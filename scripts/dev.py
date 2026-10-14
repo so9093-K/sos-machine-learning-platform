@@ -53,10 +53,10 @@ def redact(value: str, config: dict | None = None) -> str:
         secret = (config or {}).get(name, "")
         if len(secret) >= 4:
             value = value.replace(secret, "[REDACTED]")
-    value = re.sub(r"(?i)(password|secret|token|access_key)([=:]\\s*)([^\\s,;]+)",
-                   r"\\1\\2[REDACTED]", value)
-    return re.sub(r"(?i)(postgresql(?:\\+\\w+)?://)[^@\\s]+@",
-                  r"\\1[REDACTED]@", value)
+    value = re.sub(r"(?i)(password|secret|token|access_key)([=:]\s*)([^\s,;]+)",
+                   r"\1\2[REDACTED]", value)
+    return re.sub(r"(?i)(postgresql(?:\+\w+)?://)[^@\s]+@",
+                  r"\1[REDACTED]@", value)
 
 
 def configuration() -> dict[str, str]:
@@ -442,14 +442,14 @@ def logs(config: dict):
     """관리 서비스 로그를 조회하고 알려진 민감정보를 마스킹한다."""
     for name in PROCESS_NAMES:
         file = LOGDIR / f"{name}.log"
-        print(f"\\n--- {name} ---")
+        print(f"\n--- {name} ---")
         if not file.is_file():
             print("기록된 로그가 없습니다.")
             continue
         for line in file.read_text(errors="replace").splitlines()[-70:]:
             print(redact(line, config))
     if config["SOS_INFRA_MODE"] == "managed":
-        print("\\n--- infrastructure ---")
+        print("\n--- infrastructure ---")
         result = compose(["logs", "--tail", "60", "--no-color"], config)
         if result.returncode:
             print("인프라 로그 조회 실패 · make doctor로 상태를 확인하세요.")
