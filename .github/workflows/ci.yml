@@ -22,8 +22,29 @@ jobs:
         run: uv lock --check
       - name: Install development dependencies
         run: uv sync --locked --group dev
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Generate OpenAPI TypeScript definitions for review
+        run: |
+          cd web && npm ci --no-audit && npm run generate:types
+          echo SOS_TYPES_BEGIN
+          base64 -w0 src/api.generated.ts
+          echo
+          echo SOS_TYPES_END
       - name: Ruff lint
         run: uv run --locked ruff check .
+      - name: Format Python for review
+        run: |
+          uv run --locked ruff format .
+          echo SOS_FORMAT_BEGIN
+          for file in $(find src tests migrations scripts -name '*.py' | sort); do
+            echo "FILE_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "FILE_END:$file"
+          done
+          echo SOS_FORMAT_END
       - name: Ruff format
         run: uv run --locked ruff format --check .
       - name: Start integration infrastructure
@@ -36,17 +57,6 @@ jobs:
         run: uv run --locked pytest -q
       - name: Verify metadata schema matches migration
         run: uv run --locked alembic check
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-      - name: Generate OpenAPI TypeScript definitions for review
-        run: |
-          cd web && npm ci --no-audit && npm run generate:types
-          echo SOS_TYPES_BEGIN
-          base64 -w0 src/api.generated.ts
-          echo
-          echo SOS_TYPES_END
-
 
   frontend:
     runs-on: ubuntu-latest
