@@ -1,53 +1,38 @@
 # 시작하기
 
-현재 제공되는 기능은 **로컬 개발용 Data Workspace**다. 공개 서비스용 인증·권한, 원격 Worker 조정, 프로덕션 Catalog는 아직 없다. 외부 네트워크에 그대로 노출하지 않는다.
+SOS의 Data Workspace를 실제 API·Worker·데이터 서비스와 함께 실행한다. **개발 환경에서 검증하지만 플랫폼 아키텍처는 로컬 전용이 아니다.**
 
-## 준비
+## 실행
 
-Python 3.12, uv, Node.js 24, npm이 필요하다.
-
-```bash
-uv python install
-uv sync --locked --group dev
-cd web && npm ci && cd ..
-```
-
-## 로컬 실행
-
-서로 다른 터미널에서 다음을 실행한다.
+Python 3.12, uv, Node.js 24, npm, Docker Compose, GNU Make가 필요하다. 필요하면 `.env.example`을 바탕으로 `.env`를 작성한다. 비밀정보가 포함된 `.env`는 커밋하지 않는다.
 
 ```bash
-uv run --locked uvicorn sos_platform.api:app --host 127.0.0.1 --port 8000
+make           # 사용 가능한 명령 보기
+make up        # 환경 확인 · 스키마 확인/초기화 · 서비스 시작 · Readiness 확인
+make status    # 서비스별 상태
+make doctor    # 읽기 전용 환경 진단
+make check     # Ruff · pytest · UI 빌드/테스트 · Playwright
+make restart   # DB 재초기화 없이 애플리케이션 재시작
+make logs      # API · Worker · Web 로그
+make down      # 관리 대상만 종료하고 데이터 보존
 ```
 
-```bash
-uv run --locked python -m sos_platform.worker
-```
+- Web UI: `http://localhost:9601`
+- Common API: `http://localhost:9602`
+- Scalar API Reference: `http://localhost:9602/docs`
+- PostgreSQL 호스트 포트: `9603`
+- S3 호환 스토리지 호스트 포트: `9605`
 
-```bash
-cd web
-npm run dev
-```
+`python3 scripts/dev.py status --format json`으로 JSON 진단을 받을 수 있다. `python3 scripts/dev.py doctor --deep`은 API 및 의존성 준비 상태도 확인한다. `make check`는 실행 중인 서비스가 Ready인 상태에서 사용한다.
 
-- Web UI: http://127.0.0.1:5173
-- Scalar API: http://127.0.0.1:8000/docs
-- OpenAPI: http://127.0.0.1:8000/openapi.json
+## 구성과 안전
 
-데이터와 실행 기록은 기본적으로 프로젝트 내 `.sos/`에 보관한다. API 서버와 Worker는 동일한 `SOS_HOME` 경로를 사용해야 한다. Worker는 **이 저장소 루트당 하나의 프로세스만** 실행한다.
+기본 개발 환경에서는 Compose가 PostgreSQL과 S3 호환 저장소를 관리한다. 현재 기본 객체 저장소는 공식 SeaweedFS 이미지를 사용하되, 애플리케이션은 S3 API를 사용하므로 다른 호환 서비스와 관리형 스토리지로 교체할 수 있다. Iceberg SQL Catalog 메타데이터는 PostgreSQL에, 데이터 파일은 객체 저장소에 보관한다.
 
-CSV·Parquet 업로드는 현재 최대 20 MiB로 제한된다. 업로드한 파일은 SHA-256을 이용해 구별되는 원본으로 보관한다. Iceberg는 로컬 SQLite Catalog를 사용하며, 파일 데이터를 테이블로 가져올 때 새 Snapshot ID가 등록된다. 과거 스냅샷의 보존은 원래 Iceberg 테이블 관리 정책에 달려 있다.
+`SOS_INFRA_MODE=external`에서는 CLI가 DB·객체 저장소를 시작하거나 종료하지 않는다. 외부 서비스에 연결하려면 `SOS_DATABASE_URL`과 `SOS_S3_ENDPOINT`·자격 증명 등을 제공한다. 개발 프로세스는 기본적으로 루프백 주소에서만 HTTP를 수신하며, 현재 인증·권한이나 공개 서비스 배포 구성을 제공하지 않는다.
 
-EDA 화면은 처음 1,000행을 기준으로 프로파일링하고, 차트는 미리보기 최대 100행을 사용한다. 전체 데이터 프로파일과 피처 변환은 Job을 제출한 다음 별도 Worker가 처리한다. Worker 종료 후 남은 Running 작업은 **단일 Worker 재시작 시** 실행 시도 이력을 Interrupted로 남기고 Queued 상태에서 다시 시작한다. 이 로컬 실행기는 분산 큐가 아니다.
+`make down`과 `make restart`는 DB 볼륨·Iceberg 데이터·아티팩트를 삭제하지 않는다. 이미 생성된 `.sos/metadata.sqlite3` 데이터는 PostgreSQL에 자동 이관되지 않는다. 기존 데이터가 있으면 별도로 백업·이관을 검토한다.
 
-## 검사
+CSV·Parquet 업로드는 20 MiB 이하이며, 미리보기는 최대 100행, 기본 프로파일은 최대 1,000행 기준이다. 전체 프로파일·피처 처리·Iceberg 적재는 Job으로 실행한다. Snapshot ID를 기록했더라도 만료 정책으로 사라질 수 있으므로 유효성 확인과 보존 정책이 필요하다.
 
-```bash
-uv run --locked ruff check .
-uv run --locked ruff format --check .
-uv run --locked pytest -q
-cd web && npm run build && npm run test
-```
-
-주요 설계 기준은 [Experience](experience.md), [Contracts](contracts.md), [Runtimes](runtimes.md), [Workflows](workflows.md)에 있다. ML 학습과 추론은 아직 구현되지 않았다.
-
-로컬 브라우저 E2E 검증은 API·Worker·Web을 실행한 상태에서 `cd web && npx playwright install chromium && npx playwright test`로 실행한다.
+코드·환경·UX의 기준은 [Architecture](architecture.md), [Experience](experience.md), [Contracts](contracts.md), [Workflows](workflows.md), [Runtimes](runtimes.md)를 따른다. ML 모델 학습·평가·추론은 아직 이번 기능에 포함되지 않는다.

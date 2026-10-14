@@ -40,6 +40,16 @@ jobs:
           echo SOS_FORMAT_END
       - name: Fix Ruff imports for review
         run: uv run --locked ruff check --fix . || true
+      - name: Capture corrected imports
+        run: |
+          echo SOS_FIXED_BEGIN
+          for file in $(find src tests migrations scripts -name '*.py' | sort); do
+            echo "FILE_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "FILE_END:$file"
+          done
+          echo SOS_FIXED_END
       - name: Ruff lint
         run: uv run --locked ruff check .
       - name: Ruff format

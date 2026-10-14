@@ -27,7 +27,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       const data = await response.json();
       message = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
-    } catch { /* HTTP error without JSON */ }
+    } catch { /* JSON 응답 본문이 없는 오류 */ }
     throw new Error(message);
   }
   return response.json() as Promise<T>;

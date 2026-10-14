@@ -1,4 +1,4 @@
-/** Pure UI validation; API validates all requests independently. */
+/** UI가 변환 값을 먼저 검증하며, API에서도 독립적으로 계약을 검사한다. */
 export type FeatureStep = {
   op: string; column: string; value?: number | string;
   periods?: number; window?: number; dtype?: string;

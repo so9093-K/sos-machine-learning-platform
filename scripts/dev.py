@@ -1,6 +1,7 @@
 """SOS 플랫폼 서비스의 실행·진단 인터페이스. 별도 Python 패키지가 필요하지 않다."""
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -165,6 +166,9 @@ def preflight(config: dict, *, need_docker: bool = True):
                 f"{name} 포트를 다른 프로세스가 사용합니다.",
                 f"포트 {config[port_key]}가 이미 사용 중입니다.",
             )
+    if (ROOT / ".sos" / "metadata.sqlite3").exists():
+        raise StartupError("SOS-DB-002", "이전 SQLite 메타데이터가 발견됐습니다.",
+                           "자동 이관하지 않습니다. 데이터를 백업하고 전환 여부를 확인하세요.")
     if config["SOS_INFRA_MODE"] not in ("managed", "external"):
         raise StartupError("SOS-CONFIG-003", "SOS_INFRA_MODE는 managed 또는 external이어야 합니다.")
 
@@ -312,7 +316,6 @@ def up(config: dict, *, initialize: bool = True):
     if initialize:
         for command, code, label in (
             (["uv", "sync", "--locked", "--group", "dev"], "SOS-ENV-003", "Python 의존성 설치"),
-            (["npm", "ci", "--no-audit"], "SOS-ENV-004", "웹 의존성 설치"),
             (
                 ["uv", "run", "--locked", "alembic", "upgrade", "head"],
                 "SOS-DB-001",
@@ -333,6 +336,18 @@ def up(config: dict, *, initialize: bool = True):
                     f"{label}에 실패했습니다.",
                     "설정·연결·의존성을 확인하고 make doctor를 실행하세요.",
                 )
+    # 잠금 파일이 바뀌지 않았다면 재기동 시 node_modules를 다시 만들지 않는다.
+    manifest = ROOT / "web" / "package-lock.json"
+    marker = RUNTIME / "npm-lock.sha256"
+    current_hash = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    if not (ROOT / "web" / "node_modules").is_dir() or not marker.exists() or (
+        marker.read_text() != current_hash
+    ):
+        result = run(["npm", "ci", "--no-audit"], env=env, cwd=ROOT / "web", timeout=240)
+        if result.returncode:
+            raise StartupError("SOS-ENV-004", "웹 의존성 설치에 실패했습니다.")
+        RUNTIME.mkdir(parents=True, exist_ok=True)
+        marker.write_text(current_hash, encoding="utf-8")
     start_process(
         "api",
         [

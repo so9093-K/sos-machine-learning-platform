@@ -15,3 +15,5 @@ web/dist/
 !.env.example
 web/test-results/
 web/playwright-report/
+
+.sos-dev/
