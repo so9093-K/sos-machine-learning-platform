@@ -19,7 +19,7 @@ from .datasets import (
 )
 from .examples import list_examples, use_example
 from .object_store import ObjectStore
-from .processing import profile, safe_preview, transform
+from .processing import bounded_feature_preview, profile, safe_preview
 from .schemas import (
     DatasetOut,
     ExampleOut,
@@ -175,7 +175,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         # 입력의 앞 1,000행을 먼저 자르면 정렬·Lag·Rolling 경계가 실제 Job과 달라진다.
         # 전체 입력에서 같은 연산을 수행하고 출력 행 수만 제한한다.
         lf = scan_dataset(store, existing(body.dataset_id))
-        return {"sampled": False, **safe_preview(transform(lf, body.transform), 30)}
+        return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
 
     @app.get("/api/jobs", response_model=list[JobOut])
     def list_jobs():
