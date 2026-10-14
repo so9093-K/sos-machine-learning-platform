@@ -1,4 +1,4 @@
-# 사용자 경험 설계 정본
+# 사용자 경험
 
 사용자 경험은 화면을 만드는 마지막 단계가 아니라, 기능의 경계·상태·API 계약을 결정하는 설계 입력이다. 기능은 사용자 목표와 성공 기준을 먼저 이해하고 UX, 계약, 구현, 검증을 반복해서 맞춘다. [제품 정체성](vision/PLATFORM_IDENTITY.md)의 Fork·Compare·Reproduce·Understand·Explore·Apply는 연구 경험의 기준이다.
 

@@ -1,4 +1,4 @@
-# 아키텍처 설계 정본
+# 아키텍처
 
 SOS는 **Research Platform · ML Execution Platform · ML Service Platform**을 공통 API로 연결한다. 논리적인 책임을 분리하되, 이를 처음부터 별도 서버·프로세스로 배포해야 한다는 뜻은 아니다.
 
