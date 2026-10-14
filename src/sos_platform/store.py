@@ -15,6 +15,10 @@ def now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+class IcebergCancellationConflict(Exception):
+    """외부 Iceberg 커밋의 롤백을 보장할 수 없는 실행 중 취소 요청."""
+
+
 class Store:
     """데이터·작업 이력을 담당하며 실제 연산과 파일 저장은 처리하지 않는다."""
 
@@ -119,14 +123,36 @@ class Store:
             return item
 
     def jobs(self) -> list[dict]:
+        """목록의 Job과 Attempt를 각각 일괄 조회해 N+1 쿼리를 피한다."""
         with self.connection() as db:
-            ids = [r[0] for r in db.execute(text("SELECT id FROM jobs ORDER BY created_at DESC"))]
-        return [self.get_job(id_) for id_ in ids]
+            rows = db.execute(
+                text("SELECT * FROM jobs ORDER BY created_at DESC, id DESC")
+            ).mappings().all()
+            items = [dict(row) for row in rows]
+            if not items:
+                return []
+            from sqlalchemy import bindparam
+
+            attempts = db.execute(
+                text("SELECT * FROM attempts WHERE job_id IN :ids ORDER BY number").bindparams(
+                    bindparam("ids", expanding=True)
+                ),
+                {"ids": [item["id"] for item in items]},
+            ).mappings().all()
+        grouped: dict[str, list[dict]] = {item["id"]: [] for item in items}
+        for attempt in attempts:
+            grouped[attempt["job_id"]].append(dict(attempt))
+        for item in items:
+            item["spec"] = json.loads(item["spec"])
+            item["result"] = json.loads(item["result"]) if item["result"] else None
+            item["cancel_requested"] = bool(item["cancel_requested"])
+            item["attempts"] = grouped[item["id"]]
+        return items
 
     def request_cancel(self, job_id: str) -> dict | None:
         with self.connection() as db:
             row = (
-                db.execute(text("SELECT status FROM jobs WHERE id=:id FOR UPDATE"), {"id": job_id})
+                db.execute(text("SELECT status,kind FROM jobs WHERE id=:id FOR UPDATE"), {"id": job_id})
                 .mappings()
                 .first()
             )
@@ -136,6 +162,11 @@ class Store:
                     {"at": now(), "id": job_id},
                 )
             elif row and row["status"] == "Running":
+                if row["kind"] == "iceberg_import":
+                    raise IcebergCancellationConflict(
+                        "실행 중 Iceberg 적재는 커밋 여부를 보장할 수 없어 취소할 수 없습니다. "
+                        "완료 또는 중단 후 Snapshot을 확인하세요."
+                    )
                 db.execute(
                     text("UPDATE jobs SET cancel_requested=true,updated_at=:at WHERE id=:id"),
                     {"at": now(), "id": job_id},
