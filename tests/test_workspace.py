@@ -203,3 +203,21 @@ def test_cancel_running_execution_and_do_not_publish(workspace):
     assert completed["status"] == "Cancelled"
     assert completed["result"] is None
     assert completed["attempts"][0]["status"] == "Cancelled"
+
+
+
+def test_interrupted_iceberg_import_never_retries_implicitly(workspace):
+    client, store = workspace
+    dataset = upload(client)
+    created = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": dataset["id"], "table_name": "never_retry"},
+    ).json()
+    claimed = store.claim()
+    assert claimed["id"] == created["id"]
+    store.recover()
+    recovered = store.get_job(created["id"])
+    assert recovered["status"] == "Failed"
+    assert "Snapshot" in recovered["error"]
+    assert recovered["attempts"][0]["status"] == "Interrupted"
+    assert run_once(store) is False

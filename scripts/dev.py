@@ -155,6 +155,7 @@ def port_open(port: int) -> bool:
 
 
 def http_ok(url: str) -> tuple[bool, dict | None]:
+    """HTTP 503 등 오류 응답에도 포함된 준비 상태를 보존한다."""
     try:
         with urlopen(url, timeout=2) as response:
             content = response.read(8192)
@@ -163,7 +164,12 @@ def http_ok(url: str) -> tuple[bool, dict | None]:
             except (ValueError, UnicodeDecodeError):
                 payload = None
             return response.status == 200, payload
-    except (HTTPError, URLError, TimeoutError, OSError):
+    except HTTPError as exc:
+        try:
+            return False, json.loads(exc.read(8192))
+        except (ValueError, UnicodeDecodeError, OSError):
+            return False, None
+    except (URLError, TimeoutError, OSError):
         return False, None
 
 
@@ -204,11 +210,14 @@ def status(config: dict) -> dict:
     web_port, api_port = config["SOS_WEB_PORT"], config["SOS_API_PORT"]
     web_ready, _ = http_ok(f"http://127.0.0.1:{web_port}/")
     api_ready, details = http_ok(f"http://127.0.0.1:{api_port}/api/ready")
-    health = details.get("services", {}) if api_ready and isinstance(details, dict) else {}
+    health = details.get("services", {}) if isinstance(details, dict) else {}
     checks = []
     for name, key in (("database", "SOS_DB_PORT"), ("storage", "SOS_S3_PORT")):
         ready = health.get(name) == "ready"
-        reachable = config["SOS_INFRA_MODE"] == "managed" and port_open(int(config[key]))
+        try:
+            reachable = config["SOS_INFRA_MODE"] == "managed" and port_open(int(config[key]))
+        except (ValueError, KeyError):
+            reachable = False
         checks.append(
             {
                 "name": name,
@@ -366,42 +375,51 @@ def up(config: dict, *, initialize: bool = True):
             raise StartupError("SOS-ENV-004", "웹 의존성 설치에 실패했습니다.")
         RUNTIME.mkdir(parents=True, exist_ok=True)
         marker.write_text(current_hash, encoding="utf-8")
-    start_process(
-        "api",
-        [
-            "uv",
-            "run",
-            "--locked",
-            "uvicorn",
-            "sos_platform.api:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            config["SOS_API_PORT"],
-        ],
-        env,
-    )
-    start_process("worker", ["uv", "run", "--locked", "python", "-m", "sos_platform.worker"], env)
-    start_process(
-        "web",
-        [
-            "npm",
-            "run",
-            "dev",
-            "--",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            config["SOS_WEB_PORT"],
-            "--strictPort",
-        ],
-        env,
-        ROOT / "web",
-    )
-    result = wait_ready(config)
-    result["operation"] = "up"
-    result["duration_ms"] = round((time.monotonic() - start) * 1000)
-    return result
+    # 기존에 정상 기동 중이던 프로세스는 실패 복구 시 종료하지 않는다.
+    previous = processes()
+    try:
+        start_process(
+            "api",
+            [
+                "uv",
+                "run",
+                "--locked",
+                "uvicorn",
+                "sos_platform.api:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                config["SOS_API_PORT"],
+            ],
+            env,
+        )
+        start_process("worker", ["uv", "run", "--locked", "python", "-m", "sos_platform.worker"], env)
+        start_process(
+            "web",
+            [
+                "npm",
+                "run",
+                "dev",
+                "--",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                config["SOS_WEB_PORT"],
+                "--strictPort",
+            ],
+            env,
+            ROOT / "web",
+        )
+        result = wait_ready(config)
+        result["operation"] = "up"
+        result["duration_ms"] = round((time.monotonic() - start) * 1000)
+        return result
+    except BaseException:
+        # 이번 up에서 새로 시작한 프로세스만 정리하고 DB·스토리지는 유지한다.
+        for name in reversed(PROCESS_NAMES):
+            if not owned(previous.get(name)) and owned(processes().get(name)):
+                stop_process(name)
+        raise
 
 
 def down(config: dict):

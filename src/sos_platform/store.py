@@ -241,16 +241,22 @@ class Store:
         with self.connection() as db:
             rows = (
                 db.execute(
-                    text("SELECT id,cancel_requested FROM jobs WHERE status='Running' FOR UPDATE")
+                    text("SELECT id,cancel_requested,kind FROM jobs WHERE status='Running' FOR UPDATE")
                 )
                 .mappings()
                 .all()
             )
             for row in rows:
-                status = "Cancelled" if row["cancel_requested"] else "Queued"
+                # Iceberg 적재는 Worker가 죽기 직전에 커밋됐을 가능성이 있다.
+                # 자동 재시도하면 동일 데이터를 두 번 추가할 수 있으므로 명시적 확인을 요구한다.
+                unsafe = row["kind"] == "iceberg_import" and not row["cancel_requested"]
+                status = ("Cancelled" if row["cancel_requested"] else
+                          "Failed" if unsafe else "Queued")
+                message = ("Iceberg 적재가 중단됐습니다. Snapshot을 확인한 뒤 재실행하세요."
+                           if unsafe else None)
                 db.execute(
-                    text("UPDATE jobs SET status=:s,updated_at=:at WHERE id=:id"),
-                    {"s": status, "at": now(), "id": row["id"]},
+                    text("UPDATE jobs SET status=:s,error=:error,updated_at=:at WHERE id=:id"),
+                    {"s": status, "error": message, "at": now(), "id": row["id"]},
                 )
                 db.execute(
                     text(
@@ -280,6 +286,9 @@ class Store:
         return False
 
     def heartbeat(self, *, active: bool = True):
+        # Worker 소유권에 사용 중인 DB 세션이 끊겼다면 실행을 계속하지 않는다.
+        if self._worker_lock is not None:
+            self._worker_lock.execute(text("SELECT 1"))
         with self.connection() as db:
             db.execute(
                 text(
