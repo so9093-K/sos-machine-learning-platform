@@ -12,7 +12,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
         const first = detail[0];
         const field = first.loc?.filter(part => part !== "body").join(".");
         message = field ? `${field}: ${first.msg ?? "입력을 확인하세요."}` : (first.msg ?? message);
-      } else if (detail && typeof detail.message === "string") {
+      } else if (detail && !Array.isArray(detail) && typeof detail.message === "string") {
         message = detail.code ? `${detail.code}: ${detail.message}` : detail.message;
       }
     } catch { /* 응답 본문이 JSON 형식이 아닐 수 있다. */ }
