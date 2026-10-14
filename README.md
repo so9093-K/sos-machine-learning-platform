@@ -21,6 +21,8 @@ make check
 make down
 ```
 
+웹에 처음 들어오면 합성 예제로 Dataset → EDA → Feature → Job 흐름을 바로 살펴볼 수 있습니다. 예제는 사용자가 선택할 때만 데이터셋으로 등록됩니다.
+
 `make` 또는 `make help`로 공개 명령을 확인할 수 있습니다. 기본 Web UI는
 `http://localhost:9601`, API는 `http://localhost:9602`,
 Scalar API 문서는 `http://localhost:9602/docs`입니다.
