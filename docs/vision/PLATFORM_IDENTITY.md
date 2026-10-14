@@ -1,53 +1,72 @@
-# Platform Identity
+# SOS Machine Learning Platform — Platform Identity
 
-이 문서는 SOS Machine Learning Platform의 **지속적으로 지켜갈 제품 방향**을 정의합니다.
-사용 기술, 모델 구현, 내부 아키텍처, 화면 디자인은 목적에 맞게 발전할 수 있습니다.
+> **Explore · Experiment · Understand · Evolve**
+>
+> 연구, ML 실행, 외부 서비스 활용을 연결하는 확장 가능한 머신러닝 플랫폼.
 
-## 세 가지 제품 정체성
+## 1. 제품 정체성
 
-1. **Research Platform:** 가설을 세우고, 모델·아키텍처를 연구하고, 실험을 비교하며 지식을 축적합니다.
-2. **ML Execution Platform:** 데이터 처리, 피처 엔지니어링, 학습, 최적화, 평가, 저장, 추론·배포 기능을 재사용 가능한 능력으로 제공합니다.
-3. **ML Service Platform:** 외부 애플리케이션, 서버, IoT/MES 시스템, AI 에이전트가 학습·평가·추론 기능을 자신의 시스템에서 사용하도록 합니다.
+![Research Platform · ML Execution Platform · ML Service Platform](references/02-platform-pillars.png)
 
-## 지속적인 가치 창출
+| 영역 | 제공 가치 |
+| --- | --- |
+| **Research Platform** | 데이터 탐색, 가설·모델·아키텍처 연구, 실험 비교 및 연구 지식 축적 |
+| **ML Execution Platform** | 데이터 처리, 피처 엔지니어링, 학습, 최적화, 평가, 모델 관리, 추론·배포 |
+| **ML Service Platform** | 외부 애플리케이션, 서버, IoT/MES 시스템, AI 에이전트에 ML 기능 제공 |
 
-**Explore → Experiment → Evaluate → Apply → Observe → Evolve**
+## 2. 지속적 개선 과정
 
-연구·학습·배포·관찰의 결과는 다음 탐구와 실험으로 이어집니다.
-각 단계는 필요에 따라 독립적으로 접근할 수 있으며, 모든 사용 사례에 순차 실행을 강제하지 않습니다.
+![Continuous ML Lifecycle](references/01-continuous-improvement.png)
 
-## 연구 경험
+- **Research & Experiment:** 가설, 모델 설계, 연구, 실험 비교
+- **Training & Evaluation:** 전처리, 학습, 최적화, 평가, 버전 관리
+- **Deployment & Inference:** REST, Batch, Streaming, Edge
+- **Observation & Feedback:** 운영 결과, 오류 사례, 사용자 피드백
+- **Continuous Improvement:** 축적된 근거를 새로운 탐구·실험·개선에 반영
 
-- **Fork:** 기존 실험에서 새로운 시도 시작
-- **Compare:** 실험의 조건과 결과 비교
-- **Reproduce:** 이전 실험의 조건으로 재현
-- **Understand:** 결과와 차이 이해
-- **Explore:** 모델을 직접 시험하고 탐구
-- **Apply:** 결과를 다른 환경에서 재사용·적용
+각 과정은 독립적으로 활용 가능하며 고정된 순서를 강제하지 않는다.
 
-## 접근 방식
+## 3. 연구 경험
 
-- **Human:** Web UI·Playground
-- **External App:** API·SDK·Events
-- **AI Agent:** API·Tools
+![Experiment Workflow — Fork, Compare, Reproduce, Understand, Explore, Apply](references/03-research-experience.png)
 
-이들은 공통된 프로젝트·학습·모델·평가·추론 기능을 공유하며, 실행 인프라와 사용자 인터페이스는 분리합니다.
+| 기능 | 사용자 행동 |
+| --- | --- |
+| **Fork** | 이전 실험을 기반으로 새로운 실험 생성 |
+| **Compare** | 설정, 데이터, 모델, 결과의 차이 비교 |
+| **Reproduce** | 기록된 조건으로 실험 재현 |
+| **Understand** | 실험 결과와 변화 원인 탐색 |
+| **Explore** | 모델의 동작을 직접 테스트 |
+| **Apply** | 연구 결과를 재사용하고 다른 환경에 적용 |
 
-## 지켜야 할 것과 바꿀 수 있는 것
+성공한 실험뿐 아니라 실패한 실험의 조건과 결과도 이후 연구에 활용할 수 있도록 보존한다.
 
-- **지켜야 할 것:** 탐구의 자유, 지식의 연속성, 재사용성, 외부 활용성, 사용자 가치 중심 설계.
-- **바꿀 수 있는 것:** 프레임워크 버전, 라이브러리, 상세 아키텍처, 개별 UI 컴포넌트 및 구현 방법.
-- 현재 방법을 정답으로 고정하지 않으며, 더 나은 근거가 생기면 구현을 발전시킵니다.
+## 4. 플랫폼 접근
 
-## 기준 이미지
+![Human · External App · AI Agent → Common ML Platform API](references/04-common-platform-api.png)
 
-기준 이미지 원본을 `references/`에 아래 이름으로 보관합니다. 이 그림은 제품 방향을 표현하며,
-기술 구현이나 고정된 실행 순서를 강제하는 상세 설계도가 아닙니다.
+- **Human:** Web UI, Playground
+- **External App:** API, SDK, Events
+- **AI Agent:** API, Tools
 
-1. `01-continuous-improvement.png` — 연구·학습·운영 피드백의 순환
-2. `02-platform-pillars.png` — 세 가지 제품 정체성
-3. `03-research-experience.png` — Fork · Compare · Reproduce · Understand · Explore · Apply
-4. `04-common-platform-api.png` — 사람·외부 서비스·에이전트의 공통 API
-5. `05-platform-overview.png` — 사용자 경험과 실행 인프라의 분리
+학습·평가·모델 관리·추론 등 핵심 기능은 특정 UI에 종속되지 않는다. 외부 시스템은 플랫폼을 통해 모델 학습을 요청하고, 등록된 모델을 사용하며, 운영 피드백을 전달할 수 있다.
 
-> 최초 Draft PR에서 PNG 원본 업로드를 별도로 확인합니다. 이미지가 준비되기 전에는 이 목록만을 기준으로 사용합니다.
+## 5. 시스템 경계
+
+![ML Platform and Pluggable Execution Infrastructure](references/05-platform-overview.png)
+
+- **ML Platform:** 공통 프로젝트, 실행, 모델, 배포 API
+- **Execution Infrastructure:** Training Workers, Serving Workers, Storage, Connectors
+- **확장성:** 새로운 모델·알고리즘·학습 방식·프레임워크·실행 환경을 수용
+- **재사용성:** 데이터 변환, 모델, 평가, 실행 결과, 배포 구성을 재사용 가능한 단위로 관리
+
+## 설계 기준
+
+1. **사용자 가치:** 기술이나 라이브러리의 기능 자체보다 연구·실행·연동 경험을 우선한다.
+2. **연구의 자유:** 현재 지원하는 모델 및 프레임워크가 새로운 접근법을 제한하지 않는다.
+3. **연속성:** 데이터, 설정, 실험, 모델, 실행 환경 및 피드백의 관계를 추적하고 재현할 수 있도록 한다.
+4. **API-first:** 웹 UI와 외부 시스템은 동일한 플랫폼 기능을 활용한다.
+5. **분리와 재사용:** 플랫폼 기능과 실행 인프라를 분리하고, 컴포넌트를 다른 실험·서비스에서도 활용할 수 있게 한다.
+6. **지속적 진화:** 새로운 근거와 기술에 따라 구현과 사용자 경험을 개선한다.
+
+이 문서는 **제품 정체성과 설계 방향**을 정의한다. 특정 라이브러리, 모델 구조, 프레임워크 버전, 화면 구성 및 배포 기술을 고정하는 구현 명세가 아니다.
