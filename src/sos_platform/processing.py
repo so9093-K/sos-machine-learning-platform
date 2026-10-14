@@ -115,6 +115,8 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
         elif step.op in ("lag", "rolling_mean"):
             if not spec.order_by:
                 raise ValueError("Time-based features require order_by")
+            if spec.order_by not in columns or not set(spec.group_by).issubset(columns):
+                raise ValueError("Time/order and group columns must survive preceding steps")
             alias = step.alias or f"{step.column}_{step.op}"
             if alias in columns:
                 raise ValueError("Feature output column already exists")
