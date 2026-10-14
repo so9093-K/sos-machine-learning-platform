@@ -1,5 +1,7 @@
 """End-to-end API and worker tests for the local data workspace."""
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -138,3 +140,25 @@ def test_iceberg_snapshot_reproducibility(workspace):
         "/api/datasets/iceberg", json={"table_name": "sensor_data", "snapshot_id": "987654321"}
     )
     assert missing.status_code == 422
+
+
+def test_cancel_running_execution_and_do_not_publish(workspace):
+    client, store = workspace
+    dataset = upload(client)
+    created = client.post("/api/jobs", json={
+        "dataset_id": dataset["id"], "kind": "profile"
+    }).json()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(run_once, store)
+        for _ in range(200):
+            if store.get_job(created["id"])["status"] == "Running":
+                break
+            time.sleep(0.01)
+        assert store.get_job(created["id"])["status"] == "Running"
+        requested = client.post(f"/api/jobs/{created['id']}/cancel").json()
+        assert requested["cancel_requested"] is True
+        assert future.result(timeout=30) is True
+    completed = client.get(f"/api/jobs/{created['id']}").json()
+    assert completed["status"] == "Cancelled"
+    assert completed["result"] is None
+    assert completed["attempts"][0]["status"] == "Cancelled"
