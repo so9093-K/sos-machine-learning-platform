@@ -16,6 +16,17 @@ ALLOWED_CASTS = {
 
 MAX_ICEBERG_ROWS = 50_000
 MAX_ICEBERG_MEMORY_BYTES = 64 * 1024 * 1024
+MAX_FEATURE_PREVIEW_INPUT_ROWS = 100_000
+
+
+def bounded_feature_preview(lf: pl.LazyFrame, spec: Transform) -> dict:
+    """사용자 요청 API가 큰 입력의 정렬·윈도 계산으로 장시간 점유되지 않게 한다."""
+    count = lf.head(MAX_FEATURE_PREVIEW_INPUT_ROWS + 1).select(pl.len()).collect().item()
+    if count > MAX_FEATURE_PREVIEW_INPUT_ROWS:
+        raise ValueError(
+            "Feature preview exceeds 100,000 input rows; submit a full transform Job instead"
+        )
+    return safe_preview(transform(lf, spec), limit=30)
 
 
 def bounded_iceberg_arrow(lf: pl.LazyFrame):
