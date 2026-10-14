@@ -222,7 +222,6 @@ def test_interrupted_iceberg_import_never_retries_implicitly(workspace):
     assert run_once(store) is False
 
 
-
 def test_cors_uses_configured_web_port(workspace):
     client, _ = workspace
     response = client.options(
