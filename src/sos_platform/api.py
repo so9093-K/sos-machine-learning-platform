@@ -101,14 +101,19 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @app.post("/api/datasets/files", status_code=201)
     async def upload(file: Annotated[UploadFile, File()]):
-        # Read one extra byte to reject oversized uploads before writing to disk.
+        # 제한보다 한 바이트 더 읽어 파일 전체를 저장하기 전에 크기 초과를 검출한다.
         data = await file.read(MAX_UPLOAD + 1)
         try:
             return save_upload(store, file.filename or "unknown", data)
+        except ValueError:
+            raise
         except Exception as exc:
-            if isinstance(exc, ValueError):
-                raise
-            raise HTTPException(status_code=422, detail="Invalid data file") from exc
+            # 저장소 장애를 사용자 파일의 검증 오류(422)로 잘못 설명하지 않는다.
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "SOS-STORAGE-001",
+                        "message": "데이터 저장소를 사용할 수 없습니다. 잠시 후 재시도하세요."},
+            ) from exc
         finally:
             await file.close()
 

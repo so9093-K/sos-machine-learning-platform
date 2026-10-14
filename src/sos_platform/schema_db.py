@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
 )
 
 metadata = MetaData()
@@ -49,6 +50,7 @@ attempts = Table(
     Column("started_at", Text, nullable=False),
     Column("finished_at", Text),
     Column("error", Text),
+    UniqueConstraint("job_id", "number"),
 )
 
 workers = Table(
