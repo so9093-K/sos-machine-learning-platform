@@ -98,7 +98,11 @@ jobs:
           data_id=$(python3 -c 'import json; print(json.load(open("/tmp/sos-dataset.json"))["id"])')
           curl -fsS "http://127.0.0.1:9602/api/datasets/$data_id/preview" > /tmp/sos-persisted-preview.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-preview.json")); assert d["returned_rows"]==2, d'
-          curl -fsS http://127.0.0.1:9602/api/iceberg/sensor_data/snapshots > /tmp/sos-persisted-snapshots.json
+          iceberg_id=$(python3 -c 'import json; d=json.load(open("/tmp/sos-restored.json")); print(next(x["id"] for x in d if x["kind"]=="iceberg"))')
+          curl -fsS "http://127.0.0.1:9602/api/datasets/$iceberg_id/preview" > /tmp/sos-persisted-iceberg.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-iceberg.json")); assert d["returned_rows"]>=2, d'
+          iceberg_table=$(python3 -c 'import json; d=json.load(open("/tmp/sos-restored.json")); print(next(x["name"].split(".",1)[1] for x in d if x["kind"]=="iceberg"))')
+          curl -fsS "http://127.0.0.1:9602/api/iceberg/$iceberg_table/snapshots" > /tmp/sos-persisted-snapshots.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-snapshots.json")); assert len(d)>=1, d'
           curl -fsS http://127.0.0.1:9602/api/jobs > /tmp/sos-persisted-jobs.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-jobs.json")); assert any(x["status"]=="Succeeded" for x in d), d'
