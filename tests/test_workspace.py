@@ -277,3 +277,66 @@ def test_file_storage_failure_is_not_user_validation_error(workspace, monkeypatc
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "SOS-STORAGE-001"
     assert "secret-storage-credential" not in response.text
+
+
+def test_feature_preview_uses_full_input_before_grouped_time_windows(workspace):
+    client, store = workspace
+    # 처음 1,000행 밖에 가장 오래된 측정값을 배치해 샘플 경계를 검증한다.
+    rows = ["machine,time,value"]
+    rows.extend(f"A,{tick},{tick * 2}" for tick in range(2, 1002))
+    rows.append("A,1,2")
+    response = client.post(
+        "/api/datasets/files",
+        files={"file": ("unordered.csv", ("\\n".join(rows) + "\\n").encode(), "text/csv")},
+    )
+    assert response.status_code == 201, response.text
+    dataset = response.json()
+    spec = {
+        "group_by": ["machine"],
+        "order_by": "time",
+        "steps": [{"op": "lag", "column": "value", "alias": "previous"}],
+    }
+    preview = client.post(
+        "/api/features/preview", json={"dataset_id": dataset["id"], "transform": spec}
+    )
+    assert preview.status_code == 200, preview.text
+    result = preview.json()
+    assert result["sampled"] is False
+    assert result["rows"][0]["time"] == 1
+    assert result["rows"][0]["previous"] is None
+    assert result["rows"][1]["previous"] == 2
+
+
+def test_running_iceberg_import_refuses_ambiguous_cancellation(workspace):
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post(
+        "/api/iceberg/import", json={"dataset_id": dataset["id"], "table_name": "safe_cancel"}
+    ).json()
+    claimed = store.claim()
+    assert claimed["id"] == queued["id"]
+    refused = client.post(f"/api/jobs/{queued['id']}/cancel")
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["detail"]["code"] == "SOS-ICEBERG-CANCEL-409"
+    running = store.get_job(queued["id"])
+    assert running["status"] == "Running"
+    assert running["cancel_requested"] is False
+    store.recover()
+    assert store.get_job(queued["id"])["status"] == "Failed"
+
+
+def test_job_list_preserves_attempt_history(workspace):
+    client, store = workspace
+    dataset = upload(client)
+    ids = [
+        client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"}).json()[
+            "id"
+        ]
+        for _ in range(3)
+    ]
+    store.claim()
+    store.recover()
+    listed = {item["id"]: item for item in client.get("/api/jobs").json()}
+    assert set(ids).issubset(listed)
+    assert len(listed[ids[0]]["attempts"]) == 1
+    assert listed[ids[0]]["attempts"][0]["status"] == "Interrupted"
