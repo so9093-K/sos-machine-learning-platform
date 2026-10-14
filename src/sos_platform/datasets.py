@@ -44,8 +44,9 @@ def save_upload(store: Store, name: str, content: bytes) -> dict:
         )
         if not lf.collect_schema().names():
             raise ValueError("Dataset has no columns")
-        location = ObjectStore().location(key)
-        ObjectStore().put(key, temporary)
+        storage = ObjectStore()
+        location = storage.location(key)
+        storage.put(key, temporary)
     finally:
         temporary.unlink(missing_ok=True)
     return store.register_dataset(
