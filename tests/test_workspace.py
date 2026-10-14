@@ -145,9 +145,7 @@ def test_iceberg_snapshot_reproducibility(workspace):
 def test_cancel_running_execution_and_do_not_publish(workspace):
     client, store = workspace
     dataset = upload(client)
-    created = client.post("/api/jobs", json={
-        "dataset_id": dataset["id"], "kind": "profile"
-    }).json()
+    created = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"}).json()
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(run_once, store)
         for _ in range(200):
