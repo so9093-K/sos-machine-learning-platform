@@ -18,6 +18,9 @@ test("CSV upload → EDA → feature preview → worker → reusable dataset", a
   await page.getByRole("button", { name: /전체 변환 Job 실행/ }).click();
   const latestTransform = page.locator(".job").filter({ hasText: "Feature Transform" }).first();
   await expect(latestTransform.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
+  await expect(latestTransform.getByText(/입력 데이터/)).toBeVisible();
+  await latestTransform.getByText(/작업 설정 및 실행 시도/).click();
+  await expect(latestTransform.getByText(/Succeeded ·/)).toBeVisible();
   await expect(page.locator("nav").getByText(/features-/).first()).toBeVisible();
 });
 
