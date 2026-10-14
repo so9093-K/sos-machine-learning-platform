@@ -168,17 +168,22 @@ def test_existing_sqlite_data_is_not_modified_by_preflight(monkeypatch, tmp_path
     assert legacy.read_bytes() == b"preserve-me"
 
 
-
 def test_503_readiness_exposes_component_states(monkeypatch, config):
-    monkeypatch.setattr(dev, "processes", lambda: {name: {"pid": 1}
-                                                   for name in dev.PROCESS_NAMES})
+    monkeypatch.setattr(dev, "processes", lambda: {name: {"pid": 1} for name in dev.PROCESS_NAMES})
     monkeypatch.setattr(dev, "owned", lambda record: True)
     monkeypatch.setattr(dev, "port_open", lambda _port: True)
-    monkeypatch.setattr(dev, "http_ok", lambda url: (
-        (False, {"services": {"database": "ready", "storage": "ready",
-                               "worker": "unavailable"}})
-        if url.endswith("/api/ready") else (True, None)
-    ))
+    monkeypatch.setattr(
+        dev,
+        "http_ok",
+        lambda url: (
+            (
+                False,
+                {"services": {"database": "ready", "storage": "ready", "worker": "unavailable"}},
+            )
+            if url.endswith("/api/ready")
+            else (True, None)
+        ),
+    )
     outcome = dev.status(config)
     services = {item["name"]: item["status"] for item in outcome["services"]}
     assert services["database"] == "ready"
@@ -196,19 +201,28 @@ def test_partial_up_rolls_back_only_new_processes(monkeypatch, tmp_path, config)
     monkeypatch.setattr(dev, "ROOT", tmp_path)
     monkeypatch.setattr(dev, "RUNTIME", tmp_path / "runtime")
     monkeypatch.setattr(dev, "preflight", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(dev, "run", lambda *_args, **_kwargs:
-                        type("Result", (), {"returncode": 0})())
+    monkeypatch.setattr(
+        dev, "run", lambda *_args, **_kwargs: type("Result", (), {"returncode": 0})()
+    )
     running = {"api": {"pid": 1}}
     monkeypatch.setattr(dev, "processes", lambda: dict(running))
     monkeypatch.setattr(dev, "owned", lambda record: bool(record))
-    monkeypatch.setattr(dev, "start_process", lambda name, *_args, **_kwargs:
-                        running.setdefault(name, {"pid": len(running) + 1}))
+    monkeypatch.setattr(
+        dev,
+        "start_process",
+        lambda name, *_args, **_kwargs: running.setdefault(name, {"pid": len(running) + 1}),
+    )
     stopped = []
-    monkeypatch.setattr(dev, "stop_process", lambda name:
-                        (stopped.append(name), running.pop(name, None)))
-    monkeypatch.setattr(dev, "wait_ready", lambda *_args, **_kwargs:
-                        (_ for _ in ()).throw(dev.StartupError("SOS-READY-001",
-                                                                 "준비 실패")))
+    monkeypatch.setattr(
+        dev, "stop_process", lambda name: (stopped.append(name), running.pop(name, None))
+    )
+    monkeypatch.setattr(
+        dev,
+        "wait_ready",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            dev.StartupError("SOS-READY-001", "준비 실패")
+        ),
+    )
     with pytest.raises(dev.StartupError):
         dev.up(config, initialize=False)
     assert set(stopped) == {"worker", "web"}

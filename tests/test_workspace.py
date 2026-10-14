@@ -205,7 +205,6 @@ def test_cancel_running_execution_and_do_not_publish(workspace):
     assert completed["attempts"][0]["status"] == "Cancelled"
 
 
-
 def test_interrupted_iceberg_import_never_retries_implicitly(workspace):
     client, store = workspace
     dataset = upload(client)

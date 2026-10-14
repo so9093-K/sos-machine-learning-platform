@@ -241,7 +241,9 @@ class Store:
         with self.connection() as db:
             rows = (
                 db.execute(
-                    text("SELECT id,cancel_requested,kind FROM jobs WHERE status='Running' FOR UPDATE")
+                    text(
+                        "SELECT id,cancel_requested,kind FROM jobs WHERE status='Running' FOR UPDATE"
+                    )
                 )
                 .mappings()
                 .all()
@@ -250,10 +252,14 @@ class Store:
                 # Iceberg 적재는 Worker가 죽기 직전에 커밋됐을 가능성이 있다.
                 # 자동 재시도하면 동일 데이터를 두 번 추가할 수 있으므로 명시적 확인을 요구한다.
                 unsafe = row["kind"] == "iceberg_import" and not row["cancel_requested"]
-                status = ("Cancelled" if row["cancel_requested"] else
-                          "Failed" if unsafe else "Queued")
-                message = ("Iceberg 적재가 중단됐습니다. Snapshot을 확인한 뒤 재실행하세요."
-                           if unsafe else None)
+                status = (
+                    "Cancelled" if row["cancel_requested"] else "Failed" if unsafe else "Queued"
+                )
+                message = (
+                    "Iceberg 적재가 중단됐습니다. Snapshot을 확인한 뒤 재실행하세요."
+                    if unsafe
+                    else None
+                )
                 db.execute(
                     text("UPDATE jobs SET status=:s,error=:error,updated_at=:at WHERE id=:id"),
                     {"s": status, "error": message, "at": now(), "id": row["id"]},

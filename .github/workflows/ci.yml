@@ -24,17 +24,6 @@ jobs:
         run: uv sync --locked --group dev
       - name: Ruff lint
         run: uv run --locked ruff check .
-      - name: Capture formatted Python sources for review
-        run: |
-          uv run --locked ruff format .
-          echo SOS_FORMAT_BEGIN
-          for file in $(find src tests migrations scripts -name '*.py' | sort); do
-            echo "FILE_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "FILE_END:$file"
-          done
-          echo SOS_FORMAT_END
       - name: Ruff format
         run: uv run --locked ruff format --check .
       - name: Start integration infrastructure
@@ -106,6 +95,13 @@ jobs:
           make up
           curl -fsS http://127.0.0.1:9602/api/datasets > /tmp/sos-restored.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restored.json")); assert any(x["id"]==d["id"] for x in rows)'
+          data_id=$(python3 -c 'import json; print(json.load(open("/tmp/sos-dataset.json"))["id"])')
+          curl -fsS "http://127.0.0.1:9602/api/datasets/$data_id/preview" > /tmp/sos-persisted-preview.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-preview.json")); assert d["returned_rows"]==2, d'
+          curl -fsS http://127.0.0.1:9602/api/iceberg/sensor_data/snapshots > /tmp/sos-persisted-snapshots.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-snapshots.json")); assert len(d)>=1, d'
+          curl -fsS http://127.0.0.1:9602/api/jobs > /tmp/sos-persisted-jobs.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-jobs.json")); assert any(x["status"]=="Succeeded" for x in d), d'
           make check
           make logs > /tmp/sos-sanitized-logs.txt
       - name: Stop managed services without deleting data

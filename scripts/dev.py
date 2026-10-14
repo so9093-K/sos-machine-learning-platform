@@ -393,7 +393,9 @@ def up(config: dict, *, initialize: bool = True):
             ],
             env,
         )
-        start_process("worker", ["uv", "run", "--locked", "python", "-m", "sos_platform.worker"], env)
+        start_process(
+            "worker", ["uv", "run", "--locked", "python", "-m", "sos_platform.worker"], env
+        )
         start_process(
             "web",
             [
