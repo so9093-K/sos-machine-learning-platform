@@ -17,6 +17,7 @@ from .datasets import (
     save_upload,
     scan_dataset,
 )
+from .examples import list_examples, use_example
 from .object_store import ObjectStore
 from .processing import profile, safe_preview, transform
 from .schemas import FeaturePreview, IcebergConnect, IcebergImport, WorkRequest
@@ -92,6 +93,19 @@ def create_app(home: Path | None = None) -> FastAPI:
         if result["status"] != "ready":
             return JSONResponse(status_code=503, content=result)
         return result
+
+    @app.get("/api/examples")
+    def available_examples():
+        """미리 보기 가능한 합성 데이터 예제의 정의를 조회한다."""
+        return list_examples()
+
+    @app.post("/api/examples/{example_id}/use", status_code=201)
+    def start_example(example_id: str):
+        """예제를 명시적으로 선택했을 때만 일반 Dataset으로 등록한다."""
+        try:
+            return use_example(store, example_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Example not found") from exc
 
     @app.get("/api/datasets")
     def list_datasets():

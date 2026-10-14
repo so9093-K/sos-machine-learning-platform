@@ -14,6 +14,20 @@ ALLOWED_CASTS = {
     "Datetime": pl.Datetime,
 }
 
+MAX_ICEBERG_ROWS = 50_000
+MAX_ICEBERG_MEMORY_BYTES = 64 * 1024 * 1024
+
+
+def bounded_iceberg_arrow(lf: pl.LazyFrame):
+    """한 번의 Iceberg append에서 처리할 데이터 크기를 제한한다."""
+    frame = lf.head(MAX_ICEBERG_ROWS + 1).collect()
+    if frame.height > MAX_ICEBERG_ROWS:
+        raise ValueError("Iceberg import exceeds the supported 50,000-row limit")
+    if frame.estimated_size() > MAX_ICEBERG_MEMORY_BYTES:
+        raise ValueError("Iceberg import exceeds the supported 64 MiB memory limit")
+    return frame.to_arrow()
+
+
 def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
     if not 1 <= limit <= MAX_PREVIEW:
         raise ValueError("Preview limit must be between 1 and 100")

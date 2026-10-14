@@ -73,7 +73,10 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
     catalog = iceberg_catalog(store)
     catalog.create_namespace_if_not_exists("default")
     ident = f"default.{table_name}"
-    arrow = scan_dataset(store, dataset).collect().to_arrow()
+    # 단일 append의 메모리·행 수 한도를 강제한다. 추후 배치 적재 계약과 구분한다.
+    from .processing import bounded_iceberg_arrow
+
+    arrow = bounded_iceberg_arrow(scan_dataset(store, dataset))
     try:
         table = catalog.load_table(ident)
     except Exception as exc:
