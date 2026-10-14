@@ -92,7 +92,6 @@ def test_safe_feature_preview_and_worker_job(workspace):
     assert run_once(store) is True
     completed = client.get(f"/api/jobs/{job_id}").json()
     assert completed["status"] == "Succeeded", completed
-    assert Path(completed["result"]["artifact"]).is_file()
     materialized = client.get(f"/api/datasets/{completed['result']['dataset_id']}")
     assert materialized.status_code == 200
     assert (

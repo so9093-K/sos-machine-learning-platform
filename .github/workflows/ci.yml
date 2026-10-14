@@ -111,3 +111,13 @@ jobs:
       - name: Browser workflow tests
         working-directory: web
         run: npx playwright test
+      - name: Service diagnostics on failure
+        if: failure()
+        run: |
+          for file in /tmp/sos-api.log /tmp/sos-worker.log /tmp/sos-web.log; do
+            if [ -f "$file" ]; then
+              echo "$file"
+              tail -n 100 "$file"
+            fi
+          done
+

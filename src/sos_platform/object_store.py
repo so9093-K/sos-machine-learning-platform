@@ -2,6 +2,7 @@
 
 import hashlib
 from pathlib import Path
+from uuid import uuid4
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -53,7 +54,8 @@ class ObjectStore:
 
     def get(self, key: str, destination: Path):
         destination.parent.mkdir(parents=True, exist_ok=True)
-        pending = destination.with_suffix(destination.suffix + ".pending")
+        # Preview·Profile이 동시에 같은 스냅샷을 읽어도 임시 파일이 충돌하지 않는다.
+        pending = destination.with_name(destination.name + f".pending-{uuid4().hex}")
         try:
             self.client.download_file(self.config.s3_bucket, key, str(pending))
             pending.replace(destination)

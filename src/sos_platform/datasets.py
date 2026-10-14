@@ -1,6 +1,7 @@
 """Bounded dataset access, profiling and safe Polars feature transforms."""
 
 import hashlib
+import os
 import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -54,6 +55,11 @@ def iceberg_catalog(store: Store):
     from pyiceberg.catalog.sql import SqlCatalog
 
     config = Settings.from_env()
+    # 일부 Arrow 버전이 Catalog 설정과 별개로 기본 AWS 자격 증명을 조회한다.
+    os.environ.setdefault("AWS_ACCESS_KEY_ID", config.s3_access_key)
+    os.environ.setdefault("AWS_SECRET_ACCESS_KEY", config.s3_secret_key)
+    os.environ.setdefault("AWS_DEFAULT_REGION", config.s3_region)
+    os.environ["AWS_EC2_METADATA_DISABLED"] = "true"
     return SqlCatalog(
         "sos",
         uri=store.database_url,
