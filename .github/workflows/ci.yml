@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  python-quality:
+  python-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,6 +34,19 @@ jobs:
           uv run --locked python -m sos_platform.bootstrap
       - name: Unit and integration tests
         run: uv run --locked pytest -q
+      - name: Verify metadata schema matches migration
+        run: uv run --locked alembic check
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Generate OpenAPI TypeScript definitions for review
+        run: |
+          cd web && npm ci --no-audit && npm run generate:types
+          echo SOS_TYPES_BEGIN
+          base64 -w0 src/api.generated.ts
+          echo
+          echo SOS_TYPES_END
+
 
   frontend:
     runs-on: ubuntu-latest
@@ -112,6 +125,14 @@ jobs:
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-jobs.json")); assert any(x["status"]=="Succeeded" for x in d), d'
           make check
           make logs > /tmp/sos-sanitized-logs.txt
+      - name: Save Playwright trace on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-trace
+          path: web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Stop managed services without deleting data
         if: always()
         run: make down
@@ -125,3 +146,19 @@ jobs:
             fi
           done
 
+
+  # 보호 규칙의 python-quality 상태가 3개 핵심 검증을 모두 대표하도록 한다.
+  python-quality:
+    if: always()
+    needs: [python-tests, frontend, ui-e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every critical CI job
+        env:
+          PYTHON_RESULT: ${{ needs.python-tests.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          E2E_RESULT: ${{ needs.ui-e2e.result }}
+        run: |
+          test "$PYTHON_RESULT" = "success"
+          test "$FRONTEND_RESULT" = "success"
+          test "$E2E_RESULT" = "success"
