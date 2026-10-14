@@ -1,4 +1,4 @@
-"""Data-workspace request contracts shared by API and execution."""
+"""API와 실행기가 공유하는 Data Workspace 입력 계약."""
 
 from typing import Literal
 
@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class Step(BaseModel):
-    """A safe, serializable feature transformation step."""
+    """검증 및 직렬화가 가능한 피처 변환 단계."""
 
     op: Literal["select", "filter_not_null", "fill_null", "cast", "lag", "rolling_mean"]
     column: str | None = None
@@ -32,7 +32,7 @@ class Step(BaseModel):
 
 
 class Transform(BaseModel):
-    """A reproducible ordered set of transformations."""
+    """순서가 보존되는 재현 가능한 변환 정의."""
 
     steps: list[Step] = Field(min_length=1, max_length=30)
     order_by: str | None = None

@@ -1,7 +1,7 @@
-"""Isolated local execution for profiling and materialization.
+"""EDA 및 변환 작업을 별도 프로세스로 격리한다.
 
-Each job runs in a child process so a cancellation can interrupt Polars,
-rather than merely discarding results after an expensive calculation finishes.
+취소 요청 시 계산 종료를 기다리지 않고 자식 프로세스를 중단한다.
+종료가 확인된 뒤에만 취소를 확정한다.
 """
 
 import argparse
@@ -20,7 +20,7 @@ from .store import Store
 def _perform(
     home: Path, database_url: str, job: dict, completed: Path, pending: Path, output: Path
 ) -> None:
-    """Compute in a separate process; publish results only in the parent."""
+    """계산은 자식 프로세스에서 수행하고 결과 확정은 부모가 담당한다."""
     try:
         store = Store(home, database_url=database_url)
         dataset = store.get_dataset(job["dataset_id"])

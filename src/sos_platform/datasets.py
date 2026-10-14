@@ -1,4 +1,4 @@
-"""Bounded dataset access, profiling and safe Polars feature transforms."""
+"""불변 데이터 조회, EDA 프로파일 및 Polars 피처 변환 기능."""
 
 import hashlib
 import os
@@ -26,7 +26,7 @@ ALLOWED_CASTS = {
 
 
 def save_upload(store: Store, name: str, content: bytes) -> dict:
-    """ìë¡ëë¥¼ ê²ì¦í ë¤ ê°ì²´ ì ì¥ìì ë¶ë³ ë²ì ì¼ë¡ ë±ë¡íë¤."""
+    """업로드를 검증한 뒤 객체 저장소에 불변 버전으로 등록한다."""
     suffix = Path(name).suffix.lower()
     if suffix not in (".csv", ".parquet"):
         raise ValueError("Only CSV and Parquet are supported")
@@ -51,7 +51,7 @@ def save_upload(store: Store, name: str, content: bytes) -> dict:
 
 
 def iceberg_catalog(store: Store):
-    """Catalog ë©íë°ì´í°ì ì¤ì  Parquet íì¼ ì ì¥ ì±ìì ë¶ë¦¬íë¤."""
+    """Catalog 메타데이터와 실제 Parquet 파일 저장 책임을 분리한다."""
     from pyiceberg.catalog.sql import SqlCatalog
 
     config = Settings.from_env()
@@ -76,7 +76,7 @@ def iceberg_catalog(store: Store):
 
 
 def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
-    """ë¹ì©ì´ í° ë°ì´í° ë³íì APIê° ìë Worker íë¡ì¸ì¤ìì ì¤ííë¤."""
+    """비용이 큰 데이터 변환은 API가 아닌 Worker 프로세스에서 실행한다."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
         raise ValueError("Invalid Iceberg table name")
     catalog = iceberg_catalog(store)
@@ -104,7 +104,7 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
 
 
 def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = None) -> dict:
-    """ê¸°ì¡´ íì´ë¸ì ì§ì  Snapshotì Datasetì¼ë¡ ë±ë¡íë¤."""
+    """기존 테이블의 지정 Snapshot을 Dataset으로 등록한다."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
         raise ValueError("Invalid Iceberg table name")
     from pyiceberg.exceptions import NoSuchTableError
@@ -165,7 +165,17 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
         snapshot = int(dataset["version"])
         if snapshot not in {s.snapshot_id for s in table.snapshots()}:
             raise ValueError("Iceberg snapshot is not available; it may have expired")
-        return pl.scan_iceberg(table, snapshot_id=snapshot)
+        config = Settings.from_env()
+        return pl.scan_iceberg(
+            table, snapshot_id=snapshot,
+            storage_options={
+                "s3.endpoint": config.s3_endpoint,
+                "s3.access-key-id": config.s3_access_key,
+                "s3.secret-access-key": config.s3_secret_key,
+                "s3.region": config.s3_region,
+                "s3.force-virtual-addressing": "false",
+            },
+        )
     raise ValueError("Unknown dataset type")
 
 
@@ -181,7 +191,7 @@ def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
 
 
 def profile(lf: pl.LazyFrame, sample: int | None = 1000) -> dict:
-    """Compute bounded or full statistics without collecting every row in memory."""
+    """전체 데이터를 메모리에 적재하지 않고 샘플 또는 전체 통계를 집계한다."""
     if sample is not None and not 1 <= sample <= 10000:
         raise ValueError("Sample size must be between 1 and 10000")
     selected = lf.head(sample) if sample is not None else lf

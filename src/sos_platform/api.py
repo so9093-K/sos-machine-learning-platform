@@ -1,4 +1,4 @@
-"""Common Platform API for data exploration and asynchronous transformations."""
+"""데이터 탐색과 비동기 처리를 제공하는 공통 플랫폼 API."""
 
 import os
 from contextlib import asynccontextmanager
@@ -63,12 +63,12 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @app.get("/api/health")
     def health():
-        """íë¡ì¸ì¤ ìì²´ê° HTTP ìëµì ì ê³µíëì§ íì¸íë¤."""
+        """프로세스 자체가 HTTP 응답을 제공하는지 확인한다."""
         return {"status": "ok"}
 
     @app.get("/api/ready")
     def ready():
-        """ì¤ì  íì ì ì¥ìì ì¤íê¸°ê° ì¤ë¹ëì ëë§ 200ì ë°ííë¤."""
+        """실제 필수 저장소와 실행기가 준비됐을 때만 200을 반환한다."""
         checks = {}
         try:
             store.initialize()

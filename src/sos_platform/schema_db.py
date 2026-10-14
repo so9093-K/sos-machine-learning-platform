@@ -1,4 +1,4 @@
-"""PostgreSQL íì´ë¸ ì ì. Alembic ë§ì´ê·¸ë ì´ìì ê¸°ì¤ ì¤í¤ë§ë¤."""
+"""PostgreSQL 테이블 정의. Alembic 마이그레이션의 기준 스키마다."""
 
 from sqlalchemy import (
     Boolean,

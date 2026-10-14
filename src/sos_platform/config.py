@@ -1,4 +1,4 @@
-"""íë«í¼ ìë¹ì¤ êµ¬ì±ê³¼ ì¸ë¶ ì°ê²° ì¤ì ì ê´ë¦¬íë¤."""
+"""플랫폼 서비스 구성과 외부 연결 설정을 관리한다."""
 
 import os
 from dataclasses import dataclass
@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 
 @dataclass(frozen=True)
 class Settings:
-    """ì¤í ìì¹ì ë¬´ê´í ë°ì´í°Â·ì¤í ë¦¬ì§ ì°ê²° ì¤ì ."""
+    """실행 위치와 무관한 데이터·스토리지 연결 설정."""
 
     database_url: str
     s3_endpoint: str

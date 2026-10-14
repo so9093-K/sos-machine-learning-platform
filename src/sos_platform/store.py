@@ -1,4 +1,4 @@
-"""íë«í¼ ë©íë°ì´í°ì Job ì¤í ì´ë ¥ì PostgreSQLì ë³´ê´íë¤."""
+"""플랫폼 메타데이터와 Job 실행 이력을 PostgreSQL에 보관한다."""
 
 import json
 from contextlib import contextmanager
@@ -17,7 +17,7 @@ def now() -> str:
 
 
 class Store:
-    """ë°ì´í°Â·ìì ì´ë ¥ì ë´ë¹íë©° ì¤ì  ì°ì°ê³¼ íì¼ ì ì¥ì ì²ë¦¬íì§ ìëë¤."""
+    """데이터·작업 이력을 담당하며 실제 연산과 파일 저장은 처리하지 않는다."""
 
     def __init__(self, home: Path, database_url: str | None = None):
         self.home = Path(home).resolve()
@@ -34,7 +34,7 @@ class Store:
             yield connection
 
     def initialize(self):
-        """ì´ê¸°íë DB ì°ê²°Â·ì¤í¤ë§ í¸íì±ì íì¸íê³  ìë ìì±íì§ ìëë¤."""
+        """초기화는 DB 연결·스키마 호환성을 확인하고 자동 생성하지 않는다."""
         with self.connection() as db:
             db.execute(text("SELECT 1"))
             version = db.execute(text("SELECT version_num FROM alembic_version")).scalar()
@@ -144,7 +144,7 @@ class Store:
         return self.get_job(job_id)
 
     def claim(self) -> dict | None:
-        """í ì ê¸ì¼ë¡ íëì Jobì ì íí í ì¤í ìëê° ì¸ìíëë¡ íë¤."""
+        """행 잠금으로 하나의 Job을 정확히 한 실행 시도가 인수하도록 한다."""
         with self.connection() as db:
             row = (
                 db.execute(
@@ -238,7 +238,7 @@ class Store:
         return status
 
     def recover(self):
-        """ë¨ì¼ Worker ìì ê¶ì´ íë³´ë íìë§ ë¯¸ìë£ ì¤íì ë³µêµ¬íë¤."""
+        """단일 Worker 소유권이 확보된 후에만 미완료 실행을 복구한다."""
         with self.connection() as db:
             rows = (
                 db.execute(
@@ -262,7 +262,7 @@ class Store:
                 )
 
     def acquire_worker(self) -> bool:
-        """PostgreSQL ì¸ì ì ê¸ì¼ë¡ ë³µêµ¬ ìíìì Workerë¥¼ ë¨ì¼ííë¤."""
+        """PostgreSQL 세션 잠금으로 복구 수행자와 Worker를 단일화한다."""
         if self._worker_lock is not None:
             return True
         conn = self.engine.connect()

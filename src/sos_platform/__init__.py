@@ -1,1 +1,1 @@
-"""SOS data workspace and execution API."""
+"""SOS Data Workspace와 실행 API 패키지."""

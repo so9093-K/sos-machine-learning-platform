@@ -1,4 +1,4 @@
-"""S3 í¸í ê°ì²´ ì ì¥ìì ë°ì´í°ìì ë¶ë³ íì¼ì ë³´ê´íë¤."""
+"""S3 호환 객체 저장소에 데이터셋의 불변 파일을 보관한다."""
 
 import hashlib
 from pathlib import Path
@@ -12,7 +12,7 @@ from .config import Settings
 
 
 class ObjectStore:
-    """ë°ì´í° ìì¹ê° ì¤í ë¨¸ì ì ë¡ì»¬ ê²½ë¡ì ì¢ìëì§ ìëë¡ íë¤."""
+    """데이터 위치가 실행 머신의 로컬 경로에 종속되지 않도록 한다."""
 
     def __init__(self, settings: Settings | None = None):
         self.config = settings or Settings.from_env()

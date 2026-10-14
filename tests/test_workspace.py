@@ -1,4 +1,4 @@
-"""End-to-end API and worker tests for the local data workspace."""
+"""Data Workspace의 API·스토리지·Worker 통합 검증."""
 
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -22,7 +22,7 @@ from sos_platform.worker import run_once
 
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch):
-    """ê° ìëë¦¬ì¤ì ëë¦½ PostgreSQL DBë¥¼ ë¶ì¬í´ ì¤ì  í¸ëì­ìì ê²ì¦íë¤."""
+    """각 시나리오에 독립 PostgreSQL DB를 부여해 실제 트랜잭션을 검증한다."""
     base = make_url(Settings.from_env().database_url)
     name = "sos_test_" + uuid4().hex[:14]
     admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")

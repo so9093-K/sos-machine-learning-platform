@@ -1,4 +1,4 @@
-"""ì íë¦¬ì¼ì´ìê³¼ ëì¼í ì¤ì ì¼ë¡ ì¤í¤ë§ ë§ì´ê·¸ë ì´ìì ìííë¤."""
+"""애플리케이션과 동일한 설정으로 스키마 마이그레이션을 수행한다."""
 
 from alembic import context
 from sqlalchemy import create_engine, pool
