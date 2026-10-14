@@ -11,15 +11,16 @@ import multiprocessing
 import time
 from pathlib import Path
 
-from .datasets import profile, scan_dataset, transform
+from .datasets import import_to_iceberg, profile, scan_dataset, transform
+from .object_store import ObjectStore
 from .schemas import Transform
 from .store import Store
 
 
-def _perform(home: Path, job: dict, completed: Path, pending: Path, output: Path) -> None:
+def _perform(home: Path, database_url: str, job: dict, completed: Path, pending: Path, output: Path) -> None:
     """Compute in a separate process; publish results only in the parent."""
     try:
-        store = Store(home)
+        store = Store(home, database_url=database_url)
         dataset = store.get_dataset(job["dataset_id"])
         if dataset is None:
             raise ValueError("Input dataset is missing")
@@ -30,7 +31,10 @@ def _perform(home: Path, job: dict, completed: Path, pending: Path, output: Path
             spec = Transform.model_validate(job["spec"]["transform"])
             lf = transform(lf, spec)
             lf.sink_parquet(pending)
-            result = {"artifact": str(output), "input_dataset_id": dataset["id"]}
+            result = {"input_dataset_id": dataset["id"]}
+        elif job["kind"] == "iceberg_import":
+            result = {"iceberg_publish": import_to_iceberg(
+                store, dataset, job["spec"]["table_name"])}
         else:
             raise ValueError("Unknown job type")
         outcome = {"result": result}
@@ -67,12 +71,13 @@ def run_once(store: Store) -> bool:
     completed.unlink(missing_ok=True)
 
     process = multiprocessing.get_context("spawn").Process(
-        target=_perform, args=(store.home, job, completed, pending, output)
+        target=_perform, args=(store.home, store.database_url, job, completed, pending, output)
     )
     try:
         process.start()
         while process.is_alive():
             process.join(timeout=0.1)
+            store.heartbeat()
             if store.get_job(job_id)["cancel_requested"]:
                 _stop(process)
                 store.finish(job_id, "Cancelled")
@@ -88,15 +93,18 @@ def run_once(store: Store) -> bool:
             store.finish(job_id, "Failed", error=outcome["error"])
             return True
 
-        publish = None
+        publish = outcome["result"].get("iceberg_publish")
         if pending.exists():
             pending.replace(output)
+            key = f"results/{job_id}.parquet"
+            version = ObjectStore().put(key, output)
             publish = {
-                "name": f"features-{job_id[:8]}.parquet",
-                "location": str(output),
-                "version": _digest(output),
+                "name": f"features-{job_id[:8]}.parquet", "kind": "file",
+                "location": ObjectStore().location(key), "version": version,
             }
-        status = store.finish(job_id, "Succeeded", result=outcome["result"], publish=publish)
+            output.unlink(missing_ok=True)
+        result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}
+        status = store.finish(job_id, "Succeeded", result=result, publish=publish)
         if status != "Succeeded":
             output.unlink(missing_ok=True)
     except Exception as exc:
@@ -117,16 +125,22 @@ def main():
     args = parser.parse_args()
     store = Store(args.home)
     store.initialize()
-    store.recover()  # Only one local worker process may own this storage root.
-    if args.once:
-        run_once(store)
-        return
+    if not store.acquire_worker():
+        raise SystemExit("Another worker already owns the execution lock")
     try:
+        store.recover()
+        store.heartbeat()
+        if args.once:
+            run_once(store)
+            return
         while True:
+            store.heartbeat()
             if not run_once(store):
                 time.sleep(args.poll)
     except KeyboardInterrupt:
         pass
+    finally:
+        store.release_worker()
 
 
 if __name__ == "__main__":

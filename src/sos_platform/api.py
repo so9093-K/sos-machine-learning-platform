@@ -14,7 +14,6 @@ from .datasets import (
     MAX_UPLOAD,
     connect_iceberg,
     iceberg_snapshots,
-    import_to_iceberg,
     profile,
     safe_preview,
     save_upload,
@@ -23,6 +22,7 @@ from .datasets import (
 )
 from .schemas import FeaturePreview, IcebergConnect, IcebergImport, WorkRequest
 from .store import Store
+from .object_store import ObjectStore
 
 
 def create_app(home: Path | None = None) -> FastAPI:
@@ -63,7 +63,32 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @app.get("/api/health")
     def health():
+        """프로세스 자체가 HTTP 응답을 제공하는지 확인한다."""
         return {"status": "ok"}
+
+    @app.get("/api/ready")
+    def ready():
+        """실제 필수 저장소와 실행기가 준비됐을 때만 200을 반환한다."""
+        checks = {}
+        try:
+            store.initialize()
+            checks["database"] = "ready"
+        except Exception:
+            checks["database"] = "unavailable"
+        try:
+            ObjectStore().ready()
+            checks["storage"] = "ready"
+        except Exception:
+            checks["storage"] = "unavailable"
+        try:
+            checks["worker"] = "ready" if store.worker_ready() else "unavailable"
+        except Exception:
+            checks["worker"] = "unavailable"
+        result = {"status": "ready" if all(v == "ready" for v in checks.values())
+                  else "unavailable", "services": checks}
+        if result["status"] != "ready":
+            return JSONResponse(status_code=503, content=result)
+        return result
 
     @app.get("/api/datasets")
     def list_datasets():
@@ -94,9 +119,11 @@ def create_app(home: Path | None = None) -> FastAPI:
     def dataset_profile(dataset_id: str):
         return profile(scan_dataset(store, existing(dataset_id)), sample=1000)
 
-    @app.post("/api/iceberg/import", status_code=201)
+    @app.post("/api/iceberg/import", status_code=202)
     def iceberg_import(body: IcebergImport):
-        return import_to_iceberg(store, existing(body.dataset_id), body.table_name)
+        existing(body.dataset_id)
+        return store.create_job(kind="iceberg_import", dataset_id=body.dataset_id,
+                                spec=body.model_dump())
 
     @app.post("/api/datasets/iceberg", status_code=201)
     def connect_table(body: IcebergConnect):

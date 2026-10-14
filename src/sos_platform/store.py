@@ -135,7 +135,7 @@ class Store:
             if row["cancel_requested"]:
                 status, result, publish = "Cancelled", None, None
             if status == "Succeeded" and publish:
-                item = dict(id=str(uuid4()), name=publish["name"], kind="file",
+                item = dict(id=str(uuid4()), name=publish["name"], kind=publish.get("kind", "file"),
                             location=publish["location"], version=publish["version"],
                             created_at=now())
                 db.execute(text(
