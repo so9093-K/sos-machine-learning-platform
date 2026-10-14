@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import bindparam, create_engine, text
 
 from .config import Settings
 
@@ -131,8 +131,6 @@ class Store:
             items = [dict(row) for row in rows]
             if not items:
                 return []
-            from sqlalchemy import bindparam
-
             attempts = db.execute(
                 text("SELECT * FROM attempts WHERE job_id IN :ids ORDER BY number").bindparams(
                     bindparam("ids", expanding=True)
