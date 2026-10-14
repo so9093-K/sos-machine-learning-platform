@@ -61,6 +61,11 @@ def test_safe_feature_preview_and_worker_job(workspace):
     completed = client.get(f"/api/jobs/{job_id}").json()
     assert completed["status"] == "Succeeded", completed
     assert Path(completed["result"]["artifact"]).is_file()
+    materialized = client.get(f"/api/datasets/{completed['result']['dataset_id']}")
+    assert materialized.status_code == 200
+    assert client.get(
+        f"/api/datasets/{completed['result']['dataset_id']}/preview"
+    ).json()["returned_rows"] == 3
     assert completed["attempts"][0]["status"] == "Succeeded"
     assert run_once(store) is False
 
@@ -110,3 +115,14 @@ def test_iceberg_snapshot_reproducibility(workspace):
     assert client.get(f"/api/datasets/{original['id']}/preview").json()["returned_rows"] == 3
     assert client.get(f"/api/datasets/{second.json()['id']}/preview").json()["returned_rows"] == 6
     assert len(client.get("/api/iceberg/sensor_data/snapshots").json()) >= 2
+    linked = client.post("/api/datasets/iceberg", json={
+        "table_name": "sensor_data", "snapshot_id": original["version"]
+    })
+    assert linked.status_code == 201
+    assert client.get(f"/api/datasets/{linked.json()['id']}/preview").json()[
+        "returned_rows"
+    ] == 3
+    missing = client.post("/api/datasets/iceberg", json={
+        "table_name": "sensor_data", "snapshot_id": "987654321"
+    })
+    assert missing.status_code == 422

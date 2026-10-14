@@ -60,3 +60,8 @@ class FeaturePreview(BaseModel):
 class IcebergImport(BaseModel):
     dataset_id: str
     table_name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,62}$")
+
+
+class IcebergConnect(BaseModel):
+    table_name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,62}$")
+    snapshot_id: str | None = None

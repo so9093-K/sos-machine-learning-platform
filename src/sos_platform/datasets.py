@@ -37,6 +37,7 @@ def save_upload(store: Store, name: str, content: bytes) -> dict:
 def iceberg_catalog(store: Store):
     from pyiceberg.catalog.sql import SqlCatalog
 
+    (store.home / "iceberg").mkdir(exist_ok=True)
     return SqlCatalog(
         "sos_local",
         uri=f"sqlite:///{store.home / 'iceberg_catalog.sqlite3'}",
@@ -66,6 +67,28 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
         raise ValueError("Iceberg append did not create a snapshot")
     return store.register_dataset(name=ident, kind="iceberg", location=ident,
                                   version=str(snapshot.snapshot_id))
+
+
+def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = None) -> dict:
+    """Register an existing local Iceberg table at a pinned snapshot."""
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
+        raise ValueError("Invalid Iceberg table name")
+    from pyiceberg.exceptions import NoSuchTableError
+
+    try:
+        table = iceberg_catalog(store).load_table(f"default.{table_name}")
+    except NoSuchTableError as exc:
+        raise ValueError("Iceberg table does not exist") from exc
+    snapshots = {str(snapshot.snapshot_id) for snapshot in table.snapshots()}
+    if snapshot_id is None:
+        current = table.current_snapshot()
+        if current is None:
+            raise ValueError("Iceberg table has no data snapshot")
+        snapshot_id = str(current.snapshot_id)
+    if snapshot_id not in snapshots:
+        raise ValueError("Iceberg snapshot is not available; it may have expired")
+    return store.register_dataset(name=f"default.{table_name}", kind="iceberg",
+                                  location=f"default.{table_name}", version=snapshot_id)
 
 
 def iceberg_snapshots(store: Store, table_name: str) -> list[dict]:
@@ -106,23 +129,40 @@ def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
 
 
 def profile(lf: pl.LazyFrame, sample: int | None = 1000) -> dict:
-    """Return sample-bounded statistics with explicit precision metadata."""
+    """Compute bounded or full statistics without collecting every row in memory."""
     if sample is not None and not 1 <= sample <= 10000:
         raise ValueError("Sample size must be between 1 and 10000")
-    frame = lf.head(sample).collect() if sample is not None else lf.collect()
-    summaries = []
-    for name, dtype in frame.schema.items():
-        series = frame[name]
-        info = {"name": name, "dtype": str(dtype), "nulls": series.null_count(),
-                "nan_count": series.is_nan().sum() if dtype.is_numeric() and dtype.is_float()
-                else None, "unique": series.n_unique()}
+    selected = lf.head(sample) if sample is not None else lf
+    schema = selected.collect_schema()
+    aggregations = [pl.len().alias("__rows")]
+    for number, (name, dtype) in enumerate(schema.items()):
+        col = pl.col(name)
+        key = f"c{number}_"
+        aggregations.extend([
+            col.null_count().alias(key + "null"),
+            col.n_unique().alias(key + "unique"),
+        ])
+        if dtype.is_float():
+            aggregations.append(col.is_nan().sum().alias(key + "nan"))
         if dtype.is_numeric():
-            info["min"] = series.min()
-            info["max"] = series.max()
-            info["mean"] = series.mean()
-        summaries.append(info)
-    return {"sampled": sample is not None, "sample_limit": sample, "row_count": frame.height,
-            "columns": summaries}
+            aggregations.extend([
+                col.min().alias(key + "min"),
+                col.max().alias(key + "max"),
+                col.mean().alias(key + "mean"),
+            ])
+    values = selected.select(aggregations).collect().to_dicts()[0]
+    columns = []
+    for number, (name, dtype) in enumerate(schema.items()):
+        key = f"c{number}_"
+        info = {"name": name, "dtype": str(dtype),
+                "nulls": values[key + "null"],
+                "nan_count": values[key + "nan"] if dtype.is_float() else None,
+                "unique": values[key + "unique"]}
+        if dtype.is_numeric():
+            info.update({k: values[key + k] for k in ("min", "max", "mean")})
+        columns.append(info)
+    return {"sampled": sample is not None, "sample_limit": sample,
+            "row_count": values["__rows"], "columns": columns}
 
 
 def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:

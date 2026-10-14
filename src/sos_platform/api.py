@@ -12,6 +12,7 @@ from scalar_fastapi import get_scalar_api_reference
 
 from .datasets import (
     MAX_UPLOAD,
+    connect_iceberg,
     iceberg_snapshots,
     import_to_iceberg,
     profile,
@@ -20,7 +21,7 @@ from .datasets import (
     scan_dataset,
     transform,
 )
-from .schemas import FeaturePreview, IcebergImport, WorkRequest
+from .schemas import FeaturePreview, IcebergConnect, IcebergImport, WorkRequest
 from .store import Store
 
 
@@ -96,6 +97,10 @@ def create_app(home: Path | None = None) -> FastAPI:
     @app.post("/api/iceberg/import", status_code=201)
     def iceberg_import(body: IcebergImport):
         return import_to_iceberg(store, existing(body.dataset_id), body.table_name)
+
+    @app.post("/api/datasets/iceberg", status_code=201)
+    def connect_table(body: IcebergConnect):
+        return connect_iceberg(store, body.table_name, body.snapshot_id)
 
     @app.get("/api/iceberg/{table_name}/snapshots")
     def snapshots(table_name: str):

@@ -1,6 +1,7 @@
 """Single-process local worker for durable profiling and transformations."""
 
 import argparse
+import hashlib
 import time
 from pathlib import Path
 
@@ -33,9 +34,13 @@ def run_once(store: Store) -> bool:
         if store.get_job(job_id)["cancel_requested"]:
             store.finish(job_id, "Cancelled")
             return True
+        publish = None
         if pending.exists():
             pending.replace(output)
-        status = store.finish(job_id, "Succeeded", result=result)
+            version = hashlib.sha256(output.read_bytes()).hexdigest()
+            publish = {"name": f"features-{job_id[:8]}.parquet",
+                       "location": str(output), "version": version}
+        status = store.finish(job_id, "Succeeded", result=result, publish=publish)
         if status != "Succeeded":
             output.unlink(missing_ok=True)
     except Exception as exc:
