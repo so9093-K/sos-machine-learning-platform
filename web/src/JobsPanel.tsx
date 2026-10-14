@@ -1,9 +1,9 @@
-import type { Job } from "./types";
+import type { Dataset, Job } from "./types";
 
-type Props = { jobs: Job[]; busy: boolean; onRefresh: () => void;
+type Props = { jobs: Job[]; datasets: Dataset[]; busy: boolean; onRefresh: () => void;
   onCancel: (id: string) => void; onOpen: (id: string) => void; };
 
-export function JobsPanel({ jobs, busy, onRefresh, onCancel, onOpen }: Props) {
+export function JobsPanel({ jobs, datasets, busy, onRefresh, onCancel, onOpen }: Props) {
   return <section className="panel" aria-label="실행 작업">
     <div className="panel-head"><div>
       <h3>Execution Jobs</h3>
@@ -19,9 +19,21 @@ export function JobsPanel({ jobs, busy, onRefresh, onCancel, onOpen }: Props) {
         </div><span className={`status ${job.status.toLowerCase()}`}>
           {job.status}{job.cancel_requested ? " · 취소 요청 중" : ""}
         </span></div>
+        <div className="job-metadata">
+          <span>입력 데이터 · {datasets.find(d => d.id === job.dataset_id)?.name ?? job.dataset_id}</span>
+          <span>등록 · {new Date(job.created_at).toLocaleString("ko-KR")}</span>
+        </div>
         {job.error && <p className="job-error" role="alert">{job.error}</p>}
-        {job.result && <pre>{JSON.stringify(job.result, null, 2)}</pre>}
-        {job.attempts.length > 0 && <span className="muted">실행 시도 {job.attempts.length}회</span>}
+        {typeof job.result?.row_count === "number" &&
+          <p className="muted">분석한 행 · {job.result.row_count.toLocaleString("ko-KR")}</p>}
+        {job.result && <details><summary>실행 결과 상세</summary>
+          <pre>{JSON.stringify(job.result, null, 2)}</pre></details>}
+        <details><summary>작업 설정 및 실행 시도 · {job.attempts.length}회</summary>
+          <pre>{JSON.stringify(job.spec, null, 2)}</pre>
+          {job.attempts.map(attempt => <p key={attempt.id} className="muted">
+            #{attempt.number} {attempt.status} · {attempt.started_at}
+            {attempt.error ? ` · ${attempt.error}` : ""}</p>)}
+        </details>
         {typeof job.result?.dataset_id === "string" &&
           <button className="secondary" onClick={() => onOpen(job.result!.dataset_id as string)}>
             결과 데이터 열기 →
