@@ -108,7 +108,8 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
         # 그룹 안의 시간 순서가 시계열 연산의 의미를 결정한다.
         lf = lf.sort([*spec.group_by, spec.order_by])
     for step in spec.steps:
-        columns = lf.collect_schema().names()
+        current_schema = lf.collect_schema()
+        columns = current_schema.names()
         if step.op == "select":
             if not set(step.columns or []).issubset(columns):
                 raise ValueError("Selected column does not exist")
@@ -128,6 +129,8 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
                 raise ValueError("Time-based features require order_by")
             if spec.order_by not in columns or not set(spec.group_by).issubset(columns):
                 raise ValueError("Time/order and group columns must survive preceding steps")
+            if step.op == "rolling_mean" and not current_schema[step.column].is_numeric():
+                raise ValueError("Rolling Mean requires a numeric column")
             alias = step.alias or f"{step.column}_{step.op}"
             if alias in columns:
                 raise ValueError("Feature output column already exists")
