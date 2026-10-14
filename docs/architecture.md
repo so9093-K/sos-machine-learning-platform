@@ -1,0 +1,39 @@
+# 아키텍처
+
+SOS는 **Research Platform · ML Execution Platform · ML Service Platform**을 공통 API로 연결한다. 논리적인 책임을 분리하되, 이를 처음부터 별도 서버·프로세스로 배포해야 한다는 뜻은 아니다.
+
+## 논리적 구성과 경계
+
+```text
+Human / External System / AI Agent
+                 |
+        Common Platform API
+                 |
+       Application / Control
+  (projects, experiments, jobs,
+   models, policy, metadata)
+                 |
+         Execution Boundary
+            /         \
+   Training/Eval     Inference
+      Workers         Workers
+            \         /
+      Artifacts / Data / Tracking
+```
+
+- **공통 API:** 입력 검증, 인증·권한 적용, 작업 제출·조회, 결과 접근을 일관되게 제공한다. UI는 이 계약을 통해 기능을 사용한다.
+- **Application / Control:** 프로젝트·실험·작업·모델의 논리적 관계와 접근 정책을 관리한다. ML 알고리즘을 직접 실행하는 코드와 분리한다.
+- **Execution Boundary:** Job과 Runtime 요구를 실제 실행기로 전달하고, 상태·결과·오류·취소를 연결한다. 특정 큐·스케줄러 제품의 개념을 공통 도메인 계약으로 노출하지 않는다.
+- **Workers:** 데이터 처리, 학습, 평가, 모델 복원 및 추론을 실제로 수행한다. 프레임워크별 실행 구현이 플랫폼 코어를 변경하도록 요구하지 않는다.
+- **Data / Artifacts / Tracking:** 데이터 참조, 변경 불가능한 결과물, 실행·평가 이력을 보존한다. 메타데이터와 대용량 아티팩트의 저장 방식은 별개의 책임이다.
+
+## 구조적 불변 조건
+
+1. **API-first:** 웹 UI, 외부 시스템, AI 에이전트는 같은 핵심 기능과 권한 모델을 활용한다.
+2. **제어와 실행 분리:** 장시간 소요되는 학습을 API 요청 처리에 묶어 두지 않는다. 짧은 호출과 비동기 Job을 작업 특성에 맞게 구분한다.
+3. **도메인과 인프라 분리:** 모델·실험·작업의 의미는 저장소, ML 추적 도구, Worker 엔진에 종속되지 않는다. 구체적 구현은 경계의 어댑터로 연결한다.
+4. **추적 가능성:** 작업 요청부터 실제 실행 시도, 데이터·모델·평가·아티팩트까지 식별자와 참조 관계로 연결할 수 있어야 한다.
+5. **보안 경계:** 사용자 권한, 작업별 자원, 비밀정보와 외부 모델·플러그인 실행 권한을 구분한다. 단순한 파일 저장이나 모델 로드는 신뢰할 수 있는 코드 실행과 같지 않다.
+6. **점진적 배치:** 로컬 단일 환경으로 시작할 수 있지만 논리적 분리가 유지되어 원격 Worker 및 독립 Serving으로 확장할 수 있어야 한다.
+
+[Experience](experience.md)는 사용자 목표, [Contracts](contracts.md)는 객체와 인터페이스의 의미, [Workflows](workflows.md)는 상태와 흐름, [Runtimes](runtimes.md)는 실행 환경을 정의한다. 이 문서는 책임과 의존 방향을 다루며 API 필드·데이터베이스 테이블·배포 기술을 고정하지 않는다.
