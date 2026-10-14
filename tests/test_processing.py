@@ -84,3 +84,12 @@ def test_feature_preview_rejects_unbounded_source_before_sorting():
     )
     with pytest.raises(ValueError, match="100,000"):
         bounded_feature_preview(source, spec)
+
+
+def test_rolling_mean_rejects_non_numeric_inputs_before_execution():
+    raw = pl.DataFrame({"time": [1, 2], "label": ["ok", "warn"]}).lazy()
+    spec = Transform.model_validate(
+        {"order_by": "time", "steps": [{"op": "rolling_mean", "column": "label"}]}
+    )
+    with pytest.raises(ValueError, match="numeric"):
+        transform(raw, spec)
