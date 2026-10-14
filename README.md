@@ -8,6 +8,7 @@
 
 프로젝트 정체성과 기준 이미지는 [Platform Identity](docs/vision/PLATFORM_IDENTITY.md)를 참고하세요.
 협업과 코드 작성 규칙은 [AGENTS.md](AGENTS.md)에 있습니다.
+문서 영역과 작성 기준은 [문서 안내](docs/README.md)를 참고하세요.
 
 ## 개발 환경
 
