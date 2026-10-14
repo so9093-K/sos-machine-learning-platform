@@ -42,7 +42,10 @@ def create_app(home: Path | None = None) -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=[
+            f"http://localhost:{os.environ.get('SOS_WEB_PORT', '9601')}",
+            f"http://127.0.0.1:{os.environ.get('SOS_WEB_PORT', '9601')}",
+        ],
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
     )

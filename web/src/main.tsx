@@ -258,7 +258,7 @@ function Workspace() {
       <header><div><span className="eyebrow">DATA WORKSPACE</span>
         <h1>데이터를 이해하고, 준비하고, 실행하세요.</h1>
         <p>데이터 버전과 변환 조건을 남겨 동일한 연구를 다시 실행할 수 있습니다.</p></div>
-        <span className="environment">LOCAL · Python Worker</span>
+        <span className="environment">Data Workspace · Python Worker</span>
       </header>
       {error && <div role="alert" className="alert error"><strong>작업을 완료하지 못했습니다.</strong> {error}
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
@@ -392,7 +392,7 @@ function Workspace() {
           </article>)}</div>
         </section>}
       </>}
-      <footer>Explore · Experiment · Understand · Evolve <span>Local development workspace · Not a public service</span></footer>
+      <footer>Explore · Experiment · Understand · Evolve <span>개발 환경 · 외부 공개 서비스 아님</span></footer>
     </main>
   </div>;
 }

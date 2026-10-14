@@ -220,3 +220,17 @@ def test_interrupted_iceberg_import_never_retries_implicitly(workspace):
     assert "Snapshot" in recovered["error"]
     assert recovered["attempts"][0]["status"] == "Interrupted"
     assert run_once(store) is False
+
+
+
+def test_cors_uses_configured_web_port(workspace):
+    client, _ = workspace
+    response = client.options(
+        "/api/datasets",
+        headers={
+            "Origin": "http://localhost:9601",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:9601"
