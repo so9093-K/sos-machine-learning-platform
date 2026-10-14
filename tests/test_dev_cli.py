@@ -1,11 +1,16 @@
 """개발 CLI의 상태·진단·안전한 종료 계약을 외부 프로세스 없이 검증한다."""
 
-from contextlib import contextmanager
+import importlib.util
 from pathlib import Path
 
 import pytest
 
-from scripts import dev
+# 프로젝트 루트를 Python import 경로에 추가할 필요 없이 실제 CLI 파일을 검증한다.
+source = Path(__file__).resolve().parents[1] / "scripts" / "dev.py"
+spec = importlib.util.spec_from_file_location("sos_dev_cli", source)
+assert spec is not None and spec.loader is not None
+dev = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(dev)
 
 
 @pytest.fixture
