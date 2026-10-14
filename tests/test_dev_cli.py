@@ -202,7 +202,7 @@ def test_partial_up_rolls_back_only_new_processes(monkeypatch, tmp_path, config)
     monkeypatch.setattr(dev, "processes", lambda: dict(running))
     monkeypatch.setattr(dev, "owned", lambda record: bool(record))
     monkeypatch.setattr(dev, "start_process", lambda name, *_args, **_kwargs:
-                        running.update({name: {"pid": len(running) + 1}}))
+                        running.setdefault(name, {"pid": len(running) + 1}))
     stopped = []
     monkeypatch.setattr(dev, "stop_process", lambda name:
                         (stopped.append(name), running.pop(name, None)))

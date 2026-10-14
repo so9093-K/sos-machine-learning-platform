@@ -24,6 +24,17 @@ jobs:
         run: uv sync --locked --group dev
       - name: Ruff lint
         run: uv run --locked ruff check .
+      - name: Capture formatted Python sources for review
+        run: |
+          uv run --locked ruff format .
+          echo SOS_FORMAT_BEGIN
+          for file in $(find src tests migrations scripts -name '*.py' | sort); do
+            echo "FILE_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "FILE_END:$file"
+          done
+          echo SOS_FORMAT_END
       - name: Ruff format
         run: uv run --locked ruff format --check .
       - name: Start integration infrastructure

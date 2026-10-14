@@ -289,6 +289,7 @@ class Store:
         # Worker 소유권에 사용 중인 DB 세션이 끊겼다면 실행을 계속하지 않는다.
         if self._worker_lock is not None:
             self._worker_lock.execute(text("SELECT 1"))
+            self._worker_lock.commit()
         with self.connection() as db:
             db.execute(
                 text(
