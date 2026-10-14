@@ -257,6 +257,9 @@ function Workspace() {
         <button className="secondary" disabled={busy}
           onClick={() => void connectExisting()}>스냅샷 연결</button>
       </div>
+      <button className="job-navigation secondary" onClick={() => {
+        setSelected(""); setTab("preview");
+      }}>예제 데이터 살펴보기</button>
       <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
         전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
       </button>
@@ -298,12 +301,27 @@ function Workspace() {
         </div>
         <div className="tabbar" role="tablist" aria-label="데이터 작업 영역">
           {(["preview", "profile", "features"] as Tab[]).map(t =>
-            <button key={t} role="tab" aria-selected={tab === t}
-              className={tab === t ? "tab active" : "tab"} onClick={() => setTab(t)}>
+            <button key={t} role="tab" id={`sos-tab-${t}`}
+              aria-controls={`sos-panel-${t}`} aria-selected={tab === t}
+              tabIndex={tab === t ? 0 : -1}
+              className={tab === t ? "tab active" : "tab"}
+              onClick={() => setTab(t)}
+              onKeyDown={event => {
+                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const tabs: Tab[] = ["preview", "profile", "features"];
+                const index = tabs.indexOf(t);
+                const next = event.key === "Home" ? tabs[0] :
+                  event.key === "End" ? tabs[tabs.length - 1] :
+                  tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
+                setTab(next);
+                requestAnimationFrame(() => document.getElementById(`sos-tab-${next}`)?.focus());
+              }}>
               {{ preview: "Preview", profile: "EDA & Profile", features: "Features", jobs: "Jobs" }[t]}
             </button>)}
         </div>
-        {tab === "preview" && <section className="panel">
+        {tab === "preview" && <section className="panel" role="tabpanel"
+          id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
           <div className="panel-head"><div><h3>데이터 미리보기</h3><p>최대 100행 · 전체 데이터가 아닌 일부입니다.</p></div>
             <span className="chip">{preview?.returned_rows ?? "…"} rows shown</span></div>
           {preview && <><div className="table-scroll"><table><thead><tr>
@@ -317,7 +335,8 @@ function Workspace() {
             onClick={() => setReloadRevision(v => v + 1)}>미리보기 다시 시도</button>}
           <div className="hint">스키마와 파일·스냅샷 버전은 실행 입력으로 고정됩니다.</div>
         </section>}
-        {tab === "profile" && <section className="panel">
+        {tab === "profile" && <section className="panel" role="tabpanel"
+          id="sos-panel-profile" aria-labelledby="sos-tab-profile" tabIndex={0}>
           <div className="panel-head"><div><h3>탐색적 데이터 분석</h3>
             <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
           </div><button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button></div>
@@ -354,7 +373,8 @@ function Workspace() {
             <p className="hint">차트와 히스토그램은 최대 100행의 미리보기 값입니다.</p>
           </>}
         </section>}
-        {tab === "features" && <section className="panel">
+        {tab === "features" && <section className="panel" role="tabpanel"
+          id="sos-panel-features" aria-labelledby="sos-tab-features" tabIndex={0}>
           <div className="panel-head"><div><h3>Feature Builder</h3>
             <p>원본 데이터는 유지하고, 변환 단계를 저장 가능한 작업 설정으로 구성합니다.</p>
           </div></div>
