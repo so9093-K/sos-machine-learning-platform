@@ -14,13 +14,11 @@ from .datasets import (
     MAX_UPLOAD,
     connect_iceberg,
     iceberg_snapshots,
-    profile,
-    safe_preview,
     save_upload,
     scan_dataset,
-    transform,
 )
 from .object_store import ObjectStore
+from .processing import profile, safe_preview, transform
 from .schemas import FeaturePreview, IcebergConnect, IcebergImport, WorkRequest
 from .store import Store
 

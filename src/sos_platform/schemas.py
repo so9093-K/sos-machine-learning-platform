@@ -36,6 +36,15 @@ class Transform(BaseModel):
 
     steps: list[Step] = Field(min_length=1, max_length=30)
     order_by: str | None = None
+    group_by: list[str] = Field(default_factory=list, max_length=4)
+
+    @model_validator(mode="after")
+    def validate_grouping(self):
+        if len(set(self.group_by)) != len(self.group_by):
+            raise ValueError("group_by columns must be distinct")
+        if self.order_by and self.order_by in self.group_by:
+            raise ValueError("order_by must not also be a group_by column")
+        return self
 
 
 class WorkRequest(BaseModel):
