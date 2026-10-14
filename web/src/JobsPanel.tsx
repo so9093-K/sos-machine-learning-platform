@@ -26,7 +26,10 @@ export function JobsPanel({ jobs, busy, onRefresh, onCancel, onOpen }: Props) {
           <button className="secondary" onClick={() => onOpen(job.result!.dataset_id as string)}>
             결과 데이터 열기 →
           </button>}
+        {job.kind === "iceberg_import" && job.status === "Running" &&
+          <p className="muted">Iceberg 적재는 외부 커밋이 진행될 수 있어 실행 중 취소할 수 없습니다.</p>}
         {["Queued", "Running"].includes(job.status) &&
+          !(job.kind === "iceberg_import" && job.status === "Running") &&
           <button className="secondary" disabled={busy || job.cancel_requested}
             onClick={() => onCancel(job.id)}>작업 취소</button>}
       </article>)}
