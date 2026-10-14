@@ -235,7 +235,6 @@ def test_cors_uses_configured_web_port(workspace):
     assert response.headers["access-control-allow-origin"] == "http://localhost:9601"
 
 
-
 def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
     client, _ = workspace
     assert client.get("/api/datasets").json() == []
@@ -257,9 +256,9 @@ def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
 def test_api_openapi_response_contracts(workspace):
     client, _ = workspace
     spec = client.get("/openapi.json").json()
-    assert spec["paths"]["/api/datasets"]["get"]["responses"]["200"]["content"][
-        "application/json"
-    ]["schema"]
+    assert spec["paths"]["/api/datasets"]["get"]["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ]
     assert "JobOut" in spec["components"]["schemas"]
     assert "ExampleOut" in spec["components"]["schemas"]
 

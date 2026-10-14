@@ -28,8 +28,9 @@ def run_migrations_online() -> None:
     url = config.get_main_option("sqlalchemy.url") or Settings.from_env().database_url
     engine = create_engine(url, poolclass=pool.NullPool)
     with engine.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata,
-                          include_name=include_name)
+        context.configure(
+            connection=connection, target_metadata=target_metadata, include_name=include_name
+        )
         with context.begin_transaction():
             context.run_migrations()
     engine.dispose()
