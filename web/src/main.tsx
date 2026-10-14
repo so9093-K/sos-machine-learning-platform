@@ -2,40 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import * as echarts from "echarts";
 import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
+import { request, jsonPost } from "./api";
+import { ExampleGallery } from "./ExampleGallery";
+import { JobsPanel } from "./JobsPanel";
+import type { Dataset, Preview, Profile, Job, Example } from "./types";
 import "./style.css";
 
-type Dataset = {
-  id: string; name: string; kind: "file" | "iceberg";
-  version: string; location: string; created_at: string;
-};
-type Preview = { schema: Record<string, string>; rows: Record<string, unknown>[]; returned_rows: number };
-type Metric = { name: string; dtype: string; nulls: number; nan_count: number | null;
-  unique: number; min?: number | null; max?: number | null; mean?: number | null };
-type Profile = { sampled: boolean; sample_limit: number | null; row_count: number; columns: Metric[] };
 type Step = FeatureStep;
-type Job = {
-  id: string; kind: string; status: string; cancel_requested: boolean;
-  result: Record<string, unknown> | null; error: string | null;
-  attempts: { number: number; status: string }[];
-};
 type Tab = "preview" | "profile" | "features" | "jobs";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
-  if (!response.ok) {
-    let message = `Request failed (${response.status})`;
-    try {
-      const data = await response.json();
-      message = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
-    } catch { /* JSON 응답 본문이 없는 오류 */ }
-    throw new Error(message);
-  }
-  return response.json() as Promise<T>;
-}
-function jsonPost<T>(path: string, body: unknown): Promise<T> {
-  return request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body) });
-}
 function readableVersion(d: Dataset) {
   return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
 }
@@ -58,16 +33,22 @@ function Workspace() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [examples, setExamples] = useState<Example[]>([]);
+  const [examplesLoading, setExamplesLoading] = useState(true);
+  const [previewStatus, setPreviewStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [profileStatus, setProfileStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [reloadRevision, setReloadRevision] = useState(0);
   const [tab, setTab] = useState<Tab>("preview");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [tableName, setTableName] = useState("sensor_data");
+  const [tableName, setTableName] = useState("");
   const [steps, setSteps] = useState<Step[]>([]);
   const [op, setOp] = useState("filter_not_null");
   const [column, setColumn] = useState("");
   const [value, setValue] = useState("");
   const [orderBy, setOrderBy] = useState("");
+  const [groupBy, setGroupBy] = useState("");
   const [featurePreview, setFeaturePreview] = useState<Preview | null>(null);
   const dataset = datasets.find(d => d.id === selected);
   const columnNames = preview ? Object.keys(preview.schema) : [];
@@ -87,24 +68,40 @@ function Workspace() {
   useEffect(() => {
     refreshDatasets().catch(e => setError(String(e)));
     refreshJobs().catch(e => setError(String(e)));
+    request<Example[]>("/api/examples").then(setExamples)
+      .catch(e => setError(String(e)))
+      .finally(() => setExamplesLoading(false));
   }, []);
   useEffect(() => {
-    if (!selected) { setPreview(null); setProfile(null); return; }
+    if (!selected) {
+      setPreview(null); setProfile(null);
+      return;
+    }
     let active = true;
     setPreview(null); setProfile(null); setFeaturePreview(null); setSteps([]);
-    setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy("");
-    Promise.all([
-      request<Preview>(`/api/datasets/${selected}/preview?limit=100`),
-      request<Profile>(`/api/datasets/${selected}/profile`),
-    ]).then(([p, s]) => {
-      if (!active) return;
-      setPreview(p); setProfile(s);
-      const names = Object.keys(p.schema);
-      setColumn(names[0] ?? ""); setVisualColumn(names[0] ?? "");
-      setTimeColumn(names[0] ?? "");
-    }).catch(e => { if (active) setError(String(e)); });
+    setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy(""); setGroupBy("");
+    setPreviewStatus("loading"); setProfileStatus("loading");
+    request<Preview>(`/api/datasets/${selected}/preview?limit=100`)
+      .then(data => {
+        if (!active) return;
+        setPreview(data); setPreviewStatus("ready");
+        const columns = Object.keys(data.schema);
+        setColumn(columns[0] ?? ""); setVisualColumn(columns.find(
+          name => /Int|Float|Decimal/.test(data.schema[name])) ?? columns[0] ?? "");
+        setTimeColumn(columns[0] ?? "");
+      })
+      .catch(error => {
+        if (!active) return;
+        setPreviewStatus("error"); setError(String(error));
+      });
+    request<Profile>(`/api/datasets/${selected}/profile`)
+      .then(data => { if (active) { setProfile(data); setProfileStatus("ready"); } })
+      .catch(error => {
+        if (!active) return;
+        setProfileStatus("error"); setError(String(error));
+      });
     return () => { active = false; };
-  }, [selected]);
+  }, [selected, reloadRevision]);
   useEffect(() => {
     if (jobs.some(j => j.status === "Succeeded" && j.result?.dataset_id &&
       !datasets.some(d => d.id === j.result?.dataset_id))) {
@@ -131,7 +128,11 @@ function Workspace() {
       setFeaturePreview(null); setError("");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
-  const transform = { steps, ...(orderBy ? { order_by: orderBy } : {}) };
+  const transform = {
+    steps,
+    ...(orderBy ? { order_by: orderBy } : {}),
+    ...(groupBy ? { group_by: [groupBy] } : {}),
+  };
   async function previewFeatures() {
     if (!selected || steps.length === 0) return;
     if (needsTimeOrder(steps) && !orderBy) {
@@ -155,6 +156,18 @@ function Workspace() {
       setTab("jobs");
       setNotice("작업이 등록되었습니다. 별도 Worker가 작업을 실행합니다.");
     });
+  }
+  async function selectExample(exampleId: string) {
+    await withFeedback(async () => {
+      const data = await jsonPost<Dataset>(`/api/examples/${exampleId}/use`, {});
+      await refreshDatasets();
+      setSelected(data.id); setTab("preview");
+      setNotice("예제가 일반 데이터셋으로 등록됐습니다. EDA와 피처 변환을 시작할 수 있습니다.");
+    });
+  }
+  async function openJobDataset(datasetId: string) {
+    await refreshDatasets();
+    setSelected(datasetId); setTab("preview");
   }
   async function upload(file: File) {
     await withFeedback(async () => {
@@ -244,6 +257,9 @@ function Workspace() {
         <button className="secondary" disabled={busy}
           onClick={() => void connectExisting()}>스냅샷 연결</button>
       </div>
+      <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
+        전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
+      </button>
       <nav aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
@@ -264,9 +280,13 @@ function Workspace() {
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
       {notice && <div role="status" className="alert success">{notice}
         <button onClick={() => setNotice("")} aria-label="알림 닫기">×</button></div>}
-      {!dataset && <div className="empty"><h2>첫 데이터셋을 연결하세요</h2>
-        <p>왼쪽에서 CSV 또는 Parquet 파일을 가져오면 스키마와 분석 화면이 열립니다.</p></div>}
-      {dataset && <>
+      {!dataset && tab !== "jobs" && <div className="empty">
+        <h2>첫 데이터를 탐색해 보세요</h2>
+        <p>파일을 준비하지 않아도 합성 데이터로 EDA와 피처 실행을 경험할 수 있습니다.</p>
+        <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
+          onUse={id => void selectExample(id)} />
+      </div>}
+      {dataset && tab !== "jobs" && <>
         <div className="dataset-hero">
           <div><span className="eyebrow">SELECTED DATASET</span><h2>{dataset.name}</h2>
             <p>{dataset.kind.toUpperCase()} · {readableVersion(dataset)}</p></div>
@@ -277,7 +297,7 @@ function Workspace() {
             </button></div>
         </div>
         <div className="tabbar" role="tablist" aria-label="데이터 작업 영역">
-          {(["preview", "profile", "features", "jobs"] as Tab[]).map(t =>
+          {(["preview", "profile", "features"] as Tab[]).map(t =>
             <button key={t} role="tab" aria-selected={tab === t}
               className={tab === t ? "tab active" : "tab"} onClick={() => setTab(t)}>
               {{ preview: "Preview", profile: "EDA & Profile", features: "Features", jobs: "Jobs" }[t]}
@@ -292,13 +312,18 @@ function Workspace() {
             {columnNames.map(c => <td key={c}>{r[c] == null
               ? <span className="null">NULL</span> : String(r[c])}</td>)}
           </tr>)}</tbody></table></div>{preview.rows.length === 0 && <p className="muted">행이 없는 데이터셋입니다.</p>}</>}
-          {!preview && <p className="muted">데이터를 불러오는 중입니다.</p>}
+          {previewStatus === "loading" && <p className="muted" role="status">미리보기를 불러오는 중입니다.</p>}
+          {previewStatus === "error" && <button className="secondary"
+            onClick={() => setReloadRevision(v => v + 1)}>미리보기 다시 시도</button>}
           <div className="hint">스키마와 파일·스냅샷 버전은 실행 입력으로 고정됩니다.</div>
         </section>}
         {tab === "profile" && <section className="panel">
           <div className="panel-head"><div><h3>탐색적 데이터 분석</h3>
             <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
           </div><button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button></div>
+          {profileStatus === "loading" && <p role="status" className="muted">EDA 통계를 계산하고 있습니다.</p>}
+          {profileStatus === "error" && <button className="secondary"
+            onClick={() => setReloadRevision(v => v + 1)}>EDA 다시 시도</button>}
           {profile && <>
             <div className="cards">
               <div className="stat"><span>분석한 행</span><strong>{profile.row_count.toLocaleString()}</strong></div>
@@ -353,7 +378,11 @@ function Workspace() {
               <option value="">정렬하지 않음</option>
               {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
             </select></label>
-            <p className="hint">Lag / Rolling을 사용하려면 명시적으로 정렬 컬럼을 선택하세요.</p>
+            <label>그룹 컬럼 <select value={groupBy} onChange={e => setGroupBy(e.target.value)}>
+              <option value="">전체를 하나로 처리</option>
+              {columnNames.filter(c => c !== orderBy).map(c => <option key={c} value={c}>{c}</option>)}
+            </select></label>
+            <p className="hint">Lag / Rolling은 시간 정렬 후 그룹별 계산합니다. Rolling Mean에는 현재 행이 포함됩니다.</p>
           </div>
           <div className="steps">{steps.length === 0 && <p className="muted">아직 변환 단계가 없습니다.</p>}
             {steps.map((step, i) => <div className="step" key={i}>
@@ -373,25 +402,12 @@ function Workspace() {
               {Object.keys(featurePreview.schema).map(c => <td key={c}>{r[c] == null ? "—" : String(r[c])}</td>)}
             </tr>)}</tbody></table></div></div>}
         </section>}
-        {tab === "jobs" && <section className="panel">
-          <div className="panel-head"><div><h3>Execution Jobs</h3>
-            <p>Job은 별도 Worker에서 실행됩니다. 취소 요청과 취소 완료는 구분됩니다.</p>
-          </div><button className="secondary" onClick={() => void withFeedback(refreshJobs)}>새로고침</button></div>
-          {jobs.length === 0 && <p className="muted">아직 제출된 작업이 없습니다.</p>}
-          <div className="job-list">{jobs.map(j => <article className="job" key={j.id}>
-            <div className="job-title"><div><strong>{j.kind === "profile" ? "Full EDA Profile" :
-              j.kind === "iceberg_import" ? "Iceberg Import" : "Feature Transform"}</strong>
-              <small>{j.id}</small></div><span className={`status ${j.status.toLowerCase()}`}>
-                {j.status}{j.cancel_requested ? " · 취소 요청 중" : ""}</span></div>
-            {j.error && <p className="job-error">{j.error}</p>}
-            {j.result && <pre>{JSON.stringify(j.result, null, 2)}</pre>}
-            {j.attempts.length > 0 && <span className="muted">실행 시도 {j.attempts.length}회</span>}
-            {["Queued", "Running"].includes(j.status) &&
-              <button className="secondary" disabled={busy || j.cancel_requested}
-                onClick={() => void cancelJob(j.id)}>작업 취소</button>}
-          </article>)}</div>
-        </section>}
+
       </>}
+      {tab === "jobs" && <JobsPanel jobs={jobs} busy={busy}
+        onRefresh={() => void withFeedback(refreshJobs)}
+        onCancel={id => void cancelJob(id)}
+        onOpen={id => void openJobDataset(id)} />}
       <footer>Explore · Experiment · Understand · Evolve <span>개발 환경 · 외부 공개 서비스 아님</span></footer>
     </main>
   </div>;

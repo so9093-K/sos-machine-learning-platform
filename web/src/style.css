@@ -5,3 +5,15 @@
 .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .charts>div{min-width:0}
 @media(max-width:1000px){.charts{grid-template-columns:1fr}}
+
+.example-gallery{margin-top:30px;text-align:left}
+.example-gallery>.panel-head{margin-bottom:17px}
+.example-gallery h3{font-size:17px;margin-bottom:7px}
+.example-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.example-card{padding:22px;background:#182538;border:1px solid #3e5370;border-radius:12px;display:grid;gap:14px}
+.example-card h4{font-size:16px}
+.example-card p{color:#a7bad2;font-size:13px;line-height:1.55}
+.example-card .guide{color:#c9e0fa}
+.example-card button{justify-self:start}
+.job-navigation{width:100%;margin-top:12px}
+@media(max-width:800px){.example-grid{grid-template-columns:1fr}}
