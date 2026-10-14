@@ -167,7 +167,8 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
             raise ValueError("Iceberg snapshot is not available; it may have expired")
         config = Settings.from_env()
         return pl.scan_iceberg(
-            table, snapshot_id=snapshot,
+            table,
+            snapshot_id=snapshot,
             storage_options={
                 "s3.endpoint": config.s3_endpoint,
                 "s3.access-key-id": config.s3_access_key,

@@ -8,14 +8,13 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
+from sos_platform.api import create_app
 from sos_platform.config import Settings
 from sos_platform.object_store import ObjectStore
-from fastapi.testclient import TestClient
-
-from sos_platform.api import create_app
 from sos_platform.store import Store
 from sos_platform.worker import run_once
 

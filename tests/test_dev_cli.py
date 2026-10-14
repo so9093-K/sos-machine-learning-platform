@@ -17,9 +17,12 @@ spec.loader.exec_module(dev)
 def config():
     return {
         "SOS_INFRA_MODE": "managed",
-        "SOS_WEB_PORT": "9601", "SOS_API_PORT": "9602",
-        "SOS_DB_PORT": "9603", "SOS_S3_PORT": "9605",
-        "SOS_DB_PASSWORD": "secret-password", "SOS_S3_ACCESS_KEY": "sos-dev",
+        "SOS_WEB_PORT": "9601",
+        "SOS_API_PORT": "9602",
+        "SOS_DB_PORT": "9603",
+        "SOS_S3_PORT": "9605",
+        "SOS_DB_PASSWORD": "secret-password",
+        "SOS_S3_ACCESS_KEY": "sos-dev",
         "SOS_S3_SECRET_KEY": "long-storage-secret",
     }
 
@@ -34,12 +37,12 @@ def test_help_and_makefile_are_public_interface(capsys):
 
 
 def test_database_tcp_only_is_not_ready(monkeypatch, config):
-    monkeypatch.setattr(dev, "processes", lambda: {name: {"pid": 1}
-                                                   for name in dev.PROCESS_NAMES})
+    monkeypatch.setattr(dev, "processes", lambda: {name: {"pid": 1} for name in dev.PROCESS_NAMES})
     monkeypatch.setattr(dev, "owned", lambda record: bool(record))
     monkeypatch.setattr(dev, "port_open", lambda _port: True)
     monkeypatch.setattr(
-        dev, "http_ok",
+        dev,
+        "http_ok",
         lambda url: (True, None) if url.endswith(":9601/") else (False, None),
     )
     outcome = dev.status(config)
@@ -51,15 +54,13 @@ def test_database_tcp_only_is_not_ready(monkeypatch, config):
 
 
 def test_ready_requires_all_dependencies(monkeypatch, config):
-    monkeypatch.setattr(dev, "processes", lambda: {name: {"pid": 1}
-                                                   for name in dev.PROCESS_NAMES})
+    monkeypatch.setattr(dev, "processes", lambda: {name: {"pid": 1} for name in dev.PROCESS_NAMES})
     monkeypatch.setattr(dev, "owned", lambda record: True)
     monkeypatch.setattr(dev, "port_open", lambda _port: True)
 
     def response(url):
         if url.endswith("/api/ready"):
-            return True, {"services": {"database": "ready", "storage": "ready",
-                                       "worker": "ready"}}
+            return True, {"services": {"database": "ready", "storage": "ready", "worker": "ready"}}
         return True, None
 
     monkeypatch.setattr(dev, "http_ok", response)
@@ -102,9 +103,11 @@ def test_down_does_not_delete_volumes_or_external_resources(monkeypatch, config)
     actions = []
     monkeypatch.setattr(dev, "stop_services", lambda: actions.append("stopped"))
     monkeypatch.setattr(
-        dev, "compose",
-        lambda arguments, _config: (actions.append(arguments)
-                                    or type("Result", (), {"returncode": 0})()),
+        dev,
+        "compose",
+        lambda arguments, _config: (
+            actions.append(arguments) or type("Result", (), {"returncode": 0})()
+        ),
     )
     result = dev.down(config)
     assert result["status"] == "stopped"
@@ -125,8 +128,13 @@ def test_restart_skips_initialization(monkeypatch, tmp_path, config):
 
     def fake_up(_config, *, initialize=True):
         events.append(initialize)
-        return {"operation": "up", "environment": "managed", "status": "ready",
-                "services": [], "diagnostics": []}
+        return {
+            "operation": "up",
+            "environment": "managed",
+            "status": "ready",
+            "services": [],
+            "diagnostics": [],
+        }
 
     monkeypatch.setattr(dev, "up", fake_up)
     monkeypatch.setattr(dev, "render", lambda _result, _fmt: None)
@@ -136,9 +144,11 @@ def test_restart_skips_initialization(monkeypatch, tmp_path, config):
 
 
 def test_redaction_hides_configured_secrets(config):
-    line = ("SOS_DB_PASSWORD=secret-password "
-            "postgresql://sos:secret-password@localhost:9603 "
-            "token=the-token")
+    line = (
+        "SOS_DB_PASSWORD=secret-password "
+        "postgresql://sos:secret-password@localhost:9603 "
+        "token=the-token"
+    )
     hidden = dev.redact(line, config)
     assert "secret-password" not in hidden
     assert "the-token" not in hidden

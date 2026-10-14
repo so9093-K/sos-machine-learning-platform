@@ -7,7 +7,6 @@ from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import make_url
 
 from .config import Settings
 

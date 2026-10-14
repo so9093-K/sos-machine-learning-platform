@@ -20,9 +20,9 @@ from .datasets import (
     scan_dataset,
     transform,
 )
+from .object_store import ObjectStore
 from .schemas import FeaturePreview, IcebergConnect, IcebergImport, WorkRequest
 from .store import Store
-from .object_store import ObjectStore
 
 
 def create_app(home: Path | None = None) -> FastAPI:

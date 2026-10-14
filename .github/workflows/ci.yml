@@ -18,38 +18,10 @@ jobs:
           enable-cache: true
       - name: Install Python
         run: uv python install
-      - name: Resolve Python lockfile for review
-        run: |
-          uv lock
-          echo SOS_LOCK_BEGIN
-          base64 -w0 uv.lock
-          echo
-          echo SOS_LOCK_END
+      - name: Validate Python lockfile
+        run: uv lock --check
       - name: Install development dependencies
         run: uv sync --locked --group dev
-      - name: Format Python for review
-        run: |
-          uv run --locked ruff format .
-          echo SOS_FORMAT_BEGIN
-          for file in $(find src tests migrations scripts -name '*.py' | sort); do
-            echo "FILE_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "FILE_END:$file"
-          done
-          echo SOS_FORMAT_END
-      - name: Fix Ruff imports for review
-        run: uv run --locked ruff check --fix . || true
-      - name: Capture corrected imports
-        run: |
-          echo SOS_FIXED_BEGIN
-          for file in $(find src tests migrations scripts -name '*.py' | sort); do
-            echo "FILE_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "FILE_END:$file"
-          done
-          echo SOS_FIXED_END
       - name: Ruff lint
         run: uv run --locked ruff check .
       - name: Ruff format

@@ -133,6 +133,7 @@ def main():
     store.initialize()
     if not store.acquire_worker():
         raise SystemExit("Another worker already owns the execution lock")
+
     def stop_on_sigterm(_signum, _frame):
         # 부모 종료 시 run_once의 finally가 실행 중인 자식도 종료한다.
         raise KeyboardInterrupt
