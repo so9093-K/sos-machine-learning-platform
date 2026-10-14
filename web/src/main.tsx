@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import * as echarts from "echarts";
+import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
 import "./style.css";
 
 type Dataset = {
@@ -11,8 +12,7 @@ type Preview = { schema: Record<string, string>; rows: Record<string, unknown>[]
 type Metric = { name: string; dtype: string; nulls: number; nan_count: number | null;
   unique: number; min?: number | null; max?: number | null; mean?: number | null };
 type Profile = { sampled: boolean; sample_limit: number | null; row_count: number; columns: Metric[] };
-type Step = { op: string; column?: string; value?: string | number; alias?: string;
-  periods?: number; window?: number; dtype?: string; columns?: string[] };
+type Step = FeatureStep;
 type Job = {
   id: string; kind: string; status: string; cancel_requested: boolean;
   result: Record<string, unknown> | null; error: string | null;
@@ -106,6 +106,12 @@ function Workspace() {
     return () => { active = false; };
   }, [selected]);
   useEffect(() => {
+    if (jobs.some(j => j.status === "Succeeded" && j.result?.dataset_id &&
+      !datasets.some(d => d.id === j.result?.dataset_id))) {
+      refreshDatasets().catch(e => setError(String(e)));
+    }
+  }, [jobs, datasets]);
+  useEffect(() => {
     const handle = window.setInterval(() => {
       if (jobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
         refreshJobs().catch(e => setError(String(e)));
@@ -120,23 +126,17 @@ function Workspace() {
     finally { setBusy(false); }
   }
   function addStep() {
-    if (!column) { setError("컬럼을 먼저 선택해 주세요."); return; }
-    let next: Step;
-    if (op === "fill_null") {
-      if (!value.trim()) { setError("대체 값을 입력해 주세요."); return; }
-      const numericValue = Number(value);
-      next = { op, column, value: value.trim() && !Number.isNaN(numericValue)
-        ? numericValue : value };
-    } else if (op === "cast") next = { op, column, dtype: "Float64" };
-    else if (op === "lag") next = { op, column, periods: 1 };
-    else if (op === "rolling_mean") next = { op, column, window: 3 };
-    else next = { op, column };
-    setSteps(existing => [...existing, next]);
-    setFeaturePreview(null); setError("");
+    try {
+      setSteps(existing => [...existing, createStep(op, column, value)]);
+      setFeaturePreview(null); setError("");
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
   const transform = { steps, ...(orderBy ? { order_by: orderBy } : {}) };
   async function previewFeatures() {
     if (!selected || steps.length === 0) return;
+    if (needsTimeOrder(steps) && !orderBy) {
+      setError("Lag와 Rolling 변환에는 정렬 컬럼을 지정해야 합니다."); return;
+    }
     await withFeedback(async () => {
       const result = await jsonPost<Preview>("/api/features/preview",
         { dataset_id: selected, transform });
@@ -145,6 +145,9 @@ function Workspace() {
   }
   async function submit(kind: "profile" | "transform") {
     if (!selected) return;
+    if (kind === "transform" && needsTimeOrder(steps) && !orderBy) {
+      setError("Lag와 Rolling 변환에는 정렬 컬럼을 지정해야 합니다."); return;
+    }
     await withFeedback(async () => {
       await jsonPost("/api/jobs",
         { dataset_id: selected, kind, ...(kind === "transform" ? { transform } : {}) });
@@ -159,6 +162,14 @@ function Workspace() {
       const data = await request<Dataset>("/api/datasets/files", { method: "POST", body: form });
       await refreshDatasets(); setSelected(data.id); setTab("preview");
       setNotice("파일을 불변 데이터셋으로 등록했습니다.");
+    });
+  }
+  async function connectExisting() {
+    await withFeedback(async () => {
+      const data = await jsonPost<Dataset>("/api/datasets/iceberg",
+        { table_name: tableName });
+      await refreshDatasets(); setSelected(data.id); setTab("preview");
+      setNotice("기존 Iceberg 테이블의 스냅샷을 연결했습니다.");
     });
   }
   async function importIceberg() {
@@ -176,6 +187,22 @@ function Workspace() {
       await refreshJobs();
     });
   }
+  const distribution = useMemo(() => histogram(preview?.rows ?? [], visualColumn),
+    [preview, visualColumn]);
+  const distributionOption = useMemo<echarts.EChartsCoreOption | null>(() => {
+    if (!distribution) return null;
+    return {
+      backgroundColor: "transparent", textStyle: { color: "#cbd5e1" },
+      tooltip: { trigger: "axis" },
+      grid: { left: 50, right: 15, top: 20, bottom: 48 },
+      xAxis: { type: "category", data: distribution.labels,
+        axisLabel: { color: "#94a3b8", rotate: 20, hideOverlap: true } },
+      yAxis: { type: "value", axisLabel: { color: "#94a3b8" },
+        splitLine: { lineStyle: { color: "#334155" } } },
+      series: [{ type: "bar", data: distribution.counts,
+        itemStyle: { color: "#7d92e7" } }],
+    };
+  }, [distribution]);
   const chartOption = useMemo<echarts.EChartsCoreOption | null>(() => {
     if (!preview?.rows.length || !visualColumn) return null;
     const values = preview.rows.map(r => Number(r[visualColumn]))
@@ -191,7 +218,7 @@ function Workspace() {
       yAxis: { type: "value", axisLabel: { color: "#94a3b8" }, splitLine: {
         lineStyle: { color: "#334155" } } },
       series: [{ type: "line", showSymbol: false, name: visualColumn, data: preview.rows.map(
-        r => typeof r[visualColumn] === "number" ? r[visualColumn] : Number(r[visualColumn])
+        r => typeof r[visualColumn] === "number" ? r[visualColumn] : null
       ), lineStyle: { color: "#69b9ff" }, itemStyle: { color: "#69b9ff" } }],
     };
   }, [preview, visualColumn, timeColumn]);
@@ -209,6 +236,14 @@ function Workspace() {
           event.target.value = "";
         }} />
       </label>
+      <div className="connect-existing">
+        <label>기존 Iceberg 테이블
+          <input aria-label="Iceberg 테이블 이름" value={tableName}
+            onChange={e => setTableName(e.target.value)} placeholder="sensor_data" />
+        </label>
+        <button className="secondary" disabled={busy}
+          onClick={() => void connectExisting()}>스냅샷 연결</button>
+      </div>
       <nav aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
@@ -285,8 +320,13 @@ function Workspace() {
               <label>가로축 <select value={timeColumn} onChange={e => setTimeColumn(e.target.value)}>
                 {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select></label></div>
-            {chartOption ? <Chart option={chartOption} /> : <p className="muted">표시할 숫자형 데이터가 없습니다.</p>}
-            <p className="hint">차트는 최대 100행의 미리보기 값이며, 전체 집계가 아닙니다.</p>
+            <div className="charts">
+              <div><h4>값의 변화</h4>{chartOption ? <Chart option={chartOption} /> :
+                <p className="muted">표시할 숫자형 데이터가 없습니다.</p>}</div>
+              <div><h4>분포 (Histogram)</h4>{distributionOption ? <Chart option={distributionOption} /> :
+                <p className="muted">분포를 계산할 숫자형 데이터가 없습니다.</p>}</div>
+            </div>
+            <p className="hint">차트와 히스토그램은 최대 100행의 미리보기 값입니다.</p>
           </>}
         </section>}
         {tab === "features" && <section className="panel">
