@@ -74,3 +74,85 @@ class IcebergImport(BaseModel):
 class IcebergConnect(BaseModel):
     table_name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,62}$")
     snapshot_id: str | None = None
+
+
+class DatasetOut(BaseModel):
+    """불변 Dataset 참조의 API 응답 계약."""
+
+    id: str
+    name: str
+    kind: Literal["file", "iceberg"]
+    location: str
+    version: str
+    created_at: str
+
+
+class PreviewOut(BaseModel):
+    """제한된 행 미리보기와 컬럼 타입."""
+
+    schema: dict[str, str]
+    rows: list[dict[str, object]]
+    returned_rows: int
+
+
+class FeaturePreviewOut(PreviewOut):
+    sampled: bool
+
+
+class ColumnProfileOut(BaseModel):
+    name: str
+    dtype: str
+    nulls: int
+    nan_count: int | None
+    unique: int
+    min: float | int | None = None
+    max: float | int | None = None
+    mean: float | None = None
+
+
+class ProfileOut(BaseModel):
+    sampled: bool
+    sample_limit: int | None
+    row_count: int
+    columns: list[ColumnProfileOut]
+
+
+class AttemptOut(BaseModel):
+    id: str
+    job_id: str
+    number: int
+    status: str
+    started_at: str
+    finished_at: str | None = None
+    error: str | None = None
+
+
+class JobOut(BaseModel):
+    id: str
+    kind: Literal["profile", "transform", "iceberg_import"]
+    dataset_id: str
+    spec: dict[str, object]
+    status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
+    cancel_requested: bool
+    result: dict[str, object] | None
+    error: str | None
+    created_at: str
+    updated_at: str
+    attempts: list[AttemptOut]
+
+
+class ExampleOut(BaseModel):
+    """예제는 별도 가짜 결과가 아니라 Dataset 등록 안내를 제공한다."""
+
+    id: str
+    title: str
+    description: str
+    columns: list[str]
+    guide: str
+    row_count: int
+    version: str
+
+
+class SnapshotOut(BaseModel):
+    snapshot_id: str
+    timestamp_ms: int

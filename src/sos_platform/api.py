@@ -20,7 +20,19 @@ from .datasets import (
 from .examples import list_examples, use_example
 from .object_store import ObjectStore
 from .processing import profile, safe_preview, transform
-from .schemas import FeaturePreview, IcebergConnect, IcebergImport, WorkRequest
+from .schemas import (
+    DatasetOut,
+    ExampleOut,
+    FeaturePreview,
+    FeaturePreviewOut,
+    IcebergConnect,
+    IcebergImport,
+    JobOut,
+    PreviewOut,
+    ProfileOut,
+    SnapshotOut,
+    WorkRequest,
+)
 from .store import Store
 
 
@@ -94,12 +106,12 @@ def create_app(home: Path | None = None) -> FastAPI:
             return JSONResponse(status_code=503, content=result)
         return result
 
-    @app.get("/api/examples")
+    @app.get("/api/examples", response_model=list[ExampleOut])
     def available_examples():
         """미리 보기 가능한 합성 데이터 예제의 정의를 조회한다."""
         return list_examples()
 
-    @app.post("/api/examples/{example_id}/use", status_code=201)
+    @app.post("/api/examples/{example_id}/use", status_code=201, response_model=DatasetOut)
     def start_example(example_id: str):
         """예제를 명시적으로 선택했을 때만 일반 Dataset으로 등록한다."""
         try:
@@ -107,11 +119,11 @@ def create_app(home: Path | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Example not found") from exc
 
-    @app.get("/api/datasets")
+    @app.get("/api/datasets", response_model=list[DatasetOut])
     def list_datasets():
         return store.datasets()
 
-    @app.post("/api/datasets/files", status_code=201)
+    @app.post("/api/datasets/files", status_code=201, response_model=DatasetOut)
     async def upload(file: Annotated[UploadFile, File()]):
         # 제한보다 한 바이트 더 읽어 파일 전체를 저장하기 전에 크기 초과를 검출한다.
         data = await file.read(MAX_UPLOAD + 1)
@@ -129,57 +141,57 @@ def create_app(home: Path | None = None) -> FastAPI:
         finally:
             await file.close()
 
-    @app.get("/api/datasets/{dataset_id}")
+    @app.get("/api/datasets/{dataset_id}", response_model=DatasetOut)
     def dataset(dataset_id: str):
         return existing(dataset_id)
 
-    @app.get("/api/datasets/{dataset_id}/preview")
+    @app.get("/api/datasets/{dataset_id}/preview", response_model=PreviewOut)
     def dataset_preview(dataset_id: str, limit: int = Query(default=30, ge=1, le=100)):
         return safe_preview(scan_dataset(store, existing(dataset_id)), limit)
 
-    @app.get("/api/datasets/{dataset_id}/profile")
+    @app.get("/api/datasets/{dataset_id}/profile", response_model=ProfileOut)
     def dataset_profile(dataset_id: str):
         return profile(scan_dataset(store, existing(dataset_id)), sample=1000)
 
-    @app.post("/api/iceberg/import", status_code=202)
+    @app.post("/api/iceberg/import", status_code=202, response_model=JobOut)
     def iceberg_import(body: IcebergImport):
         existing(body.dataset_id)
         return store.create_job(
             kind="iceberg_import", dataset_id=body.dataset_id, spec=body.model_dump()
         )
 
-    @app.post("/api/datasets/iceberg", status_code=201)
+    @app.post("/api/datasets/iceberg", status_code=201, response_model=DatasetOut)
     def connect_table(body: IcebergConnect):
         return connect_iceberg(store, body.table_name, body.snapshot_id)
 
-    @app.get("/api/iceberg/{table_name}/snapshots")
+    @app.get("/api/iceberg/{table_name}/snapshots", response_model=list[SnapshotOut])
     def snapshots(table_name: str):
         return iceberg_snapshots(store, table_name)
 
-    @app.post("/api/features/preview")
+    @app.post("/api/features/preview", response_model=FeaturePreviewOut)
     def feature_preview(body: FeaturePreview):
         lf = scan_dataset(store, existing(body.dataset_id)).head(1000)
         return {"sampled": True, **safe_preview(transform(lf, body.transform), 30)}
 
-    @app.get("/api/jobs")
+    @app.get("/api/jobs", response_model=list[JobOut])
     def list_jobs():
         return store.jobs()
 
-    @app.post("/api/jobs", status_code=202)
+    @app.post("/api/jobs", status_code=202, response_model=JobOut)
     def create_job(body: WorkRequest):
         existing(body.dataset_id)
         return store.create_job(
             kind=body.kind, dataset_id=body.dataset_id, spec=body.model_dump(exclude_none=True)
         )
 
-    @app.get("/api/jobs/{job_id}")
+    @app.get("/api/jobs/{job_id}", response_model=JobOut)
     def get_job(job_id: str):
         result = store.get_job(job_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Job not found")
         return result
 
-    @app.post("/api/jobs/{job_id}/cancel")
+    @app.post("/api/jobs/{job_id}/cancel", response_model=JobOut)
     def cancel(job_id: str):
         result = store.request_cancel(job_id)
         if result is None:

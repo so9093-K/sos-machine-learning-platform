@@ -233,3 +233,48 @@ def test_cors_uses_configured_web_port(workspace):
     )
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:9601"
+
+
+
+def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
+    client, _ = workspace
+    assert client.get("/api/datasets").json() == []
+    examples = client.get("/api/examples").json()
+    assert {item["id"] for item in examples} == {"machine-sensors", "data-quality"}
+    assert all(item["version"] and item["row_count"] > 0 for item in examples)
+    assert client.get("/api/datasets").json() == []
+    response = client.post("/api/examples/machine-sensors/use")
+    assert response.status_code == 201, response.text
+    item = response.json()
+    assert item["kind"] == "file"
+    assert client.get(f"/api/datasets/{item['id']}/preview").json()["returned_rows"] == 96
+    again = client.post("/api/examples/machine-sensors/use").json()
+    assert again["id"] == item["id"]
+    assert len(client.get("/api/datasets").json()) == 1
+    assert client.post("/api/examples/missing/use").status_code == 404
+
+
+def test_api_openapi_response_contracts(workspace):
+    client, _ = workspace
+    spec = client.get("/openapi.json").json()
+    assert spec["paths"]["/api/datasets"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]
+    assert "JobOut" in spec["components"]["schemas"]
+    assert "ExampleOut" in spec["components"]["schemas"]
+
+
+def test_file_storage_failure_is_not_user_validation_error(workspace, monkeypatch):
+    client, _ = workspace
+
+    def unavailable(*_args, **_kwargs):
+        raise ConnectionError("secret-storage-credential")
+
+    monkeypatch.setattr("sos_platform.datasets.ObjectStore.put", unavailable)
+    response = client.post(
+        "/api/datasets/files",
+        files={"file": ("valid.csv", b"time,value\n1,2\n", "text/csv")},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "SOS-STORAGE-001"
+    assert "secret-storage-credential" not in response.text
