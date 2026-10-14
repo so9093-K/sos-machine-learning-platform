@@ -1,18 +1,17 @@
 # 문서 안내
 
-- [Platform Identity](vision/PLATFORM_IDENTITY.md): 제품 정체성과 기준 이미지
-- [ADR](adr/README.md): 장기적 영향이 있는 기술·아키텍처 결정
+이 저장소의 설계 문서는 **해당 영역의 정본(Source of Truth)이자 미래 구현을 정의하는 청사진**이다. 구현 여부가 정본의 효력을 결정하지 않는다. 설계 기준과 현재 제공되는 기능은 구분한다.
 
-아래 문서는 해당 기능이나 인터페이스가 구체화되어 설명할 내용이 있을 때 작성한다. 빈 파일은 만들지 않는다.
-
-| 문서 | 책임 |
+| 정본 | 책임 |
 | --- | --- |
-| `getting-started.md` | 설치·실행·최초 실험 등 사용 시작 절차 |
-| `architecture.md` | 시스템 구성요소, 책임과 경계, 요청 흐름 |
-| `workflows.md` | 데이터 처리, 학습·평가·추론 흐름과 작업 상태 |
-| `contracts.md` | 데이터·플러그인·Job·Model Bundle 계약과 호환성 규칙 |
-| `runtimes.md` | 실행 방식, 환경 격리, 프레임워크 호환성과 업그레이드 |
-| `development.md` | README를 넘어서는 개발·검증·CI 절차 |
-| `operations.md` | 배포·관측·장애 대응·백업·복구 절차 |
+| [Platform Identity](vision/PLATFORM_IDENTITY.md) | 제품 정체성·가치·개발 방향과 기준 이미지 |
+| [Experience](experience.md) | 사람·외부 시스템·AI 에이전트의 목표와 경험 |
+| [Architecture](architecture.md) | 플랫폼과 실행 인프라의 논리적 책임·경계 |
+| [Contracts](contracts.md) | 공통 개념·컴포넌트 계약·호환성 원칙 |
+| [Runtimes](runtimes.md) | 실행 환경 격리·식별·재현성·호환성 |
+| [Workflows](workflows.md) | 작업 실행·상태·재시도·결과 연결의 의미 |
+| [ADR](adr/README.md) | 장기적인 기술·아키텍처 결정의 근거 |
 
-코드·타입·설정·자동 생성 API 명세를 원본으로 사용한다. 문서에는 구조, 의도, 실제 사용 및 운영 방법을 기록하며 관련 변경 시 함께 검토한다.
+**권위의 경계:** 설계의 목적·제약·상호작용·호환성 원칙은 각 정본에서 정의한다. 실제 API 필드, 타입, 설정 기본값은 코드·스키마·자동 생성 명세를 원본으로 삼는다. 충돌이 발견되면 해당 책임을 확인하고 함께 수정하며, 문서나 구현 어느 쪽도 조용히 무시하지 않는다.
+
+`getting-started.md`는 실제 실행 가능한 사용 절차가 생겼을 때, `development.md`와 `operations.md`는 기존 규칙이나 문서로 설명할 수 없는 고유한 절차가 생겼을 때 작성한다. 사용법을 설계 원칙으로 가장하거나 비어 있는 문서를 미리 만들지 않는다. 중요한 설계 변경은 필요할 때 ADR로 근거를 보존한다.
