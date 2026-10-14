@@ -108,7 +108,7 @@ test("file upload is operable through keyboard", async ({ page }) => {
   await fileChooser.setFiles({
     name: "keyboard.csv",
     mimeType: "text/csv",
-    buffer: Buffer.from("time,value\\n1,10\\n2,20\\n"),
+    buffer: Buffer.from("time,value\n1,10\n2,20\n"),
   });
   await expect(page.getByRole("heading", { name: "keyboard.csv" })).toBeVisible();
 });
