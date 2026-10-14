@@ -49,7 +49,8 @@ function Workspace() {
   const [value, setValue] = useState("");
   const [orderBy, setOrderBy] = useState("");
   const [groupBy, setGroupBy] = useState("");
-  const [featurePreview, setFeaturePreview] = useState<Preview | null>(null);
+  const [featurePreviewResult, setFeaturePreview] = useState<{ signature: string; data: Preview } | null>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
   const dataset = datasets.find(d => d.id === selected);
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const numeric = profile?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
@@ -73,13 +74,17 @@ function Workspace() {
       .finally(() => setExamplesLoading(false));
   }, []);
   useEffect(() => {
+    // Dataset 전환과 네트워크 재시도를 구분해 작성 중인 변환을 보존한다.
+    setFeaturePreview(null); setSteps([]);
+    setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy(""); setGroupBy("");
+  }, [selected]);
+  useEffect(() => {
     if (!selected) {
       setPreview(null); setProfile(null);
       return;
     }
     let active = true;
-    setPreview(null); setProfile(null); setFeaturePreview(null); setSteps([]);
-    setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy(""); setGroupBy("");
+    setPreview(null); setProfile(null);
     setPreviewStatus("loading"); setProfileStatus("loading");
     request<Preview>(`/api/datasets/${selected}/preview?limit=100`)
       .then(data => {
@@ -124,7 +129,7 @@ function Workspace() {
   }
   function addStep() {
     try {
-      setSteps(existing => [...existing, createStep(op, column, value)]);
+      setSteps(existing => [...existing, createStep(op, column, value, preview?.schema[column])]);
       setFeaturePreview(null); setError("");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
@@ -133,6 +138,10 @@ function Workspace() {
     ...(orderBy ? { order_by: orderBy } : {}),
     ...(groupBy ? { group_by: [groupBy] } : {}),
   };
+  // 오래된 응답은 현재 Dataset과 변환 설정에 맞을 때만 노출한다.
+  const transformSignature = JSON.stringify({ dataset_id: selected, transform });
+  const featurePreview = featurePreviewResult?.signature === transformSignature
+    ? featurePreviewResult.data : null;
   async function previewFeatures() {
     if (!selected || steps.length === 0) return;
     if (needsTimeOrder(steps) && !orderBy) {
@@ -141,7 +150,7 @@ function Workspace() {
     await withFeedback(async () => {
       const result = await jsonPost<Preview>("/api/features/preview",
         { dataset_id: selected, transform });
-      setFeaturePreview(result);
+      setFeaturePreview({ signature: transformSignature, data: result });
     });
   }
   async function submit(kind: "profile" | "transform") {
@@ -242,12 +251,17 @@ function Workspace() {
         <strong>SOS Platform</strong><small>Research · Execute · Evolve</small>
       </div></div>
       <div className="section-title">DATA SOURCES</div>
-      <label className="upload" aria-label="CSV 또는 Parquet 파일 업로드">
+      <label className="upload" role="button" tabIndex={0} aria-label="CSV 또는 Parquet 파일 업로드"
+        aria-disabled={busy} onKeyDown={event => {
+          if (busy || !["Enter", " "].includes(event.key)) return;
+          event.preventDefault(); uploadRef.current?.click();
+        }}>
         + CSV / Parquet 가져오기
-        <input type="file" accept=".csv,.parquet" onChange={event => {
-          const file = event.target.files?.[0]; if (file) void upload(file);
-          event.target.value = "";
-        }} />
+        <input ref={uploadRef} type="file" accept=".csv,.parquet" disabled={busy}
+          onChange={event => {
+            const file = event.target.files?.[0]; if (file) void upload(file);
+            event.target.value = "";
+          }} />
       </label>
       <div className="connect-existing">
         <label>기존 Iceberg 테이블
@@ -415,7 +429,8 @@ function Workspace() {
             <button disabled={busy || !steps.length} onClick={() => void submit("transform")}>
               전체 변환 Job 실행 →
             </button></div>
-          {featurePreview && <div className="result"><h4>변환 미리보기 · 샘플 기반</h4>
+          {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 계산</h4>
+             <p className="hint">실제 Job과 동일한 입력·변환을 사용하며 출력의 최대 30행만 표시합니다.</p>
             <div className="table-scroll"><table><thead><tr>{Object.entries(featurePreview.schema).map(
               ([c, t]) => <th key={c}>{c}<small>{t}</small></th>
             )}</tr></thead><tbody>{featurePreview.rows.slice(0, 15).map((r, i) => <tr key={i}>
