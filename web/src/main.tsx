@@ -379,14 +379,14 @@ function Workspace() {
             <p>원본 데이터는 유지하고, 변환 단계를 저장 가능한 작업 설정으로 구성합니다.</p>
           </div></div>
           <div className="form-row">
-            <label>변환 <select value={op} onChange={e => setOp(e.target.value)}>
+            <label>변환 <select aria-label="변환" value={op} onChange={e => setOp(e.target.value)}>
               <option value="filter_not_null">결측 행 제외</option>
               <option value="fill_null">결측값 대체</option>
               <option value="cast">Float64 변환</option>
               <option value="lag">Lag 1</option>
               <option value="rolling_mean">Rolling Mean 3</option>
             </select></label>
-            <label>컬럼 <select value={column} onChange={e => setColumn(e.target.value)}>
+            <label>컬럼 <select aria-label="컬럼" value={column} onChange={e => setColumn(e.target.value)}>
               {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
             </select></label>
             {op === "fill_null" && <label>대체 값 <input value={value}
@@ -394,11 +394,11 @@ function Workspace() {
             <button className="secondary" onClick={addStep} disabled={!column}>+ 단계 추가</button>
           </div>
           <div className="form-row">
-            <label>시간·정렬 컬럼 <select value={orderBy} onChange={e => setOrderBy(e.target.value)}>
+            <label>시간·정렬 컬럼 <select aria-label="시간·정렬 컬럼" value={orderBy} onChange={e => setOrderBy(e.target.value)}>
               <option value="">정렬하지 않음</option>
               {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
             </select></label>
-            <label>그룹 컬럼 <select value={groupBy} onChange={e => setGroupBy(e.target.value)}>
+            <label>그룹 컬럼 <select aria-label="그룹 컬럼" value={groupBy} onChange={e => setGroupBy(e.target.value)}>
               <option value="">전체를 하나로 처리</option>
               {columnNames.filter(c => c !== orderBy).map(c => <option key={c} value={c}>{c}</option>)}
             </select></label>
