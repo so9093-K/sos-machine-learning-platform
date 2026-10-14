@@ -13,8 +13,8 @@ import time
 from pathlib import Path
 
 from .datasets import import_to_iceberg, scan_dataset
-from .processing import profile, transform
 from .object_store import ObjectStore
+from .processing import profile, transform
 from .schemas import Transform
 from .store import Store
 
