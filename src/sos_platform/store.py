@@ -125,18 +125,24 @@ class Store:
     def jobs(self) -> list[dict]:
         """목록의 Job과 Attempt를 각각 일괄 조회해 N+1 쿼리를 피한다."""
         with self.connection() as db:
-            rows = db.execute(
-                text("SELECT * FROM jobs ORDER BY created_at DESC, id DESC")
-            ).mappings().all()
+            rows = (
+                db.execute(text("SELECT * FROM jobs ORDER BY created_at DESC, id DESC"))
+                .mappings()
+                .all()
+            )
             items = [dict(row) for row in rows]
             if not items:
                 return []
-            attempts = db.execute(
-                text("SELECT * FROM attempts WHERE job_id IN :ids ORDER BY number").bindparams(
-                    bindparam("ids", expanding=True)
-                ),
-                {"ids": [item["id"] for item in items]},
-            ).mappings().all()
+            attempts = (
+                db.execute(
+                    text("SELECT * FROM attempts WHERE job_id IN :ids ORDER BY number").bindparams(
+                        bindparam("ids", expanding=True)
+                    ),
+                    {"ids": [item["id"] for item in items]},
+                )
+                .mappings()
+                .all()
+            )
         grouped: dict[str, list[dict]] = {item["id"]: [] for item in items}
         for attempt in attempts:
             grouped[attempt["job_id"]].append(dict(attempt))
@@ -150,7 +156,9 @@ class Store:
     def request_cancel(self, job_id: str) -> dict | None:
         with self.connection() as db:
             row = (
-                db.execute(text("SELECT status,kind FROM jobs WHERE id=:id FOR UPDATE"), {"id": job_id})
+                db.execute(
+                    text("SELECT status,kind FROM jobs WHERE id=:id FOR UPDATE"), {"id": job_id}
+                )
                 .mappings()
                 .first()
             )
