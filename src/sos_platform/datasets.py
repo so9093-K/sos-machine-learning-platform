@@ -153,10 +153,7 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
         destination = (store.home / "cache" / f"{dataset['version']}{suffix}").resolve()
         if not destination.is_relative_to(store.home / "cache"):
             raise ValueError("Dataset cache path is invalid")
-        if (
-            not destination.is_file()
-            or file_digest(destination) != dataset["version"]
-        ):
+        if not destination.is_file() or file_digest(destination) != dataset["version"]:
             storage.get(key, destination)
             if file_digest(destination) != dataset["version"]:
                 destination.unlink(missing_ok=True)
