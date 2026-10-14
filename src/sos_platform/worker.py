@@ -102,11 +102,12 @@ def run_once(store: Store) -> bool:
         if pending.exists():
             pending.replace(output)
             key = f"results/{job_id}.parquet"
-            version = ObjectStore().put(key, output)
+            storage = ObjectStore()
+            version = storage.put(key, output)
             publish = {
                 "name": f"features-{job_id[:8]}.parquet",
                 "kind": "file",
-                "location": ObjectStore().location(key),
+                "location": storage.location(key),
                 "version": version,
             }
             output.unlink(missing_ok=True)
