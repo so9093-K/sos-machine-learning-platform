@@ -171,5 +171,3 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
             },
         )
     raise ValueError("Unknown dataset type")
-
-

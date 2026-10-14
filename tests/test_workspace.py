@@ -247,7 +247,7 @@ def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
     assert response.status_code == 201, response.text
     item = response.json()
     assert item["kind"] == "file"
-    assert client.get(f"/api/datasets/{item['id']}/preview").json()["returned_rows"] == 96
+    assert client.get(f"/api/datasets/{item['id']}/preview?limit=100").json()["returned_rows"] == 96
     again = client.post("/api/examples/machine-sensors/use").json()
     assert again["id"] == item["id"]
     assert len(client.get("/api/datasets").json()) == 1

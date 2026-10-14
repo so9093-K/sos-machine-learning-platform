@@ -8,19 +8,23 @@ from sos_platform.schemas import Transform
 
 
 def test_grouped_lag_does_not_cross_machine_boundaries():
-    raw = pl.DataFrame({
-        "machine_id": ["A", "B", "A", "B", "A", "B"],
-        "time": [2, 1, 1, 3, 3, 2],
-        "value": [12, 20, 10, 24, 14, 22],
-    }).lazy()
-    spec = Transform.model_validate({
-        "order_by": "time",
-        "group_by": ["machine_id"],
-        "steps": [
-            {"op": "lag", "column": "value", "alias": "previous", "periods": 1},
-            {"op": "rolling_mean", "column": "value", "alias": "moving", "window": 2},
-        ],
-    })
+    raw = pl.DataFrame(
+        {
+            "machine_id": ["A", "B", "A", "B", "A", "B"],
+            "time": [2, 1, 1, 3, 3, 2],
+            "value": [12, 20, 10, 24, 14, 22],
+        }
+    ).lazy()
+    spec = Transform.model_validate(
+        {
+            "order_by": "time",
+            "group_by": ["machine_id"],
+            "steps": [
+                {"op": "lag", "column": "value", "alias": "previous", "periods": 1},
+                {"op": "rolling_mean", "column": "value", "alias": "moving", "window": 2},
+            ],
+        }
+    )
     rows = transform(raw, spec).collect().to_dicts()
     machine_a = [r for r in rows if r["machine_id"] == "A"]
     machine_b = [r for r in rows if r["machine_id"] == "B"]
@@ -32,15 +36,21 @@ def test_grouped_lag_does_not_cross_machine_boundaries():
 
 def test_group_contract_rejects_ambiguous_columns():
     with pytest.raises(ValueError, match="distinct"):
-        Transform.model_validate({
-            "order_by": "time", "group_by": ["machine_id", "machine_id"],
-            "steps": [{"op": "lag", "column": "value"}],
-        })
+        Transform.model_validate(
+            {
+                "order_by": "time",
+                "group_by": ["machine_id", "machine_id"],
+                "steps": [{"op": "lag", "column": "value"}],
+            }
+        )
     with pytest.raises(ValueError, match="must not"):
-        Transform.model_validate({
-            "order_by": "time", "group_by": ["time"],
-            "steps": [{"op": "lag", "column": "value"}],
-        })
+        Transform.model_validate(
+            {
+                "order_by": "time",
+                "group_by": ["time"],
+                "steps": [{"op": "lag", "column": "value"}],
+            }
+        )
 
 
 def test_iceberg_import_is_bounded_before_commit():

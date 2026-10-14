@@ -135,8 +135,10 @@ def create_app(home: Path | None = None) -> FastAPI:
             # 저장소 장애를 사용자 파일의 검증 오류(422)로 잘못 설명하지 않는다.
             raise HTTPException(
                 status_code=503,
-                detail={"code": "SOS-STORAGE-001",
-                        "message": "데이터 저장소를 사용할 수 없습니다. 잠시 후 재시도하세요."},
+                detail={
+                    "code": "SOS-STORAGE-001",
+                    "message": "데이터 저장소를 사용할 수 없습니다. 잠시 후 재시도하세요.",
+                },
             ) from exc
         finally:
             await file.close()

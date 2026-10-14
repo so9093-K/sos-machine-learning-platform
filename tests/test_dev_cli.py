@@ -232,14 +232,28 @@ def test_partial_up_rolls_back_only_new_processes(monkeypatch, tmp_path, config)
 def test_operation_result_matches_public_command(monkeypatch, config, capsys, tmp_path):
     monkeypatch.setattr(dev, "RUNTIME", tmp_path)
     monkeypatch.setattr(dev, "configuration", lambda: config)
-    monkeypatch.setattr(dev, "up", lambda _config: {
-        "operation": "up", "environment": "managed", "status": "ready",
-        "services": [], "diagnostics": [],
-    })
-    monkeypatch.setattr(dev, "down", lambda _config: {
-        "operation": "down", "environment": "managed", "status": "stopped",
-        "services": [], "diagnostics": [],
-    })
+    monkeypatch.setattr(
+        dev,
+        "up",
+        lambda _config: {
+            "operation": "up",
+            "environment": "managed",
+            "status": "ready",
+            "services": [],
+            "diagnostics": [],
+        },
+    )
+    monkeypatch.setattr(
+        dev,
+        "down",
+        lambda _config: {
+            "operation": "down",
+            "environment": "managed",
+            "status": "stopped",
+            "services": [],
+            "diagnostics": [],
+        },
+    )
     for action in ("up", "down"):
         monkeypatch.setattr(dev.sys, "argv", ["dev.py", action, "--format", "json"])
         assert dev.main() == 0
@@ -263,10 +277,11 @@ def test_external_up_does_not_migrate_or_initialize(monkeypatch, config, tmp_pat
     monkeypatch.setattr(dev, "run", fake_run)
     monkeypatch.setattr(dev, "processes", lambda: {})
     monkeypatch.setattr(dev, "start_process", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(dev, "wait_ready", lambda _config: {
-        "operation": "up", "status": "ready", "services": [], "diagnostics": []
-    })
+    monkeypatch.setattr(
+        dev,
+        "wait_ready",
+        lambda _config: {"operation": "up", "status": "ready", "services": [], "diagnostics": []},
+    )
     dev.up(config)
     assert any("sos_platform.validate" in command for command in calls)
-    assert not any("alembic" in command or "sos_platform.bootstrap" in command
-                   for command in calls)
+    assert not any("alembic" in command or "sos_platform.bootstrap" in command for command in calls)

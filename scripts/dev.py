@@ -339,20 +339,34 @@ def up(config: dict, *, initialize: bool = True):
                 "make logs 또는 docker compose ps로 상태를 확인하세요.",
             )
     if initialize:
-        steps = [(["uv", "sync", "--locked", "--group", "dev"],
-                  "SOS-ENV-003", "Python 의존성 설치")]
+        steps = [
+            (["uv", "sync", "--locked", "--group", "dev"], "SOS-ENV-003", "Python 의존성 설치")
+        ]
         if config["SOS_INFRA_MODE"] == "managed":
             # 우리가 관리하는 인프라에만 마이그레이션과 초기화를 실행한다.
-            steps.extend([
-                (["uv", "run", "--locked", "alembic", "upgrade", "head"],
-                 "SOS-DB-001", "DB 마이그레이션"),
-                (["uv", "run", "--locked", "python", "-m", "sos_platform.bootstrap"],
-                 "SOS-STORAGE-001", "스토리지 초기화"),
-            ])
+            steps.extend(
+                [
+                    (
+                        ["uv", "run", "--locked", "alembic", "upgrade", "head"],
+                        "SOS-DB-001",
+                        "DB 마이그레이션",
+                    ),
+                    (
+                        ["uv", "run", "--locked", "python", "-m", "sos_platform.bootstrap"],
+                        "SOS-STORAGE-001",
+                        "스토리지 초기화",
+                    ),
+                ]
+            )
         else:
             # 외부 DB와 객체 저장소에는 읽기 전용 호환성 검사만 수행한다.
-            steps.append((["uv", "run", "--locked", "python", "-m", "sos_platform.validate"],
-                          "SOS-EXTERNAL-001", "외부 서비스 호환성 검사"))
+            steps.append(
+                (
+                    ["uv", "run", "--locked", "python", "-m", "sos_platform.validate"],
+                    "SOS-EXTERNAL-001",
+                    "외부 서비스 호환성 검사",
+                )
+            )
         for command, code, label in steps:
             result = run(
                 command, env=env, cwd=ROOT / "web" if command[0] == "npm" else ROOT, timeout=240
