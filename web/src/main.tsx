@@ -479,7 +479,7 @@ function Workspace() {
         </section>}
 
       </>}
-      {tab === "jobs" && <JobsPanel jobs={jobs} busy={busy}
+      {tab === "jobs" && <JobsPanel jobs={jobs} datasets={datasets} busy={busy}
         onRefresh={() => void withFeedback(refreshJobs)}
         onCancel={id => void cancelJob(id)}
         onOpen={id => void openJobDataset(id)} />}
