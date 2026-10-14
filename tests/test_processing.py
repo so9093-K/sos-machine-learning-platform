@@ -3,7 +3,7 @@
 import polars as pl
 import pytest
 
-from sos_platform.processing import bounded_iceberg_arrow, transform
+from sos_platform.processing import bounded_feature_preview, bounded_iceberg_arrow, transform
 from sos_platform.schemas import Transform
 
 
@@ -75,3 +75,12 @@ def test_select_must_keep_time_and_group_columns_for_later_windows():
     )
     with pytest.raises(ValueError, match="survive preceding steps"):
         transform(raw, spec)
+
+
+def test_feature_preview_rejects_unbounded_source_before_sorting():
+    source = pl.DataFrame({"time": range(100_002), "value": range(100_002)}).lazy()
+    spec = Transform.model_validate(
+        {"order_by": "time", "steps": [{"op": "lag", "column": "value"}]}
+    )
+    with pytest.raises(ValueError, match="100,000"):
+        bounded_feature_preview(source, spec)
