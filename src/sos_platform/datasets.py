@@ -15,6 +15,15 @@ from .store import Store
 MAX_UPLOAD = 20 * 1024 * 1024
 
 
+def file_digest(path: Path) -> str:
+    """큰 로컬 캐시 파일도 전체 내용을 메모리에 올리지 않고 검증한다."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def save_upload(store: Store, name: str, content: bytes) -> dict:
     """업로드를 검증한 뒤 객체 저장소에 불변 버전으로 등록한다."""
     suffix = Path(name).suffix.lower()
@@ -28,7 +37,11 @@ def save_upload(store: Store, name: str, content: bytes) -> dict:
         temporary = Path(tmp.name)
         tmp.write(content)
     try:
-        lf = pl.scan_csv(temporary) if suffix == ".csv" else pl.scan_parquet(temporary)
+        lf = (
+            pl.scan_csv(temporary, try_parse_dates=True)
+            if suffix == ".csv"
+            else pl.scan_parquet(temporary)
+        )
         if not lf.collect_schema().names():
             raise ValueError("Dataset has no columns")
         location = ObjectStore().location(key)
@@ -142,10 +155,10 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
             raise ValueError("Dataset cache path is invalid")
         if (
             not destination.is_file()
-            or hashlib.sha256(destination.read_bytes()).hexdigest() != dataset["version"]
+            or file_digest(destination) != dataset["version"]
         ):
             storage.get(key, destination)
-            if hashlib.sha256(destination.read_bytes()).hexdigest() != dataset["version"]:
+            if file_digest(destination) != dataset["version"]:
                 destination.unlink(missing_ok=True)
                 raise ValueError("Dataset content hash does not match the registered version")
         return (
