@@ -13,3 +13,5 @@ web/dist/
 .env
 .env.*
 !.env.example
+web/test-results/
+web/playwright-report/

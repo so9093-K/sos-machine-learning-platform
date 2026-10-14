@@ -49,3 +49,5 @@ cd web && npm run build && npm run test
 ```
 
 주요 설계 기준은 [Experience](experience.md), [Contracts](contracts.md), [Runtimes](runtimes.md), [Workflows](workflows.md)에 있다. ML 학습과 추론은 아직 구현되지 않았다.
+
+로컬 브라우저 E2E 검증은 API·Worker·Web을 실행한 상태에서 `cd web && npx playwright install chromium && npx playwright test`로 실행한다.
