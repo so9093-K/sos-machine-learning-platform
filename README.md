@@ -20,3 +20,5 @@ uv sync --locked --group dev
 uv run --locked ruff check .
 uv run --locked ruff format --check .
 ```
+
+개발 환경과 실제 사용 가능한 기능의 시작 방법을 [Getting Started](docs/getting-started.md)에서 확인할 수 있습니다.

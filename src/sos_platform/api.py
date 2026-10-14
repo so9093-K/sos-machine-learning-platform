@@ -1,6 +1,7 @@
 """Common Platform API for data exploration and asynchronous transformations."""
 
 import os
+from typing import Annotated
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -68,7 +69,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         return store.datasets()
 
     @app.post("/api/datasets/files", status_code=201)
-    async def upload(file: UploadFile = File(...)):
+    async def upload(file: Annotated[UploadFile, File()]):
         # Read one extra byte to reject oversized uploads before writing to disk.
         data = await file.read(MAX_UPLOAD + 1)
         try:

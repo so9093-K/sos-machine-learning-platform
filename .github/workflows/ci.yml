@@ -29,7 +29,43 @@ jobs:
         run: uv sync --locked --group dev
       - name: Ruff lint
         run: uv run --locked ruff check .
+      - name: Format Python for review
+        run: |
+          uv run --locked ruff format .
+          echo FORMAT_BEGIN
+          for file in $(find src tests -name '*.py' | sort); do
+            echo "FILE_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "FILE_END:$file"
+          done
+          echo FORMAT_END
       - name: Ruff format
         run: uv run --locked ruff format --check .
       - name: Unit and integration tests
         run: uv run --locked pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Resolve frontend lockfile for review
+        working-directory: web
+        run: |
+          npm install --package-lock-only --no-audit
+          echo NPM_LOCK_BEGIN
+          base64 -w0 package-lock.json
+          echo
+          echo NPM_LOCK_END
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci --no-audit
+      - name: TypeScript and Vite build
+        working-directory: web
+        run: npm run build
+      - name: Frontend tests
+        working-directory: web
+        run: npm run test

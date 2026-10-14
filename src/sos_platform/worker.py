@@ -1,7 +1,6 @@
 """Single-process local worker for durable profiling and transformations."""
 
 import argparse
-import json
 import time
 from pathlib import Path
 
