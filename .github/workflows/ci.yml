@@ -53,3 +53,39 @@ jobs:
       - name: Frontend tests
         working-directory: web
         run: npm run test
+
+  ui-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Install Python and JavaScript
+        run: |
+          uv python install
+          uv sync --locked --group dev
+          cd web && npm install --no-audit && cd ..
+      - name: Install browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Start API, Worker and Web
+        run: |
+          export SOS_HOME="$(mktemp -d)"
+          echo "SOS_HOME=$SOS_HOME" >> "$GITHUB_ENV"
+          nohup uv run --locked uvicorn sos_platform.api:app --host 127.0.0.1 --port 8000 >/tmp/sos-api.log 2>&1 &
+          nohup uv run --locked python -m sos_platform.worker --home "$SOS_HOME" >/tmp/sos-worker.log 2>&1 &
+          (cd web && nohup npm run dev -- --host 127.0.0.1 >/tmp/sos-web.log 2>&1 &)
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/api/health >/dev/null &&
+               curl -fsS http://127.0.0.1:5173 >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/sos-api.log /tmp/sos-worker.log /tmp/sos-web.log
+          exit 1
+      - name: Browser workflow tests
+        working-directory: web
+        run: npx playwright test
