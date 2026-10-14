@@ -85,7 +85,11 @@ jobs:
           python3 scripts/dev.py doctor --deep --format json > /tmp/sos-doctor.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-doctor.json")); assert d["status"]=="passed", d'
           make up
-          printf 'timestamp,value\\n1,10\\n2,20\\n' > /tmp/sos-lifecycle.csv
+          cat > /tmp/sos-lifecycle.csv <<'CSV'
+          timestamp,value
+          1,10
+          2,20
+          CSV
           curl -fsS -F 'file=@/tmp/sos-lifecycle.csv' http://127.0.0.1:9602/api/datasets/files > /tmp/sos-dataset.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); assert d["id"]'
           make restart
