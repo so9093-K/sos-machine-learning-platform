@@ -13,7 +13,11 @@ dependencies = [
   "python-multipart>=0.0.20,<1",
   "polars>=1.35,<2",
   "pyarrow>=19,<24",
-  "pyiceberg[sql-sqlite]>=0.10,<1",
+  "pyiceberg[sql-postgres]>=0.10,<1",
+  "sqlalchemy>=2.0,<3",
+  "psycopg2-binary>=2.9,<3",
+  "alembic>=1.16,<2",
+  "boto3>=1.35,<2",
   "scalar-fastapi>=1.4,<2",
 ]
 
