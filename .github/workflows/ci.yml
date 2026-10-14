@@ -11,15 +11,13 @@ permissions:
 jobs:
   python-quality:
     runs-on: ubuntu-latest
-    env:
-      UV_PYTHON: '3.12'
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
       - name: Install Python
-        run: uv python install 3.12
+        run: uv python install
       - name: Install development dependencies
         run: uv sync --group dev
       - name: Ruff lint
