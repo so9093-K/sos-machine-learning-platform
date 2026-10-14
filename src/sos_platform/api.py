@@ -1,9 +1,9 @@
 """Common Platform API for data exploration and asynchronous transformations."""
 
 import os
-from typing import Annotated
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
