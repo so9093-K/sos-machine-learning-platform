@@ -62,9 +62,7 @@ def test_iceberg_import_is_bounded_before_commit():
 
 
 def test_select_must_keep_time_and_group_columns_for_later_windows():
-    raw = pl.DataFrame(
-        {"machine_id": ["A", "A"], "time": [1, 2], "value": [10, 20]}
-    ).lazy()
+    raw = pl.DataFrame({"machine_id": ["A", "A"], "time": [1, 2], "value": [10, 20]}).lazy()
     spec = Transform.model_validate(
         {
             "group_by": ["machine_id"],
