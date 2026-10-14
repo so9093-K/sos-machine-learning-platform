@@ -1,6 +1,8 @@
 """SOS 플랫폼 서비스의 실행·진단 인터페이스. 별도 Python 패키지가 필요하지 않다."""
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import os
@@ -11,11 +13,9 @@ import socket
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
-from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / ".sos-dev"
@@ -30,6 +30,33 @@ class StartupError(Exception):
     def __init__(self, code: str, message: str, detail: str = ""):
         self.code, self.detail = code, detail
         super().__init__(message)
+
+
+@contextmanager
+def lifecycle_lock():
+    """동시에 실행된 기동·종료 명령의 상태 파일 경쟁을 방지한다."""
+    RUNTIME.mkdir(parents=True, exist_ok=True)
+    with (RUNTIME / "lifecycle.lock").open("a+b") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise StartupError("SOS-LIFE-001", "다른 서비스 제어 명령이 실행 중입니다.") from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def redact(value: str, config: dict | None = None) -> str:
+    """연결 문자열과 설정된 비밀값을 사용자 출력에서 마스킹한다."""
+    for name in ("SOS_DB_PASSWORD", "SOS_S3_SECRET_KEY", "SOS_S3_ACCESS_KEY"):
+        secret = (config or {}).get(name, "")
+        if len(secret) >= 4:
+            value = value.replace(secret, "[REDACTED]")
+    value = re.sub(r"(?i)(password|secret|token|access_key)([=:]\\s*)([^\\s,;]+)",
+                   r"\\1\\2[REDACTED]", value)
+    return re.sub(r"(?i)(postgresql(?:\\+\\w+)?://)[^@\\s]+@",
+                  r"\\1[REDACTED]@", value)
 
 
 def configuration() -> dict[str, str]:
@@ -166,66 +193,36 @@ def preflight(config: dict, *, need_docker: bool = True):
                 f"{name} 포트를 다른 프로세스가 사용합니다.",
                 f"포트 {config[port_key]}가 이미 사용 중입니다.",
             )
-    if (ROOT / ".sos" / "metadata.sqlite3").exists():
-        raise StartupError("SOS-DB-002", "이전 SQLite 메타데이터가 발견됐습니다.",
-                           "자동 이관하지 않습니다. 데이터를 백업하고 전환 여부를 확인하세요.")
+    # 이전 SQLite 파일은 건드리지 않고 진단에서만 별도로 안내한다.
     if config["SOS_INFRA_MODE"] not in ("managed", "external"):
         raise StartupError("SOS-CONFIG-003", "SOS_INFRA_MODE는 managed 또는 external이어야 합니다.")
 
 
 def status(config: dict) -> dict:
+    """TCP 연결 가능 여부와 실제 서비스 준비 상태를 혼동하지 않는다."""
     state = processes()
     web_port, api_port = config["SOS_WEB_PORT"], config["SOS_API_PORT"]
-    checks = []
     web_ready, _ = http_ok(f"http://127.0.0.1:{web_port}/")
     api_ready, details = http_ok(f"http://127.0.0.1:{api_port}/api/ready")
-    db_tcp = (
-        port_open(int(config["SOS_DB_PORT"])) if config["SOS_INFRA_MODE"] == "managed" else None
-    )
-    s3_tcp = (
-        port_open(int(config["SOS_S3_PORT"])) if config["SOS_INFRA_MODE"] == "managed" else None
-    )
-    checks.append(
-        {
-            "name": "database",
-            "status": "reachable" if db_tcp else ("unreachable" if db_tcp is False else "external"),
-        }
-    )
-    checks.append(
-        {
-            "name": "storage",
-            "status": "reachable" if s3_tcp else ("unreachable" if s3_tcp is False else "external"),
-        }
-    )
-    for name, ready in (
-        ("api", api_ready),
-        ("worker", bool(details and details.get("services", {}).get("worker") == "ready")),
-        ("web", web_ready),
-    ):
+    health = details.get("services", {}) if api_ready and isinstance(details, dict) else {}
+    checks = []
+    for name, key in (("database", "SOS_DB_PORT"), ("storage", "SOS_S3_PORT")):
+        ready = health.get(name) == "ready"
+        reachable = config["SOS_INFRA_MODE"] == "managed" and port_open(int(config[key]))
+        checks.append({"name": name, "status": "ready" if ready else
+                       "reachable" if reachable else "unavailable"})
+    for name, ready in (("api", api_ready), ("worker", health.get("worker") == "ready"),
+                        ("web", web_ready)):
         record = state.get(name)
-        checks.append(
-            {
-                "name": name,
-                "status": "ready"
-                if ready and owned(record)
-                else "running"
-                if owned(record)
-                else "stopped",
-            }
-        )
+        checks.append({"name": name, "status": "ready" if ready and owned(record)
+                       else "running" if owned(record) else "stopped"})
     return {
-        "operation": "status",
-        "environment": config["SOS_INFRA_MODE"],
-        "status": "ready"
-        if all(x["status"] in ("ready", "reachable", "external") for x in checks) and api_ready
-        else "unavailable",
-        "services": checks,
-        "diagnostics": [],
-        "urls": {
-            "web": f"http://localhost:{web_port}",
-            "api": f"http://localhost:{api_port}",
-            "docs": f"http://localhost:{api_port}/docs",
-        },
+        "operation": "status", "environment": config["SOS_INFRA_MODE"],
+        "status": "ready" if all(x["status"] == "ready" for x in checks) else "unavailable",
+        "services": checks, "diagnostics": [],
+        "urls": {"web": f"http://localhost:{web_port}",
+                 "api": f"http://localhost:{api_port}",
+                 "docs": f"http://localhost:{api_port}/docs"},
     }
 
 
@@ -396,81 +393,68 @@ def down(config: dict):
 
 
 def doctor(config: dict, deep: bool = False):
+    """설정과 연결을 읽기 전용으로 검사한다."""
     results = []
     for name in ("uv", "node", "npm"):
-        results.append(
-            {
-                "check": name,
-                "status": "passed" if shutil.which(name) else "failed",
-                "message": "실행 도구 검색",
-            }
-        )
-    if config["SOS_INFRA_MODE"] == "managed":
-        results.append(
-            {
-                "check": "docker",
-                "status": "passed" if shutil.which("docker") else "failed",
-                "message": "컨테이너 실행 도구 검색",
-            }
-        )
-    for service, key in (
-        ("api_tcp", "SOS_API_PORT"),
-        ("web_tcp", "SOS_WEB_PORT"),
-        ("database_tcp", "SOS_DB_PORT"),
-        ("storage_tcp", "SOS_S3_PORT"),
-    ):
-        if (
-            config["SOS_INFRA_MODE"] == "external"
-            and service.endswith("_tcp")
-            and service in ("database_tcp", "storage_tcp")
-        ):
+        results.append({"check": name, "status": "passed" if shutil.which(name) else "failed",
+                        "message": "필수 실행 도구 검색"})
+    mode = config["SOS_INFRA_MODE"]
+    if mode not in ("managed", "external"):
+        results.append({"check": "infra_mode", "status": "failed",
+                        "message": "설정값은 managed 또는 external이어야 합니다."})
+    if mode == "managed":
+        results.append({"check": "docker", "status": "passed" if shutil.which("docker")
+                        else "failed", "message": "컨테이너 실행 도구 검색"})
+    ports = {}
+    for key in ("SOS_WEB_PORT", "SOS_API_PORT", "SOS_DB_PORT", "SOS_S3_PORT"):
+        try:
+            number = int(config[key])
+            if not 1 <= number <= 65535:
+                raise ValueError("포트 범위")
+            ports[key] = number
+        except (KeyError, ValueError):
+            results.append({"check": key, "status": "failed", "message": "포트 설정 오류"})
+    if len(set(ports.values())) != len(ports):
+        results.append({"check": "port_uniqueness", "status": "failed",
+                        "message": "설정된 서비스 포트 중복"})
+    for name, key in (("api_tcp", "SOS_API_PORT"), ("web_tcp", "SOS_WEB_PORT"),
+                      ("database_tcp", "SOS_DB_PORT"), ("storage_tcp", "SOS_S3_PORT")):
+        if key not in ports or (mode == "external" and name in
+                                  ("database_tcp", "storage_tcp")):
             continue
-        connected = port_open(int(config[key]))
-        results.append(
-            {
-                "check": service,
-                "status": "passed" if connected else "failed",
-                "message": "설정된 호스트·포트의 TCP 연결 결과",
-            }
-        )
-    if deep:
-        ready, details = http_ok(f"http://127.0.0.1:{config['SOS_API_PORT']}/api/ready")
-        results.append(
-            {
-                "check": "api_readiness",
-                "status": "passed" if ready else "failed",
-                "message": "API의 실제 의존성 준비 상태",
-                "details": details,
-            }
-        )
+        results.append({"check": name, "status": "passed" if port_open(ports[key])
+                        else "failed", "message": "TCP 연결 시도 결과"})
+    if (ROOT / ".sos" / "metadata.sqlite3").exists():
+        results.append({"check": "legacy_sqlite", "status": "warning",
+                        "message": "기존 SQLite 데이터 발견 · 자동 이관하지 않음"})
+    if deep and "SOS_API_PORT" in ports:
+        ready, detail = http_ok(f"http://127.0.0.1:{ports['SOS_API_PORT']}/api/ready")
+        results.append({"check": "api_readiness", "status": "passed" if ready else "failed",
+                        "message": "API·DB·스토리지·Worker 준비 검사", "details": detail})
     return {
-        "operation": "doctor",
-        "environment": config["SOS_INFRA_MODE"],
-        "status": "passed" if all(r["status"] == "passed" for r in results) else "failed",
-        "diagnostics": results,
-        "services": [],
+        "operation": "doctor", "environment": mode,
+        "status": "failed" if any(x["status"] == "failed" for x in results) else "passed",
+        "diagnostics": results, "services": [],
     }
 
 
 def logs(config: dict):
+    """관리 서비스 로그를 조회하고 알려진 민감정보를 마스킹한다."""
     for name in PROCESS_NAMES:
         file = LOGDIR / f"{name}.log"
-        print(f"\n--- {name} ---")
+        print(f"\\n--- {name} ---")
         if not file.is_file():
             print("기록된 로그가 없습니다.")
             continue
-        lines = file.read_text(errors="replace").splitlines()[-70:]
-        for line in lines:
-            # 인증값·연결 문자열을 터미널 출력에서 제거한다.
-            line = re.sub(
-                r"(?i)(password|secret|token|access_key)([=:]\s*)([^\s,;]+)",
-                r"\1\2[REDACTED]",
-                line,
-            )
-            line = re.sub(r"(?i)(postgresql(?:\+\w+)?://)[^@\s]+@", r"\1[REDACTED]@", line)
-            print(line)
+        for line in file.read_text(errors="replace").splitlines()[-70:]:
+            print(redact(line, config))
     if config["SOS_INFRA_MODE"] == "managed":
-        print("\n인프라 상세 로그는 관리 대상 서비스의 Docker 로그에서 확인합니다.")
+        print("\\n--- infrastructure ---")
+        result = compose(["logs", "--tail", "60", "--no-color"], config)
+        if result.returncode:
+            print("인프라 로그 조회 실패 · make doctor로 상태를 확인하세요.")
+        else:
+            print(redact(result.stdout, config))
 
 
 def check(config: dict):
@@ -542,13 +526,15 @@ def main():
         return 0
     config = configuration()
     try:
-        if args.command == "up":
-            result = up(config)
-        elif args.command == "down":
-            result = down(config)
-        elif args.command == "restart":
-            stop_services()
-            result = up(config, initialize=False)
+        if args.command in ("up", "down", "restart"):
+            with lifecycle_lock():
+                if args.command == "up":
+                    result = up(config)
+                elif args.command == "down":
+                    result = down(config)
+                else:
+                    stop_services()
+                    result = up(config, initialize=False)
             result["operation"] = "restart"
         elif args.command == "status":
             result = status(config)
@@ -574,7 +560,7 @@ def main():
                     "check": "operation",
                     "status": "failed",
                     "message": str(exc),
-                    "possible_cause": exc.detail,
+                    "possible_cause": redact(exc.detail, config),
                     "recommendation": "make doctor 및 make logs를 확인하세요.",
                 }
             ],
