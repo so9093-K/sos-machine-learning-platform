@@ -199,7 +199,6 @@ def preflight(config: dict, *, need_docker: bool = True):
                 f"{name} 포트를 다른 프로세스가 사용합니다.",
                 f"포트 {config[port_key]}가 이미 사용 중입니다.",
             )
-    # 이전 SQLite 파일은 건드리지 않고 진단에서만 별도로 안내한다.
     if config["SOS_INFRA_MODE"] not in ("managed", "external"):
         raise StartupError("SOS-CONFIG-003", "SOS_INFRA_MODE는 managed 또는 external이어야 합니다.")
 
@@ -503,14 +502,6 @@ def doctor(config: dict, deep: bool = False):
                 "check": name,
                 "status": "passed" if port_open(ports[key]) else "failed",
                 "message": "TCP 연결 시도 결과",
-            }
-        )
-    if (ROOT / ".sos" / "metadata.sqlite3").exists():
-        results.append(
-            {
-                "check": "legacy_sqlite",
-                "status": "warning",
-                "message": "기존 SQLite 데이터 발견 · 자동 이관하지 않음",
             }
         )
     if deep and "SOS_API_PORT" in ports:

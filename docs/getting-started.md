@@ -31,7 +31,7 @@ make down      # 관리 대상만 종료하고 데이터 보존
 
 `SOS_INFRA_MODE=external`에서는 CLI가 DB·객체 저장소를 시작·종료·마이그레이션하지 않는다. `make up`은 외부 서비스의 스키마 호환성과 객체 저장소 접근을 읽기 전용으로 확인한다. 외부 서비스에 연결하려면 `SOS_DATABASE_URL`과 `SOS_S3_ENDPOINT`·자격 증명 등을 제공한다. 개발 프로세스는 기본적으로 루프백 주소에서만 HTTP를 수신하며, 현재 인증·권한이나 공개 서비스 배포 구성을 제공하지 않는다.
 
-`make down`과 `make restart`는 DB 볼륨·Iceberg 데이터·아티팩트를 삭제하지 않는다. 이미 생성된 `.sos/metadata.sqlite3` 데이터는 PostgreSQL에 자동 이관되지 않는다. 기존 데이터가 있으면 별도로 백업·이관을 검토한다.
+`make down`과 `make restart`는 DB 볼륨·Iceberg 데이터·아티팩트를 삭제하지 않는다. 실행용 로컬 캐시와 로그는 `.sos/`와 `.sos-dev/`에서 별도로 관리되며 DB·객체 저장소 볼륨과 다른 수명주기를 갖는다.
 
 CSV·Parquet 업로드는 20 MiB 이하이며, 데이터 미리보기는 최대 100행, 기본 프로파일은 최대 1,000행 기준이다. Feature Preview는 입력을 먼저 임의 절단하지 않고 전체 입력에서 실제 Job과 같은 순서로 변환한 뒤 출력 30행을 보여준다. 동기 요청의 과도한 자원 점유를 막기 위해 입력이 100,000행을 넘으면 Preview를 거절하고 전체 Transform Job을 사용하도록 안내한다. 전체 프로파일·피처 처리·Iceberg 적재는 Job으로 실행한다. Snapshot ID를 기록했더라도 만료 정책으로 사라질 수 있으므로 유효성 확인과 보존 정책이 필요하다.
 

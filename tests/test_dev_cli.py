@@ -155,19 +155,6 @@ def test_redaction_hides_configured_secrets(config):
     assert "REDACTED" in hidden
 
 
-def test_existing_sqlite_data_is_not_modified_by_preflight(monkeypatch, tmp_path, config):
-    config["SOS_INFRA_MODE"] = "external"
-    legacy = tmp_path / ".sos" / "metadata.sqlite3"
-    legacy.parent.mkdir()
-    legacy.write_bytes(b"preserve-me")
-    monkeypatch.setattr(dev, "ROOT", tmp_path)
-    monkeypatch.setattr(dev.shutil, "which", lambda _name: "/usr/bin/tool")
-    monkeypatch.setattr(dev, "port_open", lambda _port: False)
-    monkeypatch.setattr(dev, "processes", lambda: {})
-    dev.preflight(config, need_docker=False)
-    assert legacy.read_bytes() == b"preserve-me"
-
-
 def test_503_readiness_exposes_component_states(monkeypatch, config):
     monkeypatch.setattr(dev, "processes", lambda: {name: {"pid": 1} for name in dev.PROCESS_NAMES})
     monkeypatch.setattr(dev, "owned", lambda record: True)
