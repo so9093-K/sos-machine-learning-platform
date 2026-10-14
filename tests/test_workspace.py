@@ -6,11 +6,10 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import make_url
 
 from sos_platform.api import create_app
