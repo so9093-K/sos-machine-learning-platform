@@ -12,6 +12,10 @@ describe("Feature Builder contracts", () => {
   });
   it("detects time dependencies", () => {
     expect(needsTimeOrder([createStep("lag", "temperature", "")])).toBe(true);
+    expect(createStep("lag", "temperature", "", "Float64", 5).periods).toBe(5);
+    expect(createStep("rolling_mean", "temperature", "", "Float64", 8).window).toBe(8);
+    expect(() => createStep("lag", "temperature", "", "Float64", 0)).toThrow();
+    expect(() => createStep("rolling_mean", "temperature", "", "Float64", 1)).toThrow();
     expect(needsTimeOrder([createStep("filter_not_null", "temperature", "")])).toBe(false);
     expect(() => createStep("unsupported", "temperature", "")).toThrow();
   });
