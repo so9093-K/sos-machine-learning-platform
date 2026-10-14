@@ -3,10 +3,13 @@ export type FeatureStep = {
   op: string; column: string; value?: number | string;
   periods?: number; window?: number; dtype?: string;
 };
-export function createStep(op: string, column: string, raw: string): FeatureStep {
+export function createStep(op: string, column: string, raw: string, dtype?: string): FeatureStep {
   if (!column) throw new Error("컬럼을 선택해 주세요.");
   if (op === "fill_null") {
     if (!raw.trim()) throw new Error("결측값 대체 값을 입력해 주세요.");
+    if (dtype === "String" || dtype === "Categorical") {
+      return { op, column, value: raw };
+    }
     const parsed = Number(raw);
     return { op, column, value: Number.isFinite(parsed) ? parsed : raw };
   }
