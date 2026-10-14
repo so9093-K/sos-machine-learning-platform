@@ -33,7 +33,7 @@ from .schemas import (
     SnapshotOut,
     WorkRequest,
 )
-from .store import Store
+from .store import IcebergCancellationConflict, Store
 
 
 def create_app(home: Path | None = None) -> FastAPI:
@@ -172,8 +172,10 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @app.post("/api/features/preview", response_model=FeaturePreviewOut)
     def feature_preview(body: FeaturePreview):
-        lf = scan_dataset(store, existing(body.dataset_id)).head(1000)
-        return {"sampled": True, **safe_preview(transform(lf, body.transform), 30)}
+        # 입력의 앞 1,000행을 먼저 자르면 정렬·Lag·Rolling 경계가 실제 Job과 달라진다.
+        # 전체 입력에서 같은 연산을 수행하고 출력 행 수만 제한한다.
+        lf = scan_dataset(store, existing(body.dataset_id))
+        return {"sampled": False, **safe_preview(transform(lf, body.transform), 30)}
 
     @app.get("/api/jobs", response_model=list[JobOut])
     def list_jobs():
@@ -195,7 +197,13 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobOut)
     def cancel(job_id: str):
-        result = store.request_cancel(job_id)
+        try:
+            result = store.request_cancel(job_id)
+        except IcebergCancellationConflict as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "SOS-ICEBERG-CANCEL-409", "message": str(exc)},
+            ) from exc
         if result is None:
             raise HTTPException(status_code=404, detail="Job not found")
         return result
