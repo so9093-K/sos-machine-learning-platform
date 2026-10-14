@@ -14,7 +14,7 @@ test("CSV upload → EDA → feature preview → worker → reusable dataset", a
   await page.getByRole("tab", { name: "Features" }).click();
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 샘플 기반")).toBeVisible();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
   await page.getByRole("button", { name: /전체 변환 Job 실행/ }).click();
   const latestTransform = page.locator(".job").filter({ hasText: "Feature Transform" }).first();
   await expect(latestTransform.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
@@ -58,7 +58,7 @@ test("example onboarding uses the same EDA, Feature and Job contracts", async ({
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 샘플 기반")).toBeVisible();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
   await page.getByRole("button", { name: /전체 변환 Job 실행/ }).click();
   const job = page.locator(".job").filter({ hasText: "Feature Transform" }).first();
   await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
@@ -76,4 +76,39 @@ test("workspace tabs support keyboard navigation", async ({ page }) => {
   await expect(page.getByRole("tab", { name: "EDA & Profile" })).toHaveAttribute(
     "aria-selected", "true");
   await expect(page.getByRole("tabpanel", { name: "EDA & Profile" })).toBeVisible();
+});
+
+
+test("feature preview is invalidated when group or ordering changes", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
+  await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
+  await page.getByRole("tab", { name: "Features" }).click();
+  await page.getByLabel("변환", { exact: true }).selectOption("lag");
+  await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
+  await page.getByLabel("시간·정렬 컬럼").selectOption("time");
+  await page.getByLabel("그룹 컬럼").selectOption("machine_id");
+  await page.getByRole("button", { name: "+ 단계 추가" }).click();
+  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByLabel("그룹 컬럼").selectOption("");
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toHaveCount(0);
+  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+});
+
+
+test("file upload is operable through keyboard", async ({ page }) => {
+  await page.goto("/");
+  const upload = page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" });
+  await upload.focus();
+  const chooser = page.waitForEvent("filechooser");
+  await upload.press("Enter");
+  const fileChooser = await chooser;
+  await fileChooser.setFiles({
+    name: "keyboard.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("time,value\\n1,10\\n2,20\\n"),
+  });
+  await expect(page.getByRole("heading", { name: "keyboard.csv" })).toBeVisible();
 });
