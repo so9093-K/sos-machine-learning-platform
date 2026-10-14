@@ -67,8 +67,14 @@ class Store:
             )
 
     def register_dataset(self, *, name: str, kind: str, location: str, version: str) -> dict:
-        item = dict(id=str(uuid4()), name=name, kind=kind, location=location,
-                    version=str(version), created_at=now())
+        item = dict(
+            id=str(uuid4()),
+            name=name,
+            kind=kind,
+            location=location,
+            version=str(version),
+            created_at=now(),
+        )
         with self.connection() as db:
             db.execute(
                 "INSERT INTO datasets(id,name,kind,location,version,created_at) "
@@ -87,8 +93,15 @@ class Store:
             return [dict(r) for r in db.execute("SELECT * FROM datasets ORDER BY created_at DESC")]
 
     def create_job(self, *, kind: str, dataset_id: str, spec: dict) -> dict:
-        item = dict(id=str(uuid4()), kind=kind, dataset_id=dataset_id,
-                    spec=json.dumps(spec), status="Queued", created_at=now(), updated_at=now())
+        item = dict(
+            id=str(uuid4()),
+            kind=kind,
+            dataset_id=dataset_id,
+            spec=json.dumps(spec),
+            status="Queued",
+            created_at=now(),
+            updated_at=now(),
+        )
         with self.connection() as db:
             db.execute(
                 "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at) "
@@ -106,8 +119,12 @@ class Store:
             item["spec"] = json.loads(item["spec"])
             item["result"] = json.loads(item["result"]) if item["result"] else None
             item["cancel_requested"] = bool(item["cancel_requested"])
-            item["attempts"] = [dict(r) for r in db.execute(
-                "SELECT * FROM attempts WHERE job_id=? ORDER BY number", (job_id,))]
+            item["attempts"] = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT * FROM attempts WHERE job_id=? ORDER BY number", (job_id,)
+                )
+            ]
             return item
 
     def jobs(self) -> list[dict]:
@@ -120,11 +137,13 @@ class Store:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
             if row and row["status"] == "Queued":
-                db.execute("UPDATE jobs SET status='Cancelled',updated_at=? WHERE id=?",
-                           (now(), job_id))
+                db.execute(
+                    "UPDATE jobs SET status='Cancelled',updated_at=? WHERE id=?", (now(), job_id)
+                )
             elif row and row["status"] == "Running":
-                db.execute("UPDATE jobs SET cancel_requested=1,updated_at=? WHERE id=?",
-                           (now(), job_id))
+                db.execute(
+                    "UPDATE jobs SET cancel_requested=1,updated_at=? WHERE id=?", (now(), job_id)
+                )
         return self.get_job(job_id)
 
     def claim(self) -> dict | None:
@@ -136,32 +155,46 @@ class Store:
             if row is None:
                 return None
             job_id = row["id"]
-            number = db.execute(
-                "SELECT COUNT(*) AS n FROM attempts WHERE job_id=?", (job_id,)
-            ).fetchone()["n"] + 1
-            db.execute("UPDATE jobs SET status='Running',updated_at=? WHERE id=?",
-                       (now(), job_id))
+            number = (
+                db.execute(
+                    "SELECT COUNT(*) AS n FROM attempts WHERE job_id=?", (job_id,)
+                ).fetchone()["n"]
+                + 1
+            )
+            db.execute("UPDATE jobs SET status='Running',updated_at=? WHERE id=?", (now(), job_id))
             db.execute(
-                "INSERT INTO attempts(id,job_id,number,status,started_at) "
-                "VALUES(?,?,?,?,?)",
+                "INSERT INTO attempts(id,job_id,number,status,started_at) VALUES(?,?,?,?,?)",
                 (str(uuid4()), job_id, number, "Running", now()),
             )
         return self.get_job(job_id)
 
-    def finish(self, job_id: str, status: str, *, result: dict | None = None,
-               error: str | None = None, publish: dict | None = None) -> str:
+    def finish(
+        self,
+        job_id: str,
+        status: str,
+        *,
+        result: dict | None = None,
+        error: str | None = None,
+        publish: dict | None = None,
+    ) -> str:
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT status,cancel_requested FROM jobs WHERE id=?",
-                             (job_id,)).fetchone()
+            row = db.execute(
+                "SELECT status,cancel_requested FROM jobs WHERE id=?", (job_id,)
+            ).fetchone()
             if not row or row["status"] != "Running":
                 raise RuntimeError("Job is not running")
             if row["cancel_requested"]:
                 status, result, publish = "Cancelled", None, None
             if status == "Succeeded" and publish:
-                item = dict(id=str(uuid4()), name=publish["name"], kind="file",
-                            location=publish["location"], version=publish["version"],
-                            created_at=now())
+                item = dict(
+                    id=str(uuid4()),
+                    name=publish["name"],
+                    kind="file",
+                    location=publish["location"],
+                    version=publish["version"],
+                    created_at=now(),
+                )
                 db.execute(
                     "INSERT INTO datasets(id,name,kind,location,version,created_at) "
                     "VALUES(:id,:name,:kind,:location,:version,:created_at)",
@@ -170,8 +203,7 @@ class Store:
                 result = {**(result or {}), "dataset_id": item["id"]}
             db.execute(
                 "UPDATE jobs SET status=?,result=?,error=?,updated_at=? WHERE id=?",
-                (status, json.dumps(result, default=str) if result else None, error,
-                 now(), job_id),
+                (status, json.dumps(result, default=str) if result else None, error, now(), job_id),
             )
             db.execute(
                 "UPDATE attempts SET status=?,finished_at=?,error=? WHERE job_id=? "
@@ -184,12 +216,15 @@ class Store:
         """A stopped local worker cannot leave a job marked successful."""
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            pending = [dict(r) for r in db.execute(
-                "SELECT id,cancel_requested FROM jobs WHERE status='Running'")]
+            pending = [
+                dict(r)
+                for r in db.execute("SELECT id,cancel_requested FROM jobs WHERE status='Running'")
+            ]
             for item in pending:
                 status = "Cancelled" if item["cancel_requested"] else "Queued"
-                db.execute("UPDATE jobs SET status=?,updated_at=? WHERE id=?",
-                           (status, now(), item["id"]))
+                db.execute(
+                    "UPDATE jobs SET status=?,updated_at=? WHERE id=?", (status, now(), item["id"])
+                )
                 db.execute(
                     "UPDATE attempts SET status='Interrupted',finished_at=?,error=? "
                     "WHERE job_id=? AND status='Running'",

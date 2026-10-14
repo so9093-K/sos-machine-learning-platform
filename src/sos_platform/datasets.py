@@ -12,8 +12,12 @@ from .store import Store
 MAX_UPLOAD = 20 * 1024 * 1024
 MAX_PREVIEW = 100
 ALLOWED_CASTS = {
-    "String": pl.String, "Int64": pl.Int64, "Float64": pl.Float64,
-    "Boolean": pl.Boolean, "Date": pl.Date, "Datetime": pl.Datetime,
+    "String": pl.String,
+    "Int64": pl.Int64,
+    "Float64": pl.Float64,
+    "Boolean": pl.Boolean,
+    "Date": pl.Date,
+    "Datetime": pl.Datetime,
 }
 
 
@@ -30,8 +34,9 @@ def save_upload(store: Store, name: str, content: bytes) -> dict:
     lf = pl.scan_csv(location) if suffix == ".csv" else pl.scan_parquet(location)
     if not lf.collect_schema().names():
         raise ValueError("Dataset has no columns")
-    return store.register_dataset(name=Path(name).name, kind="file",
-                                  location=str(location), version=digest)
+    return store.register_dataset(
+        name=Path(name).name, kind="file", location=str(location), version=digest
+    )
 
 
 def iceberg_catalog(store: Store):
@@ -65,8 +70,9 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
     snapshot = table.current_snapshot()
     if snapshot is None:
         raise ValueError("Iceberg append did not create a snapshot")
-    return store.register_dataset(name=ident, kind="iceberg", location=ident,
-                                  version=str(snapshot.snapshot_id))
+    return store.register_dataset(
+        name=ident, kind="iceberg", location=ident, version=str(snapshot.snapshot_id)
+    )
 
 
 def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = None) -> dict:
@@ -87,16 +93,22 @@ def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = Non
         snapshot_id = str(current.snapshot_id)
     if snapshot_id not in snapshots:
         raise ValueError("Iceberg snapshot is not available; it may have expired")
-    return store.register_dataset(name=f"default.{table_name}", kind="iceberg",
-                                  location=f"default.{table_name}", version=snapshot_id)
+    return store.register_dataset(
+        name=f"default.{table_name}",
+        kind="iceberg",
+        location=f"default.{table_name}",
+        version=snapshot_id,
+    )
 
 
 def iceberg_snapshots(store: Store, table_name: str) -> list[dict]:
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
         raise ValueError("Invalid Iceberg table name")
     table = iceberg_catalog(store).load_table(f"default.{table_name}")
-    return [{"snapshot_id": str(s.snapshot_id), "timestamp_ms": s.timestamp_ms}
-            for s in table.snapshots()]
+    return [
+        {"snapshot_id": str(s.snapshot_id), "timestamp_ms": s.timestamp_ms}
+        for s in table.snapshots()
+    ]
 
 
 def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
@@ -124,8 +136,11 @@ def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
     if not 1 <= limit <= MAX_PREVIEW:
         raise ValueError("Preview limit must be between 1 and 100")
     frame = lf.limit(limit).collect()
-    return {"schema": {c: str(t) for c, t in lf.collect_schema().items()},
-            "rows": frame.to_dicts(), "returned_rows": frame.height}
+    return {
+        "schema": {c: str(t) for c, t in lf.collect_schema().items()},
+        "rows": frame.to_dicts(),
+        "returned_rows": frame.height,
+    }
 
 
 def profile(lf: pl.LazyFrame, sample: int | None = 1000) -> dict:
@@ -138,31 +153,42 @@ def profile(lf: pl.LazyFrame, sample: int | None = 1000) -> dict:
     for number, (name, dtype) in enumerate(schema.items()):
         col = pl.col(name)
         key = f"c{number}_"
-        aggregations.extend([
-            col.null_count().alias(key + "null"),
-            col.n_unique().alias(key + "unique"),
-        ])
+        aggregations.extend(
+            [
+                col.null_count().alias(key + "null"),
+                col.n_unique().alias(key + "unique"),
+            ]
+        )
         if dtype.is_float():
             aggregations.append(col.is_nan().sum().alias(key + "nan"))
         if dtype.is_numeric():
-            aggregations.extend([
-                col.min().alias(key + "min"),
-                col.max().alias(key + "max"),
-                col.mean().alias(key + "mean"),
-            ])
+            aggregations.extend(
+                [
+                    col.min().alias(key + "min"),
+                    col.max().alias(key + "max"),
+                    col.mean().alias(key + "mean"),
+                ]
+            )
     values = selected.select(aggregations).collect().to_dicts()[0]
     columns = []
     for number, (name, dtype) in enumerate(schema.items()):
         key = f"c{number}_"
-        info = {"name": name, "dtype": str(dtype),
-                "nulls": values[key + "null"],
-                "nan_count": values[key + "nan"] if dtype.is_float() else None,
-                "unique": values[key + "unique"]}
+        info = {
+            "name": name,
+            "dtype": str(dtype),
+            "nulls": values[key + "null"],
+            "nan_count": values[key + "nan"] if dtype.is_float() else None,
+            "unique": values[key + "unique"],
+        }
         if dtype.is_numeric():
             info.update({k: values[key + k] for k in ("min", "max", "mean")})
         columns.append(info)
-    return {"sampled": sample is not None, "sample_limit": sample,
-            "row_count": values["__rows"], "columns": columns}
+    return {
+        "sampled": sample is not None,
+        "sample_limit": sample,
+        "row_count": values["__rows"],
+        "columns": columns,
+    }
 
 
 def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:

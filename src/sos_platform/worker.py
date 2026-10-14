@@ -38,8 +38,11 @@ def run_once(store: Store) -> bool:
         if pending.exists():
             pending.replace(output)
             version = hashlib.sha256(output.read_bytes()).hexdigest()
-            publish = {"name": f"features-{job_id[:8]}.parquet",
-                       "location": str(output), "version": version}
+            publish = {
+                "name": f"features-{job_id[:8]}.parquet",
+                "location": str(output),
+                "version": version,
+            }
         status = store.finish(job_id, "Succeeded", result=result, publish=publish)
         if status != "Succeeded":
             output.unlink(missing_ok=True)

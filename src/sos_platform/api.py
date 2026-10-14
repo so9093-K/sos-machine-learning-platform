@@ -118,8 +118,9 @@ def create_app(home: Path | None = None) -> FastAPI:
     @app.post("/api/jobs", status_code=202)
     def create_job(body: WorkRequest):
         existing(body.dataset_id)
-        return store.create_job(kind=body.kind, dataset_id=body.dataset_id,
-                                spec=body.model_dump(exclude_none=True))
+        return store.create_job(
+            kind=body.kind, dataset_id=body.dataset_id, spec=body.model_dump(exclude_none=True)
+        )
 
     @app.get("/api/jobs/{job_id}")
     def get_job(job_id: str):
