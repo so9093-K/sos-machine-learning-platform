@@ -412,7 +412,7 @@ function Workspace() {
         {tab === "features" && <section className="panel" role="tabpanel"
           id="sos-panel-features" aria-labelledby="sos-tab-features" tabIndex={0}>
           <div className="panel-head"><div><h3>Feature Builder</h3>
-            <p>원본 데이터는 유지하고, 변환 단계를 저장 가능한 작업 설정으로 구성합니다.</p>
+            <p>원본은 유지됩니다. 순서대로 변환 단계를 편집·검증하고 전체 Job으로 실행합니다.</p>
           </div></div>
           <div className="form-row">
             <label>변환 <select aria-label="변환" value={op} onChange={e => setOp(e.target.value)}>
@@ -470,7 +470,7 @@ function Workspace() {
               전체 변환 Job 실행 →
             </button></div>
           {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 계산</h4>
-             <p className="hint">실제 Job과 동일한 입력·변환을 사용하며 출력의 최대 30행만 표시합니다.</p>
+             <p className="hint">10만 행 이하 입력에서 실제 Job과 같은 변환을 실행한 뒤 출력 최대 30행을 표시합니다. 더 큰 데이터는 전체 Job을 사용하세요.</p>
             <div className="table-scroll"><table><thead><tr>{Object.entries(featurePreview.schema).map(
               ([c, t]) => <th key={c}>{c}<small>{t}</small></th>
             )}</tr></thead><tbody>{featurePreview.rows.slice(0, 15).map((r, i) => <tr key={i}>
