@@ -29,6 +29,10 @@ test("Iceberg import captures a pinned snapshot", async ({ page }) => {
   });
   await expect(page.getByRole("heading", { name: "repeat.csv" })).toBeVisible();
   await page.getByRole("button", { name: "Iceberg에 추가" }).click();
+  await expect(page.getByText("Iceberg Import")).toBeVisible();
+  await expect(page.getByText("Succeeded")).toBeVisible({ timeout: 30000 });
+  await expect(page.locator("nav").getByText("default.sensor_data")).toBeVisible();
+  await page.locator("nav").getByText("default.sensor_data").click();
   await expect(page.locator(".dataset-hero p")).toContainText("Snapshot", { timeout: 30000 });
   await page.getByRole("tab", { name: "Preview" }).click();
   await expect(page.getByText("2 rows shown")).toBeVisible();

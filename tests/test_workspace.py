@@ -3,8 +3,16 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+
+from sos_platform.config import Settings
+from sos_platform.object_store import ObjectStore
 from fastapi.testclient import TestClient
 
 from sos_platform.api import create_app
@@ -13,11 +21,31 @@ from sos_platform.worker import run_once
 
 
 @pytest.fixture
-def workspace(tmp_path: Path):
-    store = Store(tmp_path)
+def workspace(tmp_path: Path, monkeypatch):
+    """각 시나리오에 독립 PostgreSQL DB를 부여해 실제 트랜잭션을 검증한다."""
+    base = make_url(Settings.from_env().database_url)
+    name = "sos_test_" + uuid4().hex[:14]
+    admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(text(f'CREATE DATABASE "{name}"'))
+    test_url = base.set(database=name).render_as_string(hide_password=False)
+    monkeypatch.setenv("SOS_DATABASE_URL", test_url)
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", test_url)
+    command.upgrade(config, "head")
+    ObjectStore().ensure_bucket()
+    store = Store(tmp_path, database_url=test_url)
     app = create_app(tmp_path)
-    with TestClient(app) as client:
-        yield client, store
+    try:
+        with TestClient(app) as client:
+            yield client, store
+    finally:
+        store.engine.dispose()
+        admin.dispose()
+        admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+        with admin.connect() as conn:
+            conn.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
+        admin.dispose()
 
 
 def upload(client: TestClient) -> dict:
@@ -115,30 +143,37 @@ def test_cancel_recovery_and_input_validation(workspace):
 
 
 def test_iceberg_snapshot_reproducibility(workspace):
-    client, _ = workspace
+    client, store = workspace
     dataset = upload(client)
-    first = client.post(
-        "/api/iceberg/import", json={"dataset_id": dataset["id"], "table_name": "sensor_data"}
-    )
-    assert first.status_code == 201, first.text
-    original = first.json()
-    second = client.post(
-        "/api/iceberg/import", json={"dataset_id": dataset["id"], "table_name": "sensor_data"}
-    )
-    assert second.status_code == 201, second.text
-    assert original["version"] != second.json()["version"]
+
+    def import_snapshot() -> dict:
+        job = client.post("/api/iceberg/import", json={
+            "dataset_id": dataset["id"], "table_name": "sensor_data",
+        })
+        assert job.status_code == 202, job.text
+        assert run_once(store)
+        completed = client.get(f"/api/jobs/{job.json()['id']}").json()
+        assert completed["status"] == "Succeeded", completed
+        response = client.get(f"/api/datasets/{completed['result']['dataset_id']}")
+        assert response.status_code == 200
+        return response.json()
+
+    original = import_snapshot()
+    second = import_snapshot()
+    assert original["version"] != second["version"]
     assert client.get(f"/api/datasets/{original['id']}/preview").json()["returned_rows"] == 3
-    assert client.get(f"/api/datasets/{second.json()['id']}/preview").json()["returned_rows"] == 6
+    assert client.get(f"/api/datasets/{second['id']}/preview").json()["returned_rows"] == 6
     assert len(client.get("/api/iceberg/sensor_data/snapshots").json()) >= 2
-    linked = client.post(
-        "/api/datasets/iceberg",
-        json={"table_name": "sensor_data", "snapshot_id": original["version"]},
-    )
+    linked = client.post("/api/datasets/iceberg", json={
+        "table_name": "sensor_data", "snapshot_id": original["version"],
+    })
     assert linked.status_code == 201
-    assert client.get(f"/api/datasets/{linked.json()['id']}/preview").json()["returned_rows"] == 3
-    missing = client.post(
-        "/api/datasets/iceberg", json={"table_name": "sensor_data", "snapshot_id": "987654321"}
-    )
+    assert client.get(f"/api/datasets/{linked.json()['id']}/preview").json()[
+        "returned_rows"
+    ] == 3
+    missing = client.post("/api/datasets/iceberg", json={
+        "table_name": "sensor_data", "snapshot_id": "987654321",
+    })
     assert missing.status_code == 422
 
 

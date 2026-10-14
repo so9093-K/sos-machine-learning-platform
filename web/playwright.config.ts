@@ -6,7 +6,7 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   use: {
-    baseURL: "http://127.0.0.1:5173",
+    baseURL: `http://127.0.0.1:${process.env.SOS_WEB_PORT || 9601}`,
     browserName: "chromium",
     trace: "retain-on-failure",
   },

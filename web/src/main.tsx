@@ -175,10 +175,10 @@ function Workspace() {
   async function importIceberg() {
     if (!selected) return;
     await withFeedback(async () => {
-      const data = await jsonPost<Dataset>("/api/iceberg/import",
+      await jsonPost<Job>("/api/iceberg/import",
         { dataset_id: selected, table_name: tableName });
-      await refreshDatasets(); setSelected(data.id);
-      setNotice(`Iceberg ${readableVersion(data)}을 등록했습니다.`);
+      await refreshJobs(); setTab("jobs");
+      setNotice("Iceberg 적재 Job이 등록되었습니다. 완료 후 데이터셋 목록에서 확인할 수 있습니다.");
     });
   }
   async function cancelJob(id: string) {
@@ -379,7 +379,8 @@ function Workspace() {
           </div><button className="secondary" onClick={() => void withFeedback(refreshJobs)}>새로고침</button></div>
           {jobs.length === 0 && <p className="muted">아직 제출된 작업이 없습니다.</p>}
           <div className="job-list">{jobs.map(j => <article className="job" key={j.id}>
-            <div className="job-title"><div><strong>{j.kind === "profile" ? "Full EDA Profile" : "Feature Transform"}</strong>
+            <div className="job-title"><div><strong>{j.kind === "profile" ? "Full EDA Profile" :
+              j.kind === "iceberg_import" ? "Iceberg Import" : "Feature Transform"}</strong>
               <small>{j.id}</small></div><span className={`status ${j.status.toLowerCase()}`}>
                 {j.status}{j.cancel_requested ? " · 취소 요청 중" : ""}</span></div>
             {j.error && <p className="job-error">{j.error}</p>}
