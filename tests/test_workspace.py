@@ -329,9 +329,7 @@ def test_job_list_preserves_attempt_history(workspace):
     client, store = workspace
     dataset = upload(client)
     ids = [
-        client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"}).json()[
-            "id"
-        ]
+        client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"}).json()["id"]
         for _ in range(3)
     ]
     store.claim()
