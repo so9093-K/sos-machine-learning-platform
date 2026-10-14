@@ -287,7 +287,7 @@ def test_feature_preview_uses_full_input_before_grouped_time_windows(workspace):
     rows.append("A,1,2")
     response = client.post(
         "/api/datasets/files",
-        files={"file": ("unordered.csv", ("\\n".join(rows) + "\\n").encode(), "text/csv")},
+        files={"file": ("unordered.csv", ("\n".join(rows) + "\n").encode(), "text/csv")},
     )
     assert response.status_code == 201, response.text
     dataset = response.json()
