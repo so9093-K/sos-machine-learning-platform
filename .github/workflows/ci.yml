@@ -18,12 +18,18 @@ jobs:
           enable-cache: true
       - name: Install Python
         run: uv python install
+      - name: Resolve Python lockfile for review
+        run: |
+          uv lock
+          echo LOCK_BEGIN
+          base64 -w0 uv.lock
+          echo
+          echo LOCK_END
       - name: Install development dependencies
         run: uv sync --locked --group dev
       - name: Ruff lint
         run: uv run --locked ruff check .
       - name: Ruff format
         run: uv run --locked ruff format --check .
-      - name: Unit tests
-        if: ${{ hashFiles('tests/test_*.py', 'tests/**/test_*.py') != '' }}
+      - name: Unit and integration tests
         run: uv run --locked pytest -q

@@ -1,0 +1,159 @@
+"""Bounded dataset access, profiling and safe Polars feature transforms."""
+
+import hashlib
+import re
+from pathlib import Path
+
+import polars as pl
+
+from .schemas import Transform
+from .store import Store
+
+MAX_UPLOAD = 20 * 1024 * 1024
+MAX_PREVIEW = 100
+ALLOWED_CASTS = {
+    "String": pl.String, "Int64": pl.Int64, "Float64": pl.Float64,
+    "Boolean": pl.Boolean, "Date": pl.Date, "Datetime": pl.Datetime,
+}
+
+
+def save_upload(store: Store, name: str, content: bytes) -> dict:
+    suffix = Path(name).suffix.lower()
+    if suffix not in (".csv", ".parquet"):
+        raise ValueError("Only CSV and Parquet are supported")
+    if not content or len(content) > MAX_UPLOAD:
+        raise ValueError("File must be nonempty and at most 20 MiB")
+    digest = hashlib.sha256(content).hexdigest()
+    location = store.home / "files" / f"{digest}{suffix}"
+    if not location.exists():
+        location.write_bytes(content)
+    lf = pl.scan_csv(location) if suffix == ".csv" else pl.scan_parquet(location)
+    if not lf.collect_schema().names():
+        raise ValueError("Dataset has no columns")
+    return store.register_dataset(name=Path(name).name, kind="file",
+                                  location=str(location), version=digest)
+
+
+def iceberg_catalog(store: Store):
+    from pyiceberg.catalog.sql import SqlCatalog
+
+    return SqlCatalog(
+        "sos_local",
+        uri=f"sqlite:///{store.home / 'iceberg_catalog.sqlite3'}",
+        warehouse=(store.home / "iceberg").as_uri(),
+    )
+
+
+def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
+        raise ValueError("Invalid Iceberg table name")
+    catalog = iceberg_catalog(store)
+    catalog.create_namespace_if_not_exists("default")
+    ident = f"default.{table_name}"
+    arrow = scan_dataset(store, dataset).collect().to_arrow()
+    try:
+        table = catalog.load_table(ident)
+    except Exception as exc:
+        from pyiceberg.exceptions import NoSuchTableError
+
+        if not isinstance(exc, NoSuchTableError):
+            raise
+        table = catalog.create_table(ident, schema=arrow.schema)
+    table.append(arrow)
+    table = catalog.load_table(ident)
+    snapshot = table.current_snapshot()
+    if snapshot is None:
+        raise ValueError("Iceberg append did not create a snapshot")
+    return store.register_dataset(name=ident, kind="iceberg", location=ident,
+                                  version=str(snapshot.snapshot_id))
+
+
+def iceberg_snapshots(store: Store, table_name: str) -> list[dict]:
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
+        raise ValueError("Invalid Iceberg table name")
+    table = iceberg_catalog(store).load_table(f"default.{table_name}")
+    return [{"snapshot_id": str(s.snapshot_id), "timestamp_ms": s.timestamp_ms}
+            for s in table.snapshots()]
+
+
+def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
+    if dataset["kind"] == "file":
+        path = Path(dataset["location"]).resolve()
+        if not path.is_relative_to(store.home / "files") and not path.is_relative_to(
+            store.home / "results"
+        ):
+            raise ValueError("Dataset path outside managed storage")
+        if not path.is_file():
+            raise ValueError("Dataset file is missing")
+        if path.suffix == ".csv":
+            return pl.scan_csv(path, try_parse_dates=True)
+        return pl.scan_parquet(path)
+    if dataset["kind"] == "iceberg":
+        table = iceberg_catalog(store).load_table(dataset["location"])
+        snapshot = int(dataset["version"])
+        if snapshot not in {s.snapshot_id for s in table.snapshots()}:
+            raise ValueError("Iceberg snapshot is not available; it may have expired")
+        return pl.scan_iceberg(table, snapshot_id=snapshot)
+    raise ValueError("Unknown dataset type")
+
+
+def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
+    if not 1 <= limit <= MAX_PREVIEW:
+        raise ValueError("Preview limit must be between 1 and 100")
+    frame = lf.limit(limit).collect()
+    return {"schema": {c: str(t) for c, t in lf.collect_schema().items()},
+            "rows": frame.to_dicts(), "returned_rows": frame.height}
+
+
+def profile(lf: pl.LazyFrame, sample: int | None = 1000) -> dict:
+    """Return sample-bounded statistics with explicit precision metadata."""
+    if sample is not None and not 1 <= sample <= 10000:
+        raise ValueError("Sample size must be between 1 and 10000")
+    frame = lf.head(sample).collect() if sample is not None else lf.collect()
+    summaries = []
+    for name, dtype in frame.schema.items():
+        series = frame[name]
+        info = {"name": name, "dtype": str(dtype), "nulls": series.null_count(),
+                "nan_count": series.is_nan().sum() if dtype.is_numeric() and dtype.is_float()
+                else None, "unique": series.n_unique()}
+        if dtype.is_numeric():
+            info["min"] = series.min()
+            info["max"] = series.max()
+            info["mean"] = series.mean()
+        summaries.append(info)
+    return {"sampled": sample is not None, "sample_limit": sample, "row_count": frame.height,
+            "columns": summaries}
+
+
+def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
+    if spec.order_by:
+        if spec.order_by not in lf.collect_schema():
+            raise ValueError("Time/order column does not exist")
+        lf = lf.sort(spec.order_by)
+    for step in spec.steps:
+        columns = lf.collect_schema().names()
+        if step.op == "select":
+            if not set(step.columns or []).issubset(columns):
+                raise ValueError("Selected column does not exist")
+            lf = lf.select(step.columns)
+            continue
+        if step.column not in columns:
+            raise ValueError(f"Unknown column: {step.column}")
+        col = pl.col(step.column)
+        if step.op == "filter_not_null":
+            lf = lf.filter(col.is_not_null())
+        elif step.op == "fill_null":
+            lf = lf.with_columns(col.fill_null(step.value))
+        elif step.op == "cast":
+            lf = lf.with_columns(col.cast(ALLOWED_CASTS[step.dtype], strict=True))
+        elif step.op in ("lag", "rolling_mean"):
+            if not spec.order_by:
+                raise ValueError("Time-based features require order_by")
+            alias = step.alias or f"{step.column}_{step.op}"
+            if alias in columns:
+                raise ValueError("Feature output column already exists")
+            if step.op == "lag":
+                lf = lf.with_columns(col.shift(step.periods).alias(alias))
+            else:
+                lf = lf.with_columns(col.rolling_mean(step.window).alias(alias))
+    return lf

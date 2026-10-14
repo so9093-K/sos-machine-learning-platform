@@ -1,11 +1,15 @@
-.venv/
+# Local application state and model/data artifacts
+.sos/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
-.coverage
-htmlcov/
+.venv/
+*.egg-info/
+dist/
+build/
+node_modules/
+web/dist/
 .env
 .env.*
 !.env.example
-.DS_Store
