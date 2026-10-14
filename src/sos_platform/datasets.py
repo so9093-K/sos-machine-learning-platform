@@ -25,7 +25,7 @@ ALLOWED_CASTS = {
 
 
 def save_upload(store: Store, name: str, content: bytes) -> dict:
-    """업로드를 검증한 뒤 객체 저장소에 불변 버전으로 등록한다."""
+    """ìë¡ëë¥¼ ê²ì¦í ë¤ ê°ì²´ ì ì¥ìì ë¶ë³ ë²ì ì¼ë¡ ë±ë¡íë¤."""
     suffix = Path(name).suffix.lower()
     if suffix not in (".csv", ".parquet"):
         raise ValueError("Only CSV and Parquet are supported")
@@ -44,12 +44,13 @@ def save_upload(store: Store, name: str, content: bytes) -> dict:
         ObjectStore().put(key, temporary)
     finally:
         temporary.unlink(missing_ok=True)
-    return store.register_dataset(name=Path(name).name, kind="file",
-                                  location=location, version=digest)
+    return store.register_dataset(
+        name=Path(name).name, kind="file", location=location, version=digest
+    )
 
 
 def iceberg_catalog(store: Store):
-    """Catalog 메타데이터와 실제 Parquet 파일 저장 책임을 분리한다."""
+    """Catalog ë©íë°ì´í°ì ì¤ì  Parquet íì¼ ì ì¥ ì±ìì ë¶ë¦¬íë¤."""
     from pyiceberg.catalog.sql import SqlCatalog
 
     config = Settings.from_env()
@@ -69,7 +70,7 @@ def iceberg_catalog(store: Store):
 
 
 def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
-    """비용이 큰 데이터 변환은 API가 아닌 Worker 프로세스에서 실행한다."""
+    """ë¹ì©ì´ í° ë°ì´í° ë³íì APIê° ìë Worker íë¡ì¸ì¤ìì ì¤ííë¤."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
         raise ValueError("Invalid Iceberg table name")
     catalog = iceberg_catalog(store)
@@ -80,6 +81,7 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
         table = catalog.load_table(ident)
     except Exception as exc:
         from pyiceberg.exceptions import NoSuchTableError
+
         if not isinstance(exc, NoSuchTableError):
             raise
         table = catalog.create_table(ident, schema=arrow.schema)
@@ -87,12 +89,16 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
     snapshot = catalog.load_table(ident).current_snapshot()
     if snapshot is None:
         raise ValueError("Iceberg append did not create a snapshot")
-    return {"name": ident, "kind": "iceberg", "location": ident,
-            "version": str(snapshot.snapshot_id)}
+    return {
+        "name": ident,
+        "kind": "iceberg",
+        "location": ident,
+        "version": str(snapshot.snapshot_id),
+    }
 
 
 def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = None) -> dict:
-    """기존 테이블의 지정 Snapshot을 Dataset으로 등록한다."""
+    """ê¸°ì¡´ íì´ë¸ì ì§ì  Snapshotì Datasetì¼ë¡ ë±ë¡íë¤."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
         raise ValueError("Invalid Iceberg table name")
     from pyiceberg.exceptions import NoSuchTableError
@@ -109,8 +115,12 @@ def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = Non
         snapshot_id = str(current.snapshot_id)
     if snapshot_id not in snapshots:
         raise ValueError("Iceberg snapshot is not available; it may have expired")
-    return store.register_dataset(name=f"default.{table_name}", kind="iceberg",
-                                  location=f"default.{table_name}", version=snapshot_id)
+    return store.register_dataset(
+        name=f"default.{table_name}",
+        kind="iceberg",
+        location=f"default.{table_name}",
+        version=snapshot_id,
+    )
 
 
 def iceberg_snapshots(store: Store, table_name: str) -> list[dict]:
@@ -131,12 +141,19 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
         destination = (store.home / "cache" / f"{dataset['version']}{suffix}").resolve()
         if not destination.is_relative_to(store.home / "cache"):
             raise ValueError("Dataset cache path is invalid")
-        if not destination.is_file() or hashlib.sha256(destination.read_bytes()).hexdigest() != dataset["version"]:
+        if (
+            not destination.is_file()
+            or hashlib.sha256(destination.read_bytes()).hexdigest() != dataset["version"]
+        ):
             storage.get(key, destination)
             if hashlib.sha256(destination.read_bytes()).hexdigest() != dataset["version"]:
                 destination.unlink(missing_ok=True)
                 raise ValueError("Dataset content hash does not match the registered version")
-        return pl.scan_csv(destination, try_parse_dates=True) if suffix == ".csv" else pl.scan_parquet(destination)
+        return (
+            pl.scan_csv(destination, try_parse_dates=True)
+            if suffix == ".csv"
+            else pl.scan_parquet(destination)
+        )
     if dataset["kind"] == "iceberg":
         table = iceberg_catalog(store).load_table(dataset["location"])
         snapshot = int(dataset["version"])

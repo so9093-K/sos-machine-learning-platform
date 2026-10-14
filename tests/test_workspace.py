@@ -22,7 +22,7 @@ from sos_platform.worker import run_once
 
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch):
-    """각 시나리오에 독립 PostgreSQL DB를 부여해 실제 트랜잭션을 검증한다."""
+    """ê° ìëë¦¬ì¤ì ëë¦½ PostgreSQL DBë¥¼ ë¶ì¬í´ ì¤ì  í¸ëì­ìì ê²ì¦íë¤."""
     base = make_url(Settings.from_env().database_url)
     name = "sos_test_" + uuid4().hex[:14]
     admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
@@ -147,9 +147,13 @@ def test_iceberg_snapshot_reproducibility(workspace):
     dataset = upload(client)
 
     def import_snapshot() -> dict:
-        job = client.post("/api/iceberg/import", json={
-            "dataset_id": dataset["id"], "table_name": "sensor_data",
-        })
+        job = client.post(
+            "/api/iceberg/import",
+            json={
+                "dataset_id": dataset["id"],
+                "table_name": "sensor_data",
+            },
+        )
         assert job.status_code == 202, job.text
         assert run_once(store)
         completed = client.get(f"/api/jobs/{job.json()['id']}").json()
@@ -164,16 +168,22 @@ def test_iceberg_snapshot_reproducibility(workspace):
     assert client.get(f"/api/datasets/{original['id']}/preview").json()["returned_rows"] == 3
     assert client.get(f"/api/datasets/{second['id']}/preview").json()["returned_rows"] == 6
     assert len(client.get("/api/iceberg/sensor_data/snapshots").json()) >= 2
-    linked = client.post("/api/datasets/iceberg", json={
-        "table_name": "sensor_data", "snapshot_id": original["version"],
-    })
+    linked = client.post(
+        "/api/datasets/iceberg",
+        json={
+            "table_name": "sensor_data",
+            "snapshot_id": original["version"],
+        },
+    )
     assert linked.status_code == 201
-    assert client.get(f"/api/datasets/{linked.json()['id']}/preview").json()[
-        "returned_rows"
-    ] == 3
-    missing = client.post("/api/datasets/iceberg", json={
-        "table_name": "sensor_data", "snapshot_id": "987654321",
-    })
+    assert client.get(f"/api/datasets/{linked.json()['id']}/preview").json()["returned_rows"] == 3
+    missing = client.post(
+        "/api/datasets/iceberg",
+        json={
+            "table_name": "sensor_data",
+            "snapshot_id": "987654321",
+        },
+    )
     assert missing.status_code == 422
 
 

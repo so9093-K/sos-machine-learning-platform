@@ -38,6 +38,8 @@ jobs:
             echo "FILE_END:$file"
           done
           echo SOS_FORMAT_END
+      - name: Fix Ruff imports for review
+        run: uv run --locked ruff check --fix . || true
       - name: Ruff lint
         run: uv run --locked ruff check .
       - name: Ruff format

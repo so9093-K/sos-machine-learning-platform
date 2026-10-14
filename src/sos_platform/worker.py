@@ -17,7 +17,9 @@ from .schemas import Transform
 from .store import Store
 
 
-def _perform(home: Path, database_url: str, job: dict, completed: Path, pending: Path, output: Path) -> None:
+def _perform(
+    home: Path, database_url: str, job: dict, completed: Path, pending: Path, output: Path
+) -> None:
     """Compute in a separate process; publish results only in the parent."""
     try:
         store = Store(home, database_url=database_url)
@@ -33,8 +35,9 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
             lf.sink_parquet(pending)
             result = {"input_dataset_id": dataset["id"]}
         elif job["kind"] == "iceberg_import":
-            result = {"iceberg_publish": import_to_iceberg(
-                store, dataset, job["spec"]["table_name"])}
+            result = {
+                "iceberg_publish": import_to_iceberg(store, dataset, job["spec"]["table_name"])
+            }
         else:
             raise ValueError("Unknown job type")
         outcome = {"result": result}
@@ -99,8 +102,10 @@ def run_once(store: Store) -> bool:
             key = f"results/{job_id}.parquet"
             version = ObjectStore().put(key, output)
             publish = {
-                "name": f"features-{job_id[:8]}.parquet", "kind": "file",
-                "location": ObjectStore().location(key), "version": version,
+                "name": f"features-{job_id[:8]}.parquet",
+                "kind": "file",
+                "location": ObjectStore().location(key),
+                "version": version,
             }
             output.unlink(missing_ok=True)
         result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}

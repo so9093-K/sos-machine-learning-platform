@@ -1,4 +1,4 @@
-"""S3 호환 객체 저장소에 데이터셋의 불변 파일을 보관한다."""
+"""S3 í¸í ê°ì²´ ì ì¥ìì ë°ì´í°ìì ë¶ë³ íì¼ì ë³´ê´íë¤."""
 
 import hashlib
 from pathlib import Path
@@ -11,17 +11,22 @@ from .config import Settings
 
 
 class ObjectStore:
-    """데이터 위치가 실행 머신의 로컬 경로에 종속되지 않도록 한다."""
+    """ë°ì´í° ìì¹ê° ì¤í ë¨¸ì ì ë¡ì»¬ ê²½ë¡ì ì¢ìëì§ ìëë¡ íë¤."""
 
     def __init__(self, settings: Settings | None = None):
         self.config = settings or Settings.from_env()
         self.client = boto3.client(
-            "s3", endpoint_url=self.config.s3_endpoint,
+            "s3",
+            endpoint_url=self.config.s3_endpoint,
             aws_access_key_id=self.config.s3_access_key,
             aws_secret_access_key=self.config.s3_secret_key,
             region_name=self.config.s3_region,
-            config=BotoConfig(s3={"addressing_style": "path"},
-                              connect_timeout=2, read_timeout=10, retries={"max_attempts": 2}),
+            config=BotoConfig(
+                s3={"addressing_style": "path"},
+                connect_timeout=2,
+                read_timeout=10,
+                retries={"max_attempts": 2},
+            ),
         )
 
     def ready(self) -> bool:
@@ -62,7 +67,7 @@ class ObjectStore:
         prefix = f"s3://{self.config.s3_bucket}/"
         if not location.startswith(prefix):
             raise ValueError("Dataset is outside the configured object store")
-        key = location[len(prefix):]
+        key = location[len(prefix) :]
         if not key or ".." in key.split("/"):
             raise ValueError("Invalid object key")
         return key
