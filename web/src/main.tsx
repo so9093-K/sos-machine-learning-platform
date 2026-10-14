@@ -44,6 +44,9 @@ function Workspace() {
   const [notice, setNotice] = useState("");
   const [tableName, setTableName] = useState("");
   const [steps, setSteps] = useState<Step[]>([]);
+  const [editingStep, setEditingStep] = useState<number | null>(null);
+  const [lagPeriods, setLagPeriods] = useState(1);
+  const [rollingWindow, setRollingWindow] = useState(3);
   const [op, setOp] = useState("filter_not_null");
   const [column, setColumn] = useState("");
   const [value, setValue] = useState("");
@@ -75,7 +78,7 @@ function Workspace() {
   }, []);
   useEffect(() => {
     // Dataset 전환과 네트워크 재시도를 구분해 작성 중인 변환을 보존한다.
-    setFeaturePreview(null); setSteps([]);
+    setFeaturePreview(null); setSteps([]); setEditingStep(null);
     setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy(""); setGroupBy("");
   }, [selected]);
   useEffect(() => {
@@ -129,9 +132,28 @@ function Workspace() {
   }
   function addStep() {
     try {
-      setSteps(existing => [...existing, createStep(op, column, value, preview?.schema[column])]);
-      setFeaturePreview(null); setError("");
+      const next = createStep(op, column, value, preview?.schema[column],
+        op === "lag" ? lagPeriods : op === "rolling_mean" ? rollingWindow : undefined);
+      setSteps(existing => editingStep === null ? [...existing, next]
+        : existing.map((step, index) => index === editingStep ? next : step));
+      setEditingStep(null); setFeaturePreview(null); setError("");
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+  function editStep(index: number) {
+    const step = steps[index];
+    setEditingStep(index);
+    setOp(step.op); setColumn(step.column); setValue(step.value == null ? "" : String(step.value));
+    setLagPeriods(step.periods ?? 1); setRollingWindow(step.window ?? 3);
+  }
+  function moveStep(index: number, direction: -1 | 1) {
+    const destination = index + direction;
+    if (destination < 0 || destination >= steps.length) return;
+    setSteps(current => {
+      const copy = [...current];
+      [copy[index], copy[destination]] = [copy[destination], copy[index]];
+      return copy;
+    });
+    setEditingStep(null); setFeaturePreview(null);
   }
   const transform = {
     steps,
@@ -405,7 +427,14 @@ function Workspace() {
             </select></label>
             {op === "fill_null" && <label>대체 값 <input value={value}
               onChange={e => setValue(e.target.value)} placeholder="0" /></label>}
-            <button className="secondary" onClick={addStep} disabled={!column}>+ 단계 추가</button>
+            {op === "lag" && <label>이전 행 수 <input type="number" min={1} max={1000}
+              value={lagPeriods} onChange={e => setLagPeriods(Number(e.target.value))} /></label>}
+            {op === "rolling_mean" && <label>윈도 행 수 <input type="number" min={2} max={1000}
+              value={rollingWindow} onChange={e => setRollingWindow(Number(e.target.value))} /></label>}
+            <button className="secondary" onClick={addStep} disabled={!column || steps.length >= 30 && editingStep === null}>
+              {editingStep === null ? "+ 단계 추가" : "단계 수정 반영"}</button>
+            {editingStep !== null && <button className="ghost" onClick={() => setEditingStep(null)}>
+              수정 취소</button>}
           </div>
           <div className="form-row">
             <label>시간·정렬 컬럼 <select aria-label="시간·정렬 컬럼" value={orderBy} onChange={e => setOrderBy(e.target.value)}>
@@ -420,9 +449,20 @@ function Workspace() {
           </div>
           <div className="steps">{steps.length === 0 && <p className="muted">아직 변환 단계가 없습니다.</p>}
             {steps.map((step, i) => <div className="step" key={i}>
-              <strong>{i + 1}. {step.op}</strong><span>{step.column}</span>
+              <strong>{i + 1}. {step.op}</strong>
+              <span>{step.column} {step.periods ? `· 이전 ${step.periods}행` : ""}
+                {step.window ? `· ${step.window}행` : ""}</span>
+              <button className="ghost" aria-label={`${i + 1}번째 단계 위로 이동`}
+                disabled={i === 0} onClick={() => moveStep(i, -1)}>↑</button>
+              <button className="ghost" aria-label={`${i + 1}번째 단계 아래로 이동`}
+                disabled={i === steps.length - 1} onClick={() => moveStep(i, 1)}>↓</button>
+              <button className="ghost" aria-label={`${i + 1}번째 단계 수정`}
+                onClick={() => editStep(i)}>수정</button>
               <button className="ghost" aria-label={`${i + 1}번째 단계 삭제`}
-                onClick={() => { setSteps(prev => prev.filter((_, j) => j !== i)); setFeaturePreview(null); }}>삭제</button>
+                onClick={() => {
+                  setSteps(prev => prev.filter((_, j) => j !== i));
+                  setEditingStep(null); setFeaturePreview(null);
+                }}>삭제</button>
             </div>)}</div>
           <div className="actions"><button disabled={busy || !steps.length} className="secondary"
             onClick={() => void previewFeatures()}>샘플 변환 확인</button>
