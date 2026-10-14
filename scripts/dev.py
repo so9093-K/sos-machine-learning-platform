@@ -148,7 +148,7 @@ def preflight(config: dict, *, need_docker: bool = True):
         raise StartupError("SOS-ENV-001", "íì ì¤í ëêµ¬ê° ììµëë¤.", ", ".join(missing))
     ports = ["SOS_WEB_PORT", "SOS_API_PORT"]
     if config["SOS_INFRA_MODE"] == "managed":
-        ports += ["SOS_DB_PORT", "SOS_S3_PORT", "SOS_S3_CONSOLE_PORT"]
+        ports += ["SOS_DB_PORT", "SOS_S3_PORT"]
         if run(["docker", "compose", "version"]).returncode:
             raise StartupError("SOS-ENV-002", "Docker Composeë¥¼ ì¬ì©í  ì ììµëë¤.")
     try:

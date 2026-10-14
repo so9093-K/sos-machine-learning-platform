@@ -150,7 +150,7 @@ class Store:
                 db.execute(
                     text(
                         "SELECT id FROM jobs WHERE status='Queued' "
-                        "ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1"
+                        "ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED"
                     )
                 )
                 .mappings()
