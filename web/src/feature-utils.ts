@@ -3,7 +3,9 @@ export type FeatureStep = {
   op: string; column: string; value?: number | string;
   periods?: number; window?: number; dtype?: string;
 };
-export function createStep(op: string, column: string, raw: string, dtype?: string): FeatureStep {
+export function createStep(
+  op: string, column: string, raw: string, dtype?: string, size?: number,
+): FeatureStep {
   if (!column) throw new Error("컬럼을 선택해 주세요.");
   if (op === "fill_null") {
     if (!raw.trim()) throw new Error("결측값 대체 값을 입력해 주세요.");
@@ -14,8 +16,15 @@ export function createStep(op: string, column: string, raw: string, dtype?: stri
     return { op, column, value: Number.isFinite(parsed) ? parsed : raw };
   }
   if (op === "cast") return { op, column, dtype: "Float64" };
-  if (op === "lag") return { op, column, periods: 1 };
-  if (op === "rolling_mean") return { op, column, window: 3 };
+  if (op === "lag" || op === "rolling_mean") {
+    const parameter = size ?? (op === "lag" ? 1 : 3);
+    const minimum = op === "lag" ? 1 : 2;
+    if (!Number.isInteger(parameter) || parameter < minimum || parameter > 1000) {
+      throw new Error(`크기는 ${minimum}~1000 범위의 정수여야 합니다.`);
+    }
+    return op === "lag" ? { op, column, periods: parameter }
+      : { op, column, window: parameter };
+  }
   if (op === "filter_not_null") return { op, column };
   throw new Error("지원하지 않는 변환입니다.");
 }
