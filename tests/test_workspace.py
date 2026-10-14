@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import event
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
@@ -338,3 +339,22 @@ def test_job_list_preserves_attempt_history(workspace):
     assert set(ids).issubset(listed)
     assert len(listed[ids[0]]["attempts"]) == 1
     assert listed[ids[0]]["attempts"][0]["status"] == "Interrupted"
+
+
+def test_job_listing_uses_bounded_number_of_queries(workspace):
+    client, store = workspace
+    dataset = upload(client)
+    for _ in range(5):
+        client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
+    queries = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            queries.append(statement)
+
+    event.listen(store.engine, "before_cursor_execute", capture)
+    try:
+        assert len(store.jobs()) == 5
+    finally:
+        event.remove(store.engine, "before_cursor_execute", capture)
+    assert len(queries) == 2
