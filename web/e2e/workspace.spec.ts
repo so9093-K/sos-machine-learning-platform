@@ -205,3 +205,55 @@ test("file size is explained and rejected before upload", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("최대 1.00 MiB");
   expect(uploads).toBe(0);
 });
+
+
+test("201 registration remains successful when the subsequent list refresh fails", async ({ page }) => {
+  let failRefresh = false;
+  await page.route("**/api/datasets", route => {
+    if (route.request().method() === "GET" && failRefresh) {
+      return route.fulfill({ status: 503, contentType: "application/json",
+        body: JSON.stringify({ detail: "List temporarily unavailable" }) });
+    }
+    return route.continue();
+  });
+  await page.route("**/api/datasets/files", async route => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(201);
+    failRefresh = true;
+    await route.fulfill({ response });
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "published.csv", mimeType: "text/csv",
+    buffer: Buffer.from("signal\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "published.csv" })).toBeVisible();
+  await expect(page.getByRole("status").filter({
+    hasText: "파일은 정상 등록됐습니다.",
+  })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("upload progress distinguishes transfer from server publication", async ({ page }) => {
+  let releaseResponse: () => void = () => {};
+  const heldResponse = new Promise<void>(resolve => { releaseResponse = resolve; });
+  await page.route("**/api/datasets/files", async route => {
+    const response = await route.fetch();
+    await heldResponse;
+    await route.fulfill({ response });
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "progress.csv", mimeType: "text/csv",
+    buffer: Buffer.from("time,value\n1,2\n2,3\n"),
+  });
+  try {
+    await expect(page.getByText(
+      "전송 완료 · 서버에서 검증하고 Dataset을 등록하고 있습니다.",
+    )).toBeVisible();
+  } finally {
+    releaseResponse();
+  }
+  await expect(page.getByRole("heading", { name: "progress.csv" })).toBeVisible();
+  await expect(page.getByText("파일 등록이 완료됐습니다.", { exact: false })).toBeVisible();
+});

@@ -62,3 +62,25 @@ def test_upload_policy_is_configurable_and_bounded(monkeypatch):
         monkeypatch.setenv("SOS_MAX_UPLOAD_MIB", raw)
         with pytest.raises(ValueError, match="SOS_MAX_UPLOAD_MIB"):
             UploadPolicy.from_env()
+
+
+def test_staging_accepts_exact_byte_limit(tmp_path):
+    with staged_upload(BytesIO(b"1234"), "limit.csv", tmp_path, max_bytes=4) as item:
+        assert item.size_bytes == 4
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_failed_source_read_cleans_staging_file(tmp_path):
+    class FailingStream:
+        calls = 0
+
+        def read(self, _size: int) -> bytes:
+            self.calls += 1
+            if self.calls == 1:
+                return b"first"
+            raise OSError("read failed")
+
+    with pytest.raises(OSError, match="read failed"):
+        with staged_upload(FailingStream(), "broken.csv", tmp_path, max_bytes=100):
+            pytest.fail("a failed stream must not be published")
+    assert list(tmp_path.iterdir()) == []
