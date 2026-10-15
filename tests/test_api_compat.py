@@ -164,6 +164,7 @@ def test_success_status_removal_is_breaking():
     new["paths"]["/api/data"]["post"]["responses"] = {"204": {}}
     assert any("success status removed" in x for x in compat.breaking_changes(old, new))
 
+
 def test_numeric_and_string_constraints_detect_directional_breaking_changes():
     # 요청 제한 축소는 Breaking, 응답 보장 강화는 안전하다.
     cases = (

@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Audit Events */
+        /**
+         * Audit Events
+         * @description 운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다.
+         */
         get: operations["audit_events_api_audit_get"];
         put?: never;
         post?: never;
@@ -132,6 +135,26 @@ export interface paths {
         };
         /** Dataset Profile */
         get: operations["dataset_profile_api_datasets__dataset_id__profile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/diagnostics/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Job Diagnostics
+         * @description 권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다.
+         */
+        get: operations["job_diagnostics_api_diagnostics_jobs__job_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -827,6 +850,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                request_id?: string | null;
+                job_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -1060,6 +1085,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    job_diagnostics_api_diagnostics_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Structured API error */

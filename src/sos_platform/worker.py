@@ -50,7 +50,10 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
             stage = "iceberg_prepare"
             result = {
                 "iceberg_publish": import_to_iceberg(
-                    store, dataset, job["spec"]["table_name"], job["attempts"][-1]["id"],
+                    store,
+                    dataset,
+                    job["spec"]["table_name"],
+                    job["attempts"][-1]["id"],
                     on_commit_start=mark_commit_started,
                 )
             }

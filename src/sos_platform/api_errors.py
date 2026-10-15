@@ -4,9 +4,9 @@ import logging
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
-from starlette.exceptions import HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException
 
 from .errors import ERRORS, PlatformError
 from .observability import emit

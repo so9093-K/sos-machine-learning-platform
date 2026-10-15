@@ -96,7 +96,11 @@ def iceberg_catalog(store: Store):
 
 
 def import_to_iceberg(
-    store: Store, dataset: dict, table_name: str, attempt_id: str, *,
+    store: Store,
+    dataset: dict,
+    table_name: str,
+    attempt_id: str,
+    *,
     on_commit_start=None,
 ) -> dict:
     """비용이 큰 데이터 변환은 API가 아닌 Worker 프로세스에서 실행한다."""

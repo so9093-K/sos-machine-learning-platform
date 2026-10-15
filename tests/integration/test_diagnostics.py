@@ -64,6 +64,7 @@ def test_denied_request_keeps_auth_header_and_request_id(workspace, monkeypatch)
     assert denied.json()["request_id"] == denied.headers["X-Request-ID"]
     assert denied.json()["code"] == "SOS-AUTH-REQUIRED"
 
+
 def test_unknown_http_routes_and_methods_use_same_problem_contract(workspace):
     client, _ = workspace
     for response in (
@@ -82,21 +83,25 @@ def test_unknown_http_routes_and_methods_use_same_problem_contract(workspace):
 def test_audit_filter_finds_older_request_and_preserves_permissions(workspace, monkeypatch):
     client, store = workspace
     store.record_audit(
-        actor_id="operator", actor_type="human", action="audit.find-me",
-        resource_type="job", resource_id="abcdefab-cdef-abcd-efab-cdefabcdefab",
+        actor_id="operator",
+        actor_type="human",
+        action="audit.find-me",
+        resource_type="job",
+        resource_id="abcdefab-cdef-abcd-efab-cdefabcdefab",
         request_id="12345678-1234-1234-1234-123456789abc",
     )
     for number in range(60):
         store.record_audit(
-            actor_id="operator", actor_type="human", action="audit.noise",
-            resource_type="job", resource_id=str(number),
+            actor_id="operator",
+            actor_type="human",
+            action="audit.noise",
+            resource_type="job",
+            resource_id=str(number),
         )
     found = client.get("/api/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"})
     assert found.status_code == 200
     assert len(found.json()) == 1 and found.json()[0]["action"] == "audit.find-me"
-    by_job = client.get(
-        "/api/audit", params={"job_id": "abcdefab-cdef-abcd-efab-cdefabcdefab"}
-    )
+    by_job = client.get("/api/audit", params={"job_id": "abcdefab-cdef-abcd-efab-cdefabcdefab"})
     assert by_job.status_code == 200 and len(by_job.json()) == 1
     monkeypatch.setenv("SOS_AUTH_MODE", "token")
     monkeypatch.setenv(
