@@ -1,6 +1,10 @@
 """Dataset 등록·원본·마이그레이션 통합 계약을 검증한다."""
 
 import hashlib
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+from fastapi.testclient import TestClient
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from uuid import uuid4
@@ -10,7 +14,9 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
 
+from sos_platform.api import create_app
 from sos_platform.datasets import save_upload
+from sos_platform.errors import ERRORS
 from sos_platform.object_store import ObjectStore
 
 from .support import upload
@@ -165,3 +171,83 @@ def test_upgrade_from_0001_preserves_existing_records(workspace):
             )
         }
     assert "fingerprint" in names
+
+
+def test_upload_policy_and_raw_request_body_limit(workspace, monkeypatch):
+    _client, store = workspace
+    monkeypatch.setenv("SOS_MAX_UPLOAD_MIB", "1")
+    with TestClient(create_app(store.home)) as client:
+        policy = client.get("/api/datasets/upload-policy")
+        assert policy.status_code == 200
+        assert policy.json()["max_size_bytes"] == 1024 * 1024
+        rejected = client.post(
+            "/api/datasets/files",
+            files={"file": ("huge.csv", b"a" * (1024 * 1024 + 1), "text/csv")},
+        )
+        assert rejected.status_code == 413
+    assert store.datasets() == []
+
+
+def test_invalid_format_and_empty_upload_are_user_errors(workspace):
+    client, store = workspace
+    for name, data, code in (
+        ("unsupported.json", b"{}", "SOS-UPLOAD-FORMAT"),
+        ("empty.csv", b"", "SOS-UPLOAD-INVALID"),
+        ("broken.parquet", b"not a parquet file", "SOS-UPLOAD-INVALID"),
+    ):
+        response = client.post(
+            "/api/datasets/files",
+            files={"file": (name, data, "application/octet-stream")},
+        )
+        assert response.status_code == 422, response.text
+        assert response.json()["code"] == code
+        assert response.json()["detail"] == ERRORS[code].message
+    assert store.datasets() == []
+
+
+def test_large_parquet_registers_and_supports_parallel_first_reads(workspace, tmp_path):
+    """기존 크기 제한을 넘는 Parquet를 등록하고 Preview·Profile을 함께 읽는다."""
+    client, _store = workspace
+    path = tmp_path / "large.parquet"
+    column = pa.array(range(262_144), type=pa.int64())
+    batch = pa.table({"time": column, "signal": column})
+    with pq.ParquetWriter(path, batch.schema, compression="NONE", use_dictionary=False) as writer:
+        for _ in range(20):
+            writer.write_table(batch)
+    assert 75 * 1024 * 1024 < path.stat().st_size < 256 * 1024 * 1024
+    with path.open("rb") as handle:
+        response = client.post(
+            "/api/datasets/files",
+            files={"file": (path.name, handle, "application/octet-stream")},
+        )
+    assert response.status_code == 201, response.text[:400]
+    dataset = response.json()
+    assert dataset["version"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        preview_future = executor.submit(client.get, f"/api/datasets/{dataset['id']}/preview?limit=3")
+        profile_future = executor.submit(client.get, f"/api/datasets/{dataset['id']}/profile")
+        preview = preview_future.result(timeout=60)
+        profile = profile_future.result(timeout=60)
+    assert preview.status_code == 200, preview.text[:400]
+    assert preview.json()["returned_rows"] == 3
+    assert profile.status_code == 200, profile.text[:400]
+    assert profile.json()["row_count"] == 1000
+
+
+def test_corrupt_download_cannot_overwrite_valid_cache(workspace, tmp_path, monkeypatch):
+    _client, _store = workspace
+    destination = tmp_path / "cached.csv"
+    destination.write_bytes(b"verified")
+    expected = hashlib.sha256(b"verified").hexdigest()
+
+    def bad_download(_bucket, _key, target):
+        from pathlib import Path
+
+        Path(target).write_bytes(b"corrupt")
+
+    storage = ObjectStore()
+    monkeypatch.setattr(storage.client, "download_file", bad_download)
+    with pytest.raises(ValueError, match="hash"):
+        storage.get("datasets/file.csv", destination, expected_sha256=expected)
+    assert destination.read_bytes() == b"verified"
+    assert list(tmp_path.iterdir()) == [destination]
