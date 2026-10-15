@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { request } from "./api";
+import { request, formatError } from "./api";
 
 type AuditEvent = {
   id: string;
@@ -25,7 +25,7 @@ export function AuditPanel() {
     try {
       setEvents(await request<AuditEvent[]>("/api/audit?limit=50"));
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : String(exc));
+      setError(formatError(exc));
     } finally {
       setLoading(false);
     }
