@@ -29,6 +29,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | 검증 내용 | 테스트 |
 | --- | --- |
 | 원본 파일의 판본·등록·마이그레이션 보존 | test_datasets.py |
+| DuckDB 탐색·집계·권한과 파일 접근 | test_discovery.py |
 | Job 상태·취소·게시 원자성·Attempt·커서 | test_jobs.py |
 | Iceberg Snapshot 고정·Tag 보존·중단 후 자동 재시도 금지 | test_iceberg.py |
 | 객체 쓰기 의도·S3 관측·삭제 없는 Storage Health | test_storage.py |

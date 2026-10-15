@@ -46,7 +46,7 @@ Makefile과 개발 CLI는 서비스 기동·진단의 인터페이스이자 배�
 
 ## 현재 코드의 모듈 경계
 
-`processing.py`는 Polars LazyFrame과 변환 계약만을 입력으로 사용하며 DB·HTTP·S3에 의존하지 않는다. `datasets.py`는 Dataset 참조의 조회·등록과 Iceberg 적재를 연결하고, `object_store.py` 및 `store.py`가 실제 저장 구현을 담당한다. UI의 예제·작업 화면도 일반 API를 사용하며 별도의 가짜 실행 경로를 만들지 않는다.
+`discovery.py`는 DuckDB를 사용해 CSV·Parquet·고정 Iceberg Snapshot의 Preview·EDA·Profile·집계를 전담한다. `processing.py`는 Polars Feature·Transform 의미를 담당하며 DB·HTTP·S3에 의존하지 않는다. `datasets.py`는 Dataset 등록·검증된 원본 캐시·Iceberg 적재를 연결하고, `object_store.py`와 `store.py`가 저장·상태의 정본을 관리한다. UI의 예제·작업 화면도 일반 API를 사용하며 별도의 가짜 실행 경로를 만들지 않는다.
 
 장기적인 도메인 경계는 이 실행 형태에 종속되지 않는다. 새로운 Catalog나 저장소 제공자를 추가할 때 Dataset과 Job의 의미를 유지하고, 실제 교체 필요성이 있는 경계에만 어댑터를 도입한다.
 
