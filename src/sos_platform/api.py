@@ -42,6 +42,7 @@ from .schemas import (
     JobOut,
     JobPageOut,
     PreviewOut,
+    ProblemOut,
     ProfileOut,
     SnapshotOut,
     StorageInspectionOut,
@@ -78,6 +79,10 @@ def create_app(home: Path | None = None) -> FastAPI:
         docs_url=None,
         redoc_url=None,
         lifespan=lifespan,
+        responses={
+            status: {"model": ProblemOut}
+            for status in (400, 401, 403, 404, 409, 422, 500, 503)
+        },
     )
     app.state.identity = identity
     register_error_handlers(app)
