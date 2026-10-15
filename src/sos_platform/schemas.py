@@ -47,6 +47,40 @@ class Transform(BaseModel):
         return self
 
 
+class StoragePolicyOut(BaseModel):
+    """서버의 유효 보존 정책과 값의 출처."""
+
+    values: dict[str, int]
+    sources: dict[str, str]
+    automatic_deletion: bool
+    mode: Literal["observation_only"]
+
+
+class StorageObjectOut(BaseModel):
+    location: str
+    size_bytes: int
+    modified_at: str
+    status: Literal["protected", "waiting", "candidate", "unknown"]
+    reason: str
+
+
+class StorageInspectionOut(BaseModel):
+    scope: Literal["datasets/", "results/"]
+    items: list[StorageObjectOut]
+    counts: dict[str, int]
+    next_cursor: str | None = None
+    policy: StoragePolicyOut
+    deletion_enabled: bool
+
+
+class IcebergReferenceOut(BaseModel):
+    dataset_id: str
+    table_name: str
+    snapshot_id: str
+    status: Literal["protected", "missing", "unknown"]
+    reason: str
+
+
 class WorkRequest(BaseModel):
     dataset_id: str
     kind: Literal["profile", "transform"]
