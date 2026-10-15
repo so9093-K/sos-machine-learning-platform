@@ -115,3 +115,24 @@ test("file upload is operable through keyboard", async ({ page }) => {
   });
   await expect(page.getByRole("heading", { name: "keyboard.csv" })).toBeVisible();
 });
+
+
+test("same dataset reload preserves Feature editor selections", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
+  await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
+  await page.getByRole("tab", { name: "Features" }).click();
+  await page.getByLabel("변환", { exact: true }).selectOption("lag");
+  await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
+  await page.getByLabel("시간·정렬 컬럼").selectOption("time");
+  await page.getByLabel("그룹 컬럼").selectOption("machine_id");
+  await page.getByRole("button", { name: "+ 단계 추가" }).click();
+  await page.getByLabel("컬럼", { exact: true }).selectOption("vibration");
+  await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
+  await expect(page.getByLabel("컬럼", { exact: true })).toHaveValue("vibration");
+  await expect(page.getByLabel("시간·정렬 컬럼")).toHaveValue("time");
+  await expect(page.getByLabel("그룹 컬럼")).toHaveValue("machine_id");
+  await expect(page.locator(".step")).toHaveCount(1);
+  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+});
