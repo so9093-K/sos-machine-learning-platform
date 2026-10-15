@@ -79,10 +79,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         docs_url=None,
         redoc_url=None,
         lifespan=lifespan,
-        responses={
-            status: {"model": ProblemOut}
-            for status in (400, 401, 403, 404, 409, 422, 500, 503)
-        },
+        responses={"default": {"model": ProblemOut, "description": "Structured API error"}},
     )
     app.state.identity = identity
     register_error_handlers(app)
