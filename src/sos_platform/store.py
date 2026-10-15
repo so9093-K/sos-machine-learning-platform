@@ -774,13 +774,17 @@ class Store:
                     ),
                     {"at": now(), "id": row["id"]},
                 )
-                interrupted = db.execute(
-                    text(
-                        "UPDATE attempts SET status='Interrupted',finished_at=:at,error=:error "
-                        "WHERE job_id=:id AND status='Running' RETURNING id"
-                    ),
-                    {"at": now(), "error": "Worker stopped before completion", "id": row["id"]},
-                ).scalars().all()
+                interrupted = (
+                    db.execute(
+                        text(
+                            "UPDATE attempts SET status='Interrupted',finished_at=:at,error=:error "
+                            "WHERE job_id=:id AND status='Running' RETURNING id"
+                        ),
+                        {"at": now(), "error": "Worker stopped before completion", "id": row["id"]},
+                    )
+                    .scalars()
+                    .all()
+                )
                 attempt_id = interrupted[-1] if interrupted else "unknown"
                 if unsafe:
                     # 자동 재시도 대신 Catalog 속성으로 커밋 여부를 추적할 근거를 남긴다.

@@ -1348,7 +1348,6 @@ def test_failed_job_completion_is_audited(workspace):
     )
 
 
-
 def test_recovery_audit_failure_rolls_back_state(workspace, monkeypatch):
     """복구 감사 실패 시 Job·Attempt 상태 전환이 부분 확정되지 않는다."""
     client, store = workspace

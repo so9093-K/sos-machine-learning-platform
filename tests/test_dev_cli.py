@@ -309,7 +309,6 @@ def test_s3_endpoint_default_uses_configured_port(monkeypatch):
     assert Settings.from_env().s3_endpoint == "http://127.0.0.1:9745"
 
 
-
 def test_make_check_validates_full_contract_once(monkeypatch, config):
     """CI는 검사 종류별로 실행하더라도 로컬 make check는 완전한 검증을 유지한다."""
     monkeypatch.setattr(dev, "status", lambda _config: {"status": "ready"})
