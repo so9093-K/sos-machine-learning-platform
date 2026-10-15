@@ -14,6 +14,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Uploa
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
+from starlette.concurrency import run_in_threadpool
 
 from .api_errors import register_error_handlers
 from .config import StoragePolicy
@@ -324,7 +325,10 @@ def create_app(home: Path | None = None) -> FastAPI:
         # 제한보다 한 바이트 더 읽어 파일 전체를 저장하기 전에 크기 초과를 검출한다.
         data = await file.read(MAX_UPLOAD + 1)
         try:
-            return save_upload(store, file.filename or "unknown", data, owner_actor=actor.id)
+            # S3·PostgreSQL의 동기 I/O를 ASGI 이벤트 루프에서 실행하지 않는다.
+            return await run_in_threadpool(
+                save_upload, store, file.filename or "unknown", data, owner_actor=actor.id
+            )
         except ValueError:
             raise
         except Exception as exc:

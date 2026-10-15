@@ -36,12 +36,23 @@ test.describe("token identity and resource permissions", () => {
       .toBeVisible();
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "스냅샷 연결" })).toBeVisible();
+    // 업로드는 S3·DB 게시를 완료한 뒤 201을 반환한다. UI의 5초 표시 제한으로
+    // API 성공을 대신 판정하면 느린 CI 환경에서 정상 게시도 실패로 오인한다.
+    const uploadResponse = page.waitForResponse(
+      response => response.url().endsWith("/api/datasets/files")
+        && response.request().method() === "POST",
+      { timeout: 30_000 },
+    );
     await page.locator('input[type="file"]').setInputFiles({
       name: "authorized.csv",
       mimeType: "text/csv",
       buffer: Buffer.from("time,value\n1,10\n2,20\n"),
     });
-    await expect(page.getByRole("heading", { name: "authorized.csv" })).toBeVisible();
+    const response = await uploadResponse;
+    expect(response.status(), await response.text()).toBe(201);
+    const dataset = await response.json() as { id: string; name: string };
+    expect(dataset.name).toBe("authorized.csv");
+    await expect(page.getByRole("heading", { name: dataset.name })).toBeVisible();
     await expect(page.getByRole("button", { name: "Iceberg에 추가" })).toBeVisible();
   });
 
