@@ -68,6 +68,8 @@ def classify_object(item: dict, metadata: dict, policy: StoragePolicy) -> tuple[
     if max(latest, modified) > cutoff:
         return "waiting", "미게시 객체의 보존 유예 기간이 지나지 않았습니다."
     observation = metadata["observation"]
+    if not item.get("fingerprint") or observation["fingerprint"] != item["fingerprint"]:
+        return "unknown", "객체 세대의 동일성을 확인하지 못해 보호합니다."
     first = datetime.fromisoformat(observation["first_seen_at"])
     if observation["observation_count"] < policy.min_observations or first > datetime.now(
         UTC
@@ -85,7 +87,7 @@ def inspect_page(
     """한 접두사의 한 페이지만 조회한다. Iceberg는 절대 탐색하지 않는다."""
     prefix, token = _position(cursor)
     objects, next_token = storage.list_page(prefix, limit=policy.page_size, cursor=token)
-    metadata = store.observe_objects([obj["location"] for obj in objects], policy.observation_hours)
+    metadata = store.observe_objects(objects, policy.observation_hours)
     examined = []
     summary = {"protected": 0, "waiting": 0, "candidate": 0, "unknown": 0}
     for item in objects:
