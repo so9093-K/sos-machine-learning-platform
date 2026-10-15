@@ -38,7 +38,17 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   const response = await fetch(path, { ...init, headers });
-  if (!response.ok) {
+  if (!response.ok) throw await responseError(response);
+  return response.json() as Promise<T>;
+}
+
+export function jsonPost<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+
+/** fetch와 XHR에서 같은 오류 코드·레거시 detail 해석을 사용한다. */
+async function responseError(response: Response): Promise<ApiError> {
     let message = `요청에 실패했습니다. (HTTP ${response.status})`;
     let code: string | null = null;
     let retryPolicy: string | null = null;
@@ -61,12 +71,48 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
         if (!code && typeof legacy.code === "string") code = legacy.code;
       }
     } catch { /* JSON이 아니어도 HTTP 상태·요청 ID를 보존한다. */ }
-    throw new ApiError(message, response.status, code, requestId, retryPolicy);
-  }
-  return response.json() as Promise<T>;
+    return new ApiError(message, response.status, code, requestId, retryPolicy);
 }
 
-export function jsonPost<T>(path: string, body: unknown): Promise<T> {
-  return request<T>(path, { method: "POST",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+/** 전송된 바이트와 서버의 등록 완료를 구분하는 파일 업로드 전용 요청. */
+export function uploadFile<T>(
+  path: string,
+  file: File,
+  onProgress: (loaded: number, total: number) => void,
+  onTransferComplete: () => void,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", path);
+    if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable) onProgress(event.loaded, event.total);
+    };
+    xhr.upload.onload = onTransferComplete;
+    xhr.onerror = () => reject(new Error("업로드 중 네트워크 연결이 끊겼습니다. 등록 여부를 확인해 주세요."));
+    xhr.onabort = () => reject(new Error("요청이 중단됐습니다. 등록 여부를 확인해 주세요."));
+    xhr.onload = () => {
+      const headers = new Headers();
+      const requestId = xhr.getResponseHeader("X-Request-ID");
+      if (requestId) headers.set("X-Request-ID", requestId);
+      const response = new Response(xhr.responseText, { status: xhr.status, headers });
+      if (!response.ok) {
+        if (xhr.status === 413 && !xhr.responseText.trim().startsWith("{")) {
+          reject(new ApiError("파일 크기가 서버 업로드 한도를 초과했습니다.", 413,
+            "SOS-UPLOAD-TOO-LARGE", requestId, "never"));
+        } else {
+          void responseError(response).then(reject, reject);
+        }
+        return;
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText) as T);
+      } catch {
+        reject(new Error("서버 응답을 읽을 수 없습니다. 등록 여부를 확인해 주세요."));
+      }
+    };
+    const form = new FormData();
+    form.append("file", file);
+    xhr.send(form);
+  });
 }
