@@ -38,10 +38,14 @@ jobs = Table(
     Column("cancel_requested", Boolean, nullable=False, default=False),
     Column("result", Text),
     Column("error", Text),
+    Column("error_code", String(64)),
+    Column("failure_stage", String(64)),
+    Column("request_id", String(36)),
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
     Column("owner_actor", Text),
     Index("ix_jobs_created_at_id", "created_at", "id"),
+    Index("ix_jobs_request_id", "request_id"),
 )
 
 attempts = Table(
@@ -54,6 +58,8 @@ attempts = Table(
     Column("started_at", Text, nullable=False),
     Column("finished_at", Text),
     Column("error", Text),
+    Column("error_code", String(64)),
+    Column("failure_stage", String(64)),
     UniqueConstraint("job_id", "number"),
 )
 
