@@ -348,7 +348,11 @@ function Workspace() {
         <div className="dataset-hero">
           <div><span className="eyebrow">SELECTED DATASET</span><h2>{dataset.name}</h2>
             <p>{dataset.kind.toUpperCase()} · {readableVersion(dataset)}</p></div>
-          <div className="hero-actions"><input aria-label="Iceberg 테이블명" value={tableName}
+          <div className="hero-actions">
+            <button className="secondary" onClick={() => setReloadRevision(value => value + 1)}>
+              데이터 다시 불러오기
+            </button>
+            <input aria-label="Iceberg 테이블명" value={tableName}
             onChange={e => setTableName(e.target.value)} placeholder="Iceberg table" />
             <button disabled={busy} className="secondary" onClick={() => void importIceberg()}>
               Iceberg에 추가
