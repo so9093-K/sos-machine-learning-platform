@@ -107,10 +107,15 @@ class Store:
                 ).mappings()
             ]
 
-    def observe_objects(self, locations: list[str], observation_hours: int) -> dict:
-        """S3 읽기 전용 대조의 관측 시각을 기록하고 참조·소유권을 함께 조회한다."""
-        if not locations:
+    def observe_objects(self, objects: list[dict], observation_hours: int) -> dict:
+        """객체 세대가 변경되면 이전 관측 횟수를 폐기하고 새로 집계한다.
+
+        목록 ETag는 멀티파트 등에서 콘텐츠 해시가 아닐 수 있다. 따라서
+        ETag·수정시각·크기를 결합한 값은 삭제 증거가 아닌 진단 단서다.
+        """
+        if not objects:
             return {}
+        locations = [item["location"] for item in objects]
         cutoff = (datetime.now(UTC) - timedelta(hours=observation_hours)).isoformat()
         statement = text("SELECT location FROM datasets WHERE location IN :ids").bindparams(
             bindparam("ids", expanding=True)
@@ -131,16 +136,35 @@ class Store:
                     bindparam("ids", expanding=True)
                 )
                 attempts = dict(db.execute(statement, {"ids": owner_ids}).all())
-            for location in locations:
+            for item in objects:
+                # 한 객체의 새 세대가 관측되면 first_seen/count를 항상 초기화한다.
+                at = now()
                 db.execute(
                     text(
                         "INSERT INTO object_observations"
-                        "(location,first_seen_at,last_seen_at,observation_count) "
-                        "VALUES(:location,:at,:at,1) ON CONFLICT(location) DO UPDATE "
-                        "SET last_seen_at=:at,observation_count=object_observations.observation_count+1 "
-                        "WHERE object_observations.last_seen_at<=:cutoff"
+                        "(location,fingerprint,first_seen_at,last_seen_at,observation_count) "
+                        "VALUES(:location,:fingerprint,:at,:at,1) "
+                        "ON CONFLICT(location) DO UPDATE SET "
+                        "fingerprint=excluded.fingerprint,"
+                        "first_seen_at=CASE WHEN object_observations.fingerprint "
+                        "IS DISTINCT FROM excluded.fingerprint THEN excluded.first_seen_at "
+                        "ELSE object_observations.first_seen_at END,"
+                        "observation_count=CASE WHEN object_observations.fingerprint "
+                        "IS DISTINCT FROM excluded.fingerprint THEN 1 "
+                        "WHEN object_observations.last_seen_at<=:cutoff "
+                        "THEN object_observations.observation_count+1 "
+                        "ELSE object_observations.observation_count END,"
+                        "last_seen_at=CASE WHEN object_observations.fingerprint "
+                        "IS DISTINCT FROM excluded.fingerprint "
+                        "OR object_observations.last_seen_at<=:cutoff "
+                        "THEN excluded.last_seen_at ELSE object_observations.last_seen_at END"
                     ),
-                    {"location": location, "at": now(), "cutoff": cutoff},
+                    {
+                        "location": item["location"],
+                        "fingerprint": item.get("fingerprint"),
+                        "at": at,
+                        "cutoff": cutoff,
+                    },
                 )
             observations_query = text(
                 "SELECT * FROM object_observations WHERE location IN :ids"
