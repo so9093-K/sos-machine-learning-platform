@@ -15,8 +15,14 @@ from dataclasses import dataclass
 from fastapi import Depends, HTTPException, Request
 
 ACTIONS = {
-    "dataset.read", "dataset.create", "job.read", "job.create", "job.cancel",
-    "storage.inspect", "snapshot.retain", "audit.read",
+    "dataset.read",
+    "dataset.create",
+    "job.read",
+    "job.create",
+    "job.cancel",
+    "storage.inspect",
+    "snapshot.retain",
+    "audit.read",
 }
 GRANTS = {
     "viewer": {"dataset.read", "job.read"},
@@ -81,8 +87,11 @@ class IdentitySettings:
         if self.mode == "development":
             return Actor("local-developer", "human", frozenset({"administrator"}))
         if not authorization or not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="Authentication required",
-                                headers={"WWW-Authenticate": "Bearer"})
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         token = authorization[7:]
         if len(token) < 32 or len(token) > 4096:
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -90,8 +99,9 @@ class IdentitySettings:
         for expected, actor in self.token_subjects.items():
             if secrets.compare_digest(fingerprint, expected):
                 return actor
-        raise HTTPException(status_code=401, detail="Invalid credentials",
-                            headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status_code=401, detail="Invalid credentials", headers={"WWW-Authenticate": "Bearer"}
+        )
 
 
 def current_actor(request: Request) -> Actor:
