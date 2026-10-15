@@ -89,8 +89,12 @@ def create_app(home: Path | None = None) -> FastAPI:
         request.state.request_id = str(uuid4())
         response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
-        emit("api.request.complete", service="sos-api", request_id=request.state.request_id,
-             status=str(response.status_code))
+        emit(
+            "api.request.complete",
+            service="sos-api",
+            request_id=request.state.request_id,
+            status=str(response.status_code),
+        )
         if response.status_code in (401, 403):
             actor = getattr(request.state, "actor", None)
             try:
@@ -404,4 +408,3 @@ def create_app(home: Path | None = None) -> FastAPI:
 
 
 app = create_app()
-
