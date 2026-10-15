@@ -2,15 +2,17 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import * as echarts from "echarts";
 import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
-import { request, jsonPost } from "./api";
+import { request, jsonPost, setAccessToken } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
+import { AuditPanel } from "./AuditPanel";
 import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, Example } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
-type Tab = "preview" | "profile" | "features" | "jobs" | "storage";
+type Tab = "preview" | "profile" | "features" | "jobs" | "storage" | "audit";
+type Identity = { actor_id: string; actor_type: string; roles: string[]; mode: string };
 
 function readableVersion(d: Dataset) {
   return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
@@ -28,7 +30,9 @@ function Chart({ option }: { option: echarts.EChartsCoreOption }) {
   return <div ref={ref} className="chart" role="img" aria-label="선택된 데이터의 분석 차트" />;
 }
 
-function Workspace() {
+function Workspace({ actor }: { actor: Identity }) {
+  const canManage = actor.roles.some(r => ["administrator", "operator"].includes(r));
+  const canWrite = actor.roles.some(r => ["administrator", "researcher"].includes(r));
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -293,7 +297,7 @@ function Workspace() {
         <strong>SOS Platform</strong><small>Research · Execute · Evolve</small>
       </div></div>
       <div className="section-title">DATA SOURCES</div>
-      <label className="upload" role="button" tabIndex={0} aria-label="CSV 또는 Parquet 파일 업로드"
+      {canWrite && <label className="upload" role="button" tabIndex={0} aria-label="CSV 또는 Parquet 파일 업로드"
         aria-disabled={busy} onKeyDown={event => {
           if (busy || !["Enter", " "].includes(event.key)) return;
           event.preventDefault(); uploadRef.current?.click();
@@ -304,24 +308,27 @@ function Workspace() {
             const file = event.target.files?.[0]; if (file) void upload(file);
             event.target.value = "";
           }} />
-      </label>
-      <div className="connect-existing">
+      </label>}
+      {canManage && <div className="connect-existing">
         <label>기존 Iceberg 테이블
           <input aria-label="Iceberg 테이블 이름" value={tableName}
             onChange={e => setTableName(e.target.value)} placeholder="sensor_data" />
         </label>
         <button className="secondary" disabled={busy}
           onClick={() => void connectExisting()}>스냅샷 연결</button>
-      </div>
+      </div>}
       <button className="job-navigation secondary" onClick={() => {
         setSelected(""); setTab("preview");
       }}>예제 데이터 살펴보기</button>
       <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
         전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
       </button>
-      <button className="job-navigation secondary" onClick={() => setTab("storage")}>
+      {canManage && <button className="job-navigation secondary" onClick={() => setTab("storage")}>
         저장소 상태 보기
-      </button>
+      </button>}
+      {canManage && <button className="job-navigation secondary" onClick={() => setTab("audit")}>
+        보안 감사 보기
+      </button>}
       <nav aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
@@ -342,7 +349,7 @@ function Workspace() {
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
       {notice && <div role="status" className="alert success">{notice}
         <button onClick={() => setNotice("")} aria-label="알림 닫기">×</button></div>}
-      {!dataset && tab !== "jobs" && tab !== "storage" && <div className="empty">
+      {!dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <div className="empty">
         <h2>첫 데이터를 탐색해 보세요</h2>
         <p>파일을 준비하지 않아도 합성 데이터로 EDA와 피처 실행을 경험할 수 있습니다.</p>
         <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
@@ -506,7 +513,8 @@ function Workspace() {
         </section>}
 
       </>}
-      {tab === "storage" && <StoragePanel />}
+      {canManage && tab === "storage" && <StoragePanel />}
+      {canManage && tab === "audit" && <AuditPanel />}
       {tab === "jobs" && <JobsPanel jobs={jobs} datasets={datasets} busy={busy}
         nextCursor={nextJobsCursor} onLoadMore={() => void loadMoreJobs()}
         onRefresh={() => void withFeedback(refreshJobs)}
@@ -516,4 +524,55 @@ function Workspace() {
     </main>
   </div>;
 }
-createRoot(document.getElementById("root")!).render(<React.StrictMode><Workspace /></React.StrictMode>);
+function App() {
+  const [actor, setActor] = useState<Identity | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [token, setToken] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  useEffect(() => {
+    request<Identity>("/api/auth/me").then(setActor)
+      .catch(() => setMessage("인증이 필요합니다. 발급된 액세스 토큰을 입력하세요."))
+      .finally(() => setChecking(false));
+  }, []);
+  async function authenticate(event: React.FormEvent) {
+    event.preventDefault();
+    setSubmitting(true); setMessage("");
+    setAccessToken(token);
+    try {
+      setActor(await request<Identity>("/api/auth/me"));
+      setToken("");
+    } catch (error) {
+      setAccessToken(null);
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally { setSubmitting(false); }
+  }
+  if (checking) return <main className="main" role="status">사용자 권한을 확인하고 있습니다.</main>;
+  if (!actor) return <main className="main">
+    <section className="panel" aria-label="인증">
+      <h1>SOS Platform 접근 인증</h1>
+      <p>현재 서비스에서 발급받은 Bearer 토큰을 입력하세요.
+        토큰은 브라우저 메모리에만 보관하며, 다시 접속하면 재인증이 필요합니다.</p>
+      <form onSubmit={event => void authenticate(event)}>
+        <label>액세스 토큰 <input type="password" value={token}
+          onChange={event => setToken(event.target.value)} autoComplete="off"
+          aria-label="액세스 토큰" required /></label>
+        <button disabled={submitting || !token}>인증</button>
+      </form>
+      {message && <p role="alert">{message}</p>}
+    </section>
+  </main>;
+  const canViewDataset = actor.roles.some(r => ["viewer","researcher","administrator"].includes(r));
+  return <>
+    <div className="auth-status" role="status">
+      현재 사용자: {actor.actor_id} · {actor.roles.join(", ")}
+      {actor.mode !== "development" &&
+        <button className="secondary" onClick={() => { setAccessToken(null); setActor(null); }}>
+          인증 해제
+        </button>}
+    </div>
+    {canViewDataset ? <Workspace actor={actor} /> :
+      <main className="main"><h1>운영 진단</h1><StoragePanel /><AuditPanel /></main>}
+  </>;
+}
+createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);
