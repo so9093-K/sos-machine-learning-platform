@@ -149,6 +149,16 @@ jobs:
           curl -fsS http://127.0.0.1:9602/api/jobs > /tmp/sos-persisted-jobs.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-jobs.json")); assert any(x["status"]=="Succeeded" for x in d["items"]), d'
           make logs > /tmp/sos-sanitized-logs.txt
+      - name: Verify token-mode browser permissions
+        run: |
+          export SOS_E2E_VIEWER_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+          export SOS_E2E_RESEARCHER_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+          export SOS_E2E_OPERATOR_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+          export SOS_AUTH_MODE=token
+          export SOS_AUTH_TOKEN_HASHES="$(python3 -c "import os,json,hashlib; roles=('viewer','researcher','operator'); print(json.dumps({hashlib.sha256(os.environ['SOS_E2E_'+r.upper()+'_TOKEN'].encode()).hexdigest(): {'actor_id': 'ci-'+r, 'kind': 'human', 'roles':[r]} for r in roles}))")"
+          make restart
+          cd web && npx playwright test auth.spec.ts
+
       - name: Save Playwright trace on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
