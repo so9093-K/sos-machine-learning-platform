@@ -94,9 +94,12 @@ function Workspace() {
         if (!active) return;
         setPreview(data); setPreviewStatus("ready");
         const columns = Object.keys(data.schema);
-        setColumn(columns[0] ?? ""); setVisualColumn(columns.find(
-          name => /Int|Float|Decimal/.test(data.schema[name])) ?? columns[0] ?? "");
-        setTimeColumn(columns[0] ?? "");
+        setColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
+        setVisualColumn(current =>
+          columns.includes(current) && /Int|Float|Decimal/.test(data.schema[current])
+            ? current : (columns.find(name => /Int|Float|Decimal/.test(data.schema[name]))
+              ?? columns[0] ?? ""));
+        setTimeColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
       })
       .catch(error => {
         if (!active) return;
