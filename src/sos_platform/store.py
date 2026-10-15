@@ -656,12 +656,17 @@ class Store:
         error: str | None = None,
         publish: dict | None = None,
         write_id: str | None = None,
+        error_code: str | None = None,
+        failure_stage: str | None = None,
     ) -> str:
+        if error_code is not None and error_code not in ERRORS:
+            raise ValueError("Unregistered error code")
         with self.connection() as db:
             row = (
                 db.execute(
                     text(
-                        "SELECT status,cancel_requested,owner_actor FROM jobs WHERE id=:id FOR UPDATE"
+                        "SELECT status,cancel_requested,owner_actor,request_id "
+                        "FROM jobs WHERE id=:id FOR UPDATE"
                     ),
                     {"id": job_id},
                 )
@@ -672,6 +677,7 @@ class Store:
                 raise RuntimeError("Job is not running")
             if row["cancel_requested"]:
                 status, result, publish = "Cancelled", None, None
+                error, error_code, failure_stage = None, None, None
             if status == "Succeeded" and publish:
                 item = dict(
                     id=publish.get("retention_id") or str(uuid4()),
@@ -699,6 +705,7 @@ class Store:
             db.execute(
                 text(
                     "UPDATE jobs SET status=:status,result=:result,error=:error,"
+                    "error_code=:error_code,failure_stage=:failure_stage,"
                     "updated_at=:at WHERE id=:id"
                 ),
                 dict(
@@ -706,15 +713,19 @@ class Store:
                     status=status,
                     result=json.dumps(result, default=str) if result is not None else None,
                     error=error,
+                    error_code=error_code,
+                    failure_stage=failure_stage,
                     at=now(),
                 ),
             )
             completed_attempt = db.execute(
                 text(
-                    "UPDATE attempts SET status=:status,finished_at=:at,error=:error "
+                    "UPDATE attempts SET status=:status,finished_at=:at,error=:error,"
+                    "error_code=:error_code,failure_stage=:failure_stage "
                     "WHERE job_id=:id AND status='Running' RETURNING id"
                 ),
-                dict(id=job_id, status=status, at=now(), error=error),
+                dict(id=job_id, status=status, at=now(), error=error,
+                     error_code=error_code, failure_stage=failure_stage),
             ).scalar_one()
             reason = f"attempt={completed_attempt}"
             if status == "Succeeded" and publish:
@@ -726,6 +737,7 @@ class Store:
                     resource_type="dataset",
                     resource_id=item["id"],
                     reason=f"job={job_id};{reason}",
+                    request_id=row["request_id"],
                 )
             self._audit(
                 db,
@@ -740,6 +752,7 @@ class Store:
                     "Cancelled": "cancelled",
                 }.get(status, status.lower()),
                 reason=reason,
+                request_id=row["request_id"],
             )
         return status
 
