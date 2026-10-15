@@ -306,12 +306,13 @@ def create_app(home: Path | None = None) -> FastAPI:
         return profile(scan_dataset(store, existing(dataset_id, actor)), sample=1000)
 
     @app.post("/api/iceberg/import", status_code=202, response_model=JobOut)
-    def iceberg_import(body: IcebergImport, actor: Actor = CREATE_JOB_DEP):
+    def iceberg_import(body: IcebergImport, request: Request, actor: Actor = CREATE_JOB_DEP):
         existing(body.dataset_id, actor)
         return store.create_job(
             kind="iceberg_import",
             dataset_id=body.dataset_id,
             spec=body.model_dump(),
+            request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,
         )
@@ -368,12 +369,13 @@ def create_app(home: Path | None = None) -> FastAPI:
         return {"items": rows, "next_cursor": next_cursor}
 
     @app.post("/api/jobs", status_code=202, response_model=JobOut)
-    def create_job(body: WorkRequest, actor: Actor = CREATE_JOB_DEP):
+    def create_job(body: WorkRequest, request: Request, actor: Actor = CREATE_JOB_DEP):
         existing(body.dataset_id, actor)
         return store.create_job(
             kind=body.kind,
             dataset_id=body.dataset_id,
             spec=body.model_dump(exclude_none=True),
+            request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,
         )
