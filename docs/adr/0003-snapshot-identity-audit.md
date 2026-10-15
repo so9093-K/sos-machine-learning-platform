@@ -1,12 +1,12 @@
 # 0003 — Snapshot 보존과 인증·권한·감사 경계
 
 - 상태: Accepted
-- 이전 결정: [0002 객체 보존](0002-object-lifecycle.md)
+- 관련 결정: [0002 객체 보존](0002-object-lifecycle.md) (대체 관계가 아님)
 - 범위: Data Workspace의 현재 로컬 실행과 외부 API 준비
 
 ## 배경
 
-Snapshot ID 기록은 오래된 Iceberg Snapshot을 Catalog 만료 정책으로부터 보호하지 못한다. 현재 Data Workspace에는 인증된 사용자와 운영자를 구분하는 API 계약도 없다. 정책과 구현 기술이 바뀌더라도 Dataset·Job·실행 결과의 의미를 유지해야 한다.
+Snapshot ID 기록은 오래된 Iceberg Snapshot을 Catalog 만료 정책으로부터 보호하지 못한다. 초기 Data Workspace에는 인증된 사용자와 운영자를 구분하는 API 계약도 없었다. 정책과 구현 기술이 바뀌더라도 Dataset·Job·실행 결과의 의미를 유지해야 한다.
 
 ## 결정
 

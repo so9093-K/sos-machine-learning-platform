@@ -54,4 +54,4 @@ S3 전송 전 객체 게시 의도를 PostgreSQL `object_writes`에 기록하고
 
 ## 인증·보존·감사 경계
 
-API는 동일한 Actor·Action·Resource 권한 판단을 거쳐 Dataset·Job·Storage에 접근한다. 현재는 로컬 개발 신원과 운영용 불투명 Bearer 토큰 지문 검증을 지원하며, OIDC 로그인은 아직 구현하지 않았다. 인증 제공자 구현과 도메인 권한을 분리한다. PostgreSQL은 보존 의도·보안 감사·Dataset 소유권의 정본이고 Iceberg Catalog는 Snapshot Tag의 실제 유효 상태를 판단한다. 외부 Catalog 커밋을 PostgreSQL 트랜잭션과 동일시하지 않는다.
+API는 동일한 Actor·Action·Resource 권한 판단을 거쳐 Dataset·Job·Storage에 접근한다. 현재는 로컬 개발 신원과 사설 인증 검증용 불투명 Bearer 토큰 지문 검증을 지원하며, OIDC 로그인·TLS·외부 공개용 배포 경계는 구현하지 않았다. 인증 제공자 구현과 도메인 권한을 분리한다. PostgreSQL은 보존 의도·보안 감사·Dataset 소유권의 정본이고 Iceberg Catalog는 Snapshot Tag의 실제 유효 상태를 판단한다. 외부 Catalog 커밋을 PostgreSQL 트랜잭션과 동일시하지 않는다.
