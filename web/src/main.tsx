@@ -380,7 +380,7 @@ function Workspace() {
                 setTab(next);
                 requestAnimationFrame(() => document.getElementById(`sos-tab-${next}`)?.focus());
               }}>
-              {{ preview: "Preview", profile: "EDA & Profile", features: "Features", jobs: "Jobs" }[t]}
+              {{ preview: "Preview", profile: "EDA & Profile", features: "Features", jobs: "Jobs", storage: "Storage Health" }[t]}
             </button>)}
         </div>
         {tab === "preview" && <section className="panel" role="tabpanel"
