@@ -76,9 +76,13 @@ def create_app(home: Path | None = None) -> FastAPI:
                 store.record_audit(
                     actor_id=actor.id if actor else "anonymous",
                     actor_type=actor.kind if actor else "anonymous",
-                    action="security.access_denied", resource_type="api",
-                    resource_id=request.url.path[:200], decision="deny", outcome="denied",
-                    reason=str(response.status_code), request_id=request.state.request_id,
+                    action="security.access_denied",
+                    resource_type="api",
+                    resource_id=request.url.path[:200],
+                    decision="deny",
+                    outcome="denied",
+                    reason=str(response.status_code),
+                    request_id=request.state.request_id,
                 )
             except Exception:
                 # 거부 요청의 감사 저장에 실패해도 허용으로 바꾸지 않는다.
@@ -150,12 +154,17 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @app.get("/api/auth/me")
     def auth_me(actor: Actor = Depends(current_actor)):
-        return {"actor_id": actor.id, "actor_type": actor.kind,
-                "roles": sorted(actor.roles), "mode": identity.mode}
+        return {
+            "actor_id": actor.id,
+            "actor_type": actor.kind,
+            "roles": sorted(actor.roles),
+            "mode": identity.mode,
+        }
 
     @app.get("/api/audit")
-    def audit_events(limit: int = Query(default=50, ge=1, le=100),
-                     actor: Actor = Depends(require("audit.read"))):
+    def audit_events(
+        limit: int = Query(default=50, ge=1, le=100), actor: Actor = Depends(require("audit.read"))
+    ):
         return store.audit_events(limit=limit)
 
     @app.get("/api/storage/policy", response_model=StoragePolicyOut)
@@ -164,8 +173,10 @@ def create_app(home: Path | None = None) -> FastAPI:
         return StoragePolicy.from_env().describe()
 
     @app.get("/api/storage/inspection", response_model=StorageInspectionOut)
-    def storage_inspection(cursor: str | None = Query(default=None, max_length=4096),
-                           actor: Actor = Depends(require("storage.inspect"))):
+    def storage_inspection(
+        cursor: str | None = Query(default=None, max_length=4096),
+        actor: Actor = Depends(require("storage.inspect")),
+    ):
         """S3 객체를 읽기 전용으로 대조한다. 실제 삭제는 제공하지 않는다."""
         try:
             return inspect_page(store, ObjectStore(), StoragePolicy.from_env(), cursor)
@@ -177,8 +188,10 @@ def create_app(home: Path | None = None) -> FastAPI:
             ) from exc
 
     @app.get("/api/storage/iceberg-references", response_model=list[IcebergReferenceOut])
-    def storage_iceberg_references(limit: int = Query(default=50, ge=1, le=100),
-                                  actor: Actor = Depends(require("storage.inspect"))):
+    def storage_iceberg_references(
+        limit: int = Query(default=50, ge=1, le=100),
+        actor: Actor = Depends(require("storage.inspect")),
+    ):
         """등록된 Dataset이 참조하는 Iceberg Snapshot 존재 여부를 확인한다."""
         return inspect_iceberg_references(store, limit=limit)
 
@@ -192,12 +205,12 @@ def create_app(home: Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Iceberg Dataset not found")
         try:
             ensure_tag(
-                store, dataset_id=dataset_id,
-                location=item["location"], snapshot_id=item["version"],
+                store,
+                dataset_id=dataset_id,
+                location=item["location"],
+                snapshot_id=item["version"],
             )
-            store.confirm_existing_retention(
-                dataset_id, actor_id=actor.id, actor_type=actor.kind
-            )
+            store.confirm_existing_retention(dataset_id, actor_id=actor.id, actor_type=actor.kind)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
@@ -213,8 +226,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         return list_examples()
 
     @app.post("/api/examples/{example_id}/use", status_code=201, response_model=DatasetOut)
-    def start_example(example_id: str,
-                      actor: Actor = Depends(require("dataset.create"))):
+    def start_example(example_id: str, actor: Actor = Depends(require("dataset.create"))):
         """예제를 명시적으로 선택했을 때만 일반 Dataset으로 등록한다."""
         try:
             return use_example(store, example_id, owner_actor=actor.id)
@@ -226,8 +238,9 @@ def create_app(home: Path | None = None) -> FastAPI:
         return store.datasets(actor_id=None if actor.privileged else actor.id)
 
     @app.post("/api/datasets/files", status_code=201, response_model=DatasetOut)
-    async def upload(file: Annotated[UploadFile, File()],
-                     actor: Actor = Depends(require("dataset.create"))):
+    async def upload(
+        file: Annotated[UploadFile, File()], actor: Actor = Depends(require("dataset.create"))
+    ):
         # 제한보다 한 바이트 더 읽어 파일 전체를 저장하기 전에 크기 초과를 검출한다.
         data = await file.read(MAX_UPLOAD + 1)
         try:
@@ -251,8 +264,11 @@ def create_app(home: Path | None = None) -> FastAPI:
         return existing(dataset_id, actor)
 
     @app.get("/api/datasets/{dataset_id}/preview", response_model=PreviewOut)
-    def dataset_preview(dataset_id: str, limit: int = Query(default=30, ge=1, le=100),
-                        actor: Actor = Depends(require("dataset.read"))):
+    def dataset_preview(
+        dataset_id: str,
+        limit: int = Query(default=30, ge=1, le=100),
+        actor: Actor = Depends(require("dataset.read")),
+    ):
         return safe_preview(scan_dataset(store, existing(dataset_id, actor)), limit)
 
     @app.get("/api/datasets/{dataset_id}/profile", response_model=ProfileOut)
@@ -260,17 +276,18 @@ def create_app(home: Path | None = None) -> FastAPI:
         return profile(scan_dataset(store, existing(dataset_id, actor)), sample=1000)
 
     @app.post("/api/iceberg/import", status_code=202, response_model=JobOut)
-    def iceberg_import(body: IcebergImport,
-                       actor: Actor = Depends(require("snapshot.retain"))):
+    def iceberg_import(body: IcebergImport, actor: Actor = Depends(require("snapshot.retain"))):
         existing(body.dataset_id, actor)
         return store.create_job(
-            kind="iceberg_import", dataset_id=body.dataset_id, spec=body.model_dump(),
-            owner_actor=actor.id, actor_type=actor.kind,
+            kind="iceberg_import",
+            dataset_id=body.dataset_id,
+            spec=body.model_dump(),
+            owner_actor=actor.id,
+            actor_type=actor.kind,
         )
 
     @app.post("/api/datasets/iceberg", status_code=201, response_model=DatasetOut)
-    def connect_table(body: IcebergConnect,
-                      actor: Actor = Depends(require("snapshot.retain"))):
+    def connect_table(body: IcebergConnect, actor: Actor = Depends(require("snapshot.retain"))):
         return connect_iceberg(store, body.table_name, body.snapshot_id, owner_actor=actor.id)
 
     @app.get("/api/iceberg/{table_name}/snapshots", response_model=list[SnapshotOut])
@@ -278,8 +295,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         return iceberg_snapshots(store, table_name)
 
     @app.post("/api/features/preview", response_model=FeaturePreviewOut)
-    def feature_preview(body: FeaturePreview,
-                        actor: Actor = Depends(require("dataset.read"))):
+    def feature_preview(body: FeaturePreview, actor: Actor = Depends(require("dataset.read"))):
         # 입력의 앞 1,000행을 먼저 자르면 정렬·Lag·Rolling 경계가 실제 Job과 달라진다.
         # 전체 입력에서 같은 연산을 수행하고 출력 행 수만 제한한다.
         lf = scan_dataset(store, existing(body.dataset_id, actor))
@@ -308,8 +324,9 @@ def create_app(home: Path | None = None) -> FastAPI:
                     raise ValueError("Invalid Job cursor")
             except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
                 raise ValueError("Invalid Job cursor") from exc
-        rows = store.jobs(limit=limit + 1, before=before,
-                          actor_id=None if actor.privileged else actor.id)
+        rows = store.jobs(
+            limit=limit + 1, before=before, actor_id=None if actor.privileged else actor.id
+        )
         next_cursor = None
         if len(rows) > limit:
             rows = rows[:limit]
@@ -321,13 +338,14 @@ def create_app(home: Path | None = None) -> FastAPI:
         return {"items": rows, "next_cursor": next_cursor}
 
     @app.post("/api/jobs", status_code=202, response_model=JobOut)
-    def create_job(body: WorkRequest,
-                   actor: Actor = Depends(require("job.create"))):
+    def create_job(body: WorkRequest, actor: Actor = Depends(require("job.create"))):
         existing(body.dataset_id, actor)
         return store.create_job(
-            kind=body.kind, dataset_id=body.dataset_id,
+            kind=body.kind,
+            dataset_id=body.dataset_id,
             spec=body.model_dump(exclude_none=True),
-            owner_actor=actor.id, actor_type=actor.kind,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
         )
 
     @app.get("/api/jobs/{job_id}", response_model=JobOut)
