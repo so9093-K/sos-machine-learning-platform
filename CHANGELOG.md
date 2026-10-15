@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Iceberg Append Snapshot을 Attempt 속성으로 식별하고 Dataset별 영구 Tag로 보호한다. 기존 미보호 Snapshot은 진단·수동 보존 전환을 지원한다.
+- 로컬 개발과 토큰 인증 모드, Actor·Action·Resource별 접근 제어, Dataset·Job 소유권 및 PostgreSQL 감사 이벤트를 추가한다. 공개용 OIDC 로그인과 자동 삭제는 제공하지 않는다.
+
 - 원본 파일과 Transform 결과의 S3 게시 의도를 PostgreSQL에 선기록하고, 성공 참조와 동일 트랜잭션에서 확정한다. 결과 주소는 Attempt별 불변 경로로 변경하되 기존 Dataset 판본은 유지한다.
 - 객체 보존 기본값·변경 출처, 제한된 S3 객체 대조, 반복 관측과 Iceberg Snapshot 참조 진단을 제공한다. 자동 삭제는 제공하지 않는다.
 - Alembic 0002 스키마를 추가하고 현재 HEAD 기준 데이터베이스 호환성 검사를 적용한다.
