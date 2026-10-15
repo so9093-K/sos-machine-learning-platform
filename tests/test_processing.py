@@ -155,7 +155,6 @@ def test_time_sort_occurs_after_prior_cast():
     assert [r["previous"] for r in result] == [None, 10, 20]
 
 
-
 @pytest.mark.parametrize("seed", range(12))
 def test_grouped_lag_is_invariant_to_input_permutation(seed):
     """다양한 값·입력 순서에서도 그룹별 직전 값만 사용한다."""
@@ -185,6 +184,4 @@ def test_grouped_lag_is_invariant_to_input_permutation(seed):
     actual = transform(pl.DataFrame(randomized).lazy(), spec).collect().to_dicts()
     assert len(actual) == len(rows), f"seed={seed}"
     for row in actual:
-        assert row["previous"] == expected[row["machine"], row["time"]], (
-            f"seed={seed}; row={row}"
-        )
+        assert row["previous"] == expected[row["machine"], row["time"]], f"seed={seed}; row={row}"
