@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
 
+from .config import StoragePolicy
 from .datasets import (
     MAX_UPLOAD,
     connect_iceberg,
@@ -23,6 +24,7 @@ from .datasets import (
 from .examples import list_examples, use_example
 from .object_store import ObjectStore
 from .processing import bounded_feature_preview, profile, safe_preview
+from .reconciler import inspect_iceberg_references, inspect_page
 from .schemas import (
     DatasetOut,
     ExampleOut,
@@ -30,11 +32,14 @@ from .schemas import (
     FeaturePreviewOut,
     IcebergConnect,
     IcebergImport,
+    IcebergReferenceOut,
     JobOut,
     JobPageOut,
     PreviewOut,
     ProfileOut,
     SnapshotOut,
+    StorageInspectionOut,
+    StoragePolicyOut,
     WorkRequest,
 )
 from .store import IcebergCancellationConflict, Store
@@ -109,6 +114,28 @@ def create_app(home: Path | None = None) -> FastAPI:
         if result["status"] != "ready":
             return JSONResponse(status_code=503, content=result)
         return result
+
+    @app.get("/api/storage/policy", response_model=StoragePolicyOut)
+    def storage_policy():
+        """연결 비밀을 제외한 유효 정책과 출처를 확인한다."""
+        return StoragePolicy.from_env().describe()
+
+    @app.get("/api/storage/inspection", response_model=StorageInspectionOut)
+    def storage_inspection(cursor: str | None = Query(default=None, max_length=4096)):
+        """S3 객체를 읽기 전용으로 대조한다. 실제 삭제는 제공하지 않는다."""
+        try:
+            return inspect_page(store, ObjectStore(), StoragePolicy.from_env(), cursor)
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503, detail="Storage inventory is unavailable; no objects were deleted"
+            ) from exc
+
+    @app.get("/api/storage/iceberg-references", response_model=list[IcebergReferenceOut])
+    def storage_iceberg_references(limit: int = Query(default=50, ge=1, le=100)):
+        """등록된 Dataset이 참조하는 Iceberg Snapshot 존재 여부를 확인한다."""
+        return inspect_iceberg_references(store, limit=limit)
 
     @app.get("/api/examples", response_model=list[ExampleOut])
     def available_examples():
