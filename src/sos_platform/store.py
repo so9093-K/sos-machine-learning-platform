@@ -309,7 +309,11 @@ class Store:
             summary = latest.get(item["id"])
             item["attempt_count"] = summary["attempt_count"] if summary else 0
             item["latest_attempt"] = (
-                {key: value for key, value in summary.items() if key not in ("rank", "attempt_count")}
+                {
+                    key: value
+                    for key, value in summary.items()
+                    if key not in ("rank", "attempt_count")
+                }
                 if summary
                 else None
             )
