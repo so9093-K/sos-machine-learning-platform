@@ -39,7 +39,7 @@ test.describe("token identity and resource permissions", () => {
     await page.locator('input[type="file"]').setInputFiles({
       name: "authorized.csv",
       mimeType: "text/csv",
-      buffer: Buffer.from("time,value\\n1,10\\n2,20\\n"),
+      buffer: Buffer.from("time,value\n1,10\n2,20\n"),
     });
     await expect(page.getByRole("heading", { name: "authorized.csv" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Iceberg에 추가" })).toBeVisible();
