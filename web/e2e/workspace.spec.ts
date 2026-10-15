@@ -181,3 +181,27 @@ test("Storage Health presents effective safe policy without destructive actions"
   await storage.getByRole("button", { name: "객체 다시 검사" }).click();
   await expect(storage.getByRole("alert")).toContainText("현재 상태가 아닙니다");
 });
+
+
+test("file size is explained and rejected before upload", async ({ page }) => {
+  await page.route("**/api/datasets/upload-policy", route =>
+    route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ max_size_bytes: 1024 * 1024,
+        supported_extensions: [".csv", ".parquet"] }),
+    }));
+  let uploads = 0;
+  await page.route("**/api/datasets/files", route => {
+    uploads++;
+    return route.abort();
+  });
+  await page.goto("/");
+  await expect(page.getByText("최대 1.00 MiB")).toBeVisible();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "over-limit.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.alloc(1024 * 1024 + 1, 120),
+  });
+  await expect(page.getByRole("alert")).toContainText("최대 1.00 MiB");
+  expect(uploads).toBe(0);
+});
