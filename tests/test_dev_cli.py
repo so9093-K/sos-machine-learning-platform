@@ -327,7 +327,7 @@ def test_make_check_validates_full_contract_once(monkeypatch, config):
         (["uv", "run", "--locked", "pytest", "-q"], dev.ROOT),
         (["npm", "run", "build"], dev.ROOT / "web"),
         (["npm", "run", "test"], dev.ROOT / "web"),
-        (["npx", "playwright", "test"], dev.ROOT / "web"),
+        (["uv", "run", "--locked", "python", "scripts/run_isolated_e2e.py"], dev.ROOT),
     ]
 
 

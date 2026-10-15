@@ -18,7 +18,15 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNTIME = ROOT / ".sos-dev"
+# 일반 인스턴스는 기존 경로를 유지하고 테스트 인스턴스만 별도 PID/로그를 사용한다.
+INSTANCE = os.getenv("SOS_DEV_INSTANCE", "sos-platform")
+if INSTANCE != "sos-platform" and not re.fullmatch(r"sos-e2e-[0-9a-f]{12}", INSTANCE):
+    raise SystemExit("Invalid isolated SOS instance identifier")
+RUNTIME = (
+    ROOT / ".sos-dev"
+    if INSTANCE == "sos-platform"
+    else ROOT / ".sos-dev" / "runs" / INSTANCE
+)
 PIDFILE = RUNTIME / "processes.json"
 LOGDIR = RUNTIME / "logs"
 PROCESS_NAMES = ("api", "worker", "web")
@@ -99,7 +107,7 @@ def run(command: list[str], *, env=None, cwd=ROOT, timeout=90) -> subprocess.Com
 
 def compose(args: list[str], env: dict[str, str]):
     return run(
-        ["docker", "compose", "-f", "compose.yaml", "-p", "sos-platform", *args],
+        ["docker", "compose", "-f", "compose.yaml", "-p", INSTANCE, *args],
         env=env,
         timeout=180,
     )
@@ -592,7 +600,7 @@ def check(config: dict):
         (["uv", "run", "--locked", "pytest", "-q"], ROOT),
         (["npm", "run", "build"], ROOT / "web"),
         (["npm", "run", "test"], ROOT / "web"),
-        (["npx", "playwright", "test"], ROOT / "web"),
+        (["uv", "run", "--locked", "python", "scripts/run_isolated_e2e.py"], ROOT),
     ]
     return _run_checks(config, commands, operation="check")
 

@@ -1,4 +1,19 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function submittedJob(page: Page, route: string, click: () => Promise<void>): Promise<string> {
+  const [response] = await Promise.all([
+    page.waitForResponse(res => res.url().includes(route) && res.request().method() === "POST"),
+    click(),
+  ]);
+  expect(response.ok()).toBeTruthy();
+  const job = (await response.json()) as { id: string };
+  expect(job.id).toMatch(/^[0-9a-f-]{36}$/i);
+  return job.id;
+}
+
+function jobById(page: Page, id: string) {
+  return page.locator(".job").filter({ has: page.locator(".job-title small", { hasText: id }) });
+}
 
 test("CSV upload → EDA → feature preview → worker → reusable dataset", async ({ page }) => {
   await page.goto("/");
@@ -15,8 +30,9 @@ test("CSV upload → EDA → feature preview → worker → reusable dataset", a
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   await page.getByRole("button", { name: "샘플 변환 확인" }).click();
   await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
-  await page.getByRole("button", { name: /전체 변환 Job 실행/ }).click();
-  const latestTransform = page.locator(".job").filter({ hasText: "Feature Transform" }).first();
+  const jobId = await submittedJob(page, "/api/jobs", () =>
+    page.getByRole("button", { name: /전체 변환 Job 실행/ }).click());
+  const latestTransform = jobById(page, jobId);
   await expect(latestTransform.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   await expect(latestTransform.getByText(/입력 데이터/)).toBeVisible();
   await latestTransform.getByText(/작업 설정 및 실행 시도/).click();
@@ -34,8 +50,9 @@ test("Iceberg import captures a pinned snapshot", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "repeat.csv" })).toBeVisible();
   const tableName = `sensor_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
   await page.getByRole("textbox", { name: "Iceberg 테이블명" }).fill(tableName);
-  await page.getByRole("button", { name: "Iceberg에 추가" }).click();
-  const latestImport = page.locator(".job").filter({ hasText: "Iceberg Import" }).first();
+  const jobId = await submittedJob(page, "/api/iceberg/import", () =>
+    page.getByRole("button", { name: "Iceberg에 추가" }).click());
+  const latestImport = jobById(page, jobId);
   await expect(latestImport.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   await expect(page.locator("nav").getByText(`default.${tableName}`)).toBeVisible();
   await page.locator("nav").getByText(`default.${tableName}`).click();
@@ -62,8 +79,9 @@ test("example onboarding uses the same EDA, Feature and Job contracts", async ({
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   await page.getByRole("button", { name: "샘플 변환 확인" }).click();
   await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
-  await page.getByRole("button", { name: /전체 변환 Job 실행/ }).click();
-  const job = page.locator(".job").filter({ hasText: "Feature Transform" }).first();
+  const jobId = await submittedJob(page, "/api/jobs", () =>
+    page.getByRole("button", { name: /전체 변환 Job 실행/ }).click());
+  const job = jobById(page, jobId);
   await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   await job.getByRole("button", { name: /결과 데이터 열기/ }).click();
   await expect(page.getByRole("heading", { name: /features-/ })).toBeVisible();
