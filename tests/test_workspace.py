@@ -1,5 +1,6 @@
 """Data Workspace의 API·스토리지·Worker 통합 검증."""
 
+import hashlib
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -15,8 +16,8 @@ from sqlalchemy.engine import make_url
 
 from sos_platform import worker as worker_module
 from sos_platform.api import create_app
-from sos_platform.datasets import save_upload
 from sos_platform.config import Settings
+from sos_platform.datasets import save_upload
 from sos_platform.object_store import ObjectStore
 from sos_platform.store import Store
 from sos_platform.worker import run_once
@@ -473,7 +474,7 @@ def test_job_cursor_pagination_has_no_duplicates_or_missing_items(workspace):
 def test_upload_recovery_preserves_shared_content_addressed_blob(workspace, monkeypatch):
     """DB 실패 시 공유 가능 원본을 삭제하지 않고 안전한 재등록을 허용한다."""
     _client, store = workspace
-    content = b"time,value\\n1,5\\n2,6\\n"
+    content = b"time,value\n1,5\n2,6\n"
     real_register = store.register_dataset
 
     def database_failure(**_kwargs):
@@ -482,7 +483,7 @@ def test_upload_recovery_preserves_shared_content_addressed_blob(workspace, monk
     monkeypatch.setattr(store, "register_dataset", database_failure)
     with pytest.raises(RuntimeError, match="registration failure"):
         save_upload(store, "replay.csv", content)
-    key = "datasets/" + __import__("hashlib").sha256(content).hexdigest() + ".csv"
+    key = "datasets/" + hashlib.sha256(content).hexdigest() + ".csv"
     storage = ObjectStore()
     storage.client.head_object(Bucket=storage.config.s3_bucket, Key=key)
     monkeypatch.setattr(store, "register_dataset", real_register)
@@ -497,8 +498,11 @@ def test_transform_publish_db_failure_compensates_unique_object(workspace, monke
     dataset = upload(client)
     queued = client.post(
         "/api/jobs",
-        json={"dataset_id": dataset["id"], "kind": "transform",
-              "transform": {"steps": [{"op": "fill_null", "column": "temperature", "value": 0}]}},
+        json={
+            "dataset_id": dataset["id"],
+            "kind": "transform",
+            "transform": {"steps": [{"op": "fill_null", "column": "temperature", "value": 0}]},
+        },
     )
     assert queued.status_code == 202
     job_id = queued.json()["id"]
@@ -515,5 +519,6 @@ def test_transform_publish_db_failure_compensates_unique_object(workspace, monke
     storage = ObjectStore()
     with pytest.raises(ClientError):
         storage.client.head_object(
-            Bucket=storage.config.s3_bucket, Key=f"results/{job_id}.parquet",
+            Bucket=storage.config.s3_bucket,
+            Key=f"results/{job_id}.parquet",
         )
