@@ -941,6 +941,12 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         assert any(x["action"] == "dataset.create" and x["actor_id"] == "alice" for x in events)
         assert any(x["action"] == "job.cancel" and x["actor_id"] == "alice" for x in events)
         assert any(x["action"] == "security.access_denied" for x in events)
+        assert any(
+            x["action"] == "security.resource_access_denied"
+            and x["actor_id"] == "bob"
+            and x["resource_id"] == owned
+            for x in events
+        )
         assert tokens["alice"] not in json.dumps(events)
 
 

@@ -4,6 +4,11 @@
 
 ### Changed
 
+- 통합 테스트는 로컬 전용 독립 PostgreSQL·UUID S3 버킷을 사용해 사용자 데이터와 분리하고 테스트가 생성한 객체만 정리한다.
+- 미게시 Iceberg 보존 의도를 Storage Health에서 우선 진단하고, Worker Job·Dataset 게시 감사를 동일 DB 트랜잭션에 연결한다.
+- Worker 취소 조회와 heartbeat 주기를 분리하고 S3 객체 관측 SQL을 배치화하며, CI 중복 검증과 버전 경고를 줄인다.
+- 역할별 브라우저 Token 인증·CORS와 리소스 소유권 기반 404 거부 감사를 검증한다.
+
 - Iceberg Append Snapshot을 Attempt 속성으로 식별하고 Dataset별 영구 Tag로 보호한다. 기존 미보호 Snapshot은 진단·수동 보존 전환을 지원한다.
 - 로컬 개발과 토큰 인증 모드, Actor·Action·Resource별 접근 제어, Dataset·Job 소유권 및 PostgreSQL 감사 이벤트를 추가한다. 공개용 OIDC 로그인과 자동 삭제는 제공하지 않는다.
 

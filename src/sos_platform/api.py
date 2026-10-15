@@ -115,18 +115,38 @@ def create_app(home: Path | None = None) -> FastAPI:
     async def bad_input(_request, exc: ValueError):
         return JSONResponse(status_code=422, content={"detail": str(exc)})
 
+    def check_ownership(actor: Actor, owner: str | None, kind: str, identifier: str) -> None:
+        try:
+            resource_allowed(actor, owner)
+        except HTTPException:
+            # 존재 여부를 클라이언트에 노출하지 않는 404 권한 거부는 별도로 감사한다.
+            try:
+                store.record_audit(
+                    actor_id=actor.id,
+                    actor_type=actor.kind,
+                    action="security.resource_access_denied",
+                    resource_type=kind,
+                    resource_id=identifier,
+                    decision="deny",
+                    outcome="denied",
+                    reason="ownership",
+                )
+            except Exception:
+                logging.exception("Resource access denial audit could not be recorded")
+            raise
+
     def existing(dataset_id: str, actor: Actor) -> dict:
         item = store.get_dataset(dataset_id)
         if not item:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        resource_allowed(actor, item.get("owner_actor"))
+        check_ownership(actor, item.get("owner_actor"), "dataset", dataset_id)
         return item
 
     def existing_job(job_id: str, actor: Actor) -> dict:
         item = store.get_job(job_id)
         if not item:
             raise HTTPException(status_code=404, detail="Job not found")
-        resource_allowed(actor, item.get("owner_actor"))
+        check_ownership(actor, item.get("owner_actor"), "job", job_id)
         return item
 
     @app.get("/docs", include_in_schema=False)

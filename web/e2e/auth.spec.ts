@@ -16,7 +16,7 @@ test.describe("token identity and resource permissions", () => {
 
   test("viewer can read datasets but cannot upload or inspect storage", async ({ page }) => {
     await signIn(page, viewer!);
-    await expect(page.getByRole("status", { name: /현재 사용자/ })).toContainText("ci-viewer");
+    await expect(page.locator(".auth-status")).toContainText("ci-viewer");
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" }))
       .toHaveCount(0);
