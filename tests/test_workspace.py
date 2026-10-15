@@ -371,7 +371,7 @@ def test_job_list_preserves_attempt_history(workspace):
     ]
     store.claim()
     store.recover()
-    listed = {item["id"]: item for item in client.get("/api/jobs").json()}
+    listed = {item["id"]: item for item in client.get("/api/jobs").json()["items"]}
     assert set(ids).issubset(listed)
     assert len(listed[ids[0]]["attempts"]) == 1
     assert listed[ids[0]]["attempts"][0]["status"] == "Interrupted"
@@ -436,3 +436,33 @@ def test_worker_home_matches_configuration_and_explicit_override(
 
     worker_module.main()
     assert seen["home"] == (cli_home if explicit_home else env_home)
+
+
+def test_job_cursor_pagination_has_no_duplicates_or_missing_items(workspace):
+    client, store = workspace
+    dataset = upload(client)
+    ids = [
+        client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"}).json()["id"]
+        for _ in range(43)
+    ]
+    seen = []
+    cursor = None
+    while True:
+        query = {"limit": 10}
+        if cursor is not None:
+            query["cursor"] = cursor
+        response = client.get("/api/jobs", params=query)
+        assert response.status_code == 200, response.text
+        page = response.json()
+        assert len(page["items"]) <= 10
+        seen.extend(job["id"] for job in page["items"])
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+    assert len(seen) == len(ids)
+    assert set(seen) == set(ids)
+    assert len(set(seen)) == len(seen)
+    assert client.get("/api/jobs", params={"limit": 0}).status_code == 422
+    assert client.get("/api/jobs", params={"limit": 101}).status_code == 422
+    assert client.get("/api/jobs", params={"cursor": "invalid"}).status_code == 422
+    assert len(store.jobs()) == 20
