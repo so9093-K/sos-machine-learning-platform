@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 
 from .datasets import import_to_iceberg, scan_dataset
+from .errors import ERRORS
+from .observability import emit
 from .object_store import ObjectStore
 from .processing import profile, transform
 from .schemas import Transform
@@ -22,6 +24,7 @@ from .store import Store
 
 def _perform(home: Path, database_url: str, job: dict, completed: Path, pending: Path) -> None:
     """계산은 자식 프로세스에서 수행하고 결과 확정은 부모가 담당한다."""
+    stage = "read_input"
     try:
         store = Store(home, database_url=database_url)
         dataset = store.get_dataset(job["dataset_id"])
@@ -29,13 +32,16 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
             raise ValueError("Input dataset is missing")
         lf = scan_dataset(store, dataset)
         if job["kind"] == "profile":
+            stage = "processing"
             result = profile(lf, sample=None)
         elif job["kind"] == "transform":
+            stage = "processing"
             spec = Transform.model_validate(job["spec"]["transform"])
             lf = transform(lf, spec)
             lf.sink_parquet(pending)
             result = {"input_dataset_id": dataset["id"]}
         elif job["kind"] == "iceberg_import":
+            stage = "iceberg_commit"
             result = {
                 "iceberg_publish": import_to_iceberg(
                     store, dataset, job["spec"]["table_name"], job["attempts"][-1]["id"]
@@ -45,7 +51,9 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
             raise ValueError("Unknown job type")
         outcome = {"result": result}
     except Exception as exc:
-        outcome = {"error": f"{type(exc).__name__}: {exc}"[:500]}
+        code = "SOS-ICEBERG-UNCERTAIN" if job["kind"] == "iceberg_import" else "SOS-JOB-FAILED"
+        outcome = {"error_code": code, "failure_stage": stage,
+                   "exception_type": type(exc).__name__}
     completed.write_text(json.dumps(outcome, default=str), encoding="utf-8")
 
 
