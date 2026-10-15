@@ -488,7 +488,7 @@ def test_upload_recovery_preserves_shared_content_addressed_blob(workspace, monk
     monkeypatch.setattr(store, "register_dataset", real_register)
     registered = save_upload(store, "replay.csv", content)
     assert registered["location"] == storage.location(key)
-    assert store.dataset_location_referenced(registered["location"])
+    assert any(d["location"] == registered["location"] for d in store.datasets())
 
 
 def test_transform_publish_failure_preserves_unreferenced_attempt_object(workspace, monkeypatch):
@@ -520,7 +520,7 @@ def test_transform_publish_failure_preserves_unreferenced_attempt_object(workspa
     writes = store.object_writes(location)
     assert len(writes) == 1
     assert writes[0]["state"] == "Failed"
-    assert not store.dataset_location_referenced(location)
+    assert all(d["location"] != location for d in store.datasets())
     ObjectStore().client.head_object(
         Bucket=ObjectStore().config.s3_bucket,
         Key=ObjectStore().key(location),
