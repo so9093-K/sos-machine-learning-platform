@@ -355,9 +355,7 @@ def test_running_iceberg_import_refuses_ambiguous_cancellation(workspace):
     assert running["cancel_requested"] is False
     # 이전 실행 상태에 취소 플래그가 남아 있어도 외부 커밋 결과는 확정할 수 없다.
     with store.connection() as db:
-        db.execute(
-            text("UPDATE jobs SET cancel_requested=true WHERE id=:id"), {"id": queued["id"]}
-        )
+        db.execute(text("UPDATE jobs SET cancel_requested=true WHERE id=:id"), {"id": queued["id"]})
     store.recover()
     recovered = store.get_job(queued["id"])
     assert recovered["status"] == "Failed"
