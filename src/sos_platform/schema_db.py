@@ -5,6 +5,7 @@ from sqlalchemy import (
     Column,
     ForeignKey,
     Integer,
+    Index,
     MetaData,
     String,
     Table,
@@ -59,4 +60,30 @@ workers = Table(
     Column("id", String(64), primary_key=True),
     Column("heartbeat_at", Text, nullable=False),
     Column("active", Boolean, nullable=False),
+)
+
+# S3 객체 자체와 PostgreSQL에서 보장하는 게시 참조는 구별한다.
+object_writes = Table(
+    "object_writes",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("location", Text, nullable=False),
+    Column("owner_kind", String(16), nullable=False),
+    Column("owner_id", String(36), nullable=False),
+    Column("state", String(16), nullable=False),
+    Column("version", Text),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Column("error", Text),
+    Index("ix_object_writes_location", "location"),
+    Index("ix_object_writes_owner", "owner_kind", "owner_id"),
+)
+
+object_observations = Table(
+    "object_observations",
+    metadata,
+    Column("location", Text, primary_key=True),
+    Column("first_seen_at", Text, nullable=False),
+    Column("last_seen_at", Text, nullable=False),
+    Column("observation_count", Integer, nullable=False),
 )
