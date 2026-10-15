@@ -121,6 +121,7 @@ def inspect_page(
 def inspect_iceberg_references(store: Store, limit: int = 50) -> list[dict]:
     """참조된 Snapshot만 조회한다. 테이블 메타데이터나 파일을 변경하지 않는다."""
     from .datasets import iceberg_catalog
+    from .retention import snapshot_status
 
     with store.connection() as db:
         from sqlalchemy import text
@@ -143,13 +144,7 @@ def inspect_iceberg_references(store: Store, limit: int = 50) -> list[dict]:
             if catalog is None:
                 catalog = iceberg_catalog(store)
             table = catalog.load_table(row["location"])
-            available = str(row["version"]) in {str(s.snapshot_id) for s in table.snapshots()}
-            status = "protected" if available else "missing"
-            reason = (
-                "고정 Snapshot이 Catalog에 존재합니다."
-                if available
-                else "고정 Snapshot이 누락됐습니다. 재현성을 확인하세요."
-            )
+            status, reason = snapshot_status(store, dict(row), table)
         except Exception:
             status = "unknown"
             reason = "Catalog 확인에 실패했습니다. 만료·삭제하지 마세요."
