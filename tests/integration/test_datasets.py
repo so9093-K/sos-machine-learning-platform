@@ -30,7 +30,6 @@ def test_upload_preview_profile_and_scalar(workspace):
     assert client.get("/openapi.json").status_code == 200
 
 
-
 def test_upload_storage_wait_does_not_block_other_api_requests(workspace, monkeypatch):
     """객체 저장소가 느려도 API 이벤트 루프의 별도 조회는 진행되어야 한다."""
     client, _ = workspace
