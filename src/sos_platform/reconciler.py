@@ -102,6 +102,7 @@ def inspect_page(
         next_cursor = None
     return {
         "scope": prefix,
+        "inspected_at": datetime.now(UTC).isoformat(),
         "items": examined,
         "counts": summary,
         "next_cursor": next_cursor,
