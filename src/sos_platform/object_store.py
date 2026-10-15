@@ -62,10 +62,26 @@ class ObjectStore:
         finally:
             pending.unlink(missing_ok=True)
 
-    def delete(self, key: str) -> None:
-        """게시되지 않은 독점 객체를 검증된 버킷 키에서 삭제한다."""
-        self.key(self.location(key))
-        self.client.delete_object(Bucket=self.config.s3_bucket, Key=key)
+    def list_page(
+        self, prefix: str, *, limit: int = 100, cursor: str | None = None
+    ) -> tuple[list[dict], str | None]:
+        """Iceberg를 제외한 소유 접두사만 페이지 단위로 조회한다."""
+        if prefix not in ("datasets/", "results/") or not 1 <= limit <= 1000:
+            raise ValueError("Invalid object inventory scope")
+        options = {"Bucket": self.config.s3_bucket, "Prefix": prefix, "MaxKeys": limit}
+        if cursor:
+            options["ContinuationToken"] = cursor
+        response = self.client.list_objects_v2(**options)
+        objects = [
+            {
+                "location": self.location(item["Key"]),
+                "size_bytes": item["Size"],
+                "modified_at": item["LastModified"].isoformat(),
+            }
+            for item in response.get("Contents", [])
+            if item["Key"].startswith(prefix)
+        ]
+        return objects, response.get("NextContinuationToken")
 
     def location(self, key: str) -> str:
         return f"s3://{self.config.s3_bucket}/{key}"
