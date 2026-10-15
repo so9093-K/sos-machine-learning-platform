@@ -528,13 +528,52 @@ export interface components {
         };
         /**
          * JobPageOut
-         * @description 키셋 커서로 이어지는 Job 목록과 다음 조회 위치.
+         * @description 키셋 커서로 이어지는 경량 Job 목록과 다음 조회 위치.
          */
         JobPageOut: {
             /** Items */
-            items: components["schemas"]["JobOut"][];
+            items: components["schemas"]["JobSummaryOut"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /**
+         * JobSummaryOut
+         * @description 목록에 필요한 값과 마지막 실행 시도만 노출한다.
+         */
+        JobSummaryOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "profile" | "transform" | "iceberg_import";
+            latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
         };
         /**
          * PreviewOut
