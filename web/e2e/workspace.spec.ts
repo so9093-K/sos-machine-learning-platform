@@ -257,3 +257,30 @@ test("upload indicates pending transfer and completes after server response", as
   await expect(page.getByRole("heading", { name: "progress.csv" })).toBeVisible();
   await expect(page.getByText("파일 등록이 완료됐습니다.", { exact: false })).toBeVisible();
 });
+
+test("DuckDB Discovery searches columns and runs a full job through global Jobs", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "discovery.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("group,value\na,1\na,3\nb,5\n"),
+  });
+  await expect(page.getByRole("heading", { name: "discovery.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  const discovery = page.getByRole("region", { name: "Dataset Discovery" });
+  await expect(discovery.getByRole("heading", { name: "데이터 발견" })).toBeVisible();
+  await expect(discovery.getByText("2개 표시 / 전체 2개 컬럼")).toBeVisible();
+  await discovery.getByRole("textbox", { name: "컬럼 이름 검색" }).fill("val");
+  await expect(discovery.getByText("1개 표시 / 전체 2개 컬럼")).toBeVisible();
+  await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
+  await discovery.getByRole("button", { name: "샘플 집계" }).click();
+  await expect(discovery.getByText(/샘플 최대/)).toBeVisible();
+  await expect(discovery.getByRole("table").getByText("2", { exact: true })).toBeVisible();
+  const jobId = await submittedJob(page, "/api/explorations/jobs", () =>
+    discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
+  const job = jobById(page, jobId);
+  await expect(job.getByText("Full Discovery Analysis")).toBeVisible();
+  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
+  await job.getByText(/작업 설정 및 실행 시도/).click();
+  await expect(job.getByText(/Succeeded ·/)).toBeVisible();
+});
