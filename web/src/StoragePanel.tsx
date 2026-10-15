@@ -8,6 +8,8 @@ const statusLabel = {
   candidate: "정리 검토 후보",
   unknown: "확인 필요",
   missing: "Snapshot 누락",
+  retained: "보존 확인",
+  available_unprotected: "읽기 가능 · 보존 미보장",
 } as const;
 
 export function StoragePanel() {
@@ -113,7 +115,7 @@ export function StoragePanel() {
       다음 객체 페이지 확인 →
     </button>}
     <div className="panel-head"><div><h4>Iceberg Snapshot 참조</h4>
-      <p>고정 Dataset이 가리키는 Snapshot 존재 여부를 Catalog에서 직접 확인합니다.</p></div>
+      <p>Snapshot을 읽을 수 있는지와 SOS 보존 Tag가 확인됐는지를 구별합니다.</p></div>
       <button className="secondary" disabled={loading} onClick={() => void inspectSnapshots()}>
         Snapshot 검사
       </button></div>
