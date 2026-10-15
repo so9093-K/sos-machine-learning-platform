@@ -4,6 +4,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # 기본 브랜치에서만 정기 실행; PR 품질 게이트에는 추가 비용을 주지 않는다.
+  schedule:
+    - cron: '17 17 * * *' # 02:17 KST
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -94,6 +98,11 @@ jobs:
           retention-days: 7
       - name: Verify metadata schema matches migration
         run: uv run --locked alembic check
+      - name: Extended module-order regression (scheduled/manual)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          uv run --locked pytest -q tests/integration/test_iceberg.py tests/integration/test_jobs.py
+          uv run --locked pytest -q tests/integration/test_jobs.py tests/integration/test_iceberg.py
 
   frontend:
     runs-on: ubuntu-latest

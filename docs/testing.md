@@ -44,6 +44,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 - ui-e2e: Make up/down/restart, 브라우저 8개, 토큰 역할 3개, 독립 데이터 보존 검사.
 - python-quality: 위 세 작업이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
 - 오래된 PR HEAD만 취소하고 main 검증 결과는 보존한다.
+- 정기(매일 새벽)·수동 실행에서는 핵심 Iceberg/Job 모듈을 순서를 바꿔 두 번 반복해 격리·재현성을 점검한다. 실패는 일반 CI 실패로 남으며 Retry에 의해 무시되지 않는다.
 - API 호환성 검사는 이전 base 코드와 현재 코드에서 각각 생성한 OpenAPI를 비교한다. 핵심 경로·필드·필수 입력을 확인하는 보수적 가드이지 완전한 JSON Schema 판정기는 아니다.
 
 ## 실패 진단과 안정성 유지
