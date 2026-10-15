@@ -101,7 +101,9 @@ class Store:
             return [
                 dict(item)
                 for item in db.execute(
-                    text("SELECT * FROM object_writes WHERE location=:location ORDER BY created_at"),
+                    text(
+                        "SELECT * FROM object_writes WHERE location=:location ORDER BY created_at"
+                    ),
                     {"location": location},
                 ).mappings()
             ]
@@ -123,9 +125,7 @@ class Store:
             by_location: dict[str, list[dict]] = {location: [] for location in locations}
             for write in writes:
                 by_location[write["location"]].append(dict(write))
-            owner_ids = [
-                item["owner_id"] for item in writes if item["owner_kind"] == "attempt"
-            ]
+            owner_ids = [item["owner_id"] for item in writes if item["owner_kind"] == "attempt"]
             attempts = {}
             if owner_ids:
                 statement = text("SELECT id,status FROM attempts WHERE id IN :ids").bindparams(
