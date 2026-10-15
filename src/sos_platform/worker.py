@@ -7,6 +7,7 @@
 import argparse
 import json
 import multiprocessing
+import os
 import signal
 import time
 from pathlib import Path
@@ -115,7 +116,7 @@ def run_once(store: Store) -> bool:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--home", type=Path, default=Path(".sos"))
+    parser.add_argument("--home", type=Path, default=Path(os.getenv("SOS_HOME", ".sos")))
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--poll", type=float, default=0.5)
     args = parser.parse_args()
