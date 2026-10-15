@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Iceberg Dataset 생성·적재와 기존 Snapshot의 보존 관리 권한을 구분하고 역할별 UI를 일치시켰다.
+- Worker 복구 감사에 Attempt 식별자·복구 결과를 기록하고, 감사 실패 시 DB 상태 변경을 롤백하도록 검증했다.
+- 통합 테스트가 준비 도중 실패해도 독립 DB·버킷이 남지 않도록 정리 수명주기를 보강했다.
+- CI에서 중복된 pytest·Vitest·Frontend 빌드를 제거하되 로컬 `make check`의 전체 검증 계약을 테스트로 유지한다.
+
 - 통합 테스트는 로컬 전용 독립 PostgreSQL·UUID S3 버킷을 사용해 사용자 데이터와 분리하고 테스트가 생성한 객체만 정리한다.
 - 미게시 Iceberg 보존 의도를 Storage Health에서 우선 진단하고, Worker Job·Dataset 게시 감사를 동일 DB 트랜잭션에 연결한다.
 - Worker 취소 조회와 heartbeat 주기를 분리하고 S3 객체 관측 SQL을 배치화하며, CI 중복 검증과 버전 경고를 줄인다.
