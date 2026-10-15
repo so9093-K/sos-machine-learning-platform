@@ -333,6 +333,7 @@ def test_make_check_validates_full_contract_once(monkeypatch, config):
 
 def test_make_check_fast_is_infrastructure_independent(monkeypatch, config):
     """빠른 검사는 Ready 조회 없이 순수 검사만 실행하고 전체 검사와 명령을 구분한다."""
+
     def refuse_ready(_config):
         raise AssertionError("Fast checks must not connect to running services")
 
@@ -350,8 +351,16 @@ def test_make_check_fast_is_infrastructure_independent(monkeypatch, config):
         (["uv", "run", "--locked", "ruff", "check", "."], dev.ROOT),
         (["uv", "run", "--locked", "ruff", "format", "--check", "."], dev.ROOT),
         (
-            ["uv", "run", "--locked", "pytest", "-q", "tests/test_processing.py",
-             "tests/test_dev_cli.py", "tests/test_api_compat.py"],
+            [
+                "uv",
+                "run",
+                "--locked",
+                "pytest",
+                "-q",
+                "tests/test_processing.py",
+                "tests/test_dev_cli.py",
+                "tests/test_api_compat.py",
+            ],
             dev.ROOT,
         ),
         (["npm", "run", "test"], dev.ROOT / "web"),

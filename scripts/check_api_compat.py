@@ -29,7 +29,11 @@ def breaking_changes(before: dict, after: dict) -> list[str]:
             for key, param in new_params.items():
                 if key not in old_params and param.get("required"):
                     problems.append(f"new required parameter: {verb.upper()} {path} {key}")
-                if key in old_params and not old_params[key].get("required") and param.get("required"):
+                if (
+                    key in old_params
+                    and not old_params[key].get("required")
+                    and param.get("required")
+                ):
                     problems.append(f"parameter became required: {verb.upper()} {path} {key}")
             old_success = {s for s in old.get("responses", {}) if str(s).startswith("2")}
             new_success = {s for s in new.get("responses", {}) if str(s).startswith("2")}

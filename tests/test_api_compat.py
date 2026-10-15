@@ -45,7 +45,9 @@ def test_required_parameter_is_incompatible():
 
 
 def test_removed_response_field_is_incompatible():
-    assert any("removed field" in x for x in compat.breaking_changes(contract(extra=True), contract()))
+    assert any(
+        "removed field" in x for x in compat.breaking_changes(contract(extra=True), contract())
+    )
 
 
 def test_new_required_field_is_incompatible():
