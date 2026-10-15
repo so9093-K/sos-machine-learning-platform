@@ -43,9 +43,14 @@ def test_cli_startup_codes_are_cataloged():
 
 
 def test_structured_logs_discard_unregistered_and_sensitive_values(caplog):
-    emit("worker.execution.failed", service="sos-worker", job_id="job-1",
-         exception_type="RuntimeError", stage="publish",
-         request_id="private secret password=foo")
+    emit(
+        "worker.execution.failed",
+        service="sos-worker",
+        job_id="job-1",
+        exception_type="RuntimeError",
+        stage="publish",
+        request_id="private secret password=foo",
+    )
     # 별도의 Handler를 사용하므로 LogRecord의 내용에 비밀값이 등장하지 않는다.
     assert "private secret password=foo" not in caplog.text
     with pytest.raises(ValueError, match="Unregistered"):
