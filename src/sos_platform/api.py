@@ -1,5 +1,8 @@
 """데이터 탐색과 비동기 처리를 제공하는 공통 플랫폼 API."""
 
+import base64
+import binascii
+import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -28,6 +31,7 @@ from .schemas import (
     IcebergConnect,
     IcebergImport,
     JobOut,
+    JobPageOut,
     PreviewOut,
     ProfileOut,
     SnapshotOut,
@@ -177,9 +181,36 @@ def create_app(home: Path | None = None) -> FastAPI:
         lf = scan_dataset(store, existing(body.dataset_id))
         return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
 
-    @app.get("/api/jobs", response_model=list[JobOut])
-    def list_jobs():
-        return store.jobs()
+    @app.get("/api/jobs", response_model=JobPageOut)
+    def list_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+    ):
+        before = None
+        if cursor:
+            try:
+                raw = base64.b64decode(cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True)
+                before = json.loads(raw)
+                if (
+                    not isinstance(before, dict)
+                    or set(before) != {"created_at", "id"}
+                    or not all(isinstance(before[key], str) and before[key] for key in before)
+                    or len(before["created_at"]) > 80
+                    or len(before["id"]) != 36
+                ):
+                    raise ValueError("Invalid Job cursor")
+            except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
+                raise ValueError("Invalid Job cursor") from exc
+        rows = store.jobs(limit=limit + 1, before=before)
+        next_cursor = None
+        if len(rows) > limit:
+            rows = rows[:limit]
+            last = rows[-1]
+            token = json.dumps(
+                {"created_at": last["created_at"], "id": last["id"]}, separators=(",", ":")
+            )
+            next_cursor = base64.urlsafe_b64encode(token.encode()).decode().rstrip("=")
+        return {"items": rows, "next_cursor": next_cursor}
 
     @app.post("/api/jobs", status_code=202, response_model=JobOut)
     def create_job(body: WorkRequest):
