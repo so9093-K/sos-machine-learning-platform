@@ -25,7 +25,7 @@ def file_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-def save_upload(store: Store, name: str, content: bytes) -> dict:
+def save_upload(store: Store, name: str, content: bytes, *, owner_actor: str | None = None) -> dict:
     """업로드를 검증한 뒤 객체 저장소에 불변 버전으로 등록한다."""
     suffix = Path(name).suffix.lower()
     if suffix not in (".csv", ".parquet"):
@@ -58,6 +58,7 @@ def save_upload(store: Store, name: str, content: bytes) -> dict:
                 location=location,
                 version=digest,
                 write_id=write_id,
+                owner_actor=owner_actor,
             )
         except Exception as exc:
             try:
@@ -94,7 +95,7 @@ def iceberg_catalog(store: Store):
     )
 
 
-def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
+def import_to_iceberg(store: Store, dataset: dict, table_name: str, attempt_id: str) -> dict:
     """비용이 큰 데이터 변환은 API가 아닌 Worker 프로세스에서 실행한다."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
         raise ValueError("Invalid Iceberg table name")
@@ -113,19 +114,29 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str) -> dict:
         if not isinstance(exc, NoSuchTableError):
             raise
         table = catalog.create_table(ident, schema=arrow.schema)
-    table.append(arrow)
-    snapshot = catalog.load_table(ident).current_snapshot()
-    if snapshot is None:
-        raise ValueError("Iceberg append did not create a snapshot")
+    # 동일 테이블에 외부 작성자가 개입하더라도 최신 Snapshot을 오인하지 않는다.
+    table.append(arrow, snapshot_properties={"sos.attempt-id": attempt_id})
+    snapshots = [
+        snapshot for snapshot in catalog.load_table(ident).snapshots()
+        if snapshot.summary and snapshot.summary.get("sos.attempt-id") == attempt_id
+    ]
+    if len(snapshots) != 1:
+        raise RuntimeError("Unable to identify the committed Iceberg Snapshot")
+    snapshot = snapshots[0]
+    retention_id = str(uuid4())
+    from .retention import ensure_tag
+
+    ensure_tag(store, dataset_id=retention_id, location=ident, snapshot_id=str(snapshot.snapshot_id))
     return {
         "name": ident,
         "kind": "iceberg",
         "location": ident,
         "version": str(snapshot.snapshot_id),
+        "retention_id": retention_id,
     }
 
 
-def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = None) -> dict:
+def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = None, *, owner_actor: str | None = None) -> dict:
     """기존 테이블의 지정 Snapshot을 Dataset으로 등록한다."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
         raise ValueError("Invalid Iceberg table name")
@@ -143,11 +154,20 @@ def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = Non
         snapshot_id = str(current.snapshot_id)
     if snapshot_id not in snapshots:
         raise ValueError("Iceberg snapshot is not available; it may have expired")
+    from .retention import ensure_tag
+
+    dataset_id = str(uuid4())
+    retention_id = ensure_tag(
+        store, dataset_id=dataset_id, location=f"default.{table_name}", snapshot_id=snapshot_id
+    )
     return store.register_dataset(
         name=f"default.{table_name}",
         kind="iceberg",
         location=f"default.{table_name}",
         version=snapshot_id,
+        dataset_id=dataset_id,
+        retention_id=retention_id,
+        owner_actor=owner_actor,
     )
 
 
