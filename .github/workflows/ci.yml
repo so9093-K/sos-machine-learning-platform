@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -107,9 +111,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Start SOS using public Make interface
         run: make up
-      - name: Browser workflow tests
-        working-directory: web
-        run: npx playwright test
+      - name: Make check (quality and browser workflows)
+        run: make check
       - name: Make lifecycle and data persistence
         run: |
           make
@@ -145,7 +148,6 @@ jobs:
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-snapshots.json")); assert len(d)>=1, d'
           curl -fsS http://127.0.0.1:9602/api/jobs > /tmp/sos-persisted-jobs.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-jobs.json")); assert any(x["status"]=="Succeeded" for x in d["items"]), d'
-          make check
           make logs > /tmp/sos-sanitized-logs.txt
       - name: Save Playwright trace on failure
         if: failure()

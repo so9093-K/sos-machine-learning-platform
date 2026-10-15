@@ -108,7 +108,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             f"http://127.0.0.1:{os.environ.get('SOS_WEB_PORT', '9601')}",
         ],
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Authorization"],
     )
 
     @app.exception_handler(ValueError)

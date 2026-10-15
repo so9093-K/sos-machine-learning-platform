@@ -1203,3 +1203,21 @@ def test_object_observation_is_batched(workspace):
         event.remove(store.engine, "before_cursor_execute", capture)
     assert len(observed) == 3
     assert seen == [True]
+
+
+def test_configured_cors_allows_token_preflight(workspace, monkeypatch):
+    """설정 포트의 개발용 UI가 Bearer 요청을 보낼 수 있어야 한다."""
+    _, store = workspace
+    monkeypatch.setenv("SOS_WEB_PORT", "9765")
+    with TestClient(create_app(store.home)) as app:
+        response = app.options(
+            "/api/datasets",
+            headers={
+                "Origin": "http://localhost:9765",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "authorization",
+            },
+        )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:9765"
+    assert "authorization" in response.headers["access-control-allow-headers"].lower()
