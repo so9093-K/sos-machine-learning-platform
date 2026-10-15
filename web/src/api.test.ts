@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, request, setAccessToken } from "./api";
+import { ApiError, formatError, request, setAccessToken } from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -27,7 +27,8 @@ describe("API failure diagnostic contract", () => {
       expect(diagnosed.status).toBe(409);
       expect(diagnosed.requestId).toBe("req-example");
       expect(diagnosed.retryPolicy).toBe("manual_verification_required");
-      expect(diagnosed.toString()).toContain("req-example");
+      expect(formatError(diagnosed)).toContain("req-example");
+      expect(formatError(diagnosed)).toContain("SOS-ICEBERG-UNCERTAIN");
     }
   });
 
