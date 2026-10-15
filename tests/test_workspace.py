@@ -733,7 +733,8 @@ def test_abandoned_upload_intent_is_never_auto_classified_as_candidate(workspace
         "observation_count": 10,
     }
     result = classify_object({"fingerprint": "stable", "modified_at": old}, detail, StoragePolicy())
-    assert result[0] == "protected"
+    assert result[0] == "unknown"
+    assert "삭제하지 않습니다" in result[1]
     assert store.object_writes(location)[0]["state"] == "Pending"
 
 
