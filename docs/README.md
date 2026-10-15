@@ -11,7 +11,8 @@
 | [Runtimes](runtimes.md) | 실행 환경 격리·식별·재현성·호환성 |
 | [Workflows](workflows.md) | 작업 실행·상태·재시도·결과 연결의 의미 |
 | [ADR](adr/README.md) | 장기적인 기술·아키텍처 결정의 근거 |
-| [Testing & CI](testing.md) | 테스트 격리·계층·CI 신뢰성·실패 진단과 운영 기준 |
+| [Testing & CI](testing.md) | 테스트 격리·계층·CI 신뢰성과 운영 기준 |
+| [Diagnostics](diagnostics.md) | Error Catalog·로그·요청/Job 추적·보안·장애 Runbook |
 
 **권위의 경계:** 설계의 목적·제약·상호작용·호환성 원칙은 담당 문서에서 정의한다. 실제 API 필드, 타입, 설정 기본값은 코드·스키마·자동 생성 명세를 원본으로 삼는다. 충돌이 발견되면 해당 책임을 확인하고 함께 수정하며, 문서나 구현 어느 쪽도 조용히 무시하지 않는다.
 
