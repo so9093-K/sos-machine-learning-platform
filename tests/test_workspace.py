@@ -629,7 +629,10 @@ def test_storage_candidate_needs_grace_and_repeated_observation():
     observation["fingerprint"] = "earlier-generation"
     assert classify_object(item, metadata, StoragePolicy())[0] == "unknown"
     observation["fingerprint"] = "generation-a"
-    metadata["writes"] = [{"state": "Pending", "owner_kind": "upload", "owner_id": "abc"}]
+    metadata["writes"] = [
+        {"state": "Pending", "owner_kind": "upload", "owner_id": "abc",
+         "updated_at": datetime.now(UTC).isoformat()}
+    ]
     assert classify_object(item, metadata, StoragePolicy())[0] == "protected"
 
 
