@@ -8,12 +8,14 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import make_url
 
 from sos_platform import worker as worker_module
 from sos_platform.api import create_app
+from sos_platform.datasets import save_upload
 from sos_platform.config import Settings
 from sos_platform.object_store import ObjectStore
 from sos_platform.store import Store
@@ -466,3 +468,52 @@ def test_job_cursor_pagination_has_no_duplicates_or_missing_items(workspace):
     assert client.get("/api/jobs", params={"limit": 101}).status_code == 422
     assert client.get("/api/jobs", params={"cursor": "invalid"}).status_code == 422
     assert len(store.jobs()) == 20
+
+
+def test_upload_recovery_preserves_shared_content_addressed_blob(workspace, monkeypatch):
+    """DB 실패 시 공유 가능 원본을 삭제하지 않고 안전한 재등록을 허용한다."""
+    _client, store = workspace
+    content = b"time,value\\n1,5\\n2,6\\n"
+    real_register = store.register_dataset
+
+    def database_failure(**_kwargs):
+        raise RuntimeError("simulated registration failure")
+
+    monkeypatch.setattr(store, "register_dataset", database_failure)
+    with pytest.raises(RuntimeError, match="registration failure"):
+        save_upload(store, "replay.csv", content)
+    key = "datasets/" + __import__("hashlib").sha256(content).hexdigest() + ".csv"
+    storage = ObjectStore()
+    storage.client.head_object(Bucket=storage.config.s3_bucket, Key=key)
+    monkeypatch.setattr(store, "register_dataset", real_register)
+    registered = save_upload(store, "replay.csv", content)
+    assert registered["location"] == storage.location(key)
+    assert store.dataset_location_referenced(registered["location"])
+
+
+def test_transform_publish_db_failure_compensates_unique_object(workspace, monkeypatch):
+    """S3 업로드 후 DB 완료 트랜잭션 실패 시 독점 Job 객체를 회수한다."""
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post(
+        "/api/jobs",
+        json={"dataset_id": dataset["id"], "kind": "transform",
+              "transform": {"steps": [{"op": "fill_null", "column": "temperature", "value": 0}]}},
+    )
+    assert queued.status_code == 202
+    job_id = queued.json()["id"]
+    original_finish = store.finish
+
+    def reject_success(target_id, status, **kwargs):
+        if status == "Succeeded":
+            raise RuntimeError("simulated DB commit error")
+        return original_finish(target_id, status, **kwargs)
+
+    monkeypatch.setattr(store, "finish", reject_success)
+    assert run_once(store)
+    assert store.get_job(job_id)["status"] == "Failed"
+    storage = ObjectStore()
+    with pytest.raises(ClientError):
+        storage.client.head_object(
+            Bucket=storage.config.s3_bucket, Key=f"results/{job_id}.parquet",
+        )
