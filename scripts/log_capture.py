@@ -11,7 +11,9 @@ MAX_BYTES = 2 * 1024 * 1024
 BACKUPS = 3
 
 
-def capture(path: Path, command: list[str], *, max_bytes: int = MAX_BYTES, backups: int = BACKUPS) -> int:
+def capture(
+    path: Path, command: list[str], *, max_bytes: int = MAX_BYTES, backups: int = BACKUPS
+) -> int:
     if not command or max_bytes < 8192 or not 1 <= backups <= 10:
         raise ValueError("Invalid service log capture settings")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -24,8 +26,11 @@ def capture(path: Path, command: list[str], *, max_bytes: int = MAX_BYTES, backu
                 old.replace(dest)
 
     with subprocess.Popen(
-        command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, bufsize=0,
+        command,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=0,
     ) as child:
         assert child.stdout is not None
         size = path.stat().st_size if path.exists() else 0

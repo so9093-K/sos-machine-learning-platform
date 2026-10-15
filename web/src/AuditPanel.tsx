@@ -61,7 +61,7 @@ export function AuditPanel() {
         감사 기록 검색
       </button>
     </div>
-    {error && <p role="alert">{error}</p>
+    {error && <p role="alert">{error}</p>}
     {loading && <p role="status">감사 기록 조회 중</p>}
     {events.length === 0 && !loading && <p className="muted">조회 가능한 감사 이벤트가 없습니다.</p>}
     <div className="job-list">

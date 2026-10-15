@@ -37,7 +37,16 @@ def test_tail_does_not_read_unbounded_history(tmp_path):
 def test_capture_child_nonzero_exit_is_reported(tmp_path):
     path = tmp_path / "failed.log"
     rc = subprocess.run(
-        [sys.executable, str(SCRIPT), str(path), "--", sys.executable, "-c", "raise SystemExit(13)"],
-        check=False, capture_output=True,
+        [
+            sys.executable,
+            str(SCRIPT),
+            str(path),
+            "--",
+            sys.executable,
+            "-c",
+            "raise SystemExit(13)",
+        ],
+        check=False,
+        capture_output=True,
     )
     assert rc.returncode == 13
