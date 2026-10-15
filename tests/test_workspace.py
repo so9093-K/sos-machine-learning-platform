@@ -624,3 +624,53 @@ def test_storage_candidate_needs_grace_and_repeated_observation():
     assert classify_object(item, metadata, StoragePolicy())[0] == "waiting"
     metadata["writes"] = [{"state": "Pending", "owner_kind": "upload", "owner_id": "abc"}]
     assert classify_object(item, metadata, StoragePolicy())[0] == "protected"
+
+
+def test_recovery_marks_interrupted_attempt_writes_failed(workspace):
+    """중단된 Attempt의 Pending 기록은 재시도와 구별되는 실패 기록으로 유지한다."""
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post(
+        "/api/jobs",
+        json={
+            "dataset_id": dataset["id"],
+            "kind": "transform",
+            "transform": {"steps": [{"op": "fill_null", "column": "temperature", "value": 0}]},
+        },
+    ).json()
+    first = store.claim()
+    assert first is not None
+    attempt_id = first["attempts"][-1]["id"]
+    location = ObjectStore().location(f"results/{queued['id']}/{attempt_id}.parquet")
+    write_id = store.begin_object_write(
+        location=location, owner_kind="attempt", owner_id=attempt_id
+    )
+    store.recover()
+    writes = store.object_writes(location)
+    assert len(writes) == 1
+    assert writes[0]["id"] == write_id
+    assert writes[0]["state"] == "Failed"
+    assert run_once(store)
+    result = store.get_job(queued["id"])
+    assert result["status"] == "Succeeded"
+    registered = store.get_dataset(result["result"]["dataset_id"])
+    assert registered is not None
+    assert registered["location"] != location
+
+
+def test_inventory_unknown_object_is_not_candidate():
+    """기존 이력 없는 S3 객체를 경과 시간만으로 정리 후보로 분류하지 않는다."""
+    from datetime import UTC, datetime, timedelta
+
+    from sos_platform.config import StoragePolicy
+    from sos_platform.reconciler import classify_object
+
+    stale = (datetime.now(UTC) - timedelta(days=365)).isoformat()
+    item = {"modified_at": stale}
+    metadata = {
+        "referenced": False,
+        "writes": [],
+        "attempts": {},
+        "observation": {"first_seen_at": stale, "observation_count": 365},
+    }
+    assert classify_object(item, metadata, StoragePolicy())[0] == "unknown"
