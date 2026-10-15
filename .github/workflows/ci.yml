@@ -42,6 +42,7 @@ jobs:
       - name: Verify generated OpenAPI types
         run: |
           cd web && npm ci --no-audit && npm run generate:types
+          git diff -- src/api.generated.ts
           git diff --exit-code -- src/api.generated.ts
       - name: Verify API backward compatibility
         if: github.event_name == 'pull_request'
