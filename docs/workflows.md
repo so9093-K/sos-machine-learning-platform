@@ -40,3 +40,20 @@ SOS는 데이터 처리, 학습, 평가, 모델 재사용, 추론, 관측·피�
 - 작업 실패는 API·사용자 경험에서 이해 가능한 원인과 다음 행동으로 연결한다. 사용자에게 보여주는 상호작용 기준은 [Experience](experience.md)를 따른다.
 
 스케줄러, 큐, DAG 엔진, 저장소 제품은 실행 의미를 구현하는 선택이며, 이 정본의 특정 기술 의존성이 아니다.
+
+## 데이터 작업의 중단과 재시도
+
+일반 조회·변환과 달리 **Iceberg append는 외부 저장소 커밋이 발생하는 작업**이다. Worker가 중단됐을 때 커밋 여부가 불명확할 수 있으므로 이 경우에는 Job을 자동 재대기열에 넣지 않는다. 최종 Snapshot을 확인하고 중복 적재 위험을 검토한 뒤 사용자가 별도 실행하도록 한다.
+
+실행 중인 Iceberg append는 취소 요청만으로 외부 커밋의 롤백을 보장할 수 없으므로 현재 API에서 취소를 거부한다. 대기 중인 적재 Job은 시작 전에 취소할 수 있다. 실행 중 Worker 중단으로 커밋 결과가 불명확한 경우에는 기존 정책대로 자동 재시도하지 않으며 Snapshot 확인을 요구한다. 이 정책은 지원하는 외부 커밋 취소·확인 방법이 생기면 다시 검토한다. 중단된 적재 Job은 오류에 Attempt ID를 남기며, Catalog Snapshot의 `sos.attempt-id` 속성과 대조할 수 있다. 이 정보는 실제 커밋 여부를 확정하기 위한 조사 단서이지 자동 재실행 허가가 아니다.
+
+
+## Dataset·Job 결과의 게시 안전성
+
+Dataset 메타데이터 확정은 PostgreSQL 트랜잭션으로 수행하고 파일 본문은 S3 API에 보관한다. 두 저장소를 하나의 트랜잭션으로 취급하지 않는다. 파일 업로드는 SHA-256 기반의 공유 가능한 불변 키를 사용하므로, DB 등록 실패만으로 객체를 자동 삭제하지 않는다. 동일 본문의 재업로드는 같은 키를 재사용해 Dataset 등록을 다시 시도할 수 있다.
+
+Transform Job의 결과는 `results/{job_id}/{attempt_id}.parquet`의 Attempt별 고유 경로로 보관한다. S3 전송 이전 객체 게시 의도를 기록하고 Dataset 등록·게시 상태·Job 성공은 하나의 PostgreSQL 트랜잭션에서 확정한다. DB 게시 실패 또는 취소 경합 시 객체는 즉시 삭제하지 않고 게시 실패 이력을 남기며 보존한다. Worker 강제 종료로 남은 미완료 Attempt의 게시 의도는 복구 시 실패로 기록한 뒤 일반 Transform Job을 새 Attempt로 재실행한다. 업로드 중단과 DB 장애로 상태를 판정할 수 없는 객체는 보존하고 읽기 전용 대조에서 확인 필요로 표시한다. 이 정책은 [ADR 0002](adr/0002-object-lifecycle.md)가 [ADR 0001](adr/0001-data-publication.md)의 즉시 보상 삭제 결정을 대체한 것이다. Iceberg append는 중단된 경우 자동 재시도하지 않는다.
+
+## Iceberg Snapshot 보호와 복구
+
+Append가 만든 Snapshot은 Attempt 식별자와 연결해 확인하고, 등록될 Dataset의 Tag 보호를 Catalog에서 재확인한 뒤 PostgreSQL에 성공을 게시한다. Tag 커밋 후 DB 오류가 나면 보존 의도는 불확실한 상태로 남으며, Tag를 즉시 제거하거나 Iceberg Append를 자동 재시도하지 않는다. 기존 미보호 Dataset은 명시적인 운영자 재확인 절차로 보호 상태로 전환한다. Dataset 게시 없이 남은 보존 의도는 Storage Health의 Snapshot 참조 검사에서 우선 표시하고 실제 Catalog Tag 상태를 읽기 전용으로 대조한다. 이 진단은 자동 Tag 제거·재적재·재게시를 수행하지 않는다. 자세한 경계는 [ADR 0003](adr/0003-snapshot-identity-audit.md)을 참조한다.

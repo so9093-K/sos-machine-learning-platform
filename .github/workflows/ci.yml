@@ -5,11 +5,15 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
-  python-quality:
+  python-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -18,12 +22,179 @@ jobs:
           enable-cache: true
       - name: Install Python
         run: uv python install
+      - name: Validate Python lockfile
+        run: uv lock --check
+      - name: Verify Markdown links
+        run: python3 scripts/check_doc_links.py
       - name: Install development dependencies
         run: uv sync --locked --group dev
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Verify generated OpenAPI types
+        run: |
+          cd web && npm ci --no-audit && npm run generate:types
+          git diff --exit-code -- src/api.generated.ts
       - name: Ruff lint
         run: uv run --locked ruff check .
+      - name: Explain lint failure
+        if: failure()
+        run: uv run --locked ruff check --diff .
       - name: Ruff format
         run: uv run --locked ruff format --check .
-      - name: Unit tests
-        if: ${{ hashFiles('tests/test_*.py', 'tests/**/test_*.py') != '' }}
+      - name: Explain formatting failure
+        if: failure()
+        run: uv run --locked ruff format --diff .
+      - name: Start integration infrastructure
+        run: docker compose -f compose.yaml -p sos-platform up -d --wait
+      - name: Migrate database and prepare object storage
+        run: |
+          uv run --locked alembic upgrade head
+          uv run --locked python -m sos_platform.bootstrap
+      - name: Verify installed wheel can read packaged Alembic HEAD
+        run: |
+          uv build --wheel --out-dir /tmp/sos-wheel
+          uv pip install --target /tmp/sos-installed --no-deps /tmp/sos-wheel/*.whl
+          cd /tmp
+          "$GITHUB_WORKSPACE/.venv/bin/python" -I - <<'PY'
+          import sys
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+          sys.path.insert(0, "/tmp/sos-installed")
+          import sos_platform
+          from sos_platform.store import Store
+          assert Path(sos_platform.__file__).is_relative_to("/tmp/sos-installed")
+          with TemporaryDirectory() as directory:
+              store = Store(Path(directory))
+              store.initialize()
+              store.engine.dispose()
+          PY
+      - name: Unit and integration tests
         run: uv run --locked pytest -q
+      - name: Verify metadata schema matches migration
+        run: uv run --locked alembic check
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci --no-audit
+      - name: TypeScript and Vite build
+        working-directory: web
+        run: npm run build
+      - name: Frontend tests
+        working-directory: web
+        run: npm run test
+
+  ui-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Install Python and JavaScript
+        run: |
+          uv python install
+          uv sync --locked --group dev
+          cd web && npm ci --no-audit && cd ..
+      - name: Install browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Start SOS using public Make interface
+        run: make up
+      # pytest·Vitest·빌드는 앞선 병렬 작업에서 검증하므로 브라우저만 실행한다.
+      - name: Browser workflow tests
+        working-directory: web
+        run: npx playwright test workspace.spec.ts
+      - name: Make lifecycle and data persistence
+        run: |
+          make
+          make help
+          make up
+          make status
+          make doctor
+          python3 scripts/dev.py doctor --deep --format json > /tmp/sos-doctor.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-doctor.json")); assert d["status"]=="passed", d'
+          make up
+          cat > /tmp/sos-lifecycle.csv <<'CSV'
+          timestamp,value
+          1,10
+          2,20
+          CSV
+          curl -fsS -F 'file=@/tmp/sos-lifecycle.csv' http://127.0.0.1:9602/api/datasets/files > /tmp/sos-dataset.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); assert d["id"]'
+          make restart
+          curl -fsS http://127.0.0.1:9602/api/datasets > /tmp/sos-restarted.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restarted.json")); assert any(x["id"]==d["id"] for x in rows)'
+          make down
+          make up
+          curl -fsS http://127.0.0.1:9602/api/datasets > /tmp/sos-restored.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restored.json")); assert any(x["id"]==d["id"] for x in rows)'
+          data_id=$(python3 -c 'import json; print(json.load(open("/tmp/sos-dataset.json"))["id"])')
+          curl -fsS "http://127.0.0.1:9602/api/datasets/$data_id/preview" > /tmp/sos-persisted-preview.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-preview.json")); assert d["returned_rows"]==2, d'
+          iceberg_id=$(python3 -c 'import json; d=json.load(open("/tmp/sos-restored.json")); print(next(x["id"] for x in d if x["kind"]=="iceberg"))')
+          curl -fsS "http://127.0.0.1:9602/api/datasets/$iceberg_id/preview" > /tmp/sos-persisted-iceberg.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-iceberg.json")); assert d["returned_rows"]>=2, d'
+          iceberg_table=$(python3 -c 'import json; d=json.load(open("/tmp/sos-restored.json")); print(next(x["name"].split(".",1)[1] for x in d if x["kind"]=="iceberg"))')
+          curl -fsS "http://127.0.0.1:9602/api/iceberg/$iceberg_table/snapshots" > /tmp/sos-persisted-snapshots.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-snapshots.json")); assert len(d)>=1, d'
+          curl -fsS http://127.0.0.1:9602/api/jobs > /tmp/sos-persisted-jobs.json
+          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-jobs.json")); assert any(x["status"]=="Succeeded" for x in d["items"]), d'
+          make logs > /tmp/sos-sanitized-logs.txt
+      - name: Verify token-mode browser permissions
+        run: |
+          export SOS_E2E_VIEWER_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+          export SOS_E2E_RESEARCHER_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+          export SOS_E2E_OPERATOR_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+          export SOS_AUTH_MODE=token
+          export SOS_AUTH_TOKEN_HASHES="$(python3 -c "import os,json,hashlib; roles=('viewer','researcher','operator'); print(json.dumps({hashlib.sha256(os.environ['SOS_E2E_'+r.upper()+'_TOKEN'].encode()).hexdigest(): {'actor_id': 'ci-'+r, 'kind': 'human', 'roles':[r]} for r in roles}))")"
+          make restart
+          cd web && npx playwright test auth.spec.ts
+
+      - name: Save Playwright trace on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-trace
+          path: web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Stop managed services without deleting data
+        if: always()
+        run: make down
+      - name: Service diagnostics on failure
+        if: failure()
+        run: |
+          for file in /tmp/sos-api.log /tmp/sos-worker.log /tmp/sos-web.log; do
+            if [ -f "$file" ]; then
+              echo "$file"
+              tail -n 100 "$file"
+            fi
+          done
+
+
+  # 보호 규칙의 python-quality 상태가 3개 핵심 검증을 모두 대표하도록 한다.
+  python-quality:
+    if: always()
+    needs: [python-tests, frontend, ui-e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every critical CI job
+        env:
+          PYTHON_RESULT: ${{ needs.python-tests.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          E2E_RESULT: ${{ needs.ui-e2e.result }}
+        run: |
+          test "$PYTHON_RESULT" = "success"
+          test "$FRONTEND_RESULT" = "success"
+          test "$E2E_RESULT" = "success"

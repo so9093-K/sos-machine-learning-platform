@@ -1,0 +1,124 @@
+"""PostgreSQL 테이블 정의. Alembic 마이그레이션의 기준 스키마다."""
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    ForeignKey,
+    Index,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
+
+metadata = MetaData()
+
+datasets = Table(
+    "datasets",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("kind", String(32), nullable=False),
+    Column("location", Text, nullable=False),
+    Column("version", Text, nullable=False),
+    Column("created_at", Text, nullable=False),
+    Column("owner_actor", Text),
+)
+
+jobs = Table(
+    "jobs",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("kind", String(32), nullable=False),
+    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
+    Column("spec", Text, nullable=False),
+    Column("status", String(32), nullable=False),
+    Column("cancel_requested", Boolean, nullable=False, default=False),
+    Column("result", Text),
+    Column("error", Text),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Column("owner_actor", Text),
+    Index("ix_jobs_created_at_id", "created_at", "id"),
+)
+
+attempts = Table(
+    "attempts",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False),
+    Column("number", Integer, nullable=False),
+    Column("status", String(32), nullable=False),
+    Column("started_at", Text, nullable=False),
+    Column("finished_at", Text),
+    Column("error", Text),
+    UniqueConstraint("job_id", "number"),
+)
+
+workers = Table(
+    "workers",
+    metadata,
+    Column("id", String(64), primary_key=True),
+    Column("heartbeat_at", Text, nullable=False),
+    Column("active", Boolean, nullable=False),
+)
+
+# S3 객체 자체와 PostgreSQL에서 보장하는 게시 참조는 구별한다.
+object_writes = Table(
+    "object_writes",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("location", Text, nullable=False),
+    Column("owner_kind", String(16), nullable=False),
+    Column("owner_id", String(36), nullable=False),
+    Column("state", String(16), nullable=False),
+    Column("version", Text),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Column("error", Text),
+    Index("ix_object_writes_location", "location"),
+    Index("ix_object_writes_owner", "owner_kind", "owner_id"),
+)
+
+object_observations = Table(
+    "object_observations",
+    metadata,
+    Column("location", Text, primary_key=True),
+    Column("fingerprint", Text),
+    Column("first_seen_at", Text, nullable=False),
+    Column("last_seen_at", Text, nullable=False),
+    Column("observation_count", Integer, nullable=False),
+)
+
+# Snapshot Tag는 외부 Catalog 트랜잭션이므로 Dataset 게시보다 먼저 의도를 기록한다.
+snapshot_retention = Table(
+    "snapshot_retention",
+    metadata,
+    Column("dataset_id", String(36), primary_key=True),
+    Column("location", Text, nullable=False),
+    Column("snapshot_id", Text, nullable=False),
+    Column("tag_name", Text, nullable=False, unique=True),
+    Column("state", String(20), nullable=False),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Column("error", Text),
+)
+
+audit_events = Table(
+    "audit_events",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("at", Text, nullable=False),
+    Column("actor_id", Text, nullable=False),
+    Column("actor_type", String(24), nullable=False),
+    Column("action", String(96), nullable=False),
+    Column("resource_type", String(40), nullable=False),
+    Column("resource_id", Text),
+    Column("decision", String(12), nullable=False),
+    Column("outcome", String(20), nullable=False),
+    Column("request_id", String(36)),
+    Column("reason", String(200)),
+    Index("ix_audit_events_at_id", "at", "id"),
+)
