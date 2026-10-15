@@ -4,6 +4,7 @@
 
 ### Changed
 
+- CSV·Parquet 파일을 메모리 전체 복사 없이 등록하고 업로드 진행·오류 안내 및 캐시 무결성 게시를 보강했다.
 - 파일 업로드·인증 거부 감사의 동기 I/O를 비차단 처리하고 해당 동시성·브라우저 회귀 검증을 보강했다.
 - API 오류 코드·Request ID·레거시 `detail` 호환, Worker/Attempt 영속 진단과 구조화 로그를 연결하고 안전한 Iceberg 복구 안내를 제공한다.
 - Iceberg Dataset 생성·적재와 기존 Snapshot의 보존 관리 권한을 구분하고 역할별 UI를 일치시켰다.
