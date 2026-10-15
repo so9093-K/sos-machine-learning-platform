@@ -387,7 +387,7 @@ function Workspace({ actor }: { actor: Identity }) {
                 setTab(next);
                 requestAnimationFrame(() => document.getElementById(`sos-tab-${next}`)?.focus());
               }}>
-              {{ preview: "Preview", profile: "EDA & Profile", features: "Features", jobs: "Jobs", storage: "Storage Health" }[t]}
+              {{ preview: "Preview", profile: "EDA & Profile", features: "Features", jobs: "Jobs", storage: "Storage Health", audit: "Security Audit" }[t]}
             </button>)}
         </div>
         {tab === "preview" && <section className="panel" role="tabpanel"
