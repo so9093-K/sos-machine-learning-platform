@@ -452,9 +452,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         lf = scan_dataset(store, existing(body.dataset_id, actor))
         return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
 
-    def job_page(
-        limit: int, cursor: str | None, actor: Actor, *, discovery_only: bool
-    ) -> dict:
+    def job_page(limit: int, cursor: str | None, actor: Actor, *, discovery_only: bool) -> dict:
         before = None
         if cursor:
             try:

@@ -92,6 +92,6 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
       이전 작업 더 보기 →
     </button>}
     {discoveryNextCursor && <button className="secondary" disabled={busy}
-      onClick={onLoadMoreDiscovery}>이전 Discovery 작업 더 보기 →</button>
+      onClick={onLoadMoreDiscovery}>이전 Discovery 작업 더 보기 →</button>}
   </section>;
 }
