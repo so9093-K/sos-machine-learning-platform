@@ -141,10 +141,16 @@ def run_once(store: Store) -> bool:
         _stop(process)
         if write_id:
             try:
-                store.fail_object_write(write_id, str(exc))
+                store.fail_object_write(write_id, ERRORS["SOS-JOB-FAILED"].message)
             except Exception:
-                logging.exception("Could not record failed object write: %s", write_id)
-        store.finish(job_id, "Failed", error=f"{type(exc).__name__}: {exc}"[:500])
+                emit("worker.write_intent.record_failed", service="sos-worker",
+                     level=logging.ERROR, job_id=job_id, attempt_id=attempt_id)
+        code = "SOS-ICEBERG-UNCERTAIN" if job["kind"] == "iceberg_import" else "SOS-JOB-FAILED"
+        emit("worker.attempt.failed", service="sos-worker", level=logging.ERROR,
+             job_id=job_id, attempt_id=attempt_id, error_code=code,
+             stage="publication", exception_type=type(exc).__name__)
+        store.finish(job_id, "Failed", error=ERRORS[code].message,
+                     error_code=code, failure_stage="publication")
     finally:
         _stop(process)
         # 게시 도중 실패해도 로컬 실행 중간 파일은 남기지 않는다.
