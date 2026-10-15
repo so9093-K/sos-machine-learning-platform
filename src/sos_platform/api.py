@@ -174,9 +174,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         }
 
     @app.get("/api/audit")
-    def audit_events(
-        limit: int = Query(default=50, ge=1, le=100), actor: Actor = AUDIT_DEP
-    ):
+    def audit_events(limit: int = Query(default=50, ge=1, le=100), actor: Actor = AUDIT_DEP):
         return store.audit_events(limit=limit)
 
     @app.get("/api/storage/policy", response_model=StoragePolicyOut)
@@ -208,9 +206,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         return inspect_iceberg_references(store, limit=limit)
 
     @app.post("/api/storage/iceberg-references/{dataset_id}/retain")
-    def retain_iceberg_reference(
-        dataset_id: str, actor: Actor = RETAIN_DEP
-    ):
+    def retain_iceberg_reference(dataset_id: str, actor: Actor = RETAIN_DEP):
         """기존 Dataset을 재확인하고 SOS 영구 보존 Tag를 생성한다."""
         item = store.get_dataset(dataset_id)
         if item is None or item["kind"] != "iceberg":
@@ -250,9 +246,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         return store.datasets(actor_id=None if actor.privileged else actor.id)
 
     @app.post("/api/datasets/files", status_code=201, response_model=DatasetOut)
-    async def upload(
-        file: Annotated[UploadFile, File()], actor: Actor = CREATE_DATASET_DEP
-    ):
+    async def upload(file: Annotated[UploadFile, File()], actor: Actor = CREATE_DATASET_DEP):
         # 제한보다 한 바이트 더 읽어 파일 전체를 저장하기 전에 크기 초과를 검출한다.
         data = await file.read(MAX_UPLOAD + 1)
         try:
