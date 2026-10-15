@@ -15,8 +15,8 @@ from pathlib import Path
 
 from .datasets import import_to_iceberg, scan_dataset
 from .errors import ERRORS
-from .observability import emit
 from .object_store import ObjectStore
+from .observability import emit
 from .processing import profile, transform
 from .schemas import Transform
 from .store import Store
