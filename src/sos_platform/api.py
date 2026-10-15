@@ -15,7 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
 
+from .api_errors import register_error_handlers
 from .config import StoragePolicy
+from .errors import ERRORS
+from .observability import emit
 from .datasets import (
     MAX_UPLOAD,
     connect_iceberg,
@@ -77,11 +80,15 @@ def create_app(home: Path | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.identity = identity
+    register_error_handlers(app)
 
     @app.middleware("http")
     async def security_audit(request: Request, call_next):
         request.state.request_id = str(uuid4())
         response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        emit("api.request.complete", service="sos-api", request_id=request.state.request_id,
+             status=str(response.status_code))
         if response.status_code in (401, 403):
             actor = getattr(request.state, "actor", None)
             try:
@@ -109,11 +116,8 @@ def create_app(home: Path | None = None) -> FastAPI:
         ],
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type", "Authorization"],
+        expose_headers=["X-Request-ID"],
     )
-
-    @app.exception_handler(ValueError)
-    async def bad_input(_request, exc: ValueError):
-        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     def check_ownership(actor: Actor, owner: str | None, kind: str, identifier: str) -> None:
         try:
@@ -279,7 +283,7 @@ def create_app(home: Path | None = None) -> FastAPI:
                 status_code=503,
                 detail={
                     "code": "SOS-STORAGE-001",
-                    "message": "데이터 저장소를 사용할 수 없습니다. 잠시 후 재시도하세요.",
+                    "message": ERRORS["SOS-STORAGE-001"].message,
                 },
             ) from exc
         finally:
