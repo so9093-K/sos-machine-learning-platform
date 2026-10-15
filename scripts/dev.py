@@ -298,16 +298,15 @@ def start_process(name: str, command: list[str], env: dict, cwd: Path = ROOT):
     if owned(state.get(name)):
         return
     LOGDIR.mkdir(parents=True, exist_ok=True)
-    with (LOGDIR / f"{name}.log").open("ab") as output:
-        proc = subprocess.Popen(
-            command,
-            cwd=cwd,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+    proc = subprocess.Popen(
+        ["python3", "scripts/log_capture.py", str(LOGDIR / f"{name}.log"), "--", *command],
+        cwd=ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
     # SIGKILL 대상 검증에는 PID 외에 시작 시점까지 보관한다.
     for _ in range(20):
         birth = process_birth(proc.pid)
@@ -563,6 +562,25 @@ def doctor(config: dict, deep: bool = False):
     }
 
 
+def tail_log(path: Path, lines: int = 70, max_bytes: int = 65_536) -> list[str]:
+    """거대한 파일을 통째로 읽지 않고 제한된 끝부분에서 로그를 조회한다."""
+    with path.open("rb") as stream:
+        stream.seek(0, os.SEEK_END)
+        remaining = stream.tell()
+        chunks = []
+        total = 0
+        newlines = 0
+        while remaining > 0 and total < max_bytes and newlines <= lines:
+            length = min(4096, remaining, max_bytes - total)
+            remaining -= length
+            stream.seek(remaining)
+            chunk = stream.read(length)
+            chunks.append(chunk)
+            total += length
+            newlines += chunk.count(b"\n")
+    return b"".join(reversed(chunks)).decode("utf-8", errors="replace").splitlines()[-lines:]
+
+
 def logs(config: dict):
     """관리 서비스 로그를 조회하고 알려진 민감정보를 마스킹한다."""
     for name in PROCESS_NAMES:
@@ -571,7 +589,7 @@ def logs(config: dict):
         if not file.is_file():
             print("기록된 로그가 없습니다.")
             continue
-        for line in file.read_text(errors="replace").splitlines()[-70:]:
+        for line in tail_log(file):
             print(redact(line, config))
     if config["SOS_INFRA_MODE"] == "managed":
         print("\n--- infrastructure ---")
@@ -631,6 +649,10 @@ def check_fast(config: dict):
                     "tests/test_processing.py",
                     "tests/test_dev_cli.py",
                     "tests/test_api_compat.py",
+                    "tests/test_errors.py",
+                    "tests/test_e2e_isolation.py",
+                    "tests/test_diagnostics.py",
+                    "tests/test_log_capture.py",
                 ],
                 ROOT,
             ),

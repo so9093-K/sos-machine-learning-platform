@@ -18,12 +18,17 @@ export function AuditPanel() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [requestId, setRequestId] = useState("");
+  const [jobId, setJobId] = useState("");
 
   async function reload() {
     setLoading(true);
     setError("");
     try {
-      setEvents(await request<AuditEvent[]>("/api/audit?limit=50"));
+      const params = new URLSearchParams({ limit: "50" });
+      if (requestId.trim()) params.set("request_id", requestId.trim());
+      if (jobId.trim()) params.set("job_id", jobId.trim());
+      setEvents(await request<AuditEvent[]>(`/api/audit?${params.toString()}`));
     } catch (exc) {
       setError(formatError(exc));
     } finally {
@@ -41,7 +46,22 @@ export function AuditPanel() {
         기록 새로고침
       </button>
     </div>
-    {error && <p role="alert">{error}</p>}
+    <div className="form-grid">
+      <label>Request ID
+        <input aria-label="감사 Request ID" value={requestId}
+          onChange={event => setRequestId(event.target.value)}
+          placeholder="HTTP 응답의 요청 ID" />
+      </label>
+      <label>Job ID
+        <input aria-label="감사 Job ID" value={jobId}
+          onChange={event => setJobId(event.target.value)}
+          placeholder="Job의 ID" />
+      </label>
+      <button className="secondary" disabled={loading} onClick={() => void reload()}>
+        감사 기록 검색
+      </button>
+    </div>
+    {error && <p role="alert">{error}</p>
     {loading && <p role="status">감사 기록 조회 중</p>}
     {events.length === 0 && !loading && <p className="muted">조회 가능한 감사 이벤트가 없습니다.</p>}
     <div className="job-list">

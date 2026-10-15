@@ -15,7 +15,7 @@
 
 | 테스트 계층 | 위치 | 실행 |
 | --- | --- | --- |
-| 순수 로직·CLI·호환성 | tests/test_processing.py, tests/test_dev_cli.py, tests/test_api_compat.py | make check-fast; PR 필수 |
+| 순수 로직·CLI·호환성 | tests/test_processing.py, tests/test_dev_cli.py, tests/test_api_compat.py, tests/test_errors.py, tests/test_diagnostics.py, tests/test_log_capture.py, tests/test_e2e_isolation.py | make check-fast; PR 필수 |
 | 실제 DB·객체 저장소·Catalog | tests/integration/ | PR 필수 Python 작업 |
 | 브라우저 사용자 흐름·RBAC | web/e2e/ | PR 필수 UI 작업 |
 | Make 재시작·보존 | CI Make lifecycle | PR 필수; 자체 데이터를 생성해야 함 |
