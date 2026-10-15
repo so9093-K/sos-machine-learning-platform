@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import * as echarts from "echarts";
 import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
-import { request, jsonPost, setAccessToken } from "./api";
+import { request, jsonPost, setAccessToken, formatError } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
@@ -151,7 +151,7 @@ function Workspace({ actor }: { actor: Identity }) {
 
   async function withFeedback(action: () => Promise<void>) {
     setBusy(true); setError(""); setNotice("");
-    try { await action(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try { await action(); } catch (e) { setError(formatError(e)); }
     finally { setBusy(false); }
   }
   function addStep() {
@@ -161,7 +161,7 @@ function Workspace({ actor }: { actor: Identity }) {
       setSteps(existing => editingStep === null ? [...existing, next]
         : existing.map((step, index) => index === editingStep ? next : step));
       setEditingStep(null); setFeaturePreview(null); setError("");
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { setError(formatError(e)); }
   }
   function editStep(index: number) {
     const step = steps[index];
@@ -546,7 +546,7 @@ function App() {
       setToken("");
     } catch (error) {
       setAccessToken(null);
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(formatError(error));
     } finally { setSubmitting(false); }
   }
   if (checking) return <main className="main" role="status">사용자 권한을 확인하고 있습니다.</main>;
