@@ -522,7 +522,7 @@ class Store:
                 status, result, publish = "Cancelled", None, None
             if status == "Succeeded" and publish:
                 item = dict(
-                    id=str(uuid4()),
+                    id=publish.get("retention_id") or str(uuid4()),
                     name=publish["name"],
                     kind=publish.get("kind", "file"),
                     location=publish["location"],
