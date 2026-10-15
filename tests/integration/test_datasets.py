@@ -199,11 +199,11 @@ def test_upload_policy_and_raw_request_body_limit(workspace, monkeypatch):
         # Content-Length가 없는 스트리밍 요청도 실제 수신 바이트 수로 제한한다.
         boundary = "sos-upload-boundary"
         head = (
-            f"--{boundary}\\r\\n"
-            'Content-Disposition: form-data; name="file"; filename="huge.csv"\\r\\n'
-            "Content-Type: text/csv\\r\\n\\r\\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="file"; filename="huge.csv"\r\n'
+            "Content-Type: text/csv\r\n\r\n"
         ).encode()
-        tail = f"\\r\\n--{boundary}--\\r\\n".encode()
+        tail = f"\r\n--{boundary}--\r\n".encode()
         streamed = client.post(
             "/api/datasets/files",
             headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
