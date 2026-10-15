@@ -27,7 +27,6 @@ from .object_store import ObjectStore
 from .processing import bounded_feature_preview, profile, safe_preview
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
-from .security import Actor, IdentitySettings, current_actor, require, resource_allowed
 from .schemas import (
     DatasetOut,
     ExampleOut,
@@ -45,6 +44,7 @@ from .schemas import (
     StoragePolicyOut,
     WorkRequest,
 )
+from .security import Actor, IdentitySettings, current_actor, require, resource_allowed
 from .store import IcebergCancellationConflict, Store
 
 
