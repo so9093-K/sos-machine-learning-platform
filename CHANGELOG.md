@@ -4,6 +4,9 @@
 
 ### Changed
 
+- API 오류 코드·Request ID·레거시 `detail` 호환, Worker/Attempt 영속 진단과 구조화 로그를 연결하고 안전한 Iceberg 복구 안내를 제공한다.
+
+
 - Iceberg Dataset 생성·적재와 기존 Snapshot의 보존 관리 권한을 구분하고 역할별 UI를 일치시켰다.
 - Worker 복구 감사에 Attempt 식별자·복구 결과를 기록하고, 감사 실패 시 DB 상태 변경을 롤백하도록 검증했다.
 - 통합 테스트가 준비 도중 실패해도 독립 DB·버킷이 남지 않도록 정리 수명주기를 보강했다.
