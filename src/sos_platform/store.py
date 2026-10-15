@@ -263,7 +263,10 @@ class Store:
             )
 
     def audit_events(
-        self, *, limit: int = 50, request_id: str | None = None,
+        self,
+        *,
+        limit: int = 50,
+        request_id: str | None = None,
         resource_id: str | None = None,
     ) -> list[dict]:
         """운영자만 조회하는 감사 이력을 요청·작업 식별자로 제한한다."""
@@ -282,8 +285,10 @@ class Store:
             return [
                 dict(row)
                 for row in db.execute(
-                    text(f"SELECT * FROM audit_events {predicate} "
-                         "ORDER BY at DESC,id DESC LIMIT :limit"),
+                    text(
+                        f"SELECT * FROM audit_events {predicate} "
+                        "ORDER BY at DESC,id DESC LIMIT :limit"
+                    ),
                     params,
                 ).mappings()
             ]
@@ -574,9 +579,7 @@ class Store:
                 "FROM attempts a WHERE a.job_id IN :ids) history WHERE rank=1"
             ).bindparams(bindparam("ids", expanding=True))
             summaries = db.execute(query, {"ids": [item["id"] for item in items]}).mappings()
-            latest = {
-                row["job_id"]: self._decode_attempt(dict(row)) for row in summaries
-            }
+            latest = {row["job_id"]: self._decode_attempt(dict(row)) for row in summaries}
         for item in items:
             self._decode_job(item)
             summary = latest.get(item["id"])
@@ -749,8 +752,14 @@ class Store:
                     "error_code=:error_code,failure_stage=:failure_stage "
                     "WHERE job_id=:id AND status='Running' RETURNING id"
                 ),
-                dict(id=job_id, status=status, at=now(), error=error,
-                     error_code=error_code, failure_stage=failure_stage),
+                dict(
+                    id=job_id,
+                    status=status,
+                    at=now(),
+                    error=error,
+                    error_code=error_code,
+                    failure_stage=failure_stage,
+                ),
             ).scalar_one()
             reason = f"attempt={completed_attempt}"
             if status == "Succeeded" and publish:
@@ -807,10 +816,15 @@ class Store:
                     else None
                 )
                 db.execute(
-                    text("UPDATE jobs SET status=:s,error=:error,error_code=:code,"
-                        "failure_stage=:stage,updated_at=:at WHERE id=:id"),
+                    text(
+                        "UPDATE jobs SET status=:s,error=:error,error_code=:code,"
+                        "failure_stage=:stage,updated_at=:at WHERE id=:id"
+                    ),
                     {
-                        "s": status, "error": message, "at": now(), "id": row["id"],
+                        "s": status,
+                        "error": message,
+                        "at": now(),
+                        "id": row["id"],
                         "code": "SOS-ICEBERG-UNCERTAIN" if unsafe else None,
                         "stage": "iceberg_commit" if unsafe else None,
                     },
