@@ -9,7 +9,6 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
-from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import make_url
@@ -492,8 +491,8 @@ def test_upload_recovery_preserves_shared_content_addressed_blob(workspace, monk
     assert store.dataset_location_referenced(registered["location"])
 
 
-def test_transform_publish_db_failure_compensates_unique_object(workspace, monkeypatch):
-    """S3 업로드 후 DB 완료 트랜잭션 실패 시 독점 Job 객체를 회수한다."""
+def test_transform_publish_failure_preserves_unreferenced_attempt_object(workspace, monkeypatch):
+    """실패한 전용 결과는 삭제하지 않고 진단용 게시 실패 이력을 남긴다."""
     client, store = workspace
     dataset = upload(client)
     queued = client.post(
@@ -515,10 +514,113 @@ def test_transform_publish_db_failure_compensates_unique_object(workspace, monke
 
     monkeypatch.setattr(store, "finish", reject_success)
     assert run_once(store)
-    assert store.get_job(job_id)["status"] == "Failed"
-    storage = ObjectStore()
-    with pytest.raises(ClientError):
-        storage.client.head_object(
-            Bucket=storage.config.s3_bucket,
-            Key=f"results/{job_id}.parquet",
-        )
+    job = store.get_job(job_id)
+    assert job["status"] == "Failed"
+    location = ObjectStore().location(f"results/{job_id}/{job['attempts'][0]['id']}.parquet")
+    writes = store.object_writes(location)
+    assert len(writes) == 1
+    assert writes[0]["state"] == "Failed"
+    assert not store.dataset_location_referenced(location)
+    ObjectStore().client.head_object(
+        Bucket=ObjectStore().config.s3_bucket,
+        Key=ObjectStore().key(location),
+    )
+
+
+def test_storage_inventory_policy_and_protection(workspace):
+    """진단에서는 참조 중 Dataset을 보호하고 기본 삭제 정책을 노출한다."""
+    client, store = workspace
+    dataset = upload(client)
+    res = client.get("/api/storage/policy")
+    assert res.status_code == 200
+    assert res.json()["automatic_deletion"] is False
+    assert res.json()["values"]["grace_days"] >= 7
+
+    inspected = []
+    cursor = None
+    for _ in range(20):
+        parameters = {"cursor": cursor} if cursor else {}
+        result = client.get("/api/storage/inspection", params=parameters)
+        assert result.status_code == 200, result.text
+        page = result.json()
+        assert page["deletion_enabled"] is False
+        assert page["scope"] in ("datasets/", "results/")
+        inspected.extend(page["items"])
+        cursor = page["next_cursor"]
+        if not cursor:
+            break
+    matches = [item for item in inspected if item["location"] == dataset["location"]]
+    assert matches
+    assert matches[0]["status"] == "protected"
+    assert client.get("/api/storage/inspection", params={"cursor": "?"}).status_code == 422
+    assert store.object_writes(dataset["location"])[0]["state"] == "Published"
+
+
+def test_storage_policy_rejects_unsafe_values(monkeypatch):
+    """환경변수로 보호 조건을 완화할 수 없다."""
+    from sos_platform.config import StoragePolicy
+
+    for name, value in (
+        ("SOS_OBJECT_GRACE_DAYS", "1"),
+        ("SOS_OBJECT_OBSERVATION_HOURS", "4"),
+        ("SOS_OBJECT_MIN_OBSERVATIONS", "1"),
+        ("SOS_OBJECT_PAGE_SIZE", "50000"),
+    ):
+        monkeypatch.setenv(name, value)
+        with pytest.raises(ValueError, match="Invalid storage policy"):
+            StoragePolicy.from_env()
+        monkeypatch.delenv(name)
+
+
+def test_immutable_attempt_results_across_worker_recovery(workspace):
+    """재실행한 Attempt는 이전 결과 객체 경로를 재사용하지 않는다."""
+    client, store = workspace
+    dataset = upload(client)
+    posted = client.post(
+        "/api/jobs",
+        json={
+            "dataset_id": dataset["id"],
+            "kind": "transform",
+            "transform": {"steps": [{"op": "fill_null", "column": "temperature", "value": 0}]},
+        },
+    )
+    assert posted.status_code == 202
+    job_id = posted.json()["id"]
+    first = store.claim()
+    assert first is not None
+    first_attempt = first["attempts"][0]["id"]
+    store.recover()
+    assert run_once(store)
+    job = store.get_job(job_id)
+    assert job["status"] == "Succeeded"
+    assert len(job["attempts"]) == 2
+    assert job["attempts"][-1]["id"] != first_attempt
+    result = store.get_dataset(job["result"]["dataset_id"])
+    assert result is not None
+    assert result["location"].endswith(f"/{job['attempts'][-1]['id']}.parquet")
+
+
+def test_storage_candidate_needs_grace_and_repeated_observation():
+    """보존 기간을 충족해도 반복 관측 없이는 정리 후보가 아니다."""
+    from datetime import UTC, datetime, timedelta
+
+    from sos_platform.config import StoragePolicy
+    from sos_platform.reconciler import classify_object
+
+    past = (datetime.now(UTC) - timedelta(days=10)).isoformat()
+    item = {"modified_at": past}
+    observation = {"first_seen_at": past, "observation_count": 2}
+    metadata = {
+        "referenced": False,
+        "writes": [{"state": "Failed", "updated_at": past}],
+        "attempts": {},
+        "observation": observation,
+    }
+    assert classify_object(item, metadata, StoragePolicy())[0] == "candidate"
+    metadata["referenced"] = True
+    assert classify_object(item, metadata, StoragePolicy())[0] == "protected"
+    metadata["referenced"] = False
+    observation["observation_count"] = 1
+    assert classify_object(item, metadata, StoragePolicy())[0] == "waiting"
+    metadata["writes"] = [{"state": "Pending", "owner_kind": "upload", "owner_id": "abc"}]
+    assert classify_object(item, metadata, StoragePolicy())[0] == "protected"
