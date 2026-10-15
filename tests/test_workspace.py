@@ -103,6 +103,39 @@ def test_safe_feature_preview_and_worker_job(workspace):
     assert run_once(store) is False
 
 
+def test_failed_result_publish_cleans_local_worker_files(workspace, monkeypatch):
+    """객체 저장소 게시 실패 시 영속 원본을 유지하고 임시 산출물만 지운다."""
+    client, store = workspace
+    dataset = upload(client)
+    response = client.post(
+        "/api/jobs",
+        json={
+            "dataset_id": dataset["id"],
+            "kind": "transform",
+            "transform": {
+                "steps": [{"op": "fill_null", "column": "temperature", "value": 0}]
+            },
+        },
+    )
+    assert response.status_code == 202, response.text
+    job_id = response.json()["id"]
+
+    def fail_upload(_store, _key, source):
+        assert source.is_file()
+        raise RuntimeError("simulated object storage failure")
+
+    monkeypatch.setattr(ObjectStore, "put", fail_upload)
+    assert run_once(store) is True
+    job = store.get_job(job_id)
+    assert job["status"] == "Failed"
+    assert "simulated object storage failure" in job["error"]
+    results = store.home / "results"
+    assert not (results / f"{job_id}.parquet").exists()
+    assert not (results / f"{job_id}.pending.parquet").exists()
+    assert not (results / f"{job_id}.completed.json").exists()
+    assert store.get_dataset(dataset["id"]) is not None
+
+
 def test_cancel_recovery_and_input_validation(workspace):
     client, store = workspace
     dataset = upload(client)
