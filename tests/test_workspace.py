@@ -9,9 +9,9 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 import pytest
-from botocore.exceptions import ClientError
 from alembic import command
 from alembic.config import Config
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import make_url
