@@ -40,7 +40,7 @@ Human / External System / AI Agent
 
 ## 데이터 저장소와 실행 제어
 
-플랫폼 메타데이터(Dataset, Job, Execution Attempt)는 PostgreSQL에 영속화하고, 실제 원본 데이터·변환 결과는 S3 호환 객체 저장소에 보관한다. 서로 다른 저장소의 원자성을 가정하지 않으며, 게시 실패 시 공유 가능한 원본 객체와 Job 전용 결과 객체의 복구 정책을 구분한다. Iceberg Catalog는 테이블·Snapshot의 메타데이터를 담당하며 데이터 파일은 객체 저장소를 활용한다. 공통 Dataset 계약은 특정 제품의 내부 객체에 종속되지 않는다.
+플랫폼 메타데이터(Dataset, Job, Execution Attempt)는 PostgreSQL에 영속화하고, 실제 원본 데이터·변환 결과는 S3 호환 객체 저장소에 보관한다. 서로 다른 저장소의 원자성을 가정하지 않으며, 게시 실패 시 공유 가능한 원본 객체와 Attempt별 결과 객체의 소유권·보존 및 복구 정책을 구분한다. Iceberg Catalog는 테이블·Snapshot의 메타데이터를 담당하며 데이터 파일은 객체 저장소를 활용한다. 공통 Dataset 계약은 특정 제품의 내부 객체에 종속되지 않는다.
 
 Makefile과 개발 CLI는 서비스 기동·진단의 인터페이스이자 배포별 어댑터다. 개발 환경의 Compose 구성이 플랫폼 서비스의 의존 방향을 결정하지 않는다. 외부 관리형 데이터베이스·스토리지 또는 독립적으로 배치된 Worker를 사용할 수 있으며, 실행 중(Running)과 실제 서비스 준비(Ready)는 구별하여 판정한다.
 
