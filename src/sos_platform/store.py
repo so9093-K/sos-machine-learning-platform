@@ -291,6 +291,25 @@ class Store:
         if updated.rowcount != 1:
             raise RuntimeError("Snapshot protection intent is not ready")
 
+    def confirm_existing_retention(
+        self, dataset_id: str, *, actor_id: str, actor_type: str
+    ) -> None:
+        """기존 Dataset 보호 확인과 감사 기록을 하나의 DB 트랜잭션으로 확정한다."""
+        with self.connection() as db:
+            item = db.execute(
+                text("SELECT location,version FROM datasets WHERE id=:id AND kind='iceberg'"),
+                {"id": dataset_id},
+            ).mappings().first()
+            if item is None:
+                raise ValueError("Iceberg Dataset not found")
+            self._confirm_snapshot_retention(
+                db, dataset_id, item["location"], item["version"]
+            )
+            self._audit(
+                db, actor_id=actor_id, actor_type=actor_type,
+                action="snapshot.retain", resource_type="dataset", resource_id=dataset_id,
+            )
+
     def register_dataset(
         self, *, name: str, kind: str, location: str, version: str, write_id: str | None = None,
         dataset_id: str | None = None, owner_actor: str | None = None,
