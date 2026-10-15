@@ -73,6 +73,8 @@ def run_once(store: Store) -> bool:
     job_id = job["id"]
     attempt_id = job["attempts"][-1]["id"]
     write_id: str | None = None
+    emit("worker.attempt.started", service="sos-worker", job_id=job_id,
+         attempt_id=attempt_id, kind=job["kind"])
     output = store.home / "results" / f"{job_id}.parquet"
     pending = store.home / "results" / f"{job_id}.pending.parquet"
     completed = store.home / "results" / f"{job_id}.completed.json"
@@ -102,8 +104,14 @@ def run_once(store: Store) -> bool:
         if not completed.exists():
             raise RuntimeError(f"Execution process exited ({process.exitcode}) without result")
         outcome = json.loads(completed.read_text(encoding="utf-8"))
-        if "error" in outcome:
-            store.finish(job_id, "Failed", error=outcome["error"])
+        if "error_code" in outcome:
+            code = outcome["error_code"]
+            emit("worker.attempt.failed", service="sos-worker", level=logging.ERROR,
+                 job_id=job_id, attempt_id=attempt_id, error_code=code,
+                 stage=outcome.get("failure_stage"),
+                 exception_type=outcome.get("exception_type"))
+            store.finish(job_id, "Failed", error=ERRORS[code].message, error_code=code,
+                         failure_stage=outcome.get("failure_stage"))
             return True
 
         publish = outcome["result"].get("iceberg_publish")
@@ -127,6 +135,8 @@ def run_once(store: Store) -> bool:
         )
         if final_status != "Succeeded" and write_id:
             store.fail_object_write(write_id, "Job cancelled during publication")
+        emit("worker.attempt.finished", service="sos-worker", job_id=job_id,
+             attempt_id=attempt_id, status=final_status)
     except Exception as exc:
         _stop(process)
         if write_id:
