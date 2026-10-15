@@ -121,7 +121,7 @@ jobs:
           curl -fsS "http://127.0.0.1:9602/api/iceberg/$iceberg_table/snapshots" > /tmp/sos-persisted-snapshots.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-snapshots.json")); assert len(d)>=1, d'
           curl -fsS http://127.0.0.1:9602/api/jobs > /tmp/sos-persisted-jobs.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-jobs.json")); assert any(x["status"]=="Succeeded" for x in d), d'
+          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-jobs.json")); assert any(x["status"]=="Succeeded" for x in d["items"]), d'
           make check
           make logs > /tmp/sos-sanitized-logs.txt
       - name: Save Playwright trace on failure
