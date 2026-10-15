@@ -137,14 +137,18 @@ def inspect_iceberg_references(store: Store, limit: int = 50) -> list[dict]:
             .mappings()
             .all()
         )
+    # 성공적으로 게시된 Dataset 외에 Tag만 남은 의도도 운영자가 발견할 수 있어야 한다.
+    orphaned = store.unpublished_snapshot_retention(limit=limit)
     results = []
     catalog = None
+    table_cache = {}
     for row in rows:
         try:
             if catalog is None:
                 catalog = iceberg_catalog(store)
-            table = catalog.load_table(row["location"])
-            status, reason = snapshot_status(store, dict(row), table)
+            if row["location"] not in table_cache:
+                table_cache[row["location"]] = catalog.load_table(row["location"])
+            status, reason = snapshot_status(store, dict(row), table_cache[row["location"]])
         except Exception:
             status = "unknown"
             reason = "Catalog 확인에 실패했습니다. 만료·삭제하지 마세요."
@@ -157,4 +161,29 @@ def inspect_iceberg_references(store: Store, limit: int = 50) -> list[dict]:
                 "reason": reason,
             }
         )
-    return results
+    from .retention import inspect_tag
+
+    for item in orphaned:
+        try:
+            if catalog is None:
+                catalog = iceberg_catalog(store)
+            if item["location"] not in table_cache:
+                table_cache[item["location"]] = catalog.load_table(item["location"])
+            tag = inspect_tag(
+                table_cache[item["location"]],
+                name=item["tag_name"],
+                snapshot_id=item["snapshot_id"],
+            )
+            reason = f"미게시 보존 의도({item['state']}): Catalog Tag={tag}. 자동 삭제·재시도하지 마세요."
+        except Exception:
+            reason = f"미게시 보존 의도({item['state']}): Catalog 확인 불가. 자동 삭제하지 마세요."
+        results.append(
+            {
+                "dataset_id": item["dataset_id"],
+                "table_name": item["location"],
+                "snapshot_id": item["snapshot_id"],
+                "status": "unknown",
+                "reason": reason,
+            }
+        )
+    return results[:limit]

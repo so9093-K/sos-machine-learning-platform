@@ -330,6 +330,21 @@ class Store:
             )
             return dict(result) if result else None
 
+    def unpublished_snapshot_retention(self, *, limit: int = 50) -> list[dict]:
+        """Dataset 게시에 실패한 보존 의도를 조회한다. 참조·Tag를 변경하지 않는다."""
+        with self.connection() as db:
+            return [
+                dict(row)
+                for row in db.execute(
+                    text(
+                        "SELECT r.* FROM snapshot_retention r "
+                        "LEFT JOIN datasets d ON d.id=r.dataset_id "
+                        "WHERE d.id IS NULL ORDER BY r.created_at DESC LIMIT :limit"
+                    ),
+                    {"limit": limit},
+                ).mappings()
+            ]
+
     @staticmethod
     def _confirm_snapshot_retention(db, dataset_id: str, location: str, snapshot_id: str) -> None:
         updated = db.execute(

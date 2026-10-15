@@ -5,9 +5,11 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import pytest
+from botocore.exceptions import ClientError
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
@@ -26,8 +28,19 @@ from sos_platform.worker import run_once
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch):
     """각 시나리오에 독립 PostgreSQL DB를 부여해 실제 트랜잭션을 검증한다."""
-    base = make_url(Settings.from_env().database_url)
+    settings = Settings.from_env()
+    base = make_url(settings.database_url)
+    s3_endpoint = urlsplit(settings.s3_endpoint)
+    # 테스트에서 운영 DB·버킷을 생성하거나 삭제하지 않도록 로컬 전용 경계를 강제한다.
+    if base.host not in ("localhost", "127.0.0.1", "::1") or s3_endpoint.hostname not in (
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    ):
+        pytest.fail("Integration tests require loopback PostgreSQL and S3 endpoints")
     name = "sos_test_" + uuid4().hex[:14]
+    bucket = "sos-pytest-" + uuid4().hex[:20]
+    monkeypatch.setenv("SOS_S3_BUCKET", bucket)
     admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
     with admin.connect() as conn:
         conn.execute(text(f'CREATE DATABASE "{name}"'))
@@ -36,7 +49,16 @@ def workspace(tmp_path: Path, monkeypatch):
     config = Config("alembic.ini")
     config.set_main_option("sqlalchemy.url", test_url)
     command.upgrade(config, "head")
-    ObjectStore().ensure_bucket()
+    storage = ObjectStore()
+    try:
+        storage.client.head_bucket(Bucket=bucket)
+    except ClientError as exc:
+        status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if status != 404:
+            raise
+    else:
+        pytest.fail("Refusing to reuse an existing S3 test bucket")
+    storage.client.create_bucket(Bucket=bucket)
     store = Store(tmp_path, database_url=test_url)
     app = create_app(tmp_path)
     try:
@@ -44,11 +66,20 @@ def workspace(tmp_path: Path, monkeypatch):
             yield client, store
     finally:
         store.engine.dispose()
-        admin.dispose()
-        admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
-        with admin.connect() as conn:
-            conn.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
-        admin.dispose()
+        # 이 테스트가 생성한 UUID 버킷만 정리한다. 공유 버킷이나 운영 객체는 다루지 않는다.
+        try:
+            paginator = storage.client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket):
+                objects = [{"Key": item["Key"]} for item in page.get("Contents", [])]
+                if objects:
+                    storage.client.delete_objects(Bucket=bucket, Delete={"Objects": objects})
+            storage.client.delete_bucket(Bucket=bucket)
+        finally:
+            admin.dispose()
+            admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+            with admin.connect() as conn:
+                conn.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
+            admin.dispose()
 
 
 def upload(client: TestClient) -> dict:
@@ -714,7 +745,7 @@ def test_object_observation_resets_when_generation_changes(workspace):
     from datetime import UTC, datetime, timedelta
 
     _, store = workspace
-    location = "s3://sos-data/results/unpublished/example.parquet"
+    location = ObjectStore().location("results/unpublished/example.parquet")
     previous = (datetime.now(UTC) - timedelta(days=10)).isoformat()
     first = {"location": location, "fingerprint": "etag-size-time-a"}
     second = {"location": location, "fingerprint": "etag-size-time-b"}
@@ -744,7 +775,7 @@ def test_abandoned_upload_intent_is_never_auto_classified_as_candidate(workspace
     from sos_platform.reconciler import classify_object
 
     _, store = workspace
-    location = "s3://sos-data/datasets/abandoned.csv"
+    location = ObjectStore().location("datasets/abandoned.csv")
     store.begin_object_write(location=location, owner_kind="upload", owner_id=str(uuid4()))
     old = (datetime.now(UTC) - timedelta(days=30)).isoformat()
     with store.connection() as db:
@@ -1041,6 +1072,13 @@ def test_tag_failure_keeps_uncertain_intent_without_publishing_dataset(workspace
         )
     assert len(rows) == 1
     assert store.get_dataset(rows[0]["dataset_id"]) is None
+    inspection = client.get("/api/storage/iceberg-references")
+    assert inspection.status_code == 200
+    pending = next(
+        item for item in inspection.json() if item["dataset_id"] == rows[0]["dataset_id"]
+    )
+    assert pending["status"] == "unknown"
+    assert "미게시" in pending["reason"]
 
 
 def test_denied_audit_failure_does_not_grant_access(workspace, monkeypatch):
