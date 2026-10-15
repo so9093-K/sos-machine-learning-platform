@@ -63,7 +63,7 @@ export function StoragePanel() {
         객체 다시 검사
       </button>
     </div>
-    {error && <p className="job-error" role="alert">검사 실패 · {error} · 삭제는 수행되지 않았습니다.</p>}
+    {error && <p className="job-error" role="alert">검사 실패 · {error} · 삭제는 수행되지 않았습니다.{pages.length > 0 ? " 아래 결과는 마지막 성공 시점의 기록이며 현재 상태가 아닙니다." : ""}</p>}
     {loading && <p role="status">저장소 상태를 확인하고 있습니다.</p>}
     {policy && <>
       <h4>적용 중인 보존 정책</h4>
@@ -89,7 +89,9 @@ export function StoragePanel() {
           이 화면에서는 설정을 변경하거나 삭제를 실행할 수 없습니다.</p>
       </details>
     </>}
-    <h4>객체 대조 · 확인한 페이지 기준</h4>
+    <h4>객체 대조 · 조회한 페이지 기준</h4>
+    {current && <p className="hint" role="status">마지막 성공 확인: {new Date(current.inspected_at).toLocaleString("ko-KR")} ·
+      {pages.length}개 페이지의 부분 결과입니다. 검토 후보는 삭제 대상이 아닙니다.</p>}
     <div className="cards">
       {(["protected", "waiting", "candidate", "unknown"] as const).map(status =>
         <div className="stat" key={status}><span>{statusLabel[status]}</span>
@@ -98,7 +100,7 @@ export function StoragePanel() {
     <p className="hint">결과는 조회한 페이지의 관측값입니다. S3 목록을 계속 탐색해야 전체 규모를 알 수 있으며,
       등록되지 않은 객체는 안전을 위해 확인 필요로 분류합니다.</p>
     {pages.map((page, index) => <details key={index}>
-      <summary>{page.scope} · {page.items.length}개 검사</summary>
+      <summary>{page.scope} · {page.items.length}개 확인 · {new Date(page.inspected_at).toLocaleString("ko-KR")}</summary>
       {page.items.length === 0 && <p className="muted">이 페이지에는 객체가 없습니다.</p>}
       <div className="job-list">{page.items.map(item =>
         <article key={item.location} className="job">
