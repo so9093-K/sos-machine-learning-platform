@@ -132,4 +132,4 @@ def test_profile_null_and_nan_statistics(workspace):
     assert field["nulls"] == 1
     assert field["nan_count"] == 1
     assert field["unique"] >= 2
-    assert math.isfinite(field["mean"]) or field["mean"] is None
+    assert field["mean"] is None or math.isfinite(field["mean"])
