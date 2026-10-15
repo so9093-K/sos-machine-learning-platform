@@ -47,6 +47,20 @@ class Transform(BaseModel):
         return self
 
 
+class ProblemOut(BaseModel):
+    """오류 응답 공통 계약. detail은 이전 클라이언트 호환을 위해 보존한다."""
+
+    type: str
+    title: str
+    status: int
+    detail: object
+    code: str
+    category: str
+    request_id: str
+    instance: str
+    retry_policy: str
+
+
 class StoragePolicyOut(BaseModel):
     """서버의 유효 보존 정책과 값의 출처."""
 
@@ -160,6 +174,8 @@ class AttemptOut(BaseModel):
     started_at: str
     finished_at: str | None = None
     error: str | None = None
+    error_code: str | None = None
+    failure_stage: str | None = None
 
 
 class JobOut(BaseModel):
@@ -171,6 +187,10 @@ class JobOut(BaseModel):
     cancel_requested: bool
     result: dict[str, object] | None
     error: str | None
+    error_code: str | None = None
+    failure_stage: str | None = None
+    retry_policy: str | None = None
+    request_id: str | None = None
     created_at: str
     updated_at: str
     attempts: list[AttemptOut]
@@ -187,6 +207,10 @@ class JobSummaryOut(BaseModel):
     cancel_requested: bool
     result: dict[str, object] | None
     error: str | None
+    error_code: str | None = None
+    failure_stage: str | None = None
+    retry_policy: str | None = None
+    request_id: str | None = None
     created_at: str
     updated_at: str
     attempt_count: int

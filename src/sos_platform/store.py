@@ -12,6 +12,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import bindparam, create_engine, text
 
 from .config import Settings
+from .errors import ERRORS
 
 
 def now() -> str:
@@ -261,15 +262,34 @@ class Store:
                 request_id=request_id,
             )
 
-    def audit_events(self, *, limit: int = 50) -> list[dict]:
+    def audit_events(
+        self,
+        *,
+        limit: int = 50,
+        request_id: str | None = None,
+        resource_id: str | None = None,
+    ) -> list[dict]:
+        """운영자만 조회하는 감사 이력을 요청·작업 식별자로 제한한다."""
         if not 1 <= limit <= 100:
             raise ValueError("Audit limit out of range")
+        clauses = []
+        params = {"limit": limit}
+        if request_id is not None:
+            clauses.append("request_id=:request_id")
+            params["request_id"] = request_id
+        if resource_id is not None:
+            clauses.append("resource_id=:resource_id")
+            params["resource_id"] = resource_id
+        predicate = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         with self.connection() as db:
             return [
                 dict(row)
                 for row in db.execute(
-                    text("SELECT * FROM audit_events ORDER BY at DESC,id DESC LIMIT :limit"),
-                    {"limit": limit},
+                    text(
+                        f"SELECT * FROM audit_events {predicate} "
+                        "ORDER BY at DESC,id DESC LIMIT :limit"
+                    ),
+                    params,
                 ).mappings()
             ]
 
@@ -458,12 +478,14 @@ class Store:
         spec: dict,
         owner_actor: str | None = None,
         actor_type: str = "human",
+        request_id: str | None = None,
     ) -> dict:
         item = dict(
             id=str(uuid4()),
             kind=kind,
             dataset_id=dataset_id,
             owner_actor=owner_actor,
+            request_id=request_id,
             spec=json.dumps(spec),
             status="Queued",
             created_at=now(),
@@ -472,8 +494,10 @@ class Store:
         with self.connection() as db:
             db.execute(
                 text(
-                    "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at,owner_actor) "
-                    "VALUES(:id,:kind,:dataset_id,:spec,:status,:created_at,:updated_at,:owner_actor)"
+                    "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at,"
+                    "owner_actor,request_id) "
+                    "VALUES(:id,:kind,:dataset_id,:spec,:status,:created_at,:updated_at,"
+                    ":owner_actor,:request_id)"
                 ),
                 item,
             )
@@ -485,6 +509,7 @@ class Store:
                     action="job.create",
                     resource_type="job",
                     resource_id=item["id"],
+                    request_id=request_id,
                 )
         return self.get_job(item["id"])
 
@@ -494,6 +519,17 @@ class Store:
         item["spec"] = json.loads(item["spec"])
         item["result"] = json.loads(item["result"]) if item["result"] else None
         item["cancel_requested"] = bool(item["cancel_requested"])
+        code = item.get("error_code")
+        item["retry_policy"] = ERRORS[code].retry_policy if code in ERRORS else None
+        if item.get("error") and code not in ERRORS:
+            # 구버전 Job의 원문은 DB에서 보존하지만 API로 재노출하지 않는다.
+            item["error"] = "이전 실행의 오류 기록입니다. 운영 진단에서 확인하세요."
+        return item
+
+    @staticmethod
+    def _decode_attempt(item: dict) -> dict:
+        if item.get("error") and item.get("error_code") not in ERRORS:
+            item["error"] = "이전 실행의 상세 오류는 운영 기록에서 확인하세요."
         return item
 
     def get_job(self, job_id: str) -> dict | None:
@@ -507,7 +543,7 @@ class Store:
                 return None
             item = self._decode_job(dict(row))
             item["attempts"] = [
-                dict(a)
+                self._decode_attempt(dict(a))
                 for a in db.execute(
                     text("SELECT * FROM attempts WHERE job_id=:id ORDER BY number"), {"id": job_id}
                 ).mappings()
@@ -543,7 +579,7 @@ class Store:
                 "FROM attempts a WHERE a.job_id IN :ids) history WHERE rank=1"
             ).bindparams(bindparam("ids", expanding=True))
             summaries = db.execute(query, {"ids": [item["id"] for item in items]}).mappings()
-            latest = {row["job_id"]: dict(row) for row in summaries}
+            latest = {row["job_id"]: self._decode_attempt(dict(row)) for row in summaries}
         for item in items:
             self._decode_job(item)
             summary = latest.get(item["id"])
@@ -648,12 +684,19 @@ class Store:
         error: str | None = None,
         publish: dict | None = None,
         write_id: str | None = None,
+        error_code: str | None = None,
+        failure_stage: str | None = None,
+        failure_category: str | None = None,
+        exception_type: str | None = None,
     ) -> str:
+        if error_code is not None and error_code not in ERRORS:
+            raise ValueError("Unregistered error code")
         with self.connection() as db:
             row = (
                 db.execute(
                     text(
-                        "SELECT status,cancel_requested,owner_actor FROM jobs WHERE id=:id FOR UPDATE"
+                        "SELECT status,cancel_requested,owner_actor,request_id "
+                        "FROM jobs WHERE id=:id FOR UPDATE"
                     ),
                     {"id": job_id},
                 )
@@ -664,6 +707,8 @@ class Store:
                 raise RuntimeError("Job is not running")
             if row["cancel_requested"]:
                 status, result, publish = "Cancelled", None, None
+                error, error_code, failure_stage = None, None, None
+                failure_category, exception_type = None, None
             if status == "Succeeded" and publish:
                 item = dict(
                     id=publish.get("retention_id") or str(uuid4()),
@@ -691,6 +736,8 @@ class Store:
             db.execute(
                 text(
                     "UPDATE jobs SET status=:status,result=:result,error=:error,"
+                    "error_code=:error_code,failure_stage=:failure_stage,"
+                    "failure_category=:failure_category,exception_type=:exception_type,"
                     "updated_at=:at WHERE id=:id"
                 ),
                 dict(
@@ -698,15 +745,30 @@ class Store:
                     status=status,
                     result=json.dumps(result, default=str) if result is not None else None,
                     error=error,
+                    error_code=error_code,
+                    failure_stage=failure_stage,
+                    failure_category=failure_category,
+                    exception_type=exception_type,
                     at=now(),
                 ),
             )
             completed_attempt = db.execute(
                 text(
-                    "UPDATE attempts SET status=:status,finished_at=:at,error=:error "
+                    "UPDATE attempts SET status=:status,finished_at=:at,error=:error,"
+                    "error_code=:error_code,failure_stage=:failure_stage,"
+                    "failure_category=:failure_category,exception_type=:exception_type "
                     "WHERE job_id=:id AND status='Running' RETURNING id"
                 ),
-                dict(id=job_id, status=status, at=now(), error=error),
+                dict(
+                    id=job_id,
+                    status=status,
+                    at=now(),
+                    error=error,
+                    error_code=error_code,
+                    failure_stage=failure_stage,
+                    failure_category=failure_category,
+                    exception_type=exception_type,
+                ),
             ).scalar_one()
             reason = f"attempt={completed_attempt}"
             if status == "Succeeded" and publish:
@@ -718,6 +780,7 @@ class Store:
                     resource_type="dataset",
                     resource_id=item["id"],
                     reason=f"job={job_id};{reason}",
+                    request_id=row["request_id"],
                 )
             self._audit(
                 db,
@@ -732,6 +795,7 @@ class Store:
                     "Cancelled": "cancelled",
                 }.get(status, status.lower()),
                 reason=reason,
+                request_id=row["request_id"],
             )
         return status
 
@@ -741,7 +805,8 @@ class Store:
             rows = (
                 db.execute(
                     text(
-                        "SELECT id,cancel_requested,kind FROM jobs WHERE status='Running' FOR UPDATE"
+                        "SELECT id,cancel_requested,kind,request_id "
+                        "FROM jobs WHERE status='Running' FOR UPDATE"
                     )
                 )
                 .mappings()
@@ -760,8 +825,19 @@ class Store:
                     else None
                 )
                 db.execute(
-                    text("UPDATE jobs SET status=:s,error=:error,updated_at=:at WHERE id=:id"),
-                    {"s": status, "error": message, "at": now(), "id": row["id"]},
+                    text(
+                        "UPDATE jobs SET status=:s,error=:error,error_code=:code,"
+                        "failure_stage=:stage,failure_category='process_exit',"
+                        "exception_type=NULL,updated_at=:at WHERE id=:id"
+                    ),
+                    {
+                        "s": status,
+                        "error": message,
+                        "at": now(),
+                        "id": row["id"],
+                        "code": "SOS-ICEBERG-UNCERTAIN" if unsafe else None,
+                        "stage": "iceberg_commit" if unsafe else None,
+                    },
                 )
                 # 이전 Worker 소유권이 종료된 실행의 미확정 S3 게시 의도를 해소한다.
                 db.execute(
@@ -777,7 +853,9 @@ class Store:
                 interrupted = (
                     db.execute(
                         text(
-                            "UPDATE attempts SET status='Interrupted',finished_at=:at,error=:error "
+                            "UPDATE attempts SET status='Interrupted',finished_at=:at,error=:error,"
+                            "error_code='SOS-JOB-INTERRUPTED',failure_stage='worker_recovery',"
+                            "failure_category='process_exit',exception_type=NULL "
                             "WHERE job_id=:id AND status='Running' RETURNING id"
                         ),
                         {"at": now(), "error": "Worker stopped before completion", "id": row["id"]},
@@ -812,6 +890,7 @@ class Store:
                         "Failed": "interrupted",
                     }[status],
                     reason=f"kind={row['kind']};attempt={attempt_id}"[:200],
+                    request_id=row["request_id"],
                 )
 
     def acquire_worker(self) -> bool:

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { request } from "./api";
+import { request, formatError } from "./api";
 import type { IcebergReference, StorageInspection } from "./types";
 
 const statusLabel = {
@@ -28,7 +28,7 @@ export function StoragePanel() {
       const result = await request<StorageInspection>(url);
       setPages(previous => next ? [...previous, result] : [result]);
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : String(exc));
+      setError(formatError(exc));
     } finally {
       setLoading(false);
     }
@@ -40,7 +40,7 @@ export function StoragePanel() {
       const result = await request<IcebergReference[]>("/api/storage/iceberg-references");
       setSnapshots(result);
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : String(exc));
+      setError(formatError(exc));
     } finally {
       setLoading(false);
     }
@@ -52,7 +52,7 @@ export function StoragePanel() {
       await request(`/api/storage/iceberg-references/${datasetId}/retain`, { method: "POST" });
       await inspectSnapshots();
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : String(exc));
+      setError(formatError(exc));
     } finally { setLoading(false); }
   }
 

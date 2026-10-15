@@ -18,11 +18,15 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNTIME = ROOT / ".sos-dev"
+# 일반 인스턴스는 기존 경로를 유지하고 테스트 인스턴스만 별도 PID/로그를 사용한다.
+INSTANCE = os.getenv("SOS_DEV_INSTANCE", "sos-platform")
+if INSTANCE != "sos-platform" and not re.fullmatch(r"sos-e2e-[0-9a-f]{12}", INSTANCE):
+    raise SystemExit("Invalid isolated SOS instance identifier")
+RUNTIME = ROOT / ".sos-dev" if INSTANCE == "sos-platform" else ROOT / ".sos-dev" / "runs" / INSTANCE
 PIDFILE = RUNTIME / "processes.json"
 LOGDIR = RUNTIME / "logs"
 PROCESS_NAMES = ("api", "worker", "web")
-COMMANDS = ("up", "down", "restart", "status", "logs", "doctor", "check", "help")
+COMMANDS = ("up", "down", "restart", "status", "logs", "doctor", "check", "check-fast", "help")
 EXIT_CONFIG, EXIT_FAILED = 2, 3
 
 
@@ -99,7 +103,7 @@ def run(command: list[str], *, env=None, cwd=ROOT, timeout=90) -> subprocess.Com
 
 def compose(args: list[str], env: dict[str, str]):
     return run(
-        ["docker", "compose", "-f", "compose.yaml", "-p", "sos-platform", *args],
+        ["docker", "compose", "-f", "compose.yaml", "-p", INSTANCE, *args],
         env=env,
         timeout=180,
     )
@@ -294,16 +298,21 @@ def start_process(name: str, command: list[str], env: dict, cwd: Path = ROOT):
     if owned(state.get(name)):
         return
     LOGDIR.mkdir(parents=True, exist_ok=True)
-    with (LOGDIR / f"{name}.log").open("ab") as output:
-        proc = subprocess.Popen(
-            command,
-            cwd=cwd,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+    proc = subprocess.Popen(
+        [
+            "python3",
+            str(ROOT / "scripts" / "log_capture.py"),
+            str(LOGDIR / f"{name}.log"),
+            "--",
+            *command,
+        ],
+        cwd=cwd,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
     # SIGKILL 대상 검증에는 PID 외에 시작 시점까지 보관한다.
     for _ in range(20):
         birth = process_birth(proc.pid)
@@ -559,6 +568,25 @@ def doctor(config: dict, deep: bool = False):
     }
 
 
+def tail_log(path: Path, lines: int = 70, max_bytes: int = 65_536) -> list[str]:
+    """거대한 파일을 통째로 읽지 않고 제한된 끝부분에서 로그를 조회한다."""
+    with path.open("rb") as stream:
+        stream.seek(0, os.SEEK_END)
+        remaining = stream.tell()
+        chunks = []
+        total = 0
+        newlines = 0
+        while remaining > 0 and total < max_bytes and newlines <= lines:
+            length = min(4096, remaining, max_bytes - total)
+            remaining -= length
+            stream.seek(remaining)
+            chunk = stream.read(length)
+            chunks.append(chunk)
+            total += length
+            newlines += chunk.count(b"\n")
+    return b"".join(reversed(chunks)).decode("utf-8", errors="replace").splitlines()[-lines:]
+
+
 def logs(config: dict):
     """관리 서비스 로그를 조회하고 알려진 민감정보를 마스킹한다."""
     for name in PROCESS_NAMES:
@@ -567,7 +595,7 @@ def logs(config: dict):
         if not file.is_file():
             print("기록된 로그가 없습니다.")
             continue
-        for line in file.read_text(errors="replace").splitlines()[-70:]:
+        for line in tail_log(file):
             print(redact(line, config))
     if config["SOS_INFRA_MODE"] == "managed":
         print("\n--- infrastructure ---")
@@ -586,15 +614,20 @@ def check(config: dict):
             "통합 검증 전에 플랫폼이 Ready 상태여야 합니다.",
             "make up을 먼저 실행하세요.",
         )
-    env = dict(config)
     commands = [
         (["uv", "run", "--locked", "ruff", "check", "."], ROOT),
         (["uv", "run", "--locked", "ruff", "format", "--check", "."], ROOT),
         (["uv", "run", "--locked", "pytest", "-q"], ROOT),
         (["npm", "run", "build"], ROOT / "web"),
         (["npm", "run", "test"], ROOT / "web"),
-        (["npx", "playwright", "test"], ROOT / "web"),
+        (["uv", "run", "--locked", "python", "scripts/run_isolated_e2e.py"], ROOT),
     ]
+    return _run_checks(config, commands, operation="check")
+
+
+def _run_checks(config: dict, commands: list[tuple[list[str], Path]], *, operation: str) -> dict:
+    """검증 명령을 순서대로 실행하고 최초 실패를 보존한다."""
+    env = dict(config)
     for command, cwd in commands:
         print("검증:", " ".join(command), flush=True)
         result = subprocess.run(command, cwd=cwd, env=env, check=False)
@@ -602,7 +635,38 @@ def check(config: dict):
             raise StartupError(
                 "SOS-CHECK-002", "품질·통합 검증에 실패했습니다.", f"실패한 검사: {command[0]}"
             )
-    return {"operation": "check", "status": "passed", "services": [], "diagnostics": []}
+    return {"operation": operation, "status": "passed", "services": [], "diagnostics": []}
+
+
+def check_fast(config: dict):
+    """DB·S3·Web·Worker가 없어도 실행할 수 있는 빠른 검증."""
+    return _run_checks(
+        config,
+        [
+            (["uv", "run", "--locked", "ruff", "check", "."], ROOT),
+            (["uv", "run", "--locked", "ruff", "format", "--check", "."], ROOT),
+            (
+                [
+                    "uv",
+                    "run",
+                    "--locked",
+                    "pytest",
+                    "-q",
+                    "tests/test_processing.py",
+                    "tests/test_dev_cli.py",
+                    "tests/test_api_compat.py",
+                    "tests/test_errors.py",
+                    "tests/test_e2e_isolation.py",
+                    "tests/test_diagnostics.py",
+                    "tests/test_log_capture.py",
+                ],
+                ROOT,
+            ),
+            (["npm", "run", "test"], ROOT / "web"),
+            (["npm", "run", "build"], ROOT / "web"),
+        ],
+        operation="check-fast",
+    )
 
 
 def help_text():
@@ -615,6 +679,7 @@ def help_text():
         ("logs", "서비스 로그 확인"),
         ("doctor", "읽기 전용 환경 및 연결 진단"),
         ("check", "코드 품질·테스트 통합 검증 (make up 선행)"),
+        ("check-fast", "독립 인프라 없이 Ruff·단위 테스트·웹 타입/빌드"),
         ("help", "사용 가능한 명령 표시"),
     ):
         print(f"  make {name:<10} {desc}")
@@ -666,6 +731,8 @@ def main():
             return 0
         elif args.command == "check":
             result = check(config)
+        elif args.command == "check-fast":
+            result = check_fast(config)
         else:
             raise AssertionError(args.command)
         render(result, args.format)

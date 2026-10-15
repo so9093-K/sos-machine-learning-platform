@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { request } from "./api";
+import { request, formatError } from "./api";
 import type { Dataset, Job, JobSummary } from "./types";
 
 type Props = { jobs: JobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean; nextCursor: string | null;
@@ -21,7 +21,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, onRefre
     } catch (error) {
       setDetailErrors(current => ({
         ...current,
-        [jobId]: error instanceof Error ? error.message : String(error),
+        [jobId]: formatError(error),
       }));
     } finally {
       pending.current.delete(jobId);
@@ -46,7 +46,14 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, onRefre
           <span>입력 데이터 · {datasets.find(d => d.id === job.dataset_id)?.name ?? job.dataset_id}</span>
           <span>등록 · {new Date(job.created_at).toLocaleString("ko-KR")}</span>
         </div>
-        {job.error && <p className="job-error" role="alert">{job.error}</p>}
+        {job.error && <div className="job-error" role="alert">
+          <p>{job.error}</p>
+          {job.error_code && <small>오류 코드 · {job.error_code}</small>}
+          {job.failure_stage && <small> · 단계 · {job.failure_stage}</small>}
+          {job.retry_policy === "manual_verification_required" &&
+            <p>커밋·Snapshot 상태를 확인하기 전에는 동일 작업을 다시 실행하지 마세요.</p>}
+          {job.request_id && <p className="muted">요청 ID · {job.request_id}</p>}
+        </div>}
         {typeof job.result?.row_count === "number" &&
           <p className="muted">분석한 행 · {job.result.row_count.toLocaleString("ko-KR")}</p>}
         {job.result && <details><summary>실행 결과 상세</summary>
@@ -58,7 +65,10 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, onRefre
           {!detailById[job.id] && !detailErrors[job.id] && <p role="status">상세 이력을 확인하고 있습니다.</p>}
           {detailById[job.id]?.attempts.map(attempt => <p key={attempt.id} className="muted">
             #{attempt.number} {attempt.status} · {attempt.started_at}
-            {attempt.error ? ` · ${attempt.error}` : ""}</p>)}
+            {attempt.error ? ` · ${attempt.error}` : ""}
+            {attempt.error_code ? ` · ${attempt.error_code}` : ""}
+            {attempt.failure_stage ? ` · 단계: ${attempt.failure_stage}` : ""}
+            <small> · 실행 ID: {attempt.id}</small></p>)}
         </details>
         {typeof job.result?.dataset_id === "string" &&
           <button className="secondary" onClick={() => onOpen(job.result!.dataset_id as string)}>

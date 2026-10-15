@@ -10,5 +10,7 @@ export default defineConfig({
     browserName: "chromium",
     trace: "retain-on-failure",
   },
-  reporter: "list",
+  reporter: process.env.CI
+    ? [["list"], ["junit", { outputFile: process.env.SOS_JUNIT_FILE || "reports/default.xml" }]]
+    : "list",
 });

@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
 
+from .api_errors import register_error_handlers
 from .config import StoragePolicy
 from .datasets import (
     MAX_UPLOAD,
@@ -23,8 +24,10 @@ from .datasets import (
     save_upload,
     scan_dataset,
 )
+from .errors import ERRORS
 from .examples import list_examples, use_example
 from .object_store import ObjectStore
+from .observability import emit
 from .processing import bounded_feature_preview, profile, safe_preview
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
@@ -39,6 +42,7 @@ from .schemas import (
     JobOut,
     JobPageOut,
     PreviewOut,
+    ProblemOut,
     ProfileOut,
     SnapshotOut,
     StorageInspectionOut,
@@ -75,13 +79,22 @@ def create_app(home: Path | None = None) -> FastAPI:
         docs_url=None,
         redoc_url=None,
         lifespan=lifespan,
+        responses={"default": {"model": ProblemOut, "description": "Structured API error"}},
     )
     app.state.identity = identity
+    register_error_handlers(app)
 
     @app.middleware("http")
     async def security_audit(request: Request, call_next):
         request.state.request_id = str(uuid4())
         response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        emit(
+            "api.request.complete",
+            service="sos-api",
+            request_id=request.state.request_id,
+            status=str(response.status_code),
+        )
         if response.status_code in (401, 403):
             actor = getattr(request.state, "actor", None)
             try:
@@ -98,7 +111,13 @@ def create_app(home: Path | None = None) -> FastAPI:
                 )
             except Exception:
                 # 접근 거부는 유지하되 감사 저장 장애를 조용히 숨기지는 않는다.
-                logging.exception("Denied request audit could not be recorded")
+                emit(
+                    "audit.denial.record_failed",
+                    service="sos-api",
+                    level=logging.ERROR,
+                    request_id=request.state.request_id,
+                    error_code="SOS-API-INTERNAL",
+                )
         return response
 
     app.add_middleware(
@@ -109,11 +128,8 @@ def create_app(home: Path | None = None) -> FastAPI:
         ],
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type", "Authorization"],
+        expose_headers=["X-Request-ID"],
     )
-
-    @app.exception_handler(ValueError)
-    async def bad_input(_request, exc: ValueError):
-        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     def check_ownership(actor: Actor, owner: str | None, kind: str, identifier: str) -> None:
         try:
@@ -132,7 +148,12 @@ def create_app(home: Path | None = None) -> FastAPI:
                     reason="ownership",
                 )
             except Exception:
-                logging.exception("Resource access denial audit could not be recorded")
+                emit(
+                    "audit.resource_denial.record_failed",
+                    service="sos-api",
+                    level=logging.ERROR,
+                    error_code="SOS-API-INTERNAL",
+                )
             raise
 
     def existing(dataset_id: str, actor: Actor) -> dict:
@@ -194,8 +215,41 @@ def create_app(home: Path | None = None) -> FastAPI:
         }
 
     @app.get("/api/audit")
-    def audit_events(limit: int = Query(default=50, ge=1, le=100), actor: Actor = AUDIT_DEP):
-        return store.audit_events(limit=limit)
+    def audit_events(
+        limit: int = Query(default=50, ge=1, le=100),
+        request_id: str | None = Query(default=None, min_length=36, max_length=36),
+        job_id: str | None = Query(default=None, min_length=36, max_length=36),
+        actor: Actor = AUDIT_DEP,
+    ):
+        """운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다."""
+        return store.audit_events(limit=limit, request_id=request_id, resource_id=job_id)
+
+    @app.get("/api/diagnostics/jobs/{job_id}")
+    def job_diagnostics(job_id: str, actor: Actor = AUDIT_DEP):
+        """권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다."""
+        item = store.get_job(job_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return {
+            "job_id": item["id"],
+            "request_id": item.get("request_id"),
+            "status": item["status"],
+            "error_code": item.get("error_code"),
+            "failure_stage": item.get("failure_stage"),
+            "failure_category": item.get("failure_category"),
+            "exception_type": item.get("exception_type"),
+            "attempts": [
+                {
+                    "id": attempt["id"],
+                    "status": attempt["status"],
+                    "error_code": attempt.get("error_code"),
+                    "failure_stage": attempt.get("failure_stage"),
+                    "failure_category": attempt.get("failure_category"),
+                    "exception_type": attempt.get("exception_type"),
+                }
+                for attempt in item["attempts"]
+            ],
+        }
 
     @app.get("/api/storage/policy", response_model=StoragePolicyOut)
     def storage_policy(actor: Actor = INSPECT_DEP):
@@ -279,7 +333,7 @@ def create_app(home: Path | None = None) -> FastAPI:
                 status_code=503,
                 detail={
                     "code": "SOS-STORAGE-001",
-                    "message": "데이터 저장소를 사용할 수 없습니다. 잠시 후 재시도하세요.",
+                    "message": ERRORS["SOS-STORAGE-001"].message,
                 },
             ) from exc
         finally:
@@ -302,12 +356,13 @@ def create_app(home: Path | None = None) -> FastAPI:
         return profile(scan_dataset(store, existing(dataset_id, actor)), sample=1000)
 
     @app.post("/api/iceberg/import", status_code=202, response_model=JobOut)
-    def iceberg_import(body: IcebergImport, actor: Actor = CREATE_JOB_DEP):
+    def iceberg_import(body: IcebergImport, request: Request, actor: Actor = CREATE_JOB_DEP):
         existing(body.dataset_id, actor)
         return store.create_job(
             kind="iceberg_import",
             dataset_id=body.dataset_id,
             spec=body.model_dump(),
+            request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,
         )
@@ -364,12 +419,13 @@ def create_app(home: Path | None = None) -> FastAPI:
         return {"items": rows, "next_cursor": next_cursor}
 
     @app.post("/api/jobs", status_code=202, response_model=JobOut)
-    def create_job(body: WorkRequest, actor: Actor = CREATE_JOB_DEP):
+    def create_job(body: WorkRequest, request: Request, actor: Actor = CREATE_JOB_DEP):
         existing(body.dataset_id, actor)
         return store.create_job(
             kind=body.kind,
             dataset_id=body.dataset_id,
             spec=body.model_dump(exclude_none=True),
+            request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,
         )

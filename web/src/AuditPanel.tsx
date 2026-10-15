@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { request } from "./api";
+import { request, formatError } from "./api";
 
 type AuditEvent = {
   id: string;
@@ -18,14 +18,19 @@ export function AuditPanel() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [requestId, setRequestId] = useState("");
+  const [jobId, setJobId] = useState("");
 
   async function reload() {
     setLoading(true);
     setError("");
     try {
-      setEvents(await request<AuditEvent[]>("/api/audit?limit=50"));
+      const params = new URLSearchParams({ limit: "50" });
+      if (requestId.trim()) params.set("request_id", requestId.trim());
+      if (jobId.trim()) params.set("job_id", jobId.trim());
+      setEvents(await request<AuditEvent[]>(`/api/audit?${params.toString()}`));
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : String(exc));
+      setError(formatError(exc));
     } finally {
       setLoading(false);
     }
@@ -39,6 +44,21 @@ export function AuditPanel() {
       </div>
       <button className="secondary" disabled={loading} onClick={() => void reload()}>
         기록 새로고침
+      </button>
+    </div>
+    <div className="form-grid">
+      <label>Request ID
+        <input aria-label="감사 Request ID" value={requestId}
+          onChange={event => setRequestId(event.target.value)}
+          placeholder="HTTP 응답의 요청 ID" />
+      </label>
+      <label>Job ID
+        <input aria-label="감사 Job ID" value={jobId}
+          onChange={event => setJobId(event.target.value)}
+          placeholder="Job의 ID" />
+      </label>
+      <button className="secondary" disabled={loading} onClick={() => void reload()}>
+        감사 기록 검색
       </button>
     </div>
     {error && <p role="alert">{error}</p>}

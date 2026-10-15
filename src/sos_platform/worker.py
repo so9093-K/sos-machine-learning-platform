@@ -14,7 +14,10 @@ import time
 from pathlib import Path
 
 from .datasets import import_to_iceberg, scan_dataset
+from .diagnostics import classify_failure
+from .errors import ERRORS
 from .object_store import ObjectStore
+from .observability import emit
 from .processing import profile, transform
 from .schemas import Transform
 from .store import Store
@@ -22,6 +25,12 @@ from .store import Store
 
 def _perform(home: Path, database_url: str, job: dict, completed: Path, pending: Path) -> None:
     """계산은 자식 프로세스에서 수행하고 결과 확정은 부모가 담당한다."""
+    stage = "read_input"
+
+    def mark_commit_started() -> None:
+        nonlocal stage
+        stage = "iceberg_commit"
+
     try:
         store = Store(home, database_url=database_url)
         dataset = store.get_dataset(job["dataset_id"])
@@ -29,23 +38,41 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
             raise ValueError("Input dataset is missing")
         lf = scan_dataset(store, dataset)
         if job["kind"] == "profile":
+            stage = "processing"
             result = profile(lf, sample=None)
         elif job["kind"] == "transform":
+            stage = "processing"
             spec = Transform.model_validate(job["spec"]["transform"])
             lf = transform(lf, spec)
             lf.sink_parquet(pending)
             result = {"input_dataset_id": dataset["id"]}
         elif job["kind"] == "iceberg_import":
+            stage = "iceberg_prepare"
             result = {
                 "iceberg_publish": import_to_iceberg(
-                    store, dataset, job["spec"]["table_name"], job["attempts"][-1]["id"]
+                    store,
+                    dataset,
+                    job["spec"]["table_name"],
+                    job["attempts"][-1]["id"],
+                    on_commit_start=mark_commit_started,
                 )
             }
         else:
             raise ValueError("Unknown job type")
         outcome = {"result": result}
     except Exception as exc:
-        outcome = {"error": f"{type(exc).__name__}: {exc}"[:500]}
+        code = (
+            "SOS-ICEBERG-UNCERTAIN"
+            if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
+            else "SOS-JOB-FAILED"
+        )
+        category, exception_type = classify_failure(exc)
+        outcome = {
+            "error_code": code,
+            "failure_stage": stage,
+            "failure_category": category,
+            "exception_type": exception_type,
+        }
     completed.write_text(json.dumps(outcome, default=str), encoding="utf-8")
 
 
@@ -65,6 +92,13 @@ def run_once(store: Store) -> bool:
     job_id = job["id"]
     attempt_id = job["attempts"][-1]["id"]
     write_id: str | None = None
+    emit(
+        "worker.attempt.started",
+        service="sos-worker",
+        job_id=job_id,
+        attempt_id=attempt_id,
+        kind=job["kind"],
+    )
     output = store.home / "results" / f"{job_id}.parquet"
     pending = store.home / "results" / f"{job_id}.pending.parquet"
     completed = store.home / "results" / f"{job_id}.completed.json"
@@ -94,8 +128,28 @@ def run_once(store: Store) -> bool:
         if not completed.exists():
             raise RuntimeError(f"Execution process exited ({process.exitcode}) without result")
         outcome = json.loads(completed.read_text(encoding="utf-8"))
-        if "error" in outcome:
-            store.finish(job_id, "Failed", error=outcome["error"])
+        if "error_code" in outcome:
+            code = outcome["error_code"]
+            emit(
+                "worker.attempt.failed",
+                service="sos-worker",
+                level=logging.ERROR,
+                job_id=job_id,
+                attempt_id=attempt_id,
+                error_code=code,
+                stage=outcome.get("failure_stage"),
+                exception_type=outcome.get("exception_type"),
+                failure_category=outcome.get("failure_category"),
+            )
+            store.finish(
+                job_id,
+                "Failed",
+                error=ERRORS[code].message,
+                error_code=code,
+                failure_stage=outcome.get("failure_stage"),
+                failure_category=outcome.get("failure_category"),
+                exception_type=outcome.get("exception_type"),
+            )
             return True
 
         publish = outcome["result"].get("iceberg_publish")
@@ -119,14 +173,48 @@ def run_once(store: Store) -> bool:
         )
         if final_status != "Succeeded" and write_id:
             store.fail_object_write(write_id, "Job cancelled during publication")
+        emit(
+            "worker.attempt.finished",
+            service="sos-worker",
+            job_id=job_id,
+            attempt_id=attempt_id,
+            status=final_status,
+        )
     except Exception as exc:
         _stop(process)
         if write_id:
             try:
-                store.fail_object_write(write_id, str(exc))
+                store.fail_object_write(write_id, ERRORS["SOS-JOB-FAILED"].message)
             except Exception:
-                logging.exception("Could not record failed object write: %s", write_id)
-        store.finish(job_id, "Failed", error=f"{type(exc).__name__}: {exc}"[:500])
+                emit(
+                    "worker.write_intent.record_failed",
+                    service="sos-worker",
+                    level=logging.ERROR,
+                    job_id=job_id,
+                    attempt_id=attempt_id,
+                )
+        code = "SOS-ICEBERG-UNCERTAIN" if job["kind"] == "iceberg_import" else "SOS-JOB-FAILED"
+        category, exception_type = classify_failure(exc)
+        emit(
+            "worker.attempt.failed",
+            service="sos-worker",
+            level=logging.ERROR,
+            job_id=job_id,
+            attempt_id=attempt_id,
+            error_code=code,
+            stage="publication",
+            exception_type=exception_type,
+            failure_category=category,
+        )
+        store.finish(
+            job_id,
+            "Failed",
+            error=ERRORS[code].message,
+            error_code=code,
+            failure_stage="publication",
+            failure_category=category,
+            exception_type=exception_type,
+        )
     finally:
         _stop(process)
         # 게시 도중 실패해도 로컬 실행 중간 파일은 남기지 않는다.

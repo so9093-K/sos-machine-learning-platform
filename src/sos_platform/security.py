@@ -94,7 +94,11 @@ class IdentitySettings:
             )
         token = authorization[7:]
         if len(token) < 32 or len(token) > 4096:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         fingerprint = hashlib.sha256(token.encode()).hexdigest()
         for expected, actor in self.token_subjects.items():
             if secrets.compare_digest(fingerprint, expected):

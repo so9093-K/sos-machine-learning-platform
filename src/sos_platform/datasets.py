@@ -95,7 +95,14 @@ def iceberg_catalog(store: Store):
     )
 
 
-def import_to_iceberg(store: Store, dataset: dict, table_name: str, attempt_id: str) -> dict:
+def import_to_iceberg(
+    store: Store,
+    dataset: dict,
+    table_name: str,
+    attempt_id: str,
+    *,
+    on_commit_start=None,
+) -> dict:
     """비용이 큰 데이터 변환은 API가 아닌 Worker 프로세스에서 실행한다."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
         raise ValueError("Invalid Iceberg table name")
@@ -115,6 +122,8 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str, attempt_id: 
             raise
         table = catalog.create_table(ident, schema=arrow.schema)
     # 동일 테이블에 외부 작성자가 개입하더라도 최신 Snapshot을 오인하지 않는다.
+    if on_commit_start is not None:
+        on_commit_start()
     table.append(arrow, snapshot_properties={"sos.attempt-id": attempt_id})
     snapshots = [
         snapshot

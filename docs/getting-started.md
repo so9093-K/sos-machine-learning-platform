@@ -11,7 +11,8 @@ make           # 사용 가능한 명령 보기
 make up        # 환경 확인 · 스키마 확인/초기화 · 서비스 시작 · Readiness 확인
 make status    # 서비스별 상태
 make doctor    # 읽기 전용 환경 진단
-make check     # Ruff · pytest · UI 빌드/테스트 · Playwright
+make check     # Ruff · pytest · UI 빌드/테스트 · 격리된 별도 Playwright (make up 필요)
+make check-fast # 인프라 없이 Ruff · Python 순수 로직·CLI · UI 테스트·빌드
 make restart   # DB 재초기화 없이 애플리케이션 재시작
 make logs      # API · Worker · Web 로그
 make down      # 관리 대상만 종료하고 데이터 보존
@@ -23,7 +24,7 @@ make down      # 관리 대상만 종료하고 데이터 보존
 - PostgreSQL 호스트 포트: `9603`
 - S3 호환 스토리지 호스트 포트: `9605`
 
-`python3 scripts/dev.py status --format json`으로 JSON 진단을 받을 수 있다. `python3 scripts/dev.py doctor --deep`은 API 및 의존성 준비 상태도 확인한다. `make check`는 실행 중인 서비스가 Ready인 상태에서 사용한다.
+`python3 scripts/dev.py status --format json`으로 JSON 진단을 받을 수 있다. `python3 scripts/dev.py doctor --deep`은 API 및 의존성 준비 상태도 확인한다. `make check`는 실행 중인 서비스가 Ready인 상태에서 사용한다. 브라우저 쓰기 테스트는 개발 서비스가 아닌 UUID 식별자를 가진 별도 PostgreSQL/S3 Compose 프로젝트·API·Worker·Web에서 실행하며, 검사로 만든 테스트 프로젝트의 볼륨만 종료 시 정리한다. 일반 개발 프로젝트의 데이터·볼륨·Snapshot Tag는 수정하거나 삭제하지 않는다.
 
 ## 구성과 안전
 

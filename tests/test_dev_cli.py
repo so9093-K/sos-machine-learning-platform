@@ -327,5 +327,70 @@ def test_make_check_validates_full_contract_once(monkeypatch, config):
         (["uv", "run", "--locked", "pytest", "-q"], dev.ROOT),
         (["npm", "run", "build"], dev.ROOT / "web"),
         (["npm", "run", "test"], dev.ROOT / "web"),
-        (["npx", "playwright", "test"], dev.ROOT / "web"),
+        (["uv", "run", "--locked", "python", "scripts/run_isolated_e2e.py"], dev.ROOT),
     ]
+
+
+def test_make_check_fast_is_infrastructure_independent(monkeypatch, config):
+    """빠른 검사는 Ready 조회 없이 순수 검사만 실행하고 전체 검사와 명령을 구분한다."""
+
+    def refuse_ready(_config):
+        raise AssertionError("Fast checks must not connect to running services")
+
+    commands = []
+
+    def fake_run(command, *, cwd, env, check):
+        assert check is False
+        commands.append((command, cwd))
+        return type("Result", (), {"returncode": 0})()
+
+    monkeypatch.setattr(dev, "status", refuse_ready)
+    monkeypatch.setattr(dev.subprocess, "run", fake_run)
+    assert dev.check_fast(config)["status"] == "passed"
+    assert commands == [
+        (["uv", "run", "--locked", "ruff", "check", "."], dev.ROOT),
+        (["uv", "run", "--locked", "ruff", "format", "--check", "."], dev.ROOT),
+        (
+            [
+                "uv",
+                "run",
+                "--locked",
+                "pytest",
+                "-q",
+                "tests/test_processing.py",
+                "tests/test_dev_cli.py",
+                "tests/test_api_compat.py",
+                "tests/test_errors.py",
+                "tests/test_e2e_isolation.py",
+                "tests/test_diagnostics.py",
+                "tests/test_log_capture.py",
+            ],
+            dev.ROOT,
+        ),
+        (["npm", "run", "test"], dev.ROOT / "web"),
+        (["npm", "run", "build"], dev.ROOT / "web"),
+    ]
+
+
+def test_log_relay_preserves_service_working_directory(monkeypatch, tmp_path):
+    """npm은 web/에서 실행하며 wrapper만 절대 스크립트 경로로 호출한다."""
+    arguments = []
+
+    class FakeProcess:
+        pid = 19993
+
+    def fake_popen(command, **kwargs):
+        arguments.append((command, kwargs))
+        return FakeProcess()
+
+    monkeypatch.setattr(dev, "LOGDIR", tmp_path / "logs")
+    monkeypatch.setattr(dev, "processes", lambda: {})
+    monkeypatch.setattr(dev, "owned", lambda _record: False)
+    monkeypatch.setattr(dev, "process_birth", lambda _pid: "fixed-birth")
+    monkeypatch.setattr(dev, "persist", lambda _state: None)
+    monkeypatch.setattr(dev.subprocess, "Popen", fake_popen)
+    dev.start_process("web", ["npm", "run", "dev"], {}, cwd=dev.ROOT / "web")
+    command, settings = arguments[0]
+    assert settings["cwd"] == dev.ROOT / "web"
+    assert command[1] == str(dev.ROOT / "scripts" / "log_capture.py")
+    assert command[-3:] == ["npm", "run", "dev"]
