@@ -91,6 +91,38 @@ def schema_issues(
             if before - after if kind == "request" else after - before:
                 issues.append(f"{kind} enum changed: {path}")
 
+    # JSON Schema 범위가 바뀌면 동일 type이라도 기존 소비자의 유효한 값이 깨질 수 있다.
+    # 요청: 예전 허용 집합이 줄면 Breaking; 응답: 새 출력 집합이 늘면 Breaking.
+    for lower in ("minimum", "minLength", "minItems", "minProperties"):
+        left, right = old.get(lower), new.get(lower)
+        if left != right and (
+            (kind == "request" and right is not None and (left is None or right > left))
+            or (kind == "response" and left is not None and (right is None or right < left))
+        ):
+            issues.append(f"{kind} lower bound changed: {path} ({lower})")
+    for upper in ("maximum", "maxLength", "maxItems", "maxProperties"):
+        left, right = old.get(upper), new.get(upper)
+        if left != right and (
+            (kind == "request" and right is not None and (left is None or right < left))
+            or (kind == "response" and left is not None and (right is None or right > left))
+        ):
+            issues.append(f"{kind} upper bound changed: {path} ({upper})")
+    # 정규식·배수 제약은 포함 관계 판정이 복잡하므로 변경을 보수적으로 검사한다.
+    for constraint in ("pattern", "multipleOf", "format", "uniqueItems"):
+        if old.get(constraint) != new.get(constraint):
+            issues.append(f"{kind} constraint changed: {path} ({constraint})")
+    for lower in ("exclusiveMinimum",):
+        if old.get(lower) != new.get(lower):
+            issues.append(f"{kind} exclusive boundary changed: {path} ({lower})")
+    for upper in ("exclusiveMaximum",):
+        if old.get(upper) != new.get(upper):
+            issues.append(f"{kind} exclusive boundary changed: {path} ({upper})")
+    if old.get("nullable", False) != new.get("nullable", False):
+        if (kind == "request" and old.get("nullable", False)) or (
+            kind == "response" and new.get("nullable", False)
+        ):
+            issues.append(f"{kind} nullable changed: {path}")
+
     before_fields = old.get("properties", {})
     after_fields = new.get("properties", {})
     old_required = set(old.get("required", []))

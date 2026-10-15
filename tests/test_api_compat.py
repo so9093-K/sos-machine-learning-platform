@@ -163,3 +163,47 @@ def test_success_status_removal_is_breaking():
     new = contract()
     new["paths"]["/api/data"]["post"]["responses"] = {"204": {}}
     assert any("success status removed" in x for x in compat.breaking_changes(old, new))
+
+def test_numeric_and_string_constraints_detect_directional_breaking_changes():
+    # 요청 제한 축소는 Breaking, 응답 보장 강화는 안전하다.
+    cases = (
+        ("maximum", 100, 10, "request", True),
+        ("maximum", 10, 100, "request", False),
+        ("minimum", 1, 10, "request", True),
+        ("minimum", 10, 1, "request", False),
+        ("minLength", 1, 4, "request", True),
+        ("maxLength", 20, 5, "request", True),
+        ("minItems", 1, 4, "request", True),
+        ("maxItems", 10, 2, "request", True),
+        ("maximum", 100, 10, "response", False),
+        ("maximum", 10, 100, "response", True),
+        ("minimum", 1, 10, "response", False),
+        ("minimum", 10, 1, "response", True),
+        ("maxLength", 10, 20, "response", True),
+        ("minItems", 3, 1, "response", True),
+    )
+    for key, before, after, direction, expected in cases:
+        a = {"type": "integer", key: before}
+        b = {"type": "integer", key: after}
+        problems = compat.schema_issues(a, b, direction, "root", {}, {})
+        assert bool(problems) is expected, (key, before, after, direction, problems)
+
+
+def test_changed_format_pattern_and_exclusive_boundary_fail_conservatively():
+    for before, after in (
+        ({"type": "string", "format": "date"}, {"type": "string", "format": "date-time"}),
+        ({"type": "string", "pattern": "^[a-z]+$"}, {"type": "string", "pattern": "^[a-z]{3}$"}),
+        ({"type": "number", "exclusiveMinimum": 0}, {"type": "number", "exclusiveMinimum": 2}),
+    ):
+        assert compat.schema_issues(before, after, "request", "root", {}, {})
+
+
+def test_realistic_query_maximum_narrowing_is_breaking():
+    before, after = contract(), contract()
+    before["paths"]["/api/data"]["post"]["parameters"] = [
+        {"in": "query", "name": "limit", "schema": {"type": "integer", "maximum": 100}}
+    ]
+    after["paths"]["/api/data"]["post"]["parameters"] = [
+        {"in": "query", "name": "limit", "schema": {"type": "integer", "maximum": 10}}
+    ]
+    assert any("upper bound" in x for x in compat.breaking_changes(before, after))

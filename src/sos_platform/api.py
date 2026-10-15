@@ -215,8 +215,14 @@ def create_app(home: Path | None = None) -> FastAPI:
         }
 
     @app.get("/api/audit")
-    def audit_events(limit: int = Query(default=50, ge=1, le=100), actor: Actor = AUDIT_DEP):
-        return store.audit_events(limit=limit)
+    def audit_events(
+        limit: int = Query(default=50, ge=1, le=100),
+        request_id: str | None = Query(default=None, min_length=36, max_length=36),
+        job_id: str | None = Query(default=None, min_length=36, max_length=36),
+        actor: Actor = AUDIT_DEP,
+    ):
+        """운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다."""
+        return store.audit_events(limit=limit, request_id=request_id, resource_id=job_id)
 
     @app.get("/api/storage/policy", response_model=StoragePolicyOut)
     def storage_policy(actor: Actor = INSPECT_DEP):

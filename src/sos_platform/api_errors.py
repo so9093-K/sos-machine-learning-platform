@@ -3,7 +3,8 @@
 import logging
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
+from starlette.exceptions import HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -49,6 +50,7 @@ def register_error_handlers(app: FastAPI) -> None:
             code = {
                 403: "SOS-AUTH-DENIED",
                 404: "SOS-API-NOT-FOUND",
+                405: "SOS-API-METHOD-NOT-ALLOWED",
                 409: "SOS-API-CONFLICT",
                 503: "SOS-STORAGE-INSPECTION",
             }.get(exc.status_code, "SOS-API-VALIDATION")

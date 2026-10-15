@@ -63,3 +63,48 @@ def test_denied_request_keeps_auth_header_and_request_id(workspace, monkeypatch)
     assert denied.headers["WWW-Authenticate"] == "Bearer"
     assert denied.json()["request_id"] == denied.headers["X-Request-ID"]
     assert denied.json()["code"] == "SOS-AUTH-REQUIRED"
+
+def test_unknown_http_routes_and_methods_use_same_problem_contract(workspace):
+    client, _ = workspace
+    for response in (
+        client.get("/api/does-not-exist"),
+        client.put("/api/datasets"),
+    ):
+        assert response.status_code in (404, 405)
+        assert response.json()["code"] == (
+            "SOS-API-NOT-FOUND" if response.status_code == 404 else "SOS-API-METHOD-NOT-ALLOWED"
+        )
+        assert response.json()["request_id"] == response.headers["X-Request-ID"]
+        if response.status_code == 405:
+            assert response.headers["allow"]
+
+
+def test_audit_filter_finds_older_request_and_preserves_permissions(workspace, monkeypatch):
+    client, store = workspace
+    store.record_audit(
+        actor_id="operator", actor_type="human", action="audit.find-me",
+        resource_type="job", resource_id="abcdefab-cdef-abcd-efab-cdefabcdefab",
+        request_id="12345678-1234-1234-1234-123456789abc",
+    )
+    for number in range(60):
+        store.record_audit(
+            actor_id="operator", actor_type="human", action="audit.noise",
+            resource_type="job", resource_id=str(number),
+        )
+    found = client.get("/api/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"})
+    assert found.status_code == 200
+    assert len(found.json()) == 1 and found.json()[0]["action"] == "audit.find-me"
+    by_job = client.get(
+        "/api/audit", params={"job_id": "abcdefab-cdef-abcd-efab-cdefabcdefab"}
+    )
+    assert by_job.status_code == 200 and len(by_job.json()) == 1
+    monkeypatch.setenv("SOS_AUTH_MODE", "token")
+    monkeypatch.setenv(
+        "SOS_AUTH_TOKEN_HASHES",
+        '{"' + ("a" * 64) + '":{"actor_id":"viewer","kind":"human","roles":["viewer"]}}',
+    )
+    with TestClient(create_app(store.home)) as protected:
+        denied = protected.get(
+            "/api/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"}
+        )
+    assert denied.status_code == 401

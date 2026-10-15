@@ -19,6 +19,7 @@ def spec(code: str, title: str, message: str, category: str, retry: str = "never
 DEFINITIONS = (
     spec("SOS-API-VALIDATION", "입력 검증 실패", "입력값을 확인하세요.", "validation"),
     spec("SOS-API-NOT-FOUND", "리소스 부재", "요청한 리소스를 찾을 수 없습니다.", "not_found"),
+    spec("SOS-API-METHOD-NOT-ALLOWED", "메서드 미지원", "해당 HTTP 메서드를 지원하지 않습니다.", "validation"),
     spec("SOS-API-CONFLICT", "상태 충돌", "현재 상태에서는 처리할 수 없습니다.", "conflict"),
     spec("SOS-API-INTERNAL", "요청 실패", "요청 처리 중 문제가 발생했습니다.", "internal"),
     spec("SOS-AUTH-REQUIRED", "인증 필요", "인증이 필요합니다.", "authentication"),
