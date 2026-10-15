@@ -7,6 +7,7 @@ import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
+import { DiscoveryPanel } from "./DiscoveryPanel";
 import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, Example, UploadPolicy } from "./types";
 import "./style.css";
 
@@ -459,6 +460,7 @@ function Workspace({ actor }: { actor: Identity }) {
         </section>}
         {tab === "profile" && <section className="panel" role="tabpanel"
           id="sos-panel-profile" aria-labelledby="sos-tab-profile" tabIndex={0}>
+          <DiscoveryPanel key={selected} datasetId={selected} />
           <div className="panel-head"><div><h3>탐색적 데이터 분석</h3>
             <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
           </div>{canWrite && <button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button>}</div>

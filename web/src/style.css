@@ -28,3 +28,10 @@
 .upload-status strong{overflow-wrap:anywhere}
 .upload-status span{color:#c1d7ed}
 .upload-status progress{width:100%;height:9px;accent-color:#70b5ff}
+
+.discovery-panel{display:grid;gap:12px;padding:16px;margin-bottom:22px;border:1px solid #344e67;border-radius:10px;background:#12253a}
+.discovery-panel h4{margin:5px 0}
+.discovery-panel .stat small{display:block;color:#9ab1c8;font-size:10px}
+.column-search-results{max-height:230px;overflow:auto;display:grid;gap:2px}
+.column-search-results [role=listitem]{display:flex;justify-content:space-between;gap:12px;padding:7px;border-bottom:1px solid #284058;font-size:12px}
+.column-search-results small{color:#aac5dd}
