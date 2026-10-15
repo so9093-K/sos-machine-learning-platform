@@ -51,15 +51,22 @@ def classify_object(item: dict, metadata: dict, policy: StoragePolicy) -> tuple[
         return "unknown", "소유권 기록이 없어 수동 확인 전까지 보호합니다."
     if any(write["state"] == "Published" for write in writes):
         return "unknown", "게시된 기록과 현재 Dataset 참조가 불일치합니다."
-    if any(
-        write["state"] == "Pending"
-        and (
+    pending = [write for write in writes if write["state"] == "Pending"]
+    if pending:
+        if any(
+            write["owner_kind"] == "attempt"
+            and metadata["attempts"].get(write["owner_id"]) == "Running"
+            for write in pending
+        ):
+            return "protected", "실행 중인 Attempt의 게시 의도가 있어 보호합니다."
+        if any(
             write["owner_kind"] == "upload"
-            or metadata["attempts"].get(write["owner_id"]) == "Running"
-        )
-        for write in writes
-    ):
-        return "protected", "게시 또는 실행 중인 소유자가 있을 수 있습니다."
+            and datetime.fromisoformat(write["updated_at"])
+            > datetime.now(UTC) - timedelta(days=policy.grace_days)
+            for write in pending
+        ):
+            return "protected", "완료되지 않은 최근 업로드가 있어 보호합니다."
+        return "unknown", "완료 여부를 확인할 수 없는 오래된 게시 의도입니다. 삭제하지 않습니다."
     if any(write["state"] != "Failed" for write in writes):
         return "unknown", "종료 여부가 확실하지 않은 게시 시도가 존재합니다."
     latest = max(datetime.fromisoformat(write["updated_at"]) for write in writes)
