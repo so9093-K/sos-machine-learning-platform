@@ -1254,13 +1254,17 @@ def test_tag_survives_database_publish_failure(workspace, monkeypatch):
         connect_iceberg(store, "publish_failure")
 
     with store.connection() as db:
-        orphan = db.execute(
-            text(
-                "SELECT r.dataset_id,r.snapshot_id FROM snapshot_retention r "
-                "LEFT JOIN datasets d ON r.dataset_id=d.id "
-                "WHERE d.id IS NULL AND r.state='Pending'"
+        orphan = (
+            db.execute(
+                text(
+                    "SELECT r.dataset_id,r.snapshot_id FROM snapshot_retention r "
+                    "LEFT JOIN datasets d ON r.dataset_id=d.id "
+                    "WHERE d.id IS NULL AND r.state='Pending'"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
     table = iceberg_catalog(store).load_table("default.publish_failure")
     assert (
         inspect_tag(table, name=tag_name(orphan["dataset_id"]), snapshot_id=orphan["snapshot_id"])
