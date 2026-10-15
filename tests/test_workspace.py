@@ -210,7 +210,7 @@ def test_iceberg_snapshot_reproducibility(workspace):
         == "retained"
     )
     # 태그된 과거 판본은 만료를 실행해도 참조·읽기 가능해야 한다.
-    table.expire_snapshots().older_than(datetime.now(UTC) + timedelta(days=1)).commit()
+    table.maintenance.expire_snapshots().older_than(datetime.now(UTC) + timedelta(days=1)).commit()
     assert client.get(f"/api/datasets/{original['id']}/preview").json()["returned_rows"] == 3
     report = client.get("/api/storage/iceberg-references").json()
     assert any(
