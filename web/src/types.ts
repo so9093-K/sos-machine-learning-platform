@@ -5,4 +5,5 @@ export type Dataset = components["schemas"]["DatasetOut"];
 export type Preview = components["schemas"]["PreviewOut"];
 export type Profile = components["schemas"]["ProfileOut"];
 export type Job = components["schemas"]["JobOut"];
+export type JobPage = components["schemas"]["JobPageOut"];
 export type Example = components["schemas"]["ExampleOut"];
