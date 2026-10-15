@@ -189,7 +189,9 @@ def create_app(home: Path | None = None) -> FastAPI:
         before = None
         if cursor:
             try:
-                raw = base64.b64decode(cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True)
+                raw = base64.b64decode(
+                    cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True
+                )
                 before = json.loads(raw)
                 if (
                     not isinstance(before, dict)
