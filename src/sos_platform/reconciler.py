@@ -62,19 +62,16 @@ def classify_object(item: dict, metadata: dict, policy: StoragePolicy) -> tuple[
         return "protected", "게시 또는 실행 중인 소유자가 있을 수 있습니다."
     if any(write["state"] != "Failed" for write in writes):
         return "unknown", "종료 여부가 확실하지 않은 게시 시도가 존재합니다."
-    latest = max(
-        datetime.fromisoformat(write["updated_at"]) for write in writes
-    )
+    latest = max(datetime.fromisoformat(write["updated_at"]) for write in writes)
     modified = datetime.fromisoformat(item["modified_at"])
     cutoff = datetime.now(UTC) - timedelta(days=policy.grace_days)
     if max(latest, modified) > cutoff:
         return "waiting", "미게시 객체의 보존 유예 기간이 지나지 않았습니다."
     observation = metadata["observation"]
     first = datetime.fromisoformat(observation["first_seen_at"])
-    if (
-        observation["observation_count"] < policy.min_observations
-        or first > datetime.now(UTC) - timedelta(hours=policy.observation_hours)
-    ):
+    if observation["observation_count"] < policy.min_observations or first > datetime.now(
+        UTC
+    ) - timedelta(hours=policy.observation_hours):
         return "waiting", "별도의 날짜에 반복 관측될 때까지 보존합니다."
     return "candidate", "실패 게시·경과 기간·반복 관측을 충족한 검토 후보입니다. 삭제하지 않습니다."
 
@@ -88,9 +85,7 @@ def inspect_page(
     """한 접두사의 한 페이지만 조회한다. Iceberg는 절대 탐색하지 않는다."""
     prefix, token = _position(cursor)
     objects, next_token = storage.list_page(prefix, limit=policy.page_size, cursor=token)
-    metadata = store.observe_objects(
-        [obj["location"] for obj in objects], policy.observation_hours
-    )
+    metadata = store.observe_objects([obj["location"] for obj in objects], policy.observation_hours)
     examined = []
     summary = {"protected": 0, "waiting": 0, "candidate": 0, "unknown": 0}
     for item in objects:
@@ -120,13 +115,17 @@ def inspect_iceberg_references(store: Store, limit: int = 50) -> list[dict]:
     with store.connection() as db:
         from sqlalchemy import text
 
-        rows = db.execute(
-            text(
-                "SELECT id,name,location,version FROM datasets WHERE kind='iceberg' "
-                "ORDER BY created_at DESC LIMIT :limit"
-            ),
-            {"limit": limit},
-        ).mappings().all()
+        rows = (
+            db.execute(
+                text(
+                    "SELECT id,name,location,version FROM datasets WHERE kind='iceberg' "
+                    "ORDER BY created_at DESC LIMIT :limit"
+                ),
+                {"limit": limit},
+            )
+            .mappings()
+            .all()
+        )
     results = []
     catalog = None
     for row in rows:
@@ -138,16 +137,19 @@ def inspect_iceberg_references(store: Store, limit: int = 50) -> list[dict]:
             status = "protected" if available else "missing"
             reason = (
                 "고정 Snapshot이 Catalog에 존재합니다."
-                if available else "고정 Snapshot이 누락됐습니다. 재현성을 확인하세요."
+                if available
+                else "고정 Snapshot이 누락됐습니다. 재현성을 확인하세요."
             )
         except Exception:
             status = "unknown"
             reason = "Catalog 확인에 실패했습니다. 만료·삭제하지 마세요."
-        results.append({
-            "dataset_id": row["id"],
-            "table_name": row["location"],
-            "snapshot_id": row["version"],
-            "status": status,
-            "reason": reason,
-        })
+        results.append(
+            {
+                "dataset_id": row["id"],
+                "table_name": row["location"],
+                "snapshot_id": row["version"],
+                "status": status,
+                "reason": reason,
+            }
+        )
     return results
