@@ -4,6 +4,7 @@ import hashlib
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -27,11 +28,11 @@ from sos_platform.worker import run_once
 
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch):
-    """각 시나리오에 독립 PostgreSQL DB를 부여해 실제 트랜잭션을 검증한다."""
+    """독립 DB·버킷을 생성하고 준비 단계의 예외에도 본인이 만든 리소스를 회수한다."""
     settings = Settings.from_env()
     base = make_url(settings.database_url)
     s3_endpoint = urlsplit(settings.s3_endpoint)
-    # 테스트에서 운영 DB·버킷을 생성하거나 삭제하지 않도록 로컬 전용 경계를 강제한다.
+    # 로컬 호스트 여부는 S3/DB 초기화보다 먼저 검증해야 한다.
     if base.host not in ("localhost", "127.0.0.1", "::1") or s3_endpoint.hostname not in (
         "localhost",
         "127.0.0.1",
@@ -41,45 +42,49 @@ def workspace(tmp_path: Path, monkeypatch):
     name = "sos_test_" + uuid4().hex[:14]
     bucket = "sos-pytest-" + uuid4().hex[:20]
     monkeypatch.setenv("SOS_S3_BUCKET", bucket)
-    admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f'CREATE DATABASE "{name}"'))
-    test_url = base.set(database=name).render_as_string(hide_password=False)
-    monkeypatch.setenv("SOS_DATABASE_URL", test_url)
-    config = Config("alembic.ini")
-    config.set_main_option("sqlalchemy.url", test_url)
-    command.upgrade(config, "head")
-    storage = ObjectStore()
-    try:
-        storage.client.head_bucket(Bucket=bucket)
-    except ClientError as exc:
-        status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-        if status != 404:
-            raise
-    else:
-        pytest.fail("Refusing to reuse an existing S3 test bucket")
-    storage.client.create_bucket(Bucket=bucket)
-    store = Store(tmp_path, database_url=test_url)
-    app = create_app(tmp_path)
-    try:
-        with TestClient(app) as client:
-            yield client, store
-    finally:
-        store.engine.dispose()
-        # 이 테스트가 생성한 UUID 버킷만 정리한다. 공유 버킷이나 운영 객체는 다루지 않는다.
+
+    # fixture가 yield에 도달하지 못하더라도 이미 생성한 자원은 역순으로 정리한다.
+    with ExitStack() as resources:
+        admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+        resources.callback(admin.dispose)
+        with admin.connect() as conn:
+            conn.execute(text(f'CREATE DATABASE "{name}"'))
+
+        def drop_database():
+            with admin.connect() as conn:
+                conn.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
+
+        resources.callback(drop_database)
+        test_url = base.set(database=name).render_as_string(hide_password=False)
+        monkeypatch.setenv("SOS_DATABASE_URL", test_url)
+        config = Config("alembic.ini")
+        config.set_main_option("sqlalchemy.url", test_url)
+        command.upgrade(config, "head")
+        storage = ObjectStore()
         try:
+            storage.client.head_bucket(Bucket=bucket)
+        except ClientError as exc:
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if status != 404:
+                raise
+        else:
+            pytest.fail("Refusing to reuse an existing S3 test bucket")
+        storage.client.create_bucket(Bucket=bucket)
+
+        def remove_test_bucket():
+            # 정상 생성한 테스트 버킷에서만 객체를 제거하고 다른 버킷은 접근하지 않는다.
             paginator = storage.client.get_paginator("list_objects_v2")
             for page in paginator.paginate(Bucket=bucket):
                 objects = [{"Key": item["Key"]} for item in page.get("Contents", [])]
                 if objects:
                     storage.client.delete_objects(Bucket=bucket, Delete={"Objects": objects})
             storage.client.delete_bucket(Bucket=bucket)
-        finally:
-            admin.dispose()
-            admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
-            with admin.connect() as conn:
-                conn.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
-            admin.dispose()
+
+        resources.callback(remove_test_bucket)
+        store = Store(tmp_path, database_url=test_url)
+        resources.callback(store.engine.dispose)
+        with TestClient(create_app(tmp_path)) as client:
+            yield client, store
 
 
 def upload(client: TestClient) -> dict:
