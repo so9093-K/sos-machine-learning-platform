@@ -37,7 +37,8 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, onRefre
       {jobs.map(job => <article className="job" key={job.id}>
         <div className="job-title"><div>
           <strong>{job.kind === "profile" ? "Full EDA Profile" :
-            job.kind === "iceberg_import" ? "Iceberg Import" : "Feature Transform"}</strong>
+            job.kind === "iceberg_import" ? "Iceberg Import" :
+            job.kind === "exploration" ? "Full Discovery Analysis" : "Feature Transform"}</strong>
           <small>{job.id}</small>
         </div><span className={`status ${job.status.toLowerCase()}`}>
           {job.status}{job.cancel_requested ? " · 취소 요청 중" : ""}

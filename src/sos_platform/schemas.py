@@ -96,17 +96,28 @@ class IcebergReferenceOut(BaseModel):
     reason: str
 
 
+class ExplorationSpec(BaseModel):
+    column: str = Field(min_length=1, max_length=256)
+    metric: Literal["count", "null_count", "mean", "min", "max"]
+    group_by: str | None = Field(default=None, max_length=256)
+
+
 class WorkRequest(BaseModel):
     dataset_id: str
-    kind: Literal["profile", "transform"]
+    kind: Literal["profile", "transform", "exploration"]
     transform: Transform | None = None
+    exploration: ExplorationSpec | None = None
 
     @model_validator(mode="after")
     def validate_request(self):
         if self.kind == "transform" and self.transform is None:
             raise ValueError("transform job requires a transform specification")
-        if self.kind == "profile" and self.transform is not None:
-            raise ValueError("profile job does not accept transformations")
+        if self.kind != "transform" and self.transform is not None:
+            raise ValueError("only transform job accepts transformations")
+        if self.kind == "exploration" and self.exploration is None:
+            raise ValueError("exploration job requires a specification")
+        if self.kind != "exploration" and self.exploration is not None:
+            raise ValueError("only exploration job accepts exploration specification")
         return self
 
 
@@ -163,10 +174,8 @@ class DatasetColumnsOut(BaseModel):
     columns: list[DiscoveryColumnOut]
 
 
-class ExplorationRequest(BaseModel):
-    column: str = Field(min_length=1, max_length=256)
-    metric: Literal["count", "null_count", "mean", "min", "max"]
-    group_by: str | None = Field(default=None, max_length=256)
+class ExplorationRequest(ExplorationSpec):
+    """대화형 탐색은 제한된 선두 샘플만 분석한다."""
 
 
 class ExplorationRowOut(BaseModel):
@@ -177,7 +186,8 @@ class ExplorationRowOut(BaseModel):
 class ExplorationOut(BaseModel):
     dataset_id: str
     version: str
-    scope: Literal["full"]
+    scope: Literal["full", "sample"]
+    sample_limit: int | None
     column: str
     metric: str
     group_by: str | None
@@ -230,7 +240,7 @@ class AttemptOut(BaseModel):
 
 class JobOut(BaseModel):
     id: str
-    kind: Literal["profile", "transform", "iceberg_import"]
+    kind: Literal["profile", "transform", "exploration", "iceberg_import"]
     dataset_id: str
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -250,7 +260,7 @@ class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: Literal["profile", "transform", "iceberg_import"]
+    kind: Literal["profile", "transform", "exploration", "iceberg_import"]
     dataset_id: str
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]

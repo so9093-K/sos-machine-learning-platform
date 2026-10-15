@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as echarts from "echarts";
 import { request, jsonPost, formatError } from "./api";
-import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest } from "./types";
+import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, Job } from "./types";
 
 function analysisLabel(basis: string) {
   return basis === "parquet_metadata"
@@ -20,6 +20,7 @@ export function DiscoveryPanel({ datasetId }: { datasetId: string }) {
   const [result, setResult] = useState<Exploration | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [running, setRunning] = useState(false);
+  const [fullJobId, setFullJobId] = useState<string | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
@@ -50,6 +51,18 @@ export function DiscoveryPanel({ datasetId }: { datasetId: string }) {
       const answer = await jsonPost<Exploration>(
         `/api/datasets/${datasetId}/explorations`, body);
       setResult(answer);
+    } catch (e) { setError(formatError(e)); }
+    finally { setRunning(false); }
+  }
+  async function runFullJob() {
+    if (!measure) return;
+    setRunning(true); setError(""); setFullJobId(null);
+    try {
+      const job = await jsonPost<Job>("/api/jobs", {
+        kind: "exploration", dataset_id: datasetId,
+        exploration: { column: measure, metric, group_by: groupBy || null },
+      });
+      setFullJobId(job.id);
     } catch (e) { setError(formatError(e)); }
     finally { setRunning(false); }
   }
@@ -94,8 +107,8 @@ export function DiscoveryPanel({ datasetId }: { datasetId: string }) {
         {shown.map(c => <div role="listitem" key={c.name}>
           <span>{c.name}</span><small>{c.dtype}</small></div>)}
       </div>
-      <h4>전체 범위 집계</h4>
-      <p className="muted">선택한 Dataset 판본 전체를 대상으로 집계합니다. 높은 고유값 그룹은 표시 수를 제한합니다.</p>
+      <h4>분석 집계</h4>
+      <p className="muted">대화형 탐색은 제한된 선두 샘플을 사용하고, 정확한 전체 집계는 별도 Worker Job으로 실행합니다.</p>
       <div className="chart-controls">
         <label>수치형 컬럼 <select aria-label="분석할 컬럼" value={measure}
           onChange={e => { setMeasure(e.target.value); setResult(null); }}>
@@ -113,11 +126,16 @@ export function DiscoveryPanel({ datasetId }: { datasetId: string }) {
           {columns.columns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select></label>
         <button disabled={running || !measure} onClick={() => void run()}>
-          {running ? "분석 중…" : "집계 실행"}
+          {running ? "분석 중…" : "샘플 집계"}
         </button>
+        <button className="secondary" disabled={running || !measure}
+          onClick={() => void runFullJob()}>전체 집계 Job 실행</button>
       </div>
+      {fullJobId && <p role="status" className="muted">
+        전체 집계 Job을 제출했습니다. Jobs에서 상태와 결과를 확인하세요. 작업 ID: {fullJobId}
+      </p>}
       {result && <>
-        <p className="muted">전체 범위 · Dataset 판본 {result.version.slice(0, 12)}
+        <p className="muted">샘플 최대 {result.sample_limit?.toLocaleString()}행 · Dataset 판본 {result.version.slice(0, 12)}
           {result.truncated ? " · 표시 그룹 수 제한 적용" : ""}</p>
         <div className="table-scroll"><table><thead><tr><th>그룹</th><th>결과</th></tr></thead>
           <tbody>{result.rows.map((r, i) => <tr key={i}><td>{String(r.category ?? "전체")}</td>

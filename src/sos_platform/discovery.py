@@ -276,8 +276,17 @@ def profile(store: Store, dataset: dict, sample: int | None = 1000) -> dict:
 
 
 def explore(
-    store: Store, dataset: dict, column: str, metric: str, group_by: str | None = None
+    store: Store,
+    dataset: dict,
+    column: str,
+    metric: str,
+    group_by: str | None = None,
+    *,
+    scope: str = "sample",
 ) -> dict:
+    """동일 집계 정의로 제한된 대화형 샘플과 전체 Worker Job을 실행한다."""
+    if scope not in ("sample", "full"):
+        raise ValueError("Invalid exploration scope")
     policy = DiscoveryPolicy.from_env()
     expressions = {
         "count": lambda col: "COUNT(*)",
@@ -297,11 +306,16 @@ def explore(
         ):
             raise ValueError("Numeric metric requires numeric column")
         value = expressions[metric](quoted(column))
+        source = (
+            f"(SELECT * FROM source LIMIT {policy.max_sample}) AS sample_source"
+            if scope == "sample"
+            else "source"
+        )
         if group_by:
             group = quoted(group_by)
             rows = _records(
                 conn.execute(
-                    f"SELECT {group} AS category, {value} AS value FROM source "
+                    f"SELECT {group} AS category, {value} AS value FROM {source} "
                     f"GROUP BY {group} ORDER BY value DESC NULLS LAST, category "
                     f"LIMIT {policy.max_groups + 1}"
                 )
@@ -309,12 +323,13 @@ def explore(
             truncated = len(rows) > policy.max_groups
             rows = rows[: policy.max_groups]
         else:
-            rows = _records(conn.execute(f"SELECT NULL AS category, {value} AS value FROM source"))
+            rows = _records(conn.execute(f"SELECT NULL AS category, {value} AS value FROM {source}"))
             truncated = False
     return {
         "dataset_id": dataset["id"],
         "version": dataset["version"],
-        "scope": "full",
+        "scope": scope,
+        "sample_limit": policy.max_sample if scope == "sample" else None,
         "metric": metric,
         "column": column,
         "group_by": group_by,

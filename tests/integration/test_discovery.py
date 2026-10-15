@@ -47,10 +47,25 @@ def test_full_grouped_exploration_and_profile_job(workspace):
     )
     assert result.status_code == 200, result.text
     info = result.json()
-    assert info["scope"] == "full"
+    assert info["scope"] == "sample"
+    assert info["sample_limit"] >= 4
     assert info["version"] == dataset["version"]
     values = {row["category"]: row["value"] for row in info["rows"]}
     assert values == {"a": 2, "b": 5}
+    full_job = client.post(
+        "/api/jobs",
+        json={
+            "kind": "exploration", "dataset_id": dataset["id"],
+            "exploration": {"column": "value", "metric": "mean", "group_by": "group"},
+        },
+    )
+    assert full_job.status_code == 202, full_job.text
+    assert run_once(store)
+    full = client.get(f"/api/jobs/{full_job.json()['id']}").json()
+    assert full["status"] == "Succeeded", full
+    assert full["result"]["scope"] == "full"
+    assert full["result"]["sample_limit"] is None
+    assert {r["category"]: r["value"] for r in full["result"]["rows"]} == values
     immediate = client.get(base + "/profile")
     assert immediate.status_code == 200, immediate.text
     assert immediate.json()["sampled"] is True
