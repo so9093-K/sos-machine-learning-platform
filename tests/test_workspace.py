@@ -960,3 +960,42 @@ def test_snapshots_available_without_tag_have_explicit_unprotected_state(workspa
     assert promoted.status_code == 200, promoted.text
     assert promoted.json()["status"] == "retained"
     assert store.snapshot_retention(legacy_id)["state"] == "Retained"
+
+
+def test_retained_snapshot_repeated_protection_is_idempotent(workspace):
+    """같은 Dataset 보존 확인을 반복해도 유효한 Tag·DB 상태가 유지된다."""
+    client, store = workspace
+    source = upload(client)
+    response = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source["id"], "table_name": "retry_retention"},
+    )
+    assert response.status_code == 202
+    assert run_once(store)
+    job = client.get(f"/api/jobs/{response.json()['id']}").json()
+    assert job["status"] == "Succeeded"
+    dataset_id = job["result"]["dataset_id"]
+    for _ in range(2):
+        response = client.post(f"/api/storage/iceberg-references/{dataset_id}/retain")
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "retained"
+    assert store.snapshot_retention(dataset_id)["state"] == "Retained"
+
+
+def test_required_audit_failure_rolls_back_job_creation(workspace, monkeypatch):
+    """중요 변경의 감사 기록을 확정하지 못하면 Job 생성도 커밋되지 않는다."""
+    client, store = workspace
+    source = upload(client)
+
+    def fail_audit(_db, **_kwargs):
+        raise RuntimeError("audit storage unavailable")
+
+    monkeypatch.setattr(Store, "_audit", staticmethod(fail_audit))
+    with pytest.raises(RuntimeError, match="audit storage unavailable"):
+        store.create_job(
+            kind="profile",
+            dataset_id=source["id"],
+            spec={},
+            owner_actor="local-developer",
+        )
+    assert store.jobs() == []

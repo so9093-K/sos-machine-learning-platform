@@ -336,7 +336,7 @@ class Store:
             text(
                 "UPDATE snapshot_retention SET state='Retained',updated_at=:at,error=NULL "
                 "WHERE dataset_id=:id AND location=:location AND snapshot_id=:snapshot_id "
-                "AND state IN ('Pending','Uncertain')"
+                "AND state IN ('Pending','Uncertain','Retained')"
             ),
             {"id": dataset_id, "location": location, "snapshot_id": str(snapshot_id), "at": now()},
         )
