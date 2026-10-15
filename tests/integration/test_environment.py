@@ -2,9 +2,11 @@
 
 import pytest
 from alembic import command
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import Engine, make_url
 
+from sos_platform.api import create_app
 from sos_platform.config import Settings
 
 from .conftest import workspace
@@ -36,3 +38,19 @@ def test_test_fixture_releases_created_database_on_migration_failure(tmp_path, m
         assert databases() == before
     finally:
         admin.dispose()
+
+
+def test_api_lifespan_releases_database_pool(workspace, monkeypatch):
+    """API 종료 시 해당 애플리케이션이 소유한 연결 풀을 해제한다."""
+    _, store = workspace
+    disposed = []
+    original = Engine.dispose
+
+    def track_dispose(engine, *args, **kwargs):
+        disposed.append(engine)
+        return original(engine, *args, **kwargs)
+
+    monkeypatch.setattr(Engine, "dispose", track_dispose)
+    with TestClient(create_app(store.home)) as client:
+        assert client.get("/api/health").status_code == 200
+    assert len(disposed) == 1

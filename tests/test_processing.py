@@ -254,4 +254,3 @@ def test_preview_schema_wire_name_is_preserved():
     assert preview.schema_ == {"time": "Int64"}
     assert preview.model_dump(by_alias=True)["schema"] == {"time": "Int64"}
     assert "schema_" not in preview.model_dump(by_alias=True)
-

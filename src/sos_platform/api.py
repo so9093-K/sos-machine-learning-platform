@@ -71,8 +71,12 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app):
-        store.initialize()
-        yield
+        try:
+            store.initialize()
+            yield
+        finally:
+            # 테스트·재시작에서 애플리케이션 소유 DB 풀을 남기지 않는다.
+            store.engine.dispose()
 
     app = FastAPI(
         title="SOS Machine Learning Platform",

@@ -252,7 +252,10 @@ def main():
         pass
     finally:
         signal.signal(signal.SIGTERM, previous)
-        store.release_worker()
+        try:
+            store.release_worker()
+        finally:
+            store.engine.dispose()
 
 
 if __name__ == "__main__":
