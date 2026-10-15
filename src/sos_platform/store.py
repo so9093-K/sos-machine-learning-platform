@@ -194,11 +194,111 @@ class Store:
             for location in locations
         }
 
+    @staticmethod
+    def _audit(db, *, actor_id: str, actor_type: str, action: str,
+               resource_type: str, resource_id: str | None,
+               decision: str = "allow", outcome: str = "succeeded",
+               reason: str | None = None, request_id: str | None = None) -> None:
+        """감사 기록이 실패하면 동일 PostgreSQL 트랜잭션의 변경도 실패한다."""
+        db.execute(
+            text(
+                "INSERT INTO audit_events"
+                "(id,at,actor_id,actor_type,action,resource_type,resource_id,"
+                "decision,outcome,reason,request_id) "
+                "VALUES(:id,:at,:actor_id,:actor_type,:action,:resource_type,"
+                ":resource_id,:decision,:outcome,:reason,:request_id)"
+            ),
+            {
+                "id": str(uuid4()), "at": now(), "actor_id": actor_id,
+                "actor_type": actor_type, "action": action,
+                "resource_type": resource_type, "resource_id": resource_id,
+                "decision": decision, "outcome": outcome,
+                "reason": reason, "request_id": request_id,
+            },
+        )
+
+    def record_audit(self, *, actor_id: str, actor_type: str, action: str,
+                     resource_type: str, resource_id: str | None = None,
+                     decision: str = "deny", outcome: str = "denied",
+                     reason: str | None = None, request_id: str | None = None) -> None:
+        with self.connection() as db:
+            self._audit(
+                db, actor_id=actor_id, actor_type=actor_type, action=action,
+                resource_type=resource_type, resource_id=resource_id,
+                decision=decision, outcome=outcome, reason=reason, request_id=request_id,
+            )
+
+    def audit_events(self, *, limit: int = 50) -> list[dict]:
+        if not 1 <= limit <= 100:
+            raise ValueError("Audit limit out of range")
+        with self.connection() as db:
+            return [
+                dict(row) for row in db.execute(
+                    text("SELECT * FROM audit_events ORDER BY at DESC,id DESC LIMIT :limit"),
+                    {"limit": limit},
+                ).mappings()
+            ]
+
+    def begin_snapshot_retention(self, *, dataset_id: str, location: str,
+                                 snapshot_id: str, tag_name: str) -> None:
+        with self.connection() as db:
+            db.execute(
+                text(
+                    "INSERT INTO snapshot_retention"
+                    "(dataset_id,location,snapshot_id,tag_name,state,created_at,updated_at) "
+                    "VALUES(:dataset_id,:location,:snapshot_id,:tag_name,'Pending',:at,:at) "
+                    "ON CONFLICT(dataset_id) DO NOTHING"
+                ),
+                {
+                    "dataset_id": dataset_id, "location": location,
+                    "snapshot_id": snapshot_id, "tag_name": tag_name, "at": now(),
+                },
+            )
+            row = db.execute(
+                text("SELECT location,snapshot_id,tag_name,state FROM snapshot_retention "
+                     "WHERE dataset_id=:id FOR UPDATE"),
+                {"id": dataset_id},
+            ).mappings().one()
+            if row["location"] != location or row["snapshot_id"] != snapshot_id or row["tag_name"] != tag_name:
+                raise RuntimeError("Snapshot reservation mismatch")
+
+    def fail_snapshot_retention(self, dataset_id: str, error: str) -> None:
+        with self.connection() as db:
+            db.execute(
+                text("UPDATE snapshot_retention SET state='Uncertain',error=:error,"
+                     "updated_at=:at WHERE dataset_id=:id AND state='Pending'"),
+                {"id": dataset_id, "error": error[:200], "at": now()},
+            )
+
+    def snapshot_retention(self, dataset_id: str) -> dict | None:
+        with self.connection() as db:
+            result = db.execute(
+                text("SELECT * FROM snapshot_retention WHERE dataset_id=:id"),
+                {"id": dataset_id},
+            ).mappings().first()
+            return dict(result) if result else None
+
+    @staticmethod
+    def _confirm_snapshot_retention(db, dataset_id: str, location: str, snapshot_id: str) -> None:
+        updated = db.execute(
+            text(
+                "UPDATE snapshot_retention SET state='Retained',updated_at=:at,error=NULL "
+                "WHERE dataset_id=:id AND location=:location AND snapshot_id=:snapshot_id "
+                "AND state IN ('Pending','Uncertain')"
+            ),
+            {"id": dataset_id, "location": location, "snapshot_id": str(snapshot_id), "at": now()},
+        )
+        if updated.rowcount != 1:
+            raise RuntimeError("Snapshot protection intent is not ready")
+
     def register_dataset(
-        self, *, name: str, kind: str, location: str, version: str, write_id: str | None = None
+        self, *, name: str, kind: str, location: str, version: str, write_id: str | None = None,
+        dataset_id: str | None = None, owner_actor: str | None = None,
+        retention_id: str | None = None, actor_type: str = "human",
     ) -> dict:
         item = dict(
-            id=str(uuid4()),
+            id=dataset_id or str(uuid4()),
+            owner_actor=owner_actor,
             name=name,
             kind=kind,
             location=location,
@@ -208,13 +308,18 @@ class Store:
         with self.connection() as db:
             db.execute(
                 text(
-                    "INSERT INTO datasets(id,name,kind,location,version,created_at) "
-                    "VALUES(:id,:name,:kind,:location,:version,:created_at)"
+                    "INSERT INTO datasets(id,name,kind,location,version,created_at,owner_actor) "
+                    "VALUES(:id,:name,:kind,:location,:version,:created_at,:owner_actor)"
                 ),
                 item,
             )
             if write_id:
                 self._publish_object(db, write_id, location, version)
+            if retention_id:
+                self._confirm_snapshot_retention(db, retention_id, location, version)
+            if owner_actor:
+                self._audit(db, actor_id=owner_actor, actor_type=actor_type,
+                            action="dataset.create", resource_type="dataset", resource_id=item["id"])
         return item
 
     def get_dataset(self, dataset_id: str) -> dict | None:
@@ -226,20 +331,23 @@ class Store:
             )
             return dict(row) if row else None
 
-    def datasets(self) -> list[dict]:
+    def datasets(self, *, actor_id: str | None = None) -> list[dict]:
+        predicate = "WHERE owner_actor=:actor_id" if actor_id is not None else ""
         with self.connection() as db:
             return [
-                dict(row)
-                for row in db.execute(
-                    text("SELECT * FROM datasets ORDER BY created_at DESC")
+                dict(row) for row in db.execute(
+                    text(f"SELECT * FROM datasets {predicate} ORDER BY created_at DESC"),
+                    {"actor_id": actor_id},
                 ).mappings()
             ]
 
-    def create_job(self, *, kind: str, dataset_id: str, spec: dict) -> dict:
+    def create_job(self, *, kind: str, dataset_id: str, spec: dict,
+                   owner_actor: str | None = None, actor_type: str = "human") -> dict:
         item = dict(
             id=str(uuid4()),
             kind=kind,
             dataset_id=dataset_id,
+            owner_actor=owner_actor,
             spec=json.dumps(spec),
             status="Queued",
             created_at=now(),
@@ -248,11 +356,14 @@ class Store:
         with self.connection() as db:
             db.execute(
                 text(
-                    "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at) "
-                    "VALUES(:id,:kind,:dataset_id,:spec,:status,:created_at,:updated_at)"
+                    "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at,owner_actor) "
+                    "VALUES(:id,:kind,:dataset_id,:spec,:status,:created_at,:updated_at,:owner_actor)"
                 ),
                 item,
             )
+            if owner_actor:
+                self._audit(db, actor_id=owner_actor, actor_type=actor_type,
+                            action="job.create", resource_type="job", resource_id=item["id"])
         return self.get_job(item["id"])
 
     @staticmethod
@@ -281,15 +392,19 @@ class Store:
             ]
             return item
 
-    def jobs(self, *, limit: int = 20, before: dict | None = None) -> list[dict]:
+    def jobs(self, *, limit: int = 20, before: dict | None = None,
+             actor_id: str | None = None) -> list[dict]:
         """목록은 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
         if not 1 <= limit <= 101:
             raise ValueError("Job query limit is out of range")
-        predicate = "WHERE (created_at, id) < (:created_at, :id)" if before else ""
-        query = text(
-            f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
-        )
-        params = {"limit": limit, **(before or {})}
+        filters = []
+        if before:
+            filters.append("(created_at, id) < (:created_at, :id)")
+        if actor_id is not None:
+            filters.append("owner_actor=:actor_id")
+        predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
+        query = text(f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit")
+        params = {"limit": limit, "actor_id": actor_id, **(before or {})}
         with self.connection() as db:
             rows = db.execute(query, params).mappings().all()
             items = [dict(row) for row in rows]
@@ -319,7 +434,8 @@ class Store:
             )
         return items
 
-    def request_cancel(self, job_id: str) -> dict | None:
+    def request_cancel(self, job_id: str, *, actor_id: str | None = None,
+                       actor_type: str = "human") -> dict | None:
         with self.connection() as db:
             row = (
                 db.execute(
@@ -343,6 +459,9 @@ class Store:
                     text("UPDATE jobs SET cancel_requested=true,updated_at=:at WHERE id=:id"),
                     {"at": now(), "id": job_id},
                 )
+            if row and actor_id:
+                self._audit(db, actor_id=actor_id, actor_type=actor_type,
+                            action="job.cancel", resource_type="job", resource_id=job_id)
         return self.get_job(job_id)
 
     def claim(self) -> dict | None:
@@ -391,7 +510,7 @@ class Store:
         with self.connection() as db:
             row = (
                 db.execute(
-                    text("SELECT status,cancel_requested FROM jobs WHERE id=:id FOR UPDATE"),
+                    text("SELECT status,cancel_requested,owner_actor FROM jobs WHERE id=:id FOR UPDATE"),
                     {"id": job_id},
                 )
                 .mappings()
@@ -409,16 +528,21 @@ class Store:
                     location=publish["location"],
                     version=publish["version"],
                     created_at=now(),
+                    owner_actor=row["owner_actor"],
                 )
                 db.execute(
                     text(
-                        "INSERT INTO datasets(id,name,kind,location,version,created_at) "
-                        "VALUES(:id,:name,:kind,:location,:version,:created_at)"
+                        "INSERT INTO datasets(id,name,kind,location,version,created_at,owner_actor) "
+                        "VALUES(:id,:name,:kind,:location,:version,:created_at,:owner_actor)"
                     ),
                     item,
                 )
                 if write_id:
                     self._publish_object(db, write_id, publish["location"], publish["version"])
+                if publish.get("retention_id"):
+                    self._confirm_snapshot_retention(
+                        db, publish["retention_id"], publish["location"], publish["version"]
+                    )
                 result = {**(result or {}), "dataset_id": item["id"]}
             db.execute(
                 text(
