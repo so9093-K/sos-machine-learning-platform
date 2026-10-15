@@ -1,6 +1,15 @@
+/** 액세스 토큰은 메모리에만 유지한다. 저장소나 로그에 기록하지 않는다. */
+let accessToken: string | null = null;
+
+export function setAccessToken(value: string | null) {
+  accessToken = value || null;
+}
+
 /** API 오류를 검증 실패와 서비스 장애로 구분해 전달한다. */
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
+  const headers = new Headers(init?.headers);
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  const response = await fetch(path, { ...init, headers });
   if (!response.ok) {
     let message = `요청에 실패했습니다. (HTTP ${response.status})`;
     try {
