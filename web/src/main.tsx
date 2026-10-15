@@ -6,7 +6,7 @@ import { request, jsonPost } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
-import type { Dataset, Preview, Profile, Job, JobPage, Example } from "./types";
+import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, Example } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
@@ -33,7 +33,7 @@ function Workspace() {
   const [selected, setSelected] = useState<string>("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [nextJobsCursor, setNextJobsCursor] = useState<string | null>(null);
   const [olderJobsLoaded, setOlderJobsLoaded] = useState(false);
   const [examples, setExamples] = useState<Example[]>([]);
