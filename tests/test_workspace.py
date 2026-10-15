@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import make_url
 
+from sos_platform import worker as worker_module
 from sos_platform.api import create_app
 from sos_platform.config import Settings
 from sos_platform.object_store import ObjectStore
@@ -390,3 +391,45 @@ def test_job_listing_uses_bounded_number_of_queries(workspace):
     finally:
         event.remove(store.engine, "before_cursor_execute", capture)
     assert len(queries) == 2
+
+
+@pytest.mark.parametrize("explicit_home", [False, True])
+def test_worker_home_matches_configuration_and_explicit_override(
+    monkeypatch, tmp_path, explicit_home
+):
+    """Worker 로컬 경로가 환경 설정을 따르며 CLI 인자가 우선한다."""
+    from sys import argv
+
+    seen = {}
+
+    class FakeStore:
+        def __init__(self, home):
+            seen["home"] = home
+
+        def initialize(self):
+            pass
+
+        def acquire_worker(self):
+            return True
+
+        def recover(self):
+            pass
+
+        def heartbeat(self):
+            pass
+
+        def release_worker(self):
+            pass
+
+    env_home = tmp_path / "env-home"
+    cli_home = tmp_path / "cli-home"
+    monkeypatch.setenv("SOS_HOME", str(env_home))
+    monkeypatch.setattr(worker_module, "Store", FakeStore)
+    monkeypatch.setattr(worker_module, "run_once", lambda _store: False)
+    command = [argv[0], "--once"]
+    if explicit_home:
+        command.extend(["--home", str(cli_home)])
+    monkeypatch.setattr("sys.argv", command)
+
+    worker_module.main()
+    assert seen["home"] == (cli_home if explicit_home else env_home)
