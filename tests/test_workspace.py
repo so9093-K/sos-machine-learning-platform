@@ -1230,3 +1230,64 @@ def test_configured_cors_allows_token_preflight(workspace, monkeypatch):
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:9765"
     assert "authorization" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_tag_survives_database_publish_failure(workspace, monkeypatch):
+    """Catalog Tag 커밋 후 DB 게시 실패는 미게시 의도로 남아 운영자가 확인할 수 있다."""
+    client, store = workspace
+    source = upload(client)
+    request = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source["id"], "table_name": "publish_failure"},
+    )
+    assert request.status_code == 202
+    assert run_once(store)
+
+    from sos_platform.datasets import connect_iceberg, iceberg_catalog
+    from sos_platform.retention import inspect_tag, tag_name
+
+    def refuse_publish(**_kwargs):
+        raise RuntimeError("Simulated database publication failure")
+
+    monkeypatch.setattr(store, "register_dataset", refuse_publish)
+    with pytest.raises(RuntimeError, match="Simulated database publication failure"):
+        connect_iceberg(store, "publish_failure")
+
+    with store.connection() as db:
+        orphan = db.execute(
+            text(
+                "SELECT r.dataset_id,r.snapshot_id FROM snapshot_retention r "
+                "LEFT JOIN datasets d ON r.dataset_id=d.id "
+                "WHERE d.id IS NULL AND r.state='Pending'"
+            )
+        ).mappings().one()
+    table = iceberg_catalog(store).load_table("default.publish_failure")
+    assert (
+        inspect_tag(table, name=tag_name(orphan["dataset_id"]), snapshot_id=orphan["snapshot_id"])
+        == "retained"
+    )
+    inspection = client.get("/api/storage/iceberg-references?limit=1")
+    assert inspection.status_code == 200
+    assert inspection.json()[0]["dataset_id"] == orphan["dataset_id"]
+    assert inspection.json()[0]["status"] == "unknown"
+
+
+def test_failed_job_completion_is_audited(workspace):
+    """Worker 실패 기록은 Job 상태와 Attempt 식별자를 하나의 트랜잭션에 확정한다."""
+    client, store = workspace
+    source = upload(client)
+    created = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    assert created.status_code == 202
+    claimed = store.claim()
+    assert claimed["id"] == created.json()["id"]
+    attempt_id = claimed["attempts"][-1]["id"]
+    store.finish(claimed["id"], "Failed", error="test failure")
+    failed = store.get_job(claimed["id"])
+    assert failed["status"] == "Failed"
+    assert any(
+        entry["action"] == "job.finish"
+        and entry["outcome"] == "failed"
+        and entry["resource_id"] == claimed["id"]
+        and attempt_id in entry["reason"]
+        for entry in store.audit_events(limit=100)
+    )
