@@ -1,17 +1,16 @@
 """Dataset 등록·원본·마이그레이션 통합 계약을 검증한다."""
 
 import hashlib
-
-import pyarrow as pa
-import pyarrow.parquet as pq
-from fastapi.testclient import TestClient
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from uuid import uuid4
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from sos_platform.api import create_app
@@ -222,9 +221,12 @@ def test_large_parquet_registers_and_supports_parallel_first_reads(workspace, tm
         )
     assert response.status_code == 201, response.text[:400]
     dataset = response.json()
-    assert dataset["version"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    with path.open("rb") as handle:
+        assert dataset["version"] == hashlib.file_digest(handle, "sha256").hexdigest()
     with ThreadPoolExecutor(max_workers=2) as executor:
-        preview_future = executor.submit(client.get, f"/api/datasets/{dataset['id']}/preview?limit=3")
+        preview_future = executor.submit(
+            client.get, f"/api/datasets/{dataset['id']}/preview?limit=3"
+        )
         profile_future = executor.submit(client.get, f"/api/datasets/{dataset['id']}/profile")
         preview = preview_future.result(timeout=60)
         profile = profile_future.result(timeout=60)
