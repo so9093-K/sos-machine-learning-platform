@@ -1,9 +1,10 @@
 import type { Dataset, Job } from "./types";
 
-type Props = { jobs: Job[]; datasets: Dataset[]; busy: boolean; onRefresh: () => void;
+type Props = { jobs: Job[]; datasets: Dataset[]; busy: boolean; nextCursor: string | null;
+  onRefresh: () => void; onLoadMore: () => void;
   onCancel: (id: string) => void; onOpen: (id: string) => void; };
 
-export function JobsPanel({ jobs, datasets, busy, onRefresh, onCancel, onOpen }: Props) {
+export function JobsPanel({ jobs, datasets, busy, nextCursor, onRefresh, onLoadMore, onCancel, onOpen }: Props) {
   return <section className="panel" aria-label="실행 작업">
     <div className="panel-head"><div>
       <h3>Execution Jobs</h3>
@@ -46,5 +47,8 @@ export function JobsPanel({ jobs, datasets, busy, onRefresh, onCancel, onOpen }:
             onClick={() => onCancel(job.id)}>작업 취소</button>}
       </article>)}
     </div>
+    {nextCursor && <button className="secondary" disabled={busy} onClick={onLoadMore}>
+      이전 작업 더 보기 →
+    </button>}
   </section>;
 }
