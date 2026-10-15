@@ -307,3 +307,26 @@ def test_s3_endpoint_default_uses_configured_port(monkeypatch):
     monkeypatch.delenv("SOS_S3_ENDPOINT", raising=False)
     monkeypatch.setenv("SOS_S3_PORT", "9745")
     assert Settings.from_env().s3_endpoint == "http://127.0.0.1:9745"
+
+
+
+def test_make_check_validates_full_contract_once(monkeypatch, config):
+    """CI는 검사 종류별로 실행하더라도 로컬 make check는 완전한 검증을 유지한다."""
+    monkeypatch.setattr(dev, "status", lambda _config: {"status": "ready"})
+    commands = []
+
+    def fake_run(command, *, cwd, env, check):
+        commands.append((command, cwd))
+        assert check is False
+        return type("Result", (), {"returncode": 0})()
+
+    monkeypatch.setattr(dev.subprocess, "run", fake_run)
+    assert dev.check(config)["status"] == "passed"
+    assert commands == [
+        (["uv", "run", "--locked", "ruff", "check", "."], dev.ROOT),
+        (["uv", "run", "--locked", "ruff", "format", "--check", "."], dev.ROOT),
+        (["uv", "run", "--locked", "pytest", "-q"], dev.ROOT),
+        (["npm", "run", "build"], dev.ROOT / "web"),
+        (["npm", "run", "test"], dev.ROOT / "web"),
+        (["npx", "playwright", "test"], dev.ROOT / "web"),
+    ]

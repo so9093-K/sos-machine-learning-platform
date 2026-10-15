@@ -111,8 +111,10 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Start SOS using public Make interface
         run: make up
-      - name: Make check (quality and browser workflows)
-        run: make check
+      # pytest·Vitest·빌드는 앞선 병렬 작업에서 검증하므로 브라우저만 실행한다.
+      - name: Browser workflow tests
+        working-directory: web
+        run: npx playwright test workspace.spec.ts
       - name: Make lifecycle and data persistence
         run: |
           make

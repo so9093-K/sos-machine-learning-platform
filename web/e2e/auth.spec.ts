@@ -36,6 +36,13 @@ test.describe("token identity and resource permissions", () => {
       .toBeVisible();
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "스냅샷 연결" })).toBeVisible();
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "authorized.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("time,value\\n1,10\\n2,20\\n"),
+    });
+    await expect(page.getByRole("heading", { name: "authorized.csv" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Iceberg에 추가" })).toBeVisible();
   });
 
   test("operator has diagnostic access but cannot read user datasets", async ({ page }) => {
