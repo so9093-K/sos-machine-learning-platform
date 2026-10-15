@@ -105,6 +105,10 @@ class IdentitySettings:
 
 
 def current_actor(request: Request) -> Actor:
+    if request.app.state.identity.mode == "development":
+        peer = request.client.host if request.client else ""
+        if peer not in ("127.0.0.1", "::1", "testclient"):
+            raise HTTPException(status_code=403, detail="Development identity is local only")
     actor = request.app.state.identity.authenticate(request.headers.get("authorization"))
     request.state.actor = actor
     return actor
