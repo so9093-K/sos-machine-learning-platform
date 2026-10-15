@@ -3,6 +3,7 @@
 import base64
 import binascii
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -96,8 +97,8 @@ def create_app(home: Path | None = None) -> FastAPI:
                     request_id=request.state.request_id,
                 )
             except Exception:
-                # 거부 요청의 감사 저장에 실패해도 허용으로 바꾸지 않는다.
-                pass
+                # 접근 거부는 유지하되 감사 저장 장애를 조용히 숨기지는 않는다.
+                logging.exception("Denied request audit could not be recorded")
         return response
 
     app.add_middleware(

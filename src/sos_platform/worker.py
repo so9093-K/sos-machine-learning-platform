@@ -74,17 +74,21 @@ def run_once(store: Store) -> bool:
     process = multiprocessing.get_context("spawn").Process(
         target=_perform, args=(store.home, store.database_url, job, completed, pending)
     )
+    # 취소 확인은 100ms 단위로 유지하되 heartbeat는 주기적으로만 기록한다.
+    next_heartbeat = time.monotonic() + 2
     try:
         process.start()
         while process.is_alive():
             process.join(timeout=0.1)
-            store.heartbeat()
-            if store.get_job(job_id)["cancel_requested"]:
+            if time.monotonic() >= next_heartbeat:
+                store.heartbeat()
+                next_heartbeat = time.monotonic() + 2
+            if store.cancellation_requested(job_id):
                 _stop(process)
                 store.finish(job_id, "Cancelled")
                 return True
 
-        if store.get_job(job_id)["cancel_requested"]:
+        if store.cancellation_requested(job_id):
             store.finish(job_id, "Cancelled")
             return True
         if not completed.exists():

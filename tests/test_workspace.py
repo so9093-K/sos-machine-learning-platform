@@ -1139,3 +1139,68 @@ def test_import_uses_attempt_snapshot_not_latest(workspace, monkeypatch):
         )
         == "retained"
     )
+
+
+
+def test_worker_completion_audit_and_atomic_failure(workspace, monkeypatch):
+    """Worker 완료·결과 Dataset의 감사를 연결하고 감사 실패 시 DB 변경을 롤백한다."""
+    client, store = workspace
+    source = upload(client)
+    first = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    assert first.status_code == 202
+    assert run_once(store)
+    finished = store.get_job(first.json()["id"])
+    attempt_id = finished["attempts"][-1]["id"]
+    events = store.audit_events(limit=100)
+    assert any(
+        event["action"] == "job.finish"
+        and event["resource_id"] == finished["id"]
+        and attempt_id in event["reason"]
+        for event in events
+    )
+
+    second = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    job_id = second.json()["id"]
+    assert store.claim()["id"] == job_id
+    before = len(store.datasets())
+    original_audit = Store._audit
+
+    def fail_finished_audit(db, **kwargs):
+        if kwargs["action"] == "job.finish":
+            raise RuntimeError("Required completion audit unavailable")
+        return original_audit(db, **kwargs)
+
+    monkeypatch.setattr(Store, "_audit", staticmethod(fail_finished_audit))
+    with pytest.raises(RuntimeError, match="Required completion audit unavailable"):
+        store.finish(
+            job_id,
+            "Succeeded",
+            publish={
+                "name": "never-committed.parquet",
+                "location": ObjectStore().location("results/no-publish.parquet"),
+                "version": "unpublished",
+            },
+        )
+    assert store.get_job(job_id)["status"] == "Running"
+    assert len(store.datasets()) == before
+
+
+def test_object_observation_is_batched(workspace):
+    """관측 객체 수에 비례한 개별 SQL INSERT가 발생하지 않는다."""
+    _, store = workspace
+    seen = []
+
+    def capture(_connection, _cursor, statement, _params, _context, executemany):
+        if "INSERT INTO object_observations" in statement:
+            seen.append(executemany)
+
+    event.listen(store.engine, "before_cursor_execute", capture)
+    try:
+        locations = [ObjectStore().location(f"results/batch-{i}.parquet") for i in range(3)]
+        observed = store.observe_objects(
+            [{"location": location, "fingerprint": "same"} for location in locations], 24
+        )
+    finally:
+        event.remove(store.engine, "before_cursor_execute", capture)
+    assert len(observed) == 3
+    assert seen == [True]

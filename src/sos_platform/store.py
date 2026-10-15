@@ -147,12 +147,11 @@ class Store:
                     bindparam("ids", expanding=True)
                 )
                 attempts = dict(db.execute(statement, {"ids": owner_ids}).all())
-            for item in objects:
-                # 한 객체의 새 세대가 관측되면 first_seen/count를 항상 초기화한다.
-                at = now()
-                db.execute(
-                    text(
-                        "INSERT INTO object_observations"
+            # 모든 객체에 동일한 관측 시각을 적용하고 한 번의 executemany로 보낸다.
+            at = now()
+            db.execute(
+                text(
+                    "INSERT INTO object_observations"
                         "(location,fingerprint,first_seen_at,last_seen_at,observation_count) "
                         "VALUES(:location,:fingerprint,:at,:at,1) "
                         "ON CONFLICT(location) DO UPDATE SET "
@@ -169,14 +168,17 @@ class Store:
                         "IS DISTINCT FROM excluded.fingerprint "
                         "OR object_observations.last_seen_at<=:cutoff "
                         "THEN excluded.last_seen_at ELSE object_observations.last_seen_at END"
-                    ),
+                ),
+                [
                     {
                         "location": item["location"],
                         "fingerprint": item.get("fingerprint"),
                         "at": at,
                         "cutoff": cutoff,
-                    },
-                )
+                    }
+                    for item in objects
+                ],
+            )
             observations_query = text(
                 "SELECT * FROM object_observations WHERE location IN :ids"
             ).bindparams(bindparam("ids", expanding=True))
@@ -594,6 +596,16 @@ class Store:
                 )
         return self.get_job(job_id)
 
+    def cancellation_requested(self, job_id: str) -> bool:
+        """Worker가 전체 Job·Attempt를 읽지 않고 취소 플래그만 확인한다."""
+        with self.connection() as db:
+            value = db.execute(
+                text("SELECT cancel_requested FROM jobs WHERE id=:id"), {"id": job_id}
+            ).scalar_one_or_none()
+        if value is None:
+            raise RuntimeError("Job is missing during execution")
+        return bool(value)
+
     def claim(self) -> dict | None:
         """행 잠금으로 하나의 Job을 정확히 한 실행 시도가 인수하도록 한다."""
         with self.connection() as db:
@@ -689,12 +701,35 @@ class Store:
                     at=now(),
                 ),
             )
-            db.execute(
+            completed_attempt = db.execute(
                 text(
                     "UPDATE attempts SET status=:status,finished_at=:at,error=:error "
-                    "WHERE job_id=:id AND status='Running'"
+                    "WHERE job_id=:id AND status='Running' RETURNING id"
                 ),
                 dict(id=job_id, status=status, at=now(), error=error),
+            ).scalar_one()
+            reason = f"attempt={completed_attempt}"
+            if status == "Succeeded" and publish:
+                self._audit(
+                    db,
+                    actor_id="sos-worker",
+                    actor_type="service",
+                    action="dataset.publish",
+                    resource_type="dataset",
+                    resource_id=item["id"],
+                    reason=f"job={job_id};{reason}",
+                )
+            self._audit(
+                db,
+                actor_id="sos-worker",
+                actor_type="service",
+                action="job.finish",
+                resource_type="job",
+                resource_id=job_id,
+                outcome={"Succeeded": "succeeded", "Failed": "failed", "Cancelled": "cancelled"}.get(
+                    status, status.lower()
+                ),
+                reason=reason,
             )
         return status
 
