@@ -113,9 +113,7 @@ def test_failed_result_publish_cleans_local_worker_files(workspace, monkeypatch)
         json={
             "dataset_id": dataset["id"],
             "kind": "transform",
-            "transform": {
-                "steps": [{"op": "fill_null", "column": "temperature", "value": 0}]
-            },
+            "transform": {"steps": [{"op": "fill_null", "column": "temperature", "value": 0}]},
         },
     )
     assert response.status_code == 202, response.text
