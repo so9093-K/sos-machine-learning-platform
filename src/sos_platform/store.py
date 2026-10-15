@@ -171,10 +171,10 @@ class Store:
                 ),
                 [
                     {
-                    "location": item["location"],
-                    "fingerprint": item.get("fingerprint"),
-                    "at": at,
-                    "cutoff": cutoff,
+                        "location": item["location"],
+                        "fingerprint": item.get("fingerprint"),
+                        "at": at,
+                        "cutoff": cutoff,
                     }
                     for item in objects
                 ],
