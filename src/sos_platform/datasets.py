@@ -53,8 +53,11 @@ def save_upload(store: Store, name: str, content: bytes) -> dict:
         try:
             storage.put(key, temporary)
             return store.register_dataset(
-                name=Path(name).name, kind="file", location=location,
-                version=digest, write_id=write_id,
+                name=Path(name).name,
+                kind="file",
+                location=location,
+                version=digest,
+                write_id=write_id,
             )
         except Exception as exc:
             try:
