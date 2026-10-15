@@ -841,27 +841,38 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
     monkeypatch.setenv("SOS_AUTH_MODE", "token")
     monkeypatch.setenv(
         "SOS_AUTH_TOKEN_HASHES",
-        json.dumps({
-            hashlib.sha256(tokens[name].encode()).hexdigest(): user
-            for name, user in users.items()
-        }),
+        json.dumps(
+            {
+                hashlib.sha256(tokens[name].encode()).hexdigest(): user
+                for name, user in users.items()
+            }
+        ),
     )
     with TestClient(create_app(store.home)) as secure:
+
         def headers(name):
             return {"Authorization": "Bearer " + tokens[name]}
 
         assert secure.get("/api/datasets").status_code == 401
-        assert secure.get("/api/datasets", headers={"Authorization": "Bearer bad"}).status_code == 401
+        assert (
+            secure.get("/api/datasets", headers={"Authorization": "Bearer bad"}).status_code
+            == 401
+        )
         assert secure.get("/api/auth/me", headers=headers("alice")).json()["actor_id"] == "alice"
         assert secure.get("/api/storage/inspection", headers=headers("alice")).status_code == 403
         assert secure.get("/api/audit", headers=headers("alice")).status_code == 403
         assert secure.get("/api/storage/policy", headers=headers("ops")).status_code == 200
-        assert secure.post("/api/jobs", json={
-            "dataset_id": dataset["id"], "kind": "profile"
-        }, headers=headers("alice")).status_code == 404
+        assert (
+            secure.post(
+                "/api/jobs",
+                json={"dataset_id": dataset["id"], "kind": "profile"},
+                headers=headers("alice"),
+            ).status_code
+            == 404
+        )
         result = secure.post(
             "/api/datasets/files",
-            files={"file": ("user.csv", b"a,b\\n1,2\\n", "text/csv")},
+            files={"file": ("user.csv", b"a,b\n1,2\n", "text/csv")},
             headers=headers("alice"),
         )
         assert result.status_code == 201, result.text
@@ -872,7 +883,7 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         assert (
             secure.post(
                 "/api/datasets/files",
-                files={"file": ("no.csv", b"a\\n1\\n", "text/csv")},
+                files={"file": ("no.csv", b"a\n1\n", "text/csv")},
                 headers=headers("bob"),
             ).status_code
             == 403
