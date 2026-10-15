@@ -50,3 +50,11 @@ API 응답 타입을 변경한 경우 Pydantic 모델을 변경하고 `cd web &&
 Job 목록은 `GET /api/jobs?limit=20`에서 최근 순으로 조회하며, 응답의 `items`와 `next_cursor`를 사용해 이전 페이지를 가져온다. `limit`는 1~100으로 제한되며 전체 실행 시도는 개별 `GET /api/jobs/{job_id}`에서 조회할 수 있다.
 
 단일 Iceberg 적재는 현재 최대 50,000행과 64 MiB 추정 메모리 제한을 적용한다. 초과하면 Job이 실패하며 원본 파일·이전 Snapshot은 유지한다. 대용량 배치 적재는 별도의 자원·원자성 정책이 필요하다.
+
+## 객체 게시·보존 정책과 저장소 진단
+
+Data Workspace 사이드바의 **저장소 상태 보기**에서 `datasets/`, `results/`의 S3 객체를 페이지 단위로 읽기 전용으로 대조할 수 있다. 대조는 관측 이력을 PostgreSQL에 기록하지만, S3의 객체를 삭제하지 않는다. `iceberg/`는 범용 대조에서 제외되며 별도 **Snapshot 검사**로 Dataset의 고정 Snapshot 존재를 확인한다. 진단은 해당 요청 시 실행되며 백그라운드 정리 스케줄은 없다.
+
+안전 기본값은 `SOS_OBJECT_GRACE_DAYS=7`, `SOS_OBJECT_OBSERVATION_HOURS=24`, `SOS_OBJECT_MIN_OBSERVATIONS=2`, `SOS_OBJECT_PAGE_SIZE=100`이다. 환경변수로 조정할 수 있으나 각각 최소 7일, 최소 24시간, 최소 2회, 한 페이지 1~200개 범위로 제한된다. `GET /api/storage/policy`는 실제 적용값과 환경변수/기본값 출처를 제공한다. 자동 삭제를 활성화하는 옵션은 없다.
+
+`GET /api/storage/inspection`은 한 번에 한 접두사의 한 페이지만 조회하고 `next_cursor`를 반환한다. `protected`는 참조 또는 실행으로 보호 중, `waiting`은 유예·관측 대기, `unknown`은 소유권·게시 상태가 불명확하여 삭제 금지, `candidate`는 복수 관측된 실패 객체에 대한 검토 신호이다. **candidate도 삭제 허가가 아니다.** S3 또는 DB가 장애 상태이면 추측해 결과를 확정하지 않는다. 새 Transform 결과는 `results/{job_id}/{attempt_id}.parquet`에 저장되며 기존 결과 참조를 변경하지 않는다.
