@@ -1032,9 +1032,13 @@ def test_tag_failure_keeps_uncertain_intent_without_publishing_dataset(workspace
         connect_iceberg(store, "tag_failure")
     assert len(store.datasets()) == before
     with store.connection() as db:
-        rows = db.execute(
-            text("SELECT dataset_id,state FROM snapshot_retention WHERE state='Uncertain'")
-        ).mappings().all()
+        rows = (
+            db.execute(
+                text("SELECT dataset_id,state FROM snapshot_retention WHERE state='Uncertain'")
+            )
+            .mappings()
+            .all()
+        )
     assert len(rows) == 1
     assert store.get_dataset(rows[0]["dataset_id"]) is None
 
