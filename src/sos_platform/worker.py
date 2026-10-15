@@ -99,16 +99,15 @@ def run_once(store: Store) -> bool:
                 "location": storage.location(key),
                 "version": version,
             }
-            output.unlink(missing_ok=True)
         result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}
-        status = store.finish(job_id, "Succeeded", result=result, publish=publish)
-        if status != "Succeeded":
-            output.unlink(missing_ok=True)
+        store.finish(job_id, "Succeeded", result=result, publish=publish)
     except Exception as exc:
         _stop(process)
         store.finish(job_id, "Failed", error=f"{type(exc).__name__}: {exc}"[:500])
     finally:
         _stop(process)
+        # 게시 도중 실패해도 로컬 실행 중간 파일은 남기지 않는다.
+        output.unlink(missing_ok=True)
         pending.unlink(missing_ok=True)
         completed.unlink(missing_ok=True)
     return True
