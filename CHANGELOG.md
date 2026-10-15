@@ -4,6 +4,7 @@
 
 ### Changed
 
+- DuckDB를 Dataset Preview·Profile·Discovery 탐색의 실행기로 도입하고 Polars의 Feature·Transform 책임과 분리했다. 샘플 탐색·전체 분석 Job을 분리하고 기존 Job API 호환성을 보존했다.
 - CSV·Parquet 파일을 메모리 전체 복사 없이 등록하고 업로드 진행·오류 안내 및 캐시 무결성 게시를 보강했다.
 - 파일 업로드·인증 거부 감사의 동기 I/O를 비차단 처리하고 해당 동시성·브라우저 회귀 검증을 보강했다.
 - API 오류 코드·Request ID·레거시 `detail` 호환, Worker/Attempt 영속 진단과 구조화 로그를 연결하고 안전한 Iceberg 복구 안내를 제공한다.
