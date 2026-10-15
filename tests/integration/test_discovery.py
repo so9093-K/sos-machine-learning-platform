@@ -18,7 +18,7 @@ def _upload(client, name: str, content: bytes) -> dict:
 
 def test_discovery_overview_search_and_bounded_preview(workspace):
     client, _store = workspace
-    dataset = _upload(client, "measurements.csv", b"group,value\\na,1\\nb,2\\na,3\\n")
+    dataset = _upload(client, "measurements.csv", b"group,value\na,1\nb,2\na,3\n")
     base = f"/api/datasets/{dataset['id']}"
     overview = client.get(base + "/overview")
     assert overview.status_code == 200, overview.text
@@ -39,7 +39,7 @@ def test_discovery_overview_search_and_bounded_preview(workspace):
 
 def test_full_grouped_exploration_and_profile_job(workspace):
     client, store = workspace
-    dataset = _upload(client, "scores.csv", b"group,value\\na,1\\na,3\\nb,5\\nb,\\n")
+    dataset = _upload(client, "scores.csv", b"group,value\na,1\na,3\nb,5\nb,\n")
     base = f"/api/datasets/{dataset['id']}"
     result = client.post(
         base + "/explorations",
@@ -66,7 +66,7 @@ def test_full_grouped_exploration_and_profile_job(workspace):
 
 def test_no_untrusted_identifiers_or_sql_are_executed(workspace):
     client, _store = workspace
-    dataset = _upload(client, "quotes.csv", b'"group""quote",value\\na,10\\n')
+    dataset = _upload(client, "quotes.csv", b'"group""quote",value\na,10\n')
     base = f"/api/datasets/{dataset['id']}"
     assert quoted('a"b') == '"a""b"'
     malicious = client.post(
@@ -84,9 +84,9 @@ def test_no_untrusted_identifiers_or_sql_are_executed(workspace):
 
 def test_discovery_does_not_read_other_local_files(workspace, tmp_path):
     client, store = workspace
-    dataset = _upload(client, "source.csv", b"value\\n123\\n")
+    dataset = _upload(client, "source.csv", b"value\n123\n")
     other = tmp_path / "confidential.csv"
-    other.write_text("private\\nsecret\\n")
+    other.write_text("private\nsecret\n")
     with source_connection(store, dataset) as conn:
         with pytest.raises(Exception, match="(?i)permission|access|external"):
             conn.execute(f"SELECT * FROM read_csv('{other}')").fetchall()
@@ -103,7 +103,7 @@ def test_discovery_policy_validation(monkeypatch):
 
 def test_profile_null_and_nan_statistics(workspace):
     client, _store = workspace
-    dataset = _upload(client, "numbers.csv", b"group,value\\na,1.5\\na,NaN\\nb,\\na,1.5\\n")
+    dataset = _upload(client, "numbers.csv", b"group,value\na,1.5\na,NaN\nb,\na,1.5\n")
     response = client.get(f"/api/datasets/{dataset['id']}/profile")
     assert response.status_code == 200, response.text
     result = response.json()
