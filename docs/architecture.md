@@ -51,3 +51,7 @@ Makefile과 개발 CLI는 서비스 기동·진단의 인터페이스이자 배�
 장기적인 도메인 경계는 이 실행 형태에 종속되지 않는다. 새로운 Catalog나 저장소 제공자를 추가할 때 Dataset과 Job의 의미를 유지하고, 실제 교체 필요성이 있는 경계에만 어댑터를 도입한다.
 
 S3 전송 전 객체 게시 의도를 PostgreSQL `object_writes`에 기록하고, Dataset과 객체의 확정 상태를 하나의 DB 트랜잭션으로 갱신한다. Transform 결과는 Attempt별 불변 경로를 사용한다. 읽기 전용 Reconciler는 `datasets/`와 `results/` 객체 목록을 페이지 단위로 조회하고, `object_observations`에 날짜 간 관측 근거를 남긴다. 이는 실제 삭제 승인이 아니다. Iceberg Snapshot 보호 여부는 별도 Catalog 검사로 확인하며 범용 S3 정리 범위에서 제외한다. 장기 계약은 [ADR 0002](adr/0002-object-lifecycle.md)를 따른다.
+
+## 인증·보존·감사 경계
+
+API는 동일한 Actor·Action·Resource 권한 판단을 거쳐 Dataset·Job·Storage에 접근한다. 현재는 로컬 개발 신원과 운영용 불투명 Bearer 토큰 지문 검증을 지원하며, OIDC 로그인은 아직 구현하지 않았다. 인증 제공자 구현과 도메인 권한을 분리한다. PostgreSQL은 보존 의도·보안 감사·Dataset 소유권의 정본이고 Iceberg Catalog는 Snapshot Tag의 실제 유효 상태를 판단한다. 외부 Catalog 커밋을 PostgreSQL 트랜잭션과 동일시하지 않는다.
