@@ -722,17 +722,13 @@ def test_abandoned_upload_intent_is_never_auto_classified_as_candidate(workspace
             text("UPDATE object_writes SET updated_at=:old WHERE location=:location"),
             {"old": old, "location": location},
         )
-    detail = store.observe_objects(
-        [{"location": location, "fingerprint": "stable"}], 24
-    )[location]
+    detail = store.observe_objects([{"location": location, "fingerprint": "stable"}], 24)[location]
     detail["observation"] = {
         "fingerprint": "stable",
         "first_seen_at": old,
         "observation_count": 10,
     }
-    result = classify_object(
-        {"fingerprint": "stable", "modified_at": old}, detail, StoragePolicy()
-    )
+    result = classify_object({"fingerprint": "stable", "modified_at": old}, detail, StoragePolicy())
     assert result[0] == "protected"
     assert store.object_writes(location)[0]["state"] == "Pending"
 
@@ -741,9 +737,7 @@ def test_job_summary_bounds_attempt_payload_and_preserves_detail(workspace):
     """Job 목록은 수백 번의 Attempt가 있더라도 요약만 전송한다."""
     client, store = workspace
     dataset = upload(client)
-    job = client.post(
-        "/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"}
-    ).json()
+    job = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"}).json()
     with store.connection() as db:
         for number in range(1, 151):
             db.execute(
@@ -791,8 +785,10 @@ def test_upgrade_from_0001_preserves_existing_records(workspace):
         names = {
             row[0]
             for row in db.execute(
-                text("SELECT column_name FROM information_schema.columns "
-                     "WHERE table_name='object_observations'")
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='object_observations'"
+                )
             )
         }
     assert "fingerprint" in names
