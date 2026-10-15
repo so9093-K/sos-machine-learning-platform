@@ -409,7 +409,7 @@ function Workspace({ actor }: { actor: Identity }) {
           id="sos-panel-profile" aria-labelledby="sos-tab-profile" tabIndex={0}>
           <div className="panel-head"><div><h3>탐색적 데이터 분석</h3>
             <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
-          </div><button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button></div>
+          </div>{canWrite && <button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button>}</div>
           {profileStatus === "loading" && <p role="status" className="muted">EDA 통계를 계산하고 있습니다.</p>}
           {profileStatus === "error" && <button className="secondary"
             onClick={() => setReloadRevision(v => v + 1)}>EDA 다시 시도</button>}
@@ -500,9 +500,9 @@ function Workspace({ actor }: { actor: Identity }) {
             </div>)}</div>
           <div className="actions"><button disabled={busy || !steps.length} className="secondary"
             onClick={() => void previewFeatures()}>샘플 변환 확인</button>
-            <button disabled={busy || !steps.length} onClick={() => void submit("transform")}>
+            {canWrite && <button disabled={busy || !steps.length} onClick={() => void submit("transform")}>
               전체 변환 Job 실행 →
-            </button></div>
+            </button>}}}</div>
           {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 계산</h4>
              <p className="hint">10만 행 이하 입력에서 실제 Job과 같은 변환을 실행한 뒤 출력 최대 30행을 표시합니다. 더 큰 데이터는 전체 Job을 사용하세요.</p>
             <div className="table-scroll"><table><thead><tr>{Object.entries(featurePreview.schema).map(
@@ -515,7 +515,7 @@ function Workspace({ actor }: { actor: Identity }) {
       </>}
       {canManage && tab === "storage" && <StoragePanel />}
       {canManage && tab === "audit" && <AuditPanel />}
-      {tab === "jobs" && <JobsPanel jobs={jobs} datasets={datasets} busy={busy}
+      {tab === "jobs" && <JobsPanel jobs={jobs} datasets={datasets} busy={busy} canCancel={canWrite}
         nextCursor={nextJobsCursor} onLoadMore={() => void loadMoreJobs()}
         onRefresh={() => void withFeedback(refreshJobs)}
         onCancel={id => void cancelJob(id)}
