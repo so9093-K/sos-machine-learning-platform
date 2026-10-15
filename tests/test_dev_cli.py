@@ -283,7 +283,9 @@ def test_external_up_does_not_migrate_or_initialize(monkeypatch, config, tmp_pat
         {"SOS_S3_ENDPOINT": "http://127.0.0.1:9705"},
     ],
 )
-def test_managed_preflight_blocks_external_storage_before_any_commands(config, overrides, monkeypatch):
+def test_managed_preflight_blocks_external_storage_before_any_commands(
+    config, overrides, monkeypatch
+):
     config.update(overrides)
     monkeypatch.setattr(dev.shutil, "which", lambda _name: "/usr/bin/tool")
     invoked = []
