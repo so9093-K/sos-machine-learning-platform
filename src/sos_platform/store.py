@@ -774,12 +774,40 @@ class Store:
                     ),
                     {"at": now(), "id": row["id"]},
                 )
-                db.execute(
+                interrupted = db.execute(
                     text(
                         "UPDATE attempts SET status='Interrupted',finished_at=:at,error=:error "
-                        "WHERE job_id=:id AND status='Running'"
+                        "WHERE job_id=:id AND status='Running' RETURNING id"
                     ),
                     {"at": now(), "error": "Worker stopped before completion", "id": row["id"]},
+                ).scalars().all()
+                attempt_id = interrupted[-1] if interrupted else "unknown"
+                if unsafe:
+                    # 자동 재시도 대신 Catalog 속성으로 커밋 여부를 추적할 근거를 남긴다.
+                    db.execute(
+                        text("UPDATE jobs SET error=:error WHERE id=:id"),
+                        {
+                            "id": row["id"],
+                            "error": (
+                                f"Iceberg 적재 중단: Attempt {attempt_id}의 "
+                                "sos.attempt-id를 Catalog Snapshot과 대조하세요. "
+                                "확인 전 다시 적재하지 마세요."
+                            ),
+                        },
+                    )
+                self._audit(
+                    db,
+                    actor_id="sos-worker",
+                    actor_type="service",
+                    action="job.recover",
+                    resource_type="job",
+                    resource_id=row["id"],
+                    outcome={
+                        "Queued": "requeued",
+                        "Cancelled": "cancelled",
+                        "Failed": "interrupted",
+                    }[status],
+                    reason=f"kind={row['kind']};attempt={attempt_id}"[:200],
                 )
 
     def acquire_worker(self) -> bool:

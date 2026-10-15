@@ -308,6 +308,14 @@ def test_interrupted_iceberg_import_never_retries_implicitly(workspace):
     assert recovered["status"] == "Failed"
     assert "Snapshot" in recovered["error"]
     assert recovered["attempts"][0]["status"] == "Interrupted"
+    assert recovered["attempts"][0]["id"] in recovered["error"]
+    assert any(
+        item["action"] == "job.recover"
+        and item["resource_id"] == created["id"]
+        and item["outcome"] == "interrupted"
+        and recovered["attempts"][0]["id"] in item["reason"]
+        for item in store.audit_events(limit=100)
+    )
     assert run_once(store) is False
 
 
@@ -1338,3 +1346,69 @@ def test_failed_job_completion_is_audited(workspace):
         and attempt_id in entry["reason"]
         for entry in store.audit_events(limit=100)
     )
+
+
+
+def test_recovery_audit_failure_rolls_back_state(workspace, monkeypatch):
+    """복구 감사 실패 시 Job·Attempt 상태 전환이 부분 확정되지 않는다."""
+    client, store = workspace
+    source = upload(client)
+    created = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    job = store.claim()
+    assert job["id"] == created.json()["id"]
+    attempt_id = job["attempts"][-1]["id"]
+    original = Store._audit
+
+    def fail_recovery(db, **kwargs):
+        if kwargs["action"] == "job.recover":
+            raise RuntimeError("Simulated recovery audit outage")
+        return original(db, **kwargs)
+
+    monkeypatch.setattr(Store, "_audit", staticmethod(fail_recovery))
+    with pytest.raises(RuntimeError, match="recovery audit outage"):
+        store.recover()
+    assert store.get_job(job["id"])["status"] == "Running"
+    assert store.get_job(job["id"])["attempts"][-1]["status"] == "Running"
+    monkeypatch.setattr(Store, "_audit", staticmethod(original))
+    store.recover()
+    assert store.get_job(job["id"])["status"] == "Queued"
+    assert store.get_job(job["id"])["attempts"][-1]["status"] == "Interrupted"
+    assert any(
+        item["action"] == "job.recover"
+        and item["resource_id"] == job["id"]
+        and item["outcome"] == "requeued"
+        and attempt_id in item["reason"]
+        for item in store.audit_events(limit=100)
+    )
+    before = [item for item in store.audit_events(limit=100) if item["action"] == "job.recover"]
+    store.recover()
+    after = [item for item in store.audit_events(limit=100) if item["action"] == "job.recover"]
+    assert after == before
+
+
+def test_test_fixture_releases_created_database_on_migration_failure(tmp_path, monkeypatch):
+    """Fixture 준비 중 Alembic이 실패해도 생성된 DB는 남기지 않는다."""
+    base = make_url(Settings.from_env().database_url)
+    admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+
+    def databases():
+        with admin.connect() as conn:
+            return set(
+                conn.execute(
+                    text("SELECT datname FROM pg_database WHERE datname LIKE 'sos_test_%'")
+                ).scalars()
+            )
+
+    try:
+        before = databases()
+
+        def fail_upgrade(*_args, **_kwargs):
+            raise RuntimeError("Simulated migration setup failure")
+
+        monkeypatch.setattr(command, "upgrade", fail_upgrade)
+        fixture = workspace.__wrapped__(tmp_path, monkeypatch)
+        with pytest.raises(RuntimeError, match="Simulated migration setup failure"):
+            next(fixture)
+        assert databases() == before
+    finally:
+        admin.dispose()
