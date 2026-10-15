@@ -64,6 +64,8 @@ def run_once(store: Store) -> bool:
     pending = store.home / "results" / f"{job_id}.pending.parquet"
     completed = store.home / "results" / f"{job_id}.completed.json"
     completed.unlink(missing_ok=True)
+    uploaded_key: str | None = None
+    storage: ObjectStore | None = None
 
     process = multiprocessing.get_context("spawn").Process(
         target=_perform, args=(store.home, store.database_url, job, completed, pending)
@@ -93,6 +95,7 @@ def run_once(store: Store) -> bool:
             pending.replace(output)
             key = f"results/{job_id}.parquet"
             storage = ObjectStore()
+            uploaded_key = key
             version = storage.put(key, output)
             publish = {
                 "name": f"features-{job_id[:8]}.parquet",
@@ -101,9 +104,21 @@ def run_once(store: Store) -> bool:
                 "version": version,
             }
         result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}
-        store.finish(job_id, "Succeeded", result=result, publish=publish)
+        final_status = store.finish(job_id, "Succeeded", result=result, publish=publish)
+        if final_status != "Succeeded" and uploaded_key and storage:
+            if not store.dataset_location_referenced(storage.location(uploaded_key)):
+                storage.delete(uploaded_key)
     except Exception as exc:
         _stop(process)
+        # UUID Job 키는 다른 Job과 공유되지 않는다. DB 조회가 불가능하거나 이미
+        # 참조 중인 객체는 절대 삭제하지 않고 재실행·복구 대상으로 남긴다.
+        if uploaded_key and storage:
+            try:
+                location = storage.location(uploaded_key)
+                if not store.dataset_location_referenced(location):
+                    storage.delete(uploaded_key)
+            except Exception:
+                pass
         store.finish(job_id, "Failed", error=f"{type(exc).__name__}: {exc}"[:500])
     finally:
         _stop(process)
