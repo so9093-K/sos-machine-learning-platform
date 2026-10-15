@@ -5,7 +5,7 @@ import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./featu
 import { request, jsonPost } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
-import type { Dataset, Preview, Profile, Job, Example } from "./types";
+import type { Dataset, Preview, Profile, Job, JobPage, Example } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
@@ -33,6 +33,8 @@ function Workspace() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [nextJobsCursor, setNextJobsCursor] = useState<string | null>(null);
+  const [olderJobsLoaded, setOlderJobsLoaded] = useState(false);
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
   const [previewStatus, setPreviewStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -66,8 +68,22 @@ function Workspace() {
     setSelected(previous => items.some(d => d.id === previous) ? previous : (items[0]?.id ?? ""));
   }
   async function refreshJobs() {
-    const results = await request<Job[]>("/api/jobs");
-    setJobs(results);
+    const page = await request<JobPage>("/api/jobs?limit=20");
+    setJobs(previous => olderJobsLoaded
+      ? [...page.items, ...previous.filter(job => !page.items.some(item => item.id === job.id))]
+      : page.items);
+    if (!olderJobsLoaded) setNextJobsCursor(page.next_cursor ?? null);
+  }
+  async function loadMoreJobs() {
+    if (!nextJobsCursor) return;
+    await withFeedback(async () => {
+      const page = await request<JobPage>(
+        `/api/jobs?limit=20&cursor=${encodeURIComponent(nextJobsCursor)}`);
+      setJobs(previous => [...previous, ...page.items.filter(
+        item => !previous.some(job => job.id === item.id))]);
+      setNextJobsCursor(page.next_cursor ?? null);
+      setOlderJobsLoaded(true);
+    });
   }
   useEffect(() => {
     refreshDatasets().catch(e => setError(String(e)));
@@ -483,6 +499,7 @@ function Workspace() {
 
       </>}
       {tab === "jobs" && <JobsPanel jobs={jobs} datasets={datasets} busy={busy}
+        nextCursor={nextJobsCursor} onLoadMore={() => void loadMoreJobs()}
         onRefresh={() => void withFeedback(refreshJobs)}
         onCancel={id => void cancelJob(id)}
         onOpen={id => void openJobDataset(id)} />}
