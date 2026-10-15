@@ -21,7 +21,7 @@ def register_error_handlers(app: FastAPI) -> None:
         request_id = getattr(request.state, "request_id", str(uuid4()))
         return JSONResponse(
             status_code=status,
-            headers=headers,
+            headers={**(headers or {}), "X-Request-ID": request_id},
             content={
                 "type": f"/problems/{code.lower()}",
                 "title": definition.title,
