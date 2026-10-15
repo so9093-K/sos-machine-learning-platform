@@ -37,7 +37,9 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
             result = {"input_dataset_id": dataset["id"]}
         elif job["kind"] == "iceberg_import":
             result = {
-                "iceberg_publish": import_to_iceberg(store, dataset, job["spec"]["table_name"])
+                "iceberg_publish": import_to_iceberg(
+                    store, dataset, job["spec"]["table_name"], job["attempts"][-1]["id"]
+                )
             }
         else:
             raise ValueError("Unknown job type")
