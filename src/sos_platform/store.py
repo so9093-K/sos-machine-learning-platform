@@ -8,7 +8,6 @@ from uuid import uuid4
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-
 from sqlalchemy import bindparam, create_engine, text
 
 from .config import Settings
