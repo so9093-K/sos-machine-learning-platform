@@ -78,7 +78,7 @@ class IcebergReferenceOut(BaseModel):
     dataset_id: str
     table_name: str
     snapshot_id: str
-    status: Literal["protected", "missing", "unknown"]
+    status: Literal["retained", "available_unprotected", "missing", "unknown"]
     reason: str
 
 
