@@ -56,25 +56,17 @@ def _stop(process: multiprocessing.Process) -> None:
             process.join()
 
 
-def _cleanup_unpublished_output(store: Store, storage: ObjectStore, key: str) -> None:
-    """참조 조회를 완료한 Job 전용 객체만 정리한다. 실패하면 데이터는 보존한다."""
-    try:
-        if not store.dataset_location_referenced(storage.location(key)):
-            storage.delete(key)
-    except Exception:
-        logging.exception("Unpublished job result cleanup failed: %s", key)
-
-
 def run_once(store: Store) -> bool:
     job = store.claim()
     if job is None:
         return False
     job_id = job["id"]
+    attempt_id = job["attempts"][-1]["id"]
+    write_id: str | None = None
     output = store.home / "results" / f"{job_id}.parquet"
     pending = store.home / "results" / f"{job_id}.pending.parquet"
     completed = store.home / "results" / f"{job_id}.completed.json"
     completed.unlink(missing_ok=True)
-    uploaded_key: str | None = None
     storage: ObjectStore | None = None
 
     process = multiprocessing.get_context("spawn").Process(
@@ -103,9 +95,11 @@ def run_once(store: Store) -> bool:
         publish = outcome["result"].get("iceberg_publish")
         if pending.exists():
             pending.replace(output)
-            key = f"results/{job_id}.parquet"
+            key = f"results/{job_id}/{attempt_id}.parquet"
             storage = ObjectStore()
-            uploaded_key = key
+            write_id = store.begin_object_write(
+                location=storage.location(key), owner_kind="attempt", owner_id=attempt_id
+            )
             version = storage.put(key, output)
             publish = {
                 "name": f"features-{job_id[:8]}.parquet",
@@ -114,13 +108,18 @@ def run_once(store: Store) -> bool:
                 "version": version,
             }
         result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}
-        final_status = store.finish(job_id, "Succeeded", result=result, publish=publish)
-        if final_status != "Succeeded" and uploaded_key and storage:
-            _cleanup_unpublished_output(store, storage, uploaded_key)
+        final_status = store.finish(
+            job_id, "Succeeded", result=result, publish=publish, write_id=write_id
+        )
+        if final_status != "Succeeded" and write_id:
+            store.fail_object_write(write_id, "Job cancelled during publication")
     except Exception as exc:
         _stop(process)
-        if uploaded_key and storage:
-            _cleanup_unpublished_output(store, storage, uploaded_key)
+        if write_id:
+            try:
+                store.fail_object_write(write_id, str(exc))
+            except Exception:
+                logging.exception("Could not record failed object write: %s", write_id)
         store.finish(job_id, "Failed", error=f"{type(exc).__name__}: {exc}"[:500])
     finally:
         _stop(process)
