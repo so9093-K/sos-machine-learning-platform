@@ -282,7 +282,7 @@ class Store:
             return item
 
     def jobs(self, *, limit: int = 20, before: dict | None = None) -> list[dict]:
-        """정렬키 커서를 사용해 Job 및 Attempt를 한 페이지씩 일괄 조회한다."""
+        """목록은 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
         if not 1 <= limit <= 101:
             raise ValueError("Job query limit is out of range")
         predicate = "WHERE (created_at, id) < (:created_at, :id)" if before else ""
@@ -295,22 +295,24 @@ class Store:
             items = [dict(row) for row in rows]
             if not items:
                 return []
-            attempts = (
-                db.execute(
-                    text("SELECT * FROM attempts WHERE job_id IN :ids ORDER BY number").bindparams(
-                        bindparam("ids", expanding=True)
-                    ),
-                    {"ids": [item["id"] for item in items]},
-                )
-                .mappings()
-                .all()
-            )
-        grouped: dict[str, list[dict]] = {item["id"]: [] for item in items}
-        for attempt in attempts:
-            grouped[attempt["job_id"]].append(dict(attempt))
+            # Window 함수로 전송되는 Attempt를 Job당 하나로 제한한다.
+            query = text(
+                "SELECT * FROM (SELECT a.*, "
+                "COUNT(*) OVER(PARTITION BY a.job_id) AS attempt_count,"
+                "ROW_NUMBER() OVER(PARTITION BY a.job_id ORDER BY a.number DESC) AS rank "
+                "FROM attempts a WHERE a.job_id IN :ids) history WHERE rank=1"
+            ).bindparams(bindparam("ids", expanding=True))
+            summaries = db.execute(query, {"ids": [item["id"] for item in items]}).mappings()
+            latest = {row["job_id"]: dict(row) for row in summaries}
         for item in items:
             self._decode_job(item)
-            item["attempts"] = grouped[item["id"]]
+            summary = latest.get(item["id"])
+            item["attempt_count"] = summary["attempt_count"] if summary else 0
+            item["latest_attempt"] = (
+                {key: value for key, value in summary.items() if key not in ("rank", "attempt_count")}
+                if summary
+                else None
+            )
         return items
 
     def request_cancel(self, job_id: str) -> dict | None:
