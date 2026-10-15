@@ -191,17 +191,6 @@ class Store:
             )
             return dict(row) if row else None
 
-    def dataset_location_referenced(self, location: str) -> bool:
-        """결과 게시 실패 시 다른 Dataset 참조를 보존하기 위한 확인."""
-        with self.connection() as db:
-            return (
-                db.execute(
-                    text("SELECT 1 FROM datasets WHERE location=:location LIMIT 1"),
-                    {"location": location},
-                ).first()
-                is not None
-            )
-
     def datasets(self) -> list[dict]:
         with self.connection() as db:
             return [
