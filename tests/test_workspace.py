@@ -810,9 +810,10 @@ def test_upgrade_from_0001_preserves_existing_records(workspace):
     command.upgrade(config, "head")
     store.initialize()
     assert store.get_dataset(dataset_id)["name"] == "legacy.csv"
+    assert store.get_dataset(dataset_id)["owner_actor"] is None
     with store.connection() as db:
         rev = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert rev == "0003"
+        assert rev == "0004"
         names = {
             row[0]
             for row in db.execute(
@@ -855,8 +856,7 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
 
         assert secure.get("/api/datasets").status_code == 401
         assert (
-            secure.get("/api/datasets", headers={"Authorization": "Bearer bad"}).status_code
-            == 401
+            secure.get("/api/datasets", headers={"Authorization": "Bearer bad"}).status_code == 401
         )
         assert secure.get("/api/auth/me", headers=headers("alice")).json()["actor_id"] == "alice"
         assert secure.get("/api/storage/inspection", headers=headers("alice")).status_code == 403
