@@ -619,7 +619,7 @@ def check_fast(config: dict):
             (["uv", "run", "--locked", "ruff", "format", "--check", "."], ROOT),
             (
                 ["uv", "run", "--locked", "pytest", "-q", "tests/test_processing.py",
-                 "tests/test_dev_cli.py"],
+                 "tests/test_dev_cli.py", "tests/test_api_compat.py"],
                 ROOT,
             ),
             (["npm", "run", "test"], ROOT / "web"),

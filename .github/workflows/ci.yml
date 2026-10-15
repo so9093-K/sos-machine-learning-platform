@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # PR base OpenAPI를 별도 Worktree에서 생성
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
@@ -36,6 +38,16 @@ jobs:
         run: |
           cd web && npm ci --no-audit && npm run generate:types
           git diff --exit-code -- src/api.generated.ts
+      - name: Verify API backward compatibility
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add --detach /tmp/sos-ci-base "$BASE_SHA"
+          PYTHONPATH=/tmp/sos-ci-base/src uv run --locked python /tmp/sos-ci-base/scripts/export_openapi.py > /tmp/sos-api-before.json
+          uv run --locked python scripts/export_openapi.py > /tmp/sos-api-after.json
+          uv run --locked python scripts/check_api_compat.py /tmp/sos-api-before.json /tmp/sos-api-after.json
+          git worktree remove /tmp/sos-ci-base
       - name: Ruff lint
         run: uv run --locked ruff check .
       - name: Explain lint failure

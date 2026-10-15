@@ -351,7 +351,7 @@ def test_make_check_fast_is_infrastructure_independent(monkeypatch, config):
         (["uv", "run", "--locked", "ruff", "format", "--check", "."], dev.ROOT),
         (
             ["uv", "run", "--locked", "pytest", "-q", "tests/test_processing.py",
-             "tests/test_dev_cli.py"],
+             "tests/test_dev_cli.py", "tests/test_api_compat.py"],
             dev.ROOT,
         ),
         (["npm", "run", "test"], dev.ROOT / "web"),
