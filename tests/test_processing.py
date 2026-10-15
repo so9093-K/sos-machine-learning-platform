@@ -93,3 +93,45 @@ def test_rolling_mean_rejects_non_numeric_inputs_before_execution():
     )
     with pytest.raises(ValueError, match="numeric"):
         transform(raw, spec)
+
+
+def test_time_features_reject_duplicate_and_null_order_keys():
+    duplicates = pl.DataFrame({
+        "machine": ["A", "A", "B"], "time": [1, 1, 1], "value": [10, 20, 30],
+    }).lazy()
+    spec = Transform.model_validate({
+        "order_by": "time",
+        "group_by": ["machine"],
+        "steps": [{"op": "lag", "column": "value"}],
+    })
+    with pytest.raises(ValueError, match="unique within each group"):
+        transform(duplicates, spec)
+
+    null_time = pl.DataFrame({"time": [1, None], "value": [10, 20]}).lazy()
+    with pytest.raises(ValueError, match="null values"):
+        transform(null_time, Transform.model_validate({
+            "order_by": "time", "steps": [{"op": "rolling_mean", "column": "value"}],
+        }))
+
+    filtered = Transform.model_validate({
+        "order_by": "time",
+        "steps": [
+            {"op": "filter_not_null", "column": "time"},
+            {"op": "lag", "column": "value"},
+        ],
+    })
+    assert transform(null_time, filtered).collect().height == 1
+
+
+def test_time_sort_occurs_after_prior_cast():
+    raw = pl.DataFrame({"time": ["10", "2", "1"], "value": [100, 20, 10]}).lazy()
+    spec = Transform.model_validate({
+        "order_by": "time",
+        "steps": [
+            {"op": "cast", "column": "time", "dtype": "Int64"},
+            {"op": "lag", "column": "value", "alias": "previous"},
+        ],
+    })
+    result = transform(raw, spec).collect().to_dicts()
+    assert [r["time"] for r in result] == [1, 2, 10]
+    assert [r["previous"] for r in result] == [None, 10, 20]
