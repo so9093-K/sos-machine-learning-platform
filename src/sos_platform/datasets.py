@@ -3,9 +3,9 @@
 import hashlib
 import os
 import re
-from uuid import uuid4
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from uuid import uuid4
 
 import polars as pl
 
