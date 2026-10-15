@@ -1,4 +1,4 @@
-"""생성 OpenAPI의 이전 판본과의 호환성 회귀 검사."""
+"""실제 OpenAPI의 입력·출력 방향과 참조 스키마 변경 회귀 검증."""
 
 import importlib.util
 from pathlib import Path
@@ -10,56 +10,128 @@ compat = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(compat)
 
 
-def contract(*, required: bool = False, extra: bool = False) -> dict:
-    params = [{"in": "query", "name": "limit", "required": False}]
-    if extra:
-        params.append({"in": "query", "name": "cursor", "required": required})
-    properties = {"id": {"type": "string"}, "name": {"type": "string"}}
-    if extra:
-        properties["optional"] = {"type": "string"}
+def contract(
+    *, request: dict | None = None, response: dict | None = None,
+    output: dict | None = None,
+) -> dict:
+    op = {"responses": {"200": {"content": {"application/json": {
+        "schema": response or {"$ref": "#/components/schemas/Result"}
+    }}}}}
+    if request is not None:
+        op["requestBody"] = {"required": True, "content": {
+            "application/json": {"schema": {"$ref": "#/components/schemas/Input"}}
+        }}
     return {
-        "paths": {"/api/datasets": {"get": {"parameters": params, "responses": {"200": {}}}}},
-        "components": {
-            "schemas": {
-                "DatasetOut": {"type": "object", "properties": properties, "required": ["id"]}
-            }
-        },
+        "paths": {"/api/data": {"post": op}},
+        "components": {"schemas": {
+            "Input": request or {"type": "object", "properties": {"x": {"type": "string"}}},
+            "Result": output or {"type": "object", "properties": {
+                "x": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                "rows": {"type": "array", "items": {"type": "string"}},
+            }, "required": ["x"]},
+        }},
     }
 
 
-def test_compatible_addition():
-    assert compat.breaking_changes(contract(), contract(extra=True)) == []
+def test_identical_contract_is_compatible():
+    assert compat.breaking_changes(contract(), contract()) == []
 
 
 def test_removed_endpoint_is_incompatible():
+    changed = contract()
+    changed["paths"] = {}
+    assert any("endpoint removed" in x for x in compat.breaking_changes(contract(), changed))
+
+
+def test_added_required_query_parameter_is_breaking():
+    changed = contract()
+    changed["paths"]["/api/data"]["post"]["parameters"] = [
+        {"in": "query", "name": "cursor", "required": True, "schema": {"type": "string"}}
+    ]
+    assert any("required parameter" in x for x in compat.breaking_changes(contract(), changed))
+
+
+def test_existing_optional_query_parameter_narrowing_is_breaking():
+    before = contract()
+    after = contract()
+    old = {"in": "query", "name": "cursor", "required": False, "schema": {"type": "string"}}
+    before["paths"]["/api/data"]["post"]["parameters"] = [old]
+    after["paths"]["/api/data"]["post"]["parameters"] = [{
+        **old, "schema": {"type": "integer"}
+    }]
+    assert any("type changed" in x for x in compat.breaking_changes(before, after))
+
+
+def test_nullable_response_union_type_change_is_breaking():
+    original = contract()
+    changed = contract()
+    changed["components"]["schemas"]["Result"]["properties"]["x"] = {
+        "anyOf": [{"type": "integer"}, {"type": "null"}]
+    }
+    assert any("response union" in x for x in compat.breaking_changes(original, changed))
+
+
+def test_response_array_items_change_is_breaking():
+    original = contract()
+    changed = contract()
+    changed["components"]["schemas"]["Result"]["properties"]["rows"]["items"] = {
+        "type": "integer"
+    }
+    assert any("response type changed" in x for x in compat.breaking_changes(original, changed))
+
+
+def test_adding_required_response_field_is_safe():
+    old = contract()
     new = contract()
-    new["paths"] = {}
-    assert any("removed endpoint" in x for x in compat.breaking_changes(contract(), new))
+    result = new["components"]["schemas"]["Result"]
+    result["properties"]["created_at"] = {"type": "string"}
+    result["required"].append("created_at")
+    assert compat.breaking_changes(old, new) == []
 
 
-def test_required_parameter_is_incompatible():
-    assert any(
-        "new required parameter" in x
-        for x in compat.breaking_changes(contract(), contract(extra=True, required=True))
-    )
-
-
-def test_removed_response_field_is_incompatible():
-    assert any(
-        "removed field" in x for x in compat.breaking_changes(contract(extra=True), contract())
-    )
-
-
-def test_new_required_field_is_incompatible():
+def test_removing_required_response_field_is_breaking():
+    old = contract()
     new = contract()
-    new["components"]["schemas"]["DatasetOut"]["required"].append("name")
-    assert any("new required field" in x for x in compat.breaking_changes(contract(), new))
+    new["components"]["schemas"]["Result"]["required"].clear()
+    assert any("response required field" in x for x in compat.breaking_changes(old, new))
 
 
-def test_removed_success_status_and_type_change_are_incompatible():
+def test_new_required_request_field_is_breaking():
+    old = contract(request={"type": "object", "properties": {"x": {"type": "string"}}})
+    new = contract(request={
+        "type": "object", "properties": {"x": {"type": "string"}, "y": {"type": "string"}},
+        "required": ["y"],
+    })
+    assert any("request required field" in x for x in compat.breaking_changes(old, new))
+
+
+def test_new_optional_request_field_is_safe():
+    old = contract(request={"type": "object", "properties": {"x": {"type": "string"}}})
+    new = contract(request={
+        "type": "object", "properties": {"x": {"type": "string"}, "y": {"type": "string"}},
+    })
+    assert compat.breaking_changes(old, new) == []
+
+
+def test_response_union_widening_is_breaking_but_request_widening_is_safe():
+    old = contract(request={"type": "object", "properties": {
+        "x": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+    }})
+    new = contract(request={"type": "object", "properties": {
+        "x": {"anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "null"}]}
+    }})
+    assert compat.breaking_changes(old, new) == []
+
+
+def test_unreferenced_schema_removal_is_safe():
+    old = contract()
     new = contract()
-    new["paths"]["/api/datasets"]["get"]["responses"] = {"204": {}}
-    new["components"]["schemas"]["DatasetOut"]["properties"]["id"]["type"] = "integer"
-    issues = compat.breaking_changes(contract(), new)
-    assert any("removed success status" in x for x in issues)
-    assert any("changed type: DatasetOut.id" in x for x in issues)
+    old["components"]["schemas"]["Unused"] = {"type": "object", "properties": {}}
+    assert compat.breaking_changes(old, new) == []
+
+
+def test_success_status_removal_is_breaking():
+    old = contract()
+    new = contract()
+    new["paths"]["/api/data"]["post"]["responses"] = {"204": {}}
+    assert any("success status removed" in x for x in compat.breaking_changes(old, new))

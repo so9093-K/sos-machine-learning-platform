@@ -10,7 +10,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # PR은 같은 번호끼리 묶고 main의 각 실행은 고유한 ID를 가진다.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   # main의 필수 검증은 보존하고 오래된 PR HEAD만 취소한다.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -47,11 +48,16 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          set -euo pipefail
           git worktree add --detach /tmp/sos-ci-base "$BASE_SHA"
-          PYTHONPATH=/tmp/sos-ci-base/src uv run --locked python /tmp/sos-ci-base/scripts/export_openapi.py > /tmp/sos-api-before.json
+          trap 'git worktree remove --force /tmp/sos-ci-base' EXIT
+          if cmp -s /tmp/sos-ci-base/uv.lock uv.lock; then
+            PYTHONPATH=/tmp/sos-ci-base/src uv run --locked python /tmp/sos-ci-base/scripts/export_openapi.py > /tmp/sos-api-before.json
+          else
+            (cd /tmp/sos-ci-base && uv sync --locked --group dev && uv run --locked python scripts/export_openapi.py) > /tmp/sos-api-before.json
+          fi
           uv run --locked python scripts/export_openapi.py > /tmp/sos-api-after.json
           uv run --locked python scripts/check_api_compat.py /tmp/sos-api-before.json /tmp/sos-api-after.json
-          git worktree remove /tmp/sos-ci-base
       - name: Ruff lint
         run: uv run --locked ruff check .
       - name: Explain lint failure
@@ -62,6 +68,8 @@ jobs:
       - name: Explain formatting failure
         if: failure()
         run: uv run --locked ruff format --diff .
+      - name: Validate fast local command without infrastructure
+        run: python3 scripts/dev.py check-fast
       - name: Start integration infrastructure
         run: docker compose -f compose.yaml -p sos-platform up -d --wait
       - name: Migrate database and prepare object storage
@@ -98,8 +106,8 @@ jobs:
           retention-days: 7
       - name: Verify metadata schema matches migration
         run: uv run --locked alembic check
-      - name: Extended module-order regression (scheduled/manual)
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      - name: Extended module-order regression (scheduled/manual or PR smoke)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
         run: |
           uv run --locked pytest -q tests/integration/test_iceberg.py tests/integration/test_jobs.py
           uv run --locked pytest -q tests/integration/test_jobs.py tests/integration/test_iceberg.py
@@ -142,11 +150,10 @@ jobs:
       - name: Start SOS using public Make interface
         run: make up
       # pytest·Vitest·빌드는 앞선 병렬 작업에서 검증하므로 브라우저만 실행한다.
-      - name: Browser workflow tests
-        working-directory: web
+      - name: Browser workflow tests in separate E2E volumes
         env:
           SOS_JUNIT_FILE: reports/workspace.xml
-        run: npx playwright test workspace.spec.ts
+        run: uv run --locked python scripts/run_isolated_e2e.py
       - name: Make lifecycle and data persistence
         run: |
           make
