@@ -6,6 +6,7 @@
 
 import argparse
 import json
+import logging
 import multiprocessing
 import os
 import signal
@@ -53,6 +54,15 @@ def _stop(process: multiprocessing.Process) -> None:
         if process.is_alive():
             process.kill()
             process.join()
+
+
+def _cleanup_unpublished_output(store: Store, storage: ObjectStore, key: str) -> None:
+    """참조 조회를 완료한 Job 전용 객체만 정리한다. 실패하면 데이터는 보존한다."""
+    try:
+        if not store.dataset_location_referenced(storage.location(key)):
+            storage.delete(key)
+    except Exception:
+        logging.exception("Unpublished job result cleanup failed: %s", key)
 
 
 def run_once(store: Store) -> bool:
@@ -106,19 +116,11 @@ def run_once(store: Store) -> bool:
         result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}
         final_status = store.finish(job_id, "Succeeded", result=result, publish=publish)
         if final_status != "Succeeded" and uploaded_key and storage:
-            if not store.dataset_location_referenced(storage.location(uploaded_key)):
-                storage.delete(uploaded_key)
+            _cleanup_unpublished_output(store, storage, uploaded_key)
     except Exception as exc:
         _stop(process)
-        # UUID Job 키는 다른 Job과 공유되지 않는다. DB 조회가 불가능하거나 이미
-        # 참조 중인 객체는 절대 삭제하지 않고 재실행·복구 대상으로 남긴다.
         if uploaded_key and storage:
-            try:
-                location = storage.location(uploaded_key)
-                if not store.dataset_location_referenced(location):
-                    storage.delete(uploaded_key)
-            except Exception:
-                pass
+            _cleanup_unpublished_output(store, storage, uploaded_key)
         store.finish(job_id, "Failed", error=f"{type(exc).__name__}: {exc}"[:500])
     finally:
         _stop(process)
