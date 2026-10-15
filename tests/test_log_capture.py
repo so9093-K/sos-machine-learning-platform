@@ -16,7 +16,7 @@ spec.loader.exec_module(capture)
 
 def test_rotated_log_is_bounded_and_keeps_recent_evidence(tmp_path):
     path = tmp_path / "service.log"
-    code = "print('early-trace-' + 'x'*8000); print('latest-stage=publish-' + 'y'*8000)"
+    code = "for i in range(10):print('noise-' + 'x'*4000);print('latest-stage=publish')"
     assert capture.capture(path, [sys.executable, "-c", code], max_bytes=8192, backups=2) == 0
     assert path.stat().st_size <= 8192
     assert len(list(tmp_path.glob("service.log.*"))) <= 2

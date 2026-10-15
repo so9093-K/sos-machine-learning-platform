@@ -2,6 +2,8 @@
 
 from fastapi.testclient import TestClient
 
+from sos_platform.worker import _perform
+
 from sos_platform.api import create_app
 from sos_platform.store import Store
 
@@ -113,3 +115,113 @@ def test_audit_filter_finds_older_request_and_preserves_permissions(workspace, m
             "/api/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"}
         )
     assert denied.status_code == 401
+
+
+def test_worker_precommit_and_commit_failures_have_distinct_contracts(
+    workspace, monkeypatch, tmp_path
+):
+    """실제 Append 진입을 기준으로 결과 불확실성을 분리한다."""
+    import json
+
+    import sos_platform.worker as worker
+
+    client, store = workspace
+    dataset = upload(client)
+    posted = client.post(
+        "/api/iceberg/import", json={"dataset_id": dataset["id"], "table_name": "diagnostic_case"}
+    )
+    assert posted.status_code == 202
+    job = store.claim()
+    assert job["id"] == posted.json()["id"]
+    completed = tmp_path / "diagnosed.json"
+    pending = tmp_path / "pending.parquet"
+    secret = "password=internal-only-do-not-record"
+
+    def fail_precommit(_store, _dataset, _table, _attempt, *, on_commit_start):
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(worker, "import_to_iceberg", fail_precommit)
+    _perform(store.home, store.database_url, job, completed, pending)
+    before = json.loads(completed.read_text())
+    assert before["error_code"] == "SOS-JOB-FAILED"
+    assert before["failure_stage"] == "iceberg_prepare"
+    assert before["failure_category"] == "unclassified"
+    assert before["exception_type"] == "RuntimeError"
+    assert secret not in completed.read_text()
+
+    def fail_after_commit_entry(_store, _dataset, _table, _attempt, *, on_commit_start):
+        on_commit_start()
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(worker, "import_to_iceberg", fail_after_commit_entry)
+    _perform(store.home, store.database_url, job, completed, pending)
+    after = json.loads(completed.read_text())
+    assert after["error_code"] == "SOS-ICEBERG-UNCERTAIN"
+    assert after["failure_stage"] == "iceberg_commit"
+    assert secret not in completed.read_text()
+
+
+def test_operator_diagnostics_retains_category_without_raw_exception(workspace, monkeypatch):
+    """운영자만 원인 종류를 조회하며 Job·Attempt·감사 상관관계가 이어진다."""
+    from sos_platform.object_store import ObjectStore
+    from sos_platform.worker import run_once
+
+    client, store = workspace
+    dataset = upload(client)
+    posted = client.post(
+        "/api/jobs",
+        json={
+            "dataset_id": dataset["id"],
+            "kind": "transform",
+            "transform": {"steps": [{"op": "fill_null", "column": "temperature", "value": 0}]},
+        },
+    )
+    assert posted.status_code == 202
+    job_id = posted.json()["id"]
+    request_id = posted.headers["X-Request-ID"]
+    secret = "private-token-that-must-not-appear"
+
+    def fail_write(_store, _key, _path):
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(ObjectStore, "put", fail_write)
+    assert run_once(store)
+    details = client.get(f"/api/diagnostics/jobs/{job_id}")
+    assert details.status_code == 200
+    payload = details.json()
+    assert payload["request_id"] == request_id
+    assert payload["error_code"] == "SOS-JOB-FAILED"
+    assert payload["failure_stage"] == "publication"
+    assert payload["failure_category"] == "unclassified"
+    assert payload["exception_type"] == "RuntimeError"
+    assert payload["attempts"][0]["failure_category"] == "unclassified"
+    assert payload["attempts"][0]["exception_type"] == "RuntimeError"
+    assert secret not in details.text
+    audit = client.get("/api/audit", params={"request_id": request_id})
+    assert audit.status_code == 200
+    assert {"job.create", "job.finish"} <= {row["action"] for row in audit.json()}
+    public = client.get(f"/api/jobs/{job_id}")
+    assert public.status_code == 200
+    assert secret not in public.text
+    assert "exception_type" not in public.json()
+
+
+def test_invalid_bearer_token_length_preserves_challenge(workspace, monkeypatch):
+    import hashlib
+    import json
+
+    client, store = workspace
+    key = "real-valid-token-" + ("x" * 40)
+    token_hash = hashlib.sha256(key.encode()).hexdigest()
+    monkeypatch.setenv("SOS_AUTH_MODE", "token")
+    monkeypatch.setenv("SOS_AUTH_TOKEN_HASHES", json.dumps({
+        token_hash: {"actor_id": "operator", "kind": "human", "roles": ["operator"]}
+    }))
+    with TestClient(create_app(store.home)) as secure:
+        response = secure.get("/api/audit", headers={"Authorization": "Bearer short"})
+        assert response.status_code == 401
+        assert response.headers["WWW-Authenticate"] == "Bearer"
+        blocked = secure.get(
+            "/api/diagnostics/jobs/" + "a" * 36, headers={"Authorization": "Bearer short"}
+        )
+        assert blocked.status_code == 401

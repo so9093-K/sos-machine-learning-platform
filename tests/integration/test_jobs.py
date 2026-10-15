@@ -73,6 +73,9 @@ def test_failed_result_publish_cleans_local_worker_files(workspace, monkeypatch)
     assert job["status"] == "Failed"
     assert job["error_code"] == "SOS-JOB-FAILED"
     assert job["failure_stage"] == "publication"
+    assert job["failure_category"] == "unclassified"
+    assert job["exception_type"] == "RuntimeError"
+    assert job["attempts"][0]["failure_category"] == "unclassified"
     assert "simulated object storage failure" not in job["error"]
     results = store.home / "results"
     assert not (results / f"{job_id}.parquet").exists()
