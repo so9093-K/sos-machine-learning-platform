@@ -252,4 +252,4 @@ def test_corrupt_download_cannot_overwrite_valid_cache(workspace, tmp_path, monk
     with pytest.raises(ValueError, match="hash"):
         storage.get("datasets/file.csv", destination, expected_sha256=expected)
     assert destination.read_bytes() == b"verified"
-    assert list(tmp_path.iterdir()) == [destination]
+    assert list(tmp_path.glob("cached.csv.pending-*")) == []

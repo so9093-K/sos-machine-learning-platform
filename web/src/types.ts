@@ -11,3 +11,4 @@ export type Example = components["schemas"]["ExampleOut"];
 export type StorageInspection = components["schemas"]["StorageInspectionOut"];
 export type StoragePolicy = components["schemas"]["StoragePolicyOut"];
 export type IcebergReference = components["schemas"]["IcebergReferenceOut"];
+export type UploadPolicy = components["schemas"]["UploadPolicyOut"];

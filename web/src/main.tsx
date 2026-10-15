@@ -7,13 +7,12 @@ import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
-import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, Example } from "./types";
+import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, Example, UploadPolicy } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
 type Tab = "preview" | "profile" | "features" | "jobs" | "storage" | "audit";
 type Identity = { actor_id: string; actor_type: string; roles: string[]; mode: string };
-type UploadPolicy = { max_size_bytes: number; supported_extensions: string[] };
 type UploadProgress = {
   name: string; loaded: number; total: number;
   phase: "transferring" | "registering";
