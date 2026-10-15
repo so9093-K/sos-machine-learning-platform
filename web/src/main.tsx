@@ -5,11 +5,12 @@ import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./featu
 import { request, jsonPost } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
+import { StoragePanel } from "./StoragePanel";
 import type { Dataset, Preview, Profile, Job, JobPage, Example } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
-type Tab = "preview" | "profile" | "features" | "jobs";
+type Tab = "preview" | "profile" | "features" | "jobs" | "storage";
 
 function readableVersion(d: Dataset) {
   return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
@@ -318,6 +319,9 @@ function Workspace() {
       <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
         전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
       </button>
+      <button className="job-navigation secondary" onClick={() => setTab("storage")}>
+        저장소 상태 보기
+      </button>
       <nav aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
@@ -338,13 +342,13 @@ function Workspace() {
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
       {notice && <div role="status" className="alert success">{notice}
         <button onClick={() => setNotice("")} aria-label="알림 닫기">×</button></div>}
-      {!dataset && tab !== "jobs" && <div className="empty">
+      {!dataset && tab !== "jobs" && tab !== "storage" && <div className="empty">
         <h2>첫 데이터를 탐색해 보세요</h2>
         <p>파일을 준비하지 않아도 합성 데이터로 EDA와 피처 실행을 경험할 수 있습니다.</p>
         <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
           onUse={id => void selectExample(id)} />
       </div>}
-      {dataset && tab !== "jobs" && <>
+      {dataset && tab !== "jobs" && tab !== "storage" && <>
         <div className="dataset-hero">
           <div><span className="eyebrow">SELECTED DATASET</span><h2>{dataset.name}</h2>
             <p>{dataset.kind.toUpperCase()} · {readableVersion(dataset)}</p></div>
@@ -502,6 +506,7 @@ function Workspace() {
         </section>}
 
       </>}
+      {tab === "storage" && <StoragePanel />}
       {tab === "jobs" && <JobsPanel jobs={jobs} datasets={datasets} busy={busy}
         nextCursor={nextJobsCursor} onLoadMore={() => void loadMoreJobs()}
         onRefresh={() => void withFeedback(refreshJobs)}
