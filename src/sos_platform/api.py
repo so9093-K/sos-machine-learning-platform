@@ -111,7 +111,13 @@ def create_app(home: Path | None = None) -> FastAPI:
                 )
             except Exception:
                 # 접근 거부는 유지하되 감사 저장 장애를 조용히 숨기지는 않는다.
-                logging.exception("Denied request audit could not be recorded")
+                emit(
+                    "audit.denial.record_failed",
+                    service="sos-api",
+                    level=logging.ERROR,
+                    request_id=request.state.request_id,
+                    error_code="SOS-API-INTERNAL",
+                )
         return response
 
     app.add_middleware(
@@ -142,7 +148,12 @@ def create_app(home: Path | None = None) -> FastAPI:
                     reason="ownership",
                 )
             except Exception:
-                logging.exception("Resource access denial audit could not be recorded")
+                emit(
+                    "audit.resource_denial.record_failed",
+                    service="sos-api",
+                    level=logging.ERROR,
+                    error_code="SOS-API-INTERNAL",
+                )
             raise
 
     def existing(dataset_id: str, actor: Actor) -> dict:
