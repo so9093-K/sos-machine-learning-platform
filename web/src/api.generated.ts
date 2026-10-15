@@ -411,6 +411,10 @@ export interface components {
         AttemptOut: {
             /** Error */
             error?: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
             /** Finished At */
             finished_at?: string | null;
             /** Id */
@@ -510,11 +514,6 @@ export interface components {
                 [key: string]: string;
             };
         };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
         /** IcebergConnect */
         IcebergConnect: {
             /** Snapshot Id */
@@ -557,6 +556,10 @@ export interface components {
             dataset_id: string;
             /** Error */
             error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
             /** Id */
             id: string;
             /**
@@ -564,10 +567,14 @@ export interface components {
              * @enum {string}
              */
             kind: "profile" | "transform" | "iceberg_import";
+            /** Request Id */
+            request_id?: string | null;
             /** Result */
             result: {
                 [key: string]: unknown;
             } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
             /** Spec */
             spec: {
                 [key: string]: unknown;
@@ -605,6 +612,10 @@ export interface components {
             dataset_id: string;
             /** Error */
             error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
             /** Id */
             id: string;
             /**
@@ -613,10 +624,14 @@ export interface components {
              */
             kind: "profile" | "transform" | "iceberg_import";
             latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Request Id */
+            request_id?: string | null;
             /** Result */
             result: {
                 [key: string]: unknown;
             } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
             /** Spec */
             spec: {
                 [key: string]: unknown;
@@ -644,6 +659,30 @@ export interface components {
             schema: {
                 [key: string]: string;
             };
+        };
+        /**
+         * ProblemOut
+         * @description 오류 응답 공통 계약. detail은 이전 클라이언트 호환을 위해 보존한다.
+         */
+        ProblemOut: {
+            /** Category */
+            category: string;
+            /** Code */
+            code: string;
+            /** Detail */
+            detail: unknown;
+            /** Instance */
+            instance: string;
+            /** Request Id */
+            request_id: string;
+            /** Retry Policy */
+            retry_policy: string;
+            /** Status */
+            status: number;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
         };
         /** ProfileOut */
         ProfileOut: {
@@ -764,19 +803,6 @@ export interface components {
             /** Steps */
             steps: components["schemas"]["Step"][];
         };
-        /** ValidationError */
-        ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-        };
         /** WorkRequest */
         WorkRequest: {
             /** Dataset Id */
@@ -817,13 +843,13 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -846,6 +872,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
         };
     };
     list_datasets_api_datasets_get: {
@@ -864,6 +899,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasetOut"][];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -890,13 +934,13 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -923,13 +967,13 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -954,13 +998,13 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -987,13 +1031,13 @@ export interface operations {
                     "application/json": components["schemas"]["PreviewOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1018,13 +1062,13 @@ export interface operations {
                     "application/json": components["schemas"]["ProfileOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1045,6 +1089,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExampleOut"][];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1069,13 +1122,13 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1102,13 +1155,13 @@ export interface operations {
                     "application/json": components["schemas"]["FeaturePreviewOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1129,6 +1182,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1155,13 +1217,13 @@ export interface operations {
                     "application/json": components["schemas"]["JobOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1186,13 +1248,13 @@ export interface operations {
                     "application/json": components["schemas"]["SnapshotOut"][];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1218,13 +1280,13 @@ export interface operations {
                     "application/json": components["schemas"]["JobPageOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1251,13 +1313,13 @@ export interface operations {
                     "application/json": components["schemas"]["JobOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1282,13 +1344,13 @@ export interface operations {
                     "application/json": components["schemas"]["JobOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1313,13 +1375,13 @@ export interface operations {
                     "application/json": components["schemas"]["JobOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1340,6 +1402,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1364,13 +1435,13 @@ export interface operations {
                     "application/json": components["schemas"]["IcebergReferenceOut"][];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1395,13 +1466,13 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1426,13 +1497,13 @@ export interface operations {
                     "application/json": components["schemas"]["StorageInspectionOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Structured API error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
@@ -1453,6 +1524,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StoragePolicyOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
                 };
             };
         };
