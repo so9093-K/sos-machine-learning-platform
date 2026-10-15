@@ -83,7 +83,15 @@ jobs:
               store.engine.dispose()
           PY
       - name: Unit and integration tests
-        run: uv run --locked pytest -q
+        run: uv run --locked pytest -q --junitxml=/tmp/sos-pytest-results.xml
+      - name: Publish Python test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: python-test-report
+          path: /tmp/sos-pytest-results.xml
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Verify metadata schema matches migration
         run: uv run --locked alembic check
 
@@ -127,6 +135,8 @@ jobs:
       # pytest·Vitest·빌드는 앞선 병렬 작업에서 검증하므로 브라우저만 실행한다.
       - name: Browser workflow tests
         working-directory: web
+        env:
+          SOS_JUNIT_FILE: reports/workspace.xml
         run: npx playwright test workspace.spec.ts
       - name: Make lifecycle and data persistence
         run: |
@@ -195,14 +205,23 @@ jobs:
           export SOS_AUTH_MODE=token
           export SOS_AUTH_TOKEN_HASHES="$(python3 -c "import os,json,hashlib; roles=('viewer','researcher','operator'); print(json.dumps({hashlib.sha256(os.environ['SOS_E2E_'+r.upper()+'_TOKEN'].encode()).hexdigest(): {'actor_id': 'ci-'+r, 'kind': 'human', 'roles':[r]} for r in roles}))")"
           make restart
-          cd web && npx playwright test auth.spec.ts
+          cd web && SOS_JUNIT_FILE=reports/auth.xml npx playwright test auth.spec.ts
+          cd .. && python3 - <<'PY'
+          from xml.etree import ElementTree
+          cases = ElementTree.parse("web/reports/auth.xml").findall(".//testcase")
+          assert len(cases) == 3 and all(case.find("skipped") is None for case in cases), (
+              "CI must execute all three token-mode role cases"
+          )
+          PY
 
-      - name: Save Playwright trace on failure
-        if: failure()
+      - name: Save browser JUnit and failure trace
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: browser-trace
-          path: web/test-results/
+          name: browser-test-report
+          path: |
+            web/reports/*.xml
+            web/test-results/
           if-no-files-found: ignore
           retention-days: 7
       - name: Stop managed services without deleting data

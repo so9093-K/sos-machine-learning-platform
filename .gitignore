@@ -17,3 +17,6 @@ web/test-results/
 web/playwright-report/
 
 .sos-dev/
+
+# CI 테스트 리포트
+web/reports/
