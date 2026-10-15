@@ -42,6 +42,24 @@ jobs:
         run: |
           uv run --locked alembic upgrade head
           uv run --locked python -m sos_platform.bootstrap
+      - name: Verify installed wheel can read packaged Alembic HEAD
+        run: |
+          uv build --wheel --out-dir /tmp/sos-wheel
+          uv pip install --target /tmp/sos-installed --no-deps /tmp/sos-wheel/*.whl
+          cd /tmp
+          "$GITHUB_WORKSPACE/.venv/bin/python" -I - <<'PY'
+          import sys
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+          sys.path.insert(0, "/tmp/sos-installed")
+          import sos_platform
+          from sos_platform.store import Store
+          assert Path(sos_platform.__file__).is_relative_to("/tmp/sos-installed")
+          with TemporaryDirectory() as directory:
+              store = Store(Path(directory))
+              store.initialize()
+              store.engine.dispose()
+          PY
       - name: Unit and integration tests
         run: uv run --locked pytest -q
       - name: Verify metadata schema matches migration
