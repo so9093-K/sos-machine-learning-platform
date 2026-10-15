@@ -1141,7 +1141,6 @@ def test_import_uses_attempt_snapshot_not_latest(workspace, monkeypatch):
     )
 
 
-
 def test_worker_completion_audit_and_atomic_failure(workspace, monkeypatch):
     """Worker 완료·결과 Dataset의 감사를 연결하고 감사 실패 시 DB 변경을 롤백한다."""
     client, store = workspace

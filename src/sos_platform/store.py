@@ -152,29 +152,29 @@ class Store:
             db.execute(
                 text(
                     "INSERT INTO object_observations"
-                        "(location,fingerprint,first_seen_at,last_seen_at,observation_count) "
-                        "VALUES(:location,:fingerprint,:at,:at,1) "
-                        "ON CONFLICT(location) DO UPDATE SET "
-                        "fingerprint=excluded.fingerprint,"
-                        "first_seen_at=CASE WHEN object_observations.fingerprint "
-                        "IS DISTINCT FROM excluded.fingerprint THEN excluded.first_seen_at "
-                        "ELSE object_observations.first_seen_at END,"
-                        "observation_count=CASE WHEN object_observations.fingerprint "
-                        "IS DISTINCT FROM excluded.fingerprint THEN 1 "
-                        "WHEN object_observations.last_seen_at<=:cutoff "
-                        "THEN object_observations.observation_count+1 "
-                        "ELSE object_observations.observation_count END,"
-                        "last_seen_at=CASE WHEN object_observations.fingerprint "
-                        "IS DISTINCT FROM excluded.fingerprint "
-                        "OR object_observations.last_seen_at<=:cutoff "
-                        "THEN excluded.last_seen_at ELSE object_observations.last_seen_at END"
+                    "(location,fingerprint,first_seen_at,last_seen_at,observation_count) "
+                    "VALUES(:location,:fingerprint,:at,:at,1) "
+                    "ON CONFLICT(location) DO UPDATE SET "
+                    "fingerprint=excluded.fingerprint,"
+                    "first_seen_at=CASE WHEN object_observations.fingerprint "
+                    "IS DISTINCT FROM excluded.fingerprint THEN excluded.first_seen_at "
+                    "ELSE object_observations.first_seen_at END,"
+                    "observation_count=CASE WHEN object_observations.fingerprint "
+                    "IS DISTINCT FROM excluded.fingerprint THEN 1 "
+                    "WHEN object_observations.last_seen_at<=:cutoff "
+                    "THEN object_observations.observation_count+1 "
+                    "ELSE object_observations.observation_count END,"
+                    "last_seen_at=CASE WHEN object_observations.fingerprint "
+                    "IS DISTINCT FROM excluded.fingerprint "
+                    "OR object_observations.last_seen_at<=:cutoff "
+                    "THEN excluded.last_seen_at ELSE object_observations.last_seen_at END"
                 ),
                 [
                     {
-                        "location": item["location"],
-                        "fingerprint": item.get("fingerprint"),
-                        "at": at,
-                        "cutoff": cutoff,
+                    "location": item["location"],
+                    "fingerprint": item.get("fingerprint"),
+                    "at": at,
+                    "cutoff": cutoff,
                     }
                     for item in objects
                 ],
@@ -726,9 +726,11 @@ class Store:
                 action="job.finish",
                 resource_type="job",
                 resource_id=job_id,
-                outcome={"Succeeded": "succeeded", "Failed": "failed", "Cancelled": "cancelled"}.get(
-                    status, status.lower()
-                ),
+                outcome={
+                    "Succeeded": "succeeded",
+                    "Failed": "failed",
+                    "Cancelled": "cancelled",
+                }.get(status, status.lower()),
                 reason=reason,
             )
         return status
