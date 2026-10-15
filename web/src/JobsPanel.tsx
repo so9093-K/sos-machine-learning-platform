@@ -1,13 +1,16 @@
 import { useRef, useState } from "react";
 import { request, formatError } from "./api";
-import type { Dataset, Job, JobSummary } from "./types";
+import type { Dataset, Job, JobSummary, ExplorationJob, ExplorationJobSummary } from "./types";
 
-type Props = { jobs: JobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean; nextCursor: string | null;
-  onRefresh: () => void; onLoadMore: () => void;
+type AnyJobSummary = JobSummary | ExplorationJobSummary;
+type Props = { jobs: AnyJobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean;
+  nextCursor: string | null; discoveryNextCursor: string | null;
+  onRefresh: () => void; onLoadMore: () => void; onLoadMoreDiscovery: () => void;
   onCancel: (id: string) => void; onOpen: (id: string) => void; };
 
-export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, onRefresh, onLoadMore, onCancel, onOpen }: Props) {
-  const [detailById, setDetailById] = useState<Record<string, Job>>({});
+export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discoveryNextCursor,
+  onRefresh, onLoadMore, onLoadMoreDiscovery, onCancel, onOpen }: Props) {
+  const [detailById, setDetailById] = useState<Record<string, Job | ExplorationJob>>({});
   const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
   const pending = useRef(new Set<string>());
 
@@ -16,7 +19,9 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, onRefre
     pending.current.add(jobId);
     setDetailErrors(current => ({ ...current, [jobId]: "" }));
     try {
-      const result = await request<Job>(`/api/jobs/${jobId}`);
+      const path = jobs.find(item => item.id === jobId)?.kind === "exploration"
+        ? `/api/explorations/jobs/${jobId}` : `/api/jobs/${jobId}`;
+      const result = await request<Job | ExplorationJob>(path);
       setDetailById(current => ({ ...current, [jobId]: result }));
     } catch (error) {
       setDetailErrors(current => ({
@@ -86,5 +91,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, onRefre
     {nextCursor && <button className="secondary" disabled={busy} onClick={onLoadMore}>
       이전 작업 더 보기 →
     </button>}
+    {discoveryNextCursor && <button className="secondary" disabled={busy}
+      onClick={onLoadMoreDiscovery}>이전 Discovery 작업 더 보기 →</button>
   </section>;
 }

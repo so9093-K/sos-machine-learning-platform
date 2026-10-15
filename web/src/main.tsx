@@ -8,7 +8,7 @@ import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
-import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, Example, UploadPolicy } from "./types";
+import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
@@ -45,6 +45,9 @@ function Workspace({ actor }: { actor: Identity }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [nextJobsCursor, setNextJobsCursor] = useState<string | null>(null);
+  const [discoveryJobs, setDiscoveryJobs] = useState<ExplorationJobSummary[]>([]);
+  const [nextDiscoveryCursor, setNextDiscoveryCursor] = useState<string | null>(null);
+  const [olderDiscoveryJobsLoaded, setOlderDiscoveryJobsLoaded] = useState(false);
   const [olderJobsLoaded, setOlderJobsLoaded] = useState(false);
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
@@ -87,6 +90,24 @@ function Workspace({ actor }: { actor: Identity }) {
       : page.items);
     if (!olderJobsLoaded) setNextJobsCursor(page.next_cursor ?? null);
   }
+  async function refreshDiscoveryJobs() {
+    const page = await request<ExplorationJobPage>("/api/explorations/jobs?limit=20");
+    setDiscoveryJobs(previous => olderDiscoveryJobsLoaded
+      ? [...page.items, ...previous.filter(job => !page.items.some(item => item.id === job.id))]
+      : page.items);
+    if (!olderDiscoveryJobsLoaded) setNextDiscoveryCursor(page.next_cursor ?? null);
+  }
+  async function loadMoreDiscoveryJobs() {
+    if (!nextDiscoveryCursor) return;
+    await withFeedback(async () => {
+      const page = await request<ExplorationJobPage>(
+        `/api/explorations/jobs?limit=20&cursor=${encodeURIComponent(nextDiscoveryCursor)}`);
+      setDiscoveryJobs(previous => [...previous, ...page.items.filter(
+        item => !previous.some(job => job.id === item.id))]);
+      setNextDiscoveryCursor(page.next_cursor ?? null);
+      setOlderDiscoveryJobsLoaded(true);
+    });
+  }
   async function loadMoreJobs() {
     if (!nextJobsCursor) return;
     await withFeedback(async () => {
@@ -105,6 +126,7 @@ function Workspace({ actor }: { actor: Identity }) {
     }
     refreshDatasets().catch(e => setError(String(e)));
     refreshJobs().catch(e => setError(String(e)));
+    refreshDiscoveryJobs().catch(e => setError(String(e)));
     request<Example[]>("/api/examples").then(setExamples)
       .catch(e => setError(String(e)))
       .finally(() => setExamplesLoading(false));
@@ -157,9 +179,12 @@ function Workspace({ actor }: { actor: Identity }) {
       if (jobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
         refreshJobs().catch(e => setError(String(e)));
       }
+      if (discoveryJobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
+        refreshDiscoveryJobs().catch(e => setError(String(e)));
+      }
     }, 2000);
     return () => window.clearInterval(handle);
-  }, [jobs]);
+  }, [jobs, discoveryJobs]);
 
   async function withFeedback(action: () => Promise<void>) {
     setBusy(true); setError(""); setNotice("");
@@ -291,8 +316,10 @@ function Workspace({ actor }: { actor: Identity }) {
   }
   async function cancelJob(id: string) {
     await withFeedback(async () => {
-      await jsonPost(`/api/jobs/${id}/cancel`, {});
-      await refreshJobs();
+      const path = discoveryJobs.some(job => job.id === id)
+        ? `/api/explorations/jobs/${id}/cancel` : `/api/jobs/${id}/cancel`;
+      await jsonPost(path, {});
+      await Promise.all([refreshJobs(), refreshDiscoveryJobs()]);
     });
   }
   const distribution = useMemo(() => histogram(preview?.rows ?? [], visualColumn),
@@ -460,7 +487,8 @@ function Workspace({ actor }: { actor: Identity }) {
         </section>}
         {tab === "profile" && <section className="panel" role="tabpanel"
           id="sos-panel-profile" aria-labelledby="sos-tab-profile" tabIndex={0}>
-          <DiscoveryPanel key={selected} datasetId={selected} />
+          <DiscoveryPanel key={selected} datasetId={selected} canCreate={canWrite}
+            onCreated={async () => { await refreshDiscoveryJobs(); setTab("jobs"); }} />
           <div className="panel-head"><div><h3>탐색적 데이터 분석</h3>
             <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
           </div>{canWrite && <button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button>}</div>
@@ -569,9 +597,15 @@ function Workspace({ actor }: { actor: Identity }) {
       </>}
       {canManage && tab === "storage" && <StoragePanel />}
       {canManage && tab === "audit" && <AuditPanel />}
-      {tab === "jobs" && <JobsPanel jobs={jobs} datasets={datasets} busy={busy} canCancel={canWrite}
-        nextCursor={nextJobsCursor} onLoadMore={() => void loadMoreJobs()}
-        onRefresh={() => void withFeedback(refreshJobs)}
+      {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
+          b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))}
+        datasets={datasets} busy={busy} canCancel={canWrite}
+        nextCursor={nextJobsCursor} discoveryNextCursor={nextDiscoveryCursor}
+        onLoadMore={() => void loadMoreJobs()}
+        onLoadMoreDiscovery={() => void loadMoreDiscoveryJobs()}
+        onRefresh={() => void withFeedback(async () => {
+          await Promise.all([refreshJobs(), refreshDiscoveryJobs()]);
+        })}
         onCancel={id => void cancelJob(id)}
         onOpen={id => void openJobDataset(id)} />}
       <footer>Explore · Experiment · Understand · Evolve <span>개발 환경 · 외부 공개 서비스 아님</span></footer>
