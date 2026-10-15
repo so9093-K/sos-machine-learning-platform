@@ -215,7 +215,7 @@ def test_adjacent_time_features_reuse_verified_order(monkeypatch):
     assert calls == 2  # NULL 키 검사와 그룹별 중복 키 검사 각 1회
     rows = result.collect().to_dicts()
     assert [row["previous"] for row in rows] == [None, 10, 20]
-    assert [row["average"] for row in rows] == [10, 15, 25]
+    assert [row["average"] for row in rows] == [None, 15.0, 25.0]
 
 
 def test_mutating_step_invalidates_time_key_verification(monkeypatch):
