@@ -31,6 +31,10 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/sos_platform"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"alembic.ini" = "sos_platform/alembic.ini"
+"migrations" = "sos_platform/migrations"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
