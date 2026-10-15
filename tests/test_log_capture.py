@@ -5,9 +5,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.dev import tail_log
-
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "log_capture.py"
+DEV_SCRIPT = SCRIPT.parent / "dev.py"
+dev_spec = importlib.util.spec_from_file_location("sos_dev_logging", DEV_SCRIPT)
+assert dev_spec is not None and dev_spec.loader is not None
+dev = importlib.util.module_from_spec(dev_spec)
+dev_spec.loader.exec_module(dev)
+tail_log = dev.tail_log
 spec = importlib.util.spec_from_file_location("sos_log_capture", SCRIPT)
 assert spec is not None and spec.loader is not None
 capture = importlib.util.module_from_spec(spec)
