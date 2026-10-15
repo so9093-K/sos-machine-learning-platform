@@ -141,6 +141,13 @@ class JobOut(BaseModel):
     attempts: list[AttemptOut]
 
 
+class JobPageOut(BaseModel):
+    """키셋 커서로 이어지는 Job 목록과 다음 조회 위치."""
+
+    items: list[JobOut]
+    next_cursor: str | None = None
+
+
 class ExampleOut(BaseModel):
     """예제는 별도 가짜 결과가 아니라 Dataset 등록 안내를 제공한다."""
 
