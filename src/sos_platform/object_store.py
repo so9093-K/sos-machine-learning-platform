@@ -62,6 +62,11 @@ class ObjectStore:
         finally:
             pending.unlink(missing_ok=True)
 
+    def delete(self, key: str) -> None:
+        """게시되지 않은 독점 객체를 검증된 버킷 키에서 삭제한다."""
+        self.key(self.location(key))
+        self.client.delete_object(Bucket=self.config.s3_bucket, Key=key)
+
     def location(self, key: str) -> str:
         return f"s3://{self.config.s3_bucket}/{key}"
 
