@@ -396,3 +396,4 @@ def create_app(home: Path | None = None) -> FastAPI:
 
 
 app = create_app()
+
