@@ -88,13 +88,13 @@ def list_examples() -> list[dict]:
     ]
 
 
-def use_example(store: Store, example_id: str) -> dict:
+def use_example(store: Store, example_id: str, *, owner_actor: str | None = None) -> dict:
     """같은 예제를 반복 선택하더라도 별도의 불필요한 Dataset을 생성하지 않는다."""
     if example_id not in _EXAMPLES:
         raise KeyError(example_id)
     example = _EXAMPLES[example_id]
     digest = hashlib.sha256(example["content"]).hexdigest()
-    for dataset in store.datasets():
+    for dataset in store.datasets(actor_id=owner_actor):
         if dataset["name"] == example["name"] and dataset["version"] == digest:
             return dataset
-    return save_upload(store, example["name"], example["content"])
+    return save_upload(store, example["name"], example["content"], owner_actor=owner_actor)
