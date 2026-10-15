@@ -49,7 +49,7 @@ def test_upload_storage_wait_does_not_block_other_api_requests(workspace, monkey
         upload_future = executor.submit(
             client.post,
             "/api/datasets/files",
-            files={"file": ("slow.csv", b"time,value\\n1,2\\n", "text/csv")},
+            files={"file": ("slow.csv", b"time,value\n1,2\n", "text/csv")},
         )
         try:
             assert entered.wait(timeout=10), "Upload did not reach S3"
@@ -59,6 +59,7 @@ def test_upload_storage_wait_does_not_block_other_api_requests(workspace, monkey
             release.set()
         response = upload_future.result(timeout=20)
         assert response.status_code == 201, response.text
+
 
 def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
     client, _ = workspace

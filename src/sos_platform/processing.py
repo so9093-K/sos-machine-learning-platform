@@ -104,6 +104,9 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
         raise ValueError("Group column does not exist")
     if spec.order_by and spec.order_by not in schema:
         raise ValueError("Time/order column does not exist")
+    # 연속된 시간 피처 단계 사이에는 시간·그룹 키가 바뀌지 않는다.
+    # 값·행·컬럼을 바꾸는 단계가 등장하면 검증을 다시 수행한다.
+    time_keys_validated = False
     for step in spec.steps:
         current_schema = lf.collect_schema()
         columns = current_schema.names()
@@ -111,36 +114,42 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
             if not set(step.columns or []).issubset(columns):
                 raise ValueError("Selected column does not exist")
             lf = lf.select(step.columns)
+            time_keys_validated = False
             continue
         if step.column not in columns:
             raise ValueError(f"Unknown column: {step.column}")
         col = pl.col(step.column)
         if step.op == "filter_not_null":
             lf = lf.filter(col.is_not_null())
+            time_keys_validated = False
         elif step.op == "fill_null":
             lf = lf.with_columns(col.fill_null(step.value))
+            time_keys_validated = False
         elif step.op == "cast":
             lf = lf.with_columns(col.cast(ALLOWED_CASTS[step.dtype], strict=True))
+            time_keys_validated = False
         elif step.op in ("lag", "rolling_mean"):
             if not spec.order_by:
                 raise ValueError("Time-based features require order_by")
             if spec.order_by not in columns or not set(spec.group_by).issubset(columns):
                 raise ValueError("Time/order and group columns must survive preceding steps")
-            # 이전 단계의 필터·캐스트 적용 후 시간 순서를 확정한다.
-            # 동일 시간의 임의 순서나 NULL 시간값으로 피처가 달라지지 않게 검증한다.
-            if lf.select(pl.col(spec.order_by).is_null().any()).collect().item():
-                raise ValueError("Time/order column contains null values")
-            keys = [*spec.group_by, spec.order_by]
-            duplicates = (
-                lf.group_by(keys)
-                .agg(pl.len().alias("__sos_time_count"))
-                .filter(pl.col("__sos_time_count") > 1)
-                .limit(1)
-                .collect()
-            )
-            if duplicates.height:
-                raise ValueError("Time/order column must be unique within each group")
-            lf = lf.sort(keys)
+            # 이전 단계가 입력의 행 또는 시간 키를 변경했다면 검증·정렬을 반복한다.
+            # 연속 Lag/Rolling은 키를 변경하지 않으므로 중복 스캔을 피할 수 있다.
+            if not time_keys_validated:
+                if lf.select(pl.col(spec.order_by).is_null().any()).collect().item():
+                    raise ValueError("Time/order column contains null values")
+                keys = [*spec.group_by, spec.order_by]
+                duplicates = (
+                    lf.group_by(keys)
+                    .agg(pl.len().alias("__sos_time_count"))
+                    .filter(pl.col("__sos_time_count") > 1)
+                    .limit(1)
+                    .collect()
+                )
+                if duplicates.height:
+                    raise ValueError("Time/order column must be unique within each group")
+                lf = lf.sort(keys)
+                time_keys_validated = True
             if step.op == "rolling_mean" and not current_schema[step.column].is_numeric():
                 raise ValueError("Rolling Mean requires a numeric column")
             alias = step.alias or f"{step.column}_{step.op}"

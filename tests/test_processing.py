@@ -185,3 +185,62 @@ def test_grouped_lag_is_invariant_to_input_permutation(seed):
     assert len(actual) == len(rows), f"seed={seed}"
     for row in actual:
         assert row["previous"] == expected[row["machine"], row["time"]], f"seed={seed}; row={row}"
+
+
+def test_adjacent_time_features_reuse_verified_order(monkeypatch):
+    """시간 키를 건드리지 않는 연속 피처는 중복 입력 검증을 하지 않는다."""
+    data = pl.DataFrame(
+        {"machine_id": ["A", "A", "A"], "time": [2, 1, 3], "value": [20, 10, 30]}
+    ).lazy()
+    spec = Transform.model_validate(
+        {
+            "order_by": "time",
+            "group_by": ["machine_id"],
+            "steps": [
+                {"op": "lag", "column": "value", "alias": "previous"},
+                {"op": "rolling_mean", "column": "value", "alias": "average", "window": 2},
+            ],
+        }
+    )
+    real_collect = pl.LazyFrame.collect
+    calls = 0
+
+    def count_collect(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real_collect(self, *args, **kwargs)
+
+    monkeypatch.setattr(pl.LazyFrame, "collect", count_collect)
+    result = transform(data, spec)
+    assert calls == 2  # NULL 키 검사와 그룹별 중복 키 검사 각 1회
+    rows = result.collect().to_dicts()
+    assert [row["previous"] for row in rows] == [None, 10, 20]
+    assert [row["average"] for row in rows] == [10, 15, 25]
+
+
+def test_mutating_step_invalidates_time_key_verification(monkeypatch):
+    """시간 키 변환 단계 이후에는 기존 검증 결과를 재사용하지 않는다."""
+    data = pl.DataFrame({"time": [2, 1, 3], "value": [20, 10, 30]}).lazy()
+    spec = Transform.model_validate(
+        {
+            "order_by": "time",
+            "steps": [
+                {"op": "lag", "column": "value", "alias": "previous"},
+                {"op": "cast", "column": "time", "dtype": "String"},
+                {"op": "lag", "column": "value", "alias": "previous_again"},
+            ],
+        }
+    )
+    real_collect = pl.LazyFrame.collect
+    calls = 0
+
+    def count_collect(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real_collect(self, *args, **kwargs)
+
+    monkeypatch.setattr(pl.LazyFrame, "collect", count_collect)
+    result = transform(data, spec)
+    assert calls == 4  # Cast 이전·이후에 독립 검증
+    rows = result.collect().to_dicts()
+    assert [row["previous_again"] for row in rows] == [None, 10, 20]
