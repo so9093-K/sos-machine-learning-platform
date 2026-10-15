@@ -10,8 +10,16 @@ from datetime import UTC, datetime
 
 _LOGGER = logging.getLogger("sos.events")
 _FIELDS = {
-    "request_id", "job_id", "attempt_id", "dataset_id", "error_code",
-    "stage", "outcome", "status", "exception_type", "kind",
+    "request_id",
+    "job_id",
+    "attempt_id",
+    "dataset_id",
+    "error_code",
+    "stage",
+    "outcome",
+    "status",
+    "exception_type",
+    "kind",
 }
 _SAFE_VALUE = re.compile(r"[a-zA-Z0-9_.:/-]{1,128}\Z")
 
