@@ -2,11 +2,11 @@ import { useRef, useState } from "react";
 import { request } from "./api";
 import type { Dataset, Job, JobSummary } from "./types";
 
-type Props = { jobs: JobSummary[]; datasets: Dataset[]; busy: boolean; nextCursor: string | null;
+type Props = { jobs: JobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean; nextCursor: string | null;
   onRefresh: () => void; onLoadMore: () => void;
   onCancel: (id: string) => void; onOpen: (id: string) => void; };
 
-export function JobsPanel({ jobs, datasets, busy, nextCursor, onRefresh, onLoadMore, onCancel, onOpen }: Props) {
+export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, onRefresh, onLoadMore, onCancel, onOpen }: Props) {
   const [detailById, setDetailById] = useState<Record<string, Job>>({});
   const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
   const pending = useRef(new Set<string>());
@@ -66,7 +66,7 @@ export function JobsPanel({ jobs, datasets, busy, nextCursor, onRefresh, onLoadM
           </button>}
         {job.kind === "iceberg_import" && job.status === "Running" &&
           <p className="muted">Iceberg 적재는 외부 커밋이 진행될 수 있어 실행 중 취소할 수 없습니다.</p>}
-        {["Queued", "Running"].includes(job.status) &&
+        {canCancel && ["Queued", "Running"].includes(job.status) &&
           !(job.kind === "iceberg_import" && job.status === "Running") &&
           <button className="secondary" disabled={busy || job.cancel_requested}
             onClick={() => onCancel(job.id)}>작업 취소</button>}
