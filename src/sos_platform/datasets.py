@@ -3,6 +3,7 @@
 import hashlib
 import os
 import re
+from uuid import uuid4
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -46,12 +47,23 @@ def save_upload(store: Store, name: str, content: bytes) -> dict:
             raise ValueError("Dataset has no columns")
         storage = ObjectStore()
         location = storage.location(key)
-        storage.put(key, temporary)
+        write_id = store.begin_object_write(
+            location=location, owner_kind="upload", owner_id=str(uuid4())
+        )
+        try:
+            storage.put(key, temporary)
+            return store.register_dataset(
+                name=Path(name).name, kind="file", location=location,
+                version=digest, write_id=write_id,
+            )
+        except Exception as exc:
+            try:
+                store.fail_object_write(write_id, str(exc))
+            except Exception:
+                pass
+            raise
     finally:
         temporary.unlink(missing_ok=True)
-    return store.register_dataset(
-        name=Path(name).name, kind="file", location=location, version=digest
-    )
 
 
 def iceberg_catalog(store: Store):
