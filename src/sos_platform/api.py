@@ -6,8 +6,8 @@ import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from uuid import uuid4
 from typing import Annotated
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
