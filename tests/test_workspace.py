@@ -1,6 +1,7 @@
 """Data Workspace의 API·스토리지·Worker 통합 검증."""
 
 import hashlib
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -197,6 +198,23 @@ def test_iceberg_snapshot_reproducibility(workspace):
     original = import_snapshot()
     second = import_snapshot()
     assert original["version"] != second["version"]
+    from datetime import UTC, datetime, timedelta
+
+    from sos_platform.datasets import iceberg_catalog
+    from sos_platform.retention import inspect_tag, tag_name
+
+    catalog = iceberg_catalog(store)
+    table = catalog.load_table("default.sensor_data")
+    assert inspect_tag(
+        table, name=tag_name(original["id"]), snapshot_id=original["version"]
+    ) == "retained"
+    # 태그된 과거 판본은 만료를 실행해도 참조·읽기 가능해야 한다.
+    table.expire_snapshots().older_than(datetime.now(UTC) + timedelta(days=1)).commit()
+    assert client.get(f"/api/datasets/{original['id']}/preview").json()["returned_rows"] == 3
+    report = client.get("/api/storage/iceberg-references").json()
+    assert any(
+        row["dataset_id"] == original["id"] and row["status"] == "retained" for row in report
+    )
     assert client.get(f"/api/datasets/{original['id']}/preview").json()["returned_rows"] == 3
     assert client.get(f"/api/datasets/{second['id']}/preview").json()["returned_rows"] == 6
     assert len(client.get("/api/iceberg/sensor_data/snapshots").json()) >= 2
@@ -804,3 +822,117 @@ def test_upgrade_from_0001_preserves_existing_records(workspace):
             )
         }
     assert "fingerprint" in names
+
+
+def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
+    """Bearer 신원·기본 거부·리소스 소유권·변경 감사가 API에서 강제된다."""
+    client, store = workspace
+    dataset = upload(client)
+    from sos_platform.api import create_app
+
+    users = {
+        "alice": {"actor_id": "alice", "kind": "human", "roles": ["researcher"]},
+        "bob": {"actor_id": "bob", "kind": "human", "roles": ["viewer"]},
+        "ops": {"actor_id": "ops", "kind": "human", "roles": ["operator"]},
+        "admin": {"actor_id": "admin", "kind": "human", "roles": ["administrator"]},
+    }
+    tokens = {name: ("sos-secure-" + name + "-" * 40) for name in users}
+    monkeypatch.setenv("SOS_AUTH_MODE", "token")
+    monkeypatch.setenv(
+        "SOS_AUTH_TOKEN_HASHES",
+        json.dumps({
+            hashlib.sha256(tokens[name].encode()).hexdigest(): user
+            for name, user in users.items()
+        }),
+    )
+    with TestClient(create_app(store.home)) as secure:
+        def headers(name):
+            return {"Authorization": "Bearer " + tokens[name]}
+
+        assert secure.get("/api/datasets").status_code == 401
+        assert secure.get("/api/datasets", headers={"Authorization": "Bearer bad"}).status_code == 401
+        assert secure.get("/api/auth/me", headers=headers("alice")).json()["actor_id"] == "alice"
+        assert secure.get("/api/storage/inspection", headers=headers("alice")).status_code == 403
+        assert secure.get("/api/audit", headers=headers("alice")).status_code == 403
+        assert secure.get("/api/storage/policy", headers=headers("ops")).status_code == 200
+        assert secure.post("/api/jobs", json={
+            "dataset_id": dataset["id"], "kind": "profile"
+        }, headers=headers("alice")).status_code == 404
+        result = secure.post(
+            "/api/datasets/files",
+            files={"file": ("user.csv", b"a,b\\n1,2\\n", "text/csv")},
+            headers=headers("alice"),
+        )
+        assert result.status_code == 201, result.text
+        owned = result.json()["id"]
+        assert secure.get(f"/api/datasets/{owned}", headers=headers("bob")).status_code == 404
+        assert secure.get(f"/api/datasets/{owned}", headers=headers("alice")).status_code == 200
+        assert secure.get("/api/datasets", headers=headers("bob")).json() == []
+        assert secure.post("/api/datasets/files", files={
+            "file": ("no.csv", b"a\\n1\\n", "text/csv")
+        }, headers=headers("bob")).status_code == 403
+        job = secure.post(
+            "/api/jobs", json={"dataset_id": owned, "kind": "profile"},
+            headers=headers("alice"),
+        )
+        assert job.status_code == 202, job.text
+        assert secure.get(f"/api/jobs/{job.json()['id']}", headers=headers("bob")).status_code == 404
+        assert secure.get("/api/jobs", headers=headers("bob")).json()["items"] == []
+        assert secure.post(
+            f"/api/jobs/{job.json()['id']}/cancel", headers=headers("bob")
+        ).status_code == 403
+        cancelled = secure.post(
+            f"/api/jobs/{job.json()['id']}/cancel", headers=headers("alice")
+        )
+        assert cancelled.status_code == 200, cancelled.text
+        history = secure.get("/api/audit", headers=headers("ops"))
+        assert history.status_code == 200
+        events = history.json()
+        assert any(x["action"] == "dataset.create" and x["actor_id"] == "alice" for x in events)
+        assert any(x["action"] == "job.cancel" and x["actor_id"] == "alice" for x in events)
+        assert any(x["action"] == "security.access_denied" for x in events)
+        assert tokens["alice"] not in json.dumps(events)
+
+
+def test_protected_mode_rejects_invalid_credentials(monkeypatch):
+    """토큰 모드는 누락·잘못된 식별자·무효 역할 설정을 기동 전에 거부한다."""
+    from sos_platform.security import IdentitySettings
+
+    monkeypatch.setenv("SOS_AUTH_MODE", "token")
+    monkeypatch.delenv("SOS_AUTH_TOKEN_HASHES", raising=False)
+    with pytest.raises(ValueError):
+        IdentitySettings.from_env()
+    monkeypatch.setenv("SOS_AUTH_TOKEN_HASHES", '{"bad": {"actor_id": "admin"}}')
+    with pytest.raises(ValueError):
+        IdentitySettings.from_env()
+
+
+def test_snapshots_available_without_tag_have_explicit_unprotected_state(workspace):
+    """기존 Iceberg Dataset의 보존 미보장 상태와 Operator 전환을 구별한다."""
+    client, store = workspace
+    source = upload(client)
+    job = client.post(
+        "/api/iceberg/import", json={"dataset_id": source["id"], "table_name": "legacy_retention"}
+    ).json()
+    assert run_once(store)
+    stored = client.get(f"/api/jobs/{job['id']}").json()
+    retained = store.get_dataset(stored["result"]["dataset_id"])
+    assert retained is not None
+    # 기존 데이터베이스에 등록됐지만 Tag가 없는 Dataset을 실제로 재현한다.
+    with store.connection() as db:
+        legacy_id = str(uuid4())
+        db.execute(
+            text(
+                "INSERT INTO datasets(id,name,kind,location,version,created_at) "
+                "VALUES(:id,'legacy','iceberg',:location,:version,:at)"
+            ),
+            {"id": legacy_id, "location": retained["location"],
+             "version": retained["version"], "at": "2026-10-01T00:00:00+00:00"},
+        )
+    previous = client.get("/api/storage/iceberg-references").json()
+    assert any(x["dataset_id"] == legacy_id and x["status"] == "available_unprotected"
+               for x in previous)
+    promoted = client.post(f"/api/storage/iceberg-references/{legacy_id}/retain")
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["status"] == "retained"
+    assert store.snapshot_retention(legacy_id)["state"] == "Retained"
