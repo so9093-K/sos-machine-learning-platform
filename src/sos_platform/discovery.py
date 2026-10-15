@@ -185,9 +185,12 @@ def overview(store: Store, dataset: dict) -> dict:
     with source_connection(store, dataset) as conn:
         found = _columns(conn)
     return {
-        "dataset_id": dataset["id"], "version": dataset["version"],
-        "row_count": row_count, "row_count_basis": basis,
-        "column_count": len(found), "size_bytes": size,
+        "dataset_id": dataset["id"],
+        "version": dataset["version"],
+        "row_count": row_count,
+        "row_count_basis": basis,
+        "column_count": len(found),
+        "size_bytes": size,
         "columns": [{"name": c["name"], "dtype": c["dtype"]} for c in found],
     }
 
@@ -220,36 +223,61 @@ def profile(store: Store, dataset: dict, sample: int | None = 1000) -> dict:
             ]
             if kind in ("FLOAT", "DOUBLE", "REAL"):
                 parts.append(f"COUNT(*) FILTER (WHERE isnan({name})) AS {key}nan")
-            if kind in ("FLOAT", "DOUBLE", "REAL", "TINYINT", "SMALLINT", "INTEGER", "BIGINT",
-                        "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT") or kind.startswith("DECIMAL"):
+            if kind in (
+                "FLOAT",
+                "DOUBLE",
+                "REAL",
+                "TINYINT",
+                "SMALLINT",
+                "INTEGER",
+                "BIGINT",
+                "UTINYINT",
+                "USMALLINT",
+                "UINTEGER",
+                "UBIGINT",
+            ) or kind.startswith("DECIMAL"):
                 parts += [
-                    f"MIN({name}) AS {key}min", f"MAX({name}) AS {key}max",
+                    f"MIN({name}) AS {key}min",
+                    f"MAX({name}) AS {key}max",
                     f"AVG({name}) AS {key}mean",
                 ]
-        raw = _records(conn.execute(
-            f"SELECT {', '.join(parts)} FROM {scope}", params,
-        ))[0]
+        raw = _records(
+            conn.execute(
+                f"SELECT {', '.join(parts)} FROM {scope}",
+                params,
+            )
+        )[0]
     result = []
     for number, c in enumerate(schema):
         key = f"c{number}_"
         kind = c["sql_type"].upper()
         entry = {
-            "name": c["name"], "dtype": c["dtype"], "nulls": raw[key+"null"],
-            "nan_count": raw.get(key+"nan"), "unique": raw[key+"unique"],
+            "name": c["name"],
+            "dtype": c["dtype"],
+            "nulls": raw[key + "null"],
+            "nan_count": raw.get(key + "nan"),
+            "unique": raw[key + "unique"],
         }
-        if key+"mean" in raw:
-            entry.update({
-                "min": _number(raw[key+"min"]),
-                "max": _number(raw[key+"max"]),
-                "mean": _number(raw[key+"mean"]),
-            })
+        if key + "mean" in raw:
+            entry.update(
+                {
+                    "min": _number(raw[key + "min"]),
+                    "max": _number(raw[key + "max"]),
+                    "mean": _number(raw[key + "mean"]),
+                }
+            )
         result.append(entry)
-    return {"sampled": sample is not None, "sample_limit": sample,
-            "row_count": raw["__rows"], "columns": result}
+    return {
+        "sampled": sample is not None,
+        "sample_limit": sample,
+        "row_count": raw["__rows"],
+        "columns": result,
+    }
 
 
-def explore(store: Store, dataset: dict, column: str, metric: str,
-            group_by: str | None = None) -> dict:
+def explore(
+    store: Store, dataset: dict, column: str, metric: str, group_by: str | None = None
+) -> dict:
     policy = DiscoveryPolicy.from_env()
     expressions = {
         "count": lambda col: "COUNT(*)",
@@ -271,19 +299,25 @@ def explore(store: Store, dataset: dict, column: str, metric: str,
         value = expressions[metric](quoted(column))
         if group_by:
             group = quoted(group_by)
-            rows = _records(conn.execute(
-                f"SELECT {group} AS category, {value} AS value FROM source "
-                f"GROUP BY {group} ORDER BY value DESC NULLS LAST, category "
-                f"LIMIT {policy.max_groups + 1}"
-            ))
+            rows = _records(
+                conn.execute(
+                    f"SELECT {group} AS category, {value} AS value FROM source "
+                    f"GROUP BY {group} ORDER BY value DESC NULLS LAST, category "
+                    f"LIMIT {policy.max_groups + 1}"
+                )
+            )
             truncated = len(rows) > policy.max_groups
-            rows = rows[:policy.max_groups]
+            rows = rows[: policy.max_groups]
         else:
             rows = _records(conn.execute(f"SELECT NULL AS category, {value} AS value FROM source"))
             truncated = False
     return {
-        "dataset_id": dataset["id"], "version": dataset["version"],
-        "scope": "full", "metric": metric, "column": column,
-        "group_by": group_by, "truncated": truncated,
+        "dataset_id": dataset["id"],
+        "version": dataset["version"],
+        "scope": "full",
+        "metric": metric,
+        "column": column,
+        "group_by": group_by,
+        "truncated": truncated,
         "rows": rows,
     }
