@@ -648,6 +648,8 @@ export interface components {
             };
             /** Deletion Enabled */
             deletion_enabled: boolean;
+            /** Inspected At */
+            inspected_at: string;
             /** Items */
             items: components["schemas"]["StorageObjectOut"][];
             /** Next Cursor */
