@@ -272,3 +272,36 @@ def test_external_up_does_not_migrate_or_initialize(monkeypatch, config, tmp_pat
     dev.up(config)
     assert any("sos_platform.validate" in command for command in calls)
     assert not any("alembic" in command or "sos_platform.bootstrap" in command for command in calls)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"SOS_DATABASE_URL": "postgresql+psycopg2://user:pass@db.example.com/prod"},
+        {"SOS_DB_HOST": "db.example.com"},
+        {"SOS_S3_ENDPOINT": "https://storage.example.com/bucket"},
+        {"SOS_S3_ENDPOINT": "http://127.0.0.1:9705"},
+    ],
+)
+def test_managed_preflight_blocks_external_storage_before_any_commands(config, overrides, monkeypatch):
+    config.update(overrides)
+    monkeypatch.setattr(dev.shutil, "which", lambda _name: "/usr/bin/tool")
+    invoked = []
+
+    def unexpected(command, **_kwargs):
+        invoked.append(command)
+        raise AssertionError("관리형 사전 검사 실패 후 명령을 실행하면 안 됩니다.")
+
+    monkeypatch.setattr(dev, "run", unexpected)
+    with pytest.raises(dev.StartupError) as exc:
+        dev.preflight(config)
+    assert exc.value.code == "SOS-CONFIG-004"
+    assert invoked == []
+
+
+def test_s3_endpoint_default_uses_configured_port(monkeypatch):
+    from sos_platform.config import Settings
+
+    monkeypatch.delenv("SOS_S3_ENDPOINT", raising=False)
+    monkeypatch.setenv("SOS_S3_PORT", "9745")
+    assert Settings.from_env().s3_endpoint == "http://127.0.0.1:9745"
