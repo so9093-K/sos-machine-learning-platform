@@ -19,7 +19,10 @@ def test_error_catalog_codes_are_unique_and_stable():
         assert name == entry.code
         assert entry.message and entry.category and entry.title
         assert entry.retry_policy in (
-            "never", "after_delay", "after_refresh", "manual_verification_required"
+            "never",
+            "after_delay",
+            "after_refresh",
+            "manual_verification_required",
         )
 
 
