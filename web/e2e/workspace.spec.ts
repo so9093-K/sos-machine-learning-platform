@@ -139,3 +139,17 @@ test("same dataset reload preserves Feature editor selections", async ({ page })
   await page.getByRole("button", { name: "샘플 변환 확인" }).click();
   await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
 });
+
+
+test("Storage Health presents effective safe policy without destructive actions", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "저장소 상태 보기" }).click();
+  const storage = page.getByRole("region", { name: "저장소 상태" });
+  await expect(storage.getByRole("heading", { name: "Storage Health" })).toBeVisible();
+  await expect(storage.getByText("비활성화", { exact: true })).toBeVisible();
+  await expect(storage.getByText("적용 중인 보존 정책")).toBeVisible();
+  await expect(storage.getByRole("button", { name: "객체 다시 검사" })).toBeVisible();
+  await storage.getByRole("button", { name: "Snapshot 검사" }).click();
+  await expect(storage.getByText("등록된 Iceberg 참조가 없습니다.")).toBeVisible();
+  await expect(storage.getByRole("button", { name: /삭제 실행/ })).toHaveCount(0);
+});
