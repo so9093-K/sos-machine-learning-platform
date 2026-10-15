@@ -1,12 +1,12 @@
 """중단된 Worker 복구 통합 계약을 검증한다."""
 
-import json
 
 import pytest
 
 from sos_platform.object_store import ObjectStore
 from sos_platform.store import Store
 from sos_platform.worker import run_once
+
 from .support import upload
 
 

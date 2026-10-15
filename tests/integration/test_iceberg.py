@@ -1,12 +1,12 @@
 """Iceberg Snapshot·Tag 통합 계약을 검증한다."""
 
-import json
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
 
 from sos_platform.worker import run_once
+
 from .support import upload
 
 

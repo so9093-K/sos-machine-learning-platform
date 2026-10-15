@@ -7,6 +7,8 @@ from sqlalchemy.engine import make_url
 
 from sos_platform.config import Settings
 
+from .conftest import workspace
+
 
 def test_test_fixture_releases_created_database_on_migration_failure(tmp_path, monkeypatch):
     """Fixture 준비 중 Alembic이 실패해도 생성된 DB는 남기지 않는다."""

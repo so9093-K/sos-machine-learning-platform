@@ -1,7 +1,5 @@
 """Storage Health·객체 관측 통합 계약을 검증한다."""
 
-import json
-import time
 from uuid import uuid4
 
 import pytest
@@ -9,6 +7,7 @@ from sqlalchemy import event, text
 
 from sos_platform.object_store import ObjectStore
 from sos_platform.worker import run_once
+
 from .support import upload
 
 

@@ -1,18 +1,17 @@
 """Job·Feature·Attempt 실행 통합 계약을 검증한다."""
 
-import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 import pytest
-from alembic import command
 from sqlalchemy import event, text
 
 from sos_platform import worker as worker_module
 from sos_platform.object_store import ObjectStore
 from sos_platform.store import Store
 from sos_platform.worker import run_once
+
 from .support import upload
 
 

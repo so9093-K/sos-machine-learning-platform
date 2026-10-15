@@ -5,10 +5,10 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 
 from sos_platform.api import create_app
 from sos_platform.store import Store
+
 from .support import upload
 
 
