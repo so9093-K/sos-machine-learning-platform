@@ -24,6 +24,7 @@ datasets = Table(
     Column("location", Text, nullable=False),
     Column("version", Text, nullable=False),
     Column("created_at", Text, nullable=False),
+    Column("owner_actor", Text),
 )
 
 jobs = Table(
@@ -39,6 +40,7 @@ jobs = Table(
     Column("error", Text),
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
+    Column("owner_actor", Text),
     Index("ix_jobs_created_at_id", "created_at", "id"),
 )
 
@@ -88,4 +90,35 @@ object_observations = Table(
     Column("first_seen_at", Text, nullable=False),
     Column("last_seen_at", Text, nullable=False),
     Column("observation_count", Integer, nullable=False),
+)
+
+# Snapshot Tag는 외부 Catalog 트랜잭션이므로 Dataset 게시보다 먼저 의도를 기록한다.
+snapshot_retention = Table(
+    "snapshot_retention",
+    metadata,
+    Column("dataset_id", String(36), primary_key=True),
+    Column("location", Text, nullable=False),
+    Column("snapshot_id", Text, nullable=False),
+    Column("tag_name", Text, nullable=False, unique=True),
+    Column("state", String(20), nullable=False),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Column("error", Text),
+)
+
+audit_events = Table(
+    "audit_events",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("at", Text, nullable=False),
+    Column("actor_id", Text, nullable=False),
+    Column("actor_type", String(24), nullable=False),
+    Column("action", String(96), nullable=False),
+    Column("resource_type", String(40), nullable=False),
+    Column("resource_id", Text),
+    Column("decision", String(12), nullable=False),
+    Column("outcome", String(20), nullable=False),
+    Column("request_id", String(36)),
+    Column("reason", String(200)),
+    Index("ix_audit_events_at_id", "at", "id"),
 )
