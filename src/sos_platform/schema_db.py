@@ -83,6 +83,7 @@ object_observations = Table(
     "object_observations",
     metadata,
     Column("location", Text, primary_key=True),
+    Column("fingerprint", Text),
     Column("first_seen_at", Text, nullable=False),
     Column("last_seen_at", Text, nullable=False),
     Column("observation_count", Integer, nullable=False),
