@@ -451,6 +451,16 @@ export interface components {
             updated_at: string;
         };
         /**
+         * JobPageOut
+         * @description 키셋 커서로 이어지는 Job 목록과 다음 조회 위치.
+         */
+        JobPageOut: {
+            /** Items */
+            items: components["schemas"]["JobOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
          * PreviewOut
          * @description 제한된 행 미리보기와 컬럼 타입.
          */
@@ -911,7 +921,10 @@ export interface operations {
     };
     list_jobs_api_jobs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -924,7 +937,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobOut"][];
+                    "application/json": components["schemas"]["JobPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
