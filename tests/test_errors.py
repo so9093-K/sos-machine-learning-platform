@@ -1,6 +1,8 @@
 """Error Catalog 코드의 중복·CLI 정합성·비밀정보 보호 정책."""
 
 import ast
+import io
+import logging
 import re
 from pathlib import Path
 
@@ -45,7 +47,14 @@ def test_cli_startup_codes_are_cataloged():
             assert call.args[0].value in ERRORS
 
 
-def test_structured_logs_discard_unregistered_and_sensitive_values(caplog):
+def test_structured_logs_discard_unregistered_and_sensitive_values(monkeypatch):
+    stream = io.StringIO()
+    logger = logging.getLogger("sos.events")
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    monkeypatch.setattr(logger, "handlers", [handler])
+    monkeypatch.setattr(logger, "level", logging.INFO)
+    monkeypatch.setattr(logger, "propagate", False)
     emit(
         "worker.execution.failed",
         service="sos-worker",
@@ -54,7 +63,10 @@ def test_structured_logs_discard_unregistered_and_sensitive_values(caplog):
         stage="publish",
         request_id="private secret password=foo",
     )
-    # 별도의 Handler를 사용하므로 LogRecord의 내용에 비밀값이 등장하지 않는다.
-    assert "private secret password=foo" not in caplog.text
+    output = stream.getvalue()
+    assert '"event":"worker.execution.failed"' in output
+    assert '"stage":"publish"' in output
+    assert "private secret password=foo" not in output
+    assert '"request_id"' not in output
     with pytest.raises(ValueError, match="Unregistered"):
         emit("worker.execution.failed", service="sos-worker", secret="private")
