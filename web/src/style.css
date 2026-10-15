@@ -21,3 +21,10 @@
 .example-card button{justify-self:start}
 .job-navigation{width:100%;margin-top:12px}
 @media(max-width:800px){.example-grid{grid-template-columns:1fr}}
+
+.upload{flex-direction:column;gap:4px}
+.upload small{font-size:10px;color:#a9c5e1;font-weight:400}
+.upload-status{display:grid;gap:8px;padding:14px 17px;margin-bottom:18px;background:#172d44;border:1px solid #3c5876;border-radius:9px;font-size:12px}
+.upload-status strong{overflow-wrap:anywhere}
+.upload-status span{color:#c1d7ed}
+.upload-status progress{width:100%;height:9px;accent-color:#70b5ff}

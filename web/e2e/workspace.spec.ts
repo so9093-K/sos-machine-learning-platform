@@ -181,3 +181,79 @@ test("Storage Health presents effective safe policy without destructive actions"
   await storage.getByRole("button", { name: "객체 다시 검사" }).click();
   await expect(storage.getByRole("alert")).toContainText("현재 상태가 아닙니다");
 });
+
+
+test("file size is explained and rejected before upload", async ({ page }) => {
+  await page.route("**/api/datasets/upload-policy", route =>
+    route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ max_size_bytes: 1024 * 1024,
+        supported_extensions: [".csv", ".parquet"] }),
+    }));
+  let uploads = 0;
+  await page.route("**/api/datasets/files", route => {
+    uploads++;
+    return route.abort();
+  });
+  await page.goto("/");
+  await expect(page.getByText("최대 1.00 MiB")).toBeVisible();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "over-limit.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.alloc(1024 * 1024 + 1, 120),
+  });
+  await expect(page.getByRole("alert")).toContainText("최대 1.00 MiB");
+  expect(uploads).toBe(0);
+});
+
+
+test("201 registration remains successful when the subsequent list refresh fails", async ({ page }) => {
+  let failRefresh = false;
+  await page.route("**/api/datasets", route => {
+    if (route.request().method() === "GET" && failRefresh) {
+      return route.fulfill({ status: 503, contentType: "application/json",
+        body: JSON.stringify({ detail: "List temporarily unavailable" }) });
+    }
+    return route.continue();
+  });
+  await page.route("**/api/datasets/files", async route => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(201);
+    failRefresh = true;
+    await route.fulfill({ response });
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "published.csv", mimeType: "text/csv",
+    buffer: Buffer.from("signal\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "published.csv" })).toBeVisible();
+  await expect(page.getByRole("status").filter({
+    hasText: "파일은 정상 등록됐습니다.",
+  })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("upload indicates pending transfer and completes after server response", async ({ page }) => {
+  let releaseResponse: () => void = () => {};
+  const heldResponse = new Promise<void>(resolve => { releaseResponse = resolve; });
+  await page.route("**/api/datasets/files", async route => {
+    const response = await route.fetch();
+    await heldResponse;
+    await route.fulfill({ response });
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "progress.csv", mimeType: "text/csv",
+    buffer: Buffer.from("time,value\n1,2\n2,3\n"),
+  });
+  try {
+    // 네트워크 가로채기는 브라우저 전송 완료 이벤트 자체를 보류한다.
+    // 전송 완료 콜백과 등록 대기 상태는 upload.test.ts에서 별도로 검증한다.
+    await expect(page.getByText(/전송 중 ·/)).toBeVisible();
+  } finally {
+    releaseResponse();
+  }
+  await expect(page.getByRole("heading", { name: "progress.csv" })).toBeVisible();
+  await expect(page.getByText("파일 등록이 완료됐습니다.", { exact: false })).toBeVisible();
+});

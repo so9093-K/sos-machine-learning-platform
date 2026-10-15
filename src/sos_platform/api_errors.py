@@ -12,29 +12,30 @@ from .errors import ERRORS, PlatformError
 from .observability import emit
 
 
+def problem_response(
+    request: Request, code: str, status: int, detail: object, headers: dict | None = None
+) -> JSONResponse:
+    definition = ERRORS[code]
+    request_id = getattr(request.state, "request_id", str(uuid4()))
+    return JSONResponse(
+        status_code=status,
+        headers={**(headers or {}), "X-Request-ID": request_id},
+        content={
+            "type": f"/problems/{code.lower()}",
+            "title": definition.title,
+            "status": status,
+            "detail": detail,
+            "code": code,
+            "category": definition.category,
+            "retry_policy": definition.retry_policy,
+            "request_id": request_id,
+            "instance": f"urn:uuid:{request_id}",
+        },
+    )
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """전송 레이어의 오류 표현만 담당하며 비즈니스 상태는 바꾸지 않는다."""
-
-    def problem(
-        request: Request, code: str, status: int, detail: object, headers: dict | None = None
-    ) -> JSONResponse:
-        definition = ERRORS[code]
-        request_id = getattr(request.state, "request_id", str(uuid4()))
-        return JSONResponse(
-            status_code=status,
-            headers={**(headers or {}), "X-Request-ID": request_id},
-            content={
-                "type": f"/problems/{code.lower()}",
-                "title": definition.title,
-                "status": status,
-                "detail": detail,
-                "code": code,
-                "category": definition.category,
-                "retry_policy": definition.retry_policy,
-                "request_id": request_id,
-                "instance": f"urn:uuid:{request_id}",
-            },
-        )
 
     @app.exception_handler(HTTPException)
     async def handle_http(request: Request, exc: HTTPException):
@@ -54,7 +55,7 @@ def register_error_handlers(app: FastAPI) -> None:
                 409: "SOS-API-CONFLICT",
                 503: "SOS-STORAGE-INSPECTION",
             }.get(exc.status_code, "SOS-API-VALIDATION")
-        return problem(request, code, exc.status_code, exc.detail, headers=exc.headers)
+        return problem_response(request, code, exc.status_code, exc.detail, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation(request: Request, exc: RequestValidationError):
@@ -83,7 +84,7 @@ def register_error_handlers(app: FastAPI) -> None:
                     "msg": issue.get("msg", "") if safe_kind else "입력값을 확인하세요.",
                 }
             )
-        return problem(request, "SOS-API-VALIDATION", 422, fields)
+        return problem_response(request, "SOS-API-VALIDATION", 422, fields)
 
     @app.exception_handler(ValueError)
     async def handle_value(request: Request, exc: ValueError):
@@ -102,19 +103,20 @@ def register_error_handlers(app: FastAPI) -> None:
             "Iceberg import exceeds the supported 64 MiB memory limit",
         }
         detail = str(exc) if str(exc) in known else ERRORS["SOS-API-VALIDATION"].message
-        return problem(request, "SOS-API-VALIDATION", 422, detail)
+        return problem_response(request, "SOS-API-VALIDATION", 422, detail)
 
     @app.exception_handler(PlatformError)
     async def handle_platform(request: Request, exc: PlatformError):
         entry = ERRORS[exc.code]
         status = {
+            "upload_size": 413,
             "validation": 422,
             "not_found": 404,
             "conflict": 409,
             "commit_uncertain": 409,
             "dependency": 503,
         }.get(entry.category, 500)
-        return problem(request, exc.code, status, entry.message)
+        return problem_response(request, exc.code, status, entry.message)
 
     @app.exception_handler(Exception)
     async def handle_unexpected(request: Request, exc: Exception):
@@ -126,4 +128,6 @@ def register_error_handlers(app: FastAPI) -> None:
             error_code="SOS-API-INTERNAL",
             exception_type=type(exc).__name__,
         )
-        return problem(request, "SOS-API-INTERNAL", 500, ERRORS["SOS-API-INTERNAL"].message)
+        return problem_response(
+            request, "SOS-API-INTERNAL", 500, ERRORS["SOS-API-INTERNAL"].message
+        )

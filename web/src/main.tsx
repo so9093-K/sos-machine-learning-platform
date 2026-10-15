@@ -2,17 +2,22 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import * as echarts from "echarts";
 import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
-import { request, jsonPost, setAccessToken, formatError } from "./api";
+import { request, jsonPost, setAccessToken, formatError, uploadFile } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
-import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, Example } from "./types";
+import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, Example, UploadPolicy } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
 type Tab = "preview" | "profile" | "features" | "jobs" | "storage" | "audit";
 type Identity = { actor_id: string; actor_type: string; roles: string[]; mode: string };
+type UploadProgress = {
+  name: string; loaded: number; total: number;
+  phase: "transferring" | "registering";
+};
+const mebibytes = (size: number) => (size / (1024 * 1024)).toFixed(2);
 
 function readableVersion(d: Dataset) {
   return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
@@ -47,6 +52,8 @@ function Workspace({ actor }: { actor: Identity }) {
   const [reloadRevision, setReloadRevision] = useState(0);
   const [tab, setTab] = useState<Tab>("preview");
   const [busy, setBusy] = useState(false);
+  const [uploadPolicy, setUploadPolicy] = useState<UploadPolicy | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [tableName, setTableName] = useState("");
@@ -91,6 +98,10 @@ function Workspace({ actor }: { actor: Identity }) {
     });
   }
   useEffect(() => {
+    if (canWrite) {
+      request<UploadPolicy>("/api/datasets/upload-policy")
+        .then(setUploadPolicy).catch(e => setError(formatError(e)));
+    }
     refreshDatasets().catch(e => setError(String(e)));
     refreshJobs().catch(e => setError(String(e)));
     request<Example[]>("/api/examples").then(setExamples)
@@ -225,12 +236,40 @@ function Workspace({ actor }: { actor: Identity }) {
     setSelected(datasetId); setTab("preview");
   }
   async function upload(file: File) {
+    if (uploadPolicy && !uploadPolicy.supported_extensions.some(ext =>
+      file.name.toLowerCase().endsWith(ext.toLowerCase()))) {
+      setNotice("");
+      setError("서버가 지원하지 않는 파일 형식입니다. CSV 또는 Parquet 파일을 선택하세요.");
+      return;
+    }
+    if (uploadPolicy && file.size > uploadPolicy.max_size_bytes) {
+      setNotice("");
+      setError(`파일 크기 ${mebibytes(file.size)} MiB가 최대 ${mebibytes(uploadPolicy.max_size_bytes)} MiB를 초과했습니다.`);
+      return;
+    }
+    setUploadProgress({ name: file.name, loaded: 0,
+      total: file.size, phase: "transferring" });
     await withFeedback(async () => {
-      const form = new FormData(); form.append("file", file);
-      const data = await request<Dataset>("/api/datasets/files", { method: "POST", body: form });
-      await refreshDatasets(); setSelected(data.id); setTab("preview");
-      setNotice("파일을 불변 데이터셋으로 등록했습니다.");
+      const data = await uploadFile<Dataset>(
+        "/api/datasets/files", file,
+        (loaded, total) => setUploadProgress(previous => previous
+          ? { ...previous, loaded, total } : null),
+        () => setUploadProgress(previous => previous
+          ? { ...previous, phase: "registering" } : null),
+      );
+      // HTTP 201이 등록 성공의 정본이다. 후속 목록 조회 실패로 등록 성공을 번복하지 않는다.
+      setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+      setSelected(data.id); setTab("preview");
+      try {
+        await refreshDatasets();
+        setNotice("파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.");
+      } catch {
+        // 같은 목록 오류가 전역 경고로 표시돼 확정된 등록을 실패로 오해하지 않게 한다.
+        setError("");
+        setNotice("파일은 정상 등록됐습니다. 데이터셋 목록 새로고침에 실패했지만 등록을 다시 시도할 필요는 없습니다.");
+      }
     });
+    setUploadProgress(null);
   }
   async function connectExisting() {
     await withFeedback(async () => {
@@ -303,7 +342,9 @@ function Workspace({ actor }: { actor: Identity }) {
           event.preventDefault(); uploadRef.current?.click();
         }}>
         + CSV / Parquet 가져오기
-        <input ref={uploadRef} type="file" accept=".csv,.parquet" disabled={busy}
+        {uploadPolicy && <small>최대 {mebibytes(uploadPolicy.max_size_bytes)} MiB</small>}
+        <input ref={uploadRef} type="file"
+          accept={uploadPolicy?.supported_extensions.join(",") ?? ".csv,.parquet"} disabled={busy}
           onChange={event => {
             const file = event.target.files?.[0]; if (file) void upload(file);
             event.target.value = "";
@@ -349,6 +390,15 @@ function Workspace({ actor }: { actor: Identity }) {
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
       {notice && <div role="status" className="alert success">{notice}
         <button onClick={() => setNotice("")} aria-label="알림 닫기">×</button></div>}
+      {uploadProgress && <div className="upload-status" role="status" aria-live="polite">
+        <strong>{uploadProgress.name}</strong>
+        <span>{uploadProgress.phase === "transferring"
+          ? `전송 중 · ${mebibytes(uploadProgress.loaded)} / ${mebibytes(uploadProgress.total)} MiB`
+          : "전송 완료 · 서버에서 검증하고 Dataset을 등록하고 있습니다."}</span>
+        {uploadProgress.phase === "transferring" && uploadProgress.total > 0 &&
+          <progress max={uploadProgress.total} value={uploadProgress.loaded}
+            aria-label="파일 전송 진행률" />}
+      </div>}
       {!dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <div className="empty">
         <h2>첫 데이터를 탐색해 보세요</h2>
         <p>파일을 준비하지 않아도 합성 데이터로 EDA와 피처 실행을 경험할 수 있습니다.</p>

@@ -52,12 +52,19 @@ class ObjectStore:
         self.client.upload_file(str(source), self.config.s3_bucket, key)
         return digest.hexdigest()
 
-    def get(self, key: str, destination: Path):
+    def get(self, key: str, destination: Path, *, expected_sha256: str | None = None):
         destination.parent.mkdir(parents=True, exist_ok=True)
         # Preview·Profile이 동시에 같은 스냅샷을 읽어도 임시 파일이 충돌하지 않는다.
         pending = destination.with_name(destination.name + f".pending-{uuid4().hex}")
         try:
             self.client.download_file(self.config.s3_bucket, key, str(pending))
+            if expected_sha256 is not None:
+                digest = hashlib.sha256()
+                with pending.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                if digest.hexdigest() != expected_sha256:
+                    raise ValueError("Dataset content hash does not match the registered version")
             pending.replace(destination)
         finally:
             pending.unlink(missing_ok=True)

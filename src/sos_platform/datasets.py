@@ -3,17 +3,18 @@
 import hashlib
 import os
 import re
+from io import BytesIO
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+from typing import BinaryIO
 from uuid import uuid4
 
 import polars as pl
 
 from .config import Settings
+from .errors import PlatformError
+from .ingestion import UploadPolicy, staged_upload
 from .object_store import ObjectStore
 from .store import Store
-
-MAX_UPLOAD = 20 * 1024 * 1024
 
 
 def file_digest(path: Path) -> str:
@@ -26,37 +27,45 @@ def file_digest(path: Path) -> str:
 
 
 def save_upload(store: Store, name: str, content: bytes, *, owner_actor: str | None = None) -> dict:
-    """업로드를 검증한 뒤 객체 저장소에 불변 버전으로 등록한다."""
-    suffix = Path(name).suffix.lower()
-    if suffix not in (".csv", ".parquet"):
-        raise ValueError("Only CSV and Parquet are supported")
-    if not content or len(content) > MAX_UPLOAD:
-        raise ValueError("File must be nonempty and at most 20 MiB")
-    digest = hashlib.sha256(content).hexdigest()
-    key = f"datasets/{digest}{suffix}"
-    with NamedTemporaryFile(suffix=suffix, dir=store.home / "cache", delete=False) as tmp:
-        temporary = Path(tmp.name)
-        tmp.write(content)
-    try:
-        lf = (
-            pl.scan_csv(temporary, try_parse_dates=True)
-            if suffix == ".csv"
-            else pl.scan_parquet(temporary)
-        )
-        if not lf.collect_schema().names():
-            raise ValueError("Dataset has no columns")
+    """합성 예제 등 기존 바이트 입력도 동일한 파일 등록 계약으로 처리한다."""
+    return save_upload_file(store, name, BytesIO(content), owner_actor=owner_actor)
+
+
+def save_upload_file(
+    store: Store,
+    name: str,
+    source: BinaryIO,
+    *,
+    owner_actor: str | None = None,
+    max_bytes: int | None = None,
+) -> dict:
+    """파일 입력을 검증하고 SHA-256 불변 원본과 Dataset 참조를 게시한다."""
+    limit = max_bytes if max_bytes is not None else UploadPolicy.from_env().max_bytes
+    with staged_upload(source, name, store.home / "cache", max_bytes=limit) as staged:
+        try:
+            lf = (
+                pl.scan_csv(staged.path, try_parse_dates=True)
+                if staged.suffix == ".csv"
+                else pl.scan_parquet(staged.path)
+            )
+            if not lf.collect_schema().names():
+                raise PlatformError("SOS-UPLOAD-INVALID")
+        except (pl.exceptions.PolarsError, OSError, UnicodeError, ValueError) as exc:
+            raise PlatformError("SOS-UPLOAD-INVALID") from exc
+
+        key = f"datasets/{staged.sha256}{staged.suffix}"
         storage = ObjectStore()
         location = storage.location(key)
         write_id = store.begin_object_write(
             location=location, owner_kind="upload", owner_id=str(uuid4())
         )
         try:
-            storage.put(key, temporary)
+            storage.put(key, staged.path)
             return store.register_dataset(
                 name=Path(name).name,
                 kind="file",
                 location=location,
-                version=digest,
+                version=staged.sha256,
                 write_id=write_id,
                 owner_actor=owner_actor,
             )
@@ -66,8 +75,6 @@ def save_upload(store: Store, name: str, content: bytes, *, owner_actor: str | N
             except Exception:
                 pass
             raise
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def iceberg_catalog(store: Store):
@@ -204,10 +211,8 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
         if not destination.is_relative_to(store.home / "cache"):
             raise ValueError("Dataset cache path is invalid")
         if not destination.is_file() or file_digest(destination) != dataset["version"]:
-            storage.get(key, destination)
-            if file_digest(destination) != dataset["version"]:
-                destination.unlink(missing_ok=True)
-                raise ValueError("Dataset content hash does not match the registered version")
+            # 내려받은 임시 파일을 검증한 후에만 게시하므로 다시 읽을 필요가 없다.
+            storage.get(key, destination, expected_sha256=dataset["version"])
         return (
             pl.scan_csv(destination, try_parse_dates=True)
             if suffix == ".csv"
