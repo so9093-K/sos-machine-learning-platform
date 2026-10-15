@@ -2,6 +2,9 @@
 
 import json
 from contextlib import contextmanager
+
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -37,14 +40,129 @@ class Store:
             yield connection
 
     def initialize(self):
-        """초기화는 DB 연결·스키마 호환성을 확인하고 자동 생성하지 않는다."""
+        """현재 Alembic HEAD와 DB 스키마가 일치하는지만 확인한다."""
+        root = Path(__file__).resolve().parents[2]
+        config = Config(str(root / "alembic.ini"))
+        config.set_main_option("script_location", str(root / "migrations"))
+        expected = set(ScriptDirectory.from_config(config).get_heads())
         with self.connection() as db:
             db.execute(text("SELECT 1"))
-            version = db.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            if version != "0001":
-                raise RuntimeError("Database migration is required: alembic upgrade head")
+            actual = set(db.execute(text("SELECT version_num FROM alembic_version")).scalars())
+        if actual != expected:
+            raise RuntimeError("Database migration is required: alembic upgrade head")
 
-    def register_dataset(self, *, name: str, kind: str, location: str, version: str) -> dict:
+    def begin_object_write(self, *, location: str, owner_kind: str, owner_id: str) -> str:
+        """S3에 쓰기 전에 게시 의도를 DB에 확정한다."""
+        if owner_kind not in ("upload", "attempt"):
+            raise ValueError("Invalid object owner")
+        write_id = str(uuid4())
+        with self.connection() as db:
+            db.execute(
+                text(
+                    "INSERT INTO object_writes(id,location,owner_kind,owner_id,state,created_at,updated_at) "
+                    "VALUES(:id,:location,:owner_kind,:owner_id,'Pending',:at,:at)"
+                ),
+                {
+                    "id": write_id,
+                    "location": location,
+                    "owner_kind": owner_kind,
+                    "owner_id": owner_id,
+                    "at": now(),
+                },
+            )
+        return write_id
+
+    def fail_object_write(self, write_id: str, error: str | None = None) -> None:
+        """성공 게시된 객체는 실패로 되돌리지 않는다."""
+        with self.connection() as db:
+            db.execute(
+                text(
+                    "UPDATE object_writes SET state='Failed',error=:error,updated_at=:at "
+                    "WHERE id=:id AND state='Pending'"
+                ),
+                {"id": write_id, "error": error[:500] if error else None, "at": now()},
+            )
+
+    @staticmethod
+    def _publish_object(db, write_id: str, location: str, version: str) -> None:
+        updated = db.execute(
+            text(
+                "UPDATE object_writes SET state='Published',version=:version,updated_at=:at "
+                "WHERE id=:id AND location=:location AND state='Pending'"
+            ),
+            {"id": write_id, "location": location, "version": version, "at": now()},
+        )
+        if updated.rowcount != 1:
+            raise RuntimeError("Object publication intent is not pending")
+
+    def object_writes(self, location: str) -> list[dict]:
+        """진단에서 게시 기록을 조회한다."""
+        with self.connection() as db:
+            return [
+                dict(item)
+                for item in db.execute(
+                    text("SELECT * FROM object_writes WHERE location=:location ORDER BY created_at"),
+                    {"location": location},
+                ).mappings()
+            ]
+
+    def observe_objects(self, locations: list[str], observation_hours: int) -> dict:
+        """S3 읽기 전용 대조의 관측 시각을 기록하고 참조·소유권을 함께 조회한다."""
+        if not locations:
+            return {}
+        cutoff = (datetime.now(UTC) - timedelta(hours=observation_hours)).isoformat()
+        statement = text("SELECT location FROM datasets WHERE location IN :ids").bindparams(
+            bindparam("ids", expanding=True)
+        )
+        writes_query = text("SELECT * FROM object_writes WHERE location IN :ids").bindparams(
+            bindparam("ids", expanding=True)
+        )
+        with self.connection() as db:
+            referenced = set(db.execute(statement, {"ids": locations}).scalars())
+            writes = db.execute(writes_query, {"ids": locations}).mappings().all()
+            by_location: dict[str, list[dict]] = {location: [] for location in locations}
+            for write in writes:
+                by_location[write["location"]].append(dict(write))
+            owner_ids = [
+                item["owner_id"] for item in writes if item["owner_kind"] == "attempt"
+            ]
+            attempts = {}
+            if owner_ids:
+                statement = text("SELECT id,status FROM attempts WHERE id IN :ids").bindparams(
+                    bindparam("ids", expanding=True)
+                )
+                attempts = dict(db.execute(statement, {"ids": owner_ids}).all())
+            for location in locations:
+                db.execute(
+                    text(
+                        "INSERT INTO object_observations"
+                        "(location,first_seen_at,last_seen_at,observation_count) "
+                        "VALUES(:location,:at,:at,1) ON CONFLICT(location) DO UPDATE "
+                        "SET last_seen_at=:at,observation_count=object_observations.observation_count+1 "
+                        "WHERE object_observations.last_seen_at<=:cutoff"
+                    ),
+                    {"location": location, "at": now(), "cutoff": cutoff},
+                )
+            observations_query = text(
+                "SELECT * FROM object_observations WHERE location IN :ids"
+            ).bindparams(bindparam("ids", expanding=True))
+            observations = {
+                item["location"]: dict(item)
+                for item in db.execute(observations_query, {"ids": locations}).mappings()
+            }
+        return {
+            location: {
+                "referenced": location in referenced,
+                "writes": by_location[location],
+                "attempts": attempts,
+                "observation": observations[location],
+            }
+            for location in locations
+        }
+
+    def register_dataset(
+        self, *, name: str, kind: str, location: str, version: str, write_id: str | None = None
+    ) -> dict:
         item = dict(
             id=str(uuid4()),
             name=name,
@@ -61,6 +179,8 @@ class Store:
                 ),
                 item,
             )
+            if write_id:
+                self._publish_object(db, write_id, location, version)
         return item
 
     def get_dataset(self, dataset_id: str) -> dict | None:
@@ -237,6 +357,7 @@ class Store:
         result: dict | None = None,
         error: str | None = None,
         publish: dict | None = None,
+        write_id: str | None = None,
     ) -> str:
         with self.connection() as db:
             row = (
@@ -267,6 +388,8 @@ class Store:
                     ),
                     item,
                 )
+                if write_id:
+                    self._publish_object(db, write_id, publish["location"], publish["version"])
                 result = {**(result or {}), "dataset_id": item["id"]}
             db.execute(
                 text(
