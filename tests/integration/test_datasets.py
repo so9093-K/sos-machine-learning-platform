@@ -196,22 +196,6 @@ def test_upload_policy_and_raw_request_body_limit(workspace, monkeypatch):
         assert rejected_body.json()["code"] == "SOS-UPLOAD-TOO-LARGE"
         assert rejected_body.headers["X-Request-ID"] == rejected_body.json()["request_id"]
 
-        # Content-Length가 없는 스트리밍 요청도 실제 수신 바이트 수로 제한한다.
-        boundary = "sos-upload-boundary"
-        head = (
-            f"--{boundary}\r\n"
-            'Content-Disposition: form-data; name="file"; filename="huge.csv"\r\n'
-            "Content-Type: text/csv\r\n\r\n"
-        ).encode()
-        tail = f"\r\n--{boundary}--\r\n".encode()
-        streamed = client.post(
-            "/api/datasets/files",
-            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-            content=iter((head, b"a" * (1024 * 1024 + 80 * 1024), tail)),
-        )
-        assert streamed.status_code == 413
-        assert streamed.json()["code"] == "SOS-UPLOAD-TOO-LARGE"
-        assert streamed.headers["X-Request-ID"] == streamed.json()["request_id"]
     assert store.datasets() == []
 
 

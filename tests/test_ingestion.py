@@ -1,9 +1,11 @@
 """인프라 없는 파일 수신 자원 한도와 임시 파일의 수명주기를 검증한다."""
 
+import asyncio
 import hashlib
 from io import BytesIO
 
 import pytest
+from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from sos_platform.errors import PlatformError
 from sos_platform.ingestion import CHUNK_SIZE, UploadPolicy, staged_upload
@@ -84,3 +86,37 @@ def test_failed_source_read_cleans_staging_file(tmp_path):
         with staged_upload(FailingStream(), "broken.csv", tmp_path, max_bytes=100):
             pytest.fail("a failed stream must not be published")
     assert list(tmp_path.iterdir()) == []
+
+
+def test_body_limit_counts_chunked_asgi_bytes_without_content_length():
+    """헤더 크기 추측이 아닌 실제 ASGI body 청크의 합으로 요청을 제한한다."""
+    async def scenario():
+        messages = [
+            {"type": "http.request", "body": b"1234", "more_body": True},
+            {"type": "http.request", "body": b"5678", "more_body": False},
+        ]
+        responses = []
+
+        async def receive():
+            return messages.pop(0)
+
+        async def send(message):
+            responses.append(message)
+
+        async def consume_body(_scope, receive_body, send_response):
+            while (await receive_body()).get("more_body", False):
+                pass
+            await send_response({"type": "http.response.start", "status": 200, "headers": []})
+            await send_response({"type": "http.response.body", "body": b""})
+
+        middleware = RequestBodyLimitMiddleware(consume_body, max_body_size=5)
+        await middleware(
+            {"type": "http", "method": "POST", "path": "/api/datasets/files", "headers": []},
+            receive,
+            send,
+        )
+        return responses
+
+    output = asyncio.run(scenario())
+    assert output[0]["type"] == "http.response.start"
+    assert output[0]["status"] == 413
