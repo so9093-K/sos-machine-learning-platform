@@ -625,6 +625,10 @@ def test_storage_candidate_needs_grace_and_repeated_observation():
     metadata["referenced"] = False
     observation["observation_count"] = 1
     assert classify_object(item, metadata, StoragePolicy())[0] == "waiting"
+    observation["observation_count"] = 2
+    observation["fingerprint"] = "earlier-generation"
+    assert classify_object(item, metadata, StoragePolicy())[0] == "unknown"
+    observation["fingerprint"] = "generation-a"
     metadata["writes"] = [{"state": "Pending", "owner_kind": "upload", "owner_id": "abc"}]
     assert classify_object(item, metadata, StoragePolicy())[0] == "protected"
 
