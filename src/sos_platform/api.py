@@ -17,8 +17,6 @@ from scalar_fastapi import get_scalar_api_reference
 
 from .api_errors import register_error_handlers
 from .config import StoragePolicy
-from .errors import ERRORS
-from .observability import emit
 from .datasets import (
     MAX_UPLOAD,
     connect_iceberg,
@@ -26,8 +24,10 @@ from .datasets import (
     save_upload,
     scan_dataset,
 )
+from .errors import ERRORS
 from .examples import list_examples, use_example
 from .object_store import ObjectStore
+from .observability import emit
 from .processing import bounded_feature_preview, profile, safe_preview
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
