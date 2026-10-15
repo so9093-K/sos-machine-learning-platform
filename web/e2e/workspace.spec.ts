@@ -234,7 +234,7 @@ test("201 registration remains successful when the subsequent list refresh fails
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("upload progress distinguishes transfer from server publication", async ({ page }) => {
+test("upload indicates pending transfer and completes after server response", async ({ page }) => {
   let releaseResponse: () => void = () => {};
   const heldResponse = new Promise<void>(resolve => { releaseResponse = resolve; });
   await page.route("**/api/datasets/files", async route => {
@@ -248,9 +248,9 @@ test("upload progress distinguishes transfer from server publication", async ({ 
     buffer: Buffer.from("time,value\n1,2\n2,3\n"),
   });
   try {
-    await expect(page.getByText(
-      "전송 완료 · 서버에서 검증하고 Dataset을 등록하고 있습니다.",
-    )).toBeVisible();
+    // 네트워크 가로채기는 브라우저 전송 완료 이벤트 자체를 보류한다.
+    // 전송 완료 콜백과 등록 대기 상태는 upload.test.ts에서 별도로 검증한다.
+    await expect(page.getByText(/전송 중 ·/)).toBeVisible();
   } finally {
     releaseResponse();
   }

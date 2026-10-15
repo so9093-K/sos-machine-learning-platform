@@ -264,6 +264,8 @@ function Workspace({ actor }: { actor: Identity }) {
         await refreshDatasets();
         setNotice("파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.");
       } catch {
+        // 같은 목록 오류가 전역 경고로 표시돼 확정된 등록을 실패로 오해하지 않게 한다.
+        setError("");
         setNotice("파일은 정상 등록됐습니다. 데이터셋 목록 새로고침에 실패했지만 등록을 다시 시도할 필요는 없습니다.");
       }
     });
