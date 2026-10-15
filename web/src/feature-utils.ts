@@ -1,7 +1,10 @@
 /** API 변환 계약은 Pydantic에서 생성된 타입을 그대로 사용한다. */
 import type { components } from "./api.generated";
 
-export type FeatureStep = components["schemas"]["Step"];
+type ApiStep = components["schemas"]["Step"];
+// Pydantic가 기본값을 채우는 필드는 UI 요청 초안에서 생략할 수 있다.
+export type FeatureStep = Omit<ApiStep, "periods" | "window"> &
+  Partial<Pick<ApiStep, "periods" | "window">>;
 export function createStep(
   op: string, column: string, raw: string, dtype?: string, size?: number,
 ): FeatureStep {
