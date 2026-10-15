@@ -52,8 +52,7 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
         outcome = {"result": result}
     except Exception as exc:
         code = "SOS-ICEBERG-UNCERTAIN" if job["kind"] == "iceberg_import" else "SOS-JOB-FAILED"
-        outcome = {"error_code": code, "failure_stage": stage,
-                   "exception_type": type(exc).__name__}
+        outcome = {"error_code": code, "failure_stage": stage, "exception_type": type(exc).__name__}
     completed.write_text(json.dumps(outcome, default=str), encoding="utf-8")
 
 
@@ -73,8 +72,13 @@ def run_once(store: Store) -> bool:
     job_id = job["id"]
     attempt_id = job["attempts"][-1]["id"]
     write_id: str | None = None
-    emit("worker.attempt.started", service="sos-worker", job_id=job_id,
-         attempt_id=attempt_id, kind=job["kind"])
+    emit(
+        "worker.attempt.started",
+        service="sos-worker",
+        job_id=job_id,
+        attempt_id=attempt_id,
+        kind=job["kind"],
+    )
     output = store.home / "results" / f"{job_id}.parquet"
     pending = store.home / "results" / f"{job_id}.pending.parquet"
     completed = store.home / "results" / f"{job_id}.completed.json"
@@ -106,12 +110,23 @@ def run_once(store: Store) -> bool:
         outcome = json.loads(completed.read_text(encoding="utf-8"))
         if "error_code" in outcome:
             code = outcome["error_code"]
-            emit("worker.attempt.failed", service="sos-worker", level=logging.ERROR,
-                 job_id=job_id, attempt_id=attempt_id, error_code=code,
-                 stage=outcome.get("failure_stage"),
-                 exception_type=outcome.get("exception_type"))
-            store.finish(job_id, "Failed", error=ERRORS[code].message, error_code=code,
-                         failure_stage=outcome.get("failure_stage"))
+            emit(
+                "worker.attempt.failed",
+                service="sos-worker",
+                level=logging.ERROR,
+                job_id=job_id,
+                attempt_id=attempt_id,
+                error_code=code,
+                stage=outcome.get("failure_stage"),
+                exception_type=outcome.get("exception_type"),
+            )
+            store.finish(
+                job_id,
+                "Failed",
+                error=ERRORS[code].message,
+                error_code=code,
+                failure_stage=outcome.get("failure_stage"),
+            )
             return True
 
         publish = outcome["result"].get("iceberg_publish")
@@ -135,22 +150,44 @@ def run_once(store: Store) -> bool:
         )
         if final_status != "Succeeded" and write_id:
             store.fail_object_write(write_id, "Job cancelled during publication")
-        emit("worker.attempt.finished", service="sos-worker", job_id=job_id,
-             attempt_id=attempt_id, status=final_status)
+        emit(
+            "worker.attempt.finished",
+            service="sos-worker",
+            job_id=job_id,
+            attempt_id=attempt_id,
+            status=final_status,
+        )
     except Exception as exc:
         _stop(process)
         if write_id:
             try:
                 store.fail_object_write(write_id, ERRORS["SOS-JOB-FAILED"].message)
             except Exception:
-                emit("worker.write_intent.record_failed", service="sos-worker",
-                     level=logging.ERROR, job_id=job_id, attempt_id=attempt_id)
+                emit(
+                    "worker.write_intent.record_failed",
+                    service="sos-worker",
+                    level=logging.ERROR,
+                    job_id=job_id,
+                    attempt_id=attempt_id,
+                )
         code = "SOS-ICEBERG-UNCERTAIN" if job["kind"] == "iceberg_import" else "SOS-JOB-FAILED"
-        emit("worker.attempt.failed", service="sos-worker", level=logging.ERROR,
-             job_id=job_id, attempt_id=attempt_id, error_code=code,
-             stage="publication", exception_type=type(exc).__name__)
-        store.finish(job_id, "Failed", error=ERRORS[code].message,
-                     error_code=code, failure_stage="publication")
+        emit(
+            "worker.attempt.failed",
+            service="sos-worker",
+            level=logging.ERROR,
+            job_id=job_id,
+            attempt_id=attempt_id,
+            error_code=code,
+            stage="publication",
+            exception_type=type(exc).__name__,
+        )
+        store.finish(
+            job_id,
+            "Failed",
+            error=ERRORS[code].message,
+            error_code=code,
+            failure_stage="publication",
+        )
     finally:
         _stop(process)
         # 게시 도중 실패해도 로컬 실행 중간 파일은 남기지 않는다.
