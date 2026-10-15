@@ -90,6 +90,7 @@ def test_failed_source_read_cleans_staging_file(tmp_path):
 
 def test_body_limit_counts_chunked_asgi_bytes_without_content_length():
     """헤더 크기 추측이 아닌 실제 ASGI body 청크의 합으로 요청을 제한한다."""
+
     async def scenario():
         messages = [
             {"type": "http.request", "body": b"1234", "more_body": True},
