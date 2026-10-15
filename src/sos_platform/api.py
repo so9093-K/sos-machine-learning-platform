@@ -302,7 +302,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         return profile(scan_dataset(store, existing(dataset_id, actor)), sample=1000)
 
     @app.post("/api/iceberg/import", status_code=202, response_model=JobOut)
-    def iceberg_import(body: IcebergImport, actor: Actor = RETAIN_DEP):
+    def iceberg_import(body: IcebergImport, actor: Actor = CREATE_JOB_DEP):
         existing(body.dataset_id, actor)
         return store.create_job(
             kind="iceberg_import",
@@ -313,7 +313,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         )
 
     @app.post("/api/datasets/iceberg", status_code=201, response_model=DatasetOut)
-    def connect_table(body: IcebergConnect, actor: Actor = RETAIN_DEP):
+    def connect_table(body: IcebergConnect, actor: Actor = CREATE_DATASET_DEP):
         return connect_iceberg(store, body.table_name, body.snapshot_id, owner_actor=actor.id)
 
     @app.get("/api/iceberg/{table_name}/snapshots", response_model=list[SnapshotOut])

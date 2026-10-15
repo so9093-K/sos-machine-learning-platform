@@ -20,6 +20,8 @@ test.describe("token identity and resource permissions", () => {
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" }))
       .toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Iceberg에 추가" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "스냅샷 연결" })).toHaveCount(0);
     const response = await page.request.get("/api/storage/policy", {
       headers: { Authorization: `Bearer ${viewer}` },
     });
@@ -33,6 +35,7 @@ test.describe("token identity and resource permissions", () => {
     await expect(page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" }))
       .toBeVisible();
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "스냅샷 연결" })).toBeVisible();
   });
 
   test("operator has diagnostic access but cannot read user datasets", async ({ page }) => {

@@ -893,6 +893,31 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         assert secure.get("/api/storage/inspection", headers=headers("alice")).status_code == 403
         assert secure.get("/api/audit", headers=headers("alice")).status_code == 403
         assert secure.get("/api/storage/policy", headers=headers("ops")).status_code == 200
+        # Data 생성·실행과 이미 존재하는 Snapshot의 운영 보존은 서로 다른 권한이다.
+        assert (
+            secure.post(
+                "/api/datasets/iceberg",
+                json={"table_name": "nonexistent"},
+                headers=headers("ops"),
+            ).status_code
+            == 403
+        )
+        assert (
+            secure.post(
+                "/api/iceberg/import",
+                json={"dataset_id": dataset["id"], "table_name": "restricted"},
+                headers=headers("ops"),
+            ).status_code
+            == 403
+        )
+        assert (
+            secure.post(
+                "/api/iceberg/import",
+                json={"dataset_id": dataset["id"], "table_name": "restricted"},
+                headers=headers("bob"),
+            ).status_code
+            == 403
+        )
         assert (
             secure.post(
                 "/api/jobs",
@@ -908,6 +933,19 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         )
         assert result.status_code == 201, result.text
         owned = result.json()["id"]
+        allowed_import = secure.post(
+            "/api/iceberg/import",
+            json={"dataset_id": owned, "table_name": "allowed_research"},
+            headers=headers("alice"),
+        )
+        assert allowed_import.status_code == 202, allowed_import.text
+        # 신규 Iceberg Dataset 연결은 생성 권한을 통과한 다음 테이블을 검증한다.
+        connect_missing = secure.post(
+            "/api/datasets/iceberg",
+            json={"table_name": "nonexistent"},
+            headers=headers("alice"),
+        )
+        assert connect_missing.status_code == 422
         assert secure.get(f"/api/datasets/{owned}", headers=headers("bob")).status_code == 404
         assert secure.get(f"/api/datasets/{owned}", headers=headers("alice")).status_code == 200
         assert secure.get("/api/datasets", headers=headers("bob")).json() == []

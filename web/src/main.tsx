@@ -309,7 +309,7 @@ function Workspace({ actor }: { actor: Identity }) {
             event.target.value = "";
           }} />
       </label>}
-      {canManage && <div className="connect-existing">
+      {canWrite && <div className="connect-existing">
         <label>기존 Iceberg 테이블
           <input aria-label="Iceberg 테이블 이름" value={tableName}
             onChange={e => setTableName(e.target.value)} placeholder="sensor_data" />
@@ -363,11 +363,13 @@ function Workspace({ actor }: { actor: Identity }) {
             <button className="secondary" onClick={() => setReloadRevision(value => value + 1)}>
               데이터 다시 불러오기
             </button>
-            <input aria-label="Iceberg 테이블명" value={tableName}
-            onChange={e => setTableName(e.target.value)} placeholder="Iceberg table" />
-            <button disabled={busy} className="secondary" onClick={() => void importIceberg()}>
-              Iceberg에 추가
-            </button></div>
+            {canWrite && <>
+              <input aria-label="Iceberg 테이블명" value={tableName}
+                onChange={e => setTableName(e.target.value)} placeholder="Iceberg table" />
+              <button disabled={busy} className="secondary" onClick={() => void importIceberg()}>
+                Iceberg에 추가
+              </button>
+            </>}</div>
         </div>
         <div className="tabbar" role="tablist" aria-label="데이터 작업 영역">
           {(["preview", "profile", "features"] as Tab[]).map(t =>
