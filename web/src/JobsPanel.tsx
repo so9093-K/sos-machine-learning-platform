@@ -1,10 +1,32 @@
-import type { Dataset, Job } from "./types";
+import { useRef, useState } from "react";
+import { request } from "./api";
+import type { Dataset, Job, JobSummary } from "./types";
 
-type Props = { jobs: Job[]; datasets: Dataset[]; busy: boolean; nextCursor: string | null;
+type Props = { jobs: JobSummary[]; datasets: Dataset[]; busy: boolean; nextCursor: string | null;
   onRefresh: () => void; onLoadMore: () => void;
   onCancel: (id: string) => void; onOpen: (id: string) => void; };
 
 export function JobsPanel({ jobs, datasets, busy, nextCursor, onRefresh, onLoadMore, onCancel, onOpen }: Props) {
+  const [detailById, setDetailById] = useState<Record<string, Job>>({});
+  const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
+  const pending = useRef(new Set<string>());
+
+  async function loadDetails(jobId: string) {
+    if (pending.current.has(jobId)) return;
+    pending.current.add(jobId);
+    setDetailErrors(current => ({ ...current, [jobId]: "" }));
+    try {
+      const result = await request<Job>(`/api/jobs/${jobId}`);
+      setDetailById(current => ({ ...current, [jobId]: result }));
+    } catch (error) {
+      setDetailErrors(current => ({
+        ...current,
+        [jobId]: error instanceof Error ? error.message : String(error),
+      }));
+    } finally {
+      pending.current.delete(jobId);
+    }
+  }
   return <section className="panel" aria-label="실행 작업">
     <div className="panel-head"><div>
       <h3>Execution Jobs</h3>
@@ -29,9 +51,12 @@ export function JobsPanel({ jobs, datasets, busy, nextCursor, onRefresh, onLoadM
           <p className="muted">분석한 행 · {job.result.row_count.toLocaleString("ko-KR")}</p>}
         {job.result && <details><summary>실행 결과 상세</summary>
           <pre>{JSON.stringify(job.result, null, 2)}</pre></details>}
-        <details><summary>작업 설정 및 실행 시도 · {job.attempts.length}회</summary>
+        <details onToggle={event => { if (event.currentTarget.open) void loadDetails(job.id); }}>
+          <summary>작업 설정 및 실행 시도 · {job.attempt_count}회</summary>
           <pre>{JSON.stringify(job.spec, null, 2)}</pre>
-          {job.attempts.map(attempt => <p key={attempt.id} className="muted">
+          {detailErrors[job.id] && <p role="alert">{detailErrors[job.id]}</p>}
+          {!detailById[job.id] && !detailErrors[job.id] && <p role="status">상세 이력을 확인하고 있습니다.</p>}
+          {detailById[job.id]?.attempts.map(attempt => <p key={attempt.id} className="muted">
             #{attempt.number} {attempt.status} · {attempt.started_at}
             {attempt.error ? ` · ${attempt.error}` : ""}</p>)}
         </details>
