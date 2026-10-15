@@ -2,10 +2,9 @@
 
 from fastapi.testclient import TestClient
 
-from sos_platform.worker import _perform
-
 from sos_platform.api import create_app
 from sos_platform.store import Store
+from sos_platform.worker import _perform
 
 from .support import upload
 
@@ -214,9 +213,10 @@ def test_invalid_bearer_token_length_preserves_challenge(workspace, monkeypatch)
     key = "real-valid-token-" + ("x" * 40)
     token_hash = hashlib.sha256(key.encode()).hexdigest()
     monkeypatch.setenv("SOS_AUTH_MODE", "token")
-    monkeypatch.setenv("SOS_AUTH_TOKEN_HASHES", json.dumps({
-        token_hash: {"actor_id": "operator", "kind": "human", "roles": ["operator"]}
-    }))
+    monkeypatch.setenv(
+        "SOS_AUTH_TOKEN_HASHES",
+        json.dumps({token_hash: {"actor_id": "operator", "kind": "human", "roles": ["operator"]}}),
+    )
     with TestClient(create_app(store.home)) as secure:
         response = secure.get("/api/audit", headers={"Authorization": "Bearer short"})
         assert response.status_code == 401
