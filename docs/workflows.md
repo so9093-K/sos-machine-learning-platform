@@ -53,3 +53,7 @@ SOS는 데이터 처리, 학습, 평가, 모델 재사용, 추론, 관측·피�
 Dataset 메타데이터 확정은 PostgreSQL 트랜잭션으로 수행하고 파일 본문은 S3 API에 보관한다. 두 저장소를 하나의 트랜잭션으로 취급하지 않는다. 파일 업로드는 SHA-256 기반의 공유 가능한 불변 키를 사용하므로, DB 등록 실패만으로 객체를 자동 삭제하지 않는다. 동일 본문의 재업로드는 같은 키를 재사용해 Dataset 등록을 다시 시도할 수 있다.
 
 Transform Job의 결과는 `results/{job_id}/{attempt_id}.parquet`의 Attempt별 고유 경로로 보관한다. S3 전송 이전 객체 게시 의도를 기록하고 Dataset 등록·게시 상태·Job 성공은 하나의 PostgreSQL 트랜잭션에서 확정한다. DB 게시 실패 또는 취소 경합 시 객체는 즉시 삭제하지 않고 게시 실패 이력을 남기며 보존한다. Worker 강제 종료로 남은 미완료 Attempt의 게시 의도는 복구 시 실패로 기록한 뒤 일반 Transform Job을 새 Attempt로 재실행한다. 업로드 중단과 DB 장애로 상태를 판정할 수 없는 객체는 보존하고 읽기 전용 대조에서 확인 필요로 표시한다. 이 정책은 [ADR 0002](adr/0002-object-lifecycle.md)가 [ADR 0001](adr/0001-data-publication.md)의 즉시 보상 삭제 결정을 대체한 것이다. Iceberg append는 중단된 경우 자동 재시도하지 않는다.
+
+## Iceberg Snapshot 보호와 복구
+
+Append가 만든 Snapshot은 Attempt 식별자와 연결해 확인하고, 등록될 Dataset의 Tag 보호를 Catalog에서 재확인한 뒤 PostgreSQL에 성공을 게시한다. Tag 커밋 후 DB 오류가 나면 보존 의도는 불확실한 상태로 남으며, Tag를 즉시 제거하거나 Iceberg Append를 자동 재시도하지 않는다. 기존 미보호 Dataset은 명시적인 운영자 재확인 절차로 보호 상태로 전환한다. 자세한 경계는 [ADR 0003](adr/0003-snapshot-identity-audit.md)을 참조한다.
