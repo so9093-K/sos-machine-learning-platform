@@ -20,22 +20,26 @@ from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from .api_errors import problem_response, register_error_handlers
 from .config import StoragePolicy
 from .datasets import connect_iceberg, iceberg_snapshots, save_upload_file, scan_dataset
+from .discovery import columns as discovery_columns
+from .discovery import explore as discovery_explore
+from .discovery import overview as discovery_overview
+from .discovery import preview as discovery_preview
+from .discovery import profile as discovery_profile
 from .errors import ERRORS, PlatformError
 from .examples import list_examples, use_example
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import bounded_feature_preview
-from .discovery import columns as discovery_columns
-from .discovery import explore as discovery_explore
-from .discovery import overview as discovery_overview
-from .discovery import preview as discovery_preview
-from .discovery import profile as discovery_profile
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
 from .schemas import (
+    DatasetColumnsOut,
     DatasetOut,
+    DatasetOverviewOut,
     ExampleOut,
+    ExplorationOut,
+    ExplorationRequest,
     FeaturePreview,
     FeaturePreviewOut,
     IcebergConnect,
@@ -50,10 +54,6 @@ from .schemas import (
     StorageInspectionOut,
     StoragePolicyOut,
     UploadPolicyOut,
-    DatasetOverviewOut,
-    DatasetColumnsOut,
-    ExplorationRequest,
-    ExplorationOut,
     WorkRequest,
 )
 from .security import Actor, IdentitySettings, current_actor, require, resource_allowed

@@ -15,11 +15,11 @@ from pathlib import Path
 
 from .datasets import import_to_iceberg, scan_dataset
 from .diagnostics import classify_failure
+from .discovery import profile as discovery_profile
 from .errors import ERRORS
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import transform
-from .discovery import profile as discovery_profile
 from .schemas import Transform
 from .store import Store
 

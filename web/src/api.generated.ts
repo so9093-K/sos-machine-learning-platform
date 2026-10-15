@@ -126,6 +126,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/datasets/{dataset_id}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dataset Columns */
+        get: operations["dataset_columns_api_datasets__dataset_id__columns_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/datasets/{dataset_id}/explorations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dataset Exploration */
+        post: operations["dataset_exploration_api_datasets__dataset_id__explorations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/datasets/{dataset_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dataset Overview */
+        get: operations["dataset_overview_api_datasets__dataset_id__overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/datasets/{dataset_id}/preview": {
         parameters: {
             query?: never;
@@ -492,6 +543,17 @@ export interface components {
             /** Unique */
             unique: number;
         };
+        /** DatasetColumnsOut */
+        DatasetColumnsOut: {
+            /** Columns */
+            columns: components["schemas"]["DiscoveryColumnOut"][];
+            /** Dataset Id */
+            dataset_id: string;
+            /** Total */
+            total: number;
+            /** Version */
+            version: string;
+        };
         /**
          * DatasetOut
          * @description 불변 Dataset 참조의 API 응답 계약.
@@ -513,6 +575,33 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** DatasetOverviewOut */
+        DatasetOverviewOut: {
+            /** Column Count */
+            column_count: number;
+            /** Columns */
+            columns: components["schemas"]["DiscoveryColumnOut"][];
+            /** Dataset Id */
+            dataset_id: string;
+            /** Row Count */
+            row_count: number | null;
+            /**
+             * Row Count Basis
+             * @enum {string}
+             */
+            row_count_basis: "parquet_metadata" | "not_computed";
+            /** Size Bytes */
+            size_bytes: number | null;
+            /** Version */
+            version: string;
+        };
+        /** DiscoveryColumnOut */
+        DiscoveryColumnOut: {
+            /** Dtype */
+            dtype: string;
+            /** Name */
+            name: string;
+        };
         /**
          * ExampleOut
          * @description 예제는 별도 가짜 결과가 아니라 Dataset 등록 안내를 제공한다.
@@ -532,6 +621,47 @@ export interface components {
             title: string;
             /** Version */
             version: string;
+        };
+        /** ExplorationOut */
+        ExplorationOut: {
+            /** Column */
+            column: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Group By */
+            group_by: string | null;
+            /** Metric */
+            metric: string;
+            /** Rows */
+            rows: components["schemas"]["ExplorationRowOut"][];
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "full";
+            /** Truncated */
+            truncated: boolean;
+            /** Version */
+            version: string;
+        };
+        /** ExplorationRequest */
+        ExplorationRequest: {
+            /** Column */
+            column: string;
+            /** Group By */
+            group_by?: string | null;
+            /**
+             * Metric
+             * @enum {string}
+             */
+            metric: "count" | "null_count" | "mean" | "min" | "max";
+        };
+        /** ExplorationRowOut */
+        ExplorationRowOut: {
+            /** Category */
+            category: unknown | null;
+            /** Value */
+            value: number | null;
         };
         /** FeaturePreview */
         FeaturePreview: {
@@ -1074,6 +1204,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasetOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    dataset_columns_api_datasets__dataset_id__columns_get: {
+        parameters: {
+            query?: {
+                search?: string;
+            };
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetColumnsOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    dataset_exploration_api_datasets__dataset_id__explorations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplorationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplorationOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    dataset_overview_api_datasets__dataset_id__overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetOverviewOut"];
                 };
             };
             /** @description Structured API error */

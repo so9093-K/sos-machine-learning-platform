@@ -6,10 +6,9 @@ Dataset 판본과 접근 권한의 판단은 호출자인 API·Worker가 담당�
 
 import math
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Iterator
 
 import duckdb
 import pyarrow.parquet as pq
@@ -58,7 +57,16 @@ def _literal(value: str) -> str:
 def _dtype(dtype: str) -> str:
     """기존 Profile·Feature UI의 Polars 타입 이름을 보존한다."""
     kind = dtype.upper()
-    if kind in ("TINYINT", "SMALLINT", "INTEGER", "BIGINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"):
+    if kind in (
+        "TINYINT",
+        "SMALLINT",
+        "INTEGER",
+        "BIGINT",
+        "UTINYINT",
+        "USMALLINT",
+        "UINTEGER",
+        "UBIGINT",
+    ):
         return "Int64"
     if kind in ("FLOAT", "DOUBLE", "REAL"):
         return "Float64"
@@ -115,12 +123,8 @@ def source_connection(
     reader = None
     try:
         if path is not None:
-            connection.execute(
-                f"SET allowed_paths = [{_literal(str(path))}]"
-            )
-            connection.execute(
-                f"SET allowed_directories = [{_literal(str(scratch))}]"
-            )
+            connection.execute(f"SET allowed_paths = [{_literal(str(path))}]")
+            connection.execute(f"SET allowed_directories = [{_literal(str(scratch))}]")
             connection.execute("SET enable_external_access = false")
             function = "read_csv" if path.suffix.lower() == ".csv" else "read_parquet"
             connection.execute(
@@ -145,8 +149,10 @@ def source_connection(
 
 
 def _columns(conn) -> list[dict]:
-    return [{"name": row[0], "dtype": _dtype(str(row[1])), "sql_type": str(row[1])}
-            for row in conn.execute("DESCRIBE source").fetchall()]
+    return [
+        {"name": row[0], "dtype": _dtype(str(row[1])), "sql_type": str(row[1])}
+        for row in conn.execute("DESCRIBE source").fetchall()
+    ]
 
 
 def columns(store: Store, dataset: dict, search: str = "") -> dict:
@@ -157,8 +163,11 @@ def columns(store: Store, dataset: dict, search: str = "") -> dict:
         "dataset_id": dataset["id"],
         "version": dataset["version"],
         "total": len(discovered),
-        "columns": [{"name": c["name"], "dtype": c["dtype"]} for c in discovered
-                    if query in c["name"].casefold()],
+        "columns": [
+            {"name": c["name"], "dtype": c["dtype"]}
+            for c in discovered
+            if query in c["name"].casefold()
+        ],
     }
 
 
