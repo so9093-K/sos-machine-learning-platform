@@ -26,9 +26,7 @@ def file_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-def save_upload(
-    store: Store, name: str, content: bytes, *, owner_actor: str | None = None
-) -> dict:
+def save_upload(store: Store, name: str, content: bytes, *, owner_actor: str | None = None) -> dict:
     """합성 예제 등 기존 바이트 입력도 동일한 파일 등록 계약으로 처리한다."""
     return save_upload_file(store, name, BytesIO(content), owner_actor=owner_actor)
 
@@ -213,9 +211,8 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
         if not destination.is_relative_to(store.home / "cache"):
             raise ValueError("Dataset cache path is invalid")
         if not destination.is_file() or file_digest(destination) != dataset["version"]:
-            storage.get(key, destination)
+            storage.get(key, destination, expected_sha256=dataset["version"])
             if file_digest(destination) != dataset["version"]:
-                destination.unlink(missing_ok=True)
                 raise ValueError("Dataset content hash does not match the registered version")
         return (
             pl.scan_csv(destination, try_parse_dates=True)

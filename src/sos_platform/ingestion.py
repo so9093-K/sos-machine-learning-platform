@@ -2,11 +2,12 @@
 
 import hashlib
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import BinaryIO, Iterator
+from typing import BinaryIO
 
 from .errors import PlatformError
 

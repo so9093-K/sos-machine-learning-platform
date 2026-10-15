@@ -21,8 +21,8 @@ from .api_errors import register_error_handlers
 from .config import StoragePolicy
 from .datasets import connect_iceberg, iceberg_snapshots, save_upload_file, scan_dataset
 from .errors import ERRORS, PlatformError
-from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .examples import list_examples, use_example
+from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import bounded_feature_preview, profile, safe_preview
@@ -340,8 +340,12 @@ def create_app(home: Path | None = None) -> FastAPI:
                 raise PlatformError("SOS-UPLOAD-TOO-LARGE")
             # UploadFile의 스풀 파일을 사용해 전체 bytes 사본을 만들지 않는다.
             return await run_in_threadpool(
-                save_upload_file, store, file.filename or "unknown", file.file,
-                owner_actor=actor.id, max_bytes=upload_policy.max_bytes,
+                save_upload_file,
+                store,
+                file.filename or "unknown",
+                file.file,
+                owner_actor=actor.id,
+                max_bytes=upload_policy.max_bytes,
             )
         except (PlatformError, ValueError):
             raise
