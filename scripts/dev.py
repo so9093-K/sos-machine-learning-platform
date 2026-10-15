@@ -299,8 +299,9 @@ def start_process(name: str, command: list[str], env: dict, cwd: Path = ROOT):
         return
     LOGDIR.mkdir(parents=True, exist_ok=True)
     proc = subprocess.Popen(
-        ["python3", "scripts/log_capture.py", str(LOGDIR / f"{name}.log"), "--", *command],
-        cwd=ROOT,
+        ["python3", str(ROOT / "scripts" / "log_capture.py"), str(LOGDIR / f"{name}.log"),
+         "--", *command],
+        cwd=cwd,
         env=env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
