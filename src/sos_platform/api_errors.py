@@ -71,12 +71,21 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ValueError)
     async def handle_value(request: Request, exc: ValueError):
-        known = (
-            "Invalid Job cursor", "Job query limit", "Invalid object owner",
-            "select requires", "fill_null requires", "cast requires",
-            "group_by", "order_by", "lag", "rolling_mean",
-        )
-        detail = str(exc) if str(exc).startswith(known) else ERRORS["SOS-API-VALIDATION"].message
+        known = {
+            "Invalid Job cursor",
+            "Time/order column must be unique within each group",
+            "Time/order column contains null values",
+            "Time/order column does not exist",
+            "Time-based features require order_by",
+            "Group column does not exist",
+            "Time/order and group columns must survive preceding steps",
+            "Selected column does not exist",
+            "Rolling Mean requires a numeric column",
+            "Feature output column already exists",
+            "Iceberg import exceeds the supported 50,000-row limit",
+            "Iceberg import exceeds the supported 64 MiB memory limit",
+        }
+        detail = str(exc) if str(exc) in known else ERRORS["SOS-API-VALIDATION"].message
         return problem(request, "SOS-API-VALIDATION", 422, detail)
 
     @app.exception_handler(PlatformError)
