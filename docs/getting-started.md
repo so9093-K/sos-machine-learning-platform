@@ -58,3 +58,9 @@ Data Workspace 사이드바의 **저장소 상태 보기**에서 `datasets/`, `r
 안전 기본값은 `SOS_OBJECT_GRACE_DAYS=7`, `SOS_OBJECT_OBSERVATION_HOURS=24`, `SOS_OBJECT_MIN_OBSERVATIONS=2`, `SOS_OBJECT_PAGE_SIZE=100`이다. 환경변수로 조정할 수 있으나 각각 최소 7일, 최소 24시간, 최소 2회, 한 페이지 1~200개 범위로 제한된다. `GET /api/storage/policy`는 실제 적용값과 환경변수/기본값 출처를 제공한다. 자동 삭제를 활성화하는 옵션은 없다.
 
 `GET /api/storage/inspection`은 한 번에 한 접두사의 한 페이지만 조회하고 `next_cursor`를 반환한다. `protected`는 참조 또는 실행으로 보호 중, `waiting`은 유예·관측 대기, `unknown`은 소유권·게시 상태가 불명확하여 삭제 금지, `candidate`는 복수 관측된 실패 객체에 대한 검토 신호이다. **candidate도 삭제 허가가 아니다.** S3 또는 DB가 장애 상태이면 추측해 결과를 확정하지 않는다. 새 Transform 결과는 `results/{job_id}/{attempt_id}.parquet`에 저장되며 기존 결과 참조를 변경하지 않는다.
+
+## 실험적 권한 경계와 Snapshot 보존
+
+현재 로컬 개발 실행은 `SOS_AUTH_MODE=development`이고 개발자 신원이 자동 적용된다. 이 모드의 API는 루프백과 테스트 클라이언트 요청만 허용하며 **역방향 프록시를 통해 외부에 노출해서는 안 된다**. 인증 필수 테스트·사설 API 연동은 `SOS_AUTH_MODE=token`으로 변경하고 `SOS_AUTH_TOKEN_HASHES`에 JSON 객체로 고엔트로피 토큰의 SHA-256 해시(64자리 소문자 16진수)를 키, `{"actor_id":"...", "kind":"human"|"service", "roles":["viewer"|"researcher"|"operator"|"administrator"]}`를 값으로 설정한다. 원본 토큰은 해당 환경변수에 저장하지 않는다. API 요청은 `Authorization: Bearer <token>`을 사용하며, 브라우저에서는 현재 화면 메모리에만 보관한다. 토큰 모드에서 유효한 설정이 없다면 서비스 시작을 거부한다. 외부 공개는 아직 지원하지 않으며 TLS와 OIDC 로그인·계정 생명주기를 포함한 별도 운영 보안 구성이 필요하다.
+
+신규 Iceberg Dataset은 Snapshot의 SOS Tag를 만들고 재검증한 후에만 등록한다. 예전 Dataset은 Storage Health에서 `읽기 가능 · 보존 미보장`으로 표시될 수 있으며, 운영자 권한으로 해당 Dataset의 Tag를 생성할 수 있다. 데이터가 없는 Tag·Catalog 장애에서는 보존을 확정하지 않으며 기존 데이터 파일과 Tag를 자동 삭제하지 않는다. 보안 감사 조회는 `GET /api/audit`에서 운영 권한으로 가능하다. 기존 소유권이 없는 Dataset은 관리자가 명시적으로 마이그레이션하기 전까지 일반 사용자에게 노출되지 않는다.
