@@ -28,7 +28,9 @@ class Settings:
             database_url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
         return cls(
             database_url=database_url,
-            s3_endpoint=os.getenv("SOS_S3_ENDPOINT", "http://127.0.0.1:9605"),
+            s3_endpoint=os.getenv(
+                "SOS_S3_ENDPOINT", f"http://127.0.0.1:{os.getenv('SOS_S3_PORT', '9605')}"
+            ),
             s3_access_key=os.getenv("SOS_S3_ACCESS_KEY", "sos-dev"),
             s3_secret_key=os.getenv("SOS_S3_SECRET_KEY", "sos-dev-secret"),
             s3_bucket=os.getenv("SOS_S3_BUCKET", "sos-data"),
