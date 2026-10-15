@@ -18,9 +18,7 @@ from .schemas import Transform
 from .store import Store
 
 
-def _perform(
-    home: Path, database_url: str, job: dict, completed: Path, pending: Path
-) -> None:
+def _perform(home: Path, database_url: str, job: dict, completed: Path, pending: Path) -> None:
     """계산은 자식 프로세스에서 수행하고 결과 확정은 부모가 담당한다."""
     try:
         store = Store(home, database_url=database_url)
