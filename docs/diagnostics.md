@@ -61,3 +61,10 @@ API는 기존 `detail`(문자열·필드 오류 배열·객체)을 유지하면�
 ## 코드 변경과 검증
 
 새 오류는 Error Catalog에 의미·메시지·재시도 정책을 등록한다. API·Web·Worker는 그 코드를 사용하고 `docs/testing.md`에 해당 계약의 테스트 책임을 명시한다. 변경 전후 OpenAPI 호환성, 기존 Alembic 데이터 보존, 권한·Snapshot 복구 테스트를 확인한다. 긴급 버그 수정도 로그만 보고 데이터나 Tag를 삭제하지 않는다.
+
+### 운영자 원인 조회와 커밋 경계
+
+- `GET /api/audit?request_id=<UUID>` 또는 `?job_id=<UUID>`는 `audit.read` 역할에서 과거 기록을 조회할 수 있다.
+- `GET /api/diagnostics/jobs/{job_id}`는 동일한 감사 권한을 필요로 하며, 작업·실행 시도의 실패 단계, 분류된 원인 및 예외 **클래스명**만 반환한다. 원문 오류·원본 데이터·비밀은 반환하지 않는다.
+- `iceberg_prepare` 중단은 Append 미진입이 확인된 실패, `iceberg_commit` 진입 이후는 실제 커밋 결과가 불확실한 실패로 분류한다. Worker가 예고 없이 종료되면 단계 확인 자체가 불가능할 수 있어 모든 실행 중 Iceberg 복구에는 보수적으로 수동 Snapshot 검증을 적용한다.
+- `failure_category=unclassified`는 원인 미확정을 의미한다. 임의의 예외 메시지를 자동으로 노출하거나 분류하지 않는다.

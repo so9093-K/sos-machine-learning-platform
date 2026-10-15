@@ -224,6 +224,33 @@ def create_app(home: Path | None = None) -> FastAPI:
         """운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다."""
         return store.audit_events(limit=limit, request_id=request_id, resource_id=job_id)
 
+    @app.get("/api/diagnostics/jobs/{job_id}")
+    def job_diagnostics(job_id: str, actor: Actor = AUDIT_DEP):
+        """권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다."""
+        item = store.get_job(job_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return {
+            "job_id": item["id"],
+            "request_id": item.get("request_id"),
+            "status": item["status"],
+            "error_code": item.get("error_code"),
+            "failure_stage": item.get("failure_stage"),
+            "failure_category": item.get("failure_category"),
+            "exception_type": item.get("exception_type"),
+            "attempts": [
+                {
+                    "id": attempt["id"],
+                    "status": attempt["status"],
+                    "error_code": attempt.get("error_code"),
+                    "failure_stage": attempt.get("failure_stage"),
+                    "failure_category": attempt.get("failure_category"),
+                    "exception_type": attempt.get("exception_type"),
+                }
+                for attempt in item["attempts"]
+            ],
+        }
+
     @app.get("/api/storage/policy", response_model=StoragePolicyOut)
     def storage_policy(actor: Actor = INSPECT_DEP):
         """연결 비밀을 제외한 유효 정책과 출처를 확인한다."""
