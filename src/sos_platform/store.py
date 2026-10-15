@@ -3,6 +3,7 @@
 import json
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from importlib.resources import files
 from pathlib import Path
 from uuid import uuid4
 
@@ -40,9 +41,19 @@ class Store:
 
     def initialize(self):
         """현재 Alembic HEAD와 DB 스키마가 일치하는지만 확인한다."""
-        root = Path(__file__).resolve().parents[2]
-        config = Config(str(root / "alembic.ini"))
-        config.set_main_option("script_location", str(root / "migrations"))
+        source_root = Path(__file__).resolve().parents[2]
+        if (source_root / "migrations").is_dir() and (source_root / "alembic.ini").is_file():
+            # 소스 체크아웃과 wheel 설치의 경로가 같을 필요는 없다.
+            config_file = source_root / "alembic.ini"
+            scripts = source_root / "migrations"
+        else:
+            package_root = files("sos_platform")
+            config_file = package_root.joinpath("alembic.ini")
+            scripts = package_root.joinpath("migrations")
+            if not config_file.is_file() or not scripts.is_dir():
+                raise RuntimeError("Packaged Alembic migration resources are missing")
+        config = Config(str(config_file))
+        config.set_main_option("script_location", str(scripts))
         expected = set(ScriptDirectory.from_config(config).get_heads())
         with self.connection() as db:
             db.execute(text("SELECT 1"))
