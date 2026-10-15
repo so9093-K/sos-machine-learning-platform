@@ -289,6 +289,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/storage/iceberg-references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Storage Iceberg References
+         * @description 등록된 Dataset이 참조하는 Iceberg Snapshot 존재 여부를 확인한다.
+         */
+        get: operations["storage_iceberg_references_api_storage_iceberg_references_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/storage/inspection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Storage Inspection
+         * @description S3 객체를 읽기 전용으로 대조한다. 실제 삭제는 제공하지 않는다.
+         */
+        get: operations["storage_inspection_api_storage_inspection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/storage/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Storage Policy
+         * @description 연결 비밀을 제외한 유효 정책과 출처를 확인한다.
+         */
+        get: operations["storage_policy_api_storage_policy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -415,6 +475,22 @@ export interface components {
             /** Table Name */
             table_name: string;
         };
+        /** IcebergReferenceOut */
+        IcebergReferenceOut: {
+            /** Dataset Id */
+            dataset_id: string;
+            /** Reason */
+            reason: string;
+            /** Snapshot Id */
+            snapshot_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "protected" | "missing" | "unknown";
+            /** Table Name */
+            table_name: string;
+        };
         /** JobOut */
         JobOut: {
             /** Attempts */
@@ -524,6 +600,62 @@ export interface components {
              * @default 3
              */
             window: number;
+        };
+        /** StorageInspectionOut */
+        StorageInspectionOut: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Deletion Enabled */
+            deletion_enabled: boolean;
+            /** Items */
+            items: components["schemas"]["StorageObjectOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            policy: components["schemas"]["StoragePolicyOut"];
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "datasets/" | "results/";
+        };
+        /** StorageObjectOut */
+        StorageObjectOut: {
+            /** Location */
+            location: string;
+            /** Modified At */
+            modified_at: string;
+            /** Reason */
+            reason: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "protected" | "waiting" | "candidate" | "unknown";
+        };
+        /**
+         * StoragePolicyOut
+         * @description 서버의 유효 보존 정책과 값의 출처.
+         */
+        StoragePolicyOut: {
+            /** Automatic Deletion */
+            automatic_deletion: boolean;
+            /**
+             * Mode
+             * @constant
+             */
+            mode: "observation_only";
+            /** Sources */
+            sources: {
+                [key: string]: string;
+            };
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
         };
         /**
          * Transform
@@ -1062,6 +1194,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    storage_iceberg_references_api_storage_iceberg_references_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IcebergReferenceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    storage_inspection_api_storage_inspection_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageInspectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    storage_policy_api_storage_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoragePolicyOut"];
                 };
             };
         };
