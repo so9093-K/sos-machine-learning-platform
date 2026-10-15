@@ -55,7 +55,8 @@ def test_full_grouped_exploration_and_profile_job(workspace):
     full_job = client.post(
         "/api/jobs",
         json={
-            "kind": "exploration", "dataset_id": dataset["id"],
+            "kind": "exploration",
+            "dataset_id": dataset["id"],
             "exploration": {"column": "value", "metric": "mean", "group_by": "group"},
         },
     )

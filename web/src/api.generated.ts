@@ -634,17 +634,22 @@ export interface components {
             metric: string;
             /** Rows */
             rows: components["schemas"]["ExplorationRowOut"][];
+            /** Sample Limit */
+            sample_limit: number | null;
             /**
              * Scope
-             * @constant
+             * @enum {string}
              */
-            scope: "full";
+            scope: "full" | "sample";
             /** Truncated */
             truncated: boolean;
             /** Version */
             version: string;
         };
-        /** ExplorationRequest */
+        /**
+         * ExplorationRequest
+         * @description 대화형 탐색은 제한된 선두 샘플만 분석한다.
+         */
         ExplorationRequest: {
             /** Column */
             column: string;
@@ -662,6 +667,18 @@ export interface components {
             category: unknown | null;
             /** Value */
             value: number | null;
+        };
+        /** ExplorationSpec */
+        ExplorationSpec: {
+            /** Column */
+            column: string;
+            /** Group By */
+            group_by?: string | null;
+            /**
+             * Metric
+             * @enum {string}
+             */
+            metric: "count" | "null_count" | "mean" | "min" | "max";
         };
         /** FeaturePreview */
         FeaturePreview: {
@@ -736,7 +753,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import";
+            kind: "profile" | "transform" | "exploration" | "iceberg_import";
             /** Request Id */
             request_id?: string | null;
             /** Result */
@@ -792,7 +809,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import";
+            kind: "profile" | "transform" | "exploration" | "iceberg_import";
             latest_attempt: components["schemas"]["AttemptOut"] | null;
             /** Request Id */
             request_id?: string | null;
@@ -984,11 +1001,12 @@ export interface components {
         WorkRequest: {
             /** Dataset Id */
             dataset_id: string;
+            exploration?: components["schemas"]["ExplorationSpec"] | null;
             /**
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform";
+            kind: "profile" | "transform" | "exploration";
             transform?: components["schemas"]["Transform"] | null;
         };
     };

@@ -414,7 +414,11 @@ def create_app(home: Path | None = None) -> FastAPI:
         dataset_id: str, body: ExplorationRequest, actor: Actor = READ_DATASET_DEP
     ):
         return discovery_explore(
-            store, existing(dataset_id, actor), body.column, body.metric, body.group_by,
+            store,
+            existing(dataset_id, actor),
+            body.column,
+            body.metric,
+            body.group_by,
             scope="sample",
         )
 

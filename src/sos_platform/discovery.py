@@ -323,7 +323,9 @@ def explore(
             truncated = len(rows) > policy.max_groups
             rows = rows[: policy.max_groups]
         else:
-            rows = _records(conn.execute(f"SELECT NULL AS category, {value} AS value FROM {source}"))
+            rows = _records(
+                conn.execute(f"SELECT NULL AS category, {value} AS value FROM {source}")
+            )
             truncated = False
     return {
         "dataset_id": dataset["id"],
