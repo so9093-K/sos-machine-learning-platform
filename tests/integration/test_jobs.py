@@ -190,6 +190,10 @@ def test_worker_home_matches_configuration_and_explicit_override(
     class FakeStore:
         def __init__(self, home):
             seen["home"] = home
+            self.engine = self
+
+        def dispose(self):
+            seen["disposed"] = True
 
         def initialize(self):
             pass
@@ -218,6 +222,7 @@ def test_worker_home_matches_configuration_and_explicit_override(
 
     worker_module.main()
     assert seen["home"] == (cli_home if explicit_home else env_home)
+    assert seen["disposed"] is True
 
 
 def test_job_cursor_pagination_has_no_duplicates_or_missing_items(workspace):
