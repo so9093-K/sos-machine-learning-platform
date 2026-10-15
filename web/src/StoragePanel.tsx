@@ -46,6 +46,16 @@ export function StoragePanel() {
     }
   }
 
+  async function retainSnapshot(datasetId: string) {
+    setLoading(true); setError("");
+    try {
+      await request(`/api/storage/iceberg-references/${datasetId}/retain`, { method: "POST" });
+      await inspectSnapshots();
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    } finally { setLoading(false); }
+  }
+
   useEffect(() => { void inspect(); }, []);
 
   const policy = current?.policy;
@@ -124,6 +134,10 @@ export function StoragePanel() {
         <article className="job" key={item.dataset_id}>
           <strong>{item.table_name} · {statusLabel[item.status]}</strong>
           <p className="muted">{item.reason}</p><small>Snapshot {item.snapshot_id}</small>
+          {item.status === "available_unprotected" && <button className="secondary"
+            disabled={loading} onClick={() => void retainSnapshot(item.dataset_id)}>
+            이 Dataset의 보존 Tag 생성
+          </button>}
         </article>)}</div>)}
   </section>;
 }
