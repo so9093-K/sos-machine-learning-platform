@@ -6,3 +6,5 @@
 - 내용: **배경 · 결정 · 근거 · 영향**
 - 상태: `Proposed`, `Accepted`, `Superseded`
 - 결정을 변경할 때는 기존 기록을 수정하지 않고 새로운 ADR로 대체
+
+- [0001 — Dataset·Job 결과 게시의 저장소 간 일관성](0001-data-publication.md) · Accepted
