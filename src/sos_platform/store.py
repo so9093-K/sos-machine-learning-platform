@@ -195,10 +195,19 @@ class Store:
         }
 
     @staticmethod
-    def _audit(db, *, actor_id: str, actor_type: str, action: str,
-               resource_type: str, resource_id: str | None,
-               decision: str = "allow", outcome: str = "succeeded",
-               reason: str | None = None, request_id: str | None = None) -> None:
+    def _audit(
+        db,
+        *,
+        actor_id: str,
+        actor_type: str,
+        action: str,
+        resource_type: str,
+        resource_id: str | None,
+        decision: str = "allow",
+        outcome: str = "succeeded",
+        reason: str | None = None,
+        request_id: str | None = None,
+    ) -> None:
         """감사 기록이 실패하면 동일 PostgreSQL 트랜잭션의 변경도 실패한다."""
         db.execute(
             text(
@@ -209,23 +218,45 @@ class Store:
                 ":resource_id,:decision,:outcome,:reason,:request_id)"
             ),
             {
-                "id": str(uuid4()), "at": now(), "actor_id": actor_id,
-                "actor_type": actor_type, "action": action,
-                "resource_type": resource_type, "resource_id": resource_id,
-                "decision": decision, "outcome": outcome,
-                "reason": reason, "request_id": request_id,
+                "id": str(uuid4()),
+                "at": now(),
+                "actor_id": actor_id,
+                "actor_type": actor_type,
+                "action": action,
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+                "decision": decision,
+                "outcome": outcome,
+                "reason": reason,
+                "request_id": request_id,
             },
         )
 
-    def record_audit(self, *, actor_id: str, actor_type: str, action: str,
-                     resource_type: str, resource_id: str | None = None,
-                     decision: str = "deny", outcome: str = "denied",
-                     reason: str | None = None, request_id: str | None = None) -> None:
+    def record_audit(
+        self,
+        *,
+        actor_id: str,
+        actor_type: str,
+        action: str,
+        resource_type: str,
+        resource_id: str | None = None,
+        decision: str = "deny",
+        outcome: str = "denied",
+        reason: str | None = None,
+        request_id: str | None = None,
+    ) -> None:
         with self.connection() as db:
             self._audit(
-                db, actor_id=actor_id, actor_type=actor_type, action=action,
-                resource_type=resource_type, resource_id=resource_id,
-                decision=decision, outcome=outcome, reason=reason, request_id=request_id,
+                db,
+                actor_id=actor_id,
+                actor_type=actor_type,
+                action=action,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                decision=decision,
+                outcome=outcome,
+                reason=reason,
+                request_id=request_id,
             )
 
     def audit_events(self, *, limit: int = 50) -> list[dict]:
@@ -233,14 +264,16 @@ class Store:
             raise ValueError("Audit limit out of range")
         with self.connection() as db:
             return [
-                dict(row) for row in db.execute(
+                dict(row)
+                for row in db.execute(
                     text("SELECT * FROM audit_events ORDER BY at DESC,id DESC LIMIT :limit"),
                     {"limit": limit},
                 ).mappings()
             ]
 
-    def begin_snapshot_retention(self, *, dataset_id: str, location: str,
-                                 snapshot_id: str, tag_name: str) -> None:
+    def begin_snapshot_retention(
+        self, *, dataset_id: str, location: str, snapshot_id: str, tag_name: str
+    ) -> None:
         with self.connection() as db:
             db.execute(
                 text(
@@ -250,32 +283,51 @@ class Store:
                     "ON CONFLICT(dataset_id) DO NOTHING"
                 ),
                 {
-                    "dataset_id": dataset_id, "location": location,
-                    "snapshot_id": snapshot_id, "tag_name": tag_name, "at": now(),
+                    "dataset_id": dataset_id,
+                    "location": location,
+                    "snapshot_id": snapshot_id,
+                    "tag_name": tag_name,
+                    "at": now(),
                 },
             )
-            row = db.execute(
-                text("SELECT location,snapshot_id,tag_name,state FROM snapshot_retention "
-                     "WHERE dataset_id=:id FOR UPDATE"),
-                {"id": dataset_id},
-            ).mappings().one()
-            if row["location"] != location or row["snapshot_id"] != snapshot_id or row["tag_name"] != tag_name:
+            row = (
+                db.execute(
+                    text(
+                        "SELECT location,snapshot_id,tag_name,state FROM snapshot_retention "
+                        "WHERE dataset_id=:id FOR UPDATE"
+                    ),
+                    {"id": dataset_id},
+                )
+                .mappings()
+                .one()
+            )
+            if (
+                row["location"] != location
+                or row["snapshot_id"] != snapshot_id
+                or row["tag_name"] != tag_name
+            ):
                 raise RuntimeError("Snapshot reservation mismatch")
 
     def fail_snapshot_retention(self, dataset_id: str, error: str) -> None:
         with self.connection() as db:
             db.execute(
-                text("UPDATE snapshot_retention SET state='Uncertain',error=:error,"
-                     "updated_at=:at WHERE dataset_id=:id AND state='Pending'"),
+                text(
+                    "UPDATE snapshot_retention SET state='Uncertain',error=:error,"
+                    "updated_at=:at WHERE dataset_id=:id AND state='Pending'"
+                ),
                 {"id": dataset_id, "error": error[:200], "at": now()},
             )
 
     def snapshot_retention(self, dataset_id: str) -> dict | None:
         with self.connection() as db:
-            result = db.execute(
-                text("SELECT * FROM snapshot_retention WHERE dataset_id=:id"),
-                {"id": dataset_id},
-            ).mappings().first()
+            result = (
+                db.execute(
+                    text("SELECT * FROM snapshot_retention WHERE dataset_id=:id"),
+                    {"id": dataset_id},
+                )
+                .mappings()
+                .first()
+            )
             return dict(result) if result else None
 
     @staticmethod
@@ -296,24 +348,38 @@ class Store:
     ) -> None:
         """기존 Dataset 보호 확인과 감사 기록을 하나의 DB 트랜잭션으로 확정한다."""
         with self.connection() as db:
-            item = db.execute(
-                text("SELECT location,version FROM datasets WHERE id=:id AND kind='iceberg'"),
-                {"id": dataset_id},
-            ).mappings().first()
+            item = (
+                db.execute(
+                    text("SELECT location,version FROM datasets WHERE id=:id AND kind='iceberg'"),
+                    {"id": dataset_id},
+                )
+                .mappings()
+                .first()
+            )
             if item is None:
                 raise ValueError("Iceberg Dataset not found")
-            self._confirm_snapshot_retention(
-                db, dataset_id, item["location"], item["version"]
-            )
+            self._confirm_snapshot_retention(db, dataset_id, item["location"], item["version"])
             self._audit(
-                db, actor_id=actor_id, actor_type=actor_type,
-                action="snapshot.retain", resource_type="dataset", resource_id=dataset_id,
+                db,
+                actor_id=actor_id,
+                actor_type=actor_type,
+                action="snapshot.retain",
+                resource_type="dataset",
+                resource_id=dataset_id,
             )
 
     def register_dataset(
-        self, *, name: str, kind: str, location: str, version: str, write_id: str | None = None,
-        dataset_id: str | None = None, owner_actor: str | None = None,
-        retention_id: str | None = None, actor_type: str = "human",
+        self,
+        *,
+        name: str,
+        kind: str,
+        location: str,
+        version: str,
+        write_id: str | None = None,
+        dataset_id: str | None = None,
+        owner_actor: str | None = None,
+        retention_id: str | None = None,
+        actor_type: str = "human",
     ) -> dict:
         item = dict(
             id=dataset_id or str(uuid4()),
@@ -337,8 +403,14 @@ class Store:
             if retention_id:
                 self._confirm_snapshot_retention(db, retention_id, location, version)
             if owner_actor:
-                self._audit(db, actor_id=owner_actor, actor_type=actor_type,
-                            action="dataset.create", resource_type="dataset", resource_id=item["id"])
+                self._audit(
+                    db,
+                    actor_id=owner_actor,
+                    actor_type=actor_type,
+                    action="dataset.create",
+                    resource_type="dataset",
+                    resource_id=item["id"],
+                )
         return item
 
     def get_dataset(self, dataset_id: str) -> dict | None:
@@ -354,14 +426,22 @@ class Store:
         predicate = "WHERE owner_actor=:actor_id" if actor_id is not None else ""
         with self.connection() as db:
             return [
-                dict(row) for row in db.execute(
+                dict(row)
+                for row in db.execute(
                     text(f"SELECT * FROM datasets {predicate} ORDER BY created_at DESC"),
                     {"actor_id": actor_id},
                 ).mappings()
             ]
 
-    def create_job(self, *, kind: str, dataset_id: str, spec: dict,
-                   owner_actor: str | None = None, actor_type: str = "human") -> dict:
+    def create_job(
+        self,
+        *,
+        kind: str,
+        dataset_id: str,
+        spec: dict,
+        owner_actor: str | None = None,
+        actor_type: str = "human",
+    ) -> dict:
         item = dict(
             id=str(uuid4()),
             kind=kind,
@@ -381,8 +461,14 @@ class Store:
                 item,
             )
             if owner_actor:
-                self._audit(db, actor_id=owner_actor, actor_type=actor_type,
-                            action="job.create", resource_type="job", resource_id=item["id"])
+                self._audit(
+                    db,
+                    actor_id=owner_actor,
+                    actor_type=actor_type,
+                    action="job.create",
+                    resource_type="job",
+                    resource_id=item["id"],
+                )
         return self.get_job(item["id"])
 
     @staticmethod
@@ -411,8 +497,9 @@ class Store:
             ]
             return item
 
-    def jobs(self, *, limit: int = 20, before: dict | None = None,
-             actor_id: str | None = None) -> list[dict]:
+    def jobs(
+        self, *, limit: int = 20, before: dict | None = None, actor_id: str | None = None
+    ) -> list[dict]:
         """목록은 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
         if not 1 <= limit <= 101:
             raise ValueError("Job query limit is out of range")
@@ -422,7 +509,9 @@ class Store:
         if actor_id is not None:
             filters.append("owner_actor=:actor_id")
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
-        query = text(f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit")
+        query = text(
+            f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
+        )
         params = {"limit": limit, "actor_id": actor_id, **(before or {})}
         with self.connection() as db:
             rows = db.execute(query, params).mappings().all()
@@ -453,8 +542,9 @@ class Store:
             )
         return items
 
-    def request_cancel(self, job_id: str, *, actor_id: str | None = None,
-                       actor_type: str = "human") -> dict | None:
+    def request_cancel(
+        self, job_id: str, *, actor_id: str | None = None, actor_type: str = "human"
+    ) -> dict | None:
         with self.connection() as db:
             row = (
                 db.execute(
@@ -479,8 +569,14 @@ class Store:
                     {"at": now(), "id": job_id},
                 )
             if row and actor_id:
-                self._audit(db, actor_id=actor_id, actor_type=actor_type,
-                            action="job.cancel", resource_type="job", resource_id=job_id)
+                self._audit(
+                    db,
+                    actor_id=actor_id,
+                    actor_type=actor_type,
+                    action="job.cancel",
+                    resource_type="job",
+                    resource_id=job_id,
+                )
         return self.get_job(job_id)
 
     def claim(self) -> dict | None:
@@ -529,7 +625,9 @@ class Store:
         with self.connection() as db:
             row = (
                 db.execute(
-                    text("SELECT status,cancel_requested,owner_actor FROM jobs WHERE id=:id FOR UPDATE"),
+                    text(
+                        "SELECT status,cancel_requested,owner_actor FROM jobs WHERE id=:id FOR UPDATE"
+                    ),
                     {"id": job_id},
                 )
                 .mappings()
