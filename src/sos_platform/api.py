@@ -25,7 +25,12 @@ from .examples import list_examples, use_example
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .object_store import ObjectStore
 from .observability import emit
-from .processing import bounded_feature_preview, profile, safe_preview
+from .processing import bounded_feature_preview
+from .discovery import columns as discovery_columns
+from .discovery import explore as discovery_explore
+from .discovery import overview as discovery_overview
+from .discovery import preview as discovery_preview
+from .discovery import profile as discovery_profile
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
 from .schemas import (
@@ -45,6 +50,10 @@ from .schemas import (
     StorageInspectionOut,
     StoragePolicyOut,
     UploadPolicyOut,
+    DatasetOverviewOut,
+    DatasetColumnsOut,
+    ExplorationRequest,
+    ExplorationOut,
     WorkRequest,
 )
 from .security import Actor, IdentitySettings, current_actor, require, resource_allowed
@@ -382,11 +391,31 @@ def create_app(home: Path | None = None) -> FastAPI:
         limit: int = Query(default=30, ge=1, le=100),
         actor: Actor = READ_DATASET_DEP,
     ):
-        return safe_preview(scan_dataset(store, existing(dataset_id, actor)), limit)
+        return discovery_preview(store, existing(dataset_id, actor), limit)
 
     @app.get("/api/datasets/{dataset_id}/profile", response_model=ProfileOut)
     def dataset_profile(dataset_id: str, actor: Actor = READ_DATASET_DEP):
-        return profile(scan_dataset(store, existing(dataset_id, actor)), sample=1000)
+        return discovery_profile(store, existing(dataset_id, actor), sample=1000)
+
+    @app.get("/api/datasets/{dataset_id}/overview", response_model=DatasetOverviewOut)
+    def dataset_overview(dataset_id: str, actor: Actor = READ_DATASET_DEP):
+        return discovery_overview(store, existing(dataset_id, actor))
+
+    @app.get("/api/datasets/{dataset_id}/columns", response_model=DatasetColumnsOut)
+    def dataset_columns(
+        dataset_id: str,
+        search: str = Query(default="", max_length=120),
+        actor: Actor = READ_DATASET_DEP,
+    ):
+        return discovery_columns(store, existing(dataset_id, actor), search=search)
+
+    @app.post("/api/datasets/{dataset_id}/explorations", response_model=ExplorationOut)
+    def dataset_exploration(
+        dataset_id: str, body: ExplorationRequest, actor: Actor = READ_DATASET_DEP
+    ):
+        return discovery_explore(
+            store, existing(dataset_id, actor), body.column, body.metric, body.group_by
+        )
 
     @app.post("/api/iceberg/import", status_code=202, response_model=JobOut)
     def iceberg_import(body: IcebergImport, request: Request, actor: Actor = CREATE_JOB_DEP):

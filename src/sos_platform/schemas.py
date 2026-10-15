@@ -141,6 +141,50 @@ class UploadPolicyOut(BaseModel):
     supported_extensions: list[str]
 
 
+class DiscoveryColumnOut(BaseModel):
+    name: str
+    dtype: str
+
+
+class DatasetOverviewOut(BaseModel):
+    dataset_id: str
+    version: str
+    row_count: int | None
+    row_count_basis: Literal["parquet_metadata", "not_computed"]
+    column_count: int
+    size_bytes: int | None
+    columns: list[DiscoveryColumnOut]
+
+
+class DatasetColumnsOut(BaseModel):
+    dataset_id: str
+    version: str
+    total: int
+    columns: list[DiscoveryColumnOut]
+
+
+class ExplorationRequest(BaseModel):
+    column: str = Field(min_length=1, max_length=256)
+    metric: Literal["count", "null_count", "mean", "min", "max"]
+    group_by: str | None = Field(default=None, max_length=256)
+
+
+class ExplorationRowOut(BaseModel):
+    category: object | None
+    value: float | int | None
+
+
+class ExplorationOut(BaseModel):
+    dataset_id: str
+    version: str
+    scope: Literal["full"]
+    column: str
+    metric: str
+    group_by: str | None
+    truncated: bool
+    rows: list[ExplorationRowOut]
+
+
 class PreviewOut(BaseModel):
     """제한된 행 미리보기와 컬럼 타입."""
 

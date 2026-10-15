@@ -1,4 +1,4 @@
-"""불변 데이터 조회, EDA 프로파일 및 Polars 피처 변환 기능."""
+"""불변 Dataset의 등록·조회와 Iceberg 적재를 연결한다."""
 
 import hashlib
 import os
@@ -202,7 +202,10 @@ def iceberg_snapshots(store: Store, table_name: str) -> list[dict]:
     ]
 
 
-def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
+def local_dataset_file(store: Store, dataset: dict) -> Path:
+    """검증된 원본 콘텐츠 해시를 로컬 캐시에 준비한다."""
+    if dataset["kind"] != "file":
+        raise ValueError("File dataset is required")
     if dataset["kind"] == "file":
         storage = ObjectStore()
         key = storage.key(dataset["location"])
@@ -216,6 +219,17 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
         return (
             pl.scan_csv(destination, try_parse_dates=True)
             if suffix == ".csv"
+            else pl.scan_parquet(destination)
+        )
+    return destination
+
+
+def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
+    if dataset["kind"] == "file":
+        destination = local_dataset_file(store, dataset)
+        return (
+            pl.scan_csv(destination, try_parse_dates=True)
+            if destination.suffix.lower() == ".csv"
             else pl.scan_parquet(destination)
         )
     if dataset["kind"] == "iceberg":
