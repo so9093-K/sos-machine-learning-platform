@@ -39,6 +39,7 @@ jobs = Table(
     Column("error", Text),
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
+    Index("ix_jobs_created_at_id", "created_at", "id"),
 )
 
 attempts = Table(
