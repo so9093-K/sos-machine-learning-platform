@@ -71,6 +71,10 @@ async function responseError(response: Response): Promise<ApiError> {
         if (!code && typeof legacy.code === "string") code = legacy.code;
       }
     } catch { /* JSON이 아니어도 HTTP 상태·요청 ID를 보존한다. */ }
+    // 프록시가 HTML 또는 빈 413을 반환해도 오류 코드는 서버가 정의한 경우에만 사용한다.
+    if (response.status === 413 && !code) {
+      message = "전송할 파일 또는 요청 본문이 서버의 크기 제한을 초과했습니다.";
+    }
     return new ApiError(message, response.status, code, requestId, retryPolicy);
 }
 
@@ -97,12 +101,7 @@ export function uploadFile<T>(
       if (requestId) headers.set("X-Request-ID", requestId);
       const response = new Response(xhr.responseText, { status: xhr.status, headers });
       if (!response.ok) {
-        if (xhr.status === 413 && !xhr.responseText.trim().startsWith("{")) {
-          reject(new ApiError("파일 크기가 서버 업로드 한도를 초과했습니다.", 413,
-            "SOS-UPLOAD-TOO-LARGE", requestId, "never"));
-        } else {
-          void responseError(response).then(reject, reject);
-        }
+        void responseError(response).then(reject, reject);
         return;
       }
       try {

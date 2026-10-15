@@ -236,6 +236,12 @@ function Workspace({ actor }: { actor: Identity }) {
     setSelected(datasetId); setTab("preview");
   }
   async function upload(file: File) {
+    if (uploadPolicy && !uploadPolicy.supported_extensions.some(ext =>
+      file.name.toLowerCase().endsWith(ext.toLowerCase()))) {
+      setNotice("");
+      setError("서버가 지원하지 않는 파일 형식입니다. CSV 또는 Parquet 파일을 선택하세요.");
+      return;
+    }
     if (uploadPolicy && file.size > uploadPolicy.max_size_bytes) {
       setNotice("");
       setError(`파일 크기 ${mebibytes(file.size)} MiB가 최대 ${mebibytes(uploadPolicy.max_size_bytes)} MiB를 초과했습니다.`);
@@ -251,8 +257,15 @@ function Workspace({ actor }: { actor: Identity }) {
         () => setUploadProgress(previous => previous
           ? { ...previous, phase: "registering" } : null),
       );
-      await refreshDatasets(); setSelected(data.id); setTab("preview");
-      setNotice("파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.");
+      // HTTP 201이 등록 성공의 정본이다. 후속 목록 조회 실패로 등록 성공을 번복하지 않는다.
+      setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+      setSelected(data.id); setTab("preview");
+      try {
+        await refreshDatasets();
+        setNotice("파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.");
+      } catch {
+        setNotice("파일은 정상 등록됐습니다. 데이터셋 목록 새로고침에 실패했지만 등록을 다시 시도할 필요는 없습니다.");
+      }
     });
     setUploadProgress(null);
   }
@@ -328,7 +341,8 @@ function Workspace({ actor }: { actor: Identity }) {
         }}>
         + CSV / Parquet 가져오기
         {uploadPolicy && <small>최대 {mebibytes(uploadPolicy.max_size_bytes)} MiB</small>}
-        <input ref={uploadRef} type="file" accept=".csv,.parquet" disabled={busy}
+        <input ref={uploadRef} type="file"
+          accept={uploadPolicy?.supported_extensions.join(",") ?? ".csv,.parquet"} disabled={busy}
           onChange={event => {
             const file = event.target.files?.[0]; if (file) void upload(file);
             event.target.value = "";

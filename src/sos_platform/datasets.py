@@ -211,9 +211,8 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
         if not destination.is_relative_to(store.home / "cache"):
             raise ValueError("Dataset cache path is invalid")
         if not destination.is_file() or file_digest(destination) != dataset["version"]:
+            # 내려받은 임시 파일을 검증한 후에만 게시하므로 다시 읽을 필요가 없다.
             storage.get(key, destination, expected_sha256=dataset["version"])
-            if file_digest(destination) != dataset["version"]:
-                raise ValueError("Dataset content hash does not match the registered version")
         return (
             pl.scan_csv(destination, try_parse_dates=True)
             if suffix == ".csv"
