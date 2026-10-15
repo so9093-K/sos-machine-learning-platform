@@ -75,7 +75,6 @@ def configuration() -> dict[str, str]:
         ("SOS_API_PORT", "9602"),
         ("SOS_DB_PORT", "9603"),
         ("SOS_S3_PORT", "9605"),
-        ("SOS_S3_CONSOLE_PORT", "9606"),
         ("SOS_DB_USER", "sos"),
         ("SOS_DB_PASSWORD", "sos-dev-only"),
         ("SOS_DB_NAME", "sos"),
@@ -173,7 +172,44 @@ def http_ok(url: str) -> tuple[bool, dict | None]:
         return False, None
 
 
+def validate_managed_targets(config: dict) -> None:
+    """관리형 인프라에서 의도하지 않은 외부 DB·버킷 변경을 차단한다."""
+    if config["SOS_INFRA_MODE"] != "managed":
+        return
+    if config.get("SOS_DATABASE_URL"):
+        raise StartupError(
+            "SOS-CONFIG-004",
+            "관리형 모드에서는 외부 데이터베이스 URL을 지정할 수 없습니다.",
+            "외부 연결은 SOS_INFRA_MODE=external을 사용하세요.",
+        )
+    if config.get("SOS_DB_HOST", "127.0.0.1") not in ("localhost", "127.0.0.1"):
+        raise StartupError("SOS-CONFIG-004", "관리형 모드의 DB 호스트는 로컬이어야 합니다.")
+    from urllib.parse import urlsplit
+
+    endpoint = urlsplit(config["SOS_S3_ENDPOINT"])
+    try:
+        valid_port = endpoint.port == int(config["SOS_S3_PORT"])
+    except ValueError:
+        valid_port = False
+    if (
+        endpoint.scheme != "http"
+        or endpoint.hostname not in ("localhost", "127.0.0.1")
+        or not valid_port
+        or endpoint.username
+        or endpoint.password
+        or endpoint.path not in ("", "/")
+        or endpoint.query
+        or endpoint.fragment
+    ):
+        raise StartupError(
+            "SOS-CONFIG-004",
+            "관리형 모드의 S3 엔드포인트가 로컬 Compose 설정과 일치하지 않습니다.",
+            "외부 저장소는 SOS_INFRA_MODE=external을 사용하세요.",
+        )
+
+
 def preflight(config: dict, *, need_docker: bool = True):
+    validate_managed_targets(config)
     required = ["uv", "node", "npm"]
     if need_docker:
         required.append("docker")
