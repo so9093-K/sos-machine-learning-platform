@@ -262,15 +262,29 @@ class Store:
                 request_id=request_id,
             )
 
-    def audit_events(self, *, limit: int = 50) -> list[dict]:
+    def audit_events(
+        self, *, limit: int = 50, request_id: str | None = None,
+        resource_id: str | None = None,
+    ) -> list[dict]:
+        """운영자만 조회하는 감사 이력을 요청·작업 식별자로 제한한다."""
         if not 1 <= limit <= 100:
             raise ValueError("Audit limit out of range")
+        clauses = []
+        params = {"limit": limit}
+        if request_id is not None:
+            clauses.append("request_id=:request_id")
+            params["request_id"] = request_id
+        if resource_id is not None:
+            clauses.append("resource_id=:resource_id")
+            params["resource_id"] = resource_id
+        predicate = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         with self.connection() as db:
             return [
                 dict(row)
                 for row in db.execute(
-                    text("SELECT * FROM audit_events ORDER BY at DESC,id DESC LIMIT :limit"),
-                    {"limit": limit},
+                    text(f"SELECT * FROM audit_events {predicate} "
+                         "ORDER BY at DESC,id DESC LIMIT :limit"),
+                    params,
                 ).mappings()
             ]
 
