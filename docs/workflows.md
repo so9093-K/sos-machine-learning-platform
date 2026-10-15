@@ -56,4 +56,4 @@ Transform Job의 결과는 `results/{job_id}/{attempt_id}.parquet`의 Attempt별
 
 ## Iceberg Snapshot 보호와 복구
 
-Append가 만든 Snapshot은 Attempt 식별자와 연결해 확인하고, 등록될 Dataset의 Tag 보호를 Catalog에서 재확인한 뒤 PostgreSQL에 성공을 게시한다. Tag 커밋 후 DB 오류가 나면 보존 의도는 불확실한 상태로 남으며, Tag를 즉시 제거하거나 Iceberg Append를 자동 재시도하지 않는다. 기존 미보호 Dataset은 명시적인 운영자 재확인 절차로 보호 상태로 전환한다. 자세한 경계는 [ADR 0003](adr/0003-snapshot-identity-audit.md)을 참조한다.
+Append가 만든 Snapshot은 Attempt 식별자와 연결해 확인하고, 등록될 Dataset의 Tag 보호를 Catalog에서 재확인한 뒤 PostgreSQL에 성공을 게시한다. Tag 커밋 후 DB 오류가 나면 보존 의도는 불확실한 상태로 남으며, Tag를 즉시 제거하거나 Iceberg Append를 자동 재시도하지 않는다. 기존 미보호 Dataset은 명시적인 운영자 재확인 절차로 보호 상태로 전환한다. Dataset 게시 없이 남은 보존 의도는 Storage Health의 Snapshot 참조 검사에서 우선 표시하고 실제 Catalog Tag 상태를 읽기 전용으로 대조한다. 이 진단은 자동 Tag 제거·재적재·재게시를 수행하지 않는다. 자세한 경계는 [ADR 0003](adr/0003-snapshot-identity-audit.md)을 참조한다.

@@ -163,6 +163,7 @@ def inspect_iceberg_references(store: Store, limit: int = 50) -> list[dict]:
         )
     from .retention import inspect_tag
 
+    orphaned_results = []
     for item in orphaned:
         try:
             if catalog is None:
@@ -177,7 +178,7 @@ def inspect_iceberg_references(store: Store, limit: int = 50) -> list[dict]:
             reason = f"미게시 보존 의도({item['state']}): Catalog Tag={tag}. 자동 삭제·재시도하지 마세요."
         except Exception:
             reason = f"미게시 보존 의도({item['state']}): Catalog 확인 불가. 자동 삭제하지 마세요."
-        results.append(
+        orphaned_results.append(
             {
                 "dataset_id": item["dataset_id"],
                 "table_name": item["location"],
@@ -186,4 +187,5 @@ def inspect_iceberg_references(store: Store, limit: int = 50) -> list[dict]:
                 "reason": reason,
             }
         )
-    return results[:limit]
+    # 제한된 화면에서도 미확정 의도가 일반 게시 Dataset 목록에 가려지지 않도록 한다.
+    return (orphaned_results + results)[:limit]

@@ -1079,6 +1079,9 @@ def test_tag_failure_keeps_uncertain_intent_without_publishing_dataset(workspace
     )
     assert pending["status"] == "unknown"
     assert "미게시" in pending["reason"]
+    priority = client.get("/api/storage/iceberg-references?limit=1")
+    assert priority.status_code == 200
+    assert priority.json()[0]["dataset_id"] == rows[0]["dataset_id"]
 
 
 def test_denied_audit_failure_does_not_grant_access(workspace, monkeypatch):
