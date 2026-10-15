@@ -161,7 +161,7 @@ function Workspace() {
   function editStep(index: number) {
     const step = steps[index];
     setEditingStep(index);
-    setOp(step.op); setColumn(step.column); setValue(step.value == null ? "" : String(step.value));
+    setOp(step.op); setColumn(step.column ?? ""); setValue(step.value == null ? "" : String(step.value));
     setLagPeriods(step.periods ?? 1); setRollingWindow(step.window ?? 3);
   }
   function moveStep(index: number, direction: -1 | 1) {
