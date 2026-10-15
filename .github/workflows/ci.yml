@@ -31,6 +31,9 @@ jobs:
           git diff --exit-code -- src/api.generated.ts
       - name: Ruff lint
         run: uv run --locked ruff check .
+      - name: Explain lint failure
+        if: failure()
+        run: uv run --locked ruff check --diff .
       - name: Ruff format
         run: uv run --locked ruff format --check .
       - name: Explain formatting failure
