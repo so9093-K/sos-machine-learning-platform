@@ -1,5 +1,7 @@
 """DB나 객체 저장소 없이 데이터 처리의 의미를 검증한다."""
 
+import random
+
 import polars as pl
 import pytest
 
@@ -151,3 +153,38 @@ def test_time_sort_occurs_after_prior_cast():
     result = transform(raw, spec).collect().to_dicts()
     assert [r["time"] for r in result] == [1, 2, 10]
     assert [r["previous"] for r in result] == [None, 10, 20]
+
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_grouped_lag_is_invariant_to_input_permutation(seed):
+    """다양한 값·입력 순서에서도 그룹별 직전 값만 사용한다."""
+    rng = random.Random(seed)
+    rows = [
+        {"machine": group, "time": tick, "value": rng.randint(-10_000, 10_000)}
+        for group in ("A", "B", "C")
+        for tick in range(1, rng.randint(4, 9))
+    ]
+    randomized = rows.copy()
+    rng.shuffle(randomized)
+    expected = {}
+    for group in ("A", "B", "C"):
+        ordered = sorted(
+            (row for row in rows if row["machine"] == group),
+            key=lambda row: row["time"],
+        )
+        for index, row in enumerate(ordered):
+            expected[group, row["time"]] = None if index == 0 else ordered[index - 1]["value"]
+    spec = Transform.model_validate(
+        {
+            "group_by": ["machine"],
+            "order_by": "time",
+            "steps": [{"op": "lag", "column": "value", "alias": "previous"}],
+        }
+    )
+    actual = transform(pl.DataFrame(randomized).lazy(), spec).collect().to_dicts()
+    assert len(actual) == len(rows), f"seed={seed}"
+    for row in actual:
+        assert row["previous"] == expected[row["machine"], row["time"]], (
+            f"seed={seed}; row={row}"
+        )
