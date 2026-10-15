@@ -160,6 +160,8 @@ class AttemptOut(BaseModel):
     started_at: str
     finished_at: str | None = None
     error: str | None = None
+    error_code: str | None = None
+    failure_stage: str | None = None
 
 
 class JobOut(BaseModel):
@@ -171,6 +173,10 @@ class JobOut(BaseModel):
     cancel_requested: bool
     result: dict[str, object] | None
     error: str | None
+    error_code: str | None = None
+    failure_stage: str | None = None
+    retry_policy: str | None = None
+    request_id: str | None = None
     created_at: str
     updated_at: str
     attempts: list[AttemptOut]
@@ -187,6 +193,10 @@ class JobSummaryOut(BaseModel):
     cancel_requested: bool
     result: dict[str, object] | None
     error: str | None
+    error_code: str | None = None
+    failure_stage: str | None = None
+    retry_policy: str | None = None
+    request_id: str | None = None
     created_at: str
     updated_at: str
     attempt_count: int
