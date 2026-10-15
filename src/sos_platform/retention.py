@@ -38,7 +38,9 @@ def ensure_tag(store: Store, *, dataset_id: str, location: str, snapshot_id: str
 
     name = tag_name(dataset_id)
     store.begin_snapshot_retention(
-        dataset_id=dataset_id, location=location, snapshot_id=str(snapshot_id),
+        dataset_id=dataset_id,
+        location=location,
+        snapshot_id=str(snapshot_id),
         tag_name=name,
     )
     try:
@@ -75,9 +77,7 @@ def snapshot_status(store: Store, dataset: dict, table=None) -> tuple[str, str]:
             return "missing", "Dataset에 연결된 Snapshot이 없어 재현할 수 없습니다."
         if not record:
             return "available_unprotected", "현재 읽을 수 있지만 SOS 보호 Tag가 없습니다."
-        status = inspect_tag(
-            table, name=record["tag_name"], snapshot_id=str(dataset["version"])
-        )
+        status = inspect_tag(table, name=record["tag_name"], snapshot_id=str(dataset["version"]))
         if status == "retained" and record["state"] == "Retained":
             return "retained", "고정 Snapshot과 만료 기한 없는 SOS 보호 Tag를 확인했습니다."
         if status == "retained":
