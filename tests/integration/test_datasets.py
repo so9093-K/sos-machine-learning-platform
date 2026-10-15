@@ -114,7 +114,12 @@ def test_upgrade_from_0001_preserves_existing_records(workspace):
     assert store.get_dataset(dataset_id)["owner_actor"] is None
     with store.connection() as db:
         rev = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert rev == "0004"
+        assert rev == "0005"
+        # 기존 0001 레코드도 신규 진단 필드를 NULL로 가진 채 보존한다.
+        cols = {row[0] for row in db.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_name='jobs'"
+        ))}
+        assert {"request_id", "error_code", "failure_stage"} <= cols
         names = {
             row[0]
             for row in db.execute(
