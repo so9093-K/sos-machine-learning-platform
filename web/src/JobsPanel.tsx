@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { request } from "./api";
+import { request, formatError } from "./api";
 import type { Dataset, Job, JobSummary } from "./types";
 
 type Props = { jobs: JobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean; nextCursor: string | null;
@@ -21,7 +21,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, onRefre
     } catch (error) {
       setDetailErrors(current => ({
         ...current,
-        [jobId]: error instanceof Error ? error.message : String(error),
+        [jobId]: formatError(error),
       }));
     } finally {
       pending.current.delete(jobId);
