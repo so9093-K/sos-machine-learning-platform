@@ -205,9 +205,10 @@ def test_iceberg_snapshot_reproducibility(workspace):
 
     catalog = iceberg_catalog(store)
     table = catalog.load_table("default.sensor_data")
-    assert inspect_tag(
-        table, name=tag_name(original["id"]), snapshot_id=original["version"]
-    ) == "retained"
+    assert (
+        inspect_tag(table, name=tag_name(original["id"]), snapshot_id=original["version"])
+        == "retained"
+    )
     # 태그된 과거 판본은 만료를 실행해도 참조·읽기 가능해야 한다.
     table.expire_snapshots().older_than(datetime.now(UTC) + timedelta(days=1)).commit()
     assert client.get(f"/api/datasets/{original['id']}/preview").json()["returned_rows"] == 3
@@ -868,22 +869,29 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         assert secure.get(f"/api/datasets/{owned}", headers=headers("bob")).status_code == 404
         assert secure.get(f"/api/datasets/{owned}", headers=headers("alice")).status_code == 200
         assert secure.get("/api/datasets", headers=headers("bob")).json() == []
-        assert secure.post("/api/datasets/files", files={
-            "file": ("no.csv", b"a\\n1\\n", "text/csv")
-        }, headers=headers("bob")).status_code == 403
+        assert (
+            secure.post(
+                "/api/datasets/files",
+                files={"file": ("no.csv", b"a\\n1\\n", "text/csv")},
+                headers=headers("bob"),
+            ).status_code
+            == 403
+        )
         job = secure.post(
-            "/api/jobs", json={"dataset_id": owned, "kind": "profile"},
+            "/api/jobs",
+            json={"dataset_id": owned, "kind": "profile"},
             headers=headers("alice"),
         )
         assert job.status_code == 202, job.text
-        assert secure.get(f"/api/jobs/{job.json()['id']}", headers=headers("bob")).status_code == 404
-        assert secure.get("/api/jobs", headers=headers("bob")).json()["items"] == []
-        assert secure.post(
-            f"/api/jobs/{job.json()['id']}/cancel", headers=headers("bob")
-        ).status_code == 403
-        cancelled = secure.post(
-            f"/api/jobs/{job.json()['id']}/cancel", headers=headers("alice")
+        assert (
+            secure.get(f"/api/jobs/{job.json()['id']}", headers=headers("bob")).status_code == 404
         )
+        assert secure.get("/api/jobs", headers=headers("bob")).json()["items"] == []
+        assert (
+            secure.post(f"/api/jobs/{job.json()['id']}/cancel", headers=headers("bob")).status_code
+            == 403
+        )
+        cancelled = secure.post(f"/api/jobs/{job.json()['id']}/cancel", headers=headers("alice"))
         assert cancelled.status_code == 200, cancelled.text
         history = secure.get("/api/audit", headers=headers("ops"))
         assert history.status_code == 200
@@ -926,12 +934,17 @@ def test_snapshots_available_without_tag_have_explicit_unprotected_state(workspa
                 "INSERT INTO datasets(id,name,kind,location,version,created_at) "
                 "VALUES(:id,'legacy','iceberg',:location,:version,:at)"
             ),
-            {"id": legacy_id, "location": retained["location"],
-             "version": retained["version"], "at": "2026-10-01T00:00:00+00:00"},
+            {
+                "id": legacy_id,
+                "location": retained["location"],
+                "version": retained["version"],
+                "at": "2026-10-01T00:00:00+00:00",
+            },
         )
     previous = client.get("/api/storage/iceberg-references").json()
-    assert any(x["dataset_id"] == legacy_id and x["status"] == "available_unprotected"
-               for x in previous)
+    assert any(
+        x["dataset_id"] == legacy_id and x["status"] == "available_unprotected" for x in previous
+    )
     promoted = client.post(f"/api/storage/iceberg-references/{legacy_id}/retain")
     assert promoted.status_code == 200, promoted.text
     assert promoted.json()["status"] == "retained"
