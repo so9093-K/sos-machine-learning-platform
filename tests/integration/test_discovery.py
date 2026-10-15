@@ -1,0 +1,114 @@
+"""DuckDB Discovery의 분석 의미·권한·Job·Iceberg Snapshot 계약을 검증한다."""
+
+import math
+
+import pytest
+
+from sos_platform.discovery import DiscoveryPolicy, quoted, source_connection
+from sos_platform.worker import run_once
+
+
+def _upload(client, name: str, content: bytes) -> dict:
+    response = client.post(
+        "/api/datasets/files", files={"file": (name, content, "application/octet-stream")}
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_discovery_overview_search_and_bounded_preview(workspace):
+    client, _store = workspace
+    dataset = _upload(client, "measurements.csv", b"group,value\\na,1\\nb,2\\na,3\\n")
+    base = f"/api/datasets/{dataset['id']}"
+    overview = client.get(base + "/overview")
+    assert overview.status_code == 200, overview.text
+    assert overview.json()["row_count"] is None
+    assert overview.json()["row_count_basis"] == "not_computed"
+    assert overview.json()["column_count"] == 2
+    assert overview.json()["size_bytes"] > 0
+    assert overview.json()["version"] == dataset["version"]
+    columns = client.get(base + "/columns?search=val")
+    assert columns.status_code == 200, columns.text
+    assert columns.json()["total"] == 2
+    assert [item["name"] for item in columns.json()["columns"]] == ["value"]
+    preview = client.get(base + "/preview?limit=2")
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["returned_rows"] == 2
+    assert preview.json()["schema"]["value"] == "Int64"
+
+
+def test_full_grouped_exploration_and_profile_job(workspace):
+    client, store = workspace
+    dataset = _upload(client, "scores.csv", b"group,value\\na,1\\na,3\\nb,5\\nb,\\n")
+    base = f"/api/datasets/{dataset['id']}"
+    result = client.post(
+        base + "/explorations",
+        json={"column": "value", "metric": "mean", "group_by": "group"},
+    )
+    assert result.status_code == 200, result.text
+    info = result.json()
+    assert info["scope"] == "full"
+    assert info["version"] == dataset["version"]
+    values = {row["category"]: row["value"] for row in info["rows"]}
+    assert values == {"a": 2, "b": 5}
+    immediate = client.get(base + "/profile")
+    assert immediate.status_code == 200, immediate.text
+    assert immediate.json()["sampled"] is True
+    assert immediate.json()["row_count"] == 4
+    requested = client.post("/api/jobs", json={"kind": "profile", "dataset_id": dataset["id"]})
+    assert requested.status_code == 202
+    assert run_once(store)
+    completed = client.get(f"/api/jobs/{requested.json()['id']}").json()
+    assert completed["status"] == "Succeeded", completed
+    assert completed["result"]["sampled"] is False
+    assert completed["result"]["row_count"] == 4
+
+
+def test_no_untrusted_identifiers_or_sql_are_executed(workspace):
+    client, _store = workspace
+    dataset = _upload(client, "quotes.csv", b'"group""quote",value\\na,10\\n')
+    base = f"/api/datasets/{dataset['id']}"
+    assert quoted('a"b') == '"a""b"'
+    malicious = client.post(
+        base + "/explorations",
+        json={"column": "value); SELECT * FROM read_csv('/etc/passwd') --", "metric": "max"},
+    )
+    assert malicious.status_code == 422, malicious.text
+    valid = client.post(
+        base + "/explorations",
+        json={"column": "value", "group_by": 'group"quote', "metric": "count"},
+    )
+    assert valid.status_code == 200, valid.text
+    assert valid.json()["rows"][0]["value"] == 1
+
+
+def test_discovery_does_not_read_other_local_files(workspace, tmp_path):
+    client, store = workspace
+    dataset = _upload(client, "source.csv", b"value\\n123\\n")
+    other = tmp_path / "confidential.csv"
+    other.write_text("private\\nsecret\\n")
+    with source_connection(store, dataset) as conn:
+        with pytest.raises(Exception, match="(?i)permission|access|external"):
+            conn.execute(f"SELECT * FROM read_csv('{other}')").fetchall()
+        assert conn.execute("SELECT count(*) FROM source").fetchone()[0] == 1
+
+
+def test_discovery_policy_validation(monkeypatch):
+    monkeypatch.setenv("SOS_DISCOVERY_MEMORY_MIB", "512")
+    assert DiscoveryPolicy.from_env().memory_mib == 512
+    monkeypatch.setenv("SOS_DISCOVERY_THREADS", "99")
+    with pytest.raises(ValueError, match="SOS_DISCOVERY_THREADS"):
+        DiscoveryPolicy.from_env()
+
+
+def test_profile_null_and_nan_statistics(workspace):
+    client, _store = workspace
+    dataset = _upload(client, "numbers.csv", b"group,value\\na,1.5\\na,NaN\\nb,\\na,1.5\\n")
+    response = client.get(f"/api/datasets/{dataset['id']}/profile")
+    assert response.status_code == 200, response.text
+    result = response.json()
+    field = next(c for c in result["columns"] if c["name"] == "value")
+    assert field["nulls"] == 1
+    assert field["nan_count"] == 1
+    assert field["unique"] >= 2
+    assert math.isfinite(field["mean"]) or field["mean"] is None
