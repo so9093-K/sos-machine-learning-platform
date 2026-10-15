@@ -23,6 +23,12 @@ export class ApiError extends Error {
   }
 }
 
+/** UI에서 요청 ID·오류 코드를 보존하되 임의 예외의 원문은 추가하지 않는다. */
+export function formatError(error: unknown): string {
+  if (error instanceof ApiError) return error.toString();
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function setAccessToken(value: string | null) {
   accessToken = value || null;
 }
