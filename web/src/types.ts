@@ -7,3 +7,6 @@ export type Profile = components["schemas"]["ProfileOut"];
 export type Job = components["schemas"]["JobOut"];
 export type JobPage = components["schemas"]["JobPageOut"];
 export type Example = components["schemas"]["ExampleOut"];
+export type StorageInspection = components["schemas"]["StorageInspectionOut"];
+export type StoragePolicy = components["schemas"]["StoragePolicyOut"];
+export type IcebergReference = components["schemas"]["IcebergReferenceOut"];
