@@ -108,6 +108,7 @@ def register_error_handlers(app: FastAPI) -> None:
     async def handle_platform(request: Request, exc: PlatformError):
         entry = ERRORS[exc.code]
         status = {
+            "upload_size": 413,
             "validation": 422,
             "not_found": 404,
             "conflict": 409,

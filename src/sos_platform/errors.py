@@ -18,6 +18,18 @@ def spec(code: str, title: str, message: str, category: str, retry: str = "never
 
 DEFINITIONS = (
     spec("SOS-API-VALIDATION", "입력 검증 실패", "입력값을 확인하세요.", "validation"),
+    spec(
+        "SOS-UPLOAD-TOO-LARGE", "업로드 크기 초과",
+        "파일 크기가 허용된 업로드 한도를 초과했습니다.", "upload_size",
+    ),
+    spec(
+        "SOS-UPLOAD-FORMAT", "지원되지 않는 파일 형식",
+        "CSV 또는 Parquet 파일을 선택하세요.", "validation",
+    ),
+    spec(
+        "SOS-UPLOAD-INVALID", "파일 형식 검사 실패",
+        "파일이 비어 있거나 올바른 CSV·Parquet 데이터가 아닙니다.", "validation",
+    ),
     spec("SOS-API-NOT-FOUND", "리소스 부재", "요청한 리소스를 찾을 수 없습니다.", "not_found"),
     spec(
         "SOS-API-METHOD-NOT-ALLOWED",

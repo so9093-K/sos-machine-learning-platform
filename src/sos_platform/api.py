@@ -15,17 +15,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
 from starlette.concurrency import run_in_threadpool
+from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from .api_errors import register_error_handlers
 from .config import StoragePolicy
-from .datasets import (
-    MAX_UPLOAD,
-    connect_iceberg,
-    iceberg_snapshots,
-    save_upload,
-    scan_dataset,
-)
-from .errors import ERRORS
+from .datasets import connect_iceberg, iceberg_snapshots, save_upload_file, scan_dataset
+from .errors import ERRORS, PlatformError
+from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .examples import list_examples, use_example
 from .object_store import ObjectStore
 from .observability import emit
@@ -48,6 +44,7 @@ from .schemas import (
     SnapshotOut,
     StorageInspectionOut,
     StoragePolicyOut,
+    UploadPolicyOut,
     WorkRequest,
 )
 from .security import Actor, IdentitySettings, current_actor, require, resource_allowed
@@ -68,6 +65,7 @@ AUDIT_DEP = Depends(require("audit.read"))
 def create_app(home: Path | None = None) -> FastAPI:
     store = Store(home or Path(os.environ.get("SOS_HOME", ".sos")))
     identity = IdentitySettings.from_env()
+    upload_policy = UploadPolicy.from_env()
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -127,6 +125,11 @@ def create_app(home: Path | None = None) -> FastAPI:
                 )
         return response
 
+    # Multipart를 파싱해 디스크에 스풀링하기 전에 본문 전체를 제한한다.
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_body_size=upload_policy.max_bytes + MULTIPART_OVERHEAD_BYTES,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -326,25 +329,26 @@ def create_app(home: Path | None = None) -> FastAPI:
     def list_datasets(actor: Actor = READ_DATASET_DEP):
         return store.datasets(actor_id=None if actor.privileged else actor.id)
 
+    @app.get("/api/datasets/upload-policy", response_model=UploadPolicyOut)
+    def get_upload_policy(actor: Actor = CREATE_DATASET_DEP):
+        return upload_policy.describe()
+
     @app.post("/api/datasets/files", status_code=201, response_model=DatasetOut)
     async def upload(file: Annotated[UploadFile, File()], actor: Actor = CREATE_DATASET_DEP):
-        # 제한보다 한 바이트 더 읽어 파일 전체를 저장하기 전에 크기 초과를 검출한다.
-        data = await file.read(MAX_UPLOAD + 1)
         try:
-            # S3·PostgreSQL의 동기 I/O를 ASGI 이벤트 루프에서 실행하지 않는다.
+            if file.size is not None and file.size > upload_policy.max_bytes:
+                raise PlatformError("SOS-UPLOAD-TOO-LARGE")
+            # UploadFile의 스풀 파일을 사용해 전체 bytes 사본을 만들지 않는다.
             return await run_in_threadpool(
-                save_upload, store, file.filename or "unknown", data, owner_actor=actor.id
+                save_upload_file, store, file.filename or "unknown", file.file,
+                owner_actor=actor.id, max_bytes=upload_policy.max_bytes,
             )
-        except ValueError:
+        except (PlatformError, ValueError):
             raise
         except Exception as exc:
-            # 저장소 장애를 사용자 파일의 검증 오류(422)로 잘못 설명하지 않는다.
             raise HTTPException(
                 status_code=503,
-                detail={
-                    "code": "SOS-STORAGE-001",
-                    "message": ERRORS["SOS-STORAGE-001"].message,
-                },
+                detail={"code": "SOS-STORAGE-001", "message": ERRORS["SOS-STORAGE-001"].message},
             ) from exc
         finally:
             await file.close()

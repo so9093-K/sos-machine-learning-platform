@@ -136,6 +136,11 @@ class DatasetOut(BaseModel):
     created_at: str
 
 
+class UploadPolicyOut(BaseModel):
+    max_size_bytes: int
+    supported_extensions: list[str]
+
+
 class PreviewOut(BaseModel):
     """제한된 행 미리보기와 컬럼 타입."""
 
