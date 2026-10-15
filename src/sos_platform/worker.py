@@ -5,7 +5,6 @@
 """
 
 import argparse
-import hashlib
 import json
 import multiprocessing
 import signal
@@ -20,7 +19,7 @@ from .store import Store
 
 
 def _perform(
-    home: Path, database_url: str, job: dict, completed: Path, pending: Path, output: Path
+    home: Path, database_url: str, job: dict, completed: Path, pending: Path
 ) -> None:
     """계산은 자식 프로세스에서 수행하고 결과 확정은 부모가 담당한다."""
     try:
@@ -48,14 +47,6 @@ def _perform(
     completed.write_text(json.dumps(outcome, default=str), encoding="utf-8")
 
 
-def _digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _stop(process: multiprocessing.Process) -> None:
     if process.is_alive():
         process.terminate()
@@ -76,7 +67,7 @@ def run_once(store: Store) -> bool:
     completed.unlink(missing_ok=True)
 
     process = multiprocessing.get_context("spawn").Process(
-        target=_perform, args=(store.home, store.database_url, job, completed, pending, output)
+        target=_perform, args=(store.home, store.database_url, job, completed, pending)
     )
     try:
         process.start()
