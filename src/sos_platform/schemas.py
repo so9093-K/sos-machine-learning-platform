@@ -66,6 +66,7 @@ class StorageObjectOut(BaseModel):
 
 class StorageInspectionOut(BaseModel):
     scope: Literal["datasets/", "results/"]
+    inspected_at: str
     items: list[StorageObjectOut]
     counts: dict[str, int]
     next_cursor: str | None = None
