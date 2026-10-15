@@ -686,6 +686,8 @@ class Store:
         write_id: str | None = None,
         error_code: str | None = None,
         failure_stage: str | None = None,
+        failure_category: str | None = None,
+        exception_type: str | None = None,
     ) -> str:
         if error_code is not None and error_code not in ERRORS:
             raise ValueError("Unregistered error code")
@@ -706,6 +708,7 @@ class Store:
             if row["cancel_requested"]:
                 status, result, publish = "Cancelled", None, None
                 error, error_code, failure_stage = None, None, None
+                failure_category, exception_type = None, None
             if status == "Succeeded" and publish:
                 item = dict(
                     id=publish.get("retention_id") or str(uuid4()),
@@ -734,6 +737,7 @@ class Store:
                 text(
                     "UPDATE jobs SET status=:status,result=:result,error=:error,"
                     "error_code=:error_code,failure_stage=:failure_stage,"
+                    "failure_category=:failure_category,exception_type=:exception_type,"
                     "updated_at=:at WHERE id=:id"
                 ),
                 dict(
@@ -743,13 +747,16 @@ class Store:
                     error=error,
                     error_code=error_code,
                     failure_stage=failure_stage,
+                    failure_category=failure_category,
+                    exception_type=exception_type,
                     at=now(),
                 ),
             )
             completed_attempt = db.execute(
                 text(
                     "UPDATE attempts SET status=:status,finished_at=:at,error=:error,"
-                    "error_code=:error_code,failure_stage=:failure_stage "
+                    "error_code=:error_code,failure_stage=:failure_stage,"
+                    "failure_category=:failure_category,exception_type=:exception_type "
                     "WHERE job_id=:id AND status='Running' RETURNING id"
                 ),
                 dict(
@@ -759,6 +766,8 @@ class Store:
                     error=error,
                     error_code=error_code,
                     failure_stage=failure_stage,
+                    failure_category=failure_category,
+                    exception_type=exception_type,
                 ),
             ).scalar_one()
             reason = f"attempt={completed_attempt}"
@@ -818,7 +827,8 @@ class Store:
                 db.execute(
                     text(
                         "UPDATE jobs SET status=:s,error=:error,error_code=:code,"
-                        "failure_stage=:stage,updated_at=:at WHERE id=:id"
+                        "failure_stage=:stage,failure_category='process_exit',"
+                        "exception_type=NULL,updated_at=:at WHERE id=:id"
                     ),
                     {
                         "s": status,
@@ -844,7 +854,8 @@ class Store:
                     db.execute(
                         text(
                             "UPDATE attempts SET status='Interrupted',finished_at=:at,error=:error,"
-                            "error_code='SOS-JOB-INTERRUPTED',failure_stage='worker_recovery' "
+                            "error_code='SOS-JOB-INTERRUPTED',failure_stage='worker_recovery',"
+                            "failure_category='process_exit',exception_type=NULL "
                             "WHERE job_id=:id AND status='Running' RETURNING id"
                         ),
                         {"at": now(), "error": "Worker stopped before completion", "id": row["id"]},

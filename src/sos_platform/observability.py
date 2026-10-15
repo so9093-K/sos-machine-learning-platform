@@ -19,6 +19,7 @@ _FIELDS = {
     "outcome",
     "status",
     "exception_type",
+    "failure_category",
     "kind",
 }
 _SAFE_VALUE = re.compile(r"[a-zA-Z0-9_.:/-]{1,128}\Z")
