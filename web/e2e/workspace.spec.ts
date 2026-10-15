@@ -151,7 +151,7 @@ test("Storage Health presents effective safe policy without destructive actions"
   await expect(storage.getByRole("button", { name: "객체 다시 검사" })).toBeVisible();
   await storage.getByRole("button", { name: "Snapshot 검사" }).click();
   await expect(storage.getByText("등록된 Iceberg 참조가 없습니다.").or(
-    storage.getByText(/고정 Snapshot이 Catalog에 존재합니다/)
+    storage.getByText(/고정 Snapshot과 만료 기한 없는 SOS 보호 Tag|Snapshot은 존재하지만 유효한 보존 Tag|현재 읽을 수 있지만 SOS 보호 Tag|Catalog 확인이 불가능합니다/)
   ).first()).toBeVisible();
   await expect(storage.getByRole("button", { name: /삭제 실행/ })).toHaveCount(0);
   await expect(storage.getByText(/마지막 성공 확인:/)).toBeVisible();
