@@ -102,11 +102,15 @@ class ExplorationSpec(BaseModel):
     group_by: str | None = Field(default=None, max_length=256)
 
 
+class ExplorationJobRequest(BaseModel):
+    dataset_id: str
+    exploration: ExplorationSpec
+
+
 class WorkRequest(BaseModel):
     dataset_id: str
-    kind: Literal["profile", "transform", "exploration"]
+    kind: Literal["profile", "transform"]
     transform: Transform | None = None
-    exploration: ExplorationSpec | None = None
 
     @model_validator(mode="after")
     def validate_request(self):
@@ -114,10 +118,6 @@ class WorkRequest(BaseModel):
             raise ValueError("transform job requires a transform specification")
         if self.kind != "transform" and self.transform is not None:
             raise ValueError("only transform job accepts transformations")
-        if self.kind == "exploration" and self.exploration is None:
-            raise ValueError("exploration job requires a specification")
-        if self.kind != "exploration" and self.exploration is not None:
-            raise ValueError("only exploration job accepts exploration specification")
         return self
 
 
@@ -240,7 +240,7 @@ class AttemptOut(BaseModel):
 
 class JobOut(BaseModel):
     id: str
-    kind: Literal["profile", "transform", "exploration", "iceberg_import"]
+    kind: Literal["profile", "transform", "iceberg_import"]
     dataset_id: str
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -256,11 +256,17 @@ class JobOut(BaseModel):
     attempts: list[AttemptOut]
 
 
+class ExplorationJobOut(JobOut):
+    """Discovery Job만 반환하는 신규 API 응답 계약."""
+
+    kind: Literal["exploration"]
+
+
 class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: Literal["profile", "transform", "exploration", "iceberg_import"]
+    kind: Literal["profile", "transform", "iceberg_import"]
     dataset_id: str
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -275,6 +281,15 @@ class JobSummaryOut(BaseModel):
     updated_at: str
     attempt_count: int
     latest_attempt: AttemptOut | None
+
+
+class ExplorationJobSummaryOut(JobSummaryOut):
+    kind: Literal["exploration"]
+
+
+class ExplorationJobPageOut(BaseModel):
+    items: list[ExplorationJobSummaryOut]
+    next_cursor: str | None = None
 
 
 class JobPageOut(BaseModel):

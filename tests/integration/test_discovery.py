@@ -53,19 +53,26 @@ def test_full_grouped_exploration_and_profile_job(workspace):
     values = {row["category"]: row["value"] for row in info["rows"]}
     assert values == {"a": 2, "b": 5}
     full_job = client.post(
-        "/api/jobs",
+        "/api/explorations/jobs",
         json={
-            "kind": "exploration",
             "dataset_id": dataset["id"],
             "exploration": {"column": "value", "metric": "mean", "group_by": "group"},
         },
     )
     assert full_job.status_code == 202, full_job.text
     assert run_once(store)
-    full = client.get(f"/api/jobs/{full_job.json()['id']}").json()
+    full = client.get(f"/api/explorations/jobs/{full_job.json()['id']}").json()
     assert full["status"] == "Succeeded", full
     assert full["result"]["scope"] == "full"
     assert full["result"]["sample_limit"] is None
+    assert client.get(f"/api/jobs/{full_job.json()['id']}").status_code == 404
+    assert all(
+        job["kind"] != "exploration" for job in client.get("/api/jobs").json()["items"]
+    )
+    assert any(
+        job["id"] == full_job.json()["id"]
+        for job in client.get("/api/explorations/jobs").json()["items"]
+    )
     assert {r["category"]: r["value"] for r in full["result"]["rows"]} == values
     immediate = client.get(base + "/profile")
     assert immediate.status_code == 200, immediate.text
