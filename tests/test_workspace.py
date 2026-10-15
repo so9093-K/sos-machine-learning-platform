@@ -375,8 +375,11 @@ def test_job_list_preserves_attempt_history(workspace):
     store.recover()
     listed = {item["id"]: item for item in client.get("/api/jobs").json()["items"]}
     assert set(ids).issubset(listed)
-    assert len(listed[ids[0]]["attempts"]) == 1
-    assert listed[ids[0]]["attempts"][0]["status"] == "Interrupted"
+    assert listed[ids[0]]["attempt_count"] == 1
+    assert listed[ids[0]]["latest_attempt"]["status"] == "Interrupted"
+    assert "attempts" not in listed[ids[0]]
+    detail = client.get(f"/api/jobs/{ids[0]}").json()
+    assert len(detail["attempts"]) == 1
 
 
 def test_job_listing_uses_bounded_number_of_queries(workspace):
@@ -608,8 +611,8 @@ def test_storage_candidate_needs_grace_and_repeated_observation():
     from sos_platform.reconciler import classify_object
 
     past = (datetime.now(UTC) - timedelta(days=10)).isoformat()
-    item = {"modified_at": past}
-    observation = {"first_seen_at": past, "observation_count": 2}
+    item = {"modified_at": past, "fingerprint": "generation-a"}
+    observation = {"first_seen_at": past, "observation_count": 2, "fingerprint": "generation-a"}
     metadata = {
         "referenced": False,
         "writes": [{"state": "Failed", "updated_at": past}],
@@ -674,3 +677,122 @@ def test_inventory_unknown_object_is_not_candidate():
         "observation": {"first_seen_at": stale, "observation_count": 365},
     }
     assert classify_object(item, metadata, StoragePolicy())[0] == "unknown"
+
+
+def test_object_observation_resets_when_generation_changes(workspace):
+    """동일 S3 주소의 다른 세대가 나타나면 기존 관측 증거를 재사용하지 않는다."""
+    from datetime import UTC, datetime, timedelta
+
+    _, store = workspace
+    location = "s3://sos-data/results/unpublished/example.parquet"
+    previous = (datetime.now(UTC) - timedelta(days=10)).isoformat()
+    first = {"location": location, "fingerprint": "etag-size-time-a"}
+    second = {"location": location, "fingerprint": "etag-size-time-b"}
+    store.observe_objects([first], 24)
+    with store.connection() as db:
+        db.execute(
+            text(
+                "UPDATE object_observations SET first_seen_at=:old,last_seen_at=:old,"
+                "observation_count=2 WHERE location=:location"
+            ),
+            {"old": previous, "location": location},
+        )
+    stable = store.observe_objects([first], 24)[location]["observation"]
+    assert stable["observation_count"] == 3
+    changed = store.observe_objects([second], 24)[location]["observation"]
+    assert changed["fingerprint"] == second["fingerprint"]
+    assert changed["observation_count"] == 1
+    assert changed["first_seen_at"] > previous
+    assert store.observe_objects([second], 24)[location]["observation"]["observation_count"] == 1
+
+
+def test_abandoned_upload_intent_is_never_auto_classified_as_candidate(workspace):
+    """완료 신호가 없는 Upload는 오래돼도 소유권이 불명확하므로 보호한다."""
+    from datetime import UTC, datetime, timedelta
+
+    from sos_platform.config import StoragePolicy
+    from sos_platform.reconciler import classify_object
+
+    _, store = workspace
+    location = "s3://sos-data/datasets/abandoned.csv"
+    store.begin_object_write(location=location, owner_kind="upload", owner_id=str(uuid4()))
+    old = (datetime.now(UTC) - timedelta(days=30)).isoformat()
+    with store.connection() as db:
+        db.execute(
+            text("UPDATE object_writes SET updated_at=:old WHERE location=:location"),
+            {"old": old, "location": location},
+        )
+    detail = store.observe_objects(
+        [{"location": location, "fingerprint": "stable"}], 24
+    )[location]
+    detail["observation"] = {
+        "fingerprint": "stable",
+        "first_seen_at": old,
+        "observation_count": 10,
+    }
+    result = classify_object(
+        {"fingerprint": "stable", "modified_at": old}, detail, StoragePolicy()
+    )
+    assert result[0] == "protected"
+    assert store.object_writes(location)[0]["state"] == "Pending"
+
+
+def test_job_summary_bounds_attempt_payload_and_preserves_detail(workspace):
+    """Job 목록은 수백 번의 Attempt가 있더라도 요약만 전송한다."""
+    client, store = workspace
+    dataset = upload(client)
+    job = client.post(
+        "/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"}
+    ).json()
+    with store.connection() as db:
+        for number in range(1, 151):
+            db.execute(
+                text(
+                    "INSERT INTO attempts(id,job_id,number,status,started_at,finished_at) "
+                    "VALUES(:id,:job,:number,'Interrupted',:at,:at)"
+                ),
+                {
+                    "id": str(uuid4()),
+                    "job": job["id"],
+                    "number": number,
+                    "at": "2026-10-01T00:00:00+00:00",
+                },
+            )
+    response = client.get("/api/jobs?limit=1")
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["attempt_count"] == 150
+    assert item["latest_attempt"]["number"] == 150
+    assert "attempts" not in item
+    assert len(client.get(f"/api/jobs/{job['id']}").json()["attempts"]) == 150
+
+
+def test_upgrade_from_0001_preserves_existing_records(workspace):
+    """실제 0001 DB 레코드를 보존하고 0003까지 순서대로 스키마를 올린다."""
+    _, store = workspace
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", store.database_url)
+    command.downgrade(config, "0001")
+    dataset_id = str(uuid4())
+    with store.connection() as db:
+        db.execute(
+            text(
+                "INSERT INTO datasets(id,name,kind,location,version,created_at) "
+                "VALUES(:id,'legacy.csv','file','s3://sos-data/datasets/legacy.csv','v1',:at)"
+            ),
+            {"id": dataset_id, "at": "2026-10-01T00:00:00+00:00"},
+        )
+    command.upgrade(config, "head")
+    store.initialize()
+    assert store.get_dataset(dataset_id)["name"] == "legacy.csv"
+    with store.connection() as db:
+        rev = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+        assert rev == "0003"
+        names = {
+            row[0]
+            for row in db.execute(
+                text("SELECT column_name FROM information_schema.columns "
+                     "WHERE table_name='object_observations'")
+            )
+        }
+    assert "fingerprint" in names
