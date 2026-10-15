@@ -440,6 +440,17 @@ class Store:
                     text("UPDATE jobs SET status=:s,error=:error,updated_at=:at WHERE id=:id"),
                     {"s": status, "error": message, "at": now(), "id": row["id"]},
                 )
+                # 이전 Worker 소유권이 종료된 실행의 미확정 S3 게시 의도를 해소한다.
+                db.execute(
+                    text(
+                        "UPDATE object_writes SET state='Failed',updated_at=:at,"
+                        "error='Worker interrupted before publication' "
+                        "WHERE owner_kind='attempt' AND state='Pending' "
+                        "AND owner_id IN (SELECT id FROM attempts "
+                        "WHERE job_id=:id AND status='Running')"
+                    ),
+                    {"at": now(), "id": row["id"]},
+                )
                 db.execute(
                     text(
                         "UPDATE attempts SET status='Interrupted',finished_at=:at,error=:error "
