@@ -999,3 +999,69 @@ def test_required_audit_failure_rolls_back_job_creation(workspace, monkeypatch):
             owner_actor="local-developer",
         )
     assert store.jobs() == []
+
+
+def test_development_identity_rejects_forwarded_requests(workspace):
+    """로컬 프록시로 전달된 외부 요청에 개발용 관리자 권한을 주지 않는다."""
+    client, _ = workspace
+    response = client.get("/api/datasets", headers={"X-Forwarded-For": "198.51.100.9"})
+    assert response.status_code == 403
+
+
+def test_tag_failure_keeps_uncertain_intent_without_publishing_dataset(workspace, monkeypatch):
+    """Catalog Tag 생성 실패 후 보존 의도는 남고 Dataset은 잘못 게시되지 않는다."""
+    client, store = workspace
+    source = upload(client)
+    job = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source["id"], "table_name": "tag_failure"},
+    )
+    assert job.status_code == 202
+    assert run_once(store)
+    from pyiceberg.table import Table
+
+    from sos_platform.datasets import connect_iceberg
+
+    before = len(store.datasets())
+
+    def fail_tag(_table):
+        raise RuntimeError("Tag commit unavailable")
+
+    monkeypatch.setattr(Table, "manage_snapshots", fail_tag)
+    with pytest.raises(RuntimeError, match="Tag commit unavailable"):
+        connect_iceberg(store, "tag_failure")
+    assert len(store.datasets()) == before
+    with store.connection() as db:
+        rows = db.execute(
+            text("SELECT dataset_id,state FROM snapshot_retention WHERE state='Uncertain'")
+        ).mappings().all()
+    assert len(rows) == 1
+    assert store.get_dataset(rows[0]["dataset_id"]) is None
+
+
+def test_denied_audit_failure_does_not_grant_access(workspace, monkeypatch):
+    """거부 요청의 감사 DB 기록 실패가 접근 허용으로 바뀌지 않는다."""
+    _, store = workspace
+    from sos_platform.api import create_app
+
+    monkeypatch.setenv("SOS_AUTH_MODE", "token")
+    monkeypatch.setenv(
+        "SOS_AUTH_TOKEN_HASHES",
+        json.dumps(
+            {
+                hashlib.sha256(b"secure-secret-" + b"x" * 40).hexdigest(): {
+                    "actor_id": "reader",
+                    "kind": "human",
+                    "roles": ["viewer"],
+                }
+            }
+        ),
+    )
+
+    def fail_audit(_store, **_kwargs):
+        raise RuntimeError("Audit database unavailable")
+
+    monkeypatch.setattr(Store, "record_audit", fail_audit)
+    with TestClient(create_app(store.home)) as client:
+        assert client.get("/api/datasets").status_code == 401
+        assert client.post("/api/datasets/files").status_code == 401

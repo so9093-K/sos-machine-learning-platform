@@ -107,7 +107,12 @@ class IdentitySettings:
 def current_actor(request: Request) -> Actor:
     if request.app.state.identity.mode == "development":
         peer = request.client.host if request.client else ""
-        if peer not in ("127.0.0.1", "::1", "testclient"):
+        # 프록시가 원격 사용자를 로컬 클라이언트처럼 전달하는 실수를 차단한다.
+        # 전달 헤더를 제거하는 프록시는 감지할 수 없으므로 외부 공개 자체가 금지된다.
+        proxy_headers = ("forwarded", "x-forwarded-for", "x-real-ip", "x-forwarded-host", "via")
+        if peer not in ("127.0.0.1", "::1", "testclient") or any(
+            header in request.headers for header in proxy_headers
+        ):
             raise HTTPException(status_code=403, detail="Development identity is local only")
     actor = request.app.state.identity.authenticate(request.headers.get("authorization"))
     request.state.actor = actor
