@@ -103,8 +103,6 @@ def run_once(store: Store) -> bool:
     pending = store.home / "results" / f"{job_id}.pending.parquet"
     completed = store.home / "results" / f"{job_id}.completed.json"
     completed.unlink(missing_ok=True)
-    storage: ObjectStore | None = None
-
     process = multiprocessing.get_context("spawn").Process(
         target=_perform, args=(store.home, store.database_url, job, completed, pending)
     )

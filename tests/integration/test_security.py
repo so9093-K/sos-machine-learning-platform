@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 
 import pytest
 from fastapi.testclient import TestClient
@@ -29,7 +31,6 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
     """Bearer 신원·기본 거부·리소스 소유권·변경 감사가 API에서 강제된다."""
     client, store = workspace
     dataset = upload(client)
-    from sos_platform.api import create_app
 
     users = {
         "alice": {"actor_id": "alice", "kind": "human", "roles": ["researcher"]},
@@ -195,10 +196,36 @@ def test_development_identity_rejects_forwarded_requests(workspace):
     assert response.status_code == 403
 
 
+def test_slow_denied_audit_does_not_block_other_requests(workspace, monkeypatch):
+    """거부 감사가 느려도 다른 API 요청을 이벤트 루프에서 처리한다."""
+    client, _ = workspace
+    entered = Event()
+    release = Event()
+    original = Store.record_audit
+
+    def slow_audit(self, **kwargs):
+        entered.set()
+        if not release.wait(timeout=20):
+            raise TimeoutError("Test audit gate was not released")
+        return original(self, **kwargs)
+
+    monkeypatch.setattr(Store, "record_audit", slow_audit)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        denied = executor.submit(
+            client.get, "/api/auth/me", headers={"X-Forwarded-For": "198.51.100.9"}
+        )
+        try:
+            assert entered.wait(timeout=10), "Denied audit did not start"
+            health = executor.submit(client.get, "/api/health")
+            assert health.result(timeout=3).status_code == 200
+        finally:
+            release.set()
+        assert denied.result(timeout=20).status_code == 403
+
+
 def test_denied_audit_failure_does_not_grant_access(workspace, monkeypatch):
     """거부 요청의 감사 DB 기록 실패가 접근 허용으로 바뀌지 않는다."""
     _, store = workspace
-    from sos_platform.api import create_app
 
     monkeypatch.setenv("SOS_AUTH_MODE", "token")
     monkeypatch.setenv(

@@ -99,7 +99,9 @@ def create_app(home: Path | None = None) -> FastAPI:
         if response.status_code in (401, 403):
             actor = getattr(request.state, "actor", None)
             try:
-                store.record_audit(
+                # 거부 요청의 감사 DB 기록도 다른 API 요청을 막아서는 안 된다.
+                await run_in_threadpool(
+                    store.record_audit,
                     actor_id=actor.id if actor else "anonymous",
                     actor_type=actor.kind if actor else "anonymous",
                     action="security.access_denied",
