@@ -26,6 +26,7 @@ from .examples import list_examples, use_example
 from .object_store import ObjectStore
 from .processing import bounded_feature_preview, profile, safe_preview
 from .reconciler import inspect_iceberg_references, inspect_page
+from .retention import ensure_tag, snapshot_status
 from .security import Actor, IdentitySettings, current_actor, require, resource_allowed
 from .schemas import (
     DatasetOut,
@@ -180,6 +181,31 @@ def create_app(home: Path | None = None) -> FastAPI:
                                   actor: Actor = Depends(require("storage.inspect"))):
         """등록된 Dataset이 참조하는 Iceberg Snapshot 존재 여부를 확인한다."""
         return inspect_iceberg_references(store, limit=limit)
+
+    @app.post("/api/storage/iceberg-references/{dataset_id}/retain")
+    def retain_iceberg_reference(
+        dataset_id: str, actor: Actor = Depends(require("snapshot.retain"))
+    ):
+        """기존 Dataset을 재확인하고 SOS 영구 보존 Tag를 생성한다."""
+        item = store.get_dataset(dataset_id)
+        if item is None or item["kind"] != "iceberg":
+            raise HTTPException(status_code=404, detail="Iceberg Dataset not found")
+        try:
+            ensure_tag(
+                store, dataset_id=dataset_id,
+                location=item["location"], snapshot_id=item["version"],
+            )
+            store.confirm_existing_retention(
+                dataset_id, actor_id=actor.id, actor_type=actor.kind
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503, detail="Snapshot protection could not be verified"
+            ) from exc
+        status, reason = snapshot_status(store, item)
+        return {"dataset_id": dataset_id, "status": status, "reason": reason}
 
     @app.get("/api/examples", response_model=list[ExampleOut])
     def available_examples(actor: Actor = Depends(require("dataset.read"))):
