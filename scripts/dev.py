@@ -186,9 +186,7 @@ def validate_managed_targets(config: dict) -> None:
         raise StartupError("SOS-CONFIG-004", "관리형 모드의 DB 호스트는 로컬이어야 합니다.")
     from urllib.parse import urlsplit
 
-    endpoint = urlsplit(
-        config.get("SOS_S3_ENDPOINT", f"http://127.0.0.1:{config['SOS_S3_PORT']}")
-    )
+    endpoint = urlsplit(config.get("SOS_S3_ENDPOINT", f"http://127.0.0.1:{config['SOS_S3_PORT']}"))
     try:
         valid_port = endpoint.port == int(config["SOS_S3_PORT"])
     except ValueError:
