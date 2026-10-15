@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 
 from sos_platform.processing import bounded_feature_preview, bounded_iceberg_arrow, transform
-from sos_platform.schemas import Transform
+from sos_platform.schemas import PreviewOut, Transform
 
 
 def test_grouped_lag_does_not_cross_machine_boundaries():
@@ -244,3 +244,14 @@ def test_mutating_step_invalidates_time_key_verification(monkeypatch):
     assert calls == 4  # Cast 이전·이후에 독립 검증
     rows = result.collect().to_dicts()
     assert [row["previous_again"] for row in rows] == [None, 10, 20]
+
+
+def test_preview_schema_wire_name_is_preserved():
+    """Pydantic 내부 속성명 변경이 외부 API의 schema 계약을 바꾸지 않는다."""
+    preview = PreviewOut.model_validate(
+        {"schema": {"time": "Int64"}, "rows": [], "returned_rows": 0}
+    )
+    assert preview.schema_ == {"time": "Int64"}
+    assert preview.model_dump(by_alias=True)["schema"] == {"time": "Int64"}
+    assert "schema_" not in preview.model_dump(by_alias=True)
+
