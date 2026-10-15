@@ -47,6 +47,20 @@ class Transform(BaseModel):
         return self
 
 
+class ProblemOut(BaseModel):
+    """오류 응답 공통 계약. detail은 이전 클라이언트 호환을 위해 보존한다."""
+
+    type: str
+    title: str
+    status: int
+    detail: object
+    code: str
+    category: str
+    request_id: str
+    instance: str
+    retry_policy: str
+
+
 class StoragePolicyOut(BaseModel):
     """서버의 유효 보존 정책과 값의 출처."""
 
