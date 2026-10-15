@@ -102,11 +102,8 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
     schema = lf.collect_schema()
     if not set(spec.group_by).issubset(schema.names()):
         raise ValueError("Group column does not exist")
-    if spec.order_by:
-        if spec.order_by not in schema:
-            raise ValueError("Time/order column does not exist")
-        # 그룹 안의 시간 순서가 시계열 연산의 의미를 결정한다.
-        lf = lf.sort([*spec.group_by, spec.order_by])
+    if spec.order_by and spec.order_by not in schema:
+        raise ValueError("Time/order column does not exist")
     for step in spec.steps:
         current_schema = lf.collect_schema()
         columns = current_schema.names()
@@ -129,6 +126,21 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
                 raise ValueError("Time-based features require order_by")
             if spec.order_by not in columns or not set(spec.group_by).issubset(columns):
                 raise ValueError("Time/order and group columns must survive preceding steps")
+            # 이전 단계의 필터·캐스트 적용 후 시간 순서를 확정한다.
+            # 동일 시간의 임의 순서나 NULL 시간값으로 피처가 달라지지 않게 검증한다.
+            if lf.select(pl.col(spec.order_by).is_null().any()).collect().item():
+                raise ValueError("Time/order column contains null values")
+            keys = [*spec.group_by, spec.order_by]
+            duplicates = (
+                lf.group_by(keys)
+                .agg(pl.len().alias("__sos_time_count"))
+                .filter(pl.col("__sos_time_count") > 1)
+                .limit(1)
+                .collect()
+            )
+            if duplicates.height:
+                raise ValueError("Time/order column must be unique within each group")
+            lf = lf.sort(keys)
             if step.op == "rolling_mean" and not current_schema[step.column].is_numeric():
                 raise ValueError("Rolling Mean requires a numeric column")
             alias = step.alias or f"{step.column}_{step.op}"
