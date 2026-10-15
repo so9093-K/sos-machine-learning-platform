@@ -117,7 +117,8 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str, attempt_id: 
     # 동일 테이블에 외부 작성자가 개입하더라도 최신 Snapshot을 오인하지 않는다.
     table.append(arrow, snapshot_properties={"sos.attempt-id": attempt_id})
     snapshots = [
-        snapshot for snapshot in catalog.load_table(ident).snapshots()
+        snapshot
+        for snapshot in catalog.load_table(ident).snapshots()
         if snapshot.summary and snapshot.summary.get("sos.attempt-id") == attempt_id
     ]
     if len(snapshots) != 1:
@@ -126,7 +127,9 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str, attempt_id: 
     retention_id = str(uuid4())
     from .retention import ensure_tag
 
-    ensure_tag(store, dataset_id=retention_id, location=ident, snapshot_id=str(snapshot.snapshot_id))
+    ensure_tag(
+        store, dataset_id=retention_id, location=ident, snapshot_id=str(snapshot.snapshot_id)
+    )
     return {
         "name": ident,
         "kind": "iceberg",
@@ -136,7 +139,9 @@ def import_to_iceberg(store: Store, dataset: dict, table_name: str, attempt_id: 
     }
 
 
-def connect_iceberg(store: Store, table_name: str, snapshot_id: str | None = None, *, owner_actor: str | None = None) -> dict:
+def connect_iceberg(
+    store: Store, table_name: str, snapshot_id: str | None = None, *, owner_actor: str | None = None
+) -> dict:
     """기존 테이블의 지정 Snapshot을 Dataset으로 등록한다."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
         raise ValueError("Invalid Iceberg table name")
