@@ -12,6 +12,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import bindparam, create_engine, text
 
 from .config import Settings
+from .errors import ERRORS
 
 
 def now() -> str:
@@ -458,12 +459,14 @@ class Store:
         spec: dict,
         owner_actor: str | None = None,
         actor_type: str = "human",
+        request_id: str | None = None,
     ) -> dict:
         item = dict(
             id=str(uuid4()),
             kind=kind,
             dataset_id=dataset_id,
             owner_actor=owner_actor,
+            request_id=request_id,
             spec=json.dumps(spec),
             status="Queued",
             created_at=now(),
@@ -472,8 +475,10 @@ class Store:
         with self.connection() as db:
             db.execute(
                 text(
-                    "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at,owner_actor) "
-                    "VALUES(:id,:kind,:dataset_id,:spec,:status,:created_at,:updated_at,:owner_actor)"
+                    "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at,"
+                    "owner_actor,request_id) "
+                    "VALUES(:id,:kind,:dataset_id,:spec,:status,:created_at,:updated_at,"
+                    ":owner_actor,:request_id)"
                 ),
                 item,
             )
@@ -485,6 +490,7 @@ class Store:
                     action="job.create",
                     resource_type="job",
                     resource_id=item["id"],
+                    request_id=request_id,
                 )
         return self.get_job(item["id"])
 
@@ -494,6 +500,8 @@ class Store:
         item["spec"] = json.loads(item["spec"])
         item["result"] = json.loads(item["result"]) if item["result"] else None
         item["cancel_requested"] = bool(item["cancel_requested"])
+        code = item.get("error_code")
+        item["retry_policy"] = ERRORS[code].retry_policy if code in ERRORS else None
         return item
 
     def get_job(self, job_id: str) -> dict | None:
