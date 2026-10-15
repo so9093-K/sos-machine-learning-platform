@@ -502,7 +502,7 @@ function Workspace({ actor }: { actor: Identity }) {
             onClick={() => void previewFeatures()}>샘플 변환 확인</button>
             {canWrite && <button disabled={busy || !steps.length} onClick={() => void submit("transform")}>
               전체 변환 Job 실행 →
-            </button>}}}</div>
+            </button>}</div>
           {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 계산</h4>
              <p className="hint">10만 행 이하 입력에서 실제 Job과 같은 변환을 실행한 뒤 출력 최대 30행을 표시합니다. 더 큰 데이터는 전체 Job을 사용하세요.</p>
             <div className="table-scroll"><table><thead><tr>{Object.entries(featurePreview.schema).map(
