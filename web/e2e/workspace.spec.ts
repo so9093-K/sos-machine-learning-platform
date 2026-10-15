@@ -97,6 +97,9 @@ test("feature preview is invalidated when group or ordering changes", async ({ p
   await page.getByLabel("그룹 컬럼").selectOption("");
   await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toHaveCount(0);
   await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await expect(page.getByRole("alert")).toContainText("unique within each group");
+  await page.getByLabel("그룹 컬럼").selectOption("machine_id");
+  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
   await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
 });
 
