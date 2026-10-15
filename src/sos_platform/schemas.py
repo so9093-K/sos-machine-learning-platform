@@ -175,10 +175,27 @@ class JobOut(BaseModel):
     attempts: list[AttemptOut]
 
 
-class JobPageOut(BaseModel):
-    """키셋 커서로 이어지는 Job 목록과 다음 조회 위치."""
+class JobSummaryOut(BaseModel):
+    """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
-    items: list[JobOut]
+    id: str
+    kind: Literal["profile", "transform", "iceberg_import"]
+    dataset_id: str
+    spec: dict[str, object]
+    status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
+    cancel_requested: bool
+    result: dict[str, object] | None
+    error: str | None
+    created_at: str
+    updated_at: str
+    attempt_count: int
+    latest_attempt: AttemptOut | None
+
+
+class JobPageOut(BaseModel):
+    """키셋 커서로 이어지는 경량 Job 목록과 다음 조회 위치."""
+
+    items: list[JobSummaryOut]
     next_cursor: str | None = None
 
 
