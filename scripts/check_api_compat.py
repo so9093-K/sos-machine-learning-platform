@@ -24,7 +24,12 @@ def resolved(schema: dict, components: dict, seen: frozenset[str] = frozenset())
 
 
 def schema_issues(
-    old: dict, new: dict, kind: str, path: str, old_components: dict, new_components: dict,
+    old: dict,
+    new: dict,
+    kind: str,
+    path: str,
+    old_components: dict,
+    new_components: dict,
     visited: frozenset[tuple[int, int]] = frozenset(),
 ) -> list[str]:
     """request는 입력 허용 범위 감소, response는 출력 보장 감소를 검출한다."""
@@ -45,7 +50,11 @@ def schema_issues(
                 not schema_issues(
                     option if kind == "request" else target,
                     target if kind == "request" else option,
-                    kind, path, old_components, new_components, visited,
+                    kind,
+                    path,
+                    old_components,
+                    new_components,
+                    visited,
                 )
                 for target in targets
             ):
@@ -79,7 +88,7 @@ def schema_issues(
         else:
             before = {json.dumps(x, sort_keys=True) for x in before_enum}
             after = {json.dumps(x, sort_keys=True) for x in after_enum}
-            if (before - after if kind == "request" else after - before):
+            if before - after if kind == "request" else after - before:
                 issues.append(f"{kind} enum changed: {path}")
 
     before_fields = old.get("properties", {})
@@ -96,15 +105,25 @@ def schema_issues(
     for field in before_fields.keys() & after_fields.keys():
         issues.extend(
             schema_issues(
-                before_fields[field], after_fields[field], kind, f"{path}.{field}",
-                old_components, new_components, visited
+                before_fields[field],
+                after_fields[field],
+                kind,
+                f"{path}.{field}",
+                old_components,
+                new_components,
+                visited,
             )
         )
     if "items" in old and "items" in new:
         issues.extend(
             schema_issues(
-                old["items"], new["items"], kind, f"{path}[]",
-                old_components, new_components, visited
+                old["items"],
+                new["items"],
+                kind,
+                f"{path}[]",
+                old_components,
+                new_components,
+                visited,
             )
         )
     if "additionalProperties" in old and "additionalProperties" in new:
@@ -130,8 +149,12 @@ def media_issues(old: dict, new: dict, kind: str, label: str, before: dict, afte
         else:
             issues.extend(
                 schema_issues(
-                    value.get("schema", {}), updated.get("schema", {}), kind,
-                    f"{label} {media}", before, after,
+                    value.get("schema", {}),
+                    updated.get("schema", {}),
+                    kind,
+                    f"{label} {media}",
+                    before,
+                    after,
                 )
             )
     return issues
@@ -163,8 +186,12 @@ def breaking_changes(before: dict, after: dict) -> list[str]:
                     issues.append(f"parameter became required: {label} {key}")
                 issues.extend(
                     schema_issues(
-                        old_param.get("schema", {}), param.get("schema", {}), "request",
-                        f"{label} parameter {key}", old_components, new_components,
+                        old_param.get("schema", {}),
+                        param.get("schema", {}),
+                        "request",
+                        f"{label} parameter {key}",
+                        old_components,
+                        new_components,
                     )
                 )
             for key in old_params.keys() - new_params.keys():
@@ -174,8 +201,12 @@ def breaking_changes(before: dict, after: dict) -> list[str]:
                 issues.append(f"request body became required: {label}")
             issues.extend(
                 media_issues(
-                    old_body, new_body, "request", f"{label} request body",
-                    old_components, new_components,
+                    old_body,
+                    new_body,
+                    "request",
+                    f"{label} request body",
+                    old_components,
+                    new_components,
                 )
             )
             old_success = {s for s in old.get("responses", {}) if str(s).startswith("2")}
@@ -185,8 +216,12 @@ def breaking_changes(before: dict, after: dict) -> list[str]:
             for code in old_success & new_success:
                 issues.extend(
                     media_issues(
-                        old["responses"][code], new["responses"][code], "response",
-                        f"{label} {code}", old_components, new_components,
+                        old["responses"][code],
+                        new["responses"][code],
+                        "response",
+                        f"{label} {code}",
+                        old_components,
+                        new_components,
                     )
                 )
     return sorted(set(issues))

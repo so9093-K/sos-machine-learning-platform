@@ -11,25 +11,43 @@ spec.loader.exec_module(compat)
 
 
 def contract(
-    *, request: dict | None = None, response: dict | None = None,
+    *,
+    request: dict | None = None,
+    response: dict | None = None,
     output: dict | None = None,
 ) -> dict:
-    op = {"responses": {"200": {"content": {"application/json": {
-        "schema": response or {"$ref": "#/components/schemas/Result"}
-    }}}}}
+    op = {
+        "responses": {
+            "200": {
+                "content": {
+                    "application/json": {
+                        "schema": response or {"$ref": "#/components/schemas/Result"}
+                    }
+                }
+            }
+        }
+    }
     if request is not None:
-        op["requestBody"] = {"required": True, "content": {
-            "application/json": {"schema": {"$ref": "#/components/schemas/Input"}}
-        }}
+        op["requestBody"] = {
+            "required": True,
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Input"}}},
+        }
     return {
         "paths": {"/api/data": {"post": op}},
-        "components": {"schemas": {
-            "Input": request or {"type": "object", "properties": {"x": {"type": "string"}}},
-            "Result": output or {"type": "object", "properties": {
-                "x": {"anyOf": [{"type": "string"}, {"type": "null"}]},
-                "rows": {"type": "array", "items": {"type": "string"}},
-            }, "required": ["x"]},
-        }},
+        "components": {
+            "schemas": {
+                "Input": request or {"type": "object", "properties": {"x": {"type": "string"}}},
+                "Result": output
+                or {
+                    "type": "object",
+                    "properties": {
+                        "x": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                        "rows": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["x"],
+                },
+            }
+        },
     }
 
 
@@ -56,9 +74,7 @@ def test_existing_optional_query_parameter_narrowing_is_breaking():
     after = contract()
     old = {"in": "query", "name": "cursor", "required": False, "schema": {"type": "string"}}
     before["paths"]["/api/data"]["post"]["parameters"] = [old]
-    after["paths"]["/api/data"]["post"]["parameters"] = [{
-        **old, "schema": {"type": "integer"}
-    }]
+    after["paths"]["/api/data"]["post"]["parameters"] = [{**old, "schema": {"type": "integer"}}]
     assert any("type changed" in x for x in compat.breaking_changes(before, after))
 
 
@@ -74,9 +90,7 @@ def test_nullable_response_union_type_change_is_breaking():
 def test_response_array_items_change_is_breaking():
     original = contract()
     changed = contract()
-    changed["components"]["schemas"]["Result"]["properties"]["rows"]["items"] = {
-        "type": "integer"
-    }
+    changed["components"]["schemas"]["Result"]["properties"]["rows"]["items"] = {"type": "integer"}
     assert any("response type changed" in x for x in compat.breaking_changes(original, changed))
 
 
@@ -98,28 +112,42 @@ def test_removing_required_response_field_is_breaking():
 
 def test_new_required_request_field_is_breaking():
     old = contract(request={"type": "object", "properties": {"x": {"type": "string"}}})
-    new = contract(request={
-        "type": "object", "properties": {"x": {"type": "string"}, "y": {"type": "string"}},
-        "required": ["y"],
-    })
+    new = contract(
+        request={
+            "type": "object",
+            "properties": {"x": {"type": "string"}, "y": {"type": "string"}},
+            "required": ["y"],
+        }
+    )
     assert any("request required field" in x for x in compat.breaking_changes(old, new))
 
 
 def test_new_optional_request_field_is_safe():
     old = contract(request={"type": "object", "properties": {"x": {"type": "string"}}})
-    new = contract(request={
-        "type": "object", "properties": {"x": {"type": "string"}, "y": {"type": "string"}},
-    })
+    new = contract(
+        request={
+            "type": "object",
+            "properties": {"x": {"type": "string"}, "y": {"type": "string"}},
+        }
+    )
     assert compat.breaking_changes(old, new) == []
 
 
 def test_response_union_widening_is_breaking_but_request_widening_is_safe():
-    old = contract(request={"type": "object", "properties": {
-        "x": {"anyOf": [{"type": "string"}, {"type": "null"}]}
-    }})
-    new = contract(request={"type": "object", "properties": {
-        "x": {"anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "null"}]}
-    }})
+    old = contract(
+        request={
+            "type": "object",
+            "properties": {"x": {"anyOf": [{"type": "string"}, {"type": "null"}]}},
+        }
+    )
+    new = contract(
+        request={
+            "type": "object",
+            "properties": {
+                "x": {"anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "null"}]}
+            },
+        }
+    )
     assert compat.breaking_changes(old, new) == []
 
 

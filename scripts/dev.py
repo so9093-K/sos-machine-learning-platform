@@ -22,11 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 INSTANCE = os.getenv("SOS_DEV_INSTANCE", "sos-platform")
 if INSTANCE != "sos-platform" and not re.fullmatch(r"sos-e2e-[0-9a-f]{12}", INSTANCE):
     raise SystemExit("Invalid isolated SOS instance identifier")
-RUNTIME = (
-    ROOT / ".sos-dev"
-    if INSTANCE == "sos-platform"
-    else ROOT / ".sos-dev" / "runs" / INSTANCE
-)
+RUNTIME = ROOT / ".sos-dev" if INSTANCE == "sos-platform" else ROOT / ".sos-dev" / "runs" / INSTANCE
 PIDFILE = RUNTIME / "processes.json"
 LOGDIR = RUNTIME / "logs"
 PROCESS_NAMES = ("api", "worker", "web")
