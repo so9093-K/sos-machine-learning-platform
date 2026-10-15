@@ -66,7 +66,7 @@ def schema_issues(
             return [f"{kind} composition changed: {path}"]
         return [
             issue
-            for index, (a, b) in enumerate(zip(before, after))
+            for index, (a, b) in enumerate(zip(before, after, strict=True))
             for issue in schema_issues(
                 a, b, kind, f"{path}/allOf/{index}", old_components, new_components, visited
             )
