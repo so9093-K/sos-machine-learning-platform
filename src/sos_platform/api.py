@@ -14,6 +14,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Uploa
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
+from starlette.concurrency import run_in_threadpool
 
 from .api_errors import register_error_handlers
 from .config import StoragePolicy
@@ -70,8 +71,12 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app):
-        store.initialize()
-        yield
+        try:
+            store.initialize()
+            yield
+        finally:
+            # 테스트·재시작에서 애플리케이션 소유 DB 풀을 남기지 않는다.
+            store.engine.dispose()
 
     app = FastAPI(
         title="SOS Machine Learning Platform",
@@ -98,7 +103,9 @@ def create_app(home: Path | None = None) -> FastAPI:
         if response.status_code in (401, 403):
             actor = getattr(request.state, "actor", None)
             try:
-                store.record_audit(
+                # 거부 요청의 감사 DB 기록도 다른 API 요청을 막아서는 안 된다.
+                await run_in_threadpool(
+                    store.record_audit,
                     actor_id=actor.id if actor else "anonymous",
                     actor_type=actor.kind if actor else "anonymous",
                     action="security.access_denied",
@@ -324,7 +331,10 @@ def create_app(home: Path | None = None) -> FastAPI:
         # 제한보다 한 바이트 더 읽어 파일 전체를 저장하기 전에 크기 초과를 검출한다.
         data = await file.read(MAX_UPLOAD + 1)
         try:
-            return save_upload(store, file.filename or "unknown", data, owner_actor=actor.id)
+            # S3·PostgreSQL의 동기 I/O를 ASGI 이벤트 루프에서 실행하지 않는다.
+            return await run_in_threadpool(
+                save_upload, store, file.filename or "unknown", data, owner_actor=actor.id
+            )
         except ValueError:
             raise
         except Exception as exc:

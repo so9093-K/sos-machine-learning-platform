@@ -139,7 +139,8 @@ class DatasetOut(BaseModel):
 class PreviewOut(BaseModel):
     """제한된 행 미리보기와 컬럼 타입."""
 
-    schema: dict[str, str]
+    # 외부 JSON 필드 'schema'는 유지하고 BaseModel.schema와의 이름 충돌만 피한다.
+    schema_: dict[str, str] = Field(alias="schema")
     rows: list[dict[str, object]]
     returned_rows: int
 

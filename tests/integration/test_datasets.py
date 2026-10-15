@@ -1,6 +1,8 @@
 """Dataset 등록·원본·마이그레이션 통합 계약을 검증한다."""
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from uuid import uuid4
 
 import pytest
@@ -26,6 +28,36 @@ def test_upload_preview_profile_and_scalar(workspace):
     assert result["row_count"] == 3
     assert "openapi.json" in client.get("/docs").text
     assert client.get("/openapi.json").status_code == 200
+
+
+def test_upload_storage_wait_does_not_block_other_api_requests(workspace, monkeypatch):
+    """객체 저장소가 느려도 API 이벤트 루프의 별도 조회는 진행되어야 한다."""
+    client, _ = workspace
+    entered = Event()
+    release = Event()
+    real_put = ObjectStore.put
+
+    def wait_before_put(self, key, path):
+        entered.set()
+        if not release.wait(timeout=20):
+            raise TimeoutError("Test storage gate was not released")
+        return real_put(self, key, path)
+
+    monkeypatch.setattr(ObjectStore, "put", wait_before_put)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        upload_future = executor.submit(
+            client.post,
+            "/api/datasets/files",
+            files={"file": ("slow.csv", b"time,value\n1,2\n", "text/csv")},
+        )
+        try:
+            assert entered.wait(timeout=10), "Upload did not reach S3"
+            health_future = executor.submit(client.get, "/api/health")
+            assert health_future.result(timeout=3).status_code == 200
+        finally:
+            release.set()
+        response = upload_future.result(timeout=20)
+        assert response.status_code == 201, response.text
 
 
 def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
