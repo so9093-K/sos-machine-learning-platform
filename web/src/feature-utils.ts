@@ -1,8 +1,7 @@
-/** UI가 변환 값을 먼저 검증하며, API에서도 독립적으로 계약을 검사한다. */
-export type FeatureStep = {
-  op: string; column: string; value?: number | string;
-  periods?: number; window?: number; dtype?: string;
-};
+/** API 변환 계약은 Pydantic에서 생성된 타입을 그대로 사용한다. */
+import type { components } from "./api.generated";
+
+export type FeatureStep = components["schemas"]["Step"];
 export function createStep(
   op: string, column: string, raw: string, dtype?: string, size?: number,
 ): FeatureStep {
