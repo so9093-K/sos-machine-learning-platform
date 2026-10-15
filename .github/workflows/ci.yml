@@ -31,7 +31,10 @@ jobs:
       - name: Install Python
         run: uv python install
       - name: Validate Python lockfile
-        run: uv lock --check
+        run: |
+          uv lock
+          git diff -- uv.lock
+          uv lock --check
       - name: Verify Markdown links
         run: python3 scripts/check_doc_links.py
       - name: Install development dependencies
