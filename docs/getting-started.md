@@ -11,7 +11,8 @@ make           # 사용 가능한 명령 보기
 make up        # 환경 확인 · 스키마 확인/초기화 · 서비스 시작 · Readiness 확인
 make status    # 서비스별 상태
 make doctor    # 읽기 전용 환경 진단
-make check     # Ruff · pytest · UI 빌드/테스트 · Playwright
+make check     # Ruff · pytest · UI 빌드/테스트 · Playwright (make up 필요)
+make check-fast # 인프라 없이 Ruff · Python 순수 로직·CLI · UI 테스트·빌드
 make restart   # DB 재초기화 없이 애플리케이션 재시작
 make logs      # API · Worker · Web 로그
 make down      # 관리 대상만 종료하고 데이터 보존

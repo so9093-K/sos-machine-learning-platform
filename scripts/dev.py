@@ -22,7 +22,7 @@ RUNTIME = ROOT / ".sos-dev"
 PIDFILE = RUNTIME / "processes.json"
 LOGDIR = RUNTIME / "logs"
 PROCESS_NAMES = ("api", "worker", "web")
-COMMANDS = ("up", "down", "restart", "status", "logs", "doctor", "check", "help")
+COMMANDS = ("up", "down", "restart", "status", "logs", "doctor", "check", "check-fast", "help")
 EXIT_CONFIG, EXIT_FAILED = 2, 3
 
 
@@ -586,7 +586,6 @@ def check(config: dict):
             "통합 검증 전에 플랫폼이 Ready 상태여야 합니다.",
             "make up을 먼저 실행하세요.",
         )
-    env = dict(config)
     commands = [
         (["uv", "run", "--locked", "ruff", "check", "."], ROOT),
         (["uv", "run", "--locked", "ruff", "format", "--check", "."], ROOT),
@@ -595,6 +594,12 @@ def check(config: dict):
         (["npm", "run", "test"], ROOT / "web"),
         (["npx", "playwright", "test"], ROOT / "web"),
     ]
+    return _run_checks(config, commands, operation="check")
+
+
+def _run_checks(config: dict, commands: list[tuple[list[str], Path]], *, operation: str) -> dict:
+    """검증 명령을 순서대로 실행하고 최초 실패를 보존한다."""
+    env = dict(config)
     for command, cwd in commands:
         print("검증:", " ".join(command), flush=True)
         result = subprocess.run(command, cwd=cwd, env=env, check=False)
@@ -602,7 +607,26 @@ def check(config: dict):
             raise StartupError(
                 "SOS-CHECK-002", "품질·통합 검증에 실패했습니다.", f"실패한 검사: {command[0]}"
             )
-    return {"operation": "check", "status": "passed", "services": [], "diagnostics": []}
+    return {"operation": operation, "status": "passed", "services": [], "diagnostics": []}
+
+
+def check_fast(config: dict):
+    """DB·S3·Web·Worker가 없어도 실행할 수 있는 빠른 검증."""
+    return _run_checks(
+        config,
+        [
+            (["uv", "run", "--locked", "ruff", "check", "."], ROOT),
+            (["uv", "run", "--locked", "ruff", "format", "--check", "."], ROOT),
+            (
+                ["uv", "run", "--locked", "pytest", "-q", "tests/test_processing.py",
+                 "tests/test_dev_cli.py"],
+                ROOT,
+            ),
+            (["npm", "run", "test"], ROOT / "web"),
+            (["npm", "run", "build"], ROOT / "web"),
+        ],
+        operation="check-fast",
+    )
 
 
 def help_text():
@@ -615,6 +639,7 @@ def help_text():
         ("logs", "서비스 로그 확인"),
         ("doctor", "읽기 전용 환경 및 연결 진단"),
         ("check", "코드 품질·테스트 통합 검증 (make up 선행)"),
+        ("check-fast", "독립 인프라 없이 Ruff·단위 테스트·웹 타입/빌드"),
         ("help", "사용 가능한 명령 표시"),
     ):
         print(f"  make {name:<10} {desc}")
@@ -666,6 +691,8 @@ def main():
             return 0
         elif args.command == "check":
             result = check(config)
+        elif args.command == "check-fast":
+            result = check_fast(config)
         else:
             raise AssertionError(args.command)
         render(result, args.format)

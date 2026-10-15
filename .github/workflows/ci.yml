@@ -7,7 +7,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # main의 필수 검증은 보존하고 오래된 PR HEAD만 취소한다.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -132,6 +133,29 @@ jobs:
           CSV
           curl -fsS -F 'file=@/tmp/sos-lifecycle.csv' http://127.0.0.1:9602/api/datasets/files > /tmp/sos-dataset.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); assert d["id"]'
+          # 다른 Playwright 시나리오의 S3·DB 데이터에 의존하지 않고 이번 검사에서 Iceberg를 만든다.
+          export SOS_CI_TABLE="ci_lifecycle_${GITHUB_RUN_ID}"
+          export SOS_CI_DATASET_ID="$(python3 -c 'import json; print(json.load(open("/tmp/sos-dataset.json"))["id"])')"
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            -d "{\"dataset_id\":\"${SOS_CI_DATASET_ID}\",\"table_name\":\"${SOS_CI_TABLE}\"}" \
+            http://127.0.0.1:9602/api/iceberg/import > /tmp/sos-ci-import.json
+          python3 - <<'PY'
+          import json
+          import time
+          from urllib.request import urlopen
+          job_id = json.load(open("/tmp/sos-ci-import.json"))["id"]
+          deadline = time.monotonic() + 60
+          while time.monotonic() < deadline:
+              with urlopen(f"http://127.0.0.1:9602/api/jobs/{job_id}", timeout=5) as reply:
+                  job = json.load(reply)
+              if job["status"] == "Succeeded":
+                  break
+              if job["status"] in ("Failed", "Cancelled"):
+                  raise RuntimeError(f"Independent lifecycle import failed: {job['error']}")
+              time.sleep(0.25)
+          else:
+              raise TimeoutError("Independent Iceberg import did not finish")
+          PY
           make restart
           curl -fsS http://127.0.0.1:9602/api/datasets > /tmp/sos-restarted.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restarted.json")); assert any(x["id"]==d["id"] for x in rows)'
@@ -142,10 +166,10 @@ jobs:
           data_id=$(python3 -c 'import json; print(json.load(open("/tmp/sos-dataset.json"))["id"])')
           curl -fsS "http://127.0.0.1:9602/api/datasets/$data_id/preview" > /tmp/sos-persisted-preview.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-preview.json")); assert d["returned_rows"]==2, d'
-          iceberg_id=$(python3 -c 'import json; d=json.load(open("/tmp/sos-restored.json")); print(next(x["id"] for x in d if x["kind"]=="iceberg"))')
+          iceberg_id=$(python3 -c 'import json,os; d=json.load(open("/tmp/sos-restored.json")); print(next(x["id"] for x in d if x["name"]=="default."+os.environ["SOS_CI_TABLE"]))')
           curl -fsS "http://127.0.0.1:9602/api/datasets/$iceberg_id/preview" > /tmp/sos-persisted-iceberg.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-iceberg.json")); assert d["returned_rows"]>=2, d'
-          iceberg_table=$(python3 -c 'import json; d=json.load(open("/tmp/sos-restored.json")); print(next(x["name"].split(".",1)[1] for x in d if x["kind"]=="iceberg"))')
+          iceberg_table="$SOS_CI_TABLE"
           curl -fsS "http://127.0.0.1:9602/api/iceberg/$iceberg_table/snapshots" > /tmp/sos-persisted-snapshots.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-snapshots.json")); assert len(d)>=1, d'
           curl -fsS http://127.0.0.1:9602/api/jobs > /tmp/sos-persisted-jobs.json
@@ -175,12 +199,8 @@ jobs:
       - name: Service diagnostics on failure
         if: failure()
         run: |
-          for file in /tmp/sos-api.log /tmp/sos-worker.log /tmp/sos-web.log; do
-            if [ -f "$file" ]; then
-              echo "$file"
-              tail -n 100 "$file"
-            fi
-          done
+          # 비밀정보가 포함될 수 있는 원본 로그를 직접 출력하지 않는다.
+          make logs
 
 
   # 보호 규칙의 python-quality 상태가 3개 핵심 검증을 모두 대표하도록 한다.
