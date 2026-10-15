@@ -75,7 +75,7 @@ class IdentitySettings:
                     or kind not in ("human", "service")
                     or not isinstance(roles, list)
                     or not roles
-                    or not set(roles) <= set(GRANTS)
+                    or not all(isinstance(role, str) and role in GRANTS for role in roles)
                 ):
                     raise ValueError("Invalid actor or role map")
                 mapping[fingerprint] = Actor(actor_id, kind, frozenset(roles))
@@ -114,12 +114,15 @@ def current_actor(request: Request) -> Actor:
     return actor
 
 
+CURRENT_ACTOR_DEP = Depends(current_actor)
+
+
 def require(action: str):
     """모든 진입점에서 동일한 Action 권한을 검사한다."""
     if action not in ACTIONS:
         raise ValueError("Unknown permission")
 
-    def dependency(actor: Actor = Depends(current_actor)) -> Actor:
+    def dependency(actor: Actor = CURRENT_ACTOR_DEP) -> Actor:
         if not actor.can(action):
             raise HTTPException(status_code=403, detail="Permission denied")
         return actor
