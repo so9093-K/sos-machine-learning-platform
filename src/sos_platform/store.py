@@ -2,12 +2,12 @@
 
 import json
 from contextlib import contextmanager
-
-from alembic.config import Config
-from alembic.script import ScriptDirectory
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
+
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 from sqlalchemy import bindparam, create_engine, text
 
