@@ -77,6 +77,14 @@ class ObjectStore:
                 "location": self.location(item["Key"]),
                 "size_bytes": item["Size"],
                 "modified_at": item["LastModified"].isoformat(),
+                # ETag 단독으로는 생성 세대를 확정할 수 없어 시각·크기를 함께 사용한다.
+                "fingerprint": (
+                    hashlib.sha256(
+                        f"{item['ETag']}|{item['Size']}|{item['LastModified'].isoformat()}".encode()
+                    ).hexdigest()
+                    if item.get("ETag")
+                    else None
+                ),
             }
             for item in response.get("Contents", [])
             if item["Key"].startswith(prefix)
