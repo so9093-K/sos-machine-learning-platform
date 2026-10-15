@@ -184,6 +184,17 @@ def test_upload_policy_and_raw_request_body_limit(workspace, monkeypatch):
             files={"file": ("huge.csv", b"a" * (1024 * 1024 + 1), "text/csv")},
         )
         assert rejected.status_code == 413
+        assert rejected.json()["code"] == "SOS-UPLOAD-TOO-LARGE"
+        assert rejected.json()["detail"] == ERRORS["SOS-UPLOAD-TOO-LARGE"].message
+        assert rejected.headers["X-Request-ID"] == rejected.json()["request_id"]
+        # 본문 자체가 너무 큰 경우 라우트 진입 이전의 제한도 동일한 구조를 사용한다.
+        rejected_body = client.post(
+            "/api/datasets/files",
+            files={"file": ("huge.csv", b"a" * (1024 * 1024 + 80 * 1024), "text/csv")},
+        )
+        assert rejected_body.status_code == 413
+        assert rejected_body.json()["code"] == "SOS-UPLOAD-TOO-LARGE"
+        assert rejected_body.headers["X-Request-ID"] == rejected_body.json()["request_id"]
     assert store.datasets() == []
 
 

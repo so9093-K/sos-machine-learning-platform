@@ -17,7 +17,7 @@ from scalar_fastapi import get_scalar_api_reference
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
-from .api_errors import register_error_handlers
+from .api_errors import problem_response, register_error_handlers
 from .config import StoragePolicy
 from .datasets import connect_iceberg, iceberg_snapshots, save_upload_file, scan_dataset
 from .errors import ERRORS, PlatformError
@@ -130,6 +130,20 @@ def create_app(home: Path | None = None) -> FastAPI:
         RequestBodyLimitMiddleware,
         max_body_size=upload_policy.max_bytes + MULTIPART_OVERHEAD_BYTES,
     )
+    @app.middleware("http")
+    async def normalize_upload_body_limit(request: Request, call_next):
+        """본문 제한 미들웨어의 조기 413도 동일한 API 오류 계약으로 반환한다."""
+        response = await call_next(request)
+        if (
+            request.method == "POST"
+            and request.url.path == "/api/datasets/files"
+            and response.status_code == 413
+            and "X-Request-ID" not in response.headers
+        ):
+            code = "SOS-UPLOAD-TOO-LARGE"
+            return problem_response(request, code, 413, ERRORS[code].message)
+        return response
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
