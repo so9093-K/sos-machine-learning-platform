@@ -66,9 +66,7 @@ def test_full_grouped_exploration_and_profile_job(workspace):
     assert full["result"]["scope"] == "full"
     assert full["result"]["sample_limit"] is None
     assert client.get(f"/api/jobs/{full_job.json()['id']}").status_code == 404
-    assert all(
-        job["kind"] != "exploration" for job in client.get("/api/jobs").json()["items"]
-    )
+    assert all(job["kind"] != "exploration" for job in client.get("/api/jobs").json()["items"])
     assert any(
         job["id"] == full_job.json()["id"]
         for job in client.get("/api/explorations/jobs").json()["items"]

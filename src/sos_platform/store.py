@@ -576,8 +576,11 @@ class Store:
             f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
         )
         params = {
-            "limit": limit, "actor_id": actor_id,
-            "kind": kind, "exclude_kind": exclude_kind, **(before or {}),
+            "limit": limit,
+            "actor_id": actor_id,
+            "kind": kind,
+            "exclude_kind": exclude_kind,
+            **(before or {}),
         }
         with self.connection() as db:
             rows = db.execute(query, params).mappings().all()
