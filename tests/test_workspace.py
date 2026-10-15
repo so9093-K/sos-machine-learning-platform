@@ -1069,3 +1069,35 @@ def test_denied_audit_failure_does_not_grant_access(workspace, monkeypatch):
     with TestClient(create_app(store.home)) as client:
         assert client.get("/api/datasets").status_code == 401
         assert client.post("/api/datasets/files").status_code == 401
+
+
+def test_import_uses_attempt_snapshot_not_latest(workspace, monkeypatch):
+    """동일 테이블에 외부 Append가 끼어도 자신의 Attempt Snapshot을 게시한다."""
+    client, store = workspace
+    source = upload(client)
+    from pyiceberg.table import Table
+
+    from sos_platform.datasets import iceberg_catalog, import_to_iceberg
+
+    original_append = Table.append
+
+    def interleaved_append(table, arrow, **kwargs):
+        result = original_append(table, arrow, **kwargs)
+        original_append(table, arrow, snapshot_properties={"sos.attempt-id": "other-writer"})
+        return result
+
+    monkeypatch.setattr(Table, "append", interleaved_append)
+    published = import_to_iceberg(store, source, "interleaved_import", str(uuid4()))
+    table = iceberg_catalog(store).load_table("default.interleaved_import")
+    assert published["version"] != str(table.current_snapshot().snapshot_id)
+    assert store.snapshot_retention(published["retention_id"])["state"] == "Pending"
+    from sos_platform.retention import inspect_tag, tag_name
+
+    assert (
+        inspect_tag(
+            table,
+            name=tag_name(published["retention_id"]),
+            snapshot_id=published["version"],
+        )
+        == "retained"
+    )
