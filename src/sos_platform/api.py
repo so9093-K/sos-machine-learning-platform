@@ -130,6 +130,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         RequestBodyLimitMiddleware,
         max_body_size=upload_policy.max_bytes + MULTIPART_OVERHEAD_BYTES,
     )
+
     @app.middleware("http")
     async def normalize_upload_body_limit(request: Request, call_next):
         """본문 제한 미들웨어의 조기 413도 동일한 API 오류 계약으로 반환한다."""

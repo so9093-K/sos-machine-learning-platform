@@ -128,4 +128,6 @@ def register_error_handlers(app: FastAPI) -> None:
             error_code="SOS-API-INTERNAL",
             exception_type=type(exc).__name__,
         )
-        return problem_response(request, "SOS-API-INTERNAL", 500, ERRORS["SOS-API-INTERNAL"].message)
+        return problem_response(
+            request, "SOS-API-INTERNAL", 500, ERRORS["SOS-API-INTERNAL"].message
+        )

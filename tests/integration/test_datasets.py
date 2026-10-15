@@ -274,7 +274,8 @@ def test_concurrent_uploads_publish_independent_versions_without_staging_leftove
     with ThreadPoolExecutor(max_workers=2) as executor:
         attempts = [
             executor.submit(
-                client.post, "/api/datasets/files",
+                client.post,
+                "/api/datasets/files",
                 files={"file": (name, content, "text/csv")},
             )
             for name, content in (("first.csv", first), ("second.csv", second))
@@ -282,7 +283,8 @@ def test_concurrent_uploads_publish_independent_versions_without_staging_leftove
         responses = [attempt.result(timeout=30) for attempt in attempts]
     assert all(response.status_code == 201 for response in responses)
     assert {response.json()["version"] for response in responses} == {
-        hashlib.sha256(first).hexdigest(), hashlib.sha256(second).hexdigest(),
+        hashlib.sha256(first).hexdigest(),
+        hashlib.sha256(second).hexdigest(),
     }
     assert set((store.home / "cache").glob("tmp*.csv")) == staged_before
     assert len(store.datasets()) == 2
