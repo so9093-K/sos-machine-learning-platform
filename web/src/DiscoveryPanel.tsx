@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as echarts from "echarts";
 import { request, jsonPost, formatError } from "./api";
-import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, Job } from "./types";
+import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, ExplorationJob } from "./types";
 
 function analysisLabel(basis: string) {
   return basis === "parquet_metadata"
@@ -9,8 +9,23 @@ function analysisLabel(basis: string) {
     : "행 수는 아직 전체 계산하지 않았습니다";
 }
 
+function DiscoveryChart({ option }: { option: echarts.EChartsCoreOption }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    const chart = echarts.init(ref.current);
+    chart.setOption(option);
+    const observer = new ResizeObserver(() => chart.resize());
+    observer.observe(ref.current);
+    return () => { observer.disconnect(); chart.dispose(); };
+  }, [option]);
+  return <div className="chart" ref={ref} role="img" aria-label="샘플 집계 결과 차트" />;
+}
+
 /** 사람과 외부 API가 동일하게 사용하는 Dataset Discovery 계약을 표시한다. */
-export function DiscoveryPanel({ datasetId }: { datasetId: string }) {
+export function DiscoveryPanel({
+  datasetId, canCreate, onCreated,
+}: { datasetId: string; canCreate: boolean; onCreated: () => Promise<void> }) {
   const [overview, setOverview] = useState<DatasetOverview | null>(null);
   const [columns, setColumns] = useState<DatasetColumns | null>(null);
   const [search, setSearch] = useState("");
@@ -58,11 +73,12 @@ export function DiscoveryPanel({ datasetId }: { datasetId: string }) {
     if (!measure) return;
     setRunning(true); setError(""); setFullJobId(null);
     try {
-      const job = await jsonPost<Job>("/api/jobs", {
-        kind: "exploration", dataset_id: datasetId,
+      const job = await jsonPost<ExplorationJob>("/api/explorations/jobs", {
+        dataset_id: datasetId,
         exploration: { column: measure, metric, group_by: groupBy || null },
       });
       setFullJobId(job.id);
+      await onCreated();
     } catch (e) { setError(formatError(e)); }
     finally { setRunning(false); }
   }
@@ -128,8 +144,8 @@ export function DiscoveryPanel({ datasetId }: { datasetId: string }) {
         <button disabled={running || !measure} onClick={() => void run()}>
           {running ? "분석 중…" : "샘플 집계"}
         </button>
-        <button className="secondary" disabled={running || !measure}
-          onClick={() => void runFullJob()}>전체 집계 Job 실행</button>
+        {canCreate && <button className="secondary" disabled={running || !measure}
+          onClick={() => void runFullJob()}>전체 집계 Job 실행</button>}
       </div>
       {fullJobId && <p role="status" className="muted">
         전체 집계 Job을 제출했습니다. Jobs에서 상태와 결과를 확인하세요. 작업 ID: {fullJobId}
@@ -141,12 +157,7 @@ export function DiscoveryPanel({ datasetId }: { datasetId: string }) {
           <tbody>{result.rows.map((r, i) => <tr key={i}><td>{String(r.category ?? "전체")}</td>
             <td>{r.value == null ? "NULL" : Number(r.value).toLocaleString()}</td></tr>)}</tbody>
         </table></div>
-        {chart && <div ref={el => {
-          if (!el) return;
-          const existing = echarts.getInstanceByDom(el);
-          const instance = existing ?? echarts.init(el);
-          instance.setOption(chart, true);
-        }} className="chart" role="img" aria-label="전체 범위 집계 결과 차트" />}
+        {chart && <DiscoveryChart option={chart} />}
       </>}
     </>}
     {error && <p role="alert" className="alert">{error}</p>}
