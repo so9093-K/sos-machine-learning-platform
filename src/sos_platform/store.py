@@ -101,6 +101,14 @@ class Store:
             )
         return self.get_job(item["id"])
 
+    @staticmethod
+    def _decode_job(item: dict) -> dict:
+        """Job JSON과 취소 플래그를 API 응답 계약으로 변환한다."""
+        item["spec"] = json.loads(item["spec"])
+        item["result"] = json.loads(item["result"]) if item["result"] else None
+        item["cancel_requested"] = bool(item["cancel_requested"])
+        return item
+
     def get_job(self, job_id: str) -> dict | None:
         with self.connection() as db:
             row = (
@@ -110,10 +118,7 @@ class Store:
             )
             if not row:
                 return None
-            item = dict(row)
-            item["spec"] = json.loads(item["spec"])
-            item["result"] = json.loads(item["result"]) if item["result"] else None
-            item["cancel_requested"] = bool(item["cancel_requested"])
+            item = self._decode_job(dict(row))
             item["attempts"] = [
                 dict(a)
                 for a in db.execute(
@@ -122,14 +127,17 @@ class Store:
             ]
             return item
 
-    def jobs(self) -> list[dict]:
-        """목록의 Job과 Attempt를 각각 일괄 조회해 N+1 쿼리를 피한다."""
+    def jobs(self, *, limit: int = 20, before: dict | None = None) -> list[dict]:
+        """정렬키 커서를 사용해 Job 및 Attempt를 한 페이지씩 일괄 조회한다."""
+        if not 1 <= limit <= 101:
+            raise ValueError("Job query limit is out of range")
+        predicate = "WHERE (created_at, id) < (:created_at, :id)" if before else ""
+        query = text(
+            f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
+        )
+        params = {"limit": limit, **(before or {})}
         with self.connection() as db:
-            rows = (
-                db.execute(text("SELECT * FROM jobs ORDER BY created_at DESC, id DESC"))
-                .mappings()
-                .all()
-            )
+            rows = db.execute(query, params).mappings().all()
             items = [dict(row) for row in rows]
             if not items:
                 return []
@@ -147,9 +155,7 @@ class Store:
         for attempt in attempts:
             grouped[attempt["job_id"]].append(dict(attempt))
         for item in items:
-            item["spec"] = json.loads(item["spec"])
-            item["result"] = json.loads(item["result"]) if item["result"] else None
-            item["cancel_requested"] = bool(item["cancel_requested"])
+            self._decode_job(item)
             item["attempts"] = grouped[item["id"]]
         return items
 
