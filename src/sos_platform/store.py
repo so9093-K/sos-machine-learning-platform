@@ -762,7 +762,8 @@ class Store:
             rows = (
                 db.execute(
                     text(
-                        "SELECT id,cancel_requested,kind FROM jobs WHERE status='Running' FOR UPDATE"
+                        "SELECT id,cancel_requested,kind,request_id "
+                        "FROM jobs WHERE status='Running' FOR UPDATE"
                     )
                 )
                 .mappings()
@@ -781,8 +782,13 @@ class Store:
                     else None
                 )
                 db.execute(
-                    text("UPDATE jobs SET status=:s,error=:error,updated_at=:at WHERE id=:id"),
-                    {"s": status, "error": message, "at": now(), "id": row["id"]},
+                    text("UPDATE jobs SET status=:s,error=:error,error_code=:code,"
+                        "failure_stage=:stage,updated_at=:at WHERE id=:id"),
+                    {
+                        "s": status, "error": message, "at": now(), "id": row["id"],
+                        "code": "SOS-ICEBERG-UNCERTAIN" if unsafe else None,
+                        "stage": "iceberg_commit" if unsafe else None,
+                    },
                 )
                 # 이전 Worker 소유권이 종료된 실행의 미확정 S3 게시 의도를 해소한다.
                 db.execute(
@@ -798,7 +804,8 @@ class Store:
                 interrupted = (
                     db.execute(
                         text(
-                            "UPDATE attempts SET status='Interrupted',finished_at=:at,error=:error "
+                            "UPDATE attempts SET status='Interrupted',finished_at=:at,error=:error,"
+                            "error_code='SOS-JOB-INTERRUPTED',failure_stage='worker_recovery' "
                             "WHERE job_id=:id AND status='Running' RETURNING id"
                         ),
                         {"at": now(), "error": "Worker stopped before completion", "id": row["id"]},
@@ -833,6 +840,7 @@ class Store:
                         "Failed": "interrupted",
                     }[status],
                     reason=f"kind={row['kind']};attempt={attempt_id}"[:200],
+                    request_id=row["request_id"],
                 )
 
     def acquire_worker(self) -> bool:
