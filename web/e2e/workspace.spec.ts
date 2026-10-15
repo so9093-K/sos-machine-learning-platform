@@ -154,4 +154,12 @@ test("Storage Health presents effective safe policy without destructive actions"
     storage.getByText(/고정 Snapshot이 Catalog에 존재합니다/)
   ).first()).toBeVisible();
   await expect(storage.getByRole("button", { name: /삭제 실행/ })).toHaveCount(0);
+  await expect(storage.getByText(/마지막 성공 확인:/)).toBeVisible();
+  await expect(storage.getByText(/검토 후보는 삭제 대상이 아닙니다/)).toBeVisible();
+  await page.route("**/api/storage/inspection*", route => route.fulfill({
+    status: 503, contentType: "application/json",
+    body: JSON.stringify({ detail: "inventory temporarily unavailable" }),
+  }));
+  await storage.getByRole("button", { name: "객체 다시 검사" }).click();
+  await expect(storage.getByRole("alert")).toContainText("현재 상태가 아닙니다");
 });
