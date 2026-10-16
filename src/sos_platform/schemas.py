@@ -70,6 +70,26 @@ class AuthMeOut(BaseModel):
     mode: Literal["development", "token"]
 
 
+class InstanceSettingsOut(BaseModel):
+    """공통 플랫폼 인스턴스 표시명·인증 환경 정보."""
+
+    display_name: str = Field(min_length=1, max_length=48)
+    environment: Literal["development", "token"]
+
+
+class InstanceSettingsUpdate(BaseModel):
+    """관리자만 변경하는 표시명. 내부 플랫폼·리소스 식별자가 아니다."""
+
+    display_name: str = Field(min_length=1, max_length=48)
+
+    @model_validator(mode="after")
+    def validate_name(self) -> "InstanceSettingsUpdate":
+        self.display_name = self.display_name.strip()
+        if not self.display_name or any(ord(char) < 32 for char in self.display_name):
+            raise ValueError("Invalid instance display name")
+        return self
+
+
 class AuditEventOut(BaseModel):
     """감사 저장소의 노출 가능한 정제 기록."""
 

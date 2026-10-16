@@ -263,6 +263,37 @@ class Store:
                 request_id=request_id,
             )
 
+    def instance_display_name(self) -> str:
+        """표시 전용 인스턴스명. 제품 브랜드·실행 환경·권한과 독립적이다."""
+        with self.connection() as db:
+            return db.execute(
+                text("SELECT value FROM instance_settings WHERE key='display_name'")
+            ).scalar_one_or_none() or "Local Workspace"
+
+    def set_instance_display_name(
+        self, value: str, *, actor_id: str, actor_type: str, request_id: str | None
+    ) -> None:
+        """이름 변경과 감사 기록을 같은 트랜잭션에 기록한다."""
+        with self.connection() as db:
+            db.execute(
+                text(
+                    "INSERT INTO instance_settings(key,value,updated_at,updated_by) "
+                    "VALUES('display_name',:value,:at,:actor) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value,"
+                    "updated_at=excluded.updated_at,updated_by=excluded.updated_by"
+                ),
+                {"value": value, "at": now(), "actor": actor_id},
+            )
+            self._audit(
+                db,
+                actor_id=actor_id,
+                actor_type=actor_type,
+                action="instance.configure",
+                resource_type="instance",
+                resource_id="display_name",
+                request_id=request_id,
+            )
+
     def audit_events(
         self,
         *,

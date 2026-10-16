@@ -142,6 +142,15 @@ dataset_profiles = Table(
     Index("ix_dataset_profiles_dataset_created", "dataset_id", "created_at", "job_id"),
 )
 
+instance_settings = Table(
+    "instance_settings",
+    metadata,
+    Column("key", String(64), primary_key=True),
+    Column("value", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Column("updated_by", Text, nullable=False),
+)
+
 audit_events = Table(
     "audit_events",
     metadata,

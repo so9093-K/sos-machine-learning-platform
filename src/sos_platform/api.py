@@ -53,6 +53,8 @@ from .schemas import (
     IcebergConnect,
     IcebergImport,
     IcebergReferenceOut,
+    InstanceSettingsOut,
+    InstanceSettingsUpdate,
     JobDiagnosticsOut,
     JobOut,
     JobPageOut,
@@ -80,6 +82,7 @@ CANCEL_JOB_DEP = Depends(require("job.cancel"))
 INSPECT_DEP = Depends(require("storage.inspect"))
 RETAIN_DEP = Depends(require("snapshot.retain"))
 AUDIT_DEP = Depends(require("audit.read"))
+INSTANCE_CONFIG_DEP = Depends(require("instance.configure"))
 SNAPSHOT_READ_DEP = Depends(require("snapshot.read"))
 
 
@@ -265,6 +268,28 @@ def create_app(home: Path | None = None) -> FastAPI:
             "roles": sorted(actor.roles),
             "mode": identity.mode,
         }
+
+    @app.get("/api/instance", response_model=InstanceSettingsOut)
+    def instance_settings(actor: Actor = IDENTITY_DEP):
+        """인증된 클라이언트가 동일한 인스턴스 정보를 받는다."""
+        return {
+            "display_name": store.instance_display_name(),
+            "environment": identity.mode,
+        }
+
+    @app.put("/api/instance", response_model=InstanceSettingsOut)
+    def change_instance_settings(
+        body: InstanceSettingsUpdate,
+        request: Request,
+        actor: Actor = INSTANCE_CONFIG_DEP,
+    ):
+        store.set_instance_display_name(
+            body.display_name,
+            actor_id=actor.id,
+            actor_type=actor.kind,
+            request_id=request.state.request_id,
+        )
+        return {"display_name": body.display_name, "environment": identity.mode}
 
     @app.get("/api/audit")
     @app.get("/api/v2/audit", response_model=list[AuditEventOut])
