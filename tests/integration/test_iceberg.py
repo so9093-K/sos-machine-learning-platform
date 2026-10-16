@@ -417,7 +417,9 @@ def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch)
 
 
 @pytest.mark.parametrize("failure_type", [ValueError, RuntimeError])
-def test_snapshot_retention_failure_never_exposes_catalog_error(workspace, monkeypatch, failure_type):
+def test_snapshot_retention_failure_never_exposes_catalog_error(
+    workspace, monkeypatch, failure_type
+):
     """외부 Tag 커밋이 불확실하면 재실행을 권하지 않고 내부 오류 원문을 숨긴다."""
     import sos_platform.api as platform_api
 
