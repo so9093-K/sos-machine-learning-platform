@@ -9,11 +9,11 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
+from .api_control import control_router
 from .api_errors import problem_response, register_error_handlers
 from .config import StoragePolicy
 from .datasets import connect_iceberg, iceberg_snapshots, pinned_scan_dataset, save_upload_file
@@ -33,8 +33,6 @@ from .processing import bounded_feature_preview
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
 from .schemas import (
-    AuditEventOut,
-    AuthMeOut,
     DatasetColumnsOut,
     DatasetOut,
     DatasetOverviewOut,
@@ -51,9 +49,6 @@ from .schemas import (
     IcebergConnect,
     IcebergImport,
     IcebergReferenceOut,
-    InstanceSettingsOut,
-    InstanceSettingsUpdate,
-    JobDiagnosticsOut,
     JobOut,
     JobPageOut,
     PreviewOut,
@@ -67,12 +62,11 @@ from .schemas import (
     UploadPolicyOut,
     WorkRequest,
 )
-from .security import ACTIONS, Actor, IdentitySettings, current_actor, require, resource_allowed
+from .security import Actor, IdentitySettings, require, resource_allowed
 from .store import Store
 from .store_jobs import IcebergCancellationConflict
 
 # Depends 객체는 요청마다 재생성하지 않고 안정적으로 재사용한다.
-IDENTITY_DEP = Depends(current_actor)
 READ_DATASET_DEP = Depends(require("dataset.read"))
 CREATE_DATASET_DEP = Depends(require("dataset.create"))
 READ_JOB_DEP = Depends(require("job.read"))
@@ -80,8 +74,6 @@ CREATE_JOB_DEP = Depends(require("job.create"))
 CANCEL_JOB_DEP = Depends(require("job.cancel"))
 INSPECT_DEP = Depends(require("storage.inspect"))
 RETAIN_DEP = Depends(require("snapshot.retain"))
-AUDIT_DEP = Depends(require("audit.read"))
-INSTANCE_CONFIG_DEP = Depends(require("instance.configure"))
 SNAPSHOT_READ_DEP = Depends(require("snapshot.read"))
 
 
@@ -227,104 +219,7 @@ def create_app(home: Path | None = None) -> FastAPI:
     def scalar_docs():
         return get_scalar_api_reference(openapi_url=app.openapi_url, title=app.title)
 
-    @app.get("/api/health")
-    def health():
-        """프로세스 자체가 HTTP 응답을 제공하는지 확인한다."""
-        return {"status": "ok"}
-
-    @app.get("/api/ready")
-    def ready():
-        """실제 필수 저장소와 실행기가 준비됐을 때만 200을 반환한다."""
-        checks = {}
-        try:
-            store.initialize()
-            checks["database"] = "ready"
-        except Exception:
-            checks["database"] = "unavailable"
-        try:
-            ObjectStore().ready()
-            checks["storage"] = "ready"
-        except Exception:
-            checks["storage"] = "unavailable"
-        try:
-            checks["worker"] = "ready" if store.worker_ready() else "unavailable"
-        except Exception:
-            checks["worker"] = "unavailable"
-        result = {
-            "status": "ready" if all(v == "ready" for v in checks.values()) else "unavailable",
-            "services": checks,
-        }
-        if result["status"] != "ready":
-            return JSONResponse(status_code=503, content=result)
-        return result
-
-    @app.get("/api/v2/auth/me", response_model=AuthMeOut)
-    def auth_me(actor: Actor = IDENTITY_DEP):
-        return {
-            "actor_id": actor.id,
-            "actor_type": actor.kind,
-            "roles": sorted(actor.roles),
-            "capabilities": sorted(action for action in ACTIONS if actor.can(action)),
-            "mode": identity.mode,
-        }
-
-    @app.get("/api/instance", response_model=InstanceSettingsOut)
-    def instance_settings(actor: Actor = IDENTITY_DEP):
-        """인증된 클라이언트가 동일한 인스턴스 정보를 받는다."""
-        return {
-            "display_name": store.instance_display_name(),
-        }
-
-    @app.put("/api/instance", response_model=InstanceSettingsOut)
-    def change_instance_settings(
-        body: InstanceSettingsUpdate,
-        request: Request,
-        actor: Actor = INSTANCE_CONFIG_DEP,
-    ):
-        store.set_instance_display_name(
-            body.display_name,
-            actor_id=actor.id,
-            actor_type=actor.kind,
-            request_id=request.state.request_id,
-        )
-        return {"display_name": body.display_name}
-
-    @app.get("/api/v2/audit", response_model=list[AuditEventOut])
-    def audit_events(
-        limit: int = Query(default=50, ge=1, le=100),
-        request_id: str | None = Query(default=None, min_length=36, max_length=36),
-        job_id: str | None = Query(default=None, min_length=36, max_length=36),
-        actor: Actor = AUDIT_DEP,
-    ):
-        """운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다."""
-        return store.audit_events(limit=limit, request_id=request_id, resource_id=job_id)
-
-    @app.get("/api/v2/diagnostics/jobs/{job_id}", response_model=JobDiagnosticsOut)
-    def job_diagnostics(job_id: str, actor: Actor = AUDIT_DEP):
-        """권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다."""
-        item = store.get_job(job_id)
-        if item is None:
-            raise HTTPException(status_code=404, detail="Job not found")
-        return {
-            "job_id": item["id"],
-            "request_id": item.get("request_id"),
-            "status": item["status"],
-            "error_code": item.get("error_code"),
-            "failure_stage": item.get("failure_stage"),
-            "failure_category": item.get("failure_category"),
-            "exception_type": item.get("exception_type"),
-            "attempts": [
-                {
-                    "id": attempt["id"],
-                    "status": attempt["status"],
-                    "error_code": attempt.get("error_code"),
-                    "failure_stage": attempt.get("failure_stage"),
-                    "failure_category": attempt.get("failure_category"),
-                    "exception_type": attempt.get("exception_type"),
-                }
-                for attempt in item["attempts"]
-            ],
-        }
+    app.include_router(control_router(store, identity))
 
     @app.get("/api/storage/policy", response_model=StoragePolicyOut)
     def storage_policy(actor: Actor = INSPECT_DEP):
