@@ -67,6 +67,17 @@ def test_suggestions_only_emit_supported_operations():
     restricted = suggest_analyses([secret_group, columns[1]], 10)
     assert all(p["request"]["group_by"] != "password_hash" for p in restricted)
 
+    # CSV/Parquet 컬럼명은 API ExplorationSpec의 길이 제한보다 길 수 있다.
+    # 그런 컬럼에서 실행 불가능한 추천을 만들지 않아야 한다.
+    too_long = {
+        "name": "x" * 257,
+        "roles": [{"role": "numeric_measure"}],
+        "is_constant": False,
+        "distinct_count": 5,
+        "null_count": 0,
+    }
+    assert suggest_analyses([too_long], 10) == []
+
 
 def test_dataset_understanding_job_version_and_executable_suggestions(workspace):
     client, store = workspace

@@ -177,10 +177,13 @@ def suggest_analyses(columns: list[dict], row_count: int) -> list[dict]:
     if not row_count:
         return []
     suggestions: list[dict] = []
+    # ExplorationSpec는 256자 이하 컬럼명만 허용한다.
+    # 실행 불가능한 길이의 컬럼을 자동 추천하지 않는다.
+    eligible = [col for col in columns if 0 < len(col["name"]) <= 256]
     numeric = next(
         (
             col
-            for col in columns
+            for col in eligible
             if any(r["role"] == "numeric_measure" for r in col["roles"])
             and not col["is_constant"]
             and col["distinct_count"] > 1
@@ -190,13 +193,13 @@ def suggest_analyses(columns: list[dict], row_count: int) -> list[dict]:
     )
     categories = [
         col
-        for col in columns
+        for col in eligible
         if any(r["role"] == "categorical" for r in col["roles"])
         and not any(r["role"] in ("potentially_sensitive", "identifier") for r in col["roles"])
         and not col["is_constant"]
         and col["distinct_count"] > 1
     ]
-    missing = next((col for col in columns if col["null_count"] > 0), None)
+    missing = next((col for col in eligible if col["null_count"] > 0), None)
 
     def append(
         kind: str, title: str, reason: str, column: str, metric: str, group_by: str | None = None
