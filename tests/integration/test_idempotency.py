@@ -26,8 +26,11 @@ def test_replayed_submission_and_conflicting_payload(workspace):
         assert db.execute(text("SELECT COUNT(*) FROM job_submissions")).scalar_one() == 1
     different = client.post(
         "/api/jobs",
-        json={"dataset_id": dataset["id"], "kind": "transform",
-              "transform": {"steps": [{"op": "filter_not_null", "column": "t"}]}},
+        json={
+            "dataset_id": dataset["id"],
+            "kind": "transform",
+            "transform": {"steps": [{"op": "filter_not_null", "column": "t"}]},
+        },
         headers={"Idempotency-Key": key},
     )
     assert different.status_code == 409, different.text
@@ -43,8 +46,11 @@ def test_postgres_serializes_concurrent_submissions(workspace):
 
     def submit(_number):
         return store.create_job(
-            kind="profile", dataset_id=dataset["id"], spec=spec,
-            owner_actor="local-developer", idempotency_key=key,
+            kind="profile",
+            dataset_id=dataset["id"],
+            spec=spec,
+            owner_actor="local-developer",
+            idempotency_key=key,
         )["id"]
 
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -53,7 +59,12 @@ def test_postgres_serializes_concurrent_submissions(workspace):
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM jobs")).scalar_one() == 1
         assert db.execute(text("SELECT COUNT(*) FROM job_submissions")).scalar_one() == 1
-        assert db.execute(text("SELECT COUNT(*) FROM audit_events WHERE action='job.create'")).scalar_one() == 1
+        assert (
+            db.execute(
+                text("SELECT COUNT(*) FROM audit_events WHERE action='job.create'")
+            ).scalar_one()
+            == 1
+        )
 
 
 def test_submission_scope_cancellation_and_validation(workspace):
@@ -61,13 +72,24 @@ def test_submission_scope_cancellation_and_validation(workspace):
     dataset = upload(client)
     spec = {"dataset_id": dataset["id"], "kind": "profile"}
     key = str(uuid4())
-    actor_a = store.create_job(kind="profile", dataset_id=dataset["id"],
-                               spec=spec, owner_actor="actor-a", idempotency_key=key)
-    actor_b = store.create_job(kind="profile", dataset_id=dataset["id"],
-                               spec=spec, owner_actor="actor-b", idempotency_key=key)
+    actor_a = store.create_job(
+        kind="profile",
+        dataset_id=dataset["id"],
+        spec=spec,
+        owner_actor="actor-a",
+        idempotency_key=key,
+    )
+    actor_b = store.create_job(
+        kind="profile",
+        dataset_id=dataset["id"],
+        spec=spec,
+        owner_actor="actor-b",
+        idempotency_key=key,
+    )
     assert actor_a["id"] != actor_b["id"]
-    assert client.post("/api/jobs", json=spec,
-                       headers={"Idempotency-Key": "short"}).status_code == 422
+    assert (
+        client.post("/api/jobs", json=spec, headers={"Idempotency-Key": "short"}).status_code == 422
+    )
     first = client.post("/api/jobs", json=spec, headers={"Idempotency-Key": key}).json()
     assert client.post(f"/api/jobs/{first['id']}/cancel").json()["status"] == "Cancelled"
     replay = client.post("/api/jobs", json=spec, headers={"Idempotency-Key": key})
@@ -75,9 +97,11 @@ def test_submission_scope_cancellation_and_validation(workspace):
     assert replay.json()["id"] == first["id"]
     assert replay.json()["status"] == "Cancelled"
     assert store.get_job(first["id"])["attempts"] == []
-    conflict = client.post("/api/iceberg/import",
-                           json={"dataset_id": dataset["id"], "table_name": "another"},
-                           headers={"Idempotency-Key": key})
+    conflict = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": dataset["id"], "table_name": "another"},
+        headers={"Idempotency-Key": key},
+    )
     assert conflict.status_code == 409
 
 
@@ -93,10 +117,20 @@ def test_failed_transaction_does_not_reserve_submission_key(workspace, monkeypat
     with monkeypatch.context() as patch:
         patch.setattr(Store, "_audit", staticmethod(reject_audit))
         with pytest.raises(RuntimeError, match="audit storage"):
-            store.create_job(kind="profile", dataset_id=dataset["id"], spec=spec,
-                             owner_actor="local-developer", idempotency_key=key)
-    created = store.create_job(kind="profile", dataset_id=dataset["id"], spec=spec,
-                               owner_actor="local-developer", idempotency_key=key)
+            store.create_job(
+                kind="profile",
+                dataset_id=dataset["id"],
+                spec=spec,
+                owner_actor="local-developer",
+                idempotency_key=key,
+            )
+    created = store.create_job(
+        kind="profile",
+        dataset_id=dataset["id"],
+        spec=spec,
+        owner_actor="local-developer",
+        idempotency_key=key,
+    )
     assert created["status"] == "Queued"
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM job_submissions")).scalar_one() == 1

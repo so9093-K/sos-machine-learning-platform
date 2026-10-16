@@ -431,7 +431,10 @@ def create_app(home: Path | None = None) -> FastAPI:
         request: Request,
         actor: Actor = CREATE_JOB_DEP,
         idempotency_key: str | None = Header(
-            default=None, alias="Idempotency-Key", min_length=8, max_length=128,
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
             pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
         ),
     ):
@@ -518,7 +521,10 @@ def create_app(home: Path | None = None) -> FastAPI:
         request: Request,
         actor: Actor = CREATE_JOB_DEP,
         idempotency_key: str | None = Header(
-            default=None, alias="Idempotency-Key", min_length=8, max_length=128,
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
             pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
         ),
     ):
@@ -539,7 +545,10 @@ def create_app(home: Path | None = None) -> FastAPI:
         request: Request,
         actor: Actor = CREATE_JOB_DEP,
         idempotency_key: str | None = Header(
-            default=None, alias="Idempotency-Key", min_length=8, max_length=128,
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
             pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
         ),
     ):

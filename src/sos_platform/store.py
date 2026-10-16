@@ -488,7 +488,10 @@ class Store:
         fingerprint = hashlib.sha256(
             json.dumps(
                 {"kind": kind, "dataset_id": dataset_id, "spec": spec},
-                sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
             ).encode("utf-8")
         ).hexdigest()
         item = dict(
@@ -511,15 +514,25 @@ class Store:
                         "job_id,created_at) VALUES(:actor,:key,:fingerprint,NULL,:at) "
                         "ON CONFLICT(actor_id,submission_key) DO NOTHING RETURNING actor_id"
                     ),
-                    {"actor": owner_actor, "key": idempotency_key,
-                     "fingerprint": fingerprint, "at": now()},
+                    {
+                        "actor": owner_actor,
+                        "key": idempotency_key,
+                        "fingerprint": fingerprint,
+                        "at": now(),
+                    },
                 ).scalar_one_or_none()
                 if inserted is None:
-                    previous = db.execute(
-                        text("SELECT fingerprint,job_id FROM job_submissions "
-                             "WHERE actor_id=:actor AND submission_key=:key"),
-                        {"actor": owner_actor, "key": idempotency_key},
-                    ).mappings().one()
+                    previous = (
+                        db.execute(
+                            text(
+                                "SELECT fingerprint,job_id FROM job_submissions "
+                                "WHERE actor_id=:actor AND submission_key=:key"
+                            ),
+                            {"actor": owner_actor, "key": idempotency_key},
+                        )
+                        .mappings()
+                        .one()
+                    )
                     if previous["fingerprint"] != fingerprint:
                         raise PlatformError("SOS-JOB-IDEMPOTENCY-CONFLICT")
                     previous_id = previous["job_id"]
@@ -536,8 +549,10 @@ class Store:
             )
             if idempotency_key is not None:
                 db.execute(
-                    text("UPDATE job_submissions SET job_id=:job "
-                         "WHERE actor_id=:actor AND submission_key=:key"),
+                    text(
+                        "UPDATE job_submissions SET job_id=:job "
+                        "WHERE actor_id=:actor AND submission_key=:key"
+                    ),
                     {"job": item["id"], "actor": owner_actor, "key": idempotency_key},
                 )
             if owner_actor:

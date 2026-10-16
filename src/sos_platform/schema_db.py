@@ -77,7 +77,8 @@ workers = Table(
 
 # API 다중 인스턴스에서 Job 제출을 원자적으로 고정하는 신원.
 job_submissions = Table(
-    "job_submissions", metadata,
+    "job_submissions",
+    metadata,
     Column("actor_id", String(128), primary_key=True),
     Column("submission_key", String(128), primary_key=True),
     Column("fingerprint", String(64), nullable=False),

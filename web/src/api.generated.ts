@@ -1678,7 +1678,9 @@ export interface operations {
     create_exploration_job_api_explorations_jobs_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1835,7 +1837,9 @@ export interface operations {
     iceberg_import_api_iceberg_import_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1931,7 +1935,9 @@ export interface operations {
     create_job_api_jobs_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
