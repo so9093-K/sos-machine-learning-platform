@@ -187,4 +187,3 @@ def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(work
     finally:
         replacement.release_worker()
         replacement.engine.dispose()
-
