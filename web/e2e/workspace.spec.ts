@@ -736,3 +736,25 @@ test("operator navigation marks the active operational section", async ({ page }
   await expect(page.getByRole("navigation", { name: "전역 메뉴" })
     .getByRole("button", { name: "저장소 상태 보기" })).toHaveAttribute("aria-current", "page");
 });
+
+
+test("switching Datasets never displays another Dataset's cached Preview", async ({ page }) => {
+  await page.goto("/");
+  const input = page.locator('input[type="file"]');
+  await input.setInputFiles({
+    name: "source-a.csv", mimeType: "text/csv",
+    buffer: Buffer.from("key,value\nFIRST_ONLY,11\n"),
+  });
+  await expect(page.getByRole("heading", { name: "source-a.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
+  await expect(page.getByRole("cell", { name: "FIRST_ONLY" })).toBeVisible();
+
+  await input.setInputFiles({
+    name: "source-b.csv", mimeType: "text/csv",
+    buffer: Buffer.from("key,value\nSECOND_ONLY,22\n"),
+  });
+  await expect(page.getByRole("heading", { name: "source-b.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
+  await expect(page.getByRole("cell", { name: "FIRST_ONLY" })).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "SECOND_ONLY" })).toBeVisible();
+});

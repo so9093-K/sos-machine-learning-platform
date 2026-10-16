@@ -38,8 +38,13 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [nextDatasetCursor, setNextDatasetCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>("");
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // 응답의 소유 Dataset과 재조회 세대를 기록해 전환 중 과거 결과 노출을 막는다.
+  const [previewState, setPreviewState] = useState<{
+    datasetId: string; revision: number; data: Preview;
+  } | null>(null);
+  const [profileState, setProfileState] = useState<{
+    datasetId: string; revision: number; data: Profile;
+  } | null>(null);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [nextJobsCursor, setNextJobsCursor] = useState<string | null>(null);
   const [discoveryJobs, setDiscoveryJobs] = useState<ExplorationJobSummary[]>([]);
@@ -82,6 +87,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const showExamples = useRef(false);
   const refreshedCompletedJobs = useRef(new Set<string>());
   const dataset = datasets.find(d => d.id === selected);
+  const preview = previewState?.datasetId === selected &&
+    previewState.revision === reloadRevision ? previewState.data : null;
+  const profile = profileState?.datasetId === selected &&
+    profileState.revision === reloadRevision ? profileState.data : null;
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const displayedPreview = queryPreview?.datasetId === selected &&
     queryPreview.revision === reloadRevision ? queryPreview.data : preview;
@@ -197,7 +206,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const previewRequestKey = useRef("");
   const profileRequestKey = useRef("");
   useEffect(() => {
-    setPreview(null); setProfile(null);
+    setPreviewState(null); setProfileState(null);
     setPreviewStatus("loading"); setProfileStatus("loading");
     previewRequestKey.current = "";
     profileRequestKey.current = "";
@@ -218,7 +227,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         .then(data => {
           previewSettled = true;
           if (!active) return;
-          setPreview(data); setPreviewStatus("ready");
+          setPreviewState({ datasetId: selected, revision: reloadRevision, data });
+          setPreviewStatus("ready");
           const columns = Object.keys(data.schema);
           setColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
           setVisualColumn(current =>
@@ -240,7 +250,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       request<Profile>(`/api/datasets/${selected}/profile`)
         .then(data => {
           profileSettled = true;
-          if (active) { setProfile(data); setProfileStatus("ready"); }
+          if (active) {
+            setProfileState({ datasetId: selected, revision: reloadRevision, data });
+            setProfileStatus("ready");
+          }
         })
         .catch(error => {
           profileSettled = true;
