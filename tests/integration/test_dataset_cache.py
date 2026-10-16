@@ -32,5 +32,6 @@ def test_cache_quota_preserves_active_reader_and_source(workspace):
     # 축출은 읽기 가능한 S3 원본 객체를 삭제하지 않는다.
     storage = ObjectStore()
     assert storage.client.head_object(
-        Bucket=storage.config.s3_bucket, Key=storage.key(first["location"]),
+        Bucket=storage.config.s3_bucket,
+        Key=storage.key(first["location"]),
     )["ContentLength"] == len(first_data)

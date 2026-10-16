@@ -8,8 +8,10 @@ def test_paginated_dataset_list_preserves_order_and_legacy_response(workspace):
     base = upload(client)
     for number in range(34):
         store.register_dataset(
-            name=f"created-{number:02d}.csv", kind="file",
-            location=base["location"], version=base["version"],
+            name=f"created-{number:02d}.csv",
+            kind="file",
+            location=base["location"],
+            version=base["version"],
             owner_actor="local-developer",
         )
     seen = []

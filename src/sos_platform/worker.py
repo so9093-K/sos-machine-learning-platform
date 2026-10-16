@@ -73,7 +73,9 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
         code = (
             "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
-            else exc.code if isinstance(exc, PlatformError) else "SOS-JOB-FAILED"
+            else exc.code
+            if isinstance(exc, PlatformError)
+            else "SOS-JOB-FAILED"
         )
         category, exception_type = classify_failure(exc)
         outcome = {

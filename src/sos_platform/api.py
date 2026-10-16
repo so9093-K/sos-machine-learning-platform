@@ -386,7 +386,8 @@ def create_app(home: Path | None = None) -> FastAPI:
             except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
                 raise ValueError("Invalid Dataset cursor") from exc
         rows = store.dataset_page(
-            limit=limit + 1, before=before,
+            limit=limit + 1,
+            before=before,
             actor_id=None if actor.privileged else actor.id,
         )
         next_cursor = None
@@ -394,7 +395,8 @@ def create_app(home: Path | None = None) -> FastAPI:
             rows = rows[:limit]
             last = rows[-1]
             payload = json.dumps(
-                {"created_at": last["created_at"], "id": last["id"]}, separators=(",", ":"),
+                {"created_at": last["created_at"], "id": last["id"]},
+                separators=(",", ":"),
             )
             next_cursor = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
         return {"items": rows, "next_cursor": next_cursor}

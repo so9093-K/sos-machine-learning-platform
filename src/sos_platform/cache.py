@@ -47,8 +47,7 @@ def _digest(path: Path) -> str:
 
 
 def _verified_files(root: Path) -> list[Path]:
-    return [item for item in root.iterdir()
-            if item.is_file() and _CACHE_FILE.fullmatch(item.name)]
+    return [item for item in root.iterdir() if item.is_file() and _CACHE_FILE.fullmatch(item.name)]
 
 
 @contextmanager

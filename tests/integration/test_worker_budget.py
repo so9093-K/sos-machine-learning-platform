@@ -9,12 +9,11 @@ from .support import upload
 def test_worker_wall_timeout_stops_job_and_records_error(workspace, monkeypatch):
     client, store = workspace
     dataset = upload(client)
-    queued = client.post(
-        "/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"}
-    )
+    queued = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
     assert queued.status_code == 202
     monkeypatch.setattr(
-        ExecutionBudget, "from_env",
+        ExecutionBudget,
+        "from_env",
         classmethod(lambda cls: cls(max_wall_seconds=0.00001, max_rss_mib=2048)),
     )
     assert run_once(store)

@@ -27,7 +27,14 @@ ACTIONS = {
 }
 GRANTS = {
     "viewer": {"dataset.read", "job.read", "snapshot.read"},
-    "researcher": {"dataset.read", "dataset.create", "snapshot.read", "job.read", "job.create", "job.cancel"},
+    "researcher": {
+        "dataset.read",
+        "dataset.create",
+        "snapshot.read",
+        "job.read",
+        "job.create",
+        "job.cancel",
+    },
     "operator": {"storage.inspect", "snapshot.read", "snapshot.retain", "audit.read"},
     "administrator": ACTIONS,
 }

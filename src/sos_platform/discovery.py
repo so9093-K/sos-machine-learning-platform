@@ -14,12 +14,11 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
-
-from sqlalchemy import text
 from tempfile import TemporaryDirectory
 
 import duckdb
 import pyarrow.parquet as pq
+from sqlalchemy import text
 
 from .cache import cached_dataset_file
 from .datasets import iceberg_catalog

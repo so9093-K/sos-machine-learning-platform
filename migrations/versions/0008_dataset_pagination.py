@@ -4,7 +4,6 @@ Revision ID: 0008
 Revises: 0007
 """
 
-import sqlalchemy as sa
 from alembic import op
 
 revision = "0008"
@@ -16,7 +15,8 @@ depends_on = None
 def upgrade() -> None:
     op.create_index("ix_datasets_created_at_id", "datasets", ["created_at", "id"])
     op.create_index(
-        "ix_datasets_owner_created_at_id", "datasets",
+        "ix_datasets_owner_created_at_id",
+        "datasets",
         ["owner_actor", "created_at", "id"],
     )
 
