@@ -33,3 +33,10 @@ def test_dataset_list_preserves_order_and_page_contract(workspace):
     assert set(seen) == {item["id"] for item in store.dataset_page(limit=101)}
     assert client.get("/api/datasets", params={"cursor": "invalid"}).status_code == 422
     assert client.get("/api/datasets", params={"limit": 101}).status_code == 422
+
+
+def test_legacy_dataset_pages_alias_is_not_exposed(workspace):
+    client, _ = workspace
+    response = client.get("/api/datasets/pages")
+    assert response.status_code == 404
+    assert response.json()["code"] == "SOS-API-NOT-FOUND"

@@ -58,7 +58,13 @@ jobs:
             (cd /tmp/sos-ci-base && uv sync --locked --group dev && uv run --locked python scripts/export_openapi.py) > /tmp/sos-api-before.json
           fi
           uv run --locked python scripts/export_openapi.py > /tmp/sos-api-after.json
-          uv run --locked python scripts/check_api_compat.py /tmp/sos-api-before.json /tmp/sos-api-after.json --approved-breaking-file scripts/approved_pre_release_api_breaks.json
+          # 사용자·외부 호출자가 없었던 이 기준 HEAD에서만 의도적 API 정리를 승인한다.
+          # 이후 PR은 예외 없이 기본 API 호환성 검사를 적용한다.
+          if [ "$BASE_SHA" = "143caccd32a8102b848b56876deb6e1ebee8e07a" ]; then
+            uv run --locked python scripts/check_api_compat.py /tmp/sos-api-before.json /tmp/sos-api-after.json --approved-breaking-file scripts/approved_pre_release_api_breaks.json
+          else
+            uv run --locked python scripts/check_api_compat.py /tmp/sos-api-before.json /tmp/sos-api-after.json
+          fi
       - name: Ruff lint
         run: uv run --locked ruff check .
       - name: Explain lint failure

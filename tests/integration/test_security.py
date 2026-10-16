@@ -290,3 +290,12 @@ def test_configured_cors_allows_token_preflight(workspace, monkeypatch):
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:9765"
     assert "authorization" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_retired_auth_and_operator_paths_are_not_registered(workspace):
+    """실사용자가 없는 사전 출시 계약 정리 후 과거 별칭을 다시 노출하지 않는다."""
+    client, _ = workspace
+    for path in ("/api/auth/me", "/api/audit", "/api/diagnostics/jobs/test-id"):
+        response = client.get(path)
+        assert response.status_code == 404
+        assert response.json()["code"] == "SOS-API-NOT-FOUND"
