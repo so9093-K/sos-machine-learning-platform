@@ -6,7 +6,7 @@ from io import BytesIO
 import pytest
 
 from sos_platform.cache import CachePolicy, cached_dataset_file
-from sos_platform.datasets import save_upload_file
+from sos_platform.datasets import pinned_scan_dataset, save_upload_file, scan_dataset
 from sos_platform.errors import PlatformError
 from sos_platform.object_store import ObjectStore
 
@@ -35,3 +35,14 @@ def test_cache_quota_preserves_active_reader_and_source(workspace):
         Bucket=storage.config.s3_bucket,
         Key=storage.key(first["location"]),
     )["ContentLength"] == len(first_data)
+
+
+def test_file_scan_requires_a_pinned_read_lease(workspace):
+    """캐시 상한과 Lease를 거치지 않고 파일 LazyFrame을 생성할 수 없다."""
+    _client, store = workspace
+    data = b"signal\\n1\\n2\\n".replace(b"\\n", b"\n")
+    dataset = save_upload_file(store, "guarded.csv", BytesIO(data))
+    with pytest.raises(RuntimeError, match="pinned_scan_dataset"):
+        scan_dataset(store, dataset)
+    with pinned_scan_dataset(store, dataset) as scan:
+        assert scan.collect().height == 2
