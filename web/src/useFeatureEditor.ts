@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatError, jsonPost } from "./api";
 import { createStep, needsTimeOrder, type FeatureStep } from "./feature-utils";
 import type { Preview } from "./types";
 
 /** Feature 편집 초안과 변환 미리보기의 유일한 소유자. 탭 이동에도 보존한다. */
 export function useFeatureEditor({
-  datasetId, preview, onError, withFeedback,
+  datasetId, revision, preview, onError, withFeedback,
 }: {
   datasetId: string;
+  revision: number;
   preview: Preview | null;
   onError: (message: string) => void;
   withFeedback: (action: () => Promise<void>) => Promise<void>;
@@ -23,6 +24,8 @@ export function useFeatureEditor({
   const [groupBy, setGroupBy] = useState<string[]>([]);
   const [chosenColumns, setChosenColumns] = useState<string[]>([]);
   const [previewResult, setPreviewResult] = useState<{ signature: string; data: Preview } | null>(null);
+  // 데이터 전환·새로고침 또는 편집 중 돌아온 요청 결과는 폐기한다.
+  const activeSignature = useRef("");
   useEffect(() => {
     setPreviewResult(null); setSteps([]); setEditingStep(null);
     setColumn(""); setOrderBy(""); setGroupBy([]); setChosenColumns([]);
@@ -33,7 +36,8 @@ export function useFeatureEditor({
     ...(groupBy.length ? { group_by: groupBy } : {}),
   };
   // 늦게 돌아온 변환 응답도 원본과 실제 Recipe가 일치할 때만 보인다.
-  const signature = JSON.stringify({ dataset_id: datasetId, transform });
+  const signature = JSON.stringify({ dataset_id: datasetId, revision, transform });
+  activeSignature.current = signature;
   const featurePreview = previewResult?.signature === signature ? previewResult.data : null;
   function addStep() {
     try {
@@ -76,7 +80,9 @@ export function useFeatureEditor({
     await withFeedback(async () => {
       const data = await jsonPost<Preview>("/api/features/preview",
         { dataset_id: datasetId, transform });
-      setPreviewResult({ signature, data });
+      if (activeSignature.current === signature) {
+        setPreviewResult({ signature, data });
+      }
     });
   }
   return {

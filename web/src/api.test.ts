@@ -7,6 +7,11 @@ afterEach(() => {
 });
 
 describe("API failure diagnostic contract", () => {
+  it("uses a stable network message instead of browser implementation details", () => {
+    expect(formatError(new TypeError("Failed to fetch https://private-host:8443/secret")))
+      .toBe("네트워크 요청에 실패했습니다. 연결 상태를 확인하고 다시 시도하세요.");
+    expect(formatError({ internal: "secret" })).not.toContain("secret");
+  });
   it("retains status, stable error code, request ID and retry policy", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
       JSON.stringify({

@@ -127,7 +127,7 @@ export function DiscoveryPanel({
     </div>}
     {status === "error" && <button className="secondary"
       onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>}
-    {overview && <p className="hint">분석 대상 · ${overview.column_count.toLocaleString()}컬럼
+    {overview && <p className="hint">분석 대상 · {overview.column_count.toLocaleString()}컬럼
       {" · "}{overview.row_count?.toLocaleString() ?? "미계산"}행
       {" · "}{analysisLabel(overview.row_count_basis)}</p>}
     {columns && <>
@@ -137,10 +137,12 @@ export function DiscoveryPanel({
         <p>{draft.source.reason}</p>
         <small>구성 근거: {draft.source.profileScope === "full" ? "전체 프로파일" : "Reservoir 표본"} · 사용자가 조건을 확인하고 실행합니다.</small>
       </div>}
-      {invalidDraft && <p role="alert" className="alert">
+      {invalidDraft && <div role="alert" className="alert">
         이전 탐색 조건이 현재 Dataset 스키마 또는 집계 방식과 일치하지 않습니다.
-        분석 조건을 다시 선택하세요.
-      </p>}
+        <button type="button" className="secondary" onClick={() => updateRequest({
+          column: selectedMeasure, metric, group_by: null,
+        })} disabled={!selectedMeasure}>기본 탐색 조건 적용</button>
+      </div>}
       <p className="muted">대화형 탐색은 제한된 선두 샘플을 사용하고, 정확한 전체 집계는 별도 Worker Job으로 실행합니다.</p>
       <div className="chart-controls">
         <label>분석할 컬럼 <select aria-label="분석할 컬럼" value={selectedMeasure}

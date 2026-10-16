@@ -102,7 +102,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     useDatasetInspection(selected, reloadRevision, tab);
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const editor = useFeatureEditor({
-    datasetId: selected, preview, onError: setError, withFeedback,
+    datasetId: selected, revision: reloadRevision, preview, onError: setError, withFeedback,
   });
   const { steps, orderBy, transform, setColumn } = editor;
   const {
@@ -210,11 +210,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       request<UploadPolicy>("/api/datasets/upload-policy")
         .then(setUploadPolicy).catch(e => setError(formatError(e)));
     }
-    refreshDatasets().catch(e => setError(String(e)));
-    refreshJobs().catch(e => setError(String(e)));
-    refreshDiscoveryJobs().catch(e => setError(String(e)));
+    refreshDatasets().catch(e => setError(formatError(e)));
+    refreshJobs().catch(e => setError(formatError(e)));
+    refreshDiscoveryJobs().catch(e => setError(formatError(e)));
     request<Example[]>("/api/examples").then(setExamples)
-      .catch(e => setError(String(e)))
+      .catch(e => setError(formatError(e)))
       .finally(() => setExamplesLoading(false));
   }, []);
   useEffect(() => {
@@ -238,16 +238,16 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       !refreshedCompletedJobs.current.has(j.id));
     unseen.forEach(j => refreshedCompletedJobs.current.add(j.id));
     if (unseen.some(j => !datasets.some(d => d.id === j.result?.dataset_id))) {
-      refreshDatasets().catch(e => setError(String(e)));
+      refreshDatasets().catch(e => setError(formatError(e)));
     }
   }, [jobs, datasets]);
   useEffect(() => {
     const handle = window.setInterval(() => {
       if (jobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
-        refreshJobs().catch(e => setError(String(e)));
+        refreshJobs().catch(e => setError(formatError(e)));
       }
       if (discoveryJobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
-        refreshDiscoveryJobs().catch(e => setError(String(e)));
+        refreshDiscoveryJobs().catch(e => setError(formatError(e)));
       }
     }, 2000);
     return () => window.clearInterval(handle);
@@ -500,7 +500,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
           <div className="panel-head"><div><h3>데이터 조회</h3><p>최대 100행 · 전체 데이터가 아닌 일부입니다.</p></div>
             <span className="chip">{displayedPreview?.returned_rows ?? "…"} rows shown</span></div>
-          {preview && <DatasetQueryPanel key={selected} datasetId={selected}
+          {preview && <DatasetQueryPanel key={selected + ":" + reloadRevision} datasetId={selected}
             columns={columnNames} busy={busy}
             onResult={data => setQueryPreview({ datasetId: selected, revision: reloadRevision, data })}
             onInvalidate={() => setQueryPreview(null)} />}
