@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
 import { chartValue, explorationCategory, explorationValue } from "./exploration-format";
-import { request, jsonPost, formatError } from "./api";
+import { request, jsonPost, submitJob, formatError } from "./api";
 import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, ExplorationJob } from "./types";
 
 function analysisLabel(basis: string) {

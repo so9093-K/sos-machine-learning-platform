@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
 import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
-import { ApiError, request, jsonPost, setAccessToken, formatError, uploadFile } from "./api";
+import { ApiError, request, jsonPost, submitJob, setAccessToken, formatError, uploadFile } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
