@@ -414,3 +414,30 @@ def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch)
     with pytest.raises(ValueError, match="50,000"):
         module.import_to_iceberg(store, {"kind": "file"}, "partitioned_input", str(uuid4()))
     assert not (store.home / "cache" / "iceberg-staging").exists()
+
+
+@pytest.mark.parametrize("failure_type", [ValueError, RuntimeError])
+def test_snapshot_retention_failure_never_exposes_catalog_error(workspace, monkeypatch, failure_type):
+    """외부 Tag 커밋이 불확실하면 재실행을 권하지 않고 내부 오류 원문을 숨긴다."""
+    import sos_platform.api as platform_api
+
+    client, store = workspace
+    item = store.register_dataset(
+        name="unverified_snapshot",
+        kind="iceberg",
+        location="default.private_table",
+        version="1234",
+        owner_actor="local-developer",
+    )
+
+    def uncertain_tag(*_args, **_kwargs):
+        raise failure_type("private catalog credential and internal path")
+
+    monkeypatch.setattr(platform_api, "ensure_tag", uncertain_tag)
+    response = client.post(f"/api/storage/iceberg-references/{item['id']}/retain")
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "SOS-ICEBERG-RETAIN"
+    assert body["retry_policy"] == "manual_verification_required"
+    assert "private catalog" not in response.text
+    assert body["request_id"] == response.headers["X-Request-ID"]
