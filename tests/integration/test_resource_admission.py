@@ -175,6 +175,7 @@ def test_discovery_reserves_memory_before_occupying_concurrency_slot(workspace, 
         "release_memory",
     ]
 
+
 def test_bad_worker_discovery_memory_envelope_does_not_claim_job(workspace, monkeypatch):
     """설정이 서로 모순되면 부모 예약을 잡거나 Job을 Running으로 만들지 않는다."""
     from sos_platform.errors import RuntimeConfigurationError
@@ -200,4 +201,3 @@ def test_invalid_server_resource_configuration_is_not_client_input_error(workspa
     assert response.json()["code"] == "SOS-API-INTERNAL"
     assert "credential" not in response.text
     assert response.json()["request_id"] == response.headers["X-Request-ID"]
-

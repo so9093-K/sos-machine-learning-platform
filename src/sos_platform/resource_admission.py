@@ -48,9 +48,7 @@ class ExecutionCapacity:
             )
         return cls(pool_mib=int(capacity), wait_seconds=float(wait))
 
-    def validate_worker_budget(
-        self, *, worker_rss_mib: int, discovery_memory_mib: int
-    ) -> None:
+    def validate_worker_budget(self, *, worker_rss_mib: int, discovery_memory_mib: int) -> None:
         """실행 자원 요청의 포함 관계를 실행 전에 검사한다.
 
         부모 Worker가 예약한 예산 안에서 DuckDB가 동작하므로 자식의 DuckDB
