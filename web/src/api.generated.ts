@@ -1399,6 +1399,50 @@ export interface components {
             /** Steps */
             steps: components["schemas"]["Step"][];
         };
+        /** UnderstandingColumnOut */
+        UnderstandingColumnOut: {
+            /** Distinct Count */
+            distinct_count: number;
+            /** Distinct Exact */
+            distinct_exact: boolean;
+            /** Dtype */
+            dtype: string;
+            /** Is Constant */
+            is_constant: boolean;
+            /** Max */
+            max?: number | string | null;
+            /** Mean */
+            mean?: number | string | null;
+            /** Min */
+            min?: number | string | null;
+            /** Name */
+            name: string;
+            /** Nan Count */
+            nan_count: number | null;
+            /** Null Count */
+            null_count: number;
+            /** Null Ratio */
+            null_ratio: number | null;
+            /** Roles */
+            roles: components["schemas"]["UnderstandingRoleOut"][];
+        };
+        /** UnderstandingInsightOut */
+        UnderstandingInsightOut: {
+            /** Kind */
+            kind: string;
+            /** Reason */
+            reason: string;
+            request: components["schemas"]["ExplorationSpec"];
+            /** Requires Confirmation */
+            requires_confirmation: boolean;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "sample";
+            /** Title */
+            title: string;
+        };
         /** UnderstandingOut */
         UnderstandingOut: {
             /** Dataset Id */
@@ -1407,10 +1451,33 @@ export interface components {
             job_id?: string | null;
             /** Job Status */
             job_status?: ("Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled") | null;
-            /** Profile */
-            profile?: {
-                [key: string]: unknown;
-            } | null;
+            profile?: components["schemas"]["UnderstandingProfileOut"] | null;
+            /** Version */
+            version: string;
+        };
+        /** UnderstandingProfileOut */
+        UnderstandingProfileOut: {
+            /** Algorithm Version */
+            algorithm_version: string;
+            /** Columns */
+            columns: components["schemas"]["UnderstandingColumnOut"][];
+            /** Dataset Id */
+            dataset_id: string;
+            /** Insights */
+            insights: components["schemas"]["UnderstandingInsightOut"][];
+            /** Row Count */
+            row_count: number;
+            /** Sample Limit */
+            sample_limit: number | null;
+            /** Sample Seed */
+            sample_seed?: number | null;
+            /** Sampling Method */
+            sampling_method: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "sample" | "full";
             /** Version */
             version: string;
         };
@@ -1422,6 +1489,15 @@ export interface components {
              * @enum {string}
              */
             scope: "sample" | "full";
+        };
+        /** UnderstandingRoleOut */
+        UnderstandingRoleOut: {
+            /** Basis */
+            basis: string;
+            /** Confirmed */
+            confirmed: boolean;
+            /** Role */
+            role: string;
         };
         /** UploadPolicyOut */
         UploadPolicyOut: {

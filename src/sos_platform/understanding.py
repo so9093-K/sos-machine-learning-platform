@@ -127,8 +127,7 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
         }
         # 식별자·민감 후보 숫자형의 최소·최대도 개인 식별값일 수 있다.
         safe_stat = not any(
-            role["role"] in ("identifier", "potentially_sensitive")
-            for role in col["roles"]
+            role["role"] in ("identifier", "potentially_sensitive") for role in col["roles"]
         )
         for metric in ("min", "max", "avg"):
             if safe_stat and key + "_" + metric in values:
