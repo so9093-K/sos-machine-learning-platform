@@ -61,6 +61,51 @@ class ProblemOut(BaseModel):
     retry_policy: str
 
 
+class AuthMeOut(BaseModel):
+    """인증 신원의 공개 계약. 토큰 내용은 반환하지 않는다."""
+
+    actor_id: str
+    actor_type: Literal["human", "service"]
+    roles: list[str]
+    mode: Literal["development", "token"]
+
+
+class AuditEventOut(BaseModel):
+    """감사 저장소의 노출 가능한 정제 기록."""
+
+    id: str
+    at: str
+    actor_id: str
+    actor_type: str
+    action: str
+    resource_type: str
+    resource_id: str | None
+    decision: str
+    outcome: str
+    reason: str | None
+    request_id: str | None
+
+
+class DiagnosticAttemptOut(BaseModel):
+    id: str
+    status: str
+    error_code: str | None
+    failure_stage: str | None
+    failure_category: str | None
+    exception_type: str | None
+
+
+class JobDiagnosticsOut(BaseModel):
+    job_id: str
+    request_id: str | None
+    status: str
+    error_code: str | None
+    failure_stage: str | None
+    failure_category: str | None
+    exception_type: str | None
+    attempts: list[DiagnosticAttemptOut]
+
+
 class StoragePolicyOut(BaseModel):
     """서버의 유효 보존 정책과 값의 출처."""
 
@@ -260,6 +305,7 @@ class ExplorationJobOut(JobOut):
     """Discovery Job만 반환하는 신규 API 응답 계약."""
 
     kind: Literal["exploration"]
+    result: ExplorationOut | None
 
 
 class JobSummaryOut(BaseModel):
@@ -285,6 +331,7 @@ class JobSummaryOut(BaseModel):
 
 class ExplorationJobSummaryOut(JobSummaryOut):
     kind: Literal["exploration"]
+    result: ExplorationOut | None
 
 
 class ExplorationJobPageOut(BaseModel):

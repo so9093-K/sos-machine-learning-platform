@@ -1,18 +1,6 @@
 import { useEffect, useState } from "react";
 import { request, formatError } from "./api";
-
-type AuditEvent = {
-  id: string;
-  at: string;
-  actor_id: string;
-  actor_type: string;
-  action: string;
-  resource_type: string;
-  resource_id: string | null;
-  decision: string;
-  outcome: string;
-  reason: string | null;
-};
+import type { AuditEvent } from "./types";
 
 export function AuditPanel() {
   const [events, setEvents] = useState<AuditEvent[]>([]);

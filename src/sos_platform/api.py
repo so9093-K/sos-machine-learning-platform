@@ -34,6 +34,8 @@ from .processing import bounded_feature_preview
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
 from .schemas import (
+    AuditEventOut,
+    AuthMeOut,
     DatasetColumnsOut,
     DatasetOut,
     DatasetOverviewOut,
@@ -48,6 +50,7 @@ from .schemas import (
     IcebergConnect,
     IcebergImport,
     IcebergReferenceOut,
+    JobDiagnosticsOut,
     JobOut,
     JobPageOut,
     PreviewOut,
@@ -242,7 +245,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             return JSONResponse(status_code=503, content=result)
         return result
 
-    @app.get("/api/auth/me")
+    @app.get("/api/auth/me", response_model=AuthMeOut)
     def auth_me(actor: Actor = IDENTITY_DEP):
         return {
             "actor_id": actor.id,
@@ -251,7 +254,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             "mode": identity.mode,
         }
 
-    @app.get("/api/audit")
+    @app.get("/api/audit", response_model=list[AuditEventOut])
     def audit_events(
         limit: int = Query(default=50, ge=1, le=100),
         request_id: str | None = Query(default=None, min_length=36, max_length=36),
@@ -261,7 +264,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         """운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다."""
         return store.audit_events(limit=limit, request_id=request_id, resource_id=job_id)
 
-    @app.get("/api/diagnostics/jobs/{job_id}")
+    @app.get("/api/diagnostics/jobs/{job_id}", response_model=JobDiagnosticsOut)
     def job_diagnostics(job_id: str, actor: Actor = AUDIT_DEP):
         """권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다."""
         item = store.get_job(job_id)

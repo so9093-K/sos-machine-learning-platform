@@ -9,12 +9,11 @@ import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
-import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy } from "./types";
+import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
 type Tab = "preview" | "profile" | "features" | "jobs" | "storage" | "audit";
-type Identity = { actor_id: string; actor_type: string; roles: string[]; mode: string };
 type UploadProgress = {
   name: string; loaded: number; total: number;
   phase: "transferring" | "registering";

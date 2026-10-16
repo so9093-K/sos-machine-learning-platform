@@ -53,7 +53,7 @@ def register_error_handlers(app: FastAPI) -> None:
                 404: "SOS-API-NOT-FOUND",
                 405: "SOS-API-METHOD-NOT-ALLOWED",
                 409: "SOS-API-CONFLICT",
-                503: "SOS-STORAGE-INSPECTION",
+                503: "SOS-API-DEPENDENCY",
             }.get(exc.status_code, "SOS-API-VALIDATION")
         return problem_response(request, code, exc.status_code, exc.detail, headers=exc.headers)
 

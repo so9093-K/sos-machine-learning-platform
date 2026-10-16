@@ -51,6 +51,7 @@ DEFINITIONS = (
         "conflict",
     ),
     spec("SOS-API-INTERNAL", "요청 실패", "요청 처리 중 문제가 발생했습니다.", "internal"),
+    spec("SOS-API-DEPENDENCY", "외부 서비스 장애", "요청 처리에 필요한 서비스가 준비되지 않았습니다.", "dependency", "after_refresh"),
     spec("SOS-AUTH-REQUIRED", "인증 필요", "인증이 필요합니다.", "authentication"),
     spec("SOS-AUTH-INVALID", "인증 실패", "인증 정보를 확인하세요.", "authentication"),
     spec("SOS-AUTH-DENIED", "접근 거부", "요청한 작업에 접근할 수 없습니다.", "authorization"),
