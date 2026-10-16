@@ -19,7 +19,14 @@ export class ApiError extends Error {
   override toString() {
     const reference = [this.code, this.requestId ? `요청 ID: ${this.requestId}` : null]
       .filter(Boolean).join(" · ");
-    return reference ? `${this.message} (${reference})` : this.message;
+    const message = reference ? `${this.message} (${reference})` : this.message;
+    if (this.retryPolicy === "manual_verification_required") {
+      return `${message} · 작업의 실행·커밋 상태를 확인하기 전에는 동일 요청을 다시 제출하지 마세요.`;
+    }
+    if (this.retryPolicy === "after_refresh") {
+      return `${message} · 현재 상태를 새로 조회한 뒤 재시도 여부를 판단하세요.`;
+    }
+    return message;
   }
 }
 

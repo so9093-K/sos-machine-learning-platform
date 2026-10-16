@@ -34,7 +34,15 @@ describe("API failure diagnostic contract", () => {
       expect(diagnosed.retryPolicy).toBe("manual_verification_required");
       expect(formatError(diagnosed)).toContain("req-example");
       expect(formatError(diagnosed)).toContain("SOS-ICEBERG-UNCERTAIN");
+      expect(formatError(diagnosed)).toContain("동일 요청을 다시 제출하지 마세요");
     }
+  });
+
+  it("exposes catalog retry advice without encouraging ambiguous Job resubmission", () => {
+    const stale = new ApiError("상태가 변경됐습니다", 409, "SOS-STATE", "req-1", "after_refresh");
+    expect(formatError(stale)).toContain("새로 조회한 뒤");
+    const definitive = new ApiError("유효하지 않은 입력", 422, "SOS-INPUT", "req-2", "never");
+    expect(formatError(definitive)).not.toContain("재시도");
   });
 
   it("preserves legacy field validation and request header on non-JSON response", async () => {
