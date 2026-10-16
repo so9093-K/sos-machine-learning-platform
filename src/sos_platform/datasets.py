@@ -1,8 +1,9 @@
 """불변 Dataset의 등록·조회와 Iceberg 적재를 연결한다."""
 
-import hashlib
 import os
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO
@@ -10,20 +11,12 @@ from uuid import uuid4
 
 import polars as pl
 
+from .cache import cached_dataset_file
 from .config import Settings
 from .errors import PlatformError
 from .ingestion import UploadPolicy, staged_upload
 from .object_store import ObjectStore
 from .store import Store
-
-
-def file_digest(path: Path) -> str:
-    """큰 로컬 캐시 파일도 전체 내용을 메모리에 올리지 않고 검증한다."""
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def save_upload(store: Store, name: str, content: bytes, *, owner_actor: str | None = None) -> dict:
@@ -119,7 +112,8 @@ def import_to_iceberg(
     # 단일 append의 메모리·행 수 한도를 강제한다. 추후 배치 적재 계약과 구분한다.
     from .processing import bounded_iceberg_arrow
 
-    arrow = bounded_iceberg_arrow(scan_dataset(store, dataset))
+    with pinned_scan_dataset(store, dataset) as source:
+        arrow = bounded_iceberg_arrow(source)
     try:
         table = catalog.load_table(ident)
     except Exception as exc:
@@ -202,29 +196,10 @@ def iceberg_snapshots(store: Store, table_name: str) -> list[dict]:
     ]
 
 
-def local_dataset_file(store: Store, dataset: dict) -> Path:
-    """검증된 원본 콘텐츠 해시를 로컬 캐시에 준비한다."""
-    if dataset["kind"] != "file":
-        raise ValueError("File dataset is required")
-    storage = ObjectStore()
-    key = storage.key(dataset["location"])
-    suffix = Path(key).suffix
-    destination = (store.home / "cache" / f"{dataset['version']}{suffix}").resolve()
-    if not destination.is_relative_to(store.home / "cache"):
-        raise ValueError("Dataset cache path is invalid")
-    if not destination.is_file() or file_digest(destination) != dataset["version"]:
-        storage.get(key, destination, expected_sha256=dataset["version"])
-    return destination
-
-
 def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
+    """Iceberg LazyFrame만 직접 생성한다. 파일은 반드시 읽기 Lease 안에서 스캔한다."""
     if dataset["kind"] == "file":
-        destination = local_dataset_file(store, dataset)
-        return (
-            pl.scan_csv(destination, try_parse_dates=True)
-            if destination.suffix.lower() == ".csv"
-            else pl.scan_parquet(destination)
-        )
+        raise RuntimeError("File Dataset scan requires pinned_scan_dataset")
     if dataset["kind"] == "iceberg":
         table = iceberg_catalog(store).load_table(dataset["location"])
         snapshot = int(dataset["version"])
@@ -243,3 +218,17 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
             },
         )
     raise ValueError("Unknown dataset type")
+
+
+@contextmanager
+def pinned_scan_dataset(store: Store, dataset: dict) -> Iterator[pl.LazyFrame]:
+    """LazyFrame가 실제로 계산되는 동안 원본 캐시를 축출로부터 보호한다."""
+    if dataset["kind"] == "file":
+        with cached_dataset_file(store, dataset) as path:
+            yield (
+                pl.scan_csv(path, try_parse_dates=True)
+                if path.suffix.lower() == ".csv"
+                else pl.scan_parquet(path)
+            )
+    else:
+        yield scan_dataset(store, dataset)

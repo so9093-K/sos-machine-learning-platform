@@ -13,11 +13,12 @@ import signal
 import time
 from pathlib import Path
 
-from .datasets import import_to_iceberg, scan_dataset
+from .datasets import import_to_iceberg, pinned_scan_dataset
 from .diagnostics import classify_failure
 from .discovery import explore as discovery_explore
 from .discovery import profile as discovery_profile
-from .errors import ERRORS
+from .errors import ERRORS, PlatformError
+from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import transform
@@ -50,8 +51,9 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
         elif job["kind"] == "transform":
             stage = "processing"
             spec = Transform.model_validate(job["spec"]["transform"])
-            lf = transform(scan_dataset(store, dataset), spec)
-            lf.sink_parquet(pending)
+            with pinned_scan_dataset(store, dataset) as source:
+                lf = transform(source, spec)
+                lf.sink_parquet(pending)
             result = {"input_dataset_id": dataset["id"]}
         elif job["kind"] == "iceberg_import":
             stage = "iceberg_prepare"
@@ -71,6 +73,8 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
         code = (
             "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
+            else exc.code
+            if isinstance(exc, PlatformError)
             else "SOS-JOB-FAILED"
         )
         category, exception_type = classify_failure(exc)
@@ -93,6 +97,7 @@ def _stop(process: multiprocessing.Process) -> None:
 
 
 def run_once(store: Store) -> bool:
+    budget = ExecutionBudget.from_env()
     job = store.claim()
     if job is None:
         return False
@@ -117,8 +122,14 @@ def run_once(store: Store) -> bool:
     next_heartbeat = time.monotonic() + 2
     try:
         process.start()
+        started = time.monotonic()
         while process.is_alive():
             process.join(timeout=0.1)
+            if time.monotonic() - started > budget.max_wall_seconds:
+                raise ExecutionLimitExceeded("SOS-JOB-TIMEOUT", "timeout")
+            rss = process_rss_bytes(process.pid)
+            if rss is not None and rss > budget.max_rss_mib * 1024 * 1024:
+                raise ExecutionLimitExceeded("SOS-JOB-MEMORY-LIMIT", "memory")
             if time.monotonic() >= next_heartbeat:
                 store.heartbeat()
                 next_heartbeat = time.monotonic() + 2
@@ -198,8 +209,17 @@ def run_once(store: Store) -> bool:
                     job_id=job_id,
                     attempt_id=attempt_id,
                 )
-        code = "SOS-ICEBERG-UNCERTAIN" if job["kind"] == "iceberg_import" else "SOS-JOB-FAILED"
-        category, exception_type = classify_failure(exc)
+        if job["kind"] == "iceberg_import":
+            # 부모는 자식의 Catalog 커밋 진입 시점을 확정할 수 없다.
+            code = "SOS-ICEBERG-UNCERTAIN"
+        elif isinstance(exc, ExecutionLimitExceeded):
+            code = exc.code
+        else:
+            code = "SOS-JOB-FAILED"
+        if isinstance(exc, ExecutionLimitExceeded):
+            category, exception_type = exc.category, type(exc).__name__
+        else:
+            category, exception_type = classify_failure(exc)
         emit(
             "worker.attempt.failed",
             service="sos-worker",
@@ -207,7 +227,7 @@ def run_once(store: Store) -> bool:
             job_id=job_id,
             attempt_id=attempt_id,
             error_code=code,
-            stage="publication",
+            stage="execution" if isinstance(exc, ExecutionLimitExceeded) else "publication",
             exception_type=exception_type,
             failure_category=category,
         )
@@ -216,7 +236,7 @@ def run_once(store: Store) -> bool:
             "Failed",
             error=ERRORS[code].message,
             error_code=code,
-            failure_stage="publication",
+            failure_stage="execution" if isinstance(exc, ExecutionLimitExceeded) else "publication",
             failure_category=category,
             exception_type=exception_type,
         )

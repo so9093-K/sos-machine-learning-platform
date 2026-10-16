@@ -25,6 +25,8 @@ datasets = Table(
     Column("version", Text, nullable=False),
     Column("created_at", Text, nullable=False),
     Column("owner_actor", Text),
+    Index("ix_datasets_created_at_id", "created_at", "id"),
+    Index("ix_datasets_owner_created_at_id", "owner_actor", "created_at", "id"),
 )
 
 jobs = Table(
@@ -73,6 +75,17 @@ workers = Table(
     Column("id", String(64), primary_key=True),
     Column("heartbeat_at", Text, nullable=False),
     Column("active", Boolean, nullable=False),
+)
+
+# API 다중 인스턴스에서 Job 제출을 원자적으로 고정하는 신원.
+job_submissions = Table(
+    "job_submissions",
+    metadata,
+    Column("actor_id", String(128), primary_key=True),
+    Column("submission_key", String(128), primary_key=True),
+    Column("fingerprint", String(64), nullable=False),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=True, unique=True),
+    Column("created_at", Text, nullable=False),
 )
 
 # S3 객체 자체와 PostgreSQL에서 보장하는 게시 참조는 구별한다.

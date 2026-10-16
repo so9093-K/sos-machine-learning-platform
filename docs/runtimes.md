@@ -18,6 +18,12 @@ Runtime은 학습·평가·추론 등의 작업을 수행하는 **실제 실행 
 5. **점진적 변경:** Python·프레임워크·이미지 변경 시 기존 모델의 로드·전처리·학습·추론 호환성을 검증한다. 신규 환경을 제공해도 기존 모델의 실행 조건을 잃지 않도록 이력과 전환 방법을 관리한다.
 6. **실행 안전:** 외부 모델·플러그인 및 사용자 코드는 자원 한도, 접근 권한, 비밀정보 경계를 고려해 실행한다.
 
+Worker의 실행 시간·관측 RSS 예산은 `SOS_WORKER_MAX_SECONDS`(기본 1800초)·`SOS_WORKER_MAX_RSS_MIB`(기본 2048MiB)이다. 부모 프로세스는 자식의 초과를 감시해 종료하고 Job·Attempt에 전용 오류 코드를 남긴다. Linux `/proc` RSS 관측은 폴링 방식이며 cgroup·OS 수준의 엄격한 메모리 격리와 같지 않다. 외부 Iceberg 커밋은 시간·메모리 제한으로 중단되어도 성공/실패를 추측하지 않는다.
+
+Dataset 원본 캐시는 `SOS_DATASET_CACHE_MIB`(기본 2048MiB) 한도로 관리한다. 파일별 PostgreSQL advisory lock을 읽기 Lease로 사용해 사용 중인 파일을 축출하지 않으며, 할당량 부족 시 최근 사용되지 않은 불변 해시 캐시 파일만 선택적으로 축출한다. 모든 후보가 사용 중이면 507 자원 오류로 거부한다. S3 원본과 게시 결과·Iceberg Snapshot은 이 정리의 대상이 아니다.
+
+Discovery는 PostgreSQL advisory lock에 기반한 전역 실행 슬롯(`SOS_DISCOVERY_MAX_ACTIVE`, 기본 1개)을 사용하며 `SOS_DISCOVERY_WAIT_SECONDS`(기본 15초)를 초과하면 429 용량 오류를 반환한다. 잠금은 DuckDB 연결 종료와 함께 해제되며 여러 API 인스턴스에서도 공유된다. 향후 실행 슬롯을 늘리기 전 RSS와 합산 메모리·Spill 예산을 측정해야 한다.
+
 Discovery는 요청·Worker 실행별 DuckDB 연결을 사용한다. DuckDB Python 인터페이스가 타임존 인식 타임스탬프를 반환할 때 필요한 `pytz`는 잠금된 실행 의존성으로 포함한다. 스레드·메모리·Spill 임시 디스크와 결과 그룹 수는 `DiscoveryPolicy` 설정으로 제한한다. 임의 SQL·원본 경로·자동 확장 로딩을 허용하지 않으며 파일별 접근을 제한한다. 큰 전체 분석은 기존 Worker 프로세스로 넘긴다. DuckDB 메모리 설정이 OS 수준의 물리 메모리 상한을 강제한다는 의미는 아니다.
 
 현재 저장소의 Python **3.12**와 `uv.lock`은 **플랫폼 개발 환경의 기준**이다. 향후 모든 모델 Runtime의 버전이나 전체 OS·GPU 환경까지 고정한 것과 같지 않다. 프로젝트 버전 `0.0.1`도 개별 Runtime·모델·계약 버전의 대체물이 아니다.

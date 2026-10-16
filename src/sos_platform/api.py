@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
@@ -19,7 +19,7 @@ from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from .api_errors import problem_response, register_error_handlers
 from .config import StoragePolicy
-from .datasets import connect_iceberg, iceberg_snapshots, save_upload_file, scan_dataset
+from .datasets import connect_iceberg, iceberg_snapshots, pinned_scan_dataset, save_upload_file
 from .discovery import columns as discovery_columns
 from .discovery import explore as discovery_explore
 from .discovery import overview as discovery_overview
@@ -34,9 +34,12 @@ from .processing import bounded_feature_preview
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
 from .schemas import (
+    AuditEventOut,
+    AuthMeOut,
     DatasetColumnsOut,
     DatasetOut,
     DatasetOverviewOut,
+    DatasetPageOut,
     ExampleOut,
     ExplorationJobOut,
     ExplorationJobPageOut,
@@ -48,6 +51,7 @@ from .schemas import (
     IcebergConnect,
     IcebergImport,
     IcebergReferenceOut,
+    JobDiagnosticsOut,
     JobOut,
     JobPageOut,
     PreviewOut,
@@ -72,6 +76,7 @@ CANCEL_JOB_DEP = Depends(require("job.cancel"))
 INSPECT_DEP = Depends(require("storage.inspect"))
 RETAIN_DEP = Depends(require("snapshot.retain"))
 AUDIT_DEP = Depends(require("audit.read"))
+SNAPSHOT_READ_DEP = Depends(require("snapshot.read"))
 
 
 def create_app(home: Path | None = None) -> FastAPI:
@@ -164,7 +169,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             f"http://127.0.0.1:{os.environ.get('SOS_WEB_PORT', '9601')}",
         ],
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
         expose_headers=["X-Request-ID"],
     )
 
@@ -199,6 +204,11 @@ def create_app(home: Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Dataset not found")
         check_ownership(actor, item.get("owner_actor"), "dataset", dataset_id)
         return item
+
+    def require_job_submission_key(value: str | None) -> None:
+        """외부 토큰 API에서 무키 Job 재전송을 기본 거부한다."""
+        if identity.mode == "token" and value is None:
+            raise PlatformError("SOS-JOB-IDEMPOTENCY-REQUIRED")
 
     def existing_job(job_id: str, actor: Actor) -> dict:
         item = store.get_job(job_id)
@@ -243,6 +253,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         return result
 
     @app.get("/api/auth/me")
+    @app.get("/api/v2/auth/me", response_model=AuthMeOut)
     def auth_me(actor: Actor = IDENTITY_DEP):
         return {
             "actor_id": actor.id,
@@ -252,6 +263,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         }
 
     @app.get("/api/audit")
+    @app.get("/api/v2/audit", response_model=list[AuditEventOut])
     def audit_events(
         limit: int = Query(default=50, ge=1, le=100),
         request_id: str | None = Query(default=None, min_length=36, max_length=36),
@@ -262,6 +274,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         return store.audit_events(limit=limit, request_id=request_id, resource_id=job_id)
 
     @app.get("/api/diagnostics/jobs/{job_id}")
+    @app.get("/api/v2/diagnostics/jobs/{job_id}", response_model=JobDiagnosticsOut)
     def job_diagnostics(job_id: str, actor: Actor = AUDIT_DEP):
         """권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다."""
         item = store.get_job(job_id)
@@ -356,6 +369,46 @@ def create_app(home: Path | None = None) -> FastAPI:
     def list_datasets(actor: Actor = READ_DATASET_DEP):
         return store.datasets(actor_id=None if actor.privileged else actor.id)
 
+    @app.get("/api/datasets/pages", response_model=DatasetPageOut)
+    def list_dataset_page(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_DATASET_DEP,
+    ):
+        """기존 배열 응답을 유지하면서 규모 제한된 새 목록 API를 제공한다."""
+        before = None
+        if cursor:
+            try:
+                raw = base64.b64decode(
+                    cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True
+                )
+                before = json.loads(raw)
+                if (
+                    not isinstance(before, dict)
+                    or set(before) != {"created_at", "id"}
+                    or not all(isinstance(before[key], str) and before[key] for key in before)
+                    or len(before["created_at"]) > 80
+                    or len(before["id"]) != 36
+                ):
+                    raise ValueError("Invalid Dataset cursor")
+            except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
+                raise ValueError("Invalid Dataset cursor") from exc
+        rows = store.dataset_page(
+            limit=limit + 1,
+            before=before,
+            actor_id=None if actor.privileged else actor.id,
+        )
+        next_cursor = None
+        if len(rows) > limit:
+            rows = rows[:limit]
+            last = rows[-1]
+            payload = json.dumps(
+                {"created_at": last["created_at"], "id": last["id"]},
+                separators=(",", ":"),
+            )
+            next_cursor = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+        return {"items": rows, "next_cursor": next_cursor}
+
     @app.get("/api/datasets/upload-policy", response_model=UploadPolicyOut)
     def get_upload_policy(actor: Actor = CREATE_DATASET_DEP):
         return upload_policy.describe()
@@ -426,31 +479,52 @@ def create_app(home: Path | None = None) -> FastAPI:
         )
 
     @app.post("/api/iceberg/import", status_code=202, response_model=JobOut)
-    def iceberg_import(body: IcebergImport, request: Request, actor: Actor = CREATE_JOB_DEP):
+    def iceberg_import(
+        body: IcebergImport,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
         existing(body.dataset_id, actor)
+        require_job_submission_key(idempotency_key)
         return store.create_job(
             kind="iceberg_import",
             dataset_id=body.dataset_id,
             spec=body.model_dump(),
+            idempotency_key=idempotency_key,
             request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,
         )
 
+    def check_table_access(table_name: str, actor: Actor) -> None:
+        """테이블명 추측으로 타 사용자 Snapshot을 공개하거나 연결하지 않는다."""
+        if not (actor.privileged or actor.can("storage.inspect")):
+            if not store.owns_iceberg_table(table_name, actor.id):
+                raise HTTPException(status_code=404, detail="Iceberg table not found")
+
     @app.post("/api/datasets/iceberg", status_code=201, response_model=DatasetOut)
     def connect_table(body: IcebergConnect, actor: Actor = CREATE_DATASET_DEP):
+        check_table_access(body.table_name, actor)
         return connect_iceberg(store, body.table_name, body.snapshot_id, owner_actor=actor.id)
 
     @app.get("/api/iceberg/{table_name}/snapshots", response_model=list[SnapshotOut])
-    def snapshots(table_name: str, actor: Actor = INSPECT_DEP):
+    def snapshots(table_name: str, actor: Actor = SNAPSHOT_READ_DEP):
+        check_table_access(table_name, actor)
         return iceberg_snapshots(store, table_name)
 
     @app.post("/api/features/preview", response_model=FeaturePreviewOut)
     def feature_preview(body: FeaturePreview, actor: Actor = READ_DATASET_DEP):
         # 입력의 앞 1,000행을 먼저 자르면 정렬·Lag·Rolling 경계가 실제 Job과 달라진다.
         # 전체 입력에서 같은 연산을 수행하고 출력 행 수만 제한한다.
-        lf = scan_dataset(store, existing(body.dataset_id, actor))
-        return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
+        with pinned_scan_dataset(store, existing(body.dataset_id, actor)) as lf:
+            return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
 
     def job_page(limit: int, cursor: str | None, actor: Actor, *, discovery_only: bool) -> dict:
         before = None
@@ -504,12 +578,25 @@ def create_app(home: Path | None = None) -> FastAPI:
         return job_page(limit, cursor, actor, discovery_only=True)
 
     @app.post("/api/jobs", status_code=202, response_model=JobOut)
-    def create_job(body: WorkRequest, request: Request, actor: Actor = CREATE_JOB_DEP):
+    def create_job(
+        body: WorkRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
         existing(body.dataset_id, actor)
+        require_job_submission_key(idempotency_key)
         return store.create_job(
             kind=body.kind,
             dataset_id=body.dataset_id,
             spec=body.model_dump(exclude_none=True),
+            idempotency_key=idempotency_key,
             request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,
@@ -517,13 +604,24 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @app.post("/api/explorations/jobs", status_code=202, response_model=ExplorationJobOut)
     def create_exploration_job(
-        body: ExplorationJobRequest, request: Request, actor: Actor = CREATE_JOB_DEP
+        body: ExplorationJobRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
     ):
         existing(body.dataset_id, actor)
+        require_job_submission_key(idempotency_key)
         return store.create_job(
             kind="exploration",
             dataset_id=body.dataset_id,
             spec=body.model_dump(exclude_none=True),
+            idempotency_key=idempotency_key,
             request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,

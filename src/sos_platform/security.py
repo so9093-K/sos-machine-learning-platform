@@ -17,6 +17,7 @@ from fastapi import Depends, HTTPException, Request
 ACTIONS = {
     "dataset.read",
     "dataset.create",
+    "snapshot.read",
     "job.read",
     "job.create",
     "job.cancel",
@@ -25,9 +26,16 @@ ACTIONS = {
     "audit.read",
 }
 GRANTS = {
-    "viewer": {"dataset.read", "job.read"},
-    "researcher": {"dataset.read", "dataset.create", "job.read", "job.create", "job.cancel"},
-    "operator": {"storage.inspect", "snapshot.retain", "audit.read"},
+    "viewer": {"dataset.read", "job.read", "snapshot.read"},
+    "researcher": {
+        "dataset.read",
+        "dataset.create",
+        "snapshot.read",
+        "job.read",
+        "job.create",
+        "job.cancel",
+    },
+    "operator": {"storage.inspect", "snapshot.read", "snapshot.retain", "audit.read"},
     "administrator": ACTIONS,
 }
 

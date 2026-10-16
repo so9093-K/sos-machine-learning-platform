@@ -59,6 +59,14 @@ test("Iceberg import captures a pinned snapshot", async ({ page }) => {
   await expect(page.locator(".dataset-hero p")).toContainText("Snapshot", { timeout: 30000 });
   await page.getByRole("tab", { name: "Preview" }).click();
   await expect(page.getByText("2 rows shown")).toBeVisible();
+  await page.getByRole("textbox", { name: "Iceberg 테이블 이름" }).fill(tableName);
+  await page.getByRole("button", { name: "Snapshot 조회" }).click();
+  const selector = page.getByRole("combobox", { name: "Iceberg Snapshot 선택" });
+  await expect(selector).toBeVisible();
+  const snapshotId = await selector.inputValue();
+  expect(snapshotId).toMatch(/^\d+$/);
+  await page.getByRole("button", { name: "선택한 Snapshot 연결" }).click();
+  await expect(page.locator(".dataset-hero p")).toContainText(snapshotId);
 });
 
 
@@ -209,7 +217,7 @@ test("file size is explained and rejected before upload", async ({ page }) => {
 
 test("201 registration remains successful when the subsequent list refresh fails", async ({ page }) => {
   let failRefresh = false;
-  await page.route("**/api/datasets", route => {
+  await page.route("**/api/datasets/pages*", route => {
     if (route.request().method() === "GET" && failRefresh) {
       return route.fulfill({ status: 503, contentType: "application/json",
         body: JSON.stringify({ detail: "List temporarily unavailable" }) });
@@ -399,7 +407,7 @@ test("late initial Dataset list cannot overwrite successful upload selection", a
   const gotInitial = new Promise<void>(resolve => { initialFetched = resolve; });
   const delivery = new Promise<void>(resolve => { resolveInitial = resolve; });
   let isFirst = true;
-  await page.route("**/api/datasets", async route => {
+  await page.route("**/api/datasets/pages*", async route => {
     if (isFirst && route.request().method() === "GET") {
       isFirst = false;
       const response = await route.fetch(); // 업로드 이전의 오래된 스냅샷
@@ -420,4 +428,129 @@ test("late initial Dataset list cannot overwrite successful upload selection", a
   resolveInitial();
   await expect(page.getByRole("heading", { name: "stale-list.csv" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "EDA & Profile" })).toBeVisible();
+});
+
+
+test("lost HTTP response reuses the original Job submission key", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "replay.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "replay.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  const submitted: Array<{ key: string | undefined; id: string }> = [];
+  await page.route("**/api/jobs", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    const response = await route.fetch();
+    const job = (await response.json()) as { id: string };
+    submitted.push({ key: route.request().headers()["idempotency-key"], id: job.id });
+    if (submitted.length === 1) await route.abort("failed");
+    else await route.fulfill({ response });
+  });
+  const create = page.getByRole("button", { name: /전체 Profile 실행/ });
+  await create.click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  const secondResponse = page.waitForResponse(res =>
+    res.url().endsWith("/api/jobs") && res.request().method() === "POST"
+      && res.status() === 202);
+  await create.click();
+  await secondResponse;
+  expect(submitted).toHaveLength(2);
+  expect(submitted[0].key).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(submitted[1]).toEqual(submitted[0]);
+});
+
+
+test("late Dataset list response does not exit explicitly selected example gallery", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "original-selection.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "original-selection.csv" })).toBeVisible();
+  let unblock: () => void = () => {};
+  let fetched: () => void = () => {};
+  const started = new Promise<void>(resolve => { fetched = resolve; });
+  const release = new Promise<void>(resolve => { unblock = resolve; });
+  let held = false;
+  await page.route("**/api/datasets/pages*", async route => {
+    if (route.request().method() === "GET" && !held) {
+      held = true;
+      const response = await route.fetch();
+      fetched();
+      await release;
+      await route.fulfill({ response });
+    } else await route.continue();
+  });
+  await page.reload();
+  await started;
+  await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
+  await expect(page.getByText("예제 데이터로 먼저 살펴보기")).toBeVisible();
+  unblock();
+  await expect(page.getByText("예제 데이터로 먼저 살펴보기")).toBeVisible();
+  await expect(page.locator(".dataset-hero")).toHaveCount(0);
+});
+
+test("Job reuses submission key when server accepted it before a 503 response", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "transient-response.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "transient-response.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  const sent: Array<{ key: string | undefined; id: string }> = [];
+  await page.route("**/api/jobs", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    const response = await route.fetch();
+    const job = await response.json() as { id: string };
+    sent.push({ key: route.request().headers()["idempotency-key"], id: job.id });
+    if (sent.length === 1) {
+      await route.fulfill({ status: 503, contentType: "application/json",
+        body: JSON.stringify({ detail: "Response unavailable" }) });
+    } else await route.fulfill({ response });
+  });
+  const create = page.getByRole("button", { name: /전체 Profile 실행/ });
+  await create.click();
+  await expect(page.getByRole("alert")).toContainText("Response unavailable");
+  await create.click();
+  await expect(page.getByText("작업이 등록되었습니다.")).toBeVisible();
+  expect(sent).toHaveLength(2);
+  expect(sent[0].key).toBeTruthy();
+  expect(sent[1]).toEqual(sent[0]);
+});
+
+
+test("Iceberg browse input never changes the append target or restores stale snapshots", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "append-target.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "append-target.csv" })).toBeVisible();
+  const appendTarget = page.getByRole("textbox", { name: "Iceberg 테이블명", exact: true });
+  const browseTable = page.getByRole("textbox", { name: "Iceberg 테이블 이름" });
+  await appendTarget.fill("keep_append_target");
+  await browseTable.fill("slow_browse");
+  expect(await appendTarget.inputValue()).toBe("keep_append_target");
+  let unblock: () => void = () => {};
+  let markStarted: () => void = () => {};
+  const started = new Promise<void>(resolve => { markStarted = resolve; });
+  const release = new Promise<void>(resolve => { unblock = resolve; });
+  await page.route("**/api/iceberg/slow_browse/snapshots", async route => {
+    markStarted();
+    await release;
+    await route.fulfill({ status: 200, contentType: "application/json",
+      body: JSON.stringify([{ snapshot_id: "12345", timestamp_ms: 1000 }]) });
+  });
+  await page.getByRole("button", { name: "Snapshot 조회" }).click();
+  await started;
+  await browseTable.fill("other_browse");
+  const delivered = page.waitForResponse(res => res.url().includes("slow_browse/snapshots"));
+  unblock();
+  await delivered;
+  await expect(page.getByRole("combobox", { name: "Iceberg Snapshot 선택" })).toHaveCount(0);
+  await expect(appendTarget).toHaveValue("keep_append_target");
+  await expect(browseTable).toHaveValue("other_browse");
 });

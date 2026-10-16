@@ -11,3 +11,5 @@
 - [0002 — 객체 수명주기·장기 보존과 대조 정책](0002-object-lifecycle.md) · Accepted (0001의 일부 결정 대체)
 - [0003 — Snapshot 보존과 인증·권한·감사 경계](0003-snapshot-identity-audit.md) · Accepted (0002와 연관된 별도 결정)
 - [0004 — DuckDB Discovery와 Polars Feature 실행 책임](0004-duckdb-discovery.md) · Accepted
+
+- [0005 — 비동기 Job 제출 식별과 외부 커밋 안전성](0005-job-submission-identity.md) · Accepted

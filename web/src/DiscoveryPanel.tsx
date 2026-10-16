@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
 import { chartValue, explorationCategory, explorationValue } from "./exploration-format";
-import { request, jsonPost, formatError } from "./api";
+import { request, jsonPost, submitJob, formatError } from "./api";
 import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, ExplorationJob } from "./types";
 
 function analysisLabel(basis: string) {
@@ -70,7 +70,7 @@ export function DiscoveryPanel({
     if (!selectedMeasure) return;
     setRunning(true); setError(""); setFullJobId(null);
     try {
-      const job = await jsonPost<ExplorationJob>("/api/explorations/jobs", {
+      const job = await submitJob<ExplorationJob>("/api/explorations/jobs", {
         dataset_id: datasetId,
         exploration: { column: selectedMeasure, metric, group_by: groupBy || null },
       });

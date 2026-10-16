@@ -92,6 +92,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/datasets/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dataset Page
+         * @description 기존 배열 응답을 유지하면서 규모 제한된 새 목록 API를 제공한다.
+         */
+        get: operations["list_dataset_page_api_datasets_pages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/datasets/upload-policy": {
         parameters: {
             query?: never;
@@ -546,6 +566,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit Events
+         * @description 운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다.
+         */
+        get: operations["audit_events_api_v2_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Auth Me */
+        get: operations["auth_me_api_v2_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/diagnostics/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Job Diagnostics
+         * @description 권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다.
+         */
+        get: operations["job_diagnostics_api_v2_diagnostics_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -570,6 +647,54 @@ export interface components {
             started_at: string;
             /** Status */
             status: string;
+        };
+        /**
+         * AuditEventOut
+         * @description 감사 저장소의 노출 가능한 정제 기록.
+         */
+        AuditEventOut: {
+            /** Action */
+            action: string;
+            /** Actor Id */
+            actor_id: string;
+            /** Actor Type */
+            actor_type: string;
+            /** At */
+            at: string;
+            /** Decision */
+            decision: string;
+            /** Id */
+            id: string;
+            /** Outcome */
+            outcome: string;
+            /** Reason */
+            reason: string | null;
+            /** Request Id */
+            request_id: string | null;
+            /** Resource Id */
+            resource_id: string | null;
+            /** Resource Type */
+            resource_type: string;
+        };
+        /**
+         * AuthMeOut
+         * @description 인증 신원의 공개 계약. 토큰 내용은 반환하지 않는다.
+         */
+        AuthMeOut: {
+            /** Actor Id */
+            actor_id: string;
+            /**
+             * Actor Type
+             * @enum {string}
+             */
+            actor_type: "human" | "service";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "development" | "token";
+            /** Roles */
+            roles: string[];
         };
         /** Body_upload_api_datasets_files_post */
         Body_upload_api_datasets_files_post: {
@@ -647,6 +772,31 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * DatasetPageOut
+         * @description 상한 있는 최신순 Dataset 목록 페이지.
+         */
+        DatasetPageOut: {
+            /** Items */
+            items: components["schemas"]["DatasetOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** DiagnosticAttemptOut */
+        DiagnosticAttemptOut: {
+            /** Error Code */
+            error_code: string | null;
+            /** Exception Type */
+            exception_type: string | null;
+            /** Failure Category */
+            failure_category: string | null;
+            /** Failure Stage */
+            failure_stage: string | null;
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+        };
         /** DiscoveryColumnOut */
         DiscoveryColumnOut: {
             /** Dtype */
@@ -702,10 +852,7 @@ export interface components {
             kind: "exploration";
             /** Request Id */
             request_id?: string | null;
-            /** Result */
-            result: {
-                [key: string]: unknown;
-            } | null;
+            result: components["schemas"]["ExplorationOut"] | null;
             /** Retry Policy */
             retry_policy?: string | null;
             /** Spec */
@@ -759,10 +906,7 @@ export interface components {
             latest_attempt: components["schemas"]["AttemptOut"] | null;
             /** Request Id */
             request_id?: string | null;
-            /** Result */
-            result: {
-                [key: string]: unknown;
-            } | null;
+            result: components["schemas"]["ExplorationOut"] | null;
             /** Retry Policy */
             retry_policy?: string | null;
             /** Spec */
@@ -885,6 +1029,25 @@ export interface components {
             status: "retained" | "available_unprotected" | "missing" | "unknown";
             /** Table Name */
             table_name: string;
+        };
+        /** JobDiagnosticsOut */
+        JobDiagnosticsOut: {
+            /** Attempts */
+            attempts: components["schemas"]["DiagnosticAttemptOut"][];
+            /** Error Code */
+            error_code: string | null;
+            /** Exception Type */
+            exception_type: string | null;
+            /** Failure Category */
+            failure_category: string | null;
+            /** Failure Stage */
+            failure_stage: string | null;
+            /** Job Id */
+            job_id: string;
+            /** Request Id */
+            request_id: string | null;
+            /** Status */
+            status: string;
         };
         /** JobOut */
         JobOut: {
@@ -1329,6 +1492,38 @@ export interface operations {
             };
         };
     };
+    list_dataset_page_api_datasets_pages_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_upload_policy_api_datasets_upload_policy_get: {
         parameters: {
             query?: never;
@@ -1678,7 +1873,9 @@ export interface operations {
     create_exploration_job_api_explorations_jobs_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1835,7 +2032,9 @@ export interface operations {
     iceberg_import_api_iceberg_import_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1931,7 +2130,9 @@ export interface operations {
     create_job_api_jobs_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2161,6 +2362,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StoragePolicyOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    audit_events_api_v2_audit_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                request_id?: string | null;
+                job_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventOut"][];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    auth_me_api_v2_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthMeOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    job_diagnostics_api_v2_diagnostics_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobDiagnosticsOut"];
                 };
             };
             /** @description Structured API error */

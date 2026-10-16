@@ -1,18 +1,6 @@
 import { useEffect, useState } from "react";
 import { request, formatError } from "./api";
-
-type AuditEvent = {
-  id: string;
-  at: string;
-  actor_id: string;
-  actor_type: string;
-  action: string;
-  resource_type: string;
-  resource_id: string | null;
-  decision: string;
-  outcome: string;
-  reason: string | null;
-};
+import type { AuditEvent } from "./types";
 
 export function AuditPanel() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
@@ -28,7 +16,7 @@ export function AuditPanel() {
       const params = new URLSearchParams({ limit: "50" });
       if (requestId.trim()) params.set("request_id", requestId.trim());
       if (jobId.trim()) params.set("job_id", jobId.trim());
-      setEvents(await request<AuditEvent[]>(`/api/audit?${params.toString()}`));
+      setEvents(await request<AuditEvent[]>(`/api/v2/audit?${params.toString()}`));
     } catch (exc) {
       setError(formatError(exc));
     } finally {

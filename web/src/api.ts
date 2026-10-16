@@ -30,7 +30,9 @@ export function formatError(error: unknown): string {
 }
 
 export function setAccessToken(value: string | null) {
-  accessToken = value || null;
+  const next = value || null;
+  if (accessToken !== next) pendingJobKeys.clear();
+  accessToken = next;
 }
 
 /** 기존 detail을 읽으면서 오류 코드와 요청 ID·재시도 정책을 별도로 유지한다. */
@@ -114,4 +116,33 @@ export function uploadFile<T>(
     form.append("file", file);
     xhr.send(form);
   });
+}
+
+/** 응답이 유실된 제출의 키를 유지해 동일 클릭을 안전하게 재시도한다. */
+const pendingJobKeys = new Map<string, string>();
+
+export async function submitJob<T>(path: string, body: unknown): Promise<T> {
+  const signature = path + ":" + JSON.stringify(body);
+  let key = pendingJobKeys.get(signature);
+  if (!key) {
+    key = crypto.randomUUID();
+    pendingJobKeys.set(signature, key);
+  }
+  try {
+    const result = await request<T>(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+      body: JSON.stringify(body),
+    });
+    pendingJobKeys.delete(signature);
+    return result;
+  } catch (error) {
+    // HTTP 5xx/408/429도 서버의 Job 접수 뒤 발생할 수 있다.
+    // 확정적인 4xx만 키를 해제해 의도하지 않은 중복 Job을 방지한다.
+    if (error instanceof ApiError && error.status < 500 &&
+        ![408, 429].includes(error.status)) {
+      pendingJobKeys.delete(signature);
+    }
+    throw error;
+  }
 }

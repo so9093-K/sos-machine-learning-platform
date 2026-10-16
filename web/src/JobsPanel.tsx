@@ -80,7 +80,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
             <p>커밋·Snapshot 상태를 확인하기 전에는 동일 작업을 다시 실행하지 마세요.</p>}
           {job.request_id && <p className="muted">요청 ID · {job.request_id}</p>}
         </div>}
-        {typeof job.result?.row_count === "number" &&
+        {job.result && "row_count" in job.result && typeof job.result.row_count === "number" &&
           <p className="muted">분석한 행 · {job.result.row_count.toLocaleString("ko-KR")}</p>}
         {job.kind === "exploration" && job.result &&
           <DiscoveryJobResult result={job.result} />}

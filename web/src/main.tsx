@@ -3,18 +3,17 @@ import { createRoot } from "react-dom/client";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
 import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
-import { ApiError, request, jsonPost, setAccessToken, formatError, uploadFile } from "./api";
+import { ApiError, request, jsonPost, submitJob, setAccessToken, formatError, uploadFile } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
-import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy } from "./types";
+import type { Dataset, DatasetPage, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity, Snapshot } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
 type Tab = "preview" | "profile" | "features" | "jobs" | "storage" | "audit";
-type Identity = { actor_id: string; actor_type: string; roles: string[]; mode: string };
 type UploadProgress = {
   name: string; loaded: number; total: number;
   phase: "transferring" | "registering";
@@ -28,6 +27,7 @@ function Workspace({ actor }: { actor: Identity }) {
   const canManage = actor.roles.some(r => ["administrator", "operator"].includes(r));
   const canWrite = actor.roles.some(r => ["administrator", "researcher"].includes(r));
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [nextDatasetCursor, setNextDatasetCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -48,7 +48,12 @@ function Workspace({ actor }: { actor: Identity }) {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [tableName, setTableName] = useState("");
+  const [existingTableName, setExistingTableName] = useState("");
+  const [importTableName, setImportTableName] = useState("");
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [snapshotId, setSnapshotId] = useState("");
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const snapshotRequestVersion = useRef(0);
   const [steps, setSteps] = useState<Step[]>([]);
   const [editingStep, setEditingStep] = useState<number | null>(null);
   const [lagPeriods, setLagPeriods] = useState(1);
@@ -61,6 +66,8 @@ function Workspace({ actor }: { actor: Identity }) {
   const [featurePreviewResult, setFeaturePreview] = useState<{ signature: string; data: Preview } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
+  const showExamples = useRef(false);
+  const refreshedCompletedJobs = useRef(new Set<string>());
   const dataset = datasets.find(d => d.id === selected);
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const numeric = profile?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
@@ -69,15 +76,21 @@ function Workspace({ actor }: { actor: Identity }) {
 
   async function refreshDatasets() {
     const version = ++datasetRequestVersion.current;
-    const items = await request<Dataset[]>("/api/datasets");
+    const page = await request<DatasetPage>("/api/datasets/pages?limit=20");
     // 오래된 GET 응답이 최근 등록·조회 후 확정된 Dataset 선택을 덮지 못하게 한다.
     if (version !== datasetRequestVersion.current) return;
-    setDatasets(items);
-    setSelected(previous => items.some(d => d.id === previous) ? previous : (items[0]?.id ?? ""));
+    // 이미 조회한 옛 Dataset과 결과 화면의 현재 선택은 최신 20개 밖이어도 보존한다.
+    setDatasets(previous => [
+      ...page.items,
+      ...previous.filter(item => !page.items.some(d => d.id === item.id)),
+    ]);
+    setNextDatasetCursor(page.next_cursor ?? null);
+    setSelected(previous => showExamples.current ? "" : (previous || page.items[0]?.id || ""));
   }
   /** 서버 등록 성공을 목록 새로고침 실패 때문에 취소된 작업처럼 표시하지 않는다. */
   async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
     setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+    showExamples.current = false;
     setSelected(data.id); setTab("preview");
     try {
       await refreshDatasets();
@@ -97,6 +110,18 @@ function Workspace({ actor }: { actor: Identity }) {
       setError("");
       setNotice(`Job은 정상 접수됐습니다. 목록을 다시 확인하세요. 작업 ID: ${job.id}`);
     }
+  }
+  async function loadMoreDatasets() {
+    if (!nextDatasetCursor) return;
+    await withFeedback(async () => {
+      const version = datasetRequestVersion.current;
+      const page = await request<DatasetPage>(
+        `/api/datasets/pages?limit=20&cursor=${encodeURIComponent(nextDatasetCursor)}`);
+      if (version !== datasetRequestVersion.current) return;
+      setDatasets(previous => [...previous, ...page.items.filter(
+        item => !previous.some(d => d.id === item.id))]);
+      setNextDatasetCursor(page.next_cursor ?? null);
+    });
   }
   async function refreshJobs() {
     const page = await request<JobPage>("/api/jobs?limit=20");
@@ -184,8 +209,11 @@ function Workspace({ actor }: { actor: Identity }) {
     return () => { active = false; };
   }, [selected, reloadRevision]);
   useEffect(() => {
-    if (jobs.some(j => j.status === "Succeeded" && j.result?.dataset_id &&
-      !datasets.some(d => d.id === j.result?.dataset_id))) {
+    // 첫 페이지에 없는 과거 성공 Job 때문에 무한히 GET을 반복하지 않는다.
+    const unseen = jobs.filter(j => j.status === "Succeeded" && j.result?.dataset_id &&
+      !refreshedCompletedJobs.current.has(j.id));
+    unseen.forEach(j => refreshedCompletedJobs.current.add(j.id));
+    if (unseen.some(j => !datasets.some(d => d.id === j.result?.dataset_id))) {
       refreshDatasets().catch(e => setError(String(e)));
     }
   }, [jobs, datasets]);
@@ -257,7 +285,7 @@ function Workspace({ actor }: { actor: Identity }) {
       setError("Lag와 Rolling 변환에는 정렬 컬럼을 지정해야 합니다."); return;
     }
     await withFeedback(async () => {
-      const job = await jsonPost<Job>("/api/jobs",
+      const job = await submitJob<Job>("/api/jobs",
         { dataset_id: selected, kind, ...(kind === "transform" ? { transform } : {}) });
       await showSubmittedJob(job, "작업이 등록되었습니다. 별도 Worker가 작업을 실행합니다.");
     });
@@ -271,8 +299,13 @@ function Workspace({ actor }: { actor: Identity }) {
     });
   }
   async function openJobDataset(datasetId: string) {
-    await refreshDatasets();
-    setSelected(datasetId); setTab("preview");
+    await withFeedback(async () => {
+      // 완료 Job의 출력은 최신 Dataset 첫 페이지 밖에 있을 수 있다.
+      const item = await request<Dataset>(`/api/datasets/${encodeURIComponent(datasetId)}`);
+      setDatasets(previous => [item, ...previous.filter(d => d.id !== item.id)]);
+      showExamples.current = false;
+      setSelected(item.id); setTab("preview");
+    });
   }
   async function upload(file: File) {
     if (uploadPolicy && !uploadPolicy.supported_extensions.some(ext =>
@@ -303,10 +336,29 @@ function Workspace({ actor }: { actor: Identity }) {
     });
     setUploadProgress(null);
   }
+  async function loadSnapshots() {
+    if (!existingTableName.trim()) return;
+    const version = ++snapshotRequestVersion.current;
+    setSnapshotsLoading(true);
+    setError("");
+    try {
+      const items = await request<Snapshot[]>(
+        `/api/iceberg/${encodeURIComponent(existingTableName)}/snapshots`);
+      if (version !== snapshotRequestVersion.current) return;
+      setSnapshots(items);
+      setSnapshotId(items[0]?.snapshot_id ?? "");
+    } catch (cause) {
+      if (version !== snapshotRequestVersion.current) return;
+      setSnapshots([]); setSnapshotId("");
+      setError(formatError(cause));
+    } finally {
+      if (version === snapshotRequestVersion.current) setSnapshotsLoading(false);
+    }
+  }
   async function connectExisting() {
     await withFeedback(async () => {
       const data = await jsonPost<Dataset>("/api/datasets/iceberg",
-        { table_name: tableName });
+        { table_name: existingTableName, ...(snapshotId ? { snapshot_id: snapshotId } : {}) });
       await showRegisteredDataset(data,
         "기존 Iceberg 테이블의 스냅샷을 연결했습니다.",
         "Iceberg 스냅샷은 정상 연결됐습니다. 목록 새로고침에 실패했지만 다시 연결할 필요는 없습니다.");
@@ -315,8 +367,8 @@ function Workspace({ actor }: { actor: Identity }) {
   async function importIceberg() {
     if (!selected) return;
     await withFeedback(async () => {
-      const job = await jsonPost<Job>("/api/iceberg/import",
-        { dataset_id: selected, table_name: tableName });
+      const job = await submitJob<Job>("/api/iceberg/import",
+        { dataset_id: selected, table_name: importTableName });
       await showSubmittedJob(job, "Iceberg 적재 Job이 등록되었습니다. 완료 후 데이터셋 목록에서 확인할 수 있습니다.");
     });
   }
@@ -391,13 +443,33 @@ function Workspace({ actor }: { actor: Identity }) {
       </label>}
       {canWrite && <div className="connect-existing">
         <label>기존 Iceberg 테이블
-          <input aria-label="Iceberg 테이블 이름" value={tableName}
-            onChange={e => setTableName(e.target.value)} placeholder="sensor_data" />
+          <input aria-label="Iceberg 테이블 이름" value={existingTableName}
+            onChange={e => {
+              ++snapshotRequestVersion.current;
+              setExistingTableName(e.target.value);
+              setSnapshots([]); setSnapshotId(""); setSnapshotsLoading(false);
+            }}
+            placeholder="sensor_data" />
         </label>
-        <button className="secondary" disabled={busy}
-          onClick={() => void connectExisting()}>스냅샷 연결</button>
+        <button className="secondary" disabled={busy || snapshotsLoading || !existingTableName.trim()}
+          onClick={() => void loadSnapshots()}>
+          {snapshotsLoading ? "조회 중" : "Snapshot 조회"}
+        </button>
+        {snapshots.length > 0 && <label>사용할 Snapshot
+          <select aria-label="Iceberg Snapshot 선택" value={snapshotId}
+            onChange={event => setSnapshotId(event.target.value)}>
+            {snapshots.map(item => <option key={item.snapshot_id} value={item.snapshot_id}>
+              {item.snapshot_id} · {new Date(item.timestamp_ms).toLocaleString("ko-KR")}
+            </option>)}
+          </select>
+        </label>}
+        <button className="secondary" disabled={busy || !existingTableName.trim()}
+          onClick={() => void connectExisting()}>
+          {snapshotId ? "선택한 Snapshot 연결" : "최신 Snapshot 연결"}
+        </button>
       </div>}
       <button className="job-navigation secondary" onClick={() => {
+        showExamples.current = true;
         setSelected(""); setTab("preview");
       }}>예제 데이터 살펴보기</button>
       <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
@@ -412,11 +484,15 @@ function Workspace({ actor }: { actor: Identity }) {
       <nav aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
-          onClick={() => { setSelected(d.id); setTab("preview"); }}>
+          onClick={() => { showExamples.current = false; setSelected(d.id); setTab("preview"); }}>
           <span className="dataset-name">{d.name}</span>
           <span className="dataset-kind">{d.kind === "iceberg" ? "◆ Iceberg" : "◫ File"}</span>
         </button>)}
       </nav>
+      {nextDatasetCursor && <button className="job-navigation secondary"
+        disabled={busy} onClick={() => void loadMoreDatasets()}>
+        이전 데이터셋 더 불러오기
+      </button>}
       <div className="sidebar-bottom"><a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a></div>
     </aside>
     <main className="main">
@@ -453,8 +529,8 @@ function Workspace({ actor }: { actor: Identity }) {
               데이터 다시 불러오기
             </button>
             {canWrite && <>
-              <input aria-label="Iceberg 테이블명" value={tableName}
-                onChange={e => setTableName(e.target.value)} placeholder="Iceberg table" />
+              <input aria-label="Iceberg 테이블명" value={importTableName}
+                onChange={e => setImportTableName(e.target.value)} placeholder="Iceberg table" />
               <button disabled={busy} className="secondary" onClick={() => void importIceberg()}>
                 Iceberg에 추가
               </button>
@@ -632,7 +708,7 @@ function App() {
   async function checkIdentity() {
     setChecking(true); setMessage("");
     try {
-      setActor(await request<Identity>("/api/auth/me"));
+      setActor(await request<Identity>("/api/v2/auth/me"));
     } catch (error) {
       setMessage(error instanceof ApiError && error.status === 401
         ? "인증이 필요합니다. 발급된 액세스 토큰을 입력하세요."
@@ -645,7 +721,7 @@ function App() {
     setSubmitting(true); setMessage("");
     setAccessToken(token);
     try {
-      setActor(await request<Identity>("/api/auth/me"));
+      setActor(await request<Identity>("/api/v2/auth/me"));
       setToken("");
     } catch (error) {
       setAccessToken(null);
