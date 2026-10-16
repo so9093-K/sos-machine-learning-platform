@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
-import { chartValue, explorationCategory, explorationValue } from "./exploration-format";
+import { chartValue, explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
 import { request, jsonPost, submitJob, formatError } from "./api";
 import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, ExplorationJob } from "./types";
 import type { ExplorationDraft } from "./ExplorationDraft";
@@ -158,9 +158,9 @@ export function DiscoveryPanel({
               ? selectedMeasure : (nextCandidates[0]?.name ?? "");
             updateRequest({ metric: nextMetric, column: nextColumn });
           }}>
-          <option value="mean">평균</option><option value="min">최솟값</option>
-          <option value="max">최댓값</option><option value="count">행 수</option>
-          <option value="null_count">NULL 수</option>
+          <option value="mean">{explorationMetricLabel("mean")}</option><option value="min">{explorationMetricLabel("min")}</option>
+          <option value="max">{explorationMetricLabel("max")}</option><option value="count">{explorationMetricLabel("count")}</option>
+          <option value="null_count">{explorationMetricLabel("null_count")}</option>
         </select></label>
         <label>그룹 <select aria-label="집계 그룹" value={groupBy} disabled={running}
           onChange={e => updateRequest({ group_by: e.target.value || null })}>

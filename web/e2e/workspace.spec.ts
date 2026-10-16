@@ -157,6 +157,10 @@ test("same dataset reload preserves Feature editor selections", async ({ page })
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   await page.getByLabel("컬럼", { exact: true }).selectOption("vibration");
+  await page.getByRole("tab", { name: "개요" }).click();
+  await page.getByRole("tab", { name: "변환" }).click();
+  await expect(page.getByLabel("컬럼", { exact: true })).toHaveValue("vibration");
+  await expect(page.locator(".step")).toHaveCount(1);
   await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
   await expect(page.getByLabel("컬럼", { exact: true })).toHaveValue("vibration");
   await expect(page.getByLabel("시간·정렬 컬럼")).toHaveValue("time");

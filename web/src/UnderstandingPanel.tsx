@@ -1,6 +1,7 @@
 /** Dataset 판본의 실제 Profile과 실행 가능한 탐색을 공통 API로 표시한다. */
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
+import { explorationMetricLabel } from "./exploration-format";
 import type { DatasetOverview, ExplorationRequest, Job } from "./types";
 
 import type { components } from "./api.generated";
@@ -176,7 +177,7 @@ export function UnderstandingPanel({
         <h4>{item.title}</h4><p>{item.reason}</p>
         <p className="hint">구성 근거: {profile.scope === "full" ? "전체 프로파일" : "Reservoir 표본"}
           {" · "}실행 범위: 별도의 제한된 선두 샘플</p>
-        <p className="hint">분석 조건: {item.request.column} · {item.request.metric}{
+        <p className="hint">분석 조건: {item.request.column} · {explorationMetricLabel(item.request.metric)}{
           item.request.group_by ? ` · 그룹 ${item.request.group_by}` : " · 전체 그룹"
         }</p>
         <button onClick={() => onChooseCandidate(item, profile.version, profile.scope)}>
