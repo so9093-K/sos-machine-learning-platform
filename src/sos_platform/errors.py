@@ -90,6 +90,10 @@ DEFINITIONS = (
         "manual_verification_required",
     ),
     spec("SOS-JOB-FAILED", "실행 실패", "작업 실행 중 오류가 발생했습니다.", "execution"),
+    spec("SOS-JOB-TIMEOUT", "실행 시간 초과",
+         "작업이 허용된 실행 시간을 초과하여 종료됐습니다.", "execution"),
+    spec("SOS-JOB-MEMORY-LIMIT", "실행 메모리 초과",
+         "작업이 허용된 메모리 사용량을 초과하여 종료됐습니다.", "execution"),
     spec(
         "SOS-JOB-INTERRUPTED",
         "실행 중단",
