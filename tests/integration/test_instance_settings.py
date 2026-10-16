@@ -52,6 +52,17 @@ def test_instance_display_name_only_admin_can_change(workspace, monkeypatch):
         for name in ("viewer", "researcher", "operator"):
             headers = {"Authorization": "Bearer " + tokens[name]}
             assert secure.get("/api/instance", headers=headers).status_code == 200
+            identity = secure.get("/api/v2/auth/me", headers=headers)
+            assert identity.status_code == 200
+            abilities = identity.json()["capabilities"]
+            assert abilities == sorted(set(abilities))
+            assert "instance.configure" not in abilities
+            if name == "operator":
+                assert "storage.inspect" in abilities
+                assert "dataset.read" not in abilities
+            else:
+                assert "dataset.read" in abilities
+                assert "storage.inspect" not in abilities
             response = secure.put(
                 "/api/instance", json={"display_name": "Unauthorized"}, headers=headers
             )
@@ -60,6 +71,10 @@ def test_instance_display_name_only_admin_can_change(workspace, monkeypatch):
         success = secure.put(
             "/api/instance", json={"display_name": "AI Studio"}, headers=admin_headers
         )
+        allowed = secure.get("/api/v2/auth/me", headers=admin_headers).json()["capabilities"]
+        assert "instance.configure" in allowed
+        assert "dataset.read" in allowed
+        assert "storage.inspect" in allowed
         assert success.status_code == 200, success.text
         assert success.json() == {"display_name": "AI Studio"}
         assert secure.get("/api/instance", headers=admin_headers).json()["display_name"] == (

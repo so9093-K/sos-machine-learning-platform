@@ -763,6 +763,8 @@ export interface components {
              * @enum {string}
              */
             actor_type: "human" | "service";
+            /** Capabilities */
+            capabilities: string[];
             /**
              * Mode
              * @enum {string}
@@ -1144,16 +1146,11 @@ export interface components {
         };
         /**
          * InstanceSettingsOut
-         * @description 공통 플랫폼 인스턴스 표시명·인증 환경 정보.
+         * @description 공통 플랫폼의 표시 전용 설정. 인증·배포 환경과 별개의 계약.
          */
         InstanceSettingsOut: {
             /** Display Name */
             display_name: string;
-            /**
-             * Environment
-             * @enum {string}
-             */
-            environment: "development" | "token";
         };
         /**
          * InstanceSettingsUpdate
