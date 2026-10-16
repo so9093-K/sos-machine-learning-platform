@@ -221,7 +221,7 @@ test("file size is explained and rejected before upload", async ({ page }) => {
 
 test("201 registration remains successful when the subsequent list refresh fails", async ({ page }) => {
   let failRefresh = false;
-  await page.route("**/api/datasets/pages*", route => {
+  await page.route("**/api/datasets?*", route => {
     if (route.request().method() === "GET" && failRefresh) {
       return route.fulfill({ status: 503, contentType: "application/json",
         body: JSON.stringify({ detail: "List temporarily unavailable" }) });
@@ -414,7 +414,7 @@ test("late initial Dataset list cannot overwrite successful upload selection", a
   const gotInitial = new Promise<void>(resolve => { initialFetched = resolve; });
   const delivery = new Promise<void>(resolve => { resolveInitial = resolve; });
   let isFirst = true;
-  await page.route("**/api/datasets/pages*", async route => {
+  await page.route("**/api/datasets?*", async route => {
     if (isFirst && route.request().method() === "GET") {
       isFirst = false;
       const response = await route.fetch(); // 업로드 이전의 오래된 스냅샷
@@ -481,7 +481,7 @@ test("late Dataset list response does not exit explicitly selected example galle
   const started = new Promise<void>(resolve => { fetched = resolve; });
   const release = new Promise<void>(resolve => { unblock = resolve; });
   let held = false;
-  await page.route("**/api/datasets/pages*", async route => {
+  await page.route("**/api/datasets?*", async route => {
     if (route.request().method() === "GET" && !held) {
       held = true;
       const response = await route.fetch();

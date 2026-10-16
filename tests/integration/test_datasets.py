@@ -84,9 +84,7 @@ def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
     assert client.post("/api/examples/missing/use").status_code == 404
 
 
-def test_example_reuse_does_not_depend_on_unbounded_dataset_listing(
-    workspace, monkeypatch
-):
+def test_example_reuse_does_not_depend_on_unbounded_dataset_listing(workspace, monkeypatch):
     client, store = workspace
 
     def unexpected_page(*_args, **_kwargs):
