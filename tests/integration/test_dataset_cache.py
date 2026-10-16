@@ -13,8 +13,8 @@ from sos_platform.object_store import ObjectStore
 
 def test_cache_quota_preserves_active_reader_and_source(workspace):
     _client, store = workspace
-    first_data = b"t,value\\n1,2\\n3,4\\n"
-    second_data = b"t,value\\n10,20\\n30,40\\n"
+    first_data = b"t,value\n1,2\n3,4\n"
+    second_data = b"t,value\n10,20\n30,40\n"
     first = save_upload_file(store, "first.csv", BytesIO(first_data))
     second = save_upload_file(store, "second.csv", BytesIO(second_data))
     assert first["version"] == hashlib.sha256(first_data).hexdigest()

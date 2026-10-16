@@ -18,7 +18,7 @@ from .errors import PlatformError
 from .object_store import ObjectStore
 from .store import Store
 
-_CACHE_FILE = re.compile(r"^[0-9a-f]{64}\\.(csv|parquet)$")
+_CACHE_FILE = re.compile(r"^[0-9a-f]{64}\.(csv|parquet)$")
 
 
 @dataclass(frozen=True)
