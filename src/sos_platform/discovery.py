@@ -23,6 +23,7 @@ from sqlalchemy import text
 from .cache import cached_dataset_file
 from .datasets import iceberg_catalog
 from .errors import PlatformError
+from .resource_admission import reserve_execution_memory
 from .store import Store
 
 
@@ -231,6 +232,9 @@ def source_connection(
     # 각 요청에만 속한 Spill 파일은 연결 종료 후 함께 정리한다.
     # 다른 사용자·Worker가 사용하는 경로나 기존 캐시를 삭제하지 않는다.
     with discovery_slot(store), ExitStack() as pins:
+        # 비동기 Job의 DuckDB는 부모 Worker가 이미 예약한 자원 안에서 실행된다.
+        if not getattr(store, "_execution_memory_reserved", False):
+            pins.enter_context(reserve_execution_memory(store, policy.memory_mib))
         with TemporaryDirectory(prefix="query-", dir=scratch_root) as directory:
             scratch = Path(directory)
             path = (

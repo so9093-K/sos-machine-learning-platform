@@ -18,7 +18,6 @@ from .errors import PlatformError
 if TYPE_CHECKING:
     from .store import Store
 
-_MIB = 1024 * 1024
 _QUANTUM_MIB = 256
 _LOCK_NAMESPACE = 83420
 
@@ -28,18 +27,18 @@ class ExecutionCapacity:
     """서버의 실물 RAM과 구별되는 논리적 실행 메모리 수용량."""
 
     pool_mib: int = 3072
-    wait_seconds: float = 15.0
+    wait_seconds: float = 5.0
 
     @classmethod
     def from_env(cls) -> "ExecutionCapacity":
         capacity = os.getenv("SOS_EXECUTION_POOL_MIB", "3072")
-        wait = os.getenv("SOS_EXECUTION_POOL_WAIT_SECONDS", "15")
+        wait = os.getenv("SOS_EXECUTION_POOL_WAIT_SECONDS", "5")
         if (
             not capacity.isdecimal()
-            or not 2048 <= int(capacity) <= 65536
+            or not 256 <= int(capacity) <= 65536
             or int(capacity) % _QUANTUM_MIB
         ):
-            raise ValueError("SOS_EXECUTION_POOL_MIB must be a multiple of 256 between 2048 and 65536")
+            raise ValueError("SOS_EXECUTION_POOL_MIB must be a multiple of 256 between 256 and 65536")
         if not wait.isdecimal() or not 1 <= int(wait) <= 300:
             raise ValueError("SOS_EXECUTION_POOL_WAIT_SECONDS must be between 1 and 300")
         return cls(pool_mib=int(capacity), wait_seconds=float(wait))

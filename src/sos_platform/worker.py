@@ -27,6 +27,7 @@ from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_r
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import transform
+from .resource_admission import ExecutionCapacity, reserve_execution_memory
 from .schemas import ExplorationSpec, Transform
 from .store import Store
 from .understanding import build_understanding
@@ -42,6 +43,8 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
 
     try:
         store = Store(home, database_url=database_url)
+        # 부모 Worker의 논리적 메모리 예약 안에서 실행되는 자식이다.
+        store._execution_memory_reserved = True
         dataset = store.get_dataset(job["dataset_id"])
         if dataset is None:
             raise ValueError("Input dataset is missing")
@@ -127,7 +130,22 @@ def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) 
 
 
 def run_once(store: Store) -> bool:
+    """예약 가능한 실행 용량을 확보한 뒤에만 Job을 Running으로 변경한다."""
     budget = ExecutionBudget.from_env()
+    capacity = ExecutionCapacity.from_env()
+    if budget.max_rss_mib > capacity.pool_mib:
+        raise ValueError("SOS_EXECUTION_POOL_MIB must cover SOS_WORKER_MAX_RSS_MIB")
+    try:
+        with reserve_execution_memory(store, budget.max_rss_mib, capacity):
+            return _run_once_reserved(store, budget)
+    except PlatformError as exc:
+        if exc.code == "SOS-EXECUTION-CAPACITY":
+            # Job을 Claim하지 않았으므로 Queued 상태를 유지하고 다음 폴링에서 재시도한다.
+            return False
+        raise
+
+
+def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
     job = store.claim()
     if job is None:
         return False
