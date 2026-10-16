@@ -75,6 +75,16 @@ workers = Table(
     Column("active", Boolean, nullable=False),
 )
 
+# API 다중 인스턴스에서 Job 제출을 원자적으로 고정하는 신원.
+job_submissions = Table(
+    "job_submissions", metadata,
+    Column("actor_id", String(128), primary_key=True),
+    Column("submission_key", String(128), primary_key=True),
+    Column("fingerprint", String(64), nullable=False),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=True, unique=True),
+    Column("created_at", Text, nullable=False),
+)
+
 # S3 객체 자체와 PostgreSQL에서 보장하는 게시 참조는 구별한다.
 object_writes = Table(
     "object_writes",

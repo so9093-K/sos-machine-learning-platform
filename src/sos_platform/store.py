@@ -1,5 +1,6 @@
 """플랫폼 메타데이터와 Job 실행 이력을 PostgreSQL에 보관한다."""
 
+import hashlib
 import json
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -479,7 +480,17 @@ class Store:
         owner_actor: str | None = None,
         actor_type: str = "human",
         request_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict:
+        """중복 제출을 PostgreSQL 유일성 제약과 같은 트랜잭션으로 처리한다."""
+        if idempotency_key is not None and owner_actor is None:
+            raise ValueError("Idempotent Job requires an actor")
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                {"kind": kind, "dataset_id": dataset_id, "spec": spec},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest()
         item = dict(
             id=str(uuid4()),
             kind=kind,
@@ -492,6 +503,28 @@ class Store:
             updated_at=now(),
         )
         with self.connection() as db:
+            if idempotency_key is not None:
+                # PostgreSQL 유일성 충돌은 동시 트랜잭션을 직렬화한다.
+                inserted = db.execute(
+                    text(
+                        "INSERT INTO job_submissions(actor_id,submission_key,fingerprint,"
+                        "job_id,created_at) VALUES(:actor,:key,:fingerprint,NULL,:at) "
+                        "ON CONFLICT(actor_id,submission_key) DO NOTHING RETURNING actor_id"
+                    ),
+                    {"actor": owner_actor, "key": idempotency_key,
+                     "fingerprint": fingerprint, "at": now()},
+                ).scalar_one_or_none()
+                if inserted is None:
+                    previous = db.execute(
+                        text("SELECT fingerprint,job_id FROM job_submissions "
+                             "WHERE actor_id=:actor AND submission_key=:key"),
+                        {"actor": owner_actor, "key": idempotency_key},
+                    ).mappings().one()
+                    if previous["fingerprint"] != fingerprint:
+                        raise PlatformError("SOS-JOB-IDEMPOTENCY-CONFLICT")
+                    previous_id = previous["job_id"]
+                    # get_job은 새 트랜잭션으로 기존 확정 Job을 조회한다.
+                    return self.get_job(previous_id)
             db.execute(
                 text(
                     "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at,"
@@ -501,6 +534,12 @@ class Store:
                 ),
                 item,
             )
+            if idempotency_key is not None:
+                db.execute(
+                    text("UPDATE job_submissions SET job_id=:job "
+                         "WHERE actor_id=:actor AND submission_key=:key"),
+                    {"job": item["id"], "actor": owner_actor, "key": idempotency_key},
+                )
             if owner_actor:
                 self._audit(
                     db,
