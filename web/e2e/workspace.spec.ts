@@ -371,3 +371,23 @@ test("audit navigation does not show unrelated dataset tabs", async ({ page }) =
   await expect(page.locator(".dataset-hero")).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "EDA & Profile" })).toHaveCount(0);
 });
+
+
+test("sample and full Discovery distinguish NULL groups from whole-dataset aggregation", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "nullable-group.csv", mimeType: "text/csv",
+    buffer: Buffer.from("group,value\n,1\na,2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "nullable-group.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  const discovery = page.getByRole("region", { name: "Dataset Discovery" });
+  await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
+  await discovery.getByRole("button", { name: "샘플 집계" }).click();
+  await expect(discovery.getByRole("table").getByText("(NULL 그룹)")).toBeVisible();
+  const jobId = await submittedJob(page, "/api/explorations/jobs", () =>
+    discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
+  const job = jobById(page, jobId);
+  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
+  await expect(job.getByRole("region", { name: "전체 집계 결과" }).getByText("(NULL 그룹)")).toBeVisible();
+});

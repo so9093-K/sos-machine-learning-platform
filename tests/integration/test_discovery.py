@@ -1,6 +1,8 @@
 """DuckDB Discovery의 분석 의미·권한·Job·Iceberg Snapshot 계약을 검증한다."""
 
 import math
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from io import BytesIO
 
 import pyarrow as pa
@@ -184,7 +186,7 @@ def test_nonfinite_preview_and_sample_full_exploration_are_json_safe(workspace):
 
 
 def test_exploration_counts_all_categorical_columns(workspace):
-    client, store = workspace
+    client, _store = workspace
     dataset = _upload(client, "categories.csv", b"group,label\na,x\na,\nb,y\n")
     spec = {"column": "label", "metric": "null_count", "group_by": "group"}
     response = client.post(f"/api/datasets/{dataset['id']}/explorations", json=spec)
@@ -214,3 +216,143 @@ def test_discovery_query_spill_directory_is_owned_and_released(workspace):
             assert len(list(scratch_root.glob("query-*"))) == 2
         assert len(list(scratch_root.glob("query-*"))) == 1
     assert not list(scratch_root.glob("query-*"))
+
+
+def _parquet_payload(table: pa.Table) -> bytes:
+    """계약별 Parquet 입력을 결정적 바이트로 생성한다."""
+    buffer = BytesIO()
+    pq.write_table(table, buffer)
+    return buffer.getvalue()
+
+
+def test_decimal_precision_is_preserved_across_sample_profile_and_worker(workspace):
+    """큰 DECIMAL의 MIN/MAX는 샘플과 Worker에서 정확히 같은 십진 문자열이다."""
+    client, store = workspace
+    high = Decimal("9007199254740993.125000")
+    low = Decimal("9007199254740992.500000")
+    table = pa.table(
+        {
+            "group": ["high", "low"],
+            "amount": pa.array([high, low], type=pa.decimal128(30, 6)),
+        }
+    )
+    dataset = _upload(client, "precise.parquet", _parquet_payload(table))
+    base = f"/api/datasets/{dataset['id']}"
+    preview = client.get(base + "/preview")
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["schema"]["amount"] == "Decimal(30,6)"
+    assert [row["amount"] for row in preview.json()["rows"]] == [str(high), str(low)]
+    profile = client.get(base + "/profile")
+    assert profile.status_code == 200, profile.text
+    amount = next(col for col in profile.json()["columns"] if col["name"] == "amount")
+    assert amount["min"] == str(low)
+    assert amount["max"] == str(high)
+
+    spec = {"column": "amount", "metric": "max", "group_by": "group"}
+    sample = client.post(base + "/explorations", json=spec)
+    assert sample.status_code == 200, sample.text
+    exact = {"high": str(high), "low": str(low)}
+    assert {row["category"]: row["value"] for row in sample.json()["rows"]} == exact
+    submitted = client.post(
+        "/api/explorations/jobs", json={"dataset_id": dataset["id"], "exploration": spec}
+    )
+    assert submitted.status_code == 202, submitted.text
+    assert run_once(store)
+    job = client.get(f"/api/explorations/jobs/{submitted.json()['id']}")
+    assert job.status_code == 200, job.text
+    assert job.json()["status"] == "Succeeded", job.text
+    assert {row["category"]: row["value"] for row in job.json()["result"]["rows"]} == exact
+
+
+def test_binary_parquet_preview_and_null_group_are_json_safe(workspace):
+    """임의 bytes 및 실제 NULL 그룹을 Preview와 샘플·전체 Job에서 구별한다."""
+    client, store = workspace
+    table = pa.table(
+        {
+            "binary": pa.array([b"\xff", None, b"\x00"], type=pa.binary()),
+            "value": [1, 2, 3],
+        }
+    )
+    dataset = _upload(client, "binary.parquet", _parquet_payload(table))
+    base = f"/api/datasets/{dataset['id']}"
+    preview = client.get(base + "/preview")
+    assert preview.status_code == 200, preview.text
+    assert [row["binary"] for row in preview.json()["rows"]] == [
+        "base64:/w==", None, "base64:AA==",
+    ]
+    spec = {"column": "value", "metric": "count", "group_by": "binary"}
+    sample = client.post(base + "/explorations", json=spec)
+    assert sample.status_code == 200, sample.text
+    exact = {"base64:/w==": 1, None: 1, "base64:AA==": 1}
+    assert {row["category"]: row["value"] for row in sample.json()["rows"]} == exact
+    submitted = client.post(
+        "/api/explorations/jobs", json={"dataset_id": dataset["id"], "exploration": spec}
+    )
+    assert submitted.status_code == 202, submitted.text
+    assert run_once(store)
+    job = client.get(f"/api/explorations/jobs/{submitted.json()['id']}")
+    assert job.status_code == 200, job.text
+    assert job.json()["status"] == "Succeeded", job.text
+    assert {row["category"]: row["value"] for row in job.json()["result"]["rows"]} == exact
+
+
+def test_nonfinite_groups_sort_after_normalization_before_limit(workspace, monkeypatch):
+    """NaN 그룹이 우선 표시되어 유효한 숫자 그룹을 숨기지 않는다."""
+    monkeypatch.setenv("SOS_DISCOVERY_MAX_GROUPS", "5")
+    client, store = workspace
+    table = pa.table(
+        {
+            "group": [f"bad_{i}" for i in range(5)] + ["good_a", "good_b"],
+            "value": pa.array([float("nan")] * 5 + [7.0, 8.0], type=pa.float64()),
+        }
+    )
+    dataset = _upload(client, "ranked.parquet", _parquet_payload(table))
+    spec = {"column": "value", "metric": "max", "group_by": "group"}
+    sample = client.post(f"/api/datasets/{dataset['id']}/explorations", json=spec)
+    assert sample.status_code == 200, sample.text
+    rows = sample.json()["rows"]
+    assert sample.json()["truncated"] is True
+    assert len(rows) == 5
+    assert [(row["category"], row["value"]) for row in rows[:2]] == [
+        ("good_b", 8.0), ("good_a", 7.0),
+    ]
+    assert all(row["value"] is None for row in rows[2:])
+    submitted = client.post(
+        "/api/explorations/jobs", json={"dataset_id": dataset["id"], "exploration": spec}
+    )
+    assert submitted.status_code == 202
+    assert run_once(store)
+    job = client.get(f"/api/explorations/jobs/{submitted.json()['id']}")
+    assert job.status_code == 200, job.text
+    assert job.json()["status"] == "Succeeded"
+    assert job.json()["result"]["rows"] == rows
+
+
+def test_unsigned_integer_and_zoned_timestamp_keep_dtype_and_json_meaning(workspace):
+    """부호·폭·시간대를 표시하며 브라우저에서 큰 정수 정밀도를 잃지 않는다."""
+    client, _store = workspace
+    huge = 18446744073709551615
+    instant = datetime(2024, 1, 1, tzinfo=timezone(timedelta(hours=9)))
+    table = pa.table(
+        {
+            "counter": pa.array([huge], type=pa.uint64()),
+            "observed": pa.array([instant], type=pa.timestamp("us", tz="Asia/Seoul")),
+        }
+    )
+    dataset = _upload(client, "typed.parquet", _parquet_payload(table))
+    base = f"/api/datasets/{dataset['id']}"
+    preview = client.get(base + "/preview")
+    assert preview.status_code == 200, preview.text
+    row = preview.json()["rows"][0]
+    assert preview.json()["schema"]["counter"] == "UInt64"
+    assert preview.json()["schema"]["observed"] == "Datetime(time_unit='us', time_zone='UTC')"
+    assert row["counter"] == str(huge)
+    assert row["observed"].startswith("2023-12-31T15:00:00")
+    assert row["observed"].endswith("+00:00")
+    result = client.post(base + "/explorations", json={"column": "counter", "metric": "max"})
+    assert result.status_code == 200, result.text
+    assert result.json()["rows"][0]["value"] == str(huge)
+    profile = client.get(base + "/profile")
+    assert profile.status_code == 200, profile.text
+    counter = next(c for c in profile.json()["columns"] if c["name"] == "counter")
+    assert counter["max"] == str(huge)
