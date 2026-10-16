@@ -27,21 +27,22 @@ def test_suggestions_only_emit_supported_operations():
         {
             "name": "group",
             "roles": [{"role": "categorical"}],
-            "is_constant": False, "distinct_count": 2,
+            "is_constant": False,
+            "distinct_count": 2,
             "null_count": 0,
         },
         {
             "name": "value",
             "roles": [{"role": "numeric_measure"}],
-            "is_constant": False, "distinct_count": 4,
+            "is_constant": False,
+            "distinct_count": 4,
             "null_count": 0,
         },
     ]
     proposals = suggest_analyses(columns, 10)
     assert proposals
     assert all(
-        p["request"]["metric"] in {"count", "null_count", "mean", "min", "max"}
-        for p in proposals
+        p["request"]["metric"] in {"count", "null_count", "mean", "min", "max"} for p in proposals
     )
     assert proposals[0]["request"]["group_by"] == "group"
     assert suggest_analyses([], 0) == []
@@ -50,7 +51,8 @@ def test_suggestions_only_emit_supported_operations():
 def test_dataset_understanding_job_version_and_executable_suggestions(workspace):
     client, store = workspace
     dataset = _upload(
-        client, "unknown.csv",
+        client,
+        "unknown.csv",
         b"ts,department,score,user_name\n"
         b"2026-01-01T00:00:00Z,alpha,2.0,person_a\n"
         b"2026-01-01T00:01:00Z,beta,5.0,person_b\n"
