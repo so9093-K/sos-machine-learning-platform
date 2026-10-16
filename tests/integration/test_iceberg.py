@@ -381,3 +381,36 @@ def test_staging_size_tracks_only_the_target_attempt(workspace):
     assert iceberg_staging_bytes(store, other) == 29
     cleanup_iceberg_staging(store)
     assert iceberg_staging_bytes(store, first) == 0
+
+
+def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch):
+    """기존 파티션 테이블의 호환 한도는 대용량 임시 파일 작성 전에 검사한다."""
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    import polars as pl
+
+    import sos_platform.datasets as module
+
+    _client, store = workspace
+
+    class ExistingTable:
+        def spec(self):
+            return SimpleNamespace(fields=["part"])
+
+    class ExistingCatalog:
+        def create_namespace_if_not_exists(self, _name):
+            pass
+
+        def load_table(self, _name):
+            return ExistingTable()
+
+    @contextmanager
+    def fake_source(_store, _dataset):
+        yield pl.DataFrame({"value": range(50_001)}).lazy()
+
+    monkeypatch.setattr(module, "iceberg_catalog", lambda _store: ExistingCatalog())
+    monkeypatch.setattr(module, "pinned_scan_dataset", fake_source)
+    with pytest.raises(ValueError, match="50,000"):
+        module.import_to_iceberg(store, {"kind": "file"}, "partitioned_input", str(uuid4()))
+    assert not (store.home / "cache" / "iceberg-staging").exists()

@@ -35,7 +35,6 @@ def test_staging_budget_configuration(monkeypatch):
         ExecutionBudget.from_env()
 
 
-
 def test_worker_staging_budget_rejects_oversize_attempt_and_keeps_commit_uncertain(
     workspace, monkeypatch
 ):
