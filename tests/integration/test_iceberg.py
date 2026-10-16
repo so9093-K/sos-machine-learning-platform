@@ -296,3 +296,121 @@ def test_tag_survives_database_publish_failure(workspace, monkeypatch):
     assert inspection.status_code == 200
     assert inspection.json()[0]["dataset_id"] == orphan["dataset_id"]
     assert inspection.json()[0]["status"] == "unknown"
+
+
+def test_large_unpartitioned_iceberg_import_uses_one_snapshot(workspace):
+    """과거 50,000행 제한을 넘는 입력도 한번의 논리적 커밋으로 적재한다."""
+    from io import BytesIO
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from sos_platform.datasets import iceberg_catalog
+
+    client, store = workspace
+    buffer = BytesIO()
+    pq.write_table(
+        pa.table(
+            {
+                "value": pa.array(range(65_000), type=pa.int64()),
+                "label": pa.array(["unit"] * 65_000),
+            }
+        ),
+        buffer,
+    )
+    uploaded = client.post(
+        "/api/datasets/files",
+        files={"file": ("large-import.parquet", buffer.getvalue(), "application/octet-stream")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    job = client.post(
+        "/api/iceberg/import",
+        json={
+            "dataset_id": uploaded.json()["id"],
+            "table_name": "large_import",
+        },
+    )
+    assert job.status_code == 202
+    assert run_once(store)
+    finished = client.get(f"/api/jobs/{job.json()['id']}").json()
+    assert finished["status"] == "Succeeded", finished
+    table = iceberg_catalog(store).load_table("default.large_import")
+    assert len(table.snapshots()) == 1
+    assert table.scan().to_arrow().num_rows == 65_000
+    assert table.current_snapshot().summary["sos.attempt-id"] == finished["attempts"][0]["id"]
+
+
+def test_iceberg_staging_cleanup_is_scoped_to_its_attempt(workspace):
+    """강제 종료 후에는 해당 Attempt의 임시 파일만 정리할 수 있어야 한다."""
+    from sos_platform.datasets import cleanup_iceberg_staging
+
+    _client, store = workspace
+    first, second = str(uuid4()), str(uuid4())
+    root = store.home / "cache" / "iceberg-staging"
+    own = root / f"attempt-{first}-test1"
+    other = root / f"attempt-{second}-test2"
+    for path in (own, other):
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "input.parquet").write_bytes(b"partially-written")
+    unexpected = root / "user-original.parquet"
+    unexpected.write_bytes(b"keep-me")
+    cleanup_iceberg_staging(store, first)
+    assert not own.exists()
+    assert other.exists()
+    assert unexpected.read_bytes() == b"keep-me"
+    cleanup_iceberg_staging(store)
+    assert not other.exists()
+    assert unexpected.read_bytes() == b"keep-me"
+    unexpected.unlink()
+
+
+def test_staging_size_tracks_only_the_target_attempt(workspace):
+    """임시 디스크 관측은 타 Attempt 및 무관한 캐시 파일을 포함하지 않는다."""
+    from sos_platform.datasets import cleanup_iceberg_staging, iceberg_staging_bytes
+
+    _client, store = workspace
+    first, other = str(uuid4()), str(uuid4())
+    root = store.home / "cache" / "iceberg-staging"
+    path_a = root / f"attempt-{first}-aaaa"
+    path_b = root / f"attempt-{other}-bbbb"
+    path_a.mkdir(parents=True, exist_ok=True)
+    path_b.mkdir(parents=True, exist_ok=True)
+    (path_a / "input.parquet").write_bytes(b"a" * 19)
+    (path_b / "input.parquet").write_bytes(b"b" * 29)
+    assert iceberg_staging_bytes(store, first) == 19
+    assert iceberg_staging_bytes(store, other) == 29
+    cleanup_iceberg_staging(store)
+    assert iceberg_staging_bytes(store, first) == 0
+
+
+def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch):
+    """기존 파티션 테이블의 호환 한도는 대용량 임시 파일 작성 전에 검사한다."""
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    import polars as pl
+
+    import sos_platform.datasets as module
+
+    _client, store = workspace
+
+    class ExistingTable:
+        def spec(self):
+            return SimpleNamespace(fields=["part"])
+
+    class ExistingCatalog:
+        def create_namespace_if_not_exists(self, _name):
+            pass
+
+        def load_table(self, _name):
+            return ExistingTable()
+
+    @contextmanager
+    def fake_source(_store, _dataset):
+        yield pl.DataFrame({"value": range(50_001)}).lazy()
+
+    monkeypatch.setattr(module, "iceberg_catalog", lambda _store: ExistingCatalog())
+    monkeypatch.setattr(module, "pinned_scan_dataset", fake_source)
+    with pytest.raises(ValueError, match="50,000"):
+        module.import_to_iceberg(store, {"kind": "file"}, "partitioned_input", str(uuid4()))
+    assert not (store.home / "cache" / "iceberg-staging").exists()

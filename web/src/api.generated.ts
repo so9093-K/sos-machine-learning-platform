@@ -231,6 +231,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/datasets/{dataset_id}/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dataset Query */
+        post: operations["dataset_query_api_datasets__dataset_id__query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/diagnostics/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -732,6 +749,21 @@ export interface components {
             version: string;
         };
         /**
+         * DatasetFilter
+         * @description 필드 존재 여부를 검증한 뒤 안전한 SQL 바인딩으로 평가하는 조건.
+         */
+        DatasetFilter: {
+            /** Column */
+            column: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "is_null" | "is_not_null";
+            /** Value */
+            value?: string | number | boolean | null;
+        };
+        /**
          * DatasetOut
          * @description 불변 Dataset 참조의 API 응답 계약.
          */
@@ -781,6 +813,28 @@ export interface components {
             items: components["schemas"]["DatasetOut"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /**
+         * DatasetQuery
+         * @description 임의 SQL이나 파일 경로를 받지 않는 범용 Dataset 조회.
+         */
+        DatasetQuery: {
+            /** Columns */
+            columns?: string[] | null;
+            /**
+             * Descending
+             * @default false
+             */
+            descending: boolean;
+            /** Filters */
+            filters?: components["schemas"]["DatasetFilter"][];
+            /**
+             * Limit
+             * @default 30
+             */
+            limit: number;
+            /** Order By */
+            order_by?: string | null;
         };
         /** DiagnosticAttemptOut */
         DiagnosticAttemptOut: {
@@ -1734,6 +1788,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    dataset_query_api_datasets__dataset_id__query_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatasetQuery"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewOut"];
                 };
             };
             /** @description Structured API error */

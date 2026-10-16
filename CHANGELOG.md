@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Dataset의 구조화된 컬럼 투영·필터·정렬 조회와 웹 컬럼 선택·탐색을 추가했다. 잘못된 비교 타입은 422로 처리하고 기존 Preview API를 보존한다.
+- Feature Builder에서 컬럼 선택 단계와 복수 그룹 키를 설정할 수 있다.
+- 비파티션 Iceberg 입력은 Parquet 스테이징·RecordBatchReader로 처리하여 5만 행 전체 메모리 제한 없이 하나의 Snapshot을 커밋한다. 기존 파티션 테이블은 소규모 호환 경로를 유지한다.
+
 - Discovery의 DECIMAL·큰 정수 정밀도, 바이너리·시간 타입 JSON 표현 및 NaN 집계 정렬을 샘플·전체 Job에 걸쳐 일관화하고, NULL 그룹/전체 그룹 구분과 정확한 값 표시를 개선했다.
 - Discovery의 NaN·무한대 Preview 및 JSON 집계 의미를 명확히 하고, 메타데이터 재시도·범주형 집계 선택·전체 Job 결과 표와 공통 차트 구현을 보완했다. 등록 성공과 후속 목록 조회 실패를 구분하고 사용자 복구·오류 안내를 개선했다.
 - DuckDB를 Dataset Preview·Profile·Discovery 탐색의 실행기로 도입하고 Polars의 Feature·Transform 책임과 분리했다. 샘플 탐색·전체 분석 Job을 분리하고 기존 Job API 호환성을 보존했다.
@@ -32,7 +36,7 @@
 - 시계열 Lag·Rolling의 NULL·중복 시간키를 검증하고 선행 캐스트·필터 적용 후 정렬하며, 동일 Dataset 재조회에서 사용자의 편집·차트 선택을 보존한다.
 - Job 목록을 정렬키 커서 기반 페이지 응답으로 제한하고 이전 이력 탐색 기능을 추가했다. UI의 변환 단계 타입은 생성 OpenAPI 계약을 사용한다.
 
-- Feature Preview는 전체 입력을 기준으로 변환한 뒤 최대 30행을 표시하며, 100,000행 초과 입력은 비동기 Transform Job으로 안내한다.
+- Feature Preview는 Row-local 변환에서 입력 행 수와 독립적으로 Lazy 결과 최대 30행을 반환한다. 그룹 Lag·Rolling은 전역 의미를 보존하기 위해 동기 예산 초과 시 전체 Transform Job으로 안내한다.
 - Feature Builder의 단계 수정·순서 변경·Lag·Rolling 값 조정, 편집 상태 보존·미리보기 일치 검증, 접근 가능한 파일 업로드와 Job 이력 탐색을 개선했다.
 - 실행 중 Iceberg 적재는 외부 커밋 결과 불확실성을 피하기 위해 취소를 거부하고, 데이터 스키마·캐시 무결성 및 Job 조회를 개선했다.
 

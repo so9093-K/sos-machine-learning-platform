@@ -554,3 +554,79 @@ test("Iceberg browse input never changes the append target or restores stale sna
   await expect(appendTarget).toHaveValue("keep_append_target");
   await expect(browseTable).toHaveValue("other_browse");
 });
+
+
+test("general Dataset query projects, filters and sorts columns", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "generic-query.csv", mimeType: "text/csv",
+    buffer: Buffer.from("group,value,private\na,10,hidden\nb,2,secret\na,5,internal\n"),
+  });
+  await expect(page.getByRole("heading", { name: "generic-query.csv" })).toBeVisible();
+  await page.getByText("컬럼·필터·정렬 선택").click();
+  await page.getByLabel("표시할 컬럼 선택").getByLabel("value", { exact: true }).check();
+  await page.getByLabel("필터 컬럼").selectOption("group");
+  await page.getByLabel("비교 값").fill("a");
+  await page.getByLabel("정렬 컬럼").selectOption("value");
+  await page.getByLabel("내림차순").check();
+  await page.getByRole("button", { name: "조회 적용" }).click();
+  await expect(page.locator("#sos-panel-preview thead th")).toHaveCount(1);
+  await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(2);
+  await expect(page.locator("#sos-panel-preview tbody tr").first()).toContainText("10");
+  await expect(page.locator("#sos-panel-preview tbody tr").last()).toContainText("5");
+});
+
+test("Feature Builder can select columns and multiple grouping keys", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "grouped-features.csv", mimeType: "text/csv",
+    buffer: Buffer.from("site,machine,time,value,private\na,x,1,10,k\na,x,2,20,z\nb,y,1,30,q\n"),
+  });
+  await expect(page.getByRole("heading", { name: "grouped-features.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "Features" }).click();
+  await page.getByLabel("변환", { exact: true }).selectOption("select");
+  await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("site").check();
+  await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("machine").check();
+  await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("time").check();
+  await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("value").check();
+  await page.getByRole("button", { name: "+ 단계 추가" }).click();
+  await page.getByLabel("시간·정렬 컬럼").selectOption("time");
+  await page.getByLabel("그룹 컬럼").selectOption(["site", "machine"]);
+  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await expect(page.locator("#sos-panel-features .result th")).toHaveCount(4);
+});
+
+test("editing Dataset Query while its response is pending never renders stale rows", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "query-race.csv", mimeType: "text/csv",
+    buffer: Buffer.from("group,value\na,10\nb,20\na,30\n"),
+  });
+  await expect(page.getByRole("heading", { name: "query-race.csv" })).toBeVisible();
+  await page.getByText("컬럼·필터·정렬 선택").click();
+  await page.getByLabel("필터 컬럼").selectOption("group");
+  await page.getByLabel("비교 값").fill("a");
+  let release: () => void = () => {};
+  let received: () => void = () => {};
+  const started = new Promise<void>(resolve => { received = resolve; });
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let intercepted = false;
+  await page.route("**/api/datasets/*/query", async route => {
+    if (route.request().method() !== "POST" || intercepted) return route.continue();
+    intercepted = true;
+    const response = await route.fetch();
+    received();
+    await held;
+    await route.fulfill({ response });
+  });
+  await page.getByRole("button", { name: "조회 적용" }).click();
+  await started;
+  await page.getByLabel("비교 값").fill("b");
+  release();
+  await expect(page.getByRole("button", { name: "조회 적용" })).toBeEnabled();
+  await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(3);
+  await page.getByRole("button", { name: "조회 적용" }).click();
+  await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(1);
+  await expect(page.locator("#sos-panel-preview tbody tr")).toContainText("20");
+});

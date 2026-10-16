@@ -189,6 +189,7 @@ def test_worker_home_matches_configuration_and_explicit_override(
 
     class FakeStore:
         def __init__(self, home):
+            self.home = home
             seen["home"] = home
             self.engine = self
 

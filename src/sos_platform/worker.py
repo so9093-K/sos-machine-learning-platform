@@ -13,7 +13,12 @@ import signal
 import time
 from pathlib import Path
 
-from .datasets import import_to_iceberg, pinned_scan_dataset
+from .datasets import (
+    cleanup_iceberg_staging,
+    iceberg_staging_bytes,
+    import_to_iceberg,
+    pinned_scan_dataset,
+)
 from .diagnostics import classify_failure
 from .discovery import explore as discovery_explore
 from .discovery import profile as discovery_profile
@@ -127,6 +132,12 @@ def run_once(store: Store) -> bool:
             process.join(timeout=0.1)
             if time.monotonic() - started > budget.max_wall_seconds:
                 raise ExecutionLimitExceeded("SOS-JOB-TIMEOUT", "timeout")
+            if (
+                job["kind"] == "iceberg_import"
+                and iceberg_staging_bytes(store, attempt_id) > budget.max_stage_mib * 1024 * 1024
+            ):
+                # 커밋 진입 여부를 부모가 알지 못하므로 실패 판정은 계속 보수적이다.
+                raise ExecutionLimitExceeded("SOS-ICEBERG-UNCERTAIN", "storage")
             rss = process_rss_bytes(process.pid)
             if rss is not None and rss > budget.max_rss_mib * 1024 * 1024:
                 raise ExecutionLimitExceeded("SOS-JOB-MEMORY-LIMIT", "memory")
@@ -246,6 +257,19 @@ def run_once(store: Store) -> bool:
         output.unlink(missing_ok=True)
         pending.unlink(missing_ok=True)
         completed.unlink(missing_ok=True)
+        if job["kind"] == "iceberg_import":
+            # 자식이 SIGKILL되어도 Attempt에 속한 미완성 입력은 부모가 회수한다.
+            try:
+                cleanup_iceberg_staging(store, attempt_id)
+            except OSError:
+                # 정리 실패로 이미 확정한 Job/Attempt 결과를 덮어쓰지 않는다.
+                emit(
+                    "worker.staging.cleanup_failed",
+                    service="sos-worker",
+                    level=logging.ERROR,
+                    job_id=job_id,
+                    attempt_id=attempt_id,
+                )
     return True
 
 
@@ -267,6 +291,8 @@ def main():
     previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
     try:
         store.recover()
+        # 단일 Worker 잠금 아래에서는 이전 실행의 자식이 남아 있지 않다.
+        cleanup_iceberg_staging(store)
         store.heartbeat()
         if args.once:
             run_once(store)

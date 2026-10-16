@@ -7,7 +7,14 @@ export type FeatureStep = Omit<ApiStep, "periods" | "window"> &
   Partial<Pick<ApiStep, "periods" | "window">>;
 export function createStep(
   op: string, column: string, raw: string, dtype?: string, size?: number,
+  columns?: string[],
 ): FeatureStep {
+  if (op === "select") {
+    if (!columns?.length || new Set(columns).size !== columns.length) {
+      throw new Error("서로 다른 컬럼을 하나 이상 선택해 주세요.");
+    }
+    return { op, columns };
+  }
   if (!column) throw new Error("컬럼을 선택해 주세요.");
   if (op === "fill_null") {
     if (!raw.trim()) throw new Error("결측값 대체 값을 입력해 주세요.");

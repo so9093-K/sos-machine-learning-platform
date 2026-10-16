@@ -42,3 +42,13 @@
 .discovery-job-result .hint{margin-top:0}
 .discovery-job-result .table-scroll{max-height:360px}
 @media(max-width:620px){.discovery-panel .cards{grid-template-columns:1fr}.discovery-job-result table{min-width:320px}}
+
+
+/* 넓은 Dataset/Feature 스키마는 가로 페이지 전체가 아닌 독립 영역에서 탐색한다. */
+.query-tools { margin: 0.75rem 0; }
+.query-tools details { border: 1px solid var(--border, #b7b7b7); border-radius: 8px; padding: 0.7rem; }
+.query-tools summary { cursor: pointer; font-weight: 600; }
+.column-picks { max-height: 13rem; overflow: auto; min-width: 12rem; display: flex;
+  gap: 0.4rem 1rem; flex-wrap: wrap; align-content: flex-start; padding: 0.5rem; }
+.column-picks label { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; }
+.column-picks input { flex-shrink: 0; }

@@ -25,6 +25,7 @@ from .discovery import explore as discovery_explore
 from .discovery import overview as discovery_overview
 from .discovery import preview as discovery_preview
 from .discovery import profile as discovery_profile
+from .discovery import query_dataset
 from .errors import ERRORS, PlatformError
 from .examples import list_examples, use_example
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
@@ -40,6 +41,7 @@ from .schemas import (
     DatasetOut,
     DatasetOverviewOut,
     DatasetPageOut,
+    DatasetQuery,
     ExampleOut,
     ExplorationJobOut,
     ExplorationJobPageOut,
@@ -448,6 +450,10 @@ def create_app(home: Path | None = None) -> FastAPI:
         actor: Actor = READ_DATASET_DEP,
     ):
         return discovery_preview(store, existing(dataset_id, actor), limit)
+
+    @app.post("/api/datasets/{dataset_id}/query", response_model=PreviewOut)
+    def dataset_query(dataset_id: str, body: DatasetQuery, actor: Actor = READ_DATASET_DEP):
+        return query_dataset(store, existing(dataset_id, actor), body)
 
     @app.get("/api/datasets/{dataset_id}/profile", response_model=ProfileOut)
     def dataset_profile(dataset_id: str, actor: Actor = READ_DATASET_DEP):

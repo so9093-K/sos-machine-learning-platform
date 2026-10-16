@@ -226,6 +226,41 @@ class DatasetColumnsOut(BaseModel):
     columns: list[DiscoveryColumnOut]
 
 
+class DatasetFilter(BaseModel):
+    """필드 존재 여부를 검증한 뒤 안전한 SQL 바인딩으로 평가하는 조건."""
+
+    column: str = Field(min_length=1, max_length=256)
+    op: Literal["eq", "ne", "lt", "lte", "gt", "gte", "is_null", "is_not_null"]
+    value: str | int | float | bool | None = None
+
+    @model_validator(mode="after")
+    def validate_filter(self):
+        if self.op in ("is_null", "is_not_null"):
+            if self.value is not None:
+                raise ValueError("Null operators do not accept values")
+        elif self.value is None:
+            raise ValueError("Comparison requires a non-null value")
+        return self
+
+
+class DatasetQuery(BaseModel):
+    """임의 SQL이나 파일 경로를 받지 않는 범용 Dataset 조회."""
+
+    columns: list[str] | None = Field(default=None, max_length=1024)
+    filters: list[DatasetFilter] = Field(default_factory=list, max_length=8)
+    order_by: str | None = Field(default=None, max_length=256)
+    descending: bool = False
+    limit: int = Field(default=30, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def validate_columns(self):
+        if self.columns is not None and (
+            not self.columns or len(set(self.columns)) != len(self.columns)
+        ):
+            raise ValueError("columns must be nonempty and unique")
+        return self
+
+
 class ExplorationRequest(ExplorationSpec):
     """대화형 탐색은 제한된 선두 샘플만 분석한다."""
 

@@ -360,3 +360,71 @@ def test_unsigned_integer_and_zoned_timestamp_keep_dtype_and_json_meaning(worksp
     assert profile.status_code == 200, profile.text
     counter = next(c for c in profile.json()["columns"] if c["name"] == "counter")
     assert counter["max"] == str(huge)
+
+
+def test_dataset_query_projects_filters_sorts_and_validates_columns(workspace):
+    client, _store = workspace
+    dataset = _upload(
+        client, "wide.csv", b"group,value,hidden\na,3,secret\nb,1,private\na,2,internal\n"
+    )
+    path = f"/api/datasets/{dataset['id']}/query"
+    result = client.post(
+        path,
+        json={
+            "columns": ["group", "value"],
+            "filters": [
+                {"column": "group", "op": "eq", "value": "a"},
+                {"column": "value", "op": "gte", "value": 2},
+            ],
+            "order_by": "value",
+            "descending": True,
+            "limit": 2,
+        },
+    )
+    assert result.status_code == 200, result.text
+    assert result.json() == {
+        "schema": {"group": "String", "value": "Int64"},
+        "rows": [{"group": "a", "value": 3}, {"group": "a", "value": 2}],
+        "returned_rows": 2,
+    }
+    assert client.post(path, json={"columns": ["missing; DELETE FROM datasets"]}).status_code == 422
+    assert (
+        client.post(
+            path, json={"filters": [{"column": "hidden", "op": "eq", "value": "x' OR TRUE --"}]}
+        ).status_code
+        == 200
+    )
+    assert client.post(path, json={"limit": 101}).status_code == 422
+    assert client.get(f"/api/datasets/{dataset['id']}/preview").status_code == 200
+
+
+def test_query_handles_wide_schemas_and_invalid_typed_comparisons(workspace):
+    client, _store = workspace
+    buffer = BytesIO()
+    pq.write_table(
+        pa.table({f"sensor_{index:03d}": pa.array([index, index + 1]) for index in range(320)}),
+        buffer,
+    )
+    dataset = _upload(client, "wide-schema.parquet", buffer.getvalue())
+    path = f"/api/datasets/{dataset['id']}/query"
+    projected = client.post(
+        path,
+        json={
+            "columns": ["sensor_319", "sensor_000"],
+            "limit": 1,
+            "order_by": "sensor_319",
+            "descending": True,
+        },
+    )
+    assert projected.status_code == 200, projected.text
+    assert projected.json()["rows"] == [{"sensor_319": 320, "sensor_000": 1}]
+    all_columns = client.post(
+        path, json={"columns": [f"sensor_{index:03d}" for index in range(320)], "limit": 1}
+    )
+    assert all_columns.status_code == 200, all_columns.text
+    assert len(all_columns.json()["schema"]) == 320
+    incompatible = client.post(
+        path, json={"filters": [{"column": "sensor_000", "op": "gte", "value": "not-a-number"}]}
+    )
+    assert incompatible.status_code == 422
+    assert incompatible.json()["code"] == "SOS-API-VALIDATION"

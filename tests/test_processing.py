@@ -79,12 +79,27 @@ def test_select_must_keep_time_and_group_columns_for_later_windows():
         transform(raw, spec)
 
 
+def test_large_row_local_feature_preview_is_not_rejected():
+    source = pl.DataFrame({"value": range(150_000), "unneeded": range(150_000)}).lazy()
+    spec = Transform.model_validate(
+        {
+            "steps": [
+                {"op": "select", "columns": ["value"]},
+                {"op": "filter_not_null", "column": "value"},
+            ]
+        }
+    )
+    result = bounded_feature_preview(source, spec)
+    assert result["schema"] == {"value": "Int64"}
+    assert result["returned_rows"] == 30
+
+
 def test_feature_preview_rejects_unbounded_source_before_sorting():
     source = pl.DataFrame({"time": range(100_002), "value": range(100_002)}).lazy()
     spec = Transform.model_validate(
         {"order_by": "time", "steps": [{"op": "lag", "column": "value"}]}
     )
-    with pytest.raises(ValueError, match="100,000"):
+    with pytest.raises(ValueError, match="Global window"):
         bounded_feature_preview(source, spec)
 
 
