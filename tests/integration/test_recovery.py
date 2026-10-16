@@ -155,3 +155,36 @@ def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
     finally:
         other.release_worker()
         other.engine.dispose()
+
+
+def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(workspace):
+    """잠금 소유권이 변경됐는데 실행 결과가 나와도 이전 Worker는 성공을 게시하지 않는다."""
+    from sos_platform.store import WorkerOwnershipLost
+
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
+    assert queued.status_code == 202
+    assert store.acquire_worker()
+    # DB 자동 재연결로 backend id가 바뀐 상황을 결정적으로 재현한다.
+    store._worker_backend_pid = -1
+    try:
+        with pytest.raises(WorkerOwnershipLost):
+            run_once(store)
+        pending = store.get_job(queued.json()["id"])
+        assert pending["status"] == "Running"
+        assert pending["attempts"][-1]["status"] == "Running"
+        assert pending["result"] is None
+    finally:
+        store.release_worker()
+
+    replacement = Store(store.home, database_url=store.database_url)
+    try:
+        assert replacement.acquire_worker()
+        interrupted = replacement.recover()
+        assert (pending["id"], pending["attempts"][-1]["id"]) in interrupted
+        assert replacement.get_job(pending["id"])["status"] == "Queued"
+    finally:
+        replacement.release_worker()
+        replacement.engine.dispose()
+

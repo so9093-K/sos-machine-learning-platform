@@ -189,16 +189,17 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
                 store.heartbeat()
                 next_heartbeat = time.monotonic() + 2
             if store.cancellation_requested(job_id):
+                store._assert_worker_ownership()
                 _stop(process)
                 store.finish(job_id, "Cancelled")
                 return True
 
+        # Worker 종료 직후 소유권을 확인한다. 유실 시 이전 Worker는
+        # 취소나 성공을 확정하지 않고 새 Worker의 복구에 판단을 맡긴다.
+        store._assert_worker_ownership()
         if store.cancellation_requested(job_id):
             store.finish(job_id, "Cancelled")
             return True
-        # Worker 종료 직후 소유권을 다시 확인한다. 손실되었다면 새 Worker의
-        # recover()가 미확정 Attempt를 판단하며, 이전 Worker는 결과를 게시하지 않는다.
-        store._assert_worker_ownership()
         if not completed.exists():
             raise RuntimeError(f"Execution process exited ({process.exitcode}) without result")
         outcome = json.loads(completed.read_text(encoding="utf-8"))
@@ -273,6 +274,9 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
         raise
     except Exception as exc:
         _stop(process)
+        # 잠금이 사라진 Worker는 실패 확정이나 게시 의도 변경도 수행하지 않는다.
+        # DB가 살아 있으면 새 소유자가 Running Attempt의 복구를 맡는다.
+        store._assert_worker_ownership()
         if write_id:
             try:
                 store.fail_object_write(write_id, ERRORS["SOS-JOB-FAILED"].message)
