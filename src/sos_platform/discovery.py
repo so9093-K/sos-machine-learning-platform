@@ -90,6 +90,22 @@ def _number(value):
     return number if math.isfinite(number) else None
 
 
+def _preview_value(value):
+    """JSON에서 NaN·무한대를 NULL과 혼동하지 않도록 표시용 문자열로 보존한다."""
+    if isinstance(value, float) and not math.isfinite(value):
+        if math.isnan(value):
+            return "NaN"
+        return "Infinity" if value > 0 else "-Infinity"
+    return value
+
+
+def _finite_aggregate(value):
+    """JSON에서 표현할 수 없는 집계 실수는 정의되지 않은 수치로 반환한다."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
 def _records(cursor) -> list[dict]:
     columns = [item[0] for item in cursor.description]
     return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
@@ -200,7 +216,8 @@ def preview(store: Store, dataset: dict, limit: int = 30) -> dict:
         raise ValueError("Preview limit must be between 1 and 100")
     with source_connection(store, dataset) as conn:
         schema = {c["name"]: c["dtype"] for c in _columns(conn)}
-        rows = _records(conn.execute("SELECT * FROM source LIMIT ?", [limit]))
+        raw = _records(conn.execute("SELECT * FROM source LIMIT ?", [limit]))
+        rows = [{key: _preview_value(value) for key, value in row.items()} for row in raw]
     return {"schema": schema, "rows": rows, "returned_rows": len(rows)}
 
 
@@ -327,6 +344,11 @@ def explore(
                 conn.execute(f"SELECT NULL AS category, {value} AS value FROM {source}")
             )
             truncated = False
+    # 샘플과 Worker의 전체 집계는 같은 JSON 의미를 사용한다.
+    # 원본 Preview에서는 NaN·무한대를 명시적으로 표시하지만, 계산 불능 집계는 NULL이다.
+    for row in rows:
+        row["category"] = _preview_value(row["category"])
+        row["value"] = _finite_aggregate(row["value"])
     return {
         "dataset_id": dataset["id"],
         "version": dataset["version"],

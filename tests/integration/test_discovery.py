@@ -1,7 +1,10 @@
 """DuckDB Discovery의 분석 의미·권한·Job·Iceberg Snapshot 계약을 검증한다."""
 
 import math
+from io import BytesIO
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 from sos_platform.discovery import DiscoveryPolicy, quoted, source_connection
@@ -133,3 +136,63 @@ def test_profile_null_and_nan_statistics(workspace):
     assert field["nan_count"] == 1
     assert field["unique"] >= 2
     assert field["mean"] is None or math.isfinite(field["mean"])
+
+
+def test_nonfinite_preview_and_sample_full_exploration_are_json_safe(workspace):
+    """원본 NaN·무한대 표시는 구분하고 집계 불능은 JSON NULL로 반환한다."""
+    client, store = workspace
+    buffer = BytesIO()
+    pq.write_table(
+        pa.table(
+            {
+                "group": ["finite", "nan", "positive", "negative"],
+                "value": pa.array(
+                    [1.25, float("nan"), float("inf"), -float("inf")], type=pa.float64()
+                ),
+            }
+        ),
+        buffer,
+    )
+    dataset = _upload(client, "nonfinite.parquet", buffer.getvalue())
+    base = f"/api/datasets/{dataset['id']}"
+    preview = client.get(base + "/preview?limit=4")
+    assert preview.status_code == 200, preview.text
+    values = {row["group"]: row["value"] for row in preview.json()["rows"]}
+    assert values == {
+        "finite": 1.25,
+        "nan": "NaN",
+        "positive": "Infinity",
+        "negative": "-Infinity",
+    }
+
+    spec = {"column": "value", "metric": "max", "group_by": "group"}
+    sample = client.post(base + "/explorations", json=spec)
+    assert sample.status_code == 200, sample.text
+    expected = {"finite": 1.25, "nan": None, "positive": None, "negative": None}
+    assert {row["category"]: row["value"] for row in sample.json()["rows"]} == expected
+
+    submitted = client.post(
+        "/api/explorations/jobs",
+        json={"dataset_id": dataset["id"], "exploration": spec},
+    )
+    assert submitted.status_code == 202, submitted.text
+    assert run_once(store)
+    full = client.get(f"/api/explorations/jobs/{submitted.json()['id']}")
+    assert full.status_code == 200, full.text
+    assert full.json()["status"] == "Succeeded", full.text
+    assert {row["category"]: row["value"] for row in full.json()["result"]["rows"]} == expected
+
+
+def test_exploration_counts_all_categorical_columns(workspace):
+    client, store = workspace
+    dataset = _upload(client, "categories.csv", b"group,label\na,x\na,\nb,y\n")
+    spec = {"column": "label", "metric": "null_count", "group_by": "group"}
+    response = client.post(f"/api/datasets/{dataset['id']}/explorations", json=spec)
+    assert response.status_code == 200, response.text
+    assert {row["category"]: row["value"] for row in response.json()["rows"]} == {
+        "a": 1, "b": 0,
+    }
+    assert client.post(
+        f"/api/datasets/{dataset['id']}/explorations",
+        json={"column": "label", "metric": "mean"},
+    ).status_code == 422
