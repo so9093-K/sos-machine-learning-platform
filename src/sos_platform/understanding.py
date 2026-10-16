@@ -88,6 +88,17 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
             )
             expressions.append(distinct + " AS " + key + "_unique")
             sql_type = item["sql_type"].upper()
+            # 고유값의 전체 근사치와 상수 여부는 별개로 계산한다.
+            # MIN/MAX는 스칼라 자료형에 한해 사용해 구조형 컬럼 오류를 피한다.
+            if (
+                _numeric_type(sql_type)
+                or sql_type in ("VARCHAR", "CHAR", "TEXT", "BOOLEAN", "BOOL", "DATE", "TIME")
+                or sql_type.startswith("TIMESTAMP")
+            ):
+                expressions.append(
+                    "(MIN(" + col + ") IS NOT DISTINCT FROM MAX(" + col + ")) AS "
+                    + key + "_constant"
+                )
             if sql_type in ("FLOAT", "DOUBLE", "REAL"):
                 expressions.append("COUNT(*) FILTER (WHERE isnan(" + col + ")) AS " + key + "_nan")
             if _numeric_type(sql_type):
@@ -123,7 +134,9 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
             "distinct_count": unique,
             "distinct_exact": scope == "sample",
             "roles": role_candidates(item["name"], item["dtype"], unique, count),
-            "is_constant": scope == "sample" and count > 0 and unique <= 1 and nulls == 0,
+            "is_constant": (
+                count > 0 and nulls == 0 and bool(values.get(key + "_constant", False))
+            ),
         }
         # 식별자·민감 후보 숫자형의 최소·최대도 개인 식별값일 수 있다.
         safe_stat = not any(

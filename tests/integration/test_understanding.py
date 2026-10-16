@@ -53,11 +53,11 @@ def test_dataset_understanding_job_version_and_executable_suggestions(workspace)
     dataset = _upload(
         client,
         "unknown.csv",
-        b"ts,department,score,user_name\n"
-        b"2026-01-01T00:00:00Z,alpha,2.0,person_a\n"
-        b"2026-01-01T00:01:00Z,beta,5.0,person_b\n"
-        b"2026-01-01T00:02:00Z,alpha,,person_c\n"
-        b"2026-01-01T00:03:00Z,beta,7.0,person_d\n",
+        b"ts,department,score,user_name,fixed\n"
+        b"2026-01-01T00:00:00Z,alpha,2.0,person_a,same\n"
+        b"2026-01-01T00:01:00Z,beta,5.0,person_b,same\n"
+        b"2026-01-01T00:02:00Z,alpha,,person_c,same\n"
+        b"2026-01-01T00:03:00Z,beta,7.0,person_d,same\n",
     )
     path = "/api/datasets/" + dataset["id"] + "/understanding"
     before = client.get(path)
@@ -78,6 +78,7 @@ def test_dataset_understanding_job_version_and_executable_suggestions(workspace)
     columns = {c["name"]: c for c in body["profile"]["columns"]}
     assert columns["score"]["null_count"] == 1
     assert columns["score"]["distinct_exact"] is True
+    assert columns["fixed"]["is_constant"] is True
     assert any(r["role"] == "temporal" for r in columns["ts"]["roles"])
     assert "person_a" not in str(body)
     assert "alpha" not in str(body)
@@ -98,7 +99,16 @@ def test_dataset_understanding_job_version_and_executable_suggestions(workspace)
     assert after["profile"]["scope"] == "full"
     assert after["profile"]["row_count"] == 4
     assert all(c["distinct_exact"] is False for c in after["profile"]["columns"])
+    assert {c["name"]: c for c in after["profile"]["columns"]}["fixed"]["is_constant"]
     assert store.latest_dataset_profile(dataset["id"], dataset["version"]) is not None
+
+    # 완료된 최신 결과를 우선 조회한다. 전체 결과가 과거라는 이유로 샘플을 가리면 안 된다.
+    rerun = client.post(path + "/jobs", json={"scope": "sample"})
+    assert rerun.status_code == 202, rerun.text
+    assert run_once(store)
+    recent = client.get(path).json()
+    assert recent["profile"]["scope"] == "sample"
+    assert recent["job_id"] == rerun.json()["id"]
 
 
 def test_cancel_understanding_preserves_dataset_and_previous_profile(workspace):

@@ -518,8 +518,7 @@ class Store:
                 text(
                     "SELECT result FROM dataset_profiles "
                     "WHERE dataset_id=:dataset_id AND dataset_version=:version "
-                    "ORDER BY CASE WHEN scope='full' THEN 0 ELSE 1 END, "
-                    "created_at DESC, job_id DESC LIMIT 1"
+                    "ORDER BY created_at DESC, job_id DESC LIMIT 1"
                 ),
                 {"dataset_id": dataset_id, "version": version},
             ).scalar_one_or_none()
