@@ -563,6 +563,7 @@ test("general Dataset query projects, filters and sorts columns", async ({ page 
     buffer: Buffer.from("group,value,private\na,10,hidden\nb,2,secret\na,5,internal\n"),
   });
   await expect(page.getByRole("heading", { name: "generic-query.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "Preview" }).click();
   await page.getByText("컬럼·필터·정렬 선택").click();
   await page.getByLabel("표시할 컬럼 선택").getByLabel("value", { exact: true }).check();
   await page.getByLabel("필터 컬럼").selectOption("group");
@@ -604,6 +605,7 @@ test("editing Dataset Query while its response is pending never renders stale ro
     buffer: Buffer.from("group,value\na,10\nb,20\na,30\n"),
   });
   await expect(page.getByRole("heading", { name: "query-race.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "Preview" }).click();
   await page.getByText("컬럼·필터·정렬 선택").click();
   await page.getByLabel("필터 컬럼").selectOption("group");
   await page.getByLabel("비교 값").fill("a");
