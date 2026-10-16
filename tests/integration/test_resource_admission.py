@@ -252,3 +252,30 @@ def test_feature_preview_reservation_is_released_after_internal_failure(workspac
     assert resumed.status_code == 200, resumed.text
     with reserve_execution_memory(store, 1024):
         pass
+
+def test_active_execution_pool_configuration_mismatch_is_rejected(workspace):
+    """서로 다른 인스턴스가 같은 DB에 다른 풀 크기를 주장해 과수용하지 못한다."""
+    from sos_platform.errors import RuntimeConfigurationError
+
+    _client, store = workspace
+    other = Store(store.home, database_url=store.database_url)
+    small = ExecutionCapacity(pool_mib=512, wait_seconds=0.1)
+    large = ExecutionCapacity(pool_mib=1024, wait_seconds=0.1)
+    try:
+        with reserve_execution_memory(store, 256, small):
+            with pytest.raises(RuntimeConfigurationError, match="SOS_EXECUTION_POOL_MIB"):
+                with reserve_execution_memory(other, 256, large):
+                    pytest.fail("Different capacity must not share active leases")
+            # 같은 크기인 요청은 정상적으로 동시 수용된다.
+            with reserve_execution_memory(other, 256, small):
+                pass
+        # 활성 작업이 끝나면 다른 크기로의 전환을 방해하지 않는다.
+        with reserve_execution_memory(other, 1024, large):
+            with pytest.raises(RuntimeConfigurationError, match="SOS_EXECUTION_POOL_MIB"):
+                with reserve_execution_memory(store, 256, small):
+                    pytest.fail("Old capacity must not silently overlap")
+        with reserve_execution_memory(store, 512, small):
+            pass
+    finally:
+        other.engine.dispose()
+

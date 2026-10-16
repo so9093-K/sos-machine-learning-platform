@@ -20,6 +20,11 @@ if TYPE_CHECKING:
 
 _QUANTUM_MIB = 256
 _LOCK_NAMESPACE = 83420
+# 하나의 DB에 여러 API/Worker 인스턴스가 접속할 때 활성 풀 크기를 합의한다.
+# 실행 슬롯(0~255)과 별개 키를 사용한다. 동시 시작은 트랜잭션 Mutex로 직렬화.
+_POLICY_MUTEX = 512
+_POLICY_MARKER_BASE = 1024
+_POLICY_MAX_SLOTS = 65536 // _QUANTUM_MIB
 
 
 @dataclass(frozen=True)
@@ -110,6 +115,8 @@ def reserve_execution_memory(
     deadline = time.monotonic() + policy.wait_seconds
     with store.engine.connect() as connection:
         acquired: list[int] = []
+        marker = _POLICY_MARKER_BASE + policy.slots
+        marker_acquired = False
 
         def release() -> None:
             while acquired:
@@ -121,6 +128,39 @@ def reserve_execution_memory(
                 connection.commit()
 
         try:
+            # 잠시만 유지하는 xact Mutex 안에서 타 인스턴스의 활성 정책을 확인하고
+            # 세션 공유 Marker를 등록한다. 서로 다른 풀 크기를 동시에 사용하면
+            # 작은 풀의 경계를 우회할 수 있으므로 요청 전 거부한다.
+            connection.execute(
+                text("SELECT pg_advisory_xact_lock(:namespace, :mutex)"),
+                {"namespace": _LOCK_NAMESPACE, "mutex": _POLICY_MUTEX},
+            )
+            mismatch = connection.execute(
+                text(
+                    "SELECT 1 FROM pg_locks WHERE locktype='advisory' AND granted "
+                    "AND database=(SELECT oid FROM pg_database WHERE datname=current_database()) "
+                    "AND classid=CAST(:namespace AS oid) AND objsubid=2 "
+                    "AND objid BETWEEN CAST(:first AS oid) AND CAST(:last AS oid) "
+                    "AND objid<>CAST(:marker AS oid) LIMIT 1"
+                ),
+                {
+                    "namespace": _LOCK_NAMESPACE,
+                    "first": _POLICY_MARKER_BASE + 1,
+                    "last": _POLICY_MARKER_BASE + _POLICY_MAX_SLOTS,
+                    "marker": marker,
+                },
+            ).first()
+            if mismatch:
+                raise RuntimeConfigurationError(
+                    "SOS_EXECUTION_POOL_MIB differs between active database clients"
+                )
+            connection.execute(
+                text("SELECT pg_advisory_lock_shared(:namespace, :marker)"),
+                {"namespace": _LOCK_NAMESPACE, "marker": marker},
+            )
+            marker_acquired = True
+            connection.commit()
+
             while True:
                 for slot in range(policy.slots):
                     granted = connection.execute(
@@ -140,4 +180,14 @@ def reserve_execution_memory(
                 time.sleep(0.05)
             yield
         finally:
-            release()
+            try:
+                release()
+            finally:
+                # 마지막 실제 슬롯을 반납한 뒤 정책 Marker도 반납한다. 세션이
+                # 유실되었다면 PostgreSQL이 두 종류의 advisory lock을 회수한다.
+                if marker_acquired:
+                    connection.execute(
+                        text("SELECT pg_advisory_unlock_shared(:namespace, :marker)"),
+                        {"namespace": _LOCK_NAMESPACE, "marker": marker},
+                    )
+                    connection.commit()
