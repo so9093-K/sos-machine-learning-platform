@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
-import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
+import { histogram, needsTimeOrder } from "./feature-utils";
+import { useFeatureEditor } from "./useFeatureEditor";
+import { FeaturePanel } from "./FeaturePanel";
 import { request, jsonPost, submitJob, formatError, uploadFile } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
@@ -19,7 +21,6 @@ import { useDatasetInspection } from "./useDatasetInspection";
 import type { ExplorationRequest } from "./types";
 
 
-type Step = FeatureStep;
 type Tab = DatasetTab | "jobs" | "storage" | "audit";
 type UploadProgress = {
   name: string; loaded: number; total: number;
@@ -64,16 +65,6 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [snapshotId, setSnapshotId] = useState("");
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const snapshotRequestVersion = useRef(0);
-  const [steps, setSteps] = useState<Step[]>([]);
-  const [editingStep, setEditingStep] = useState<number | null>(null);
-  const [lagPeriods, setLagPeriods] = useState(1);
-  const [rollingWindow, setRollingWindow] = useState(3);
-  const [op, setOp] = useState("filter_not_null");
-  const [column, setColumn] = useState("");
-  const [value, setValue] = useState("");
-  const [orderBy, setOrderBy] = useState("");
-  const [groupBy, setGroupBy] = useState<string[]>([]);
-  const [chosenColumns, setChosenColumns] = useState<string[]>([]);
   const [queryPreview, setQueryPreview] = useState<{
     datasetId: string; revision: number; data: Preview
   } | null>(null);
@@ -116,6 +107,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const { preview, profile, previewStatus, profileStatus, previewError, profileError } =
     useDatasetInspection(selected, reloadRevision, tab);
   const columnNames = preview ? Object.keys(preview.schema) : [];
+  const editor = useFeatureEditor({
+    datasetId: selected, preview, onError: setError, withFeedback,
+  });
+  const { steps, orderBy, transform, setColumn } = editor;
   const displayedPreview = queryPreview?.datasetId === selected &&
     queryPreview.revision === reloadRevision ? queryPreview.data : preview;
   const displayedColumns = displayedPreview ? Object.keys(displayedPreview.schema) : [];
@@ -222,9 +217,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   }, []);
   useEffect(() => {
     // Dataset 전환과 네트워크 재시도를 구분해 작성 중인 변환을 보존한다.
-    setFeaturePreview(null); setSteps([]); setEditingStep(null);
-    setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy(""); setGroupBy([]);
-    setChosenColumns([]); setQueryPreview(null);
+    setVisualColumn(""); setTimeColumn("");
+    setQueryPreview(null);
   }, [selected]);
   useEffect(() => {
     if (!preview) return;
@@ -261,53 +255,6 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setBusy(true); setError(""); setNotice("");
     try { await action(); } catch (e) { setError(formatError(e)); }
     finally { setBusy(false); }
-  }
-  function addStep() {
-    try {
-      const next = createStep(op, column, value, preview?.schema[column],
-        op === "lag" ? lagPeriods : op === "rolling_mean" ? rollingWindow : undefined,
-        chosenColumns);
-      setSteps(existing => editingStep === null ? [...existing, next]
-        : existing.map((step, index) => index === editingStep ? next : step));
-      setEditingStep(null); setFeaturePreview(null); setError("");
-    } catch (e) { setError(formatError(e)); }
-  }
-  function editStep(index: number) {
-    const step = steps[index];
-    setEditingStep(index);
-    setOp(step.op); setColumn(step.column ?? ""); setValue(step.value == null ? "" : String(step.value));
-    setLagPeriods(step.periods ?? 1); setRollingWindow(step.window ?? 3);
-    setChosenColumns(step.columns ?? []);
-  }
-  function moveStep(index: number, direction: -1 | 1) {
-    const destination = index + direction;
-    if (destination < 0 || destination >= steps.length) return;
-    setSteps(current => {
-      const copy = [...current];
-      [copy[index], copy[destination]] = [copy[destination], copy[index]];
-      return copy;
-    });
-    setEditingStep(null); setFeaturePreview(null);
-  }
-  const transform = {
-    steps,
-    ...(orderBy ? { order_by: orderBy } : {}),
-    ...(groupBy.length ? { group_by: groupBy } : {}),
-  };
-  // 오래된 응답은 현재 Dataset과 변환 설정에 맞을 때만 노출한다.
-  const transformSignature = JSON.stringify({ dataset_id: selected, transform });
-  const featurePreview = featurePreviewResult?.signature === transformSignature
-    ? featurePreviewResult.data : null;
-  async function previewFeatures() {
-    if (!selected || steps.length === 0) return;
-    if (needsTimeOrder(steps) && !orderBy) {
-      setError("Lag와 Rolling 변환에는 정렬 컬럼을 지정해야 합니다."); return;
-    }
-    await withFeedback(async () => {
-      const result = await jsonPost<Preview>("/api/features/preview",
-        { dataset_id: selected, transform });
-      setFeaturePreview({ signature: transformSignature, data: result });
-    });
   }
   async function submit(kind: "profile" | "transform") {
     if (!selected) return;
@@ -651,89 +598,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             <p className="hint">차트와 히스토그램은 최대 100행의 미리보기 값입니다.</p>
           </>}
         </section>}
-        {tab === "features" && <section className="panel" role="tabpanel"
-          id="sos-panel-features" aria-labelledby="sos-tab-features" tabIndex={0}>
-          <div className="panel-head"><div><h3>변환</h3>
-            <p>원본은 유지됩니다. 순서대로 변환 단계를 편집·검증하고 전체 Job으로 실행합니다.</p>
-          </div></div>
-          <div className="form-row">
-            <label>변환 연산 <select aria-label="변환 연산" value={op} onChange={e => setOp(e.target.value)}>
-              <option value="select">컬럼 선택</option>
-              <option value="filter_not_null">결측 행 제외</option>
-              <option value="fill_null">결측값 대체</option>
-              <option value="cast">Float64 변환</option>
-              <option value="lag">Lag 1</option>
-              <option value="rolling_mean">Rolling Mean 3</option>
-            </select></label>
-            {op === "select" && <fieldset className="column-picks">
-              <legend>유지할 컬럼</legend>
-              {columnNames.map(name => <label key={name}>
-                <input type="checkbox" checked={chosenColumns.includes(name)}
-                  onChange={event => setChosenColumns(current => event.target.checked
-                    ? [...current, name] : current.filter(item => item !== name))} />
-                {name}
-              </label>)}
-            </fieldset>}
-            {op !== "select" && <label>컬럼 <select aria-label="컬럼" value={column} onChange={e => setColumn(e.target.value)}>
-              {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
-            </select></label>}
-            {op === "fill_null" && <label>대체 값 <input value={value}
-              onChange={e => setValue(e.target.value)} placeholder="0" /></label>}
-            {op === "lag" && <label>이전 행 수 <input type="number" min={1} max={1000}
-              value={lagPeriods} onChange={e => setLagPeriods(Number(e.target.value))} /></label>}
-            {op === "rolling_mean" && <label>윈도 행 수 <input type="number" min={2} max={1000}
-              value={rollingWindow} onChange={e => setRollingWindow(Number(e.target.value))} /></label>}
-            <button className="secondary" onClick={addStep} disabled={
-              (op === "select" ? chosenColumns.length === 0 : !column) ||
-              (steps.length >= 30 && editingStep === null)
-            }>
-              {editingStep === null ? "+ 단계 추가" : "단계 수정 반영"}</button>
-            {editingStep !== null && <button className="ghost" onClick={() => setEditingStep(null)}>
-              수정 취소</button>}
-          </div>
-          <div className="form-row">
-            <label>시간·정렬 컬럼 <select aria-label="시간·정렬 컬럼" value={orderBy} onChange={e => setOrderBy(e.target.value)}>
-              <option value="">정렬하지 않음</option>
-              {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
-            </select></label>
-            <label>그룹 컬럼 (최대 4개) <select aria-label="그룹 컬럼" multiple size={Math.min(5, Math.max(2, columnNames.length))}
-              value={groupBy} onChange={e => setGroupBy(Array.from(e.target.selectedOptions, option => option.value)
-                .filter(Boolean).slice(0, 4))}>
-              <option value="">그룹 없음</option>
-              {columnNames.filter(c => c !== orderBy).map(c => <option key={c} value={c}>{c}</option>)}
-            </select></label>
-            <p className="hint">Lag / Rolling은 시간 정렬 후 그룹별 계산합니다. Rolling Mean에는 현재 행이 포함됩니다.</p>
-          </div>
-          <div className="steps">{steps.length === 0 && <p className="muted">아직 변환 단계가 없습니다.</p>}
-            {steps.map((step, i) => <div className="step" key={i}>
-              <strong>{i + 1}. {step.op}</strong>
-              <span>{step.column} {step.periods ? `· 이전 ${step.periods}행` : ""}
-                {step.window ? `· ${step.window}행` : ""}</span>
-              <button className="ghost" aria-label={`${i + 1}번째 단계 위로 이동`}
-                disabled={i === 0} onClick={() => moveStep(i, -1)}>↑</button>
-              <button className="ghost" aria-label={`${i + 1}번째 단계 아래로 이동`}
-                disabled={i === steps.length - 1} onClick={() => moveStep(i, 1)}>↓</button>
-              <button className="ghost" aria-label={`${i + 1}번째 단계 수정`}
-                onClick={() => editStep(i)}>수정</button>
-              <button className="ghost" aria-label={`${i + 1}번째 단계 삭제`}
-                onClick={() => {
-                  setSteps(prev => prev.filter((_, j) => j !== i));
-                  setEditingStep(null); setFeaturePreview(null);
-                }}>삭제</button>
-            </div>)}</div>
-          <div className="actions"><button disabled={busy || !steps.length} className="secondary"
-            onClick={() => void previewFeatures()}>샘플 변환 확인</button>
-            {canRun && <button disabled={busy || !steps.length} onClick={() => void submit("transform")}>
-              전체 변환 Job 실행 →
-            </button>}</div>
-          {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 계산</h4>
-             <p className="hint">결과는 최대 30행입니다. 단순 변환은 큰 Dataset에서도 일부 결과만 읽고, 전역 Window는 동기 예산 초과 시 전체 Job을 안내합니다.</p>
-            <div className="table-scroll"><table><thead><tr>{Object.entries(featurePreview.schema).map(
-              ([c, t]) => <th key={c}>{c}<small>{t}</small></th>
-            )}</tr></thead><tbody>{featurePreview.rows.slice(0, 15).map((r, i) => <tr key={i}>
-              {Object.keys(featurePreview.schema).map(c => <td key={c}>{r[c] == null ? "—" : String(r[c])}</td>)}
-            </tr>)}</tbody></table></div></div>}
-        </section>}
+        {tab === "features" && <FeaturePanel editor={editor}
+          columnNames={columnNames} busy={busy} canRun={canRun}
+          onSubmit={() => void submit("transform")} />}
 
       </>}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
