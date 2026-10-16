@@ -276,7 +276,8 @@ test("DuckDB Discovery searches columns and runs a full job through global Jobs"
   await expect(page.getByRole("heading", { name: "discovery.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
   const discovery = page.getByRole("region", { name: "Dataset Discovery" });
-  await expect(discovery.getByRole("heading", { name: "데이터 개요" })).toBeVisible();
+  await expect(discovery.getByRole("heading", { name: "탐색 분석" })).toBeVisible();
+  await discovery.getByText("컬럼 목록 및 검색").click();
   await expect(discovery.getByText("2개 표시 / 전체 2개 컬럼")).toBeVisible();
   await discovery.getByRole("textbox", { name: "컬럼 이름 검색" }).fill("val");
   await expect(discovery.getByText("1개 표시 / 전체 2개 컬럼")).toBeVisible();

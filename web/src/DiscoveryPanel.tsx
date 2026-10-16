@@ -118,7 +118,7 @@ export function DiscoveryPanel({
     };
   }, [result]);
   return <section className="discovery-panel" aria-label="Dataset Discovery">
-    <h4>데이터 개요</h4>
+    <h3>탐색 분석</h3>
     {status === "loading" && <p role="status" className="muted">컬럼 목록을 확인하는 중입니다.</p>}
     {overviewStatus === "loading" && <p className="muted" role="status">기본 정보 조회 중</p>}
     {overviewStatus === "error" && <div role="alert" className="alert">
@@ -127,22 +127,10 @@ export function DiscoveryPanel({
     </div>}
     {status === "error" && <button className="secondary"
       onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>}
-    {overview && <div className="cards">
-      <div className="stat"><span>전체 행</span><strong>{overview.row_count?.toLocaleString() ?? "미계산"}</strong>
-        <small>{analysisLabel(overview.row_count_basis)}</small></div>
-      <div className="stat"><span>컬럼 수</span><strong>{overview.column_count}</strong></div>
-      <div className="stat"><span>원본 크기</span><strong>{overview.size_bytes == null
-        ? "외부 Snapshot" : `${(overview.size_bytes / (1024 * 1024)).toFixed(2)} MiB`}</strong></div>
-    </div>}
+    {overview && <p className="hint">분석 대상 · ${overview.column_count.toLocaleString()}컬럼
+      {" · "}{overview.row_count?.toLocaleString() ?? "미계산"}행
+      {" · "}{analysisLabel(overview.row_count_basis)}</p>}
     {columns && <>
-      <h4>컬럼 검색</h4>
-      <input aria-label="컬럼 이름 검색" value={search} onChange={e => setSearch(e.target.value)}
-        placeholder="컬럼 이름으로 찾기" />
-      <p className="muted">{shown.length}개 표시 / 전체 {columns.total}개 컬럼</p>
-      <div className="column-search-results" role="list">
-        {shown.map(c => <div role="listitem" key={c.name}>
-          <span>{c.name}</span><small>{c.dtype}</small></div>)}
-      </div>
       <h4>탐색 조건</h4>
       {draft?.source && <div className="exploration-origin" role="status">
         <strong>탐색 후보에서 가져온 조건 · {draft.source.title}</strong>
@@ -198,6 +186,17 @@ export function DiscoveryPanel({
         {chart ? <DataChart option={chart} ariaLabel="샘플 집계 결과 차트" /> :
           <p className="muted">정밀 수치 문자열이나 계산 불가 값은 차트에서 제외합니다. 정확한 값은 위 표에서 확인하세요.</p>}
       </>}
+      <details className="column-catalog">
+        <summary>컬럼 목록 및 검색</summary>
+      <h4>컬럼 검색</h4>
+      <input aria-label="컬럼 이름 검색" value={search} onChange={e => setSearch(e.target.value)}
+        placeholder="컬럼 이름으로 찾기" />
+      <p className="muted">{shown.length}개 표시 / 전체 {columns.total}개 컬럼</p>
+      <div className="column-search-results" role="list">
+        {shown.map(c => <div role="listitem" key={c.name}>
+          <span>{c.name}</span><small>{c.dtype}</small></div>)}
+      </div>
+      </details>
     </>}
     {error && <p role="alert" className="alert">{error}</p>}
   </section>;

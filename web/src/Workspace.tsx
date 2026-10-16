@@ -218,7 +218,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   useEffect(() => {
     // Dataset 전환과 네트워크 재시도를 구분해 작성 중인 변환을 보존한다.
     setVisualColumn(""); setTimeColumn("");
-    setQueryPreview(null);
+    setQueryPreview(null); setExplorationDraft(null);
   }, [selected]);
   useEffect(() => {
     if (!preview) return;

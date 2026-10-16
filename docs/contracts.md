@@ -42,7 +42,7 @@
 
 - Dataset Understanding의 후보는 업무 목적에 대한 권고가 아니라 입력 데이터 특성으로 구성한 **실행 가능한 탐색 조건**이다. 후보의 생성 근거·원본 Dataset 판본·프로파일 범위와 실제 Exploration의 계산 범위를 분리한다.
 - 후보를 선택해도 계산하지 않는다. 선택된 `ExplorationSpec`는 탐색 화면에서 편집할 수 있고, 직접 작성한 조건과 동일한 API로 실행한다. 전체 분석은 기존 Job 계약을 통해 별도로 제출한다.
-- 웹 초안은 Dataset ID와 버전에 귀속시키며, Dataset 전환 후 이전 후보의 조건·결과를 새 Dataset에 적용하지 않는다. 기존 API의 `insights` 필드명은 호환성을 위해 유지한다.
+- 웹 초안은 Dataset ID와 버전에 귀속시키며, Dataset 전환 시 기존 후보·조건·결과를 폐기한다. 기존 API의 `insights` 필드명은 호환성을 위해 유지한다.
 
 ## Dataset Understanding 결과 계약
 
