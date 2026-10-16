@@ -20,6 +20,8 @@ Runtime은 학습·평가·추론 등의 작업을 수행하는 **실제 실행 
 
 Worker의 실행 시간·관측 RSS 예산은 `SOS_WORKER_MAX_SECONDS`(기본 1800초)·`SOS_WORKER_MAX_RSS_MIB`(기본 2048MiB)이다. 부모 프로세스는 자식의 초과를 감시해 종료하고 Job·Attempt에 전용 오류 코드를 남긴다. Linux `/proc` RSS 관측은 폴링 방식이며 cgroup·OS 수준의 엄격한 메모리 격리와 같지 않다. 외부 Iceberg 커밋은 시간·메모리 제한으로 중단되어도 성공/실패를 추측하지 않는다.
 
+Iceberg의 비파티션 테이블 적재는 Polars 디스크 스테이징과 PyArrow RecordBatchReader를 이용해 입력 전체 Arrow Table을 만들지 않고 하나의 Snapshot으로 커밋한다. 임시 파일은 Attempt가 수행한 로컬 작업에만 속하며, 외부 커밋 실패 시 성공·미실행을 추측하지 않는다. 현재 PyIceberg가 Reader 기반 파티션 쓰기를 지원하지 않으므로, 기존 파티션 테이블만 종전 소규모 호환 경로를 유지한다. 데이터 파일·Snapshot·Tag는 범용 캐시 축출 대상이 아니다.
+
 Dataset 원본 캐시는 `SOS_DATASET_CACHE_MIB`(기본 2048MiB) 한도로 관리한다. 파일별 PostgreSQL advisory lock을 읽기 Lease로 사용해 사용 중인 파일을 축출하지 않으며, 할당량 부족 시 최근 사용되지 않은 불변 해시 캐시 파일만 선택적으로 축출한다. 모든 후보가 사용 중이면 507 자원 오류로 거부한다. S3 원본과 게시 결과·Iceberg Snapshot은 이 정리의 대상이 아니다.
 
 Discovery는 PostgreSQL advisory lock에 기반한 전역 실행 슬롯(`SOS_DISCOVERY_MAX_ACTIVE`, 기본 1개)을 사용하며 `SOS_DISCOVERY_WAIT_SECONDS`(기본 15초)를 초과하면 429 용량 오류를 반환한다. 잠금은 DuckDB 연결 종료와 함께 해제되며 여러 API 인스턴스에서도 공유된다. 향후 실행 슬롯을 늘리기 전 RSS와 합산 메모리·Spill 예산을 측정해야 한다.

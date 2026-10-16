@@ -6,10 +6,13 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import BinaryIO
 from uuid import uuid4
 
 import polars as pl
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from .cache import cached_dataset_file
 from .config import Settings
@@ -109,23 +112,45 @@ def import_to_iceberg(
     catalog = iceberg_catalog(store)
     catalog.create_namespace_if_not_exists("default")
     ident = f"default.{table_name}"
-    # 단일 append의 메모리·행 수 한도를 강제한다. 추후 배치 적재 계약과 구분한다.
-    from .processing import bounded_iceberg_arrow
+    # Lazy 결과를 로컬 불변 스테이징 Parquet으로 기록한다. 입력 전체를
+    # 메모리에 수집하지 않으며 중간 계산 실패는 Catalog 커밋 이전에 발생한다.
+    scratch = store.home / "cache" / "iceberg-staging"
+    scratch.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix="attempt-", dir=scratch) as directory:
+        staged = Path(directory) / "input.parquet"
+        with pinned_scan_dataset(store, dataset) as source:
+            source.sink_parquet(staged)
+        staged_parquet = pq.ParquetFile(staged)
+        try:
+            table = catalog.load_table(ident)
+        except Exception as exc:
+            from pyiceberg.exceptions import NoSuchTableError
 
-    with pinned_scan_dataset(store, dataset) as source:
-        arrow = bounded_iceberg_arrow(source)
-    try:
-        table = catalog.load_table(ident)
-    except Exception as exc:
-        from pyiceberg.exceptions import NoSuchTableError
+            if not isinstance(exc, NoSuchTableError):
+                raise
+            table = catalog.create_table(ident, schema=staged_parquet.schema_arrow)
 
-        if not isinstance(exc, NoSuchTableError):
-            raise
-        table = catalog.create_table(ident, schema=arrow.schema)
-    # 동일 테이블에 외부 작성자가 개입하더라도 최신 Snapshot을 오인하지 않는다.
-    if on_commit_start is not None:
-        on_commit_start()
-    table.append(arrow, snapshot_properties={"sos.attempt-id": attempt_id})
+        if table.spec().fields:
+            # 기존 파티션 테이블은 PyIceberg 0.12의 Reader append 대상이 아니다.
+            # 이전 작은 입력의 호환 경로를 유지하며 부분 커밋은 수행하지 않는다.
+            from .processing import bounded_iceberg_arrow
+
+            with pinned_scan_dataset(store, dataset) as source:
+                data = bounded_iceberg_arrow(source)
+        else:
+            data = pa.RecordBatchReader.from_batches(
+                staged_parquet.schema_arrow,
+                staged_parquet.iter_batches(batch_size=65_536),
+            )
+
+        # 실제 외부 커밋 진입 여부를 부모 Worker에 명시하고 한 Snapshot에 쓰기.
+        if on_commit_start is not None:
+            on_commit_start()
+        try:
+            table.append(data, snapshot_properties={"sos.attempt-id": attempt_id})
+        finally:
+            if isinstance(data, pa.RecordBatchReader):
+                data.close()
     snapshots = [
         snapshot
         for snapshot in catalog.load_table(ident).snapshots()
