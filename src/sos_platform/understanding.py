@@ -39,9 +39,8 @@ def role_candidates(name: str, dtype: str, unique: int, total: int) -> list[dict
         add("categorical", "physical_dtype")
     elif total and 1 < unique <= min(32, max(2, total // 2)):
         add("categorical", "sample_cardinality")
-    if (
-        any(token in kind for token in ("INT", "FLOAT", "DOUBLE", "DECIMAL", "HUGE"))
-        and not any(item["role"] == "identifier" for item in values)
+    if any(token in kind for token in ("INT", "FLOAT", "DOUBLE", "DECIMAL", "HUGE")) and not any(
+        item["role"] == "identifier" for item in values
     ):
         add("numeric_measure", "physical_dtype")
     if re.search(r"(?:^|_)(?:ip|email|phone|user|name|ssn|token)(?:$|_)", name, re.I):
@@ -61,43 +60,48 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
         schema = _columns(conn)
         if not schema:
             return {
-                "dataset_id": dataset["id"], "version": dataset["version"],
-                "algorithm_version": ALGORITHM_VERSION, "scope": scope,
-                "sampling_method": "none", "sample_limit": None,
-                "row_count": 0, "columns": [], "insights": [],
+                "dataset_id": dataset["id"],
+                "version": dataset["version"],
+                "algorithm_version": ALGORITHM_VERSION,
+                "scope": scope,
+                "sampling_method": "none",
+                "sample_limit": None,
+                "row_count": 0,
+                "columns": [],
+                "insights": [],
             }
         relation = (
             "source"
             if scope == "full"
             else "(SELECT * FROM source USING SAMPLE reservoir("
-            + str(SAMPLE_ROWS) + " ROWS) REPEATABLE (" + str(SAMPLE_SEED) + "))"
+            + str(SAMPLE_ROWS)
+            + " ROWS) REPEATABLE ("
+            + str(SAMPLE_SEED)
+            + "))"
         )
         expressions = ["COUNT(*) AS __row_count"]
         for n, item in enumerate(schema):
             col = quoted(item["name"])
             key = "c" + str(n)
             expressions.append("COUNT(*) - COUNT(" + col + ") AS " + key + "_null")
-            distinct = "COUNT(DISTINCT " + col + ")" if scope == "sample" else (
-                "APPROX_COUNT_DISTINCT(" + col + ")"
+            distinct = (
+                "COUNT(DISTINCT " + col + ")"
+                if scope == "sample"
+                else ("APPROX_COUNT_DISTINCT(" + col + ")")
             )
             expressions.append(distinct + " AS " + key + "_unique")
             sql_type = item["sql_type"].upper()
             if sql_type in ("FLOAT", "DOUBLE", "REAL"):
-                expressions.append(
-                    "COUNT(*) FILTER (WHERE isnan(" + col + ")) AS " + key + "_nan"
-                )
+                expressions.append("COUNT(*) FILTER (WHERE isnan(" + col + ")) AS " + key + "_nan")
             if _numeric_type(sql_type):
                 valid = (
                     "CASE WHEN isfinite(" + col + ") THEN " + col + " ELSE NULL END"
-                    if sql_type in ("FLOAT", "DOUBLE", "REAL") else col
+                    if sql_type in ("FLOAT", "DOUBLE", "REAL")
+                    else col
                 )
                 for metric in ("MIN", "MAX", "AVG"):
-                    expressions.append(
-                        metric + "(" + valid + ") AS " + key + "_" + metric.lower()
-                    )
-        values = _records(conn.execute(
-            "SELECT " + ", ".join(expressions) + " FROM " + relation
-        ))[0]
+                    expressions.append(metric + "(" + valid + ") AS " + key + "_" + metric.lower())
+        values = _records(conn.execute("SELECT " + ", ".join(expressions) + " FROM " + relation))[0]
     count = int(values["__row_count"])
     columns: list[dict] = []
     for n, item in enumerate(schema):
@@ -105,8 +109,10 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
         unique = int(values[key + "_unique"] or 0)
         nulls = int(values[key + "_null"] or 0)
         col = {
-            "name": item["name"], "dtype": item["dtype"],
-            "null_count": nulls, "null_ratio": nulls / count if count else None,
+            "name": item["name"],
+            "dtype": item["dtype"],
+            "null_count": nulls,
+            "null_ratio": nulls / count if count else None,
             "nan_count": int(values[key + "_nan"]) if key + "_nan" in values else None,
             "distinct_count": unique,
             "distinct_exact": scope == "sample",
@@ -121,12 +127,16 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
         columns.append(col)
     insights = suggest_analyses(columns, count)
     return {
-        "dataset_id": dataset["id"], "version": dataset["version"],
-        "algorithm_version": ALGORITHM_VERSION, "scope": scope,
+        "dataset_id": dataset["id"],
+        "version": dataset["version"],
+        "algorithm_version": ALGORITHM_VERSION,
+        "scope": scope,
         "sampling_method": "full_scan" if scope == "full" else "reservoir",
         "sample_limit": None if scope == "full" else SAMPLE_ROWS,
         "sample_seed": None if scope == "full" else SAMPLE_SEED,
-        "row_count": count, "columns": columns, "insights": insights,
+        "row_count": count,
+        "columns": columns,
+        "insights": insights,
     }
 
 
@@ -135,42 +145,73 @@ def suggest_analyses(columns: list[dict], row_count: int) -> list[dict]:
     if not row_count:
         return []
     suggestions: list[dict] = []
-    numeric = next((
-        col for col in columns
-        if any(r["role"] == "numeric_measure" for r in col["roles"])
-        and not col["is_constant"] and col["distinct_count"] > 1
-        and col["null_count"] < row_count
-    ), None)
+    numeric = next(
+        (
+            col
+            for col in columns
+            if any(r["role"] == "numeric_measure" for r in col["roles"])
+            and not col["is_constant"]
+            and col["distinct_count"] > 1
+            and col["null_count"] < row_count
+        ),
+        None,
+    )
     categories = [
-        col for col in columns
+        col
+        for col in columns
         if any(r["role"] == "categorical" for r in col["roles"])
         and not any(r["role"] == "potentially_sensitive" for r in col["roles"])
-        and not col["is_constant"] and col["distinct_count"] > 1
+        and not col["is_constant"]
+        and col["distinct_count"] > 1
     ]
     missing = next((col for col in columns if col["null_count"] > 0), None)
 
-    def append(kind: str, title: str, reason: str, column: str, metric: str,
-               group_by: str | None = None) -> None:
-        suggestions.append({
-            "kind": kind, "title": title, "reason": reason,
-            "scope": "sample", "requires_confirmation": False,
-            "request": {"column": column, "metric": metric, "group_by": group_by},
-        })
+    def append(
+        kind: str, title: str, reason: str, column: str, metric: str, group_by: str | None = None
+    ) -> None:
+        suggestions.append(
+            {
+                "kind": kind,
+                "title": title,
+                "reason": reason,
+                "scope": "sample",
+                "requires_confirmation": False,
+                "request": {"column": column, "metric": metric, "group_by": group_by},
+            }
+        )
 
     if numeric and categories:
-        append("group_comparison", "그룹별 수치 비교",
-               "범주형 후보와 변동이 있는 숫자형 컬럼이 발견됐습니다.",
-               numeric["name"], "mean", categories[0]["name"])
+        append(
+            "group_comparison",
+            "그룹별 수치 비교",
+            "범주형 후보와 변동이 있는 숫자형 컬럼이 발견됐습니다.",
+            numeric["name"],
+            "mean",
+            categories[0]["name"],
+        )
     if numeric:
-        append("numeric_summary", "숫자형 분포 확인",
-               "변동이 있는 숫자형 컬럼이 발견됐습니다.",
-               numeric["name"], "max")
+        append(
+            "numeric_summary",
+            "숫자형 분포 확인",
+            "변동이 있는 숫자형 컬럼이 발견됐습니다.",
+            numeric["name"],
+            "max",
+        )
     if categories:
-        append("category_count", "그룹별 행 수 비교",
-               "서로 다른 값이 반복되는 범주형 컬럼이 발견됐습니다.",
-               categories[0]["name"], "count", categories[0]["name"])
+        append(
+            "category_count",
+            "그룹별 행 수 비교",
+            "서로 다른 값이 반복되는 범주형 컬럼이 발견됐습니다.",
+            categories[0]["name"],
+            "count",
+            categories[0]["name"],
+        )
     if missing:
-        append("missingness", "결측 현황 확인",
-               "값이 비어 있는 컬럼이 발견됐습니다.",
-               missing["name"], "null_count")
+        append(
+            "missingness",
+            "결측 현황 확인",
+            "값이 비어 있는 컬럼이 발견됐습니다.",
+            missing["name"],
+            "null_count",
+        )
     return suggestions[:4]

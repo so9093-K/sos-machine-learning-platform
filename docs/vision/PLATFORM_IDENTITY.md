@@ -22,7 +22,7 @@ SOS는 사전에 정의된 데이터 사전이나 특정 ML 시나리오가 없�
 
 데이터 이해는 독립적인 결과이고, 탐색·준비·실험은 필요에 따라 선택·반복하거나 생략할 수 있다. 원본을 보존하면서 분석 근거와 판본을 연결하며, 이 능력은 사람과 외부 API 클라이언트에 동일한 계약으로 제공한다. 이는 모든 형식과 업무적 의미를 무조건 이해한다는 약속이 아니다.
 
-## 7. 지속적 개선 과정
+## 3. 지속적 개선 과정
 
 ![Continuous ML Lifecycle](references/01-continuous-improvement.png)
 
@@ -34,7 +34,7 @@ SOS는 사전에 정의된 데이터 사전이나 특정 ML 시나리오가 없�
 
 각 과정은 독립적으로 활용 가능하며 고정된 순서를 강제하지 않는다.
 
-## 3. 연구 경험
+## 4. 연구 경험
 
 ![Experiment Workflow — Fork, Compare, Reproduce, Understand, Explore, Apply](references/03-research-experience.png)
 
@@ -49,7 +49,7 @@ SOS는 사전에 정의된 데이터 사전이나 특정 ML 시나리오가 없�
 
 성공한 실험뿐 아니라 실패한 실험의 조건과 결과도 이후 연구에 활용할 수 있도록 보존한다.
 
-## 4. 플랫폼 접근
+## 5. 플랫폼 접근
 
 ![Human · External App · AI Agent → Common ML Platform API](references/04-common-platform-api.png)
 
@@ -59,7 +59,7 @@ SOS는 사전에 정의된 데이터 사전이나 특정 ML 시나리오가 없�
 
 학습·평가·모델 관리·추론 등 핵심 기능은 특정 UI에 종속되지 않는다. 외부 시스템은 플랫폼을 통해 모델 학습을 요청하고, 등록된 모델을 사용하며, 운영 피드백을 전달할 수 있다.
 
-## 5. 시스템 경계
+## 6. 시스템 경계
 
 ![ML Platform and Pluggable Execution Infrastructure](references/05-platform-overview.png)
 
@@ -68,7 +68,7 @@ SOS는 사전에 정의된 데이터 사전이나 특정 ML 시나리오가 없�
 - **확장성:** 새로운 모델·알고리즘·학습 방식·프레임워크·실행 환경을 수용
 - **재사용성:** 데이터 변환, 모델, 평가, 실행 결과, 배포 구성을 재사용 가능한 단위로 관리
 
-## 6. 경험 중심 기능 개발
+## 7. 경험 중심 기능 개발
 
 ![Experience-driven Development — 사용자 목표에서 경험·설계·구현·검증으로 연결되는 반복 개발](references/06-experience-driven-development.png)
 

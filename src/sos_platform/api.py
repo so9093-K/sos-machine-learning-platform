@@ -480,7 +480,8 @@ def create_app(home: Path | None = None) -> FastAPI:
         profile = store.latest_dataset_profile(item["id"], item["version"])
         latest = store.latest_understanding_job(item["id"])
         return {
-            "dataset_id": item["id"], "version": item["version"],
+            "dataset_id": item["id"],
+            "version": item["version"],
             "profile": profile,
             "job_status": latest["status"] if latest else None,
             "job_id": latest["id"] if latest else None,
@@ -508,11 +509,13 @@ def create_app(home: Path | None = None) -> FastAPI:
         require_job_submission_key(idempotency_key)
         # 새 Job 종류 없이 기존 Profile Job/Attempt 인프라를 그대로 사용한다.
         return store.create_job(
-            kind="profile", dataset_id=dataset_id,
+            kind="profile",
+            dataset_id=dataset_id,
             spec={"mode": "understanding", "scope": body.scope},
             idempotency_key=idempotency_key,
             request_id=request.state.request_id,
-            owner_actor=actor.id, actor_type=actor.kind,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
         )
 
     @app.post("/api/datasets/{dataset_id}/explorations", response_model=ExplorationOut)

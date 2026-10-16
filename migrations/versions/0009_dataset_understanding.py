@@ -25,7 +25,8 @@ def upgrade() -> None:
     )
     op.create_index(
         "ix_dataset_profiles_dataset_created",
-        "dataset_profiles", ["dataset_id", "created_at", "job_id"],
+        "dataset_profiles",
+        ["dataset_id", "created_at", "job_id"],
     )
 
 

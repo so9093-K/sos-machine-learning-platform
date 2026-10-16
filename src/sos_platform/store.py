@@ -533,7 +533,8 @@ class Store:
                     "SELECT id FROM jobs WHERE dataset_id=:id AND kind='profile' "
                     "AND spec::jsonb->>'mode'='understanding' "
                     "ORDER BY created_at DESC,id DESC LIMIT 1"
-                ), {"id": dataset_id},
+                ),
+                {"id": dataset_id},
             ).scalar_one_or_none()
         return self.get_job(job_id) if job_id else None
 
@@ -882,8 +883,10 @@ class Store:
                         "VALUES(:job,:dataset,:version,:scope,:result,:at)"
                     ),
                     {
-                        "job": job_id, "dataset": row["dataset_id"],
-                        "version": result["version"], "scope": result["scope"],
+                        "job": job_id,
+                        "dataset": row["dataset_id"],
+                        "version": result["version"],
+                        "scope": result["scope"],
                         "result": json.dumps(result, ensure_ascii=False, allow_nan=False),
                         "at": now(),
                     },

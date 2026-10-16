@@ -248,6 +248,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/datasets/{dataset_id}/understanding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dataset Understanding
+         * @description 원본 등록과 독립적으로 계산된 최신 이해 결과 및 실행 상태를 제공한다.
+         */
+        get: operations["dataset_understanding_api_datasets__dataset_id__understanding_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/datasets/{dataset_id}/understanding/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Understanding */
+        post: operations["submit_understanding_api_datasets__dataset_id__understanding_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/diagnostics/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -1362,6 +1399,30 @@ export interface components {
             /** Steps */
             steps: components["schemas"]["Step"][];
         };
+        /** UnderstandingOut */
+        UnderstandingOut: {
+            /** Dataset Id */
+            dataset_id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Job Status */
+            job_status?: ("Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled") | null;
+            /** Profile */
+            profile?: {
+                [key: string]: unknown;
+            } | null;
+            /** Version */
+            version: string;
+        };
+        /** UnderstandingRequest */
+        UnderstandingRequest: {
+            /**
+             * Scope
+             * @default sample
+             * @enum {string}
+             */
+            scope: "sample" | "full";
+        };
         /** UploadPolicyOut */
         UploadPolicyOut: {
             /** Max Size Bytes */
@@ -1823,6 +1884,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    dataset_understanding_api_datasets__dataset_id__understanding_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnderstandingOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    submit_understanding_api_datasets__dataset_id__understanding_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnderstandingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Structured API error */
