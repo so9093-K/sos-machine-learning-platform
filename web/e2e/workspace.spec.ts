@@ -606,6 +606,41 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
 });
 
 
+test("loading older Jobs survives a concurrent background refresh", async ({ page }) => {
+  let requestedOlder = 0;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/jobs?limit=20*", async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has("cursor")) {
+      requestedOlder++;
+      await held;
+      return route.fulfill({ status: 200, json: {
+        items: [{
+          id: "older-page-job", dataset_id: "old-dataset", kind: "profile",
+          status: "Succeeded", created_at: "2026-01-01T00:00:00Z",
+          attempt_count: 0, spec: {}, result: null,
+        }],
+        next_cursor: null,
+      } });
+    }
+    const response = await route.fetch();
+    const current = await response.json() as { items: unknown[]; next_cursor: string | null };
+    return route.fulfill({ response, json: { ...current, next_cursor: "older-page-token" } });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
+  try {
+    await page.getByRole("button", { name: "이전 작업 더 보기 →" }).click();
+    await expect.poll(() => requestedOlder).toBeGreaterThan(0);
+    await page.getByRole("button", { name: "새로고침" }).click();
+  } finally {
+    release();
+  }
+  await expect(page.getByText("older-page-job")).toBeVisible();
+});
+
+
 test("an older Jobs GET cannot overwrite a newer manual refresh", async ({ page }) => {
   let seen = 0;
   let delivered = false;
