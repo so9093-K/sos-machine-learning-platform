@@ -64,7 +64,7 @@ test("Iceberg import captures a pinned snapshot", async ({ page }) => {
   const selector = page.getByRole("combobox", { name: "Iceberg Snapshot 선택" });
   await expect(selector).toBeVisible();
   const snapshotId = await selector.inputValue();
-  expect(snapshotId).toMatch(/^\\d+$/);
+  expect(snapshotId).toMatch(/^\d+$/);
   await page.getByRole("button", { name: "선택한 Snapshot 연결" }).click();
   await expect(page.locator(".dataset-hero p")).toContainText(snapshotId);
 });

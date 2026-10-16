@@ -687,7 +687,7 @@ function App() {
   async function checkIdentity() {
     setChecking(true); setMessage("");
     try {
-      setActor(await request<Identity>("/api/auth/me"));
+      setActor(await request<Identity>("/api/v2/auth/me"));
     } catch (error) {
       setMessage(error instanceof ApiError && error.status === 401
         ? "인증이 필요합니다. 발급된 액세스 토큰을 입력하세요."
@@ -700,7 +700,7 @@ function App() {
     setSubmitting(true); setMessage("");
     setAccessToken(token);
     try {
-      setActor(await request<Identity>("/api/auth/me"));
+      setActor(await request<Identity>("/api/v2/auth/me"));
       setToken("");
     } catch (error) {
       setAccessToken(null);
