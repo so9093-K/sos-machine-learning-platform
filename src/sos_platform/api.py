@@ -62,6 +62,8 @@ from .schemas import (
     SnapshotOut,
     StorageInspectionOut,
     StoragePolicyOut,
+    UnderstandingOut,
+    UnderstandingRequest,
     UploadPolicyOut,
     WorkRequest,
 )
@@ -470,6 +472,51 @@ def create_app(home: Path | None = None) -> FastAPI:
         actor: Actor = READ_DATASET_DEP,
     ):
         return discovery_columns(store, existing(dataset_id, actor), search=search)
+
+    @app.get("/api/datasets/{dataset_id}/understanding", response_model=UnderstandingOut)
+    def dataset_understanding(dataset_id: str, actor: Actor = READ_DATASET_DEP):
+        """원본 등록과 독립적으로 계산된 최신 이해 결과 및 실행 상태를 제공한다."""
+        item = existing(dataset_id, actor)
+        profile = store.latest_dataset_profile(item["id"], item["version"])
+        latest = store.latest_understanding_job(item["id"])
+        return {
+            "dataset_id": item["id"],
+            "version": item["version"],
+            "profile": profile,
+            "job_status": latest["status"] if latest else None,
+            "job_id": latest["id"] if latest else None,
+        }
+
+    @app.post(
+        "/api/datasets/{dataset_id}/understanding/jobs",
+        status_code=202,
+        response_model=JobOut,
+    )
+    def submit_understanding(
+        dataset_id: str,
+        body: UnderstandingRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        existing(dataset_id, actor)
+        require_job_submission_key(idempotency_key)
+        # 새 Job 종류 없이 기존 Profile Job/Attempt 인프라를 그대로 사용한다.
+        return store.create_job(
+            kind="profile",
+            dataset_id=dataset_id,
+            spec={"mode": "understanding", "scope": body.scope},
+            idempotency_key=idempotency_key,
+            request_id=request.state.request_id,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+        )
 
     @app.post("/api/datasets/{dataset_id}/explorations", response_model=ExplorationOut)
     def dataset_exploration(

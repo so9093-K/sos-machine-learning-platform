@@ -4,6 +4,10 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**을 
 
 ## 논리적 구성과 경계
 
+![SOS Control Plane과 교체 가능한 Training·Serving Runtime의 책임 분리](references/control-plane-runtime-architecture.png)
+
+이 그림은 목표 책임 경계를 표현한다. **Control Plane은 모델·실행·평가·배포의 제어 상태**, 실제 Training·Serving Runtime은 격리된 실행을 담당한다. 그림에 적힌 프레임워크·스토리지 제품은 예시이며 필수 기술 스택이 아니다. 현재 구현되지 않은 모델 운영 능력도 포함한 장기 논리 구조다. Data Explorer와 Model Playground는 별도 플랫폼이 아니라 같은 API·권한·모델 판본을 사용하는 경험이다.
+
 ```text
 Human / External System / AI Agent
                  |
@@ -43,6 +47,10 @@ Human / External System / AI Agent
 플랫폼 메타데이터(Dataset, Job, Execution Attempt)는 PostgreSQL에 영속화하고, 실제 원본 데이터·변환 결과는 S3 호환 객체 저장소에 보관한다. 서로 다른 저장소의 원자성을 가정하지 않으며, 게시 실패 시 공유 가능한 원본 객체와 Attempt별 결과 객체의 소유권·보존 및 복구 정책을 구분한다. Iceberg Catalog는 테이블·Snapshot의 메타데이터를 담당하며 데이터 파일은 객체 저장소를 활용한다. 공통 Dataset 계약은 특정 제품의 내부 객체에 종속되지 않는다.
 
 Makefile과 개발 CLI는 서비스 기동·진단의 인터페이스이자 배포별 어댑터다. 개발 환경의 Compose 구성이 플랫폼 서비스의 의존 방향을 결정하지 않는다. 외부 관리형 데이터베이스·스토리지 또는 독립적으로 배치된 Worker를 사용할 수 있으며, 실행 중(Running)과 실제 서비스 준비(Ready)는 구별하여 판정한다.
+
+## 범용 Dataset Understanding 책임
+
+DuckDB 기반 Profiler는 원본 판본에서 통계·품질을 계산하며 역할 추론과 추천 규칙은 독립된 순수 정책으로 분리한다. 실행과 취소는 기존 Job/Attempt를 재사용하고 완료된 Profile은 PostgreSQL에서 원본과 별도로 추적한다. 웹과 외부 클라이언트는 동일한 API를 사용한다. 물리적 저장소나 특정 모델·LLM의 추론을 필수 조건으로 삼지 않는다.
 
 ## 현재 코드의 모듈 경계
 

@@ -563,6 +563,7 @@ test("general Dataset query projects, filters and sorts columns", async ({ page 
     buffer: Buffer.from("group,value,private\na,10,hidden\nb,2,secret\na,5,internal\n"),
   });
   await expect(page.getByRole("heading", { name: "generic-query.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "Preview" }).click();
   await page.getByText("컬럼·필터·정렬 선택").click();
   await page.getByLabel("표시할 컬럼 선택").getByLabel("value", { exact: true }).check();
   await page.getByLabel("필터 컬럼").selectOption("group");
@@ -604,6 +605,7 @@ test("editing Dataset Query while its response is pending never renders stale ro
     buffer: Buffer.from("group,value\na,10\nb,20\na,30\n"),
   });
   await expect(page.getByRole("heading", { name: "query-race.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "Preview" }).click();
   await page.getByText("컬럼·필터·정렬 선택").click();
   await page.getByLabel("필터 컬럼").selectOption("group");
   await page.getByLabel("비교 값").fill("a");
@@ -629,4 +631,23 @@ test("editing Dataset Query while its response is pending never renders stale ro
   await page.getByRole("button", { name: "조회 적용" }).click();
   await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(1);
   await expect(page.locator("#sos-panel-preview tbody tr")).toContainText("20");
+});
+
+test("unknown CSV opens Understanding, persists profile and runs suggested exploration", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "unknown.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("department,score\nalpha,3\nbeta,5\nalpha,7\nbeta,9\n"),
+  });
+  await expect(page.getByRole("heading", { name: "unknown.csv" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Understand" })).toHaveAttribute("aria-selected", "true");
+  const panel = page.getByRole("tabpanel", { name: "Understand" });
+  await expect(panel.getByText("발견된 컬럼 특성")).toBeVisible({ timeout: 30000 });
+  await expect(panel.getByText("그룹별 수치 비교")).toBeVisible();
+  await panel.getByRole("button", { name: "탐색 실행" }).first().click();
+  await expect(panel.getByText(/탐색 결과/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("tab", { name: "Understand" })).toBeVisible();
+  await expect(page.getByText("발견된 컬럼 특성")).toBeVisible({ timeout: 30000 });
 });

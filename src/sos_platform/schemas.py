@@ -282,6 +282,61 @@ class ExplorationOut(BaseModel):
     rows: list[ExplorationRowOut]
 
 
+class UnderstandingRoleOut(BaseModel):
+    role: str
+    basis: str
+    confirmed: bool
+
+
+class UnderstandingColumnOut(BaseModel):
+    name: str
+    dtype: str
+    null_count: int
+    null_ratio: float | None
+    nan_count: int | None
+    distinct_count: int
+    distinct_exact: bool
+    roles: list[UnderstandingRoleOut]
+    is_constant: bool
+    min: int | float | str | None = None
+    max: int | float | str | None = None
+    mean: int | float | str | None = None
+
+
+class UnderstandingInsightOut(BaseModel):
+    kind: str
+    title: str
+    reason: str
+    scope: Literal["sample"]
+    requires_confirmation: bool
+    request: ExplorationSpec
+
+
+class UnderstandingProfileOut(BaseModel):
+    dataset_id: str
+    version: str
+    algorithm_version: str
+    scope: Literal["sample", "full"]
+    sampling_method: str
+    sample_limit: int | None
+    sample_seed: int | None = None
+    row_count: int
+    columns: list[UnderstandingColumnOut]
+    insights: list[UnderstandingInsightOut]
+
+
+class UnderstandingRequest(BaseModel):
+    scope: Literal["sample", "full"] = "sample"
+
+
+class UnderstandingOut(BaseModel):
+    dataset_id: str
+    version: str
+    profile: UnderstandingProfileOut | None = None
+    job_status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"] | None = None
+    job_id: str | None = None
+
+
 class PreviewOut(BaseModel):
     """제한된 행 미리보기와 컬럼 타입."""
 
