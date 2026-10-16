@@ -289,10 +289,10 @@ test("DuckDB Discovery searches columns and runs a full job through global Jobs"
 
 
 test("Discovery metadata retry restores selection and analysis controls", async ({ page }) => {
-  let failed = false;
+  let shouldFail = true;
   await page.route("**/api/datasets/*/columns", async route => {
-    if (!failed) {
-      failed = true;
+    // StrictMode는 초기 Effect를 재실행하므로 재시도 클릭 전의 모든 호출을 실패시킨다.
+    if (shouldFail) {
       await route.fulfill({ status: 503, contentType: "application/json", body: '{"detail":"일시적인 오류"}' });
     } else {
       await route.continue();
@@ -306,6 +306,7 @@ test("Discovery metadata retry restores selection and analysis controls", async 
   await page.getByRole("tab", { name: "EDA & Profile" }).click();
   const discovery = page.getByRole("region", { name: "Dataset Discovery" });
   await expect(discovery.getByRole("button", { name: "메타데이터 다시 시도" })).toBeVisible();
+  shouldFail = false;
   await discovery.getByRole("button", { name: "메타데이터 다시 시도" }).click();
   await expect(discovery.getByRole("button", { name: "샘플 집계" })).toBeEnabled();
   await discovery.getByRole("button", { name: "샘플 집계" }).click();
