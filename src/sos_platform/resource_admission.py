@@ -42,7 +42,9 @@ class ExecutionCapacity:
                 "SOS_EXECUTION_POOL_MIB must be a multiple of 256 between 256 and 65536"
             )
         if not wait.isdecimal() or not 1 <= int(wait) <= 300:
-            raise RuntimeConfigurationError("SOS_EXECUTION_POOL_WAIT_SECONDS must be between 1 and 300")
+            raise RuntimeConfigurationError(
+                "SOS_EXECUTION_POOL_WAIT_SECONDS must be between 1 and 300"
+            )
         return cls(pool_mib=int(capacity), wait_seconds=float(wait))
 
     def validate_worker_budget(
