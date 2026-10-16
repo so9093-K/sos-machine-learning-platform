@@ -31,6 +31,10 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | 원본 파일의 판본·등록·마이그레이션 보존 | test_datasets.py |
 | DuckDB 탐색·집계·권한과 파일 접근, NaN·무한대·DECIMAL·큰 정수·바이너리 Preview·전체 Job 직렬화와 그룹 상위 제한 | test_discovery.py |
 | Job 상태·취소·게시 원자성·Attempt·커서 | test_jobs.py |
+| Job 제출 키 중복·동시성·감사 롤백 | test_idempotency.py |
+| 전역 Discovery 슬롯 경합과 회수 | test_discovery_admission.py |
+| Worker 실행 시간 제한·실패 기록 | test_worker_budget.py |
+| Dataset 키셋 페이지와 Snapshot 소유권 | test_dataset_pages.py, test_snapshot_scope.py |
 | Iceberg Snapshot 고정·Tag 보존·중단 후 자동 재시도 금지 | test_iceberg.py |
 | 객체 쓰기 의도·S3 관측·삭제 없는 Storage Health | test_storage.py |
 | 토큰·역할·리소스 소유권·거부 감사 | test_security.py, auth.spec.ts |
