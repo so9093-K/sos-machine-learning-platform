@@ -229,3 +229,24 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 @media(prefers-reduced-motion:reduce) {
   *,*::before,*::after { transition:none!important; scroll-behavior:auto!important; }
 }
+
+/* 데이터 탐색 테이블의 빠른 탐색과 우선순위 요약. */
+.understanding-content { display:grid; gap:15px; min-width:0; }
+.understanding-content .panel-head { margin-bottom:0; }
+.profile-findings { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.profile-findings>div { display:grid; gap:6px; padding:13px 15px; border:1px solid var(--sos-border); border-radius:9px; background:var(--sos-raised); }
+.profile-findings strong { font-size:20px; }
+.profile-findings span,.filter-count { color:var(--sos-muted); font-size:12px; }
+.profile-filters { display:flex; flex-wrap:wrap; align-items:end; gap:11px; }
+.profile-filters label { display:grid; gap:6px; color:var(--sos-muted); font-size:12px; min-width:165px; }
+.profile-filters input,.profile-filters select { width:100%; }
+.filter-count { padding:11px; }
+@media(max-width:850px) {
+  .global-nav { max-height:none; overflow:visible; display:flex; flex-wrap:wrap; gap:8px; }
+  .global-nav .section-title { width:100%; }
+  .global-nav .job-navigation { width:auto; }
+}
+@media(max-width:620px) {
+  .profile-findings { grid-template-columns:1fr; }
+  .profile-filters label { flex:1 1 100%; }
+}

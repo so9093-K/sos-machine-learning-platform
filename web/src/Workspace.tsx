@@ -470,6 +470,19 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   return <div className="shell">
     <aside className="sidebar">
       <InstanceBrand canEdit={actor.roles.includes("administrator")} />
+      <nav className="global-nav" aria-label="전역 메뉴">
+      <div className="section-title">PLATFORM</div>
+      <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
+        전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
+      </button>
+      {canManage && <button className="job-navigation secondary" onClick={() => setTab("storage")}>
+        저장소 상태 보기
+      </button>}
+      {canManage && <button className="job-navigation secondary" onClick={() => setTab("audit")}>
+        보안 감사 보기
+      </button>}
+      </nav>
+
       <div className="section-title">DATA SOURCES</div>
       {canWrite && <label className="upload" role="button" tabIndex={0} aria-label="CSV 또는 Parquet 파일 업로드"
         aria-disabled={busy} onKeyDown={event => {
@@ -516,19 +529,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         showExamples.current = true;
         setSelected(""); setTab("preview");
       }}>예제 데이터 살펴보기</button>
-      <nav className="global-nav" aria-label="전역 메뉴">
-      <div className="section-title">PLATFORM</div>
-      <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
-        전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
-      </button>
-      {canManage && <button className="job-navigation secondary" onClick={() => setTab("storage")}>
-        저장소 상태 보기
-      </button>}
-      {canManage && <button className="job-navigation secondary" onClick={() => setTab("audit")}>
-        보안 감사 보기
-      </button>}
-      </nav>
-      <div className="section-title dataset-section-title">DATASETS</div>
+            <div className="section-title dataset-section-title">DATASETS</div>
       <nav className="dataset-nav" aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}

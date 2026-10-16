@@ -645,6 +645,10 @@ test("unknown CSV opens Understanding, persists profile and runs suggested explo
   const panel = page.getByRole("tabpanel", { name: "개요" });
   await expect(panel.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });
   await expect(panel.getByText("그룹별 수치 비교")).toBeVisible();
+  await panel.getByRole("searchbox", { name: "프로파일 컬럼 검색" }).fill("score");
+  await expect(panel.getByRole("cell", { name: "score" })).toBeVisible();
+  await expect(panel.getByRole("cell", { name: "department" })).toHaveCount(0);
+  await panel.getByRole("searchbox", { name: "프로파일 컬럼 검색" }).fill("");
   await panel.getByRole("button", { name: "탐색 실행" }).first().click();
   await expect(panel.getByText(/탐색 결과/)).toBeVisible();
   await page.reload();
