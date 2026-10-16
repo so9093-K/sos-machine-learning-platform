@@ -103,3 +103,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 ## PR 완료 조건
 
 계약·검증 계층이 명확하고, 테스트 독립성·실패 안전 정리가 확인되고, 필수 검사와 API 호환성 평가를 통과해야 한다. 최종 HEAD의 CI를 확인하고 개발자가 직접 PR을 병합한다.
+
+## 독립적인 연산 기준선
+
+`uv run --locked python scripts/benchmark_processing.py --rows 150000 --groups 32 --scenario window`와 `--scenario row_local`을 각각 독립 프로세스로 실행해 같은 합성 입력 생성 규칙에서 **실제 SOS Polars Transform**의 경과 시간·출력 크기·Linux RSS 관측치를 JSON으로 확인한다. 숫자 비교 시 환경·CPU·메모리·Polars 버전·시나리오·행/그룹 수를 함께 기록한다. `VmHWM`은 프로세스 생애 고수위이므로 단일 연산에만 귀속되는 엄격한 Peak RSS가 아니며, 파일 I/O·Iceberg 커밋·여러 동시 실행·cgroup 제한도 검증하지 않는다. 운영 환경의 성능 보장으로 사용하지 않는다.
