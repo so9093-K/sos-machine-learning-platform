@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import * as echarts from "echarts";
+import { useEffect, useMemo, useState } from "react";
+import type * as echarts from "echarts";
+import { DataChart, CHART_COLORS } from "./DataChart";
 import { request, jsonPost, formatError } from "./api";
 import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, ExplorationJob } from "./types";
 
@@ -7,19 +8,6 @@ function analysisLabel(basis: string) {
   return basis === "parquet_metadata"
     ? "Parquet 파일 메타데이터"
     : "행 수는 아직 전체 계산하지 않았습니다";
-}
-
-function DiscoveryChart({ option }: { option: echarts.EChartsCoreOption }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    const chart = echarts.init(ref.current);
-    chart.setOption(option);
-    const observer = new ResizeObserver(() => chart.resize());
-    observer.observe(ref.current);
-    return () => { observer.disconnect(); chart.dispose(); };
-  }, [option]);
-  return <div className="chart" ref={ref} role="img" aria-label="샘플 집계 결과 차트" />;
 }
 
 /** 사람과 외부 API가 동일하게 사용하는 Dataset Discovery 계약을 표시한다. */
@@ -40,7 +28,8 @@ export function DiscoveryPanel({
   const [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true;
-    setStatus("loading"); setResult(null); setError("");
+    setStatus("loading"); setOverview(null); setColumns(null);
+    setResult(null); setError("");
     Promise.all([
       request<DatasetOverview>(`/api/datasets/${datasetId}/overview`),
       request<DatasetColumns>(`/api/datasets/${datasetId}/columns`),
@@ -97,14 +86,14 @@ export function DiscoveryPanel({
   const chart = useMemo<echarts.EChartsCoreOption | null>(() => {
     if (!result?.rows.some(row => typeof row.value === "number")) return null;
     return {
-      backgroundColor: "transparent", textStyle: { color: "#cbd5e1" },
+      backgroundColor: "transparent", textStyle: { color: CHART_COLORS.text },
       tooltip: { trigger: "axis" },
       grid: { left: 52, right: 15, top: 22, bottom: 55 },
       xAxis: { type: "category", data: result.rows.map(x => String(x.category ?? "전체")),
-        axisLabel: { color: "#94a3b8", hideOverlap: true, rotate: 20 } },
-      yAxis: { type: "value", axisLabel: { color: "#94a3b8" } },
+        axisLabel: { color: CHART_COLORS.label, hideOverlap: true, rotate: 20 } },
+      yAxis: { type: "value", axisLabel: { color: CHART_COLORS.label } },
       series: [{ type: "bar", data: result.rows.map(x => x.value),
-        itemStyle: { color: "#7d92e7" } }],
+        itemStyle: { color: CHART_COLORS.bar } }],
     };
   }, [result]);
   return <section className="discovery-panel" aria-label="Dataset Discovery">
@@ -164,7 +153,7 @@ export function DiscoveryPanel({
           <tbody>{result.rows.map((r, i) => <tr key={i}><td>{String(r.category ?? "전체")}</td>
             <td>{r.value == null ? "NULL" : Number(r.value).toLocaleString()}</td></tr>)}</tbody>
         </table></div>
-        {chart ? <DiscoveryChart option={chart} /> :
+        {chart ? <DataChart option={chart} ariaLabel="샘플 집계 결과 차트" /> :
           <p className="muted">시각화할 유효한 수치가 없습니다. 위 표에서 값을 확인하세요.</p>}
       </>}
     </>}

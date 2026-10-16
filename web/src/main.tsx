@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import * as echarts from "echarts";
+import type * as echarts from "echarts";
+import { DataChart, CHART_COLORS } from "./DataChart";
 import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
 import { ApiError, request, jsonPost, setAccessToken, formatError, uploadFile } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
@@ -23,19 +24,6 @@ const mebibytes = (size: number) => (size / (1024 * 1024)).toFixed(2);
 function readableVersion(d: Dataset) {
   return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
 }
-function Chart({ option }: { option: echarts.EChartsCoreOption }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    const chart = echarts.init(ref.current);
-    chart.setOption(option);
-    const observer = new ResizeObserver(() => chart.resize());
-    observer.observe(ref.current);
-    return () => { observer.disconnect(); chart.dispose(); };
-  }, [option]);
-  return <div ref={ref} className="chart" role="img" aria-label="선택된 데이터의 분석 차트" />;
-}
-
 function Workspace({ actor }: { actor: Identity }) {
   const canManage = actor.roles.some(r => ["administrator", "operator"].includes(r));
   const canWrite = actor.roles.some(r => ["administrator", "researcher"].includes(r));
@@ -333,15 +321,15 @@ function Workspace({ actor }: { actor: Identity }) {
   const distributionOption = useMemo<echarts.EChartsCoreOption | null>(() => {
     if (!distribution) return null;
     return {
-      backgroundColor: "transparent", textStyle: { color: "#cbd5e1" },
+      backgroundColor: "transparent", textStyle: { color: CHART_COLORS.text },
       tooltip: { trigger: "axis" },
       grid: { left: 50, right: 15, top: 20, bottom: 48 },
       xAxis: { type: "category", data: distribution.labels,
-        axisLabel: { color: "#94a3b8", rotate: 20, hideOverlap: true } },
-      yAxis: { type: "value", axisLabel: { color: "#94a3b8" },
-        splitLine: { lineStyle: { color: "#334155" } } },
+        axisLabel: { color: CHART_COLORS.label, rotate: 20, hideOverlap: true } },
+      yAxis: { type: "value", axisLabel: { color: CHART_COLORS.label },
+        splitLine: { lineStyle: { color: CHART_COLORS.grid } } },
       series: [{ type: "bar", data: distribution.counts,
-        itemStyle: { color: "#7d92e7" } }],
+        itemStyle: { color: CHART_COLORS.bar } }],
     };
   }, [distribution]);
   const chartOption = useMemo<echarts.EChartsCoreOption | null>(() => {
@@ -351,16 +339,16 @@ function Workspace({ actor }: { actor: Identity }) {
     if (!values.length) return null;
     return {
       backgroundColor: "transparent",
-      textStyle: { color: "#cbd5e1" },
+      textStyle: { color: CHART_COLORS.text },
       tooltip: { trigger: "axis" },
       grid: { left: 48, right: 20, top: 25, bottom: 42 },
       xAxis: { type: "category", data: preview.rows.map(r => String(r[timeColumn] ?? "")),
-        axisLabel: { color: "#94a3b8", hideOverlap: true } },
-      yAxis: { type: "value", axisLabel: { color: "#94a3b8" }, splitLine: {
-        lineStyle: { color: "#334155" } } },
+        axisLabel: { color: CHART_COLORS.label, hideOverlap: true } },
+      yAxis: { type: "value", axisLabel: { color: CHART_COLORS.label }, splitLine: {
+        lineStyle: { color: CHART_COLORS.grid } } },
       series: [{ type: "line", showSymbol: false, name: visualColumn, data: preview.rows.map(
         r => typeof r[visualColumn] === "number" ? r[visualColumn] : null
-      ), lineStyle: { color: "#69b9ff" }, itemStyle: { color: "#69b9ff" } }],
+      ), lineStyle: { color: CHART_COLORS.line }, itemStyle: { color: CHART_COLORS.line } }],
     };
   }, [preview, visualColumn, timeColumn]);
 
@@ -523,9 +511,9 @@ function Workspace({ actor }: { actor: Identity }) {
                 {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select></label></div>
             <div className="charts">
-              <div><h4>값의 변화</h4>{chartOption ? <Chart option={chartOption} /> :
+              <div><h4>값의 변화</h4>{chartOption ? <DataChart option={chartOption} ariaLabel="값의 변화 시계열 차트" /> :
                 <p className="muted">표시할 숫자형 데이터가 없습니다.</p>}</div>
-              <div><h4>분포 (Histogram)</h4>{distributionOption ? <Chart option={distributionOption} /> :
+              <div><h4>분포 (Histogram)</h4>{distributionOption ? <DataChart option={distributionOption} ariaLabel="데이터 분포 히스토그램" /> :
                 <p className="muted">분포를 계산할 숫자형 데이터가 없습니다.</p>}</div>
             </div>
             <p className="hint">차트와 히스토그램은 최대 100행의 미리보기 값입니다.</p>
