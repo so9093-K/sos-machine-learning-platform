@@ -758,3 +758,13 @@ test("switching Datasets never displays another Dataset's cached Preview", async
   await expect(page.getByRole("cell", { name: "FIRST_ONLY" })).toHaveCount(0);
   await expect(page.getByRole("cell", { name: "SECOND_ONLY" })).toBeVisible();
 });
+
+
+test("Data Explorer supports WCAG 320px reflow without page-wide overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/");
+  await expect(page.getByRole("navigation", { name: "전역 메뉴" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "데이터 탐색" })).toBeVisible();
+  const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(pageWidth).toBeLessThanOrEqual(320);
+});

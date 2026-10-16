@@ -16,7 +16,7 @@ import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 
 
 type Step = FeatureStep;
-type Tab = "understanding" | "preview" | "profile" | "features" | "jobs" | "storage" | "audit";
+type Tab = DatasetTab | "jobs" | "storage" | "audit";
 type UploadProgress = {
   name: string; loaded: number; total: number;
   phase: "transferring" | "registering";
