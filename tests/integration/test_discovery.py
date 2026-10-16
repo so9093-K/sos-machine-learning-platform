@@ -398,28 +398,33 @@ def test_dataset_query_projects_filters_sorts_and_validates_columns(workspace):
     assert client.get(f"/api/datasets/{dataset['id']}/preview").status_code == 200
 
 
-
 def test_query_handles_wide_schemas_and_invalid_typed_comparisons(workspace):
     client, _store = workspace
     buffer = BytesIO()
     pq.write_table(
-        pa.table({f"sensor_{index:03d}": pa.array([index, index + 1])
-                  for index in range(320)}),
+        pa.table({f"sensor_{index:03d}": pa.array([index, index + 1]) for index in range(320)}),
         buffer,
     )
     dataset = _upload(client, "wide-schema.parquet", buffer.getvalue())
     path = f"/api/datasets/{dataset['id']}/query"
-    projected = client.post(path, json={
-        "columns": ["sensor_319", "sensor_000"], "limit": 1,
-        "order_by": "sensor_319", "descending": True,
-    })
+    projected = client.post(
+        path,
+        json={
+            "columns": ["sensor_319", "sensor_000"],
+            "limit": 1,
+            "order_by": "sensor_319",
+            "descending": True,
+        },
+    )
     assert projected.status_code == 200, projected.text
     assert projected.json()["rows"] == [{"sensor_319": 320, "sensor_000": 1}]
-    all_columns = client.post(path, json={"columns": [
-        f"sensor_{index:03d}" for index in range(320)], "limit": 1})
+    all_columns = client.post(
+        path, json={"columns": [f"sensor_{index:03d}" for index in range(320)], "limit": 1}
+    )
     assert all_columns.status_code == 200, all_columns.text
     assert len(all_columns.json()["schema"]) == 320
-    incompatible = client.post(path, json={"filters": [
-        {"column": "sensor_000", "op": "gte", "value": "not-a-number"}]})
+    incompatible = client.post(
+        path, json={"filters": [{"column": "sensor_000", "op": "gte", "value": "not-a-number"}]}
+    )
     assert incompatible.status_code == 422
     assert incompatible.json()["code"] == "SOS-API-VALIDATION"
