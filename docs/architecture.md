@@ -4,6 +4,10 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**을 
 
 ## 논리적 구성과 경계
 
+![SOS Control Plane과 교체 가능한 Training·Serving Runtime의 책임 분리](references/control-plane-runtime-architecture.png)
+
+이 그림은 목표 책임 경계를 표현한다. **Control Plane은 모델·실행·평가·배포의 제어 상태**, 실제 Training·Serving Runtime은 격리된 실행을 담당한다. 그림에 적힌 프레임워크·스토리지 제품은 예시이며 필수 기술 스택이 아니다. 현재 구현되지 않은 모델 운영 능력도 포함한 장기 논리 구조다. Data Explorer와 Model Playground는 별도 플랫폼이 아니라 같은 API·권한·모델 판본을 사용하는 경험이다.
+
 ```text
 Human / External System / AI Agent
                  |
