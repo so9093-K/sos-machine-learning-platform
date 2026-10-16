@@ -33,6 +33,7 @@ export function UnderstandingPanel({
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let missingCompletedProfile = 0;
     async function refresh() {
       try {
         const data = await request<Understanding>(
@@ -43,6 +44,13 @@ export function UnderstandingPanel({
         setError("");
         if (data.job_status === "Queued" || data.job_status === "Running") {
           timer = setTimeout(() => { void refresh(); }, 1500);
+        } else if (data.job_status === "Succeeded" && !data.profile) {
+          // 마감 시점의 교차 읽기 또는 지연된 결과 표시를 회복하되 무한 폴링하지 않는다.
+          if (++missingCompletedProfile <= 3) {
+            timer = setTimeout(() => { void refresh(); }, 1500);
+          } else {
+            setError("완료된 분석의 프로파일을 조회하지 못했습니다. 상태를 다시 조회하세요.");
+          }
         }
         // 한 Dataset에서 분석 접수가 여러 번 반복되지 않도록 서버 상태를 먼저 확인한다.
         if (!data.profile && !data.job_status && canCreate) {

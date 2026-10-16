@@ -502,8 +502,10 @@ def create_app(home: Path | None = None) -> FastAPI:
     def dataset_understanding(dataset_id: str, actor: Actor = READ_DATASET_DEP):
         """원본 등록과 독립적으로 계산된 최신 이해 결과 및 실행 상태를 제공한다."""
         item = existing(dataset_id, actor)
-        profile = store.latest_dataset_profile(item["id"], item["version"])
+        # 완료 트랜잭션의 중간을 읽지 않도록 Job 상태를 먼저 조회한다.
+        # 반대 순서에서는 profile=None 조회 후 Worker 커밋, job=Succeeded가 가능하다.
         latest = store.latest_understanding_job(item["id"])
+        profile = store.latest_dataset_profile(item["id"], item["version"])
         return {
             "dataset_id": item["id"],
             "version": item["version"],

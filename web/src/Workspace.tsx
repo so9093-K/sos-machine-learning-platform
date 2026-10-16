@@ -125,7 +125,14 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
 
   async function refreshDatasets() {
     const version = ++datasetRequestVersion.current;
-    const page = await request<DatasetPage>("/api/datasets/pages?limit=20");
+    let page: DatasetPage;
+    try {
+      page = await request<DatasetPage>("/api/datasets/pages?limit=20");
+    } catch (error) {
+      // 새 등록·더 최신 조회에서 대체된 실패는 현재 화면의 오류가 아니다.
+      if (version !== datasetRequestVersion.current) return;
+      throw error;
+    }
     // 오래된 GET 응답이 최근 등록·조회 후 확정된 Dataset 선택을 덮지 못하게 한다.
     if (version !== datasetRequestVersion.current) return;
     // 이미 조회한 옛 Dataset과 결과 화면의 현재 선택은 최신 20개 밖이어도 보존한다.
@@ -250,7 +257,12 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       !refreshedCompletedJobs.current.has(j.id));
     unseen.forEach(j => refreshedCompletedJobs.current.add(j.id));
     if (unseen.some(j => !datasets.some(d => d.id === j.result?.dataset_id))) {
-      refreshDatasets().catch(e => setError(formatError(e)));
+      // 백그라운드에서 누락된 Job 결과를 목록에 보강하는 best-effort 조회다.
+      // 실패를 업로드·Job 제출 실패로 표현하지 않으며 다음 기회에 재조회한다.
+      refreshDatasets().catch(() => {
+        unseen.forEach(j => refreshedCompletedJobs.current.delete(j.id));
+        setNotice(current => current || "일부 Job 결과 Dataset 목록을 갱신하지 못했습니다. 목록을 다시 조회하세요.");
+      });
     }
   }, [jobs, datasets]);
   useEffect(() => {

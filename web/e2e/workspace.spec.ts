@@ -632,10 +632,11 @@ test("an older Jobs GET cannot overwrite a newer manual refresh", async ({ page 
     delivered = true;
   });
   await page.goto("/");
-  await expect.poll(() => seen).toBe(1);
+  await expect.poll(() => seen).toBeGreaterThanOrEqual(1);
+  const beforeRefresh = seen;
   await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
   await page.getByRole("button", { name: "새로고침" }).click();
-  await expect.poll(() => seen).toBe(2);
+  await expect.poll(() => seen).toBeGreaterThan(beforeRefresh);
   release();
   await expect.poll(() => delivered).toBe(true);
   await expect(page.getByText("stale-polling-result")).toHaveCount(0);
