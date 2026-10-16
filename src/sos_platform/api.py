@@ -76,6 +76,7 @@ CANCEL_JOB_DEP = Depends(require("job.cancel"))
 INSPECT_DEP = Depends(require("storage.inspect"))
 RETAIN_DEP = Depends(require("snapshot.retain"))
 AUDIT_DEP = Depends(require("audit.read"))
+SNAPSHOT_READ_DEP = Depends(require("snapshot.read"))
 
 
 def create_app(home: Path | None = None) -> FastAPI:
@@ -491,12 +492,20 @@ def create_app(home: Path | None = None) -> FastAPI:
             actor_type=actor.kind,
         )
 
+    def check_table_access(table_name: str, actor: Actor) -> None:
+        """테이블명 추측으로 타 사용자 Snapshot을 공개하거나 연결하지 않는다."""
+        if not (actor.privileged or actor.can("storage.inspect")):
+            if not store.owns_iceberg_table(table_name, actor.id):
+                raise HTTPException(status_code=404, detail="Iceberg table not found")
+
     @app.post("/api/datasets/iceberg", status_code=201, response_model=DatasetOut)
     def connect_table(body: IcebergConnect, actor: Actor = CREATE_DATASET_DEP):
+        check_table_access(body.table_name, actor)
         return connect_iceberg(store, body.table_name, body.snapshot_id, owner_actor=actor.id)
 
     @app.get("/api/iceberg/{table_name}/snapshots", response_model=list[SnapshotOut])
-    def snapshots(table_name: str, actor: Actor = INSPECT_DEP):
+    def snapshots(table_name: str, actor: Actor = SNAPSHOT_READ_DEP):
+        check_table_access(table_name, actor)
         return iceberg_snapshots(store, table_name)
 
     @app.post("/api/features/preview", response_model=FeaturePreviewOut)

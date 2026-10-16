@@ -9,7 +9,7 @@ import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
-import type { Dataset, DatasetPage, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity } from "./types";
+import type { Dataset, DatasetPage, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity, Snapshot } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
@@ -49,6 +49,9 @@ function Workspace({ actor }: { actor: Identity }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [tableName, setTableName] = useState("");
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [snapshotId, setSnapshotId] = useState("");
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [steps, setSteps] = useState<Step[]>([]);
   const [editingStep, setEditingStep] = useState<number | null>(null);
   const [lagPeriods, setLagPeriods] = useState(1);
@@ -320,10 +323,26 @@ function Workspace({ actor }: { actor: Identity }) {
     });
     setUploadProgress(null);
   }
+  async function loadSnapshots() {
+    if (!tableName.trim()) return;
+    setSnapshotsLoading(true);
+    setError("");
+    try {
+      const items = await request<Snapshot[]>(
+        `/api/iceberg/${encodeURIComponent(tableName)}/snapshots`);
+      setSnapshots(items);
+      setSnapshotId(items[0]?.snapshot_id ?? "");
+    } catch (cause) {
+      setSnapshots([]); setSnapshotId("");
+      setError(formatError(cause));
+    } finally {
+      setSnapshotsLoading(false);
+    }
+  }
   async function connectExisting() {
     await withFeedback(async () => {
       const data = await jsonPost<Dataset>("/api/datasets/iceberg",
-        { table_name: tableName });
+        { table_name: tableName, ...(snapshotId ? { snapshot_id: snapshotId } : {}) });
       await showRegisteredDataset(data,
         "기존 Iceberg 테이블의 스냅샷을 연결했습니다.",
         "Iceberg 스냅샷은 정상 연결됐습니다. 목록 새로고침에 실패했지만 다시 연결할 필요는 없습니다.");
@@ -409,10 +428,25 @@ function Workspace({ actor }: { actor: Identity }) {
       {canWrite && <div className="connect-existing">
         <label>기존 Iceberg 테이블
           <input aria-label="Iceberg 테이블 이름" value={tableName}
-            onChange={e => setTableName(e.target.value)} placeholder="sensor_data" />
+            onChange={e => { setTableName(e.target.value); setSnapshots([]); setSnapshotId(""); }}
+            placeholder="sensor_data" />
         </label>
-        <button className="secondary" disabled={busy}
-          onClick={() => void connectExisting()}>스냅샷 연결</button>
+        <button className="secondary" disabled={busy || snapshotsLoading || !tableName.trim()}
+          onClick={() => void loadSnapshots()}>
+          {snapshotsLoading ? "조회 중" : "Snapshot 조회"}
+        </button>
+        {snapshots.length > 0 && <label>사용할 Snapshot
+          <select aria-label="Iceberg Snapshot 선택" value={snapshotId}
+            onChange={event => setSnapshotId(event.target.value)}>
+            {snapshots.map(item => <option key={item.snapshot_id} value={item.snapshot_id}>
+              {item.snapshot_id} · {new Date(item.timestamp_ms).toLocaleString("ko-KR")}
+            </option>)}
+          </select>
+        </label>}
+        <button className="secondary" disabled={busy || !tableName.trim()}
+          onClick={() => void connectExisting()}>
+          {snapshotId ? "선택한 Snapshot 연결" : "최신 Snapshot 연결"}
+        </button>
       </div>}
       <button className="job-navigation secondary" onClick={() => {
         setSelected(""); setTab("preview");

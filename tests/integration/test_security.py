@@ -114,7 +114,7 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
             json={"table_name": "nonexistent"},
             headers=headers("alice"),
         )
-        assert connect_missing.status_code == 422
+        assert connect_missing.status_code == 404
         assert secure.get(f"/api/datasets/{owned}", headers=headers("bob")).status_code == 404
         assert secure.get(f"/api/datasets/{owned}", headers=headers("alice")).status_code == 200
         assert secure.get("/api/datasets", headers=headers("bob")).json() == []

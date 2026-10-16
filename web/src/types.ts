@@ -6,6 +6,7 @@ export type AuditEvent = components["schemas"]["AuditEventOut"];
 export type JobDiagnostics = components["schemas"]["JobDiagnosticsOut"];
 export type Dataset = components["schemas"]["DatasetOut"];
 export type DatasetPage = components["schemas"]["DatasetPageOut"];
+export type Snapshot = components["schemas"]["SnapshotOut"];
 export type Preview = components["schemas"]["PreviewOut"];
 export type Profile = components["schemas"]["ProfileOut"];
 export type Job = components["schemas"]["JobOut"];

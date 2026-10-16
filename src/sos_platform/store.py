@@ -471,6 +471,19 @@ class Store:
                 ).mappings()
             ]
 
+    def owns_iceberg_table(self, table_name: str, actor_id: str) -> bool:
+        """명시적인 기존 Iceberg Dataset 소유권만 테이블 접근 근거로 사용한다."""
+        with self.connection() as db:
+            return bool(
+                db.execute(
+                    text(
+                        "SELECT EXISTS(SELECT 1 FROM datasets "
+                        "WHERE kind='iceberg' AND location=:table AND owner_actor=:actor)"
+                    ),
+                    {"table": f"default.{table_name}", "actor": actor_id},
+                ).scalar_one()
+            )
+
     def dataset_page(
         self, *, limit: int, before: dict | None = None, actor_id: str | None = None
     ) -> list[dict]:
