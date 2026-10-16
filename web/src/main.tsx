@@ -64,6 +64,8 @@ function Workspace({ actor }: { actor: Identity }) {
   const [featurePreviewResult, setFeaturePreview] = useState<{ signature: string; data: Preview } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
+  const showExamples = useRef(false);
+  const refreshedCompletedJobs = useRef(new Set<string>());
   const dataset = datasets.find(d => d.id === selected);
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const numeric = profile?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
@@ -75,17 +77,18 @@ function Workspace({ actor }: { actor: Identity }) {
     const page = await request<DatasetPage>("/api/datasets/pages?limit=20");
     // 오래된 GET 응답이 최근 등록·조회 후 확정된 Dataset 선택을 덮지 못하게 한다.
     if (version !== datasetRequestVersion.current) return;
+    // 이미 조회한 옛 Dataset과 결과 화면의 현재 선택은 최신 20개 밖이어도 보존한다.
     setDatasets(previous => [
       ...page.items,
-      ...previous.filter(item => item.id === selected && !page.items.some(d => d.id === item.id)),
+      ...previous.filter(item => !page.items.some(d => d.id === item.id)),
     ]);
     setNextDatasetCursor(page.next_cursor ?? null);
-    setSelected(previous => previous && datasets.some(d => d.id === previous)
-      ? previous : (page.items[0]?.id ?? ""));
+    setSelected(previous => showExamples.current ? "" : (previous || page.items[0]?.id || ""));
   }
   /** 서버 등록 성공을 목록 새로고침 실패 때문에 취소된 작업처럼 표시하지 않는다. */
   async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
     setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+    showExamples.current = false;
     setSelected(data.id); setTab("preview");
     try {
       await refreshDatasets();
@@ -204,8 +207,11 @@ function Workspace({ actor }: { actor: Identity }) {
     return () => { active = false; };
   }, [selected, reloadRevision]);
   useEffect(() => {
-    if (jobs.some(j => j.status === "Succeeded" && j.result?.dataset_id &&
-      !datasets.some(d => d.id === j.result?.dataset_id))) {
+    // 첫 페이지에 없는 과거 성공 Job 때문에 무한히 GET을 반복하지 않는다.
+    const unseen = jobs.filter(j => j.status === "Succeeded" && j.result?.dataset_id &&
+      !refreshedCompletedJobs.current.has(j.id));
+    unseen.forEach(j => refreshedCompletedJobs.current.add(j.id));
+    if (unseen.some(j => !datasets.some(d => d.id === j.result?.dataset_id))) {
       refreshDatasets().catch(e => setError(String(e)));
     }
   }, [jobs, datasets]);
@@ -291,8 +297,13 @@ function Workspace({ actor }: { actor: Identity }) {
     });
   }
   async function openJobDataset(datasetId: string) {
-    await refreshDatasets();
-    setSelected(datasetId); setTab("preview");
+    await withFeedback(async () => {
+      // 완료 Job의 출력은 최신 Dataset 첫 페이지 밖에 있을 수 있다.
+      const item = await request<Dataset>(`/api/datasets/${encodeURIComponent(datasetId)}`);
+      setDatasets(previous => [item, ...previous.filter(d => d.id !== item.id)]);
+      showExamples.current = false;
+      setSelected(item.id); setTab("preview");
+    });
   }
   async function upload(file: File) {
     if (uploadPolicy && !uploadPolicy.supported_extensions.some(ext =>
@@ -449,6 +460,7 @@ function Workspace({ actor }: { actor: Identity }) {
         </button>
       </div>}
       <button className="job-navigation secondary" onClick={() => {
+        showExamples.current = true;
         setSelected(""); setTab("preview");
       }}>예제 데이터 살펴보기</button>
       <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
@@ -463,7 +475,7 @@ function Workspace({ actor }: { actor: Identity }) {
       <nav aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
-          onClick={() => { setSelected(d.id); setTab("preview"); }}>
+          onClick={() => { showExamples.current = false; setSelected(d.id); setTab("preview"); }}>
           <span className="dataset-name">{d.name}</span>
           <span className="dataset-kind">{d.kind === "iceberg" ? "◆ Iceberg" : "◫ File"}</span>
         </button>)}

@@ -30,7 +30,9 @@ export function formatError(error: unknown): string {
 }
 
 export function setAccessToken(value: string | null) {
-  accessToken = value || null;
+  const next = value || null;
+  if (accessToken !== next) pendingJobKeys.clear();
+  accessToken = next;
 }
 
 /** 기존 detail을 읽으면서 오류 코드와 요청 ID·재시도 정책을 별도로 유지한다. */
@@ -135,9 +137,12 @@ export async function submitJob<T>(path: string, body: unknown): Promise<T> {
     pendingJobKeys.delete(signature);
     return result;
   } catch (error) {
-    // HTTP 오류는 서버가 응답했으므로 다음 명시적 실행에서 새 키 사용.
-    // 연결 오류는 접수 여부가 불명확해 기존 키 보존.
-    if (error instanceof ApiError) pendingJobKeys.delete(signature);
+    // HTTP 5xx/408/429도 서버의 Job 접수 뒤 발생할 수 있다.
+    // 확정적인 4xx만 키를 해제해 의도하지 않은 중복 Job을 방지한다.
+    if (error instanceof ApiError && error.status < 500 &&
+        ![408, 429].includes(error.status)) {
+      pendingJobKeys.delete(signature);
+    }
     throw error;
   }
 }
