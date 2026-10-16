@@ -203,7 +203,7 @@ def test_worker_home_matches_configuration_and_explicit_override(
             return True
 
         def recover(self):
-            pass
+            return []
 
         def heartbeat(self):
             pass
