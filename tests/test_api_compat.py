@@ -215,11 +215,13 @@ def test_pre_release_break_list_covers_only_explicit_retired_contracts():
     import json
 
     approved = json.loads(
-        (Path(__file__).resolve().parents[1] / "scripts" / "approved_pre_release_api_breaks.json").read_text(
-            encoding="utf-8"
-        )
+        (
+            Path(__file__).resolve().parents[1] / "scripts" / "approved_pre_release_api_breaks.json"
+        ).read_text(encoding="utf-8")
     )["issues"]
     assert len(approved) == len(set(approved))
     assert "endpoint removed: GET /api/auth/me" in approved
     assert "endpoint removed: GET /api/datasets/pages" in approved
-    assert all(item.startswith(("endpoint removed: ", "response type changed: ")) for item in approved)
+    assert all(
+        item.startswith(("endpoint removed: ", "response type changed: ")) for item in approved
+    )

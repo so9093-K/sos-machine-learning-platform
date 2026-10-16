@@ -99,7 +99,9 @@ def test_audit_filter_finds_older_request_and_preserves_permissions(workspace, m
             resource_type="job",
             resource_id=str(number),
         )
-    found = client.get("/api/v2/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"})
+    found = client.get(
+        "/api/v2/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"}
+    )
     assert found.status_code == 200
     assert len(found.json()) == 1 and found.json()[0]["action"] == "audit.find-me"
     by_job = client.get("/api/v2/audit", params={"job_id": "abcdefab-cdef-abcd-efab-cdefabcdefab"})
