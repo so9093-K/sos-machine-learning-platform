@@ -246,7 +246,7 @@ class DatasetFilter(BaseModel):
 class DatasetQuery(BaseModel):
     """임의 SQL이나 파일 경로를 받지 않는 범용 Dataset 조회."""
 
-    columns: list[str] | None = Field(default=None, max_length=256)
+    columns: list[str] | None = Field(default=None, max_length=1024)
     filters: list[DatasetFilter] = Field(default_factory=list, max_length=8)
     order_by: str | None = Field(default=None, max_length=256)
     descending: bool = False

@@ -371,7 +371,11 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
                 f" {'DESC' if query.descending else 'ASC'} NULLS LAST"
             )
         sql += " LIMIT ?"
-        raw = _records(conn.execute(sql, [*params, query.limit]))
+        try:
+            raw = _records(conn.execute(sql, [*params, query.limit]))
+        except (duckdb.ConversionException, duckdb.BinderException) as exc:
+            # 비교 자료형이 맞지 않는 사용자 입력은 Internal 500이 아닌 422다.
+            raise ValueError("Dataset query comparison is incompatible with the column type") from exc
     return {
         "schema": {name: available[name] for name in selected},
         "rows": [{key: _json_value(value) for key, value in row.items()} for row in raw],
