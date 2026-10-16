@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import * as echarts from "echarts";
 import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
-import { request, jsonPost, setAccessToken, formatError, uploadFile } from "./api";
+import { ApiError, request, jsonPost, setAccessToken, formatError, uploadFile } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
@@ -82,6 +82,18 @@ function Workspace({ actor }: { actor: Identity }) {
     const items = await request<Dataset[]>("/api/datasets");
     setDatasets(items);
     setSelected(previous => items.some(d => d.id === previous) ? previous : (items[0]?.id ?? ""));
+  }
+  /** 서버 등록 성공을 목록 새로고침 실패 때문에 취소된 작업처럼 표시하지 않는다. */
+  async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
+    setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+    setSelected(data.id); setTab("preview");
+    try {
+      await refreshDatasets();
+      setNotice(success);
+    } catch {
+      setError("");
+      setNotice(stale);
+    }
   }
   async function refreshJobs() {
     const page = await request<JobPage>("/api/jobs?limit=20");
@@ -283,17 +295,10 @@ function Workspace({ actor }: { actor: Identity }) {
         () => setUploadProgress(previous => previous
           ? { ...previous, phase: "registering" } : null),
       );
-      // HTTP 201이 등록 성공의 정본이다. 후속 목록 조회 실패로 등록 성공을 번복하지 않는다.
-      setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
-      setSelected(data.id); setTab("preview");
-      try {
-        await refreshDatasets();
-        setNotice("파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.");
-      } catch {
-        // 같은 목록 오류가 전역 경고로 표시돼 확정된 등록을 실패로 오해하지 않게 한다.
-        setError("");
-        setNotice("파일은 정상 등록됐습니다. 데이터셋 목록 새로고침에 실패했지만 등록을 다시 시도할 필요는 없습니다.");
-      }
+      // HTTP 201이 등록 성공의 정본이다.
+      await showRegisteredDataset(data,
+        "파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.",
+        "파일은 정상 등록됐습니다. 데이터셋 목록 새로고침에 실패했지만 등록을 다시 시도할 필요는 없습니다.");
     });
     setUploadProgress(null);
   }
@@ -301,8 +306,9 @@ function Workspace({ actor }: { actor: Identity }) {
     await withFeedback(async () => {
       const data = await jsonPost<Dataset>("/api/datasets/iceberg",
         { table_name: tableName });
-      await refreshDatasets(); setSelected(data.id); setTab("preview");
-      setNotice("기존 Iceberg 테이블의 스냅샷을 연결했습니다.");
+      await showRegisteredDataset(data,
+        "기존 Iceberg 테이블의 스냅샷을 연결했습니다.",
+        "Iceberg 스냅샷은 정상 연결됐습니다. 목록 새로고침에 실패했지만 다시 연결할 필요는 없습니다.");
     });
   }
   async function importIceberg() {
@@ -433,7 +439,7 @@ function Workspace({ actor }: { actor: Identity }) {
         <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
           onUse={id => void selectExample(id)} />
       </div>}
-      {dataset && tab !== "jobs" && tab !== "storage" && <>
+      {dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <>
         <div className="dataset-hero">
           <div><span className="eyebrow">SELECTED DATASET</span><h2>{dataset.name}</h2>
             <p>{dataset.kind.toUpperCase()} · {readableVersion(dataset)}</p></div>
@@ -618,11 +624,17 @@ function App() {
   const [token, setToken] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  useEffect(() => {
-    request<Identity>("/api/auth/me").then(setActor)
-      .catch(() => setMessage("인증이 필요합니다. 발급된 액세스 토큰을 입력하세요."))
-      .finally(() => setChecking(false));
-  }, []);
+  async function checkIdentity() {
+    setChecking(true); setMessage("");
+    try {
+      setActor(await request<Identity>("/api/auth/me"));
+    } catch (error) {
+      setMessage(error instanceof ApiError && error.status === 401
+        ? "인증이 필요합니다. 발급된 액세스 토큰을 입력하세요."
+        : `서비스 연결을 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도하세요. ${formatError(error)}`);
+    } finally { setChecking(false); }
+  }
+  useEffect(() => { void checkIdentity(); }, []);
   async function authenticate(event: React.FormEvent) {
     event.preventDefault();
     setSubmitting(true); setMessage("");
@@ -648,6 +660,9 @@ function App() {
         <button disabled={submitting || !token}>인증</button>
       </form>
       {message && <p role="alert">{message}</p>}
+      <button type="button" className="secondary" onClick={() => void checkIdentity()}>
+        연결 다시 확인
+      </button>
     </section>
   </main>;
   const canViewDataset = actor.roles.some(r => ["viewer","researcher","administrator"].includes(r));

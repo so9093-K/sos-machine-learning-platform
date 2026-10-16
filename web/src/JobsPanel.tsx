@@ -3,6 +3,25 @@ import { request, formatError } from "./api";
 import type { Dataset, Job, JobSummary, ExplorationJob, ExplorationJobSummary } from "./types";
 
 type AnyJobSummary = JobSummary | ExplorationJobSummary;
+
+/** Discovery 전체 분석 결과는 일반 사용자에게 표로 우선 제공한다. */
+function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
+  if (!Array.isArray(result.rows)) return null;
+  const rows = result.rows as Array<{ category: unknown; value: unknown }>;
+  return <section className="discovery-job-result" aria-label="전체 집계 결과">
+    <h4>전체 집계 결과</h4>
+    <p className="muted">전체 입력 · 컬럼 {String(result.column)} · 집계 {String(result.metric)}
+      {result.group_by ? ` · 그룹 ${String(result.group_by)}` : " · 그룹 없음"}</p>
+    <p className="hint">Dataset 판본 {String(result.version).slice(0, 12)}
+      {result.truncated ? " · 표시 그룹 수 제한으로 일부 결과만 표시됩니다." : ""}</p>
+    <div className="table-scroll"><table><thead><tr><th>그룹</th><th>집계값</th></tr></thead>
+      <tbody>{rows.map((row, index) => <tr key={index}>
+        <td>{String(row.category ?? "전체")}</td>
+        <td>{typeof row.value === "number" ? row.value.toLocaleString("ko-KR") : "계산 불가 / NULL"}</td>
+      </tr>)}</tbody></table></div>
+    {rows.length === 0 && <p className="muted">표시 가능한 그룹이 없습니다.</p>}
+  </section>;
+}
 type Props = { jobs: AnyJobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean;
   nextCursor: string | null; discoveryNextCursor: string | null;
   onRefresh: () => void; onLoadMore: () => void; onLoadMoreDiscovery: () => void;
@@ -62,6 +81,8 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
         </div>}
         {typeof job.result?.row_count === "number" &&
           <p className="muted">분석한 행 · {job.result.row_count.toLocaleString("ko-KR")}</p>}
+        {job.kind === "exploration" && job.result &&
+          <DiscoveryJobResult result={job.result} />}
         {job.result && <details><summary>실행 결과 상세</summary>
           <pre>{JSON.stringify(job.result, null, 2)}</pre></details>}
         <details onToggle={event => { if (event.currentTarget.open) void loadDetails(job.id); }}>
@@ -76,7 +97,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
             {attempt.failure_stage ? ` · 단계: ${attempt.failure_stage}` : ""}
             <small> · 실행 ID: {attempt.id}</small></p>)}
         </details>
-        {typeof job.result?.dataset_id === "string" &&
+        {job.kind !== "exploration" && typeof job.result?.dataset_id === "string" &&
           <button className="secondary" onClick={() => onOpen(job.result!.dataset_id as string)}>
             결과 데이터 열기 →
           </button>}

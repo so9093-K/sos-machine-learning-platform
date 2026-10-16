@@ -35,3 +35,10 @@
 .column-search-results{max-height:230px;overflow:auto;display:grid;gap:2px}
 .column-search-results [role=listitem]{display:flex;justify-content:space-between;gap:12px;padding:7px;border-bottom:1px solid #284058;font-size:12px}
 .column-search-results small{color:#aac5dd}
+
+/* 분석 Job의 결과를 원시 JSON 열람 없이 먼저 이해할 수 있도록 한다. */
+.discovery-job-result{display:grid;gap:10px}
+.discovery-job-result h4{font-size:14px;margin-bottom:0}
+.discovery-job-result .hint{margin-top:0}
+.discovery-job-result .table-scroll{max-height:360px}
+@media(max-width:620px){.discovery-panel .cards{grid-template-columns:1fr}.discovery-job-result table{min-width:320px}}

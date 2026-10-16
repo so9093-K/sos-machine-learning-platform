@@ -280,7 +280,51 @@ test("DuckDB Discovery searches columns and runs a full job through global Jobs"
     discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
   const job = jobById(page, jobId);
   await expect(job.getByText("Full Discovery Analysis")).toBeVisible();
+  await expect(job.getByRole("region", { name: "전체 집계 결과" })).toBeVisible();
+  await expect(job.getByRole("button", { name: "결과 데이터 열기" })).toHaveCount(0);
   await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   await job.getByText(/작업 설정 및 실행 시도/).click();
   await expect(job.getByText(/Succeeded ·/)).toBeVisible();
+});
+
+
+test("Discovery metadata retry restores selection and analysis controls", async ({ page }) => {
+  let failed = false;
+  await page.route("**/api/datasets/*/columns", async route => {
+    if (!failed) {
+      failed = true;
+      await route.fulfill({ status: 503, contentType: "application/json", body: '{"detail":"일시적인 오류"}' });
+    } else {
+      await route.continue();
+    }
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "recovery.csv", mimeType: "text/csv", buffer: Buffer.from("group,value\\na,2\\nb,4\\n"),
+  });
+  await expect(page.getByRole("heading", { name: "recovery.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  const discovery = page.getByRole("region", { name: "Dataset Discovery" });
+  await expect(discovery.getByRole("button", { name: "메타데이터 다시 시도" })).toBeVisible();
+  await discovery.getByRole("button", { name: "메타데이터 다시 시도" }).click();
+  await expect(discovery.getByRole("button", { name: "샘플 집계" })).toBeEnabled();
+  await discovery.getByRole("button", { name: "샘플 집계" }).click();
+  await expect(discovery.getByText(/샘플 최대/)).toBeVisible();
+});
+
+test("Discovery supports categorical-only counts", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "labels.csv", mimeType: "text/csv",
+    buffer: Buffer.from("group,label\\na,x\\na,\\nb,y\\n"),
+  });
+  await expect(page.getByRole("heading", { name: "labels.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  const discovery = page.getByRole("region", { name: "Dataset Discovery" });
+  await expect(discovery.getByRole("combobox", { name: "집계 방식" })).toHaveValue("count");
+  await discovery.getByRole("combobox", { name: "집계 방식" }).selectOption("null_count");
+  await discovery.getByRole("combobox", { name: "분석할 컬럼" }).selectOption("label");
+  await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
+  await discovery.getByRole("button", { name: "샘플 집계" }).click();
+  await expect(discovery.getByRole("table").getByText("1", { exact: true })).toBeVisible();
 });

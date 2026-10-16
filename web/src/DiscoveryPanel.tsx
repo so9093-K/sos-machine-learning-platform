@@ -37,6 +37,7 @@ export function DiscoveryPanel({
   const [running, setRunning] = useState(false);
   const [fullJobId, setFullJobId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true;
     setStatus("loading"); setResult(null); setError("");
@@ -47,21 +48,27 @@ export function DiscoveryPanel({
       if (!active) return;
       setOverview(o); setColumns(c);
       const firstNumeric = c.columns.find(x => /Int|Float|Decimal/.test(x.dtype));
-      setMeasure(firstNumeric?.name ?? c.columns[0]?.name ?? "");
-      setGroupBy("");
+      setMeasure(previous => c.columns.some(item => item.name === previous)
+        ? previous : (firstNumeric?.name ?? c.columns[0]?.name ?? ""));
+      if (!firstNumeric) setMetric("count");
+      setGroupBy(previous => c.columns.some(item => item.name === previous) ? previous : "");
       setStatus("ready");
     }).catch(e => { if (active) { setError(formatError(e)); setStatus("error"); } });
     return () => { active = false; };
-  }, [datasetId]);
+  }, [datasetId, reload]);
   const shown = useMemo(() => columns?.columns.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())) ?? [], [columns, search]);
   const numeric = columns?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
+  const candidates = metric === "count" || metric === "null_count"
+    ? (columns?.columns ?? []) : numeric;
+  const selectedMeasure = candidates.some(item => item.name === measure)
+    ? measure : (candidates[0]?.name ?? "");
   async function run() {
-    if (!measure) return;
+    if (!selectedMeasure) return;
     setRunning(true); setError(""); setResult(null);
     try {
       const body: ExplorationRequest = {
-        column: measure, metric, group_by: groupBy || null,
+        column: selectedMeasure, metric, group_by: groupBy || null,
       };
       const answer = await jsonPost<Exploration>(
         `/api/datasets/${datasetId}/explorations`, body);
@@ -70,20 +77,25 @@ export function DiscoveryPanel({
     finally { setRunning(false); }
   }
   async function runFullJob() {
-    if (!measure) return;
+    if (!selectedMeasure) return;
     setRunning(true); setError(""); setFullJobId(null);
     try {
       const job = await jsonPost<ExplorationJob>("/api/explorations/jobs", {
         dataset_id: datasetId,
-        exploration: { column: measure, metric, group_by: groupBy || null },
+        exploration: { column: selectedMeasure, metric, group_by: groupBy || null },
       });
       setFullJobId(job.id);
-      await onCreated();
+      try {
+        await onCreated();
+      } catch (e) {
+        // Job 202 접수는 성공했으므로 목록 갱신 오류를 제출 실패로 표현하지 않는다.
+        setError(`작업은 정상 접수됐습니다. Jobs 목록을 다시 확인하세요. ${formatError(e)}`);
+      }
     } catch (e) { setError(formatError(e)); }
     finally { setRunning(false); }
   }
   const chart = useMemo<echarts.EChartsCoreOption | null>(() => {
-    if (!result?.rows.length) return null;
+    if (!result?.rows.some(row => typeof row.value === "number")) return null;
     return {
       backgroundColor: "transparent", textStyle: { color: "#cbd5e1" },
       tooltip: { trigger: "axis" },
@@ -98,15 +110,8 @@ export function DiscoveryPanel({
   return <section className="discovery-panel" aria-label="Dataset Discovery">
     <h4>데이터 발견</h4>
     {status === "loading" && <p role="status" className="muted">구조와 메타데이터를 확인하는 중입니다.</p>}
-    {status === "error" && <button className="secondary" onClick={() => {
-      setStatus("loading"); setOverview(null); setColumns(null); setError("");
-      // 새 Dataset 컴포넌트를 마운트하지 않고 다시 조회
-      Promise.all([
-        request<DatasetOverview>(`/api/datasets/${datasetId}/overview`),
-        request<DatasetColumns>(`/api/datasets/${datasetId}/columns`),
-      ]).then(([o, c]) => { setOverview(o); setColumns(c); setStatus("ready"); })
-        .catch(e => { setError(formatError(e)); setStatus("error"); });
-    }}>메타데이터 다시 시도</button>}
+    {status === "error" && <button className="secondary"
+      onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>
     {overview && <div className="cards">
       <div className="stat"><span>전체 행</span><strong>{overview.row_count?.toLocaleString() ?? "미계산"}</strong>
         <small>{analysisLabel(overview.row_count_basis)}</small></div>
@@ -126,25 +131,27 @@ export function DiscoveryPanel({
       <h4>분석 집계</h4>
       <p className="muted">대화형 탐색은 제한된 선두 샘플을 사용하고, 정확한 전체 집계는 별도 Worker Job으로 실행합니다.</p>
       <div className="chart-controls">
-        <label>수치형 컬럼 <select aria-label="분석할 컬럼" value={measure}
+        <label>분석할 컬럼 <select aria-label="분석할 컬럼" value={selectedMeasure}
+          disabled={running || candidates.length === 0}
           onChange={e => { setMeasure(e.target.value); setResult(null); }}>
-          {numeric.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+          {candidates.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select></label>
-        <label>집계 <select aria-label="집계 방식" value={metric}
+        {candidates.length === 0 && <p role="status" className="muted">선택한 집계를 지원하는 숫자형 컬럼이 없습니다. 행 수 또는 NULL 수 집계를 선택하세요.</p>}
+        <label>집계 <select aria-label="집계 방식" value={metric} disabled={running}
           onChange={e => { setMetric(e.target.value as ExplorationRequest["metric"]); setResult(null); }}>
           <option value="mean">평균</option><option value="min">최솟값</option>
           <option value="max">최댓값</option><option value="count">행 수</option>
           <option value="null_count">NULL 수</option>
         </select></label>
-        <label>그룹 <select aria-label="집계 그룹" value={groupBy}
+        <label>그룹 <select aria-label="집계 그룹" value={groupBy} disabled={running}
           onChange={e => { setGroupBy(e.target.value); setResult(null); }}>
           <option value="">전체</option>
           {columns.columns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select></label>
-        <button disabled={running || !measure} onClick={() => void run()}>
+        <button disabled={running || !selectedMeasure} onClick={() => void run()}>
           {running ? "분석 중…" : "샘플 집계"}
         </button>
-        {canCreate && <button className="secondary" disabled={running || !measure}
+        {canCreate && <button className="secondary" disabled={running || !selectedMeasure}
           onClick={() => void runFullJob()}>전체 집계 Job 실행</button>}
       </div>
       {fullJobId && <p role="status" className="muted">
@@ -157,7 +164,8 @@ export function DiscoveryPanel({
           <tbody>{result.rows.map((r, i) => <tr key={i}><td>{String(r.category ?? "전체")}</td>
             <td>{r.value == null ? "NULL" : Number(r.value).toLocaleString()}</td></tr>)}</tbody>
         </table></div>
-        {chart && <DiscoveryChart option={chart} />}
+        {chart ? <DiscoveryChart option={chart} /> :
+          <p className="muted">시각화할 유효한 수치가 없습니다. 위 표에서 값을 확인하세요.</p>}
       </>}
     </>}
     {error && <p role="alert" className="alert">{error}</p>}
