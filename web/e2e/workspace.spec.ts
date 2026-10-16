@@ -633,7 +633,7 @@ test("editing Dataset Query while its response is pending never renders stale ro
   await expect(page.locator("#sos-panel-preview tbody tr")).toContainText("20");
 });
 
-test("unknown CSV opens Understanding, persists profile and runs suggested exploration", async ({ page }) => {
+test("unknown CSV opens Understanding and transfers a candidate to editable Exploration", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
     name: "unknown.csv",
@@ -649,8 +649,16 @@ test("unknown CSV opens Understanding, persists profile and runs suggested explo
   await expect(panel.getByRole("cell", { name: "score" })).toBeVisible();
   await expect(panel.getByRole("cell", { name: "department" })).toHaveCount(0);
   await panel.getByRole("searchbox", { name: "프로파일 컬럼 검색" }).fill("");
-  await panel.getByRole("button", { name: "탐색 실행" }).first().click();
-  await expect(panel.getByText(/탐색 결과/)).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "탐색 후보" })).toBeVisible();
+  await panel.getByRole("button", { name: "탐색 조건 보기" }).first().click();
+  await expect(page.getByRole("tab", { name: "탐색" })).toHaveAttribute("aria-selected", "true");
+  const exploration = page.getByRole("tabpanel", { name: "탐색" });
+  await expect(exploration.getByText(/탐색 후보에서 가져온 조건/)).toBeVisible();
+  await expect(exploration.getByLabel("집계 방식")).toHaveValue("mean");
+  await expect(exploration.getByLabel("분석할 컬럼")).toHaveValue("score");
+  await expect(exploration.getByLabel("집계 그룹")).toHaveValue("department");
+  await exploration.getByRole("button", { name: "샘플 집계" }).click();
+  await expect(exploration.getByText(/Dataset 판본/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("tab", { name: "개요" })).toBeVisible();
   await expect(page.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });

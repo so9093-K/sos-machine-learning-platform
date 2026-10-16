@@ -1,20 +1,24 @@
 /** Dataset 판본의 실제 Profile과 실행 가능한 탐색을 공통 API로 표시한다. */
 import { useEffect, useState } from "react";
-import { formatError, jsonPost, request, submitJob } from "./api";
-import type { DatasetOverview, Exploration, ExplorationRequest, Job } from "./types";
+import { formatError, request, submitJob } from "./api";
+import type { DatasetOverview, ExplorationRequest, Job } from "./types";
 
 import type { components } from "./api.generated";
 
 type Understanding = components["schemas"]["UnderstandingOut"];
 
-export function UnderstandingPanel({ datasetId, canCreate }: {
-  datasetId: string; canCreate: boolean;
+export function UnderstandingPanel({ datasetId, canCreate, onChooseCandidate }: {
+  datasetId: string;
+  canCreate: boolean;
+  onChooseCandidate: (
+    candidate: { request: ExplorationRequest; title: string; reason: string },
+    version: string, profileScope: "sample" | "full",
+  ) => void;
 }) {
   const [state, setState] = useState<Understanding | null>(null);
   const [overview, setOverview] = useState<DatasetOverview | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<Exploration | null>(null);
   const [jobError, setJobError] = useState("");
   const [revision, setRevision] = useState(0);
   const [columnSearch, setColumnSearch] = useState("");
@@ -72,17 +76,6 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
         { scope },
       );
       setRevision(n => n + 1);
-    } catch (cause) { setJobError(formatError(cause)); }
-    finally { setBusy(false); }
-  }
-
-  async function explore(spec: ExplorationRequest) {
-    setBusy(true); setJobError(""); setResult(null);
-    try {
-      const answer = await jsonPost<Exploration>(
-        "/api/datasets/" + encodeURIComponent(datasetId) + "/explorations", spec,
-      );
-      setResult(answer);
     } catch (cause) { setJobError(formatError(cause)); }
     finally { setBusy(false); }
   }
@@ -177,27 +170,21 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
           {col.roles.map(r => r.role + " (" + r.basis + ")").join(", ") || "미확인"}</td>
       </tr>)}</tbody></table></div>
       {filteredColumns.length === 0 && <p className="muted" role="status">선택한 조건에 해당하는 컬럼이 없습니다.</p>}
-      <h4>추천 탐색</h4>
-      {profile.insights.length === 0 && <p className="muted">현재 확인된 정보만으로 실행 가능한 분석을 제안하지 않습니다. Preview에서 구조를 확인하세요.</p>}
+      <h4>탐색 후보</h4>
+      <p className="hint">데이터 특성과 지원 연산을 기준으로 구성된 항목입니다. 분석 적합성이나 업무적 의미를 확정하지 않습니다.</p>
+      {profile.insights.length === 0 && <p className="muted">현재 프로파일로 구성할 수 있는 탐색 후보가 없습니다. 탐색 탭에서 분석 조건을 직접 선택할 수 있습니다.</p>}
       <div className="example-grid">{profile.insights.map((item, i) => <article
         className="example-card" key={item.kind + i}>
         <h4>{item.title}</h4><p>{item.reason}</p>
-        <p className="hint">추천 근거: {profile.scope === "full" ? "전체 입력" : "Reservoir 표본"}
-          {" · "}실행: 별도의 제한된 선두 샘플 · 선택 후 실행</p>
-        <button disabled={busy} onClick={() => void explore(item.request)}>탐색 실행</button>
+        <p className="hint">구성 근거: {profile.scope === "full" ? "전체 프로파일" : "Reservoir 표본"}
+          {" · "}실행 범위: 별도의 제한된 선두 샘플</p>
+        <p className="hint">분석 조건: {item.request.column} · {item.request.metric}{
+          item.request.group_by ? ` · 그룹 ${item.request.group_by}` : " · 전체 그룹"
+        }</p>
+        <button onClick={() => onChooseCandidate(item, profile.version, profile.scope)}>
+          탐색 조건 보기
+        </button>
       </article>)}</div>
-      {result && <div className="result" role="status">
-        <h4>탐색 결과 · {result.scope === "sample" ? "샘플" : "전체"}</h4>
-        <p className="hint">입력 판본 {result.version.slice(0, 12)}
-          {result.sample_limit == null ? " · 전체 집계" :
-            ` · 선두 최대 ${result.sample_limit.toLocaleString()}행`}
-          {" · "}표시 그룹 제한 {result.truncated ? "있음" : "없음"}</p>
-        <div className="table-scroll"><table><thead><tr><th>그룹</th><th>값</th></tr></thead>
-          <tbody>{result.rows.map((row, i) => <tr key={i}>
-            <td>{row.category === null ? "전체/NULL" : String(row.category)}</td>
-            <td>{row.value === null ? "계산 불가" : String(row.value)}</td>
-          </tr>)}</tbody></table></div>
-      </div>}
     </>}
     {canCreate && <div className="actions">
       <button className="secondary" disabled={busy ||

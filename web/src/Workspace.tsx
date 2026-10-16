@@ -13,6 +13,8 @@ import { DatasetQueryPanel } from "./DatasetQueryPanel";
 import type { Dataset, DatasetPage, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity, Snapshot } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
+import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
+import type { ExplorationRequest } from "./types";
 
 
 type Step = FeatureStep;
@@ -57,6 +59,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [profileStatus, setProfileStatus] = useState<"loading" | "ready" | "error">("loading");
   const [reloadRevision, setReloadRevision] = useState(0);
   const [tab, setTab] = useState<Tab>("understanding");
+  const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadPolicy, setUploadPolicy] = useState<UploadPolicy | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
@@ -87,6 +90,34 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const showExamples = useRef(false);
   const refreshedCompletedJobs = useRef(new Set<string>());
   const dataset = datasets.find(d => d.id === selected);
+  const activeExplorationDraft = dataset
+    ? draftForDataset(explorationDraft, dataset.id, dataset.version) : null;
+  function changeExploration(request: ExplorationRequest) {
+    if (!dataset) return;
+    setExplorationDraft(current => ({
+      datasetId: dataset.id,
+      version: dataset.version,
+      request,
+      source: draftForDataset(current, dataset.id, dataset.version)?.source,
+    }));
+  }
+  function selectExplorationCandidate(
+    candidate: { request: ExplorationRequest; title: string; reason: string },
+    sourceVersion: string, profileScope: "sample" | "full",
+  ) {
+    if (!dataset || dataset.version !== sourceVersion) {
+      setError("탐색 후보의 데이터 판본과 현재 Dataset이 다릅니다. 개요를 새로고침하세요.");
+      return;
+    }
+    setExplorationDraft({
+      datasetId: dataset.id,
+      version: dataset.version,
+      request: candidate.request,
+      source: { title: candidate.title, reason: candidate.reason, profileScope },
+    });
+    setTab("profile");
+    requestAnimationFrame(() => document.getElementById("sos-tab-profile")?.focus());
+  }
   const preview = previewState?.datasetId === selected &&
     previewState.revision === reloadRevision ? previewState.data : null;
   const profile = profileState?.datasetId === selected &&
@@ -618,7 +649,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         {tab === "understanding" && <section className="panel" role="tabpanel"
           id="sos-panel-understanding" aria-labelledby="sos-tab-understanding" tabIndex={0}>
           <UnderstandingPanel key={selected + ":" + reloadRevision} datasetId={selected}
-            canCreate={canRun} />
+            canCreate={canRun} onChooseCandidate={selectExplorationCandidate} />
         </section>}
         {tab === "preview" && <section className="panel" role="tabpanel"
           id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
@@ -641,7 +672,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </section>}
         {tab === "profile" && <section className="panel" role="tabpanel"
           id="sos-panel-profile" aria-labelledby="sos-tab-profile" tabIndex={0}>
-          <DiscoveryPanel key={selected + ":" + reloadRevision} datasetId={selected} canCreate={canRun}
+          <DiscoveryPanel key={selected + ":" + reloadRevision} datasetId={selected}
+            canCreate={canRun} draft={activeExplorationDraft} onDraftChange={changeExploration}
             onCreated={async () => { await refreshDiscoveryJobs(); setTab("jobs"); }} />
           <div className="panel-head"><div><h3>샘플 프로파일</h3>
             <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
