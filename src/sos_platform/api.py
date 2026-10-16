@@ -394,7 +394,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Example not found") from exc
 
-    @app.get("/api/datasets", response_model=list[DatasetOut])
+    @app.get("/api/datasets", response_model=list[DatasetOut], deprecated=True)
     def list_datasets(actor: Actor = READ_DATASET_DEP):
         return store.datasets(actor_id=None if actor.privileged else actor.id)
 
