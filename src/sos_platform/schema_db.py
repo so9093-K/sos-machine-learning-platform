@@ -129,6 +129,18 @@ snapshot_retention = Table(
     Column("error", Text),
 )
 
+dataset_profiles = Table(
+    "dataset_profiles",
+    metadata,
+    Column("job_id", String(36), ForeignKey("jobs.id"), primary_key=True),
+    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
+    Column("dataset_version", Text, nullable=False),
+    Column("scope", String(16), nullable=False),
+    Column("result", Text, nullable=False),
+    Column("created_at", Text, nullable=False),
+    Index("ix_dataset_profiles_dataset_created", "dataset_id", "created_at", "job_id"),
+)
+
 audit_events = Table(
     "audit_events",
     metadata,

@@ -29,6 +29,7 @@ from .observability import emit
 from .processing import transform
 from .schemas import ExplorationSpec, Transform
 from .store import Store
+from .understanding import build_understanding
 
 
 def _perform(home: Path, database_url: str, job: dict, completed: Path, pending: Path) -> None:
@@ -46,7 +47,12 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
             raise ValueError("Input dataset is missing")
         if job["kind"] == "profile":
             stage = "processing"
-            result = discovery_profile(store, dataset, sample=None)
+            if job["spec"].get("mode") == "understanding":
+                result = build_understanding(
+                    store, dataset, scope=job["spec"].get("scope", "sample")
+                )
+            else:
+                result = discovery_profile(store, dataset, sample=None)
         elif job["kind"] == "exploration":
             stage = "processing"
             spec = ExplorationSpec.model_validate(job["spec"]["exploration"])

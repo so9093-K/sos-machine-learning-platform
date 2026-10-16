@@ -44,6 +44,10 @@ Human / External System / AI Agent
 
 Makefile과 개발 CLI는 서비스 기동·진단의 인터페이스이자 배포별 어댑터다. 개발 환경의 Compose 구성이 플랫폼 서비스의 의존 방향을 결정하지 않는다. 외부 관리형 데이터베이스·스토리지 또는 독립적으로 배치된 Worker를 사용할 수 있으며, 실행 중(Running)과 실제 서비스 준비(Ready)는 구별하여 판정한다.
 
+## 범용 Dataset Understanding 책임
+
+DuckDB 기반 Profiler는 원본 판본에서 통계·품질을 계산하며 역할 추론과 추천 규칙은 독립된 순수 정책으로 분리한다. 실행과 취소는 기존 Job/Attempt를 재사용하고 완료된 Profile은 PostgreSQL에서 원본과 별도로 추적한다. 웹과 외부 클라이언트는 동일한 API를 사용한다. 물리적 저장소나 특정 모델·LLM의 추론을 필수 조건으로 삼지 않는다.
+
 ## 현재 코드의 모듈 경계
 
 `discovery.py`는 DuckDB를 사용해 CSV·Parquet·고정 Iceberg Snapshot의 Preview·EDA·Profile·집계를 전담한다. `processing.py`는 Polars Feature·Transform 의미를 담당하며 DB·HTTP·S3에 의존하지 않는다. `datasets.py`는 Dataset 등록·검증된 원본 캐시·Iceberg 적재를 연결하고, `object_store.py`와 `store.py`가 저장·상태의 정본을 관리한다. UI의 예제·작업 화면도 일반 API를 사용하며 별도의 가짜 실행 경로를 만들지 않는다.

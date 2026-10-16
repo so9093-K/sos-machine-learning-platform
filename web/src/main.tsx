@@ -9,12 +9,13 @@ import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
+import { UnderstandingPanel } from "./UnderstandingPanel";
 import { DatasetQueryPanel } from "./DatasetQueryPanel";
 import type { Dataset, DatasetPage, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity, Snapshot } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
-type Tab = "preview" | "profile" | "features" | "jobs" | "storage" | "audit";
+type Tab = "understanding" | "preview" | "profile" | "features" | "jobs" | "storage" | "audit";
 type UploadProgress = {
   name: string; loaded: number; total: number;
   phase: "transferring" | "registering";
@@ -43,7 +44,7 @@ function Workspace({ actor }: { actor: Identity }) {
   const [previewStatus, setPreviewStatus] = useState<"loading" | "ready" | "error">("loading");
   const [profileStatus, setProfileStatus] = useState<"loading" | "ready" | "error">("loading");
   const [reloadRevision, setReloadRevision] = useState(0);
-  const [tab, setTab] = useState<Tab>("preview");
+  const [tab, setTab] = useState<Tab>("understanding");
   const [busy, setBusy] = useState(false);
   const [uploadPolicy, setUploadPolicy] = useState<UploadPolicy | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
@@ -99,7 +100,7 @@ function Workspace({ actor }: { actor: Identity }) {
   async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
     setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
     showExamples.current = false;
-    setSelected(data.id); setTab("preview");
+    setSelected(data.id); setTab("understanding");
     try {
       await refreshDatasets();
       setNotice(success);
@@ -495,7 +496,7 @@ function Workspace({ actor }: { actor: Identity }) {
       <nav aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
-          onClick={() => { showExamples.current = false; setSelected(d.id); setTab("preview"); }}>
+          onClick={() => { showExamples.current = false; setSelected(d.id); setTab("understanding"); }}>
           <span className="dataset-name">{d.name}</span>
           <span className="dataset-kind">{d.kind === "iceberg" ? "◆ Iceberg" : "◫ File"}</span>
         </button>)}
@@ -548,7 +549,7 @@ function Workspace({ actor }: { actor: Identity }) {
             </>}</div>
         </div>
         <div className="tabbar" role="tablist" aria-label="데이터 작업 영역">
-          {(["preview", "profile", "features"] as Tab[]).map(t =>
+          {(["understanding", "preview", "profile", "features"] as Tab[]).map(t =>
             <button key={t} role="tab" id={`sos-tab-${t}`}
               aria-controls={`sos-panel-${t}`} aria-selected={tab === t}
               tabIndex={tab === t ? 0 : -1}
@@ -557,7 +558,7 @@ function Workspace({ actor }: { actor: Identity }) {
               onKeyDown={event => {
                 if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
                 event.preventDefault();
-                const tabs: Tab[] = ["preview", "profile", "features"];
+                const tabs: Tab[] = ["understanding", "preview", "profile", "features"];
                 const index = tabs.indexOf(t);
                 const next = event.key === "Home" ? tabs[0] :
                   event.key === "End" ? tabs[tabs.length - 1] :
@@ -565,9 +566,13 @@ function Workspace({ actor }: { actor: Identity }) {
                 setTab(next);
                 requestAnimationFrame(() => document.getElementById(`sos-tab-${next}`)?.focus());
               }}>
-              {{ preview: "Preview", profile: "EDA & Profile", features: "Features", jobs: "Jobs", storage: "Storage Health", audit: "Security Audit" }[t]}
+              {{ understanding: "Understand", preview: "Preview", profile: "EDA & Profile", features: "Features", jobs: "Jobs", storage: "Storage Health", audit: "Security Audit" }[t]}
             </button>)}
         </div>
+        {tab === "understanding" && <section className="panel" role="tabpanel"
+          id="sos-panel-understanding" aria-labelledby="sos-tab-understanding" tabIndex={0}>
+          <UnderstandingPanel key={selected} datasetId={selected} canCreate={canWrite} />
+        </section>}
         {tab === "preview" && <section className="panel" role="tabpanel"
           id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
           <div className="panel-head"><div><h3>데이터 미리보기</h3><p>최대 100행 · 전체 데이터가 아닌 일부입니다.</p></div>

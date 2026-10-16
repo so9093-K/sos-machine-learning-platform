@@ -43,6 +43,10 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | 데이터→EDA→Feature→Job·브라우저 접근성, 재시도·문자형 집계·전체 결과 이해 | workspace.spec.ts |
 | OpenAPI 삭제·필수 입력 추가·필드 변경 위험 | test_api_compat.py와 PR 비교 검사 |
 
+## Dataset Understanding 회귀 계약
+
+결정적인 CSV·Parquet Fixture로 미지의 컬럼명, NULL·NaN·무한대, 상수·고유값이 큰 컬럼, 단일 행·빈 행, 역할 후보의 미확정 상태와 실행 가능한 탐색 추천을 검증한다. Profile 판본·영속화·마이그레이션·취소·권한과 Job/Attempt 정합성 및 브라우저 첫 사용 흐름을 함께 검사한다. 표본 계산을 전체 통계로 오인하지 않게 하고 민감한 범주 값이 자동 결과에 포함되지 않도록 한다.
+
 ## CI의 품질 게이트
 
 - python-tests: 잠금·Ruff·API 타입·PR base API 호환성·실제 인프라 통합 테스트·Alembic·Wheel.

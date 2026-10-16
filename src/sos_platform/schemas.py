@@ -282,6 +282,18 @@ class ExplorationOut(BaseModel):
     rows: list[ExplorationRowOut]
 
 
+class UnderstandingRequest(BaseModel):
+    scope: Literal["sample", "full"] = "sample"
+
+
+class UnderstandingOut(BaseModel):
+    dataset_id: str
+    version: str
+    profile: dict[str, object] | None = None
+    job_status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"] | None = None
+    job_id: str | None = None
+
+
 class PreviewOut(BaseModel):
     """제한된 행 미리보기와 컬럼 타입."""
 

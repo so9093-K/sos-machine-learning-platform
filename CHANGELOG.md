@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 처음 보는 CSV·Parquet Dataset을 위한 판본별 Understanding Profile, 역할 후보, 실행 가능한 탐색 추천 및 UI를 추가했습니다.
+
 ### Changed
 
 - Dataset의 구조화된 컬럼 투영·필터·정렬 조회와 웹 컬럼 선택·탐색을 추가했다. 잘못된 비교 타입은 422로 처리하고 기존 Preview API를 보존한다.

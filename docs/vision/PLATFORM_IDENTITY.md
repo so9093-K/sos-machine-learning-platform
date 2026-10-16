@@ -14,7 +14,15 @@
 | **ML Execution Platform** | 데이터 처리, 피처 엔지니어링, 학습, 최적화, 평가, 모델 관리, 추론·배포 |
 | **ML Service Platform** | 외부 애플리케이션, 서버, IoT/MES 시스템, AI 에이전트에 ML 기능 제공 |
 
-## 2. 지속적 개선 과정
+## 2. 데이터에서 시작하는 연구 경험
+
+![알 수 없는 Dataset → System Discovery → Dataset Understanding → Explore · Prepare · Experiment](references/07-dataset-understanding.svg)
+
+SOS는 사전에 정의된 데이터 사전이나 특정 ML 시나리오가 없어도 **지원 가능한 Dataset의 구조와 검증 가능한 특성을 발견**할 수 있어야 한다. 시스템은 계산으로 확인한 사실, 해석을 요하는 역할 후보, 아직 알 수 없는 업무적 의미를 구별하며 확정되지 않은 의미를 강요하지 않는다.
+
+데이터 이해는 독립적인 결과이고, 탐색·준비·실험은 필요에 따라 선택·반복하거나 생략할 수 있다. 원본을 보존하면서 분석 근거와 판본을 연결하며, 이 능력은 사람과 외부 API 클라이언트에 동일한 계약으로 제공한다. 이는 모든 형식과 업무적 의미를 무조건 이해한다는 약속이 아니다.
+
+## 7. 지속적 개선 과정
 
 ![Continuous ML Lifecycle](references/01-continuous-improvement.png)
 
