@@ -2,13 +2,18 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts";
 
+/** CSS 토큰을 차트의 단일 색상 정본으로 사용한다. Canvas에는 계산된 값이 필요하다. */
+function themeColor(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 export const CHART_COLORS = {
-  text: "#cbd5e1",
-  label: "#94a3b8",
-  grid: "#334155",
-  bar: "#7d92e7",
-  line: "#69b9ff",
-} as const;
+  get text() { return themeColor("--sos-text"); },
+  get label() { return themeColor("--sos-muted"); },
+  get grid() { return themeColor("--sos-border"); },
+  get bar() { return themeColor("--sos-chart-bar"); },
+  get line() { return themeColor("--sos-chart-line"); },
+};
 
 export function DataChart({ option, ariaLabel }: {
   option: echarts.EChartsCoreOption;

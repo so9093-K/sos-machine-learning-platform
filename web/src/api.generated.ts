@@ -468,6 +468,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/instance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Instance Settings
+         * @description 인증된 클라이언트가 동일한 인스턴스 정보를 받는다.
+         */
+        get: operations["instance_settings_api_instance_get"];
+        /** Change Instance Settings */
+        put: operations["change_instance_settings_api_instance_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs": {
         parameters: {
             query?: never;
@@ -742,6 +763,8 @@ export interface components {
              * @enum {string}
              */
             actor_type: "human" | "service";
+            /** Capabilities */
+            capabilities: string[];
             /**
              * Mode
              * @enum {string}
@@ -1120,6 +1143,22 @@ export interface components {
             status: "retained" | "available_unprotected" | "missing" | "unknown";
             /** Table Name */
             table_name: string;
+        };
+        /**
+         * InstanceSettingsOut
+         * @description 공통 플랫폼의 표시 전용 설정. 인증·배포 환경과 별개의 계약.
+         */
+        InstanceSettingsOut: {
+            /** Display Name */
+            display_name: string;
+        };
+        /**
+         * InstanceSettingsUpdate
+         * @description 관리자만 변경하는 표시명. 내부 플랫폼·리소스 식별자가 아니다.
+         */
+        InstanceSettingsUpdate: {
+            /** Display Name */
+            display_name: string;
         };
         /** JobDiagnosticsOut */
         JobDiagnosticsOut: {
@@ -2376,6 +2415,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SnapshotOut"][];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    instance_settings_api_instance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettingsOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    change_instance_settings_api_instance_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstanceSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettingsOut"];
                 };
             };
             /** @description Structured API error */

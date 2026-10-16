@@ -19,14 +19,23 @@ export class ApiError extends Error {
   override toString() {
     const reference = [this.code, this.requestId ? `요청 ID: ${this.requestId}` : null]
       .filter(Boolean).join(" · ");
-    return reference ? `${this.message} (${reference})` : this.message;
+    const message = reference ? `${this.message} (${reference})` : this.message;
+    if (this.retryPolicy === "manual_verification_required") {
+      return `${message} · 작업의 실행·커밋 상태를 확인하기 전에는 동일 요청을 다시 제출하지 마세요.`;
+    }
+    if (this.retryPolicy === "after_refresh") {
+      return `${message} · 현재 상태를 새로 조회한 뒤 재시도 여부를 판단하세요.`;
+    }
+    return message;
   }
 }
 
 /** UI에서 요청 ID·오류 코드를 보존하되 임의 예외의 원문은 추가하지 않는다. */
 export function formatError(error: unknown): string {
   if (error instanceof ApiError) return error.toString();
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof TypeError) return "네트워크 요청에 실패했습니다. 연결 상태를 확인하고 다시 시도하세요.";
+  // 필드 입력 검증 등 의도적으로 발생시킨 로컬 Error 메시지는 유지한다.
+  return error instanceof Error ? error.message : "요청을 처리하지 못했습니다. 다시 시도하세요.";
 }
 
 export function setAccessToken(value: string | null) {

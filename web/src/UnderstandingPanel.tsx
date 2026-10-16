@@ -1,38 +1,39 @@
 /** Dataset 판본의 실제 Profile과 실행 가능한 탐색을 공통 API로 표시한다. */
 import { useEffect, useState } from "react";
-import { formatError, jsonPost, request, submitJob } from "./api";
-import type { DatasetOverview, Exploration, ExplorationRequest, Job } from "./types";
+import { formatError, request, submitJob } from "./api";
+import { explorationMetricLabel } from "./exploration-format";
+import type { DatasetOverview, ExplorationRequest, Job } from "./types";
 
 import type { components } from "./api.generated";
 
 type Understanding = components["schemas"]["UnderstandingOut"];
 
-export function UnderstandingPanel({ datasetId, canCreate }: {
-  datasetId: string; canCreate: boolean;
+export function UnderstandingPanel({
+  datasetId, canCreate, onChooseCandidate, overview, overviewStatus, overviewError, onRetryOverview,
+}: {
+  datasetId: string;
+  canCreate: boolean;
+  overview: DatasetOverview | null;
+  overviewStatus: "loading" | "ready" | "error";
+  overviewError: string;
+  onRetryOverview: () => void;
+  onChooseCandidate: (
+    candidate: { request: ExplorationRequest; title: string; reason: string },
+    version: string, profileScope: "sample" | "full",
+  ) => void;
 }) {
   const [state, setState] = useState<Understanding | null>(null);
-  const [overview, setOverview] = useState<DatasetOverview | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<Exploration | null>(null);
   const [jobError, setJobError] = useState("");
   const [revision, setRevision] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    request<DatasetOverview>(
-      "/api/datasets/" + encodeURIComponent(datasetId) + "/overview"
-    ).then(data => {
-      if (active) setOverview(data);
-    }).catch(() => {
-      // Overview 실패가 Profile 조회나 원본 Dataset 접근을 차단해서는 안 된다.
-    });
-    return () => { active = false; };
-  }, [datasetId]);
+  const [columnSearch, setColumnSearch] = useState("");
+  const [columnFilter, setColumnFilter] = useState("all");
 
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let missingCompletedProfile = 0;
     async function refresh() {
       try {
         const data = await request<Understanding>(
@@ -43,6 +44,13 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
         setError("");
         if (data.job_status === "Queued" || data.job_status === "Running") {
           timer = setTimeout(() => { void refresh(); }, 1500);
+        } else if (data.job_status === "Succeeded" && !data.profile) {
+          // 마감 시점의 교차 읽기 또는 지연된 결과 표시를 회복하되 무한 폴링하지 않는다.
+          if (++missingCompletedProfile <= 3) {
+            timer = setTimeout(() => { void refresh(); }, 1500);
+          } else {
+            setError("완료된 분석의 프로파일을 조회하지 못했습니다. 상태를 다시 조회하세요.");
+          }
         }
         // 한 Dataset에서 분석 접수가 여러 번 반복되지 않도록 서버 상태를 먼저 확인한다.
         if (!data.profile && !data.job_status && canCreate) {
@@ -74,20 +82,20 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
     finally { setBusy(false); }
   }
 
-  async function explore(spec: ExplorationRequest) {
-    setBusy(true); setJobError(""); setResult(null);
-    try {
-      const answer = await jsonPost<Exploration>(
-        "/api/datasets/" + encodeURIComponent(datasetId) + "/explorations", spec,
-      );
-      setResult(answer);
-    } catch (cause) { setJobError(formatError(cause)); }
-    finally { setBusy(false); }
-  }
-
   const profile = state?.profile;
-  return <section className="panel" aria-label="Dataset Understanding">
-    <div className="panel-head"><div><h3>데이터 이해</h3>
+  const columns = profile?.columns ?? [];
+  const filteredColumns = columns.filter(col => {
+    if (!col.name.toLowerCase().includes(columnSearch.trim().toLowerCase())) return false;
+    if (columnFilter === "all") return true;
+    if (columnFilter === "constant") return col.is_constant;
+    if (columnFilter === "missing") return col.null_count > 0;
+    return col.roles.some(role => role.role === columnFilter);
+  });
+  const constantCount = columns.filter(col => col.is_constant).length;
+  const missingCount = columns.filter(col => col.null_count > 0).length;
+  const timeCount = columns.filter(col => col.roles.some(r => r.role === "temporal")).length;
+  return <section className="understanding-content" aria-label="Dataset Understanding">
+    <div className="panel-head"><div><h3>데이터 프로파일</h3>
       <p>확인된 통계와 추론된 역할 후보를 구분합니다. 원본은 변경하지 않습니다.</p>
     </div></div>
     {!state && !error && <p role="status">구조와 분석 상태를 확인하는 중입니다.</p>}
@@ -98,6 +106,11 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
     {state?.job_status === "Failed" && <p role="alert">
       최근 분석에 실패했습니다. Dataset과 이전 완료 결과는 그대로 사용할 수 있습니다.
     </p>}
+    {!profile && overviewStatus === "error" && <div role="alert">
+      기본 메타데이터 조회 실패: {overviewError}
+      <button className="secondary" onClick={onRetryOverview}>기본 정보 다시 조회</button>
+    </div>}
+    {!profile && overviewStatus === "loading" && <p role="status">기본 메타데이터 조회 중</p>}
     {!profile && overview && <>
       <div className="cards">
         <div className="stat"><span>등록된 컬럼</span><strong>{overview.column_count}</strong></div>
@@ -128,10 +141,34 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
         "고정 Seed Reservoir 표본 · 전체 분포를 대표한다고 보장하지 않습니다."}
         {" · "}고유값 수 {profile.scope === "full" ? "근사" : "표본 내 정확"}
         {" · "}{profile.algorithm_version}</p>
-      <h4>발견된 컬럼 특성</h4>
+      <div className="profile-findings" aria-label="주요 데이터 특성">
+        <div><strong>{constantCount.toLocaleString()}</strong>
+          <span>{profile.scope === "sample" ? "표본 내 상수 후보" : "전체 상수 컬럼"}</span></div>
+        <div><strong>{missingCount.toLocaleString()}</strong><span>결측 포함 컬럼</span></div>
+        <div><strong>{timeCount.toLocaleString()}</strong><span>시간 역할 후보</span></div>
+      </div>
+      <div className="panel-head profile-head">
+        <div><h4>컬럼 특성</h4><p>검색과 역할 후보 필터로 관심 컬럼을 찾을 수 있습니다.</p></div>
+      </div>
+      <div className="profile-filters">
+        <label>컬럼 검색<input aria-label="프로파일 컬럼 검색" type="search" value={columnSearch}
+          onChange={event => setColumnSearch(event.target.value)} placeholder="컬럼 이름" /></label>
+        <label>특성 필터<select aria-label="특성 필터" value={columnFilter}
+          onChange={event => setColumnFilter(event.target.value)}>
+          <option value="all">전체</option>
+          <option value="missing">결측 포함</option>
+          <option value="constant">상수 후보</option>
+          <option value="temporal">시간 후보</option>
+          <option value="numeric_measure">수치형 후보</option>
+          <option value="categorical">범주형 후보</option>
+          <option value="identifier">식별자 후보</option>
+          <option value="potentially_sensitive">민감정보 후보</option>
+        </select></label>
+        <span className="filter-count" role="status">{filteredColumns.length.toLocaleString()} / {columns.length.toLocaleString()} 컬럼</span>
+      </div>
       <div className="table-scroll"><table><thead><tr>
         <th>컬럼</th><th>자료형</th><th>NULL</th><th>NaN</th><th>고유값</th><th>역할 후보 (미확정)</th>
-      </tr></thead><tbody>{profile.columns.map(col => <tr key={col.name}>
+      </tr></thead><tbody>{filteredColumns.map(col => <tr key={col.name}>
         <td>{col.name}</td><td>{col.dtype}</td>
         <td>{col.null_ratio === null ? "—" : (col.null_ratio * 100).toFixed(1) + "%"}</td>
         <td>{col.nan_count === null ? "—" : col.nan_count.toLocaleString()}</td>
@@ -139,24 +176,22 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
         <td>{col.is_constant ? "상수 · " : ""}
           {col.roles.map(r => r.role + " (" + r.basis + ")").join(", ") || "미확인"}</td>
       </tr>)}</tbody></table></div>
-      <h4>시작할 수 있는 탐색</h4>
-      {profile.insights.length === 0 && <p className="muted">현재 확인된 정보만으로 실행 가능한 분석을 제안하지 않습니다. Preview에서 구조를 확인하세요.</p>}
+      {filteredColumns.length === 0 && <p className="muted" role="status">선택한 조건에 해당하는 컬럼이 없습니다.</p>}
+      <h4>탐색 후보</h4>
+      <p className="hint">데이터 특성과 지원 연산을 기준으로 구성된 항목입니다. 분석 적합성이나 업무적 의미를 확정하지 않습니다.</p>
+      {profile.insights.length === 0 && <p className="muted">현재 프로파일로 구성할 수 있는 탐색 후보가 없습니다. 탐색 탭에서 분석 조건을 직접 선택할 수 있습니다.</p>}
       <div className="example-grid">{profile.insights.map((item, i) => <article
         className="example-card" key={item.kind + i}>
         <h4>{item.title}</h4><p>{item.reason}</p>
-        <p className="hint">추천 근거: {profile.scope === "full" ? "전체 입력" : "Reservoir 표본"}
-          {" · "}실행: 선두 최대 10,000행 기반의 별도 샘플 · 선택 후 실행</p>
-        <button disabled={busy} onClick={() => void explore(item.request)}>탐색 실행</button>
+        <p className="hint">구성 근거: {profile.scope === "full" ? "전체 프로파일" : "Reservoir 표본"}
+          {" · "}실행 범위: 별도의 제한된 선두 샘플</p>
+        <p className="hint">분석 조건: {item.request.column} · {explorationMetricLabel(item.request.metric)}{
+          item.request.group_by ? ` · 그룹 ${item.request.group_by}` : " · 전체 그룹"
+        }</p>
+        <button onClick={() => onChooseCandidate(item, profile.version, profile.scope)}>
+          탐색 조건 보기
+        </button>
       </article>)}</div>
-      {result && <div className="result" role="status">
-        <h4>탐색 결과 · {result.scope === "sample" ? "샘플" : "전체"}</h4>
-        <p className="hint">입력 판본 {result.version.slice(0, 12)} · 표시 그룹 제한 {result.truncated ? "있음" : "없음"}</p>
-        <div className="table-scroll"><table><thead><tr><th>그룹</th><th>값</th></tr></thead>
-          <tbody>{result.rows.map((row, i) => <tr key={i}>
-            <td>{row.category === null ? "전체/NULL" : String(row.category)}</td>
-            <td>{row.value === null ? "계산 불가" : String(row.value)}</td>
-          </tr>)}</tbody></table></div>
-      </div>}
     </>}
     {canCreate && <div className="actions">
       <button className="secondary" disabled={busy ||

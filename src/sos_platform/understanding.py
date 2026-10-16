@@ -1,4 +1,4 @@
-"""불변 Dataset의 기계적 특성과 실행 가능한 탐색 제안을 생성한다.
+"""불변 Dataset의 기계적 특성과 실행 가능한 탐색 후보를 구성한다.
 
 업무적 의미는 확정하지 않으며 원시 범주 값과 민감한 예시는 결과에 포함하지 않는다.
 """
@@ -173,7 +173,7 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
 
 
 def suggest_analyses(columns: list[dict], row_count: int) -> list[dict]:
-    """기존 Exploration API가 실행할 수 있는 요청만 제안한다."""
+    """기존 Exploration API로 실행 가능한 분석 조건만 구성한다."""
     if not row_count:
         return []
     suggestions: list[dict] = []

@@ -24,6 +24,7 @@ ACTIONS = {
     "storage.inspect",
     "snapshot.retain",
     "audit.read",
+    "instance.configure",
 }
 GRANTS = {
     "viewer": {"dataset.read", "job.read", "snapshot.read"},

@@ -1,3 +1,18 @@
+import type { ExplorationRequest } from "./types";
+
+/** API 연산 식별자와 사용자 표기를 분리해 모든 탐색 화면에서 같은 의미를 사용한다. */
+const metricLabels: Record<ExplorationRequest["metric"], string> = {
+  mean: "평균",
+  min: "최솟값",
+  max: "최댓값",
+  count: "행 수",
+  null_count: "NULL 수",
+};
+
+export function explorationMetricLabel(metric: ExplorationRequest["metric"]): string {
+  return metricLabels[metric];
+}
+
 /** 샘플·전체 Job 화면이 같은 값·그룹 의미를 표시한다. */
 export function explorationCategory(value: unknown, groupBy: string | null | undefined): string {
   if (value == null) return groupBy ? "(NULL 그룹)" : "전체";

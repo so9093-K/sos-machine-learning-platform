@@ -53,6 +53,8 @@ from .schemas import (
     IcebergConnect,
     IcebergImport,
     IcebergReferenceOut,
+    InstanceSettingsOut,
+    InstanceSettingsUpdate,
     JobDiagnosticsOut,
     JobOut,
     JobPageOut,
@@ -67,7 +69,7 @@ from .schemas import (
     UploadPolicyOut,
     WorkRequest,
 )
-from .security import Actor, IdentitySettings, current_actor, require, resource_allowed
+from .security import ACTIONS, Actor, IdentitySettings, current_actor, require, resource_allowed
 from .store import IcebergCancellationConflict, Store
 
 # Depends 객체는 요청마다 재생성하지 않고 안정적으로 재사용한다.
@@ -80,6 +82,7 @@ CANCEL_JOB_DEP = Depends(require("job.cancel"))
 INSPECT_DEP = Depends(require("storage.inspect"))
 RETAIN_DEP = Depends(require("snapshot.retain"))
 AUDIT_DEP = Depends(require("audit.read"))
+INSTANCE_CONFIG_DEP = Depends(require("instance.configure"))
 SNAPSHOT_READ_DEP = Depends(require("snapshot.read"))
 
 
@@ -263,8 +266,30 @@ def create_app(home: Path | None = None) -> FastAPI:
             "actor_id": actor.id,
             "actor_type": actor.kind,
             "roles": sorted(actor.roles),
+            "capabilities": sorted(action for action in ACTIONS if actor.can(action)),
             "mode": identity.mode,
         }
+
+    @app.get("/api/instance", response_model=InstanceSettingsOut)
+    def instance_settings(actor: Actor = IDENTITY_DEP):
+        """인증된 클라이언트가 동일한 인스턴스 정보를 받는다."""
+        return {
+            "display_name": store.instance_display_name(),
+        }
+
+    @app.put("/api/instance", response_model=InstanceSettingsOut)
+    def change_instance_settings(
+        body: InstanceSettingsUpdate,
+        request: Request,
+        actor: Actor = INSTANCE_CONFIG_DEP,
+    ):
+        store.set_instance_display_name(
+            body.display_name,
+            actor_id=actor.id,
+            actor_type=actor.kind,
+            request_id=request.state.request_id,
+        )
+        return {"display_name": body.display_name}
 
     @app.get("/api/audit")
     @app.get("/api/v2/audit", response_model=list[AuditEventOut])
@@ -477,8 +502,10 @@ def create_app(home: Path | None = None) -> FastAPI:
     def dataset_understanding(dataset_id: str, actor: Actor = READ_DATASET_DEP):
         """원본 등록과 독립적으로 계산된 최신 이해 결과 및 실행 상태를 제공한다."""
         item = existing(dataset_id, actor)
-        profile = store.latest_dataset_profile(item["id"], item["version"])
+        # 완료 트랜잭션의 중간을 읽지 않도록 Job 상태를 먼저 조회한다.
+        # 반대 순서에서는 profile=None 조회 후 Worker 커밋, job=Succeeded가 가능하다.
         latest = store.latest_understanding_job(item["id"])
+        profile = store.latest_dataset_profile(item["id"], item["version"])
         return {
             "dataset_id": item["id"],
             "version": item["version"],

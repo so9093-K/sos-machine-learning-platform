@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { request, formatError } from "./api";
-import { explorationCategory, explorationValue } from "./exploration-format";
+import { explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
 import type { Dataset, Job, JobSummary, ExplorationJob, ExplorationJobSummary } from "./types";
 
 type AnyJobSummary = JobSummary | ExplorationJobSummary;
@@ -9,9 +9,13 @@ type AnyJobSummary = JobSummary | ExplorationJobSummary;
 function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
   if (!Array.isArray(result.rows)) return null;
   const rows = result.rows as Array<{ category: unknown; value: unknown }>;
+  const metric = String(result.metric);
+  const metricLabel = ["mean", "min", "max", "count", "null_count"].includes(metric)
+    ? explorationMetricLabel(metric as Parameters<typeof explorationMetricLabel>[0])
+    : metric;
   return <section className="discovery-job-result" aria-label="전체 집계 결과">
     <h4>전체 집계 결과</h4>
-    <p className="muted">전체 입력 · 컬럼 {String(result.column)} · 집계 {String(result.metric)}
+    <p className="muted">전체 입력 · 컬럼 {String(result.column)} · 집계 {metricLabel}
       {result.group_by ? ` · 그룹 ${String(result.group_by)}` : " · 그룹 없음"}</p>
     <p className="hint">Dataset 판본 {String(result.version).slice(0, 12)}
       {result.truncated ? " · 표시 그룹 수 제한으로 일부 결과만 표시됩니다." : ""}</p>

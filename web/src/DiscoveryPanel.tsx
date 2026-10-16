@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
-import { chartValue, explorationCategory, explorationValue } from "./exploration-format";
+import { chartValue, explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
 import { request, jsonPost, submitJob, formatError } from "./api";
 import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, ExplorationJob } from "./types";
+import type { ExplorationDraft } from "./ExplorationDraft";
 
 function analysisLabel(basis: string) {
   return basis === "parquet_metadata"
@@ -13,14 +14,21 @@ function analysisLabel(basis: string) {
 
 /** 사람과 외부 API가 동일하게 사용하는 Dataset Discovery 계약을 표시한다. */
 export function DiscoveryPanel({
-  datasetId, canCreate, onCreated,
-}: { datasetId: string; canCreate: boolean; onCreated: () => Promise<void> }) {
-  const [overview, setOverview] = useState<DatasetOverview | null>(null);
+  datasetId, canCreate, onCreated, draft, onDraftChange,
+  overview, overviewStatus, overviewError, onRetryOverview,
+}: {
+  datasetId: string;
+  canCreate: boolean;
+  onCreated: () => Promise<void>;
+  draft: ExplorationDraft | null;
+  onDraftChange: (request: ExplorationRequest) => void;
+  overview: DatasetOverview | null;
+  overviewStatus: "loading" | "ready" | "error";
+  overviewError: string;
+  onRetryOverview: () => void;
+}) {
   const [columns, setColumns] = useState<DatasetColumns | null>(null);
   const [search, setSearch] = useState("");
-  const [measure, setMeasure] = useState("");
-  const [groupBy, setGroupBy] = useState("");
-  const [metric, setMetric] = useState<ExplorationRequest["metric"]>("mean");
   const [result, setResult] = useState<Exploration | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [running, setRunning] = useState(false);
@@ -29,19 +37,13 @@ export function DiscoveryPanel({
   const [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true;
-    setStatus("loading"); setOverview(null); setColumns(null);
+    setStatus("loading"); setColumns(null);
     setResult(null); setError("");
-    Promise.all([
-      request<DatasetOverview>(`/api/datasets/${datasetId}/overview`),
-      request<DatasetColumns>(`/api/datasets/${datasetId}/columns`),
-    ]).then(([o, c]) => {
+    request<DatasetColumns>(
+      `/api/datasets/${encodeURIComponent(datasetId)}/columns`,
+    ).then(c => {
       if (!active) return;
-      setOverview(o); setColumns(c);
-      const firstNumeric = c.columns.find(x => /Int|Float|Decimal/.test(x.dtype));
-      setMeasure(previous => c.columns.some(item => item.name === previous)
-        ? previous : (firstNumeric?.name ?? c.columns[0]?.name ?? ""));
-      if (!firstNumeric) setMetric("count");
-      setGroupBy(previous => c.columns.some(item => item.name === previous) ? previous : "");
+      setColumns(c);
       setStatus("ready");
     }).catch(e => { if (active) { setError(formatError(e)); setStatus("error"); } });
     return () => { active = false; };
@@ -49,30 +51,48 @@ export function DiscoveryPanel({
   const shown = useMemo(() => columns?.columns.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())) ?? [], [columns, search]);
   const numeric = columns?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
+  const metric = draft?.request.metric ?? (numeric.length ? "mean" : "count");
+  const measure = draft?.request.column ?? "";
+  const groupBy = draft?.request.group_by ?? "";
   const candidates = metric === "count" || metric === "null_count"
     ? (columns?.columns ?? []) : numeric;
   const selectedMeasure = candidates.some(item => item.name === measure)
     ? measure : (candidates[0]?.name ?? "");
+  const invalidDraft = !!draft && !!columns && (
+    !columns.columns.some(c => c.name === draft.request.column) ||
+    (draft.request.group_by !== null &&
+      !columns.columns.some(c => c.name === draft.request.group_by)) ||
+    (metric !== "count" && metric !== "null_count" &&
+      !numeric.some(c => c.name === draft.request.column))
+  );
+  const selectedRequest: ExplorationRequest = {
+    column: selectedMeasure,
+    metric,
+    group_by: groupBy || null,
+  };
+  function updateRequest(patch: Partial<ExplorationRequest>) {
+    onDraftChange({ ...selectedRequest, ...patch });
+    setResult(null);
+    setFullJobId(null);
+    setError("");
+  }
   async function run() {
-    if (!selectedMeasure) return;
+    if (!selectedMeasure || invalidDraft) return;
     setRunning(true); setError(""); setResult(null);
     try {
-      const body: ExplorationRequest = {
-        column: selectedMeasure, metric, group_by: groupBy || null,
-      };
       const answer = await jsonPost<Exploration>(
-        `/api/datasets/${datasetId}/explorations`, body);
+        `/api/datasets/${datasetId}/explorations`, selectedRequest);
       setResult(answer);
     } catch (e) { setError(formatError(e)); }
     finally { setRunning(false); }
   }
   async function runFullJob() {
-    if (!selectedMeasure) return;
+    if (!selectedMeasure || invalidDraft) return;
     setRunning(true); setError(""); setFullJobId(null);
     try {
       const job = await submitJob<ExplorationJob>("/api/explorations/jobs", {
         dataset_id: datasetId,
-        exploration: { column: selectedMeasure, metric, group_by: groupBy || null },
+        exploration: selectedRequest,
       });
       setFullJobId(job.id);
       try {
@@ -98,50 +118,61 @@ export function DiscoveryPanel({
     };
   }, [result]);
   return <section className="discovery-panel" aria-label="Dataset Discovery">
-    <h4>데이터 발견</h4>
-    {status === "loading" && <p role="status" className="muted">구조와 메타데이터를 확인하는 중입니다.</p>}
+    <h3>탐색 분석</h3>
+    {status === "loading" && <p role="status" className="muted">컬럼 목록을 확인하는 중입니다.</p>}
+    {overviewStatus === "loading" && <p className="muted" role="status">기본 정보 조회 중</p>}
+    {overviewStatus === "error" && <div role="alert" className="alert">
+      기본 정보 조회 실패: {overviewError}
+      <button className="secondary" onClick={onRetryOverview}>기본 정보 다시 조회</button>
+    </div>}
     {status === "error" && <button className="secondary"
       onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>}
-    {overview && <div className="cards">
-      <div className="stat"><span>전체 행</span><strong>{overview.row_count?.toLocaleString() ?? "미계산"}</strong>
-        <small>{analysisLabel(overview.row_count_basis)}</small></div>
-      <div className="stat"><span>컬럼 수</span><strong>{overview.column_count}</strong></div>
-      <div className="stat"><span>원본 크기</span><strong>{overview.size_bytes == null
-        ? "외부 Snapshot" : `${(overview.size_bytes / (1024 * 1024)).toFixed(2)} MiB`}</strong></div>
-    </div>}
+    {overview && <p className="hint">분석 대상 · {overview.column_count.toLocaleString()}컬럼
+      {" · "}{overview.row_count?.toLocaleString() ?? "미계산"}행
+      {" · "}{analysisLabel(overview.row_count_basis)}</p>}
     {columns && <>
-      <h4>컬럼 검색</h4>
-      <input aria-label="컬럼 이름 검색" value={search} onChange={e => setSearch(e.target.value)}
-        placeholder="컬럼 이름으로 찾기" />
-      <p className="muted">{shown.length}개 표시 / 전체 {columns.total}개 컬럼</p>
-      <div className="column-search-results" role="list">
-        {shown.map(c => <div role="listitem" key={c.name}>
-          <span>{c.name}</span><small>{c.dtype}</small></div>)}
-      </div>
-      <h4>분석 집계</h4>
+      <h4>탐색 조건</h4>
+      {draft?.source && <div className="exploration-origin" role="status">
+        <strong>탐색 후보에서 가져온 조건 · {draft.source.title}</strong>
+        <p>{draft.source.reason}</p>
+        <small>구성 근거: {draft.source.profileScope === "full" ? "전체 프로파일" : "Reservoir 표본"} · 사용자가 조건을 확인하고 실행합니다.</small>
+      </div>}
+      {invalidDraft && <div role="alert" className="alert">
+        이전 탐색 조건이 현재 Dataset 스키마 또는 집계 방식과 일치하지 않습니다.
+        <button type="button" className="secondary" onClick={() => updateRequest({
+          column: selectedMeasure, metric, group_by: null,
+        })} disabled={!selectedMeasure}>기본 탐색 조건 적용</button>
+      </div>}
       <p className="muted">대화형 탐색은 제한된 선두 샘플을 사용하고, 정확한 전체 집계는 별도 Worker Job으로 실행합니다.</p>
       <div className="chart-controls">
         <label>분석할 컬럼 <select aria-label="분석할 컬럼" value={selectedMeasure}
           disabled={running || candidates.length === 0}
-          onChange={e => { setMeasure(e.target.value); setResult(null); }}>
+          onChange={e => updateRequest({ column: e.target.value })}>
           {candidates.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select></label>
         {candidates.length === 0 && <p role="status" className="muted">선택한 집계를 지원하는 숫자형 컬럼이 없습니다. 행 수 또는 NULL 수 집계를 선택하세요.</p>}
         <label>집계 <select aria-label="집계 방식" value={metric} disabled={running}
-          onChange={e => { setMetric(e.target.value as ExplorationRequest["metric"]); setResult(null); }}>
-          <option value="mean">평균</option><option value="min">최솟값</option>
-          <option value="max">최댓값</option><option value="count">행 수</option>
-          <option value="null_count">NULL 수</option>
+          onChange={e => {
+            const nextMetric = e.target.value as ExplorationRequest["metric"];
+            const nextCandidates = nextMetric === "count" || nextMetric === "null_count"
+              ? (columns?.columns ?? []) : numeric;
+            const nextColumn = nextCandidates.some(c => c.name === selectedMeasure)
+              ? selectedMeasure : (nextCandidates[0]?.name ?? "");
+            updateRequest({ metric: nextMetric, column: nextColumn });
+          }}>
+          <option value="mean">{explorationMetricLabel("mean")}</option><option value="min">{explorationMetricLabel("min")}</option>
+          <option value="max">{explorationMetricLabel("max")}</option><option value="count">{explorationMetricLabel("count")}</option>
+          <option value="null_count">{explorationMetricLabel("null_count")}</option>
         </select></label>
         <label>그룹 <select aria-label="집계 그룹" value={groupBy} disabled={running}
-          onChange={e => { setGroupBy(e.target.value); setResult(null); }}>
+          onChange={e => updateRequest({ group_by: e.target.value || null })}>
           <option value="">전체</option>
           {columns.columns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select></label>
-        <button disabled={running || !selectedMeasure} onClick={() => void run()}>
+        <button disabled={running || !selectedMeasure || invalidDraft} onClick={() => void run()}>
           {running ? "분석 중…" : "샘플 집계"}
         </button>
-        {canCreate && <button className="secondary" disabled={running || !selectedMeasure}
+        {canCreate && <button className="secondary" disabled={running || !selectedMeasure || invalidDraft}
           onClick={() => void runFullJob()}>전체 집계 Job 실행</button>}
       </div>
       {fullJobId && <p role="status" className="muted">
@@ -157,6 +188,17 @@ export function DiscoveryPanel({
         {chart ? <DataChart option={chart} ariaLabel="샘플 집계 결과 차트" /> :
           <p className="muted">정밀 수치 문자열이나 계산 불가 값은 차트에서 제외합니다. 정확한 값은 위 표에서 확인하세요.</p>}
       </>}
+      <details className="column-catalog">
+        <summary>컬럼 목록 및 검색</summary>
+      <h4>컬럼 검색</h4>
+      <input aria-label="컬럼 이름 검색" value={search} onChange={e => setSearch(e.target.value)}
+        placeholder="컬럼 이름으로 찾기" />
+      <p className="muted">{shown.length}개 표시 / 전체 {columns.total}개 컬럼</p>
+      <div className="column-search-results" role="list">
+        {shown.map(c => <div role="listitem" key={c.name}>
+          <span>{c.name}</span><small>{c.dtype}</small></div>)}
+      </div>
+      </details>
     </>}
     {error && <p role="alert" className="alert">{error}</p>}
   </section>;

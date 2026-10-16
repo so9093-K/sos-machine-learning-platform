@@ -67,7 +67,27 @@ class AuthMeOut(BaseModel):
     actor_id: str
     actor_type: Literal["human", "service"]
     roles: list[str]
+    capabilities: list[str]
     mode: Literal["development", "token"]
+
+
+class InstanceSettingsOut(BaseModel):
+    """공통 플랫폼의 표시 전용 설정. 인증·배포 환경과 별개의 계약."""
+
+    display_name: str = Field(min_length=1, max_length=48)
+
+
+class InstanceSettingsUpdate(BaseModel):
+    """관리자만 변경하는 표시명. 내부 플랫폼·리소스 식별자가 아니다."""
+
+    display_name: str = Field(min_length=1, max_length=48)
+
+    @model_validator(mode="after")
+    def validate_name(self) -> "InstanceSettingsUpdate":
+        self.display_name = self.display_name.strip()
+        if not self.display_name or any(ord(char) < 32 for char in self.display_name):
+            raise ValueError("Invalid instance display name")
+        return self
 
 
 class AuditEventOut(BaseModel):
