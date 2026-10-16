@@ -39,6 +39,7 @@ from .schemas import (
     DatasetColumnsOut,
     DatasetOut,
     DatasetOverviewOut,
+    DatasetPageOut,
     ExampleOut,
     ExplorationJobOut,
     ExplorationJobPageOut,
@@ -358,6 +359,44 @@ def create_app(home: Path | None = None) -> FastAPI:
     @app.get("/api/datasets", response_model=list[DatasetOut])
     def list_datasets(actor: Actor = READ_DATASET_DEP):
         return store.datasets(actor_id=None if actor.privileged else actor.id)
+
+    @app.get("/api/datasets/pages", response_model=DatasetPageOut)
+    def list_dataset_page(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_DATASET_DEP,
+    ):
+        """기존 배열 응답을 유지하면서 규모 제한된 새 목록 API를 제공한다."""
+        before = None
+        if cursor:
+            try:
+                raw = base64.b64decode(
+                    cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True
+                )
+                before = json.loads(raw)
+                if (
+                    not isinstance(before, dict)
+                    or set(before) != {"created_at", "id"}
+                    or not all(isinstance(before[key], str) and before[key] for key in before)
+                    or len(before["created_at"]) > 80
+                    or len(before["id"]) != 36
+                ):
+                    raise ValueError("Invalid Dataset cursor")
+            except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
+                raise ValueError("Invalid Dataset cursor") from exc
+        rows = store.dataset_page(
+            limit=limit + 1, before=before,
+            actor_id=None if actor.privileged else actor.id,
+        )
+        next_cursor = None
+        if len(rows) > limit:
+            rows = rows[:limit]
+            last = rows[-1]
+            payload = json.dumps(
+                {"created_at": last["created_at"], "id": last["id"]}, separators=(",", ":"),
+            )
+            next_cursor = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+        return {"items": rows, "next_cursor": next_cursor}
 
     @app.get("/api/datasets/upload-policy", response_model=UploadPolicyOut)
     def get_upload_policy(actor: Actor = CREATE_DATASET_DEP):

@@ -471,6 +471,33 @@ class Store:
                 ).mappings()
             ]
 
+    def dataset_page(
+        self, *, limit: int, before: dict | None = None, actor_id: str | None = None
+    ) -> list[dict]:
+        """안정적인 created_at+id 키셋으로 데이터셋을 조회한다."""
+        if not 1 <= limit <= 101:
+            raise ValueError("Dataset page limit is out of range")
+        conditions = []
+        params = {"limit": limit}
+        if actor_id is not None:
+            conditions.append("owner_actor=:actor_id")
+            params["actor_id"] = actor_id
+        if before is not None:
+            conditions.append("(created_at,id) < (:created_at,:id)")
+            params.update(before)
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        with self.connection() as db:
+            return [
+                dict(row)
+                for row in db.execute(
+                    text(
+                        f"SELECT * FROM datasets{where} "
+                        "ORDER BY created_at DESC,id DESC LIMIT :limit"
+                    ),
+                    params,
+                ).mappings()
+            ]
+
     def create_job(
         self,
         *,

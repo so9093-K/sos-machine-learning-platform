@@ -9,7 +9,7 @@ import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
-import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity } from "./types";
+import type { Dataset, DatasetPage, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
@@ -27,6 +27,7 @@ function Workspace({ actor }: { actor: Identity }) {
   const canManage = actor.roles.some(r => ["administrator", "operator"].includes(r));
   const canWrite = actor.roles.some(r => ["administrator", "researcher"].includes(r));
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [nextDatasetCursor, setNextDatasetCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -68,11 +69,16 @@ function Workspace({ actor }: { actor: Identity }) {
 
   async function refreshDatasets() {
     const version = ++datasetRequestVersion.current;
-    const items = await request<Dataset[]>("/api/datasets");
+    const page = await request<DatasetPage>("/api/datasets/pages?limit=20");
     // 오래된 GET 응답이 최근 등록·조회 후 확정된 Dataset 선택을 덮지 못하게 한다.
     if (version !== datasetRequestVersion.current) return;
-    setDatasets(items);
-    setSelected(previous => items.some(d => d.id === previous) ? previous : (items[0]?.id ?? ""));
+    setDatasets(previous => [
+      ...page.items,
+      ...previous.filter(item => item.id === selected && !page.items.some(d => d.id === item.id)),
+    ]);
+    setNextDatasetCursor(page.next_cursor ?? null);
+    setSelected(previous => previous && datasets.some(d => d.id === previous)
+      ? previous : (page.items[0]?.id ?? ""));
   }
   /** 서버 등록 성공을 목록 새로고침 실패 때문에 취소된 작업처럼 표시하지 않는다. */
   async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
@@ -96,6 +102,18 @@ function Workspace({ actor }: { actor: Identity }) {
       setError("");
       setNotice(`Job은 정상 접수됐습니다. 목록을 다시 확인하세요. 작업 ID: ${job.id}`);
     }
+  }
+  async function loadMoreDatasets() {
+    if (!nextDatasetCursor) return;
+    await withFeedback(async () => {
+      const version = datasetRequestVersion.current;
+      const page = await request<DatasetPage>(
+        `/api/datasets/pages?limit=20&cursor=${encodeURIComponent(nextDatasetCursor)}`);
+      if (version !== datasetRequestVersion.current) return;
+      setDatasets(previous => [...previous, ...page.items.filter(
+        item => !previous.some(d => d.id === item.id))]);
+      setNextDatasetCursor(page.next_cursor ?? null);
+    });
   }
   async function refreshJobs() {
     const page = await request<JobPage>("/api/jobs?limit=20");
@@ -416,6 +434,10 @@ function Workspace({ actor }: { actor: Identity }) {
           <span className="dataset-kind">{d.kind === "iceberg" ? "◆ Iceberg" : "◫ File"}</span>
         </button>)}
       </nav>
+      {nextDatasetCursor && <button className="job-navigation secondary"
+        disabled={busy} onClick={() => void loadMoreDatasets()}>
+        이전 데이터셋 더 불러오기
+      </button>}
       <div className="sidebar-bottom"><a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a></div>
     </aside>
     <main className="main">

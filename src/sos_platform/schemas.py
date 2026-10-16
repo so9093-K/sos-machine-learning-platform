@@ -192,6 +192,13 @@ class DatasetOut(BaseModel):
     created_at: str
 
 
+class DatasetPageOut(BaseModel):
+    """상한 있는 최신순 Dataset 목록 페이지."""
+
+    items: list[DatasetOut]
+    next_cursor: str | None = None
+
+
 class UploadPolicyOut(BaseModel):
     max_size_bytes: int
     supported_extensions: list[str]

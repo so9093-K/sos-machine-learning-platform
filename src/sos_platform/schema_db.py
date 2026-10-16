@@ -25,6 +25,8 @@ datasets = Table(
     Column("version", Text, nullable=False),
     Column("created_at", Text, nullable=False),
     Column("owner_actor", Text),
+    Index("ix_datasets_created_at_id", "created_at", "id"),
+    Index("ix_datasets_owner_created_at_id", "owner_actor", "created_at", "id"),
 )
 
 jobs = Table(
