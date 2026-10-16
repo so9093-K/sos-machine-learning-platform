@@ -630,3 +630,22 @@ test("editing Dataset Query while its response is pending never renders stale ro
   await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(1);
   await expect(page.locator("#sos-panel-preview tbody tr")).toContainText("20");
 });
+
+test("unknown CSV opens Understanding, persists profile and runs suggested exploration", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "unknown.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("department,score\nalpha,3\nbeta,5\nalpha,7\nbeta,9\n"),
+  });
+  await expect(page.getByRole("heading", { name: "unknown.csv" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Understand" })).toHaveAttribute("aria-selected", "true");
+  const panel = page.getByRole("tabpanel", { name: "Understand" });
+  await expect(panel.getByText("발견된 컬럼 특성")).toBeVisible({ timeout: 30000 });
+  await expect(panel.getByText("그룹별 수치 비교")).toBeVisible();
+  await panel.getByRole("button", { name: "탐색 실행" }).first().click();
+  await expect(panel.getByText(/탐색 결과/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("tab", { name: "Understand" })).toBeVisible();
+  await expect(page.getByText("발견된 컬럼 특성")).toBeVisible({ timeout: 30000 });
+});
