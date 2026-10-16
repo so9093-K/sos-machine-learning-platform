@@ -60,6 +60,7 @@ function Workspace({ actor }: { actor: Identity }) {
   const [groupBy, setGroupBy] = useState("");
   const [featurePreviewResult, setFeaturePreview] = useState<{ signature: string; data: Preview } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
+  const datasetRequestVersion = useRef(0);
   const dataset = datasets.find(d => d.id === selected);
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const numeric = profile?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
@@ -67,7 +68,10 @@ function Workspace({ actor }: { actor: Identity }) {
   const [timeColumn, setTimeColumn] = useState("");
 
   async function refreshDatasets() {
+    const version = ++datasetRequestVersion.current;
     const items = await request<Dataset[]>("/api/datasets");
+    // 오래된 GET 응답이 최근 등록·조회 후 확정된 Dataset 선택을 덮지 못하게 한다.
+    if (version !== datasetRequestVersion.current) return;
     setDatasets(items);
     setSelected(previous => items.some(d => d.id === previous) ? previous : (items[0]?.id ?? ""));
   }
