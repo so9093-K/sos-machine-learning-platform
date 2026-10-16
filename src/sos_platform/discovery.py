@@ -7,7 +7,7 @@ Dataset 판본과 접근 권한의 판단은 호출자인 API·Worker가 담당�
 import base64
 import math
 import os
-import time
+import time as clock
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
@@ -193,7 +193,7 @@ class DiscoveryAdmission:
 def discovery_slot(store: Store, policy: DiscoveryAdmission | None = None):
     """PostgreSQL 세션 advisory lock으로 원격 API 인스턴스 간 실행 수를 제한한다."""
     budget = policy or DiscoveryAdmission.from_env()
-    deadline = time.monotonic() + budget.wait_seconds
+    deadline = clock.monotonic() + budget.wait_seconds
     with store.engine.connect() as gate:
         acquired = None
         while acquired is None:
@@ -207,9 +207,9 @@ def discovery_slot(store: Store, policy: DiscoveryAdmission | None = None):
                     break
             if acquired is not None:
                 break
-            if time.monotonic() >= deadline:
+            if clock.monotonic() >= deadline:
                 raise PlatformError("SOS-DISCOVERY-CAPACITY")
-            time.sleep(0.05)
+            clock.sleep(0.05)
         try:
             yield
         finally:
