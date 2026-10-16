@@ -7,18 +7,22 @@ Dataset 판본과 접근 권한의 판단은 호출자인 API·Worker가 담당�
 import base64
 import math
 import os
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
+
+from sqlalchemy import text
 from tempfile import TemporaryDirectory
 
 import duckdb
 import pyarrow.parquet as pq
 
 from .datasets import iceberg_catalog, local_dataset_file
+from .errors import PlatformError
 from .store import Store
 
 
@@ -167,6 +171,52 @@ def _records(cursor) -> list[dict]:
     return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
 
+@dataclass(frozen=True)
+class DiscoveryAdmission:
+    """모든 API 인스턴스와 전체 Worker를 위한 DB 기준 탐색 슬롯."""
+
+    max_active: int = 1
+    wait_seconds: int = 15
+
+    @classmethod
+    def from_env(cls) -> "DiscoveryAdmission":
+        active = os.getenv("SOS_DISCOVERY_MAX_ACTIVE", "1")
+        wait = os.getenv("SOS_DISCOVERY_WAIT_SECONDS", "15")
+        if not active.isdecimal() or not 1 <= int(active) <= 8:
+            raise ValueError("SOS_DISCOVERY_MAX_ACTIVE must be between 1 and 8")
+        if not wait.isdecimal() or not 1 <= int(wait) <= 300:
+            raise ValueError("SOS_DISCOVERY_WAIT_SECONDS must be between 1 and 300")
+        return cls(max_active=int(active), wait_seconds=int(wait))
+
+
+@contextmanager
+def discovery_slot(store: Store, policy: DiscoveryAdmission | None = None):
+    """PostgreSQL 세션 advisory lock으로 원격 API 인스턴스 간 실행 수를 제한한다."""
+    budget = policy or DiscoveryAdmission.from_env()
+    deadline = time.monotonic() + budget.wait_seconds
+    with store.engine.connect() as gate:
+        acquired = None
+        while acquired is None:
+            for slot in range(budget.max_active):
+                locked = gate.execute(
+                    text("SELECT pg_try_advisory_lock(83417, :slot)"), {"slot": slot}
+                ).scalar_one()
+                gate.commit()
+                if locked:
+                    acquired = slot
+                    break
+            if acquired is not None:
+                break
+            if time.monotonic() >= deadline:
+                raise PlatformError("SOS-DISCOVERY-CAPACITY")
+            time.sleep(0.05)
+        try:
+            yield
+        finally:
+            gate.execute(text("SELECT pg_advisory_unlock(83417, :slot)"), {"slot": acquired})
+            gate.commit()
+
+
 @contextmanager
 def source_connection(
     store: Store, dataset: dict, policy: DiscoveryPolicy | None = None
@@ -180,48 +230,49 @@ def source_connection(
     scratch_root.mkdir(parents=True, exist_ok=True)
     # 각 요청에만 속한 Spill 파일은 연결 종료 후 함께 정리한다.
     # 다른 사용자·Worker가 사용하는 경로나 기존 캐시를 삭제하지 않는다.
-    with TemporaryDirectory(prefix="query-", dir=scratch_root) as directory:
-        scratch = Path(directory)
-        path = local_dataset_file(store, dataset) if dataset["kind"] == "file" else None
-        connection = duckdb.connect(
-            database=":memory:",
-            config={
-                "memory_limit": f"{policy.memory_mib}MiB",
-                "threads": str(policy.threads),
-                "temp_directory": str(scratch),
-                "max_temp_directory_size": f"{policy.temp_mib}MiB",
-                "allow_community_extensions": "false",
-                "autoinstall_known_extensions": "false",
-                "autoload_known_extensions": "false",
-                "allow_unsigned_extensions": "false",
-            },
-        )
-        reader = None
-        try:
-            if path is not None:
-                connection.execute(f"SET allowed_paths = [{_literal(str(path))}]")
-                connection.execute(f"SET allowed_directories = [{_literal(str(scratch))}]")
-                connection.execute("SET enable_external_access = false")
-                function = "read_csv" if path.suffix.lower() == ".csv" else "read_parquet"
-                connection.execute(
-                    f"CREATE TEMP VIEW source AS SELECT * FROM {function}({_literal(str(path))})"
-                )
-            elif dataset["kind"] == "iceberg":
-                table = iceberg_catalog(store).load_table(dataset["location"])
-                snapshot = int(dataset["version"])
-                if snapshot not in {s.snapshot_id for s in table.snapshots()}:
-                    raise ValueError("Iceberg snapshot is not available; it may have expired")
-                reader = table.scan(snapshot_id=snapshot).to_arrow_batch_reader()
-                connection.register("source", reader)
-                connection.execute("SET enable_external_access = false")
-            else:
-                raise ValueError("Unknown dataset type")
-            connection.execute("SET lock_configuration = true")
-            yield connection
-        finally:
-            connection.close()
-            if reader is not None:
-                reader.close()
+    with discovery_slot(store):
+        with TemporaryDirectory(prefix="query-", dir=scratch_root) as directory:
+            scratch = Path(directory)
+            path = local_dataset_file(store, dataset) if dataset["kind"] == "file" else None
+            connection = duckdb.connect(
+                database=":memory:",
+                config={
+                    "memory_limit": f"{policy.memory_mib}MiB",
+                    "threads": str(policy.threads),
+                    "temp_directory": str(scratch),
+                    "max_temp_directory_size": f"{policy.temp_mib}MiB",
+                    "allow_community_extensions": "false",
+                    "autoinstall_known_extensions": "false",
+                    "autoload_known_extensions": "false",
+                    "allow_unsigned_extensions": "false",
+                },
+            )
+            reader = None
+            try:
+                if path is not None:
+                    connection.execute(f"SET allowed_paths = [{_literal(str(path))}]")
+                    connection.execute(f"SET allowed_directories = [{_literal(str(scratch))}]")
+                    connection.execute("SET enable_external_access = false")
+                    function = "read_csv" if path.suffix.lower() == ".csv" else "read_parquet"
+                    connection.execute(
+                        f"CREATE TEMP VIEW source AS SELECT * FROM {function}({_literal(str(path))})"
+                    )
+                elif dataset["kind"] == "iceberg":
+                    table = iceberg_catalog(store).load_table(dataset["location"])
+                    snapshot = int(dataset["version"])
+                    if snapshot not in {s.snapshot_id for s in table.snapshots()}:
+                        raise ValueError("Iceberg snapshot is not available; it may have expired")
+                    reader = table.scan(snapshot_id=snapshot).to_arrow_batch_reader()
+                    connection.register("source", reader)
+                    connection.execute("SET enable_external_access = false")
+                else:
+                    raise ValueError("Unknown dataset type")
+                connection.execute("SET lock_configuration = true")
+                yield connection
+            finally:
+                connection.close()
+                if reader is not None:
+                    reader.close()
 
 
 def _columns(conn) -> list[dict]:
