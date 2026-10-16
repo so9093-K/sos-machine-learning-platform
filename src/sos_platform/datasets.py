@@ -104,6 +104,22 @@ def _stage_prefix(attempt_id: str) -> str:
     return f"attempt-{UUID(attempt_id)}-"
 
 
+def iceberg_staging_bytes(store: Store, attempt_id: str) -> int:
+    """활성 Attempt 임시 Parquet 크기를 관찰한다. 엄격한 파일시스템 쿼터는 아니다."""
+    root = store.home / "cache" / "iceberg-staging"
+    if not root.exists():
+        return 0
+    total = 0
+    for directory in root.glob(_stage_prefix(attempt_id) + "*"):
+        if not directory.is_dir() or directory.is_symlink():
+            continue
+        try:
+            total += (directory / "input.parquet").stat().st_size
+        except FileNotFoundError:
+            continue
+    return total
+
+
 def cleanup_iceberg_staging(store: Store, attempt_id: str | None = None) -> None:
     """실행 종료·Worker 재시작 시 불완전한 로컬 입력만 정리한다.
 

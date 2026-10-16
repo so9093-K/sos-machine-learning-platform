@@ -362,3 +362,23 @@ def test_iceberg_staging_cleanup_is_scoped_to_its_attempt(workspace):
     assert not other.exists()
     assert unexpected.read_bytes() == b"keep-me"
     unexpected.unlink()
+
+
+
+def test_staging_size_tracks_only_the_target_attempt(workspace):
+    """임시 디스크 관측은 타 Attempt 및 무관한 캐시 파일을 포함하지 않는다."""
+    from sos_platform.datasets import cleanup_iceberg_staging, iceberg_staging_bytes
+
+    _client, store = workspace
+    first, other = str(uuid4()), str(uuid4())
+    root = store.home / "cache" / "iceberg-staging"
+    path_a = root / f"attempt-{first}-aaaa"
+    path_b = root / f"attempt-{other}-bbbb"
+    path_a.mkdir(parents=True, exist_ok=True)
+    path_b.mkdir(parents=True, exist_ok=True)
+    (path_a / "input.parquet").write_bytes(b"a" * 19)
+    (path_b / "input.parquet").write_bytes(b"b" * 29)
+    assert iceberg_staging_bytes(store, first) == 19
+    assert iceberg_staging_bytes(store, other) == 29
+    cleanup_iceberg_staging(store)
+    assert iceberg_staging_bytes(store, first) == 0

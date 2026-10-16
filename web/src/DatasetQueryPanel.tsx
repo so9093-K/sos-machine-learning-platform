@@ -2,6 +2,10 @@
 import { useEffect, useRef, useState } from "react";
 import { jsonPost, formatError } from "./api";
 import type { Preview } from "./types";
+import type { components } from "./api.generated";
+
+type DatasetQuery = components["schemas"]["DatasetQuery"];
+type FilterOp = components["schemas"]["DatasetFilter"]["op"];
 
 type Props = {
   datasetId: string;
@@ -27,7 +31,7 @@ export function DatasetQueryPanel({ datasetId, columns, busy, onResult, onInvali
   const [search, setSearch] = useState("");
   const [filterColumn, setFilterColumn] = useState("");
   const [filterValue, setFilterValue] = useState("");
-  const [filterOp, setFilterOp] = useState("eq");
+  const [filterOp, setFilterOp] = useState<FilterOp>("eq");
   const [sortColumn, setSortColumn] = useState("");
   const [descending, setDescending] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,13 +44,14 @@ export function DatasetQueryPanel({ datasetId, columns, busy, onResult, onInvali
     const version = requestVersion.current;
     setError(""); setLoading(true);
     try {
-      const body = {
+      const body: DatasetQuery = {
         ...(chosen.length ? { columns: columns.filter(c => chosen.includes(c)) } : {}),
         ...(filterColumn ? { filters: [{
           column: filterColumn, op: filterOp,
           ...(!["is_null", "is_not_null"].includes(filterOp) ? { value: filterValue } : {}),
         }] } : {}),
-        ...(sortColumn ? { order_by: sortColumn, descending } : {}),
+        ...(sortColumn ? { order_by: sortColumn } : {}),
+        descending,
         limit,
       };
       const result = await jsonPost<Preview>(
@@ -86,7 +91,7 @@ export function DatasetQueryPanel({ datasetId, columns, busy, onResult, onInvali
           {columns.map(c => <option key={c} value={c}>{c}</option>)}
         </select></label>
         <label>비교 연산 <select aria-label="비교 연산" value={filterOp}
-          onChange={event => { invalidate(); setFilterOp(event.target.value); }}>
+          onChange={event => { invalidate(); setFilterOp(event.target.value as FilterOp); }}>
           {["eq", "ne", "lt", "lte", "gt", "gte", "is_null", "is_not_null"].map(op =>
             <option key={op} value={op}>{op}</option>)}
         </select></label>

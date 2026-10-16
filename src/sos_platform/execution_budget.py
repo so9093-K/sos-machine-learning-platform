@@ -11,16 +11,22 @@ class ExecutionBudget:
 
     max_wall_seconds: float = 1800.0
     max_rss_mib: int = 2048
+    max_stage_mib: int = 2048
 
     @classmethod
     def from_env(cls) -> "ExecutionBudget":
         wall = os.getenv("SOS_WORKER_MAX_SECONDS", "1800")
         memory = os.getenv("SOS_WORKER_MAX_RSS_MIB", "2048")
+        staging = os.getenv("SOS_WORKER_MAX_STAGE_MIB", "2048")
         if not wall.isdecimal() or not 1 <= int(wall) <= 86400:
             raise ValueError("SOS_WORKER_MAX_SECONDS must be between 1 and 86400")
         if not memory.isdecimal() or not 256 <= int(memory) <= 65536:
             raise ValueError("SOS_WORKER_MAX_RSS_MIB must be between 256 and 65536")
-        return cls(max_wall_seconds=float(wall), max_rss_mib=int(memory))
+        if not staging.isdecimal() or not 128 <= int(staging) <= 131072:
+            raise ValueError("SOS_WORKER_MAX_STAGE_MIB must be between 128 and 131072")
+        return cls(
+            max_wall_seconds=float(wall), max_rss_mib=int(memory), max_stage_mib=int(staging)
+        )
 
 
 class ExecutionLimitExceeded(Exception):
