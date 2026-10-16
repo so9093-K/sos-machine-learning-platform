@@ -68,7 +68,8 @@ from .schemas import (
     WorkRequest,
 )
 from .security import ACTIONS, Actor, IdentitySettings, current_actor, require, resource_allowed
-from .store import IcebergCancellationConflict, Store
+from .store import Store
+from .store_jobs import IcebergCancellationConflict
 
 # Depends 객체는 요청마다 재생성하지 않고 안정적으로 재사용한다.
 IDENTITY_DEP = Depends(current_actor)
