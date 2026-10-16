@@ -457,3 +457,63 @@ test("lost HTTP response reuses the original Job submission key", async ({ page 
   expect(submitted[0].key).toMatch(/^[0-9a-f-]{36}$/i);
   expect(submitted[1]).toEqual(submitted[0]);
 });
+
+
+test("late Dataset list response does not exit explicitly selected example gallery", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "original-selection.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "original-selection.csv" })).toBeVisible();
+  let unblock: () => void = () => {};
+  let fetched: () => void = () => {};
+  const started = new Promise<void>(resolve => { fetched = resolve; });
+  const release = new Promise<void>(resolve => { unblock = resolve; });
+  let held = false;
+  await page.route("**/api/datasets/pages*", async route => {
+    if (route.request().method() === "GET" && !held) {
+      held = true;
+      const response = await route.fetch();
+      fetched();
+      await release;
+      await route.fulfill({ response });
+    } else await route.continue();
+  });
+  await page.reload();
+  await started;
+  await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
+  await expect(page.getByText("예제 데이터로 먼저 살펴보기")).toBeVisible();
+  unblock();
+  await expect(page.getByText("예제 데이터로 먼저 살펴보기")).toBeVisible();
+  await expect(page.locator(".dataset-hero")).toHaveCount(0);
+});
+
+test("Job reuses submission key when server accepted it before a 503 response", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "transient-response.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "transient-response.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  const sent: Array<{ key: string | undefined; id: string }> = [];
+  await page.route("**/api/jobs", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    const response = await route.fetch();
+    const job = await response.json() as { id: string };
+    sent.push({ key: route.request().headers()["idempotency-key"], id: job.id });
+    if (sent.length === 1) {
+      await route.fulfill({ status: 503, contentType: "application/json",
+        body: JSON.stringify({ detail: "Response unavailable" }) });
+    } else await route.fulfill({ response });
+  });
+  const create = page.getByRole("button", { name: /전체 Profile 실행/ });
+  await create.click();
+  await expect(page.getByRole("alert")).toContainText("Response unavailable");
+  await create.click();
+  await expect(page.getByText("작업이 등록되었습니다.")).toBeVisible();
+  expect(sent).toHaveLength(2);
+  expect(sent[0].key).toBeTruthy();
+  expect(sent[1]).toEqual(sent[0]);
+});
