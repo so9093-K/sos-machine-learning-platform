@@ -31,8 +31,9 @@ class ExecutionCapacity:
 
     @classmethod
     def from_env(cls) -> "ExecutionCapacity":
-        capacity = os.getenv("SOS_EXECUTION_POOL_MIB", "3072")
-        wait = os.getenv("SOS_EXECUTION_POOL_WAIT_SECONDS", "5")
+        defaults = cls()
+        capacity = os.getenv("SOS_EXECUTION_POOL_MIB", str(defaults.pool_mib))
+        wait = os.getenv("SOS_EXECUTION_POOL_WAIT_SECONDS", str(int(defaults.wait_seconds)))
         if (
             not capacity.isdecimal()
             or not 256 <= int(capacity) <= 65536

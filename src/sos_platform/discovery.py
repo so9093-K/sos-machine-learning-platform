@@ -39,12 +39,13 @@ class DiscoveryPolicy:
 
     @classmethod
     def from_env(cls) -> "DiscoveryPolicy":
+        defaults = cls()
         names = {
-            "memory_mib": ("SOS_DISCOVERY_MEMORY_MIB", 128, 16384, 1024),
-            "threads": ("SOS_DISCOVERY_THREADS", 1, 16, 2),
-            "temp_mib": ("SOS_DISCOVERY_TEMP_MIB", 128, 65536, 2048),
-            "max_groups": ("SOS_DISCOVERY_MAX_GROUPS", 1, 1000, 100),
-            "max_sample": ("SOS_DISCOVERY_MAX_SAMPLE", 100, 100000, 10000),
+            "memory_mib": ("SOS_DISCOVERY_MEMORY_MIB", 128, 16384, defaults.memory_mib),
+            "threads": ("SOS_DISCOVERY_THREADS", 1, 16, defaults.threads),
+            "temp_mib": ("SOS_DISCOVERY_TEMP_MIB", 128, 65536, defaults.temp_mib),
+            "max_groups": ("SOS_DISCOVERY_MAX_GROUPS", 1, 1000, defaults.max_groups),
+            "max_sample": ("SOS_DISCOVERY_MAX_SAMPLE", 100, 100000, defaults.max_sample),
         }
         values = {}
         for field, (name, low, high, default) in names.items():
@@ -181,8 +182,9 @@ class DiscoveryAdmission:
 
     @classmethod
     def from_env(cls) -> "DiscoveryAdmission":
-        active = os.getenv("SOS_DISCOVERY_MAX_ACTIVE", "1")
-        wait = os.getenv("SOS_DISCOVERY_WAIT_SECONDS", "15")
+        defaults = cls()
+        active = os.getenv("SOS_DISCOVERY_MAX_ACTIVE", str(defaults.max_active))
+        wait = os.getenv("SOS_DISCOVERY_WAIT_SECONDS", str(defaults.wait_seconds))
         if not active.isdecimal() or not 1 <= int(active) <= 8:
             raise RuntimeConfigurationError("SOS_DISCOVERY_MAX_ACTIVE must be between 1 and 8")
         if not wait.isdecimal() or not 1 <= int(wait) <= 300:

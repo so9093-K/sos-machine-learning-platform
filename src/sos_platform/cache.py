@@ -49,7 +49,7 @@ class CachePolicy:
 
     @classmethod
     def from_env(cls) -> "CachePolicy":
-        value = os.getenv("SOS_DATASET_CACHE_MIB", "2048")
+        value = os.getenv("SOS_DATASET_CACHE_MIB", str(cls().max_bytes // (1024 * 1024)))
         if not value.isdecimal() or not 256 <= int(value) <= 131072:
             raise RuntimeConfigurationError("SOS_DATASET_CACHE_MIB must be between 256 and 131072")
         return cls(max_bytes=int(value) * 1024 * 1024)

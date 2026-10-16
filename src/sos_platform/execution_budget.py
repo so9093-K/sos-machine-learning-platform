@@ -17,9 +17,10 @@ class ExecutionBudget:
 
     @classmethod
     def from_env(cls) -> "ExecutionBudget":
-        wall = os.getenv("SOS_WORKER_MAX_SECONDS", "1800")
-        memory = os.getenv("SOS_WORKER_MAX_RSS_MIB", "2048")
-        staging = os.getenv("SOS_WORKER_MAX_STAGE_MIB", "2048")
+        defaults = cls()
+        wall = os.getenv("SOS_WORKER_MAX_SECONDS", str(int(defaults.max_wall_seconds)))
+        memory = os.getenv("SOS_WORKER_MAX_RSS_MIB", str(defaults.max_rss_mib))
+        staging = os.getenv("SOS_WORKER_MAX_STAGE_MIB", str(defaults.max_stage_mib))
         if not wall.isdecimal() or not 1 <= int(wall) <= 86400:
             raise RuntimeConfigurationError("SOS_WORKER_MAX_SECONDS must be between 1 and 86400")
         if not memory.isdecimal() or not 256 <= int(memory) <= 65536:
