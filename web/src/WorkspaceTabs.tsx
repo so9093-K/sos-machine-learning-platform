@@ -20,7 +20,7 @@ export function WorkspaceTabs({
       type="button"
       role="tab"
       id={`sos-tab-${id}`}
-      aria-controls={`sos-panel-${id}`}
+      aria-controls={active === id ? `sos-panel-${id}` : undefined}
       aria-selected={active === id}
       tabIndex={active === id ? 0 : -1}
       className={active === id ? "tab active" : "tab"}
