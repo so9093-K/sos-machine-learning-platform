@@ -21,11 +21,15 @@ MAX_FEATURE_PREVIEW_INPUT_ROWS = 100_000
 
 def bounded_feature_preview(lf: pl.LazyFrame, spec: Transform) -> dict:
     """사용자 요청 API가 큰 입력의 정렬·윈도 계산으로 장시간 점유되지 않게 한다."""
-    count = lf.head(MAX_FEATURE_PREVIEW_INPUT_ROWS + 1).select(pl.len()).collect().item()
-    if count > MAX_FEATURE_PREVIEW_INPUT_ROWS:
-        raise ValueError(
-            "Feature preview exceeds 100,000 input rows; submit a full transform Job instead"
-        )
+    # Row-local 작업은 결과 행만 제한한다. 앞단 전체 행수를 거부할 필요가 없다.
+    # Lag/Rolling은 임의로 입력을 자르면 그룹·시간 의미가 깨지므로 별도 취급한다.
+    if any(step.op in ("lag", "rolling_mean") for step in spec.steps):
+        count = lf.head(MAX_FEATURE_PREVIEW_INPUT_ROWS + 1).select(pl.len()).collect().item()
+        if count > MAX_FEATURE_PREVIEW_INPUT_ROWS:
+            raise ValueError(
+                "Global window preview exceeds synchronous execution budget; "
+                "submit a full transform Job"
+            )
     return safe_preview(transform(lf, spec), limit=30)
 
 

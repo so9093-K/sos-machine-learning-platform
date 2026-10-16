@@ -336,6 +336,49 @@ def preview(store: Store, dataset: dict, limit: int = 30) -> dict:
     return {"schema": schema, "rows": rows, "returned_rows": len(rows)}
 
 
+def query_dataset(store: Store, dataset: dict, query) -> dict:
+    """요청 컬럼을 스키마로 확인하고 비교값은 반드시 바인딩한다."""
+    from .schemas import DatasetQuery
+
+    if not isinstance(query, DatasetQuery):
+        raise TypeError("DatasetQuery is required")
+    operators = {"eq": "=", "ne": "<>", "lt": "<", "lte": "<=", "gt": ">", "gte": ">="}
+    with source_connection(store, dataset) as conn:
+        available = {c["name"]: c["dtype"] for c in _columns(conn)}
+        selected = query.columns if query.columns is not None else list(available)
+        referenced = [*selected, *(f.column for f in query.filters)]
+        if query.order_by:
+            referenced.append(query.order_by)
+        if not set(referenced).issubset(available):
+            raise ValueError("Unknown Dataset query column")
+        where = []
+        params = []
+        for predicate in query.filters:
+            column = quoted(predicate.column)
+            if predicate.op == "is_null":
+                where.append(f"{column} IS NULL")
+            elif predicate.op == "is_not_null":
+                where.append(f"{column} IS NOT NULL")
+            else:
+                where.append(f"{column} {operators[predicate.op]} ?")
+                params.append(predicate.value)
+        sql = f"SELECT {', '.join(quoted(c) for c in selected)} FROM source"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        if query.order_by:
+            sql += (
+                f" ORDER BY {quoted(query.order_by)}"
+                f" {'DESC' if query.descending else 'ASC'} NULLS LAST"
+            )
+        sql += " LIMIT ?"
+        raw = _records(conn.execute(sql, [*params, query.limit]))
+    return {
+        "schema": {name: available[name] for name in selected},
+        "rows": [{key: _json_value(value) for key, value in row.items()} for row in raw],
+        "returned_rows": len(raw),
+    }
+
+
 def profile(store: Store, dataset: dict, sample: int | None = 1000) -> dict:
     policy = DiscoveryPolicy.from_env()
     if sample is not None and not 1 <= sample <= policy.max_sample:
