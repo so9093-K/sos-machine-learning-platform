@@ -9,6 +9,8 @@ import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import duckdb
 import pyarrow.parquet as pq
@@ -120,48 +122,52 @@ def source_connection(
     Iceberg는 PyIceberg가 지정 Snapshot과 삭제 파일을 해석한 Arrow 배치로 연결한다.
     """
     policy = policy or DiscoveryPolicy.from_env()
-    scratch = store.home / "cache" / "discovery-tmp"
-    scratch.mkdir(parents=True, exist_ok=True)
-    path = local_dataset_file(store, dataset) if dataset["kind"] == "file" else None
-    connection = duckdb.connect(
-        database=":memory:",
-        config={
-            "memory_limit": f"{policy.memory_mib}MiB",
-            "threads": str(policy.threads),
-            "temp_directory": str(scratch),
-            "max_temp_directory_size": f"{policy.temp_mib}MiB",
-            "allow_community_extensions": "false",
-            "autoinstall_known_extensions": "false",
-            "autoload_known_extensions": "false",
-            "allow_unsigned_extensions": "false",
-        },
-    )
-    reader = None
-    try:
-        if path is not None:
-            connection.execute(f"SET allowed_paths = [{_literal(str(path))}]")
-            connection.execute(f"SET allowed_directories = [{_literal(str(scratch))}]")
-            connection.execute("SET enable_external_access = false")
-            function = "read_csv" if path.suffix.lower() == ".csv" else "read_parquet"
-            connection.execute(
-                f"CREATE TEMP VIEW source AS SELECT * FROM {function}({_literal(str(path))})"
-            )
-        elif dataset["kind"] == "iceberg":
-            table = iceberg_catalog(store).load_table(dataset["location"])
-            snapshot = int(dataset["version"])
-            if snapshot not in {s.snapshot_id for s in table.snapshots()}:
-                raise ValueError("Iceberg snapshot is not available; it may have expired")
-            reader = table.scan(snapshot_id=snapshot).to_arrow_batch_reader()
-            connection.register("source", reader)
-            connection.execute("SET enable_external_access = false")
-        else:
-            raise ValueError("Unknown dataset type")
-        connection.execute("SET lock_configuration = true")
-        yield connection
-    finally:
-        connection.close()
-        if reader is not None:
-            reader.close()
+    scratch_root = store.home / "cache" / "discovery-tmp"
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    # 각 요청에만 속한 Spill 파일은 연결 종료 후 함께 정리한다.
+    # 다른 사용자·Worker가 사용하는 경로나 기존 캐시를 삭제하지 않는다.
+    with TemporaryDirectory(prefix="query-", dir=scratch_root) as directory:
+        scratch = Path(directory)
+        path = local_dataset_file(store, dataset) if dataset["kind"] == "file" else None
+        connection = duckdb.connect(
+            database=":memory:",
+            config={
+                "memory_limit": f"{policy.memory_mib}MiB",
+                "threads": str(policy.threads),
+                "temp_directory": str(scratch),
+                "max_temp_directory_size": f"{policy.temp_mib}MiB",
+                "allow_community_extensions": "false",
+                "autoinstall_known_extensions": "false",
+                "autoload_known_extensions": "false",
+                "allow_unsigned_extensions": "false",
+            },
+        )
+        reader = None
+        try:
+            if path is not None:
+                connection.execute(f"SET allowed_paths = [{_literal(str(path))}]")
+                connection.execute(f"SET allowed_directories = [{_literal(str(scratch))}]")
+                connection.execute("SET enable_external_access = false")
+                function = "read_csv" if path.suffix.lower() == ".csv" else "read_parquet"
+                connection.execute(
+                    f"CREATE TEMP VIEW source AS SELECT * FROM {function}({_literal(str(path))})"
+                )
+            elif dataset["kind"] == "iceberg":
+                table = iceberg_catalog(store).load_table(dataset["location"])
+                snapshot = int(dataset["version"])
+                if snapshot not in {s.snapshot_id for s in table.snapshots()}:
+                    raise ValueError("Iceberg snapshot is not available; it may have expired")
+                reader = table.scan(snapshot_id=snapshot).to_arrow_batch_reader()
+                connection.register("source", reader)
+                connection.execute("SET enable_external_access = false")
+            else:
+                raise ValueError("Unknown dataset type")
+            connection.execute("SET lock_configuration = true")
+            yield connection
+        finally:
+            connection.close()
+            if reader is not None:
+                reader.close()
 
 
 def _columns(conn) -> list[dict]:
