@@ -199,16 +199,17 @@ def test_consecutive_windows_reuse_key_validation_without_changing_results(monke
     assert calls == 2  # NULL과 중복 시간 키 검증, 각 한 번씩
     rows = output.collect().to_dicts()
     assert [(r["machine"], r["time"], r["previous"]) for r in rows] == [
-        ("A", 1, None), ("A", 2, 10), ("B", 1, None), ("B", 2, 30)
+        ("A", 1, None),
+        ("A", 2, 10),
+        ("B", 1, None),
+        ("B", 2, 30),
     ]
     assert [r["moving"] for r in rows] == [None, 15.0, None, 35.0]
 
 
 def test_time_key_cast_invalidates_prior_window_validation():
     """기존에 유일했던 시간 키가 캐스트로 충돌하면 다시 검증해야 한다."""
-    source = pl.DataFrame(
-        {"time": ["01", "1", "2"], "value": [10, 20, 30]}
-    ).lazy()
+    source = pl.DataFrame({"time": ["01", "1", "2"], "value": [10, 20, 30]}).lazy()
     spec = Transform.model_validate(
         {
             "order_by": "time",

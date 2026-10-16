@@ -48,7 +48,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Datasets */
+        /**
+         * List Datasets
+         * @deprecated
+         */
         get: operations["list_datasets_api_datasets_get"];
         put?: never;
         post?: never;
