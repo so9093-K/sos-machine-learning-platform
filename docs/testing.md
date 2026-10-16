@@ -33,7 +33,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | Job 상태·취소·게시 원자성·Attempt·커서 | test_jobs.py |
 | Job 제출 키 중복·동시성·감사 롤백 | test_idempotency.py |
 | 전역 Discovery 슬롯 경합과 회수 | test_discovery_admission.py |
-| Worker·Discovery 공통 메모리 수용과 예약 회수 | test_resource_admission.py (unit·integration) |
+| Worker·Discovery 공통 메모리 수용과 예약 회수, 설정의 포함 관계·서버 오류 분리 | test_resource_admission.py (unit·integration) |
 | Worker 실행 시간 제한·실패 기록 | test_worker_budget.py |
 | Dataset 키셋 페이지와 Snapshot 소유권 | test_dataset_pages.py, test_snapshot_scope.py |
 | Iceberg Snapshot 고정·Tag 보존·중단 후 자동 재시도 금지·대용량 비파티션 단일 Snapshot | test_iceberg.py |

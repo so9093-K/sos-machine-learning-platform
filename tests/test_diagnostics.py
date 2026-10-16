@@ -31,3 +31,12 @@ def test_object_store_failures_have_actionable_safe_categories():
 def test_unrecognized_provider_code_stays_unclassified_dependency():
     error = ClientError({"Error": {"Code": "Private-Secret-Not-Allowed"}}, "PutObject")
     assert classify_failure(error) == ("dependency", "ClientError")
+
+def test_runtime_configuration_is_not_misclassified_as_user_input():
+    from sos_platform.errors import RuntimeConfigurationError
+
+    assert classify_failure(RuntimeConfigurationError("private configuration detail")) == (
+        "configuration",
+        "RuntimeConfigurationError",
+    )
+

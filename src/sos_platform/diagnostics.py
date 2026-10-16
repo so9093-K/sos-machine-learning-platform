@@ -5,6 +5,8 @@ import re
 from botocore.exceptions import ClientError, EndpointConnectionError
 from sqlalchemy.exc import DataError, IntegrityError, OperationalError
 
+from .errors import RuntimeConfigurationError
+
 _REMOTE_CODES = {
     "AccessDenied": "permission",
     "InvalidAccessKeyId": "permission",
@@ -33,6 +35,8 @@ def classify_failure(exc: Exception) -> tuple[str, str]:
         return "timeout", exception_type
     if isinstance(exc, IntegrityError):
         return "database_constraint", exception_type
+    if isinstance(exc, RuntimeConfigurationError):
+        return "configuration", exception_type
     if isinstance(exc, (DataError, ValueError)):
         return "invalid_input", exception_type
     if isinstance(exc, OSError):

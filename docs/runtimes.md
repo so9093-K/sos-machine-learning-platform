@@ -18,7 +18,9 @@ Runtime은 학습·평가·추론 등의 작업을 수행하는 **실제 실행 
 5. **점진적 변경:** Python·프레임워크·이미지 변경 시 기존 모델의 로드·전처리·학습·추론 호환성을 검증한다. 신규 환경을 제공해도 기존 모델의 실행 조건을 잃지 않도록 이력과 전환 방법을 관리한다.
 6. **실행 안전:** 외부 모델·플러그인 및 사용자 코드는 자원 한도, 접근 권한, 비밀정보 경계를 고려해 실행한다.
 
-공통 실행 수용 정책은 `SOS_EXECUTION_POOL_MIB`(기본 3072MiB, 256MiB 단위)로 API Discovery와 Worker의 *요청한 메모리 예산*을 PostgreSQL 세션 advisory lock으로 예약한다. `SOS_EXECUTION_POOL_WAIT_SECONDS`(기본 5초) 안에 예약하지 못한 동기 요청은 429를 반환하며, Worker는 Job을 시작하지 않고 Queued로 남겨 다음 폴링을 기다린다. 같은 DB를 사용하는 여러 API 인스턴스에서 예약량을 공유하며, 부모 Worker의 예약 아래에서 실행하는 DuckDB는 이중 예약하지 않는다. 이는 동시 실행 수용 판단을 위한 **논리적 예산**이며 실물 RAM 확인·cgroup·실제 OOM 보호를 대체하지 않는다. Worker RSS 한도가 풀 용량을 초과하면 구성 오류로 거부한다.
+공통 실행 수용 정책은 `SOS_EXECUTION_POOL_MIB`(기본 3072MiB, 256MiB 단위)로 API Discovery와 Worker의 *요청한 메모리 예산*을 PostgreSQL 세션 advisory lock으로 예약한다. `SOS_EXECUTION_POOL_WAIT_SECONDS`(기본 5초) 안에 예약하지 못한 동기 요청은 429를 반환하며, Worker는 Job을 시작하지 않고 Queued로 남겨 다음 폴링을 기다린다. 같은 DB를 사용하는 여러 API 인스턴스에서 예약량을 공유하며, 부모 Worker의 예약 아래에서 실행하는 DuckDB는 이중 예약하지 않는다. 이는 동시 실행 수용 판단을 위한 **논리적 예산**이며 실물 RAM 확인·cgroup·실제 OOM 보호를 대체하지 않는다. Worker RSS 한도가 풀 용량을 초과하면 구성 오류로 거부한다. Worker의 하위 DuckDB Discovery 예산 역시 Worker RSS 예산 안에 포함돼야 하며, 두 요구가 충돌하면 Job을 인수하기 전에 실패한다. 이는 물리적인 사용량 측정 대신 요청량의 포함 관계를 보증하는 사전 검증이다.
+
+자원 기본값은 특정 CPU·RAM 모델의 최적값이 아니라 로컬 개발 환경에서 사용할 초기 논리 예산이다. 환경별 조정은 **요청한 자원 → 예약된 실행 용량 → 실제 격리/감시 → 관측** 순으로 독립된 계약을 유지해야 한다. 대형 서버로 옮긴다는 이유만으로 무제한 동시 실행이나 Worker 예산 자동 확대를 허용하지 않는다. 반대로 제한된 장비에서는 자원 요청을 수용할 수 없는 원인을 먼저 알려주고 Job을 Queued로 유지한다. 공유 PostgreSQL 잠금은 개별 호스트의 실물 메모리를 관측하지 못하므로 다중 호스트에서는 호스트별 실행 배치·자원 소유 범위를 도입하기 전 글로벌 예약 총량을 물리 보장으로 해석해서는 안 된다.
 
 Worker의 실행 시간·관측 RSS 예산은 `SOS_WORKER_MAX_SECONDS`(기본 1800초)·`SOS_WORKER_MAX_RSS_MIB`(기본 2048MiB)이다. Iceberg Attempt의 스테이징 입력은 `SOS_WORKER_MAX_STAGE_MIB`(기본 2048MiB)로 실행 중 크기를 감시하고, 강제 종료·재시작 시 Attempt별 로컬 임시 파일을 회수한다. 이는 폴링 기반 보호이며 실제 파일시스템 쿼터나 엄격한 OS 격리를 대체하지 않는다. 부모 프로세스는 자식의 초과를 감시해 종료하고 Job·Attempt에 전용 오류 코드를 남긴다. Linux `/proc` RSS 관측은 폴링 방식이며 cgroup·OS 수준의 엄격한 메모리 격리와 같지 않다. 외부 Iceberg 커밋은 시간·메모리 제한으로 중단되어도 성공/실패를 추측하지 않는다.
 
