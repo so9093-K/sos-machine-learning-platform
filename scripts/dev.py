@@ -655,6 +655,8 @@ def check_fast(config: dict):
                     "tests/test_processing.py",
                     "tests/test_dev_cli.py",
                     "tests/test_api_compat.py",
+                    "tests/test_pagination.py",
+                    "tests/test_execution_budget.py",
                     "tests/test_errors.py",
                     "tests/test_e2e_isolation.py",
                     "tests/test_diagnostics.py",

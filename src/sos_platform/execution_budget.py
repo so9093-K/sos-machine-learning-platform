@@ -28,6 +28,18 @@ class ExecutionBudget:
             max_wall_seconds=float(wall), max_rss_mib=int(memory), max_stage_mib=int(staging)
         )
 
+    def enforce(
+        self, *, elapsed_seconds: float, rss_bytes: int | None, stage_bytes: int | None = None
+    ) -> None:
+        """측정된 사용량을 실행 예산과 비교한다. 물리적인 자원 격리는 별개다."""
+        if elapsed_seconds > self.max_wall_seconds:
+            raise ExecutionLimitExceeded("SOS-JOB-TIMEOUT", "timeout")
+        if stage_bytes is not None and stage_bytes > self.max_stage_mib * 1024 * 1024:
+            # Iceberg 커밋 중단 가능성을 부모가 판정할 수 없으므로 보수적으로 실패한다.
+            raise ExecutionLimitExceeded("SOS-ICEBERG-UNCERTAIN", "storage")
+        if rss_bytes is not None and rss_bytes > self.max_rss_mib * 1024 * 1024:
+            raise ExecutionLimitExceeded("SOS-JOB-MEMORY-LIMIT", "memory")
+
 
 class ExecutionLimitExceeded(Exception):
     """부모 감시자가 자식 프로세스를 중단해야 하는 자원 제한."""

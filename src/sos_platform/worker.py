@@ -157,17 +157,16 @@ def run_once(store: Store) -> bool:
         started = time.monotonic()
         while process.is_alive():
             process.join(timeout=0.1)
-            if time.monotonic() - started > budget.max_wall_seconds:
-                raise ExecutionLimitExceeded("SOS-JOB-TIMEOUT", "timeout")
-            if (
-                job["kind"] == "iceberg_import"
-                and iceberg_staging_bytes(store, attempt_id) > budget.max_stage_mib * 1024 * 1024
-            ):
-                # 커밋 진입 여부를 부모가 알지 못하므로 실패 판정은 계속 보수적이다.
-                raise ExecutionLimitExceeded("SOS-ICEBERG-UNCERTAIN", "storage")
-            rss = process_rss_bytes(process.pid)
-            if rss is not None and rss > budget.max_rss_mib * 1024 * 1024:
-                raise ExecutionLimitExceeded("SOS-JOB-MEMORY-LIMIT", "memory")
+            stage_bytes = (
+                iceberg_staging_bytes(store, attempt_id)
+                if job["kind"] == "iceberg_import"
+                else None
+            )
+            budget.enforce(
+                elapsed_seconds=time.monotonic() - started,
+                stage_bytes=stage_bytes,
+                rss_bytes=process_rss_bytes(process.pid),
+            )
             if time.monotonic() >= next_heartbeat:
                 store.heartbeat()
                 next_heartbeat = time.monotonic() + 2
