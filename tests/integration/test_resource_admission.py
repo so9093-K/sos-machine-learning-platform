@@ -253,6 +253,7 @@ def test_feature_preview_reservation_is_released_after_internal_failure(workspac
     with reserve_execution_memory(store, 1024):
         pass
 
+
 def test_active_execution_pool_configuration_mismatch_is_rejected(workspace):
     """서로 다른 인스턴스가 같은 DB에 다른 풀 크기를 주장해 과수용하지 못한다."""
     from sos_platform.errors import RuntimeConfigurationError
@@ -278,4 +279,3 @@ def test_active_execution_pool_configuration_mismatch_is_rejected(workspace):
             pass
     finally:
         other.engine.dispose()
-
