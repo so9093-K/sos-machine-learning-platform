@@ -4,8 +4,10 @@
 """
 
 import re
+from dataclasses import replace
 
 from .discovery import (
+    DiscoveryPolicy,
     _columns,
     _numeric_type,
     _profile_number,
@@ -56,7 +58,11 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
     """
     if scope not in ("sample", "full"):
         raise ValueError("Unsupported understanding scope")
-    with source_connection(store, dataset) as conn:
+    # 고정 시드의 재현성은 DuckDB 단일 스레드에서만 보장된다.
+    policy = DiscoveryPolicy.from_env()
+    if scope == "sample":
+        policy = replace(policy, threads=1)
+    with source_connection(store, dataset, policy) as conn:
         schema = _columns(conn)
         if not schema:
             return {
@@ -70,15 +76,6 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
                 "columns": [],
                 "insights": [],
             }
-        relation = (
-            "source"
-            if scope == "full"
-            else "(SELECT * FROM source USING SAMPLE reservoir("
-            + str(SAMPLE_ROWS)
-            + " ROWS) REPEATABLE ("
-            + str(SAMPLE_SEED)
-            + "))"
-        )
         expressions = ["COUNT(*) AS __row_count"]
         for n, item in enumerate(schema):
             col = quoted(item["name"])
@@ -101,7 +98,16 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
                 )
                 for metric in ("MIN", "MAX", "AVG"):
                     expressions.append(metric + "(" + valid + ") AS " + key + "_" + metric.lower())
-        values = _records(conn.execute("SELECT " + ", ".join(expressions) + " FROM " + relation))[0]
+        query = "SELECT " + ", ".join(expressions) + " FROM source"
+        if scope == "sample":
+            query += (
+                " USING SAMPLE reservoir("
+                + str(SAMPLE_ROWS)
+                + " ROWS) REPEATABLE ("
+                + str(SAMPLE_SEED)
+                + ")"
+            )
+        values = _records(conn.execute(query))[0]
     count = int(values["__row_count"])
     columns: list[dict] = []
     for n, item in enumerate(schema):
@@ -117,10 +123,15 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
             "distinct_count": unique,
             "distinct_exact": scope == "sample",
             "roles": role_candidates(item["name"], item["dtype"], unique, count),
-            "is_constant": count > 0 and unique <= 1 and nulls == 0,
+            "is_constant": scope == "sample" and count > 0 and unique <= 1 and nulls == 0,
         }
+        # 식별자·민감 후보 숫자형의 최소·최대도 개인 식별값일 수 있다.
+        safe_stat = not any(
+            role["role"] in ("identifier", "potentially_sensitive")
+            for role in col["roles"]
+        )
         for metric in ("min", "max", "avg"):
-            if key + "_" + metric in values:
+            if safe_stat and key + "_" + metric in values:
                 col["mean" if metric == "avg" else metric] = _profile_number(
                     values[key + "_" + metric]
                 )

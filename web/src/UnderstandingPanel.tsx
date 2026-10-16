@@ -3,23 +3,9 @@ import { useEffect, useState } from "react";
 import { formatError, jsonPost, request, submitJob } from "./api";
 import type { Exploration, ExplorationRequest, Job } from "./types";
 
-type Role = { role: string; basis: string; confirmed: boolean };
-type Column = {
-  name: string; dtype: string; null_count: number; null_ratio: number | null;
-  distinct_count: number; distinct_exact: boolean; is_constant: boolean; roles: Role[];
-};
-type Suggestion = {
-  kind: string; title: string; reason: string; scope: string;
-  request: ExplorationRequest;
-};
-type Profile = {
-  scope: string; sampling_method: string; row_count: number; version: string;
-  algorithm_version: string; columns: Column[]; insights: Suggestion[];
-};
-type Understanding = {
-  dataset_id: string; version: string; profile: Profile | null;
-  job_status: string | null; job_id: string | null;
-};
+import type { components } from "./api.generated";
+
+type Understanding = components["schemas"]["UnderstandingOut"];
 
 export function UnderstandingPanel({ datasetId, canCreate }: {
   datasetId: string; canCreate: boolean;
