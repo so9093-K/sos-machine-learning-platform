@@ -573,7 +573,8 @@ class Store:
         )
         with self.connection() as db:
             is_understanding = (
-                kind == "profile" and spec.get("mode") == "understanding"
+                kind == "profile"
+                and spec.get("mode") == "understanding"
                 and owner_actor is not None
             )
             if is_understanding:
