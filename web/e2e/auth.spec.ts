@@ -21,7 +21,7 @@ test.describe("token identity and resource permissions", () => {
     await expect(page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" }))
       .toHaveCount(0);
     await expect(page.getByRole("button", { name: "Iceberg에 추가" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "스냅샷 연결" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "최신 Snapshot 연결" })).toHaveCount(0);
     const response = await page.request.get("/api/storage/policy", {
       headers: { Authorization: `Bearer ${viewer}` },
     });
@@ -35,7 +35,7 @@ test.describe("token identity and resource permissions", () => {
     await expect(page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" }))
       .toBeVisible();
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "스냅샷 연결" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "최신 Snapshot 연결" })).toBeVisible();
     // 업로드는 S3·DB 게시를 완료한 뒤 201을 반환한다. UI의 5초 표시 제한으로
     // API 성공을 대신 판정하면 느린 CI 환경에서 정상 게시도 실패로 오인한다.
     const uploadResponse = page.waitForResponse(

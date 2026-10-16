@@ -10,6 +10,7 @@ import pyarrow.parquet as pq
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -131,7 +132,7 @@ def test_upload_recovery_preserves_shared_content_addressed_blob(workspace, monk
 
 
 def test_upgrade_from_0001_preserves_existing_records(workspace):
-    """실제 0001 DB 레코드를 보존하고 0003까지 순서대로 스키마를 올린다."""
+    """실제 0001 DB 레코드를 보존하고 현재 Alembic HEAD까지 스키마를 올린다."""
     _, store = workspace
     config = Config("alembic.ini")
     config.set_main_option("sqlalchemy.url", store.database_url)
@@ -151,7 +152,7 @@ def test_upgrade_from_0001_preserves_existing_records(workspace):
     assert store.get_dataset(dataset_id)["owner_actor"] is None
     with store.connection() as db:
         rev = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert rev == "0006"
+        assert rev == ScriptDirectory.from_config(config).get_current_head()
         # 기존 0001 레코드도 신규 진단 필드를 NULL로 가진 채 보존한다.
         cols = {
             row[0]

@@ -204,8 +204,9 @@ def test_exploration_counts_all_categorical_columns(workspace):
     )
 
 
-def test_discovery_query_spill_directory_is_owned_and_released(workspace):
-    """동시 요청의 임시 공간을 격리하고 종료 시 해당 쿼리 공간만 정리한다."""
+def test_discovery_query_spill_directory_is_owned_and_released(workspace, monkeypatch):
+    """실행 슬롯 2개에서 동시 요청의 임시 공간과 종료 시 회수를 검증한다."""
+    monkeypatch.setenv("SOS_DISCOVERY_MAX_ACTIVE", "2")
     client, store = workspace
     dataset = _upload(client, "scratch.csv", b"value\n1\n2\n")
     scratch_root = store.home / "cache" / "discovery-tmp"
