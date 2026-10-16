@@ -162,9 +162,7 @@ def test_cancel_understanding_preserves_dataset_and_previous_profile(workspace):
 
 def test_reservoir_sample_is_reproducible_over_one_thousand_rows(workspace):
     client, store = workspace
-    csv_content = "group,value\\n".replace("\\n", "\n") + "".join(
-        f"{i % 7},{i}\n" for i in range(1500)
-    )
+    csv_content = "group,value\n" + "".join(f"{i % 7},{i}\n" for i in range(1500))
     dataset = _upload(client, "many.csv", csv_content.encode("utf-8"))
     first = build_understanding(store, dataset, scope="sample")
     second = build_understanding(store, dataset, scope="sample")
