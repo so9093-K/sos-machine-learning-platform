@@ -6,7 +6,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
-from .config import IdentitySettings
 from .object_store import ObjectStore
 from .schemas import (
     AuditEventOut,
@@ -15,7 +14,7 @@ from .schemas import (
     InstanceSettingsUpdate,
     JobDiagnosticsOut,
 )
-from .security import ACTIONS, Actor, current_actor, require
+from .security import ACTIONS, Actor, IdentitySettings, current_actor, require
 from .store import Store
 
 IDENTITY_DEP = Depends(current_actor)
