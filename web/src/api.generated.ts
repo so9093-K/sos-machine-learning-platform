@@ -581,11 +581,11 @@ export interface components {
             /** Dtype */
             dtype: string;
             /** Max */
-            max?: number | null;
+            max?: number | string | null;
             /** Mean */
             mean?: number | null;
             /** Min */
-            min?: number | null;
+            min?: number | string | null;
             /** Name */
             name: string;
             /** Nan Count */
@@ -821,7 +821,7 @@ export interface components {
             /** Category */
             category: unknown | null;
             /** Value */
-            value: number | null;
+            value: number | string | null;
         };
         /** ExplorationSpec */
         ExplorationSpec: {

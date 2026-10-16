@@ -180,7 +180,7 @@ class ExplorationRequest(ExplorationSpec):
 
 class ExplorationRowOut(BaseModel):
     category: object | None
-    value: float | int | None
+    value: int | float | str | None
 
 
 class ExplorationOut(BaseModel):
@@ -214,8 +214,8 @@ class ColumnProfileOut(BaseModel):
     nulls: int
     nan_count: int | None
     unique: int
-    min: float | int | None = None
-    max: float | int | None = None
+    min: int | float | str | None = None
+    max: int | float | str | None = None
     mean: float | None = None
 
 

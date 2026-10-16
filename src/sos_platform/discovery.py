@@ -4,8 +4,11 @@
 Dataset 판본과 접근 권한의 판단은 호출자인 API·Worker가 담당한다.
 """
 
+import base64
 import math
 import os
+from datetime import date, datetime, time
+from decimal import Decimal
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -56,21 +59,35 @@ def _literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+MAX_SAFE_JSON_INTEGER = 2**53 - 1
+
+
+_NUMERIC_SQL_TYPES = {
+    "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT",
+    "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT", "UHUGEINT",
+    "FLOAT", "DOUBLE", "REAL",
+}
+
+
+def _numeric_type(sql_type: str) -> bool:
+    kind = sql_type.upper()
+    return kind in _NUMERIC_SQL_TYPES or kind.startswith("DECIMAL")
+
+
 def _dtype(dtype: str) -> str:
-    """기존 Profile·Feature UI의 Polars 타입 이름을 보존한다."""
+    """원본 SQL 타입의 크기·부호·시간대 의미를 보존해 UI에 노출한다."""
     kind = dtype.upper()
-    if kind in (
-        "TINYINT",
-        "SMALLINT",
-        "INTEGER",
-        "BIGINT",
-        "UTINYINT",
-        "USMALLINT",
-        "UINTEGER",
-        "UBIGINT",
-    ):
-        return "Int64"
-    if kind in ("FLOAT", "DOUBLE", "REAL"):
+    integer = {
+        "TINYINT": "Int8", "SMALLINT": "Int16", "INTEGER": "Int32",
+        "BIGINT": "Int64", "HUGEINT": "Int128",
+        "UTINYINT": "UInt8", "USMALLINT": "UInt16", "UINTEGER": "UInt32",
+        "UBIGINT": "UInt64", "UHUGEINT": "UInt128",
+    }
+    if kind in integer:
+        return integer[kind]
+    if kind in ("FLOAT", "REAL"):
+        return "Float32"
+    if kind == "DOUBLE":
         return "Float64"
     if kind.startswith("DECIMAL"):
         return kind.title()
@@ -80,32 +97,53 @@ def _dtype(dtype: str) -> str:
         return "Boolean"
     if kind == "DATE":
         return "Date"
-    if kind.startswith("TIMESTAMP"):
+    if kind in ("TIMESTAMP WITH TIME ZONE", "TIMESTAMPTZ"):
+        return "Datetime(time_unit='us', time_zone='UTC')"
+    units = {"TIMESTAMP_S": "s", "TIMESTAMP_MS": "ms", "TIMESTAMP_NS": "ns"}
+    if kind in units:
+        return f"Datetime(time_unit='{units[kind]}', time_zone=None)"
+    if kind == "TIMESTAMP":
         return "Datetime(time_unit='us', time_zone=None)"
     return dtype
 
 
-def _number(value):
-    if value is None:
-        return None
-    number = float(value)
-    return number if math.isfinite(number) else None
+def _json_value(value):
+    """Preview/그룹 키에서 정밀도·비유한 수·바이너리·시간 의미를 보존한다.
 
-
-def _preview_value(value):
-    """JSON에서 NaN·무한대를 NULL과 혼동하지 않도록 표시용 문자열로 보존한다."""
+    큰 정수와 DECIMAL은 JSON 숫자의 정밀도 손실을 피하기 위해 문자열로,
+    임의 bytes는 `base64:` 접두 문자열로 인코딩한다. 원본 dtype이 해석 기준이다.
+    """
     if isinstance(value, float) and not math.isfinite(value):
         if math.isnan(value):
             return "NaN"
         return "Infinity" if value > 0 else "-Infinity"
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value) if abs(value) > MAX_SAFE_JSON_INTEGER else value
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return "base64:" + base64.b64encode(bytes(value)).decode("ascii")
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, (list, tuple)):
+        return [_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_value(item) for key, item in value.items()}
     return value
 
 
-def _finite_aggregate(value):
-    """JSON에서 표현할 수 없는 집계 실수는 정의되지 않은 수치로 반환한다."""
+def _profile_number(value):
+    """비유한 통계는 NULL로, 정밀도 손실 가능한 수치는 문자열로 노출한다."""
+    if value is None or (isinstance(value, float) and not math.isfinite(value)):
+        return None
+    return _json_value(value)
+
+
+def _aggregate_number(value):
+    """미정의된 비유한 집계값은 NULL로 반환하며 유효한 정밀 수치는 보존한다."""
     if isinstance(value, float) and not math.isfinite(value):
         return None
-    return value
+    return _json_value(value)
 
 
 def _records(cursor) -> list[dict]:
@@ -223,7 +261,7 @@ def preview(store: Store, dataset: dict, limit: int = 30) -> dict:
     with source_connection(store, dataset) as conn:
         schema = {c["name"]: c["dtype"] for c in _columns(conn)}
         raw = _records(conn.execute("SELECT * FROM source LIMIT ?", [limit]))
-        rows = [{key: _preview_value(value) for key, value in row.items()} for row in raw]
+        rows = [{key: _json_value(value) for key, value in row.items()} for row in raw]
     return {"schema": schema, "rows": rows, "returned_rows": len(rows)}
 
 
@@ -246,19 +284,7 @@ def profile(store: Store, dataset: dict, sample: int | None = 1000) -> dict:
             ]
             if kind in ("FLOAT", "DOUBLE", "REAL"):
                 parts.append(f"COUNT(*) FILTER (WHERE isnan({name})) AS {key}nan")
-            if kind in (
-                "FLOAT",
-                "DOUBLE",
-                "REAL",
-                "TINYINT",
-                "SMALLINT",
-                "INTEGER",
-                "BIGINT",
-                "UTINYINT",
-                "USMALLINT",
-                "UINTEGER",
-                "UBIGINT",
-            ) or kind.startswith("DECIMAL"):
+            if _numeric_type(kind):
                 parts += [
                     f"MIN({name}) AS {key}min",
                     f"MAX({name}) AS {key}max",
@@ -284,9 +310,9 @@ def profile(store: Store, dataset: dict, sample: int | None = 1000) -> dict:
         if key + "mean" in raw:
             entry.update(
                 {
-                    "min": _number(raw[key + "min"]),
-                    "max": _number(raw[key + "max"]),
-                    "mean": _number(raw[key + "mean"]),
+                    "min": _profile_number(raw[key + "min"]),
+                    "max": _profile_number(raw[key + "max"]),
+                    "mean": _profile_number(raw[key + "mean"]),
                 }
             )
         result.append(entry)
@@ -324,8 +350,8 @@ def explore(
         actual = {c["name"]: c for c in _columns(conn)}
         if column not in actual or (group_by is not None and group_by not in actual):
             raise ValueError("Unknown exploration column")
-        if metric in ("mean", "min", "max") and not (
-            actual[column]["dtype"].startswith(("Int", "Float", "Decimal"))
+        if metric in ("mean", "min", "max") and not _numeric_type(
+            actual[column]["sql_type"]
         ):
             raise ValueError("Numeric metric requires numeric column")
         value = expressions[metric](quoted(column))
@@ -334,27 +360,42 @@ def explore(
             if scope == "sample"
             else "source"
         )
+        # SQL에서 비유한 집계값을 먼저 NULL로 치환해 올바른 그룹 순서와 LIMIT을 얻는다.
+        # AVG는 DOUBLE이고 FLOAT/DOUBLE의 MIN/MAX도 비유한 값을 낼 수 있다.
+        floating_result = metric == "mean" or (
+            metric in ("min", "max")
+            and actual[column]["sql_type"].upper() in ("FLOAT", "DOUBLE", "REAL")
+        )
+        normalized = (
+            "CASE WHEN isfinite(raw_value) THEN raw_value ELSE NULL END"
+            if floating_result
+            else "raw_value"
+        )
         if group_by:
             group = quoted(group_by)
             rows = _records(
                 conn.execute(
-                    f"SELECT {group} AS category, {value} AS value FROM {source} "
-                    f"GROUP BY {group} ORDER BY value DESC NULLS LAST, category "
-                    f"LIMIT {policy.max_groups + 1}"
+                    "WITH aggregated AS ("
+                    f"SELECT {group} AS category, {value} AS raw_value FROM {source} "
+                    f"GROUP BY {group}) "
+                    f"SELECT category, {normalized} AS value FROM aggregated "
+                    f"ORDER BY value DESC NULLS LAST, category LIMIT {policy.max_groups + 1}"
                 )
             )
             truncated = len(rows) > policy.max_groups
             rows = rows[: policy.max_groups]
         else:
             rows = _records(
-                conn.execute(f"SELECT NULL AS category, {value} AS value FROM {source}")
+                conn.execute(
+                    f"WITH aggregated AS (SELECT {value} AS raw_value FROM {source}) "
+                    f"SELECT NULL AS category, {normalized} AS value FROM aggregated"
+                )
             )
             truncated = False
-    # 샘플과 Worker의 전체 집계는 같은 JSON 의미를 사용한다.
-    # 원본 Preview에서는 NaN·무한대를 명시적으로 표시하지만, 계산 불능 집계는 NULL이다.
+    # Worker JSON 저장 전에도 모든 값을 원시 JSON 타입으로 확정한다.
     for row in rows:
-        row["category"] = _preview_value(row["category"])
-        row["value"] = _finite_aggregate(row["value"])
+        row["category"] = _json_value(row["category"])
+        row["value"] = _aggregate_number(row["value"])
     return {
         "dataset_id": dataset["id"],
         "version": dataset["version"],
