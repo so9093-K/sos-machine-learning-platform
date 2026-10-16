@@ -90,6 +90,7 @@ def register_error_handlers(app: FastAPI) -> None:
     async def handle_value(request: Request, exc: ValueError):
         known = {
             "Invalid Job cursor",
+            "Invalid Dataset cursor",
             "Time/order column must be unique within each group",
             "Time/order column contains null values",
             "Time/order column does not exist",

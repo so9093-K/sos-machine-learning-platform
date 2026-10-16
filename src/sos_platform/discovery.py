@@ -231,10 +231,13 @@ def source_connection(
     scratch_root.mkdir(parents=True, exist_ok=True)
     # 각 요청에만 속한 Spill 파일은 연결 종료 후 함께 정리한다.
     # 다른 사용자·Worker가 사용하는 경로나 기존 캐시를 삭제하지 않는다.
-    with discovery_slot(store), ExitStack() as pins:
-        # 비동기 Job의 DuckDB는 부모 Worker가 이미 예약한 자원 안에서 실행된다.
+    with ExitStack() as pins:
+        # 작업의 자원 수용을 먼저 확인한다. 용량을 기다리는 요청이 Discovery 슬롯을
+        # 점유하면 이미 예약된 Worker의 탐색 실행이 불필요하게 지연될 수 있다.
+        # Worker 자식은 부모에서 예약했으므로 별도 메모리를 이중 예약하지 않는다.
         if not getattr(store, "_execution_memory_reserved", False):
             pins.enter_context(reserve_execution_memory(store, policy.memory_mib))
+        pins.enter_context(discovery_slot(store))
         with TemporaryDirectory(prefix="query-", dir=scratch_root) as directory:
             scratch = Path(directory)
             path = (

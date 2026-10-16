@@ -40,3 +40,13 @@ def test_legacy_dataset_pages_alias_is_not_exposed(workspace):
     response = client.get("/api/datasets/pages")
     assert response.status_code == 404
     assert response.json()["code"] == "SOS-API-NOT-FOUND"
+
+
+def test_invalid_dataset_cursor_returns_specific_safe_validation_error(workspace):
+    client, _store = workspace
+    result = client.get("/api/datasets", params={"cursor": "not-a-valid-cursor"})
+    assert result.status_code == 422
+    assert result.json()["code"] == "SOS-API-VALIDATION"
+    assert result.json()["detail"] == "Invalid Dataset cursor"
+
+

@@ -166,7 +166,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             f"http://localhost:{os.environ.get('SOS_WEB_PORT', '9601')}",
             f"http://127.0.0.1:{os.environ.get('SOS_WEB_PORT', '9601')}",
         ],
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT"],
         allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
         expose_headers=["X-Request-ID"],
     )
