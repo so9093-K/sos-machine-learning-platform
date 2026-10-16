@@ -83,6 +83,17 @@ function Workspace({ actor }: { actor: Identity }) {
       setNotice(stale);
     }
   }
+  /** HTTP 202 접수 이후의 목록 조회 실패는 Job 제출 실패가 아니다. */
+  async function showSubmittedJob(job: Job, message: string) {
+    setTab("jobs");
+    try {
+      await refreshJobs();
+      setNotice(message);
+    } catch {
+      setError("");
+      setNotice(`Job은 정상 접수됐습니다. 목록을 다시 확인하세요. 작업 ID: ${job.id}`);
+    }
+  }
   async function refreshJobs() {
     const page = await request<JobPage>("/api/jobs?limit=20");
     setJobs(previous => olderJobsLoaded
@@ -242,19 +253,17 @@ function Workspace({ actor }: { actor: Identity }) {
       setError("Lag와 Rolling 변환에는 정렬 컬럼을 지정해야 합니다."); return;
     }
     await withFeedback(async () => {
-      await jsonPost("/api/jobs",
+      const job = await jsonPost<Job>("/api/jobs",
         { dataset_id: selected, kind, ...(kind === "transform" ? { transform } : {}) });
-      await refreshJobs();
-      setTab("jobs");
-      setNotice("작업이 등록되었습니다. 별도 Worker가 작업을 실행합니다.");
+      await showSubmittedJob(job, "작업이 등록되었습니다. 별도 Worker가 작업을 실행합니다.");
     });
   }
   async function selectExample(exampleId: string) {
     await withFeedback(async () => {
       const data = await jsonPost<Dataset>(`/api/examples/${exampleId}/use`, {});
-      await refreshDatasets();
-      setSelected(data.id); setTab("preview");
-      setNotice("예제가 일반 데이터셋으로 등록됐습니다. EDA와 피처 변환을 시작할 수 있습니다.");
+      await showRegisteredDataset(data,
+        "예제가 일반 데이터셋으로 등록됐습니다. EDA와 피처 변환을 시작할 수 있습니다.",
+        "예제는 정상 등록됐습니다. 목록 새로고침에 실패했지만 다시 등록할 필요는 없습니다.");
     });
   }
   async function openJobDataset(datasetId: string) {
@@ -302,10 +311,9 @@ function Workspace({ actor }: { actor: Identity }) {
   async function importIceberg() {
     if (!selected) return;
     await withFeedback(async () => {
-      await jsonPost<Job>("/api/iceberg/import",
+      const job = await jsonPost<Job>("/api/iceberg/import",
         { dataset_id: selected, table_name: tableName });
-      await refreshJobs(); setTab("jobs");
-      setNotice("Iceberg 적재 Job이 등록되었습니다. 완료 후 데이터셋 목록에서 확인할 수 있습니다.");
+      await showSubmittedJob(job, "Iceberg 적재 Job이 등록되었습니다. 완료 후 데이터셋 목록에서 확인할 수 있습니다.");
     });
   }
   async function cancelJob(id: string) {
@@ -313,7 +321,12 @@ function Workspace({ actor }: { actor: Identity }) {
       const path = discoveryJobs.some(job => job.id === id)
         ? `/api/explorations/jobs/${id}/cancel` : `/api/jobs/${id}/cancel`;
       await jsonPost(path, {});
-      await Promise.all([refreshJobs(), refreshDiscoveryJobs()]);
+      try {
+        await Promise.all([refreshJobs(), refreshDiscoveryJobs()]);
+      } catch {
+        setError("");
+        setNotice("취소 요청은 접수됐지만 상태 조회에 실패했습니다. 실제 종료 상태를 다시 확인하세요.");
+      }
     });
   }
   const distribution = useMemo(() => histogram(preview?.rows ?? [], visualColumn),

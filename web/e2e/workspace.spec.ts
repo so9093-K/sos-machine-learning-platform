@@ -328,3 +328,45 @@ test("Discovery supports categorical-only counts", async ({ page }) => {
   await discovery.getByRole("button", { name: "샘플 집계" }).click();
   await expect(discovery.getByRole("table").getByText("1", { exact: true })).toBeVisible();
 });
+
+
+test("accepted Job is not reported as failed when Jobs refresh fails", async ({ page }) => {
+  let failRefresh = false;
+  await page.route("**/api/jobs**", async route => {
+    if (route.request().method() === "GET" && failRefresh) {
+      await route.fulfill({ status: 503, contentType: "application/json", body: '{"detail":"일시적인 목록 오류"}' });
+      return;
+    }
+    if (route.request().method() === "POST") {
+      const response = await route.fetch();
+      expect(response.status()).toBe(202);
+      failRefresh = true;
+      await route.fulfill({ response });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "job-accepted.csv", mimeType: "text/csv",
+    buffer: Buffer.from("signal\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "job-accepted.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("button", { name: /전체 Profile 실행/ }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Job은 정상 접수됐습니다." })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("audit navigation does not show unrelated dataset tabs", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "audit-navigation.csv", mimeType: "text/csv",
+    buffer: Buffer.from("signal\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "audit-navigation.csv" })).toBeVisible();
+  await page.getByRole("button", { name: "보안 감사 보기" }).click();
+  await expect(page.getByRole("heading", { name: "Security Audit" })).toBeVisible();
+  await expect(page.locator(".dataset-hero")).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "EDA & Profile" })).toHaveCount(0);
+});
