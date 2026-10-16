@@ -58,7 +58,7 @@ jobs:
             (cd /tmp/sos-ci-base && uv sync --locked --group dev && uv run --locked python scripts/export_openapi.py) > /tmp/sos-api-before.json
           fi
           uv run --locked python scripts/export_openapi.py > /tmp/sos-api-after.json
-          uv run --locked python scripts/check_api_compat.py /tmp/sos-api-before.json /tmp/sos-api-after.json
+          uv run --locked python scripts/check_api_compat.py /tmp/sos-api-before.json /tmp/sos-api-after.json --approved-breaking-file scripts/approved_pre_release_api_breaks.json
       - name: Ruff lint
         run: uv run --locked ruff check .
       - name: Explain lint failure

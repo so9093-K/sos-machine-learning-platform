@@ -131,7 +131,7 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
             == 404
         )
         assert secure.post(f"/api/datasets/{owned}/query", json={"limit": 1}).status_code == 401
-        assert secure.get("/api/datasets", headers=headers("bob")).json()["items"] == []
+        assert secure.get("/api/datasets", headers=headers("bob")).json() == {"items": [], "next_cursor": None}
         assert (
             secure.post(
                 "/api/datasets/files",
