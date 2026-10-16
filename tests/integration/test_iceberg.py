@@ -298,7 +298,6 @@ def test_tag_survives_database_publish_failure(workspace, monkeypatch):
     assert inspection.json()[0]["status"] == "unknown"
 
 
-
 def test_large_unpartitioned_iceberg_import_uses_one_snapshot(workspace):
     """과거 50,000행 제한을 넘는 입력도 한번의 논리적 커밋으로 적재한다."""
     from io import BytesIO
@@ -310,16 +309,27 @@ def test_large_unpartitioned_iceberg_import_uses_one_snapshot(workspace):
 
     client, store = workspace
     buffer = BytesIO()
-    pq.write_table(pa.table({"value": pa.array(range(65_000), type=pa.int64()),
-                             "label": pa.array(["unit"] * 65_000)}), buffer)
+    pq.write_table(
+        pa.table(
+            {
+                "value": pa.array(range(65_000), type=pa.int64()),
+                "label": pa.array(["unit"] * 65_000),
+            }
+        ),
+        buffer,
+    )
     uploaded = client.post(
         "/api/datasets/files",
         files={"file": ("large-import.parquet", buffer.getvalue(), "application/octet-stream")},
     )
     assert uploaded.status_code == 201, uploaded.text
-    job = client.post("/api/iceberg/import", json={
-        "dataset_id": uploaded.json()["id"], "table_name": "large_import",
-    })
+    job = client.post(
+        "/api/iceberg/import",
+        json={
+            "dataset_id": uploaded.json()["id"],
+            "table_name": "large_import",
+        },
+    )
     assert job.status_code == 202
     assert run_once(store)
     finished = client.get(f"/api/jobs/{job.json()['id']}").json()

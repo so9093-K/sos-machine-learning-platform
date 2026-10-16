@@ -81,10 +81,14 @@ def test_select_must_keep_time_and_group_columns_for_later_windows():
 
 def test_large_row_local_feature_preview_is_not_rejected():
     source = pl.DataFrame({"value": range(150_000), "unneeded": range(150_000)}).lazy()
-    spec = Transform.model_validate({"steps": [
-        {"op": "select", "columns": ["value"]},
-        {"op": "filter_not_null", "column": "value"},
-    ]})
+    spec = Transform.model_validate(
+        {
+            "steps": [
+                {"op": "select", "columns": ["value"]},
+                {"op": "filter_not_null", "column": "value"},
+            ]
+        }
+    )
     result = bounded_feature_preview(source, spec)
     assert result["schema"] == {"value": "Int64"}
     assert result["returned_rows"] == 30
