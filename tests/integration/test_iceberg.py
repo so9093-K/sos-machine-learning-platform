@@ -340,7 +340,6 @@ def test_large_unpartitioned_iceberg_import_uses_one_snapshot(workspace):
     assert table.current_snapshot().summary["sos.attempt-id"] == finished["attempts"][0]["id"]
 
 
-
 def test_iceberg_staging_cleanup_is_scoped_to_its_attempt(workspace):
     """강제 종료 후에는 해당 Attempt의 임시 파일만 정리할 수 있어야 한다."""
     from sos_platform.datasets import cleanup_iceberg_staging

@@ -574,7 +574,8 @@ function Workspace({ actor }: { actor: Identity }) {
             <span className="chip">{displayedPreview?.returned_rows ?? "…"} rows shown</span></div>
           {preview && <DatasetQueryPanel key={selected} datasetId={selected}
             columns={columnNames} busy={busy}
-            onResult={data => setQueryPreview({ datasetId: selected, revision: reloadRevision, data })} />}
+            onResult={data => setQueryPreview({ datasetId: selected, revision: reloadRevision, data })}
+            onInvalidate={() => setQueryPreview(null)} />}
           {displayedPreview && <><div className="table-scroll"><table><thead><tr>
             {displayedColumns.map(c => <th key={c}>{c}<small>{displayedPreview.schema[c]}</small></th>)}
           </tr></thead><tbody>{displayedPreview.rows.map((r, i) => <tr key={i}>

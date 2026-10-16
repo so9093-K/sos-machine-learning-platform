@@ -596,3 +596,37 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
   await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
   await expect(page.locator("#sos-panel-features .result th")).toHaveCount(4);
 });
+
+test("editing Dataset Query while its response is pending never renders stale rows", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "query-race.csv", mimeType: "text/csv",
+    buffer: Buffer.from("group,value\na,10\nb,20\na,30\n"),
+  });
+  await expect(page.getByRole("heading", { name: "query-race.csv" })).toBeVisible();
+  await page.getByText("컬럼·필터·정렬 선택").click();
+  await page.getByLabel("필터 컬럼").selectOption("group");
+  await page.getByLabel("비교 값").fill("a");
+  let release: () => void = () => {};
+  let received: () => void = () => {};
+  const started = new Promise<void>(resolve => { received = resolve; });
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let intercepted = false;
+  await page.route("**/api/datasets/*/query", async route => {
+    if (route.request().method() !== "POST" || intercepted) return route.continue();
+    intercepted = true;
+    const response = await route.fetch();
+    received();
+    await held;
+    await route.fulfill({ response });
+  });
+  await page.getByRole("button", { name: "조회 적용" }).click();
+  await started;
+  await page.getByLabel("비교 값").fill("b");
+  release();
+  await expect(page.getByRole("button", { name: "조회 적용" })).toBeEnabled();
+  await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(3);
+  await page.getByRole("button", { name: "조회 적용" }).click();
+  await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(1);
+  await expect(page.locator("#sos-panel-preview tbody tr")).toContainText("20");
+});

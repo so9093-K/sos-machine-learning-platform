@@ -120,9 +120,13 @@ def cleanup_iceberg_staging(store: Store, attempt_id: str | None = None) -> None
         if not path.name.startswith(prefix):
             continue
         # 임시 디렉터리만 대상으로 하며 symlink는 따라가지 않는다.
-        if path.is_dir() and not path.is_symlink() and re.fullmatch(
-            r"attempt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[A-Za-z0-9_]+",
-            path.name,
+        if (
+            path.is_dir()
+            and not path.is_symlink()
+            and re.fullmatch(
+                r"attempt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[A-Za-z0-9_]+",
+                path.name,
+            )
         ):
             shutil.rmtree(path)
 
