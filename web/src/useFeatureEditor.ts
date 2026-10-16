@@ -78,10 +78,15 @@ export function useFeatureEditor({
       onError("Lag와 Rolling 변환에는 정렬 컬럼을 지정해야 합니다."); return;
     }
     await withFeedback(async () => {
-      const data = await jsonPost<Preview>("/api/features/preview",
-        { dataset_id: datasetId, transform });
-      if (activeSignature.current === signature) {
-        setPreviewResult({ signature, data });
+      try {
+        const data = await jsonPost<Preview>("/api/features/preview",
+          { dataset_id: datasetId, transform });
+        if (activeSignature.current === signature) {
+          setPreviewResult({ signature, data });
+        }
+      } catch (error) {
+        // 이전 Dataset·Recipe·재조회 판본에 속한 실패도 현재 오류로 보이지 않는다.
+        if (activeSignature.current === signature) throw error;
       }
     });
   }
