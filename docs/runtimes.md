@@ -35,3 +35,5 @@ Discovery는 요청·Worker 실행별 DuckDB 연결을 사용한다. DuckDB Pyth
 현재 저장소의 Python **3.12**와 `uv.lock`은 **플랫폼 개발 환경의 기준**이다. 향후 모든 모델 Runtime의 버전이나 전체 OS·GPU 환경까지 고정한 것과 같지 않다. 프로젝트 버전 `0.0.1`도 개별 Runtime·모델·계약 버전의 대체물이 아니다.
 
 가상환경, 컨테이너, 원격 Worker, GPU 관리 도구, 스케줄러는 위 요구를 만족시키는 구현 선택이다. 이 정본은 특정 제품, 배치 구조, 이미지 빌드 방법을 미리 강제하지 않는다. 관련 계약은 [Contracts](contracts.md), 실행 동작은 [Workflows](workflows.md)를 따른다.
+
+Worker 소유권은 PostgreSQL 세션의 advisory lock에 귀속된다. 접속이 자동으로 재수립되었더라도 이전 잠금이 살아 있다고 가정할 수 없다. Worker는 잠금 소유 세션의 Backend ID가 바뀌거나 세션 검증이 실패하면 자식 계산을 중단하고 **기존 Job·Attempt를 성공·실패로 확정하지 않는다**. 새 Worker의 독점 복구가 Running 상태와 외부 Iceberg 불확실 커밋을 구별한다. 강제 DB 백엔드 종료의 실제 통합 테스트로 이 계약을 검증한다. 단, 세션 검증과 실제 외부 커밋 사이의 경쟁까지 해결하는 완전한 Fencing Token/원자적 커밋 프로토콜은 아니며, 다중 호스트 실행기의 도입 전에 별도 검토해야 한다.

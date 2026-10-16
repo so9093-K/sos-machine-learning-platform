@@ -117,3 +117,42 @@ def test_new_attempt_uses_distinct_local_paths_after_recovery(workspace):
         store, next_attempt["id"], next_attempt["attempts"][-1]["id"]
     )
     assert set(first_paths).isdisjoint(second_paths)
+
+
+def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
+    """실제 DB 백엔드를 종료해도 기존 Worker가 Job 완료를 확정하지 않는다."""
+    from sqlalchemy import text
+
+    from sos_platform.store import WorkerOwnershipLost
+
+    client, store = workspace
+    source = upload(client)
+    response = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    assert response.status_code == 202
+    assert store.acquire_worker()
+    running = store.claim()
+    assert running["id"] == response.json()["id"]
+    old_attempt_id = running["attempts"][-1]["id"]
+    lost_backend = store._worker_backend_pid
+    with store.engine.begin() as conn:
+        assert conn.execute(
+            text("SELECT pg_terminate_backend(:backend)"),
+            {"backend": lost_backend},
+        ).scalar_one()
+    with pytest.raises(WorkerOwnershipLost):
+        store.heartbeat()
+    store.release_worker()
+
+    other = Store(store.home, database_url=store.database_url)
+    try:
+        assert other.acquire_worker()
+        interrupted = other.recover()
+        assert (running["id"], old_attempt_id) in interrupted
+        recovered = other.get_job(running["id"])
+        assert recovered["status"] == "Queued"
+        assert recovered["attempts"][-1]["status"] == "Interrupted"
+        assert recovered["result"] is None
+    finally:
+        other.release_worker()
+        other.engine.dispose()
+

@@ -30,7 +30,7 @@ from .observability import emit
 from .processing import transform
 from .resource_admission import ExecutionCapacity, reserve_execution_memory
 from .schemas import ExplorationSpec, Transform
-from .store import Store
+from .store import Store, WorkerOwnershipLost
 from .understanding import build_understanding
 
 
@@ -196,6 +196,9 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
         if store.cancellation_requested(job_id):
             store.finish(job_id, "Cancelled")
             return True
+        # Worker 종료 직후 소유권을 다시 확인한다. 손실되었다면 새 Worker의
+        # recover()가 미확정 Attempt를 판단하며, 이전 Worker는 결과를 게시하지 않는다.
+        store._assert_worker_ownership()
         if not completed.exists():
             raise RuntimeError(f"Execution process exited ({process.exitcode}) without result")
         outcome = json.loads(completed.read_text(encoding="utf-8"))
@@ -239,6 +242,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
                 "version": version,
             }
         result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}
+        store._assert_worker_ownership()
         final_status = store.finish(
             job_id, "Succeeded", result=result, publish=publish, write_id=write_id
         )
@@ -251,6 +255,22 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
             attempt_id=attempt_id,
             status=final_status,
         )
+    except WorkerOwnershipLost:
+        # 소유권을 잃었을 때 기존 Worker가 Failed/Cancelled를 확정하는 것도 위험하다.
+        # 새 소유자가 동일 DB의 Running Attempt를 보수적으로 복구한다.
+        _stop(process)
+        emit(
+            "worker.attempt.failed",
+            service="sos-worker",
+            level=logging.ERROR,
+            job_id=job_id,
+            attempt_id=attempt_id,
+            error_code="SOS-JOB-INTERRUPTED",
+            stage="execution",
+            exception_type="WorkerOwnershipLost",
+            failure_category="process_exit",
+        )
+        raise
     except Exception as exc:
         _stop(process)
         if write_id:
