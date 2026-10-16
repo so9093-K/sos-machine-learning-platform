@@ -13,7 +13,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import bindparam, create_engine, text
 
 from .config import Settings
-from .errors import ERRORS
+from .errors import ERRORS, PlatformError
 
 
 def now() -> str:

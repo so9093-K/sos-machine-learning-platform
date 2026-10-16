@@ -115,3 +115,29 @@ export function uploadFile<T>(
     xhr.send(form);
   });
 }
+
+/** 응답이 유실된 제출의 키를 유지해 동일 클릭을 안전하게 재시도한다. */
+const pendingJobKeys = new Map<string, string>();
+
+export async function submitJob<T>(path: string, body: unknown): Promise<T> {
+  const signature = path + ":" + JSON.stringify(body);
+  let key = pendingJobKeys.get(signature);
+  if (!key) {
+    key = crypto.randomUUID();
+    pendingJobKeys.set(signature, key);
+  }
+  try {
+    const result = await request<T>(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+      body: JSON.stringify(body),
+    });
+    pendingJobKeys.delete(signature);
+    return result;
+  } catch (error) {
+    // HTTP 오류는 서버가 응답했으므로 다음 명시적 실행에서 새 키 사용.
+    // 연결 오류는 접수 여부가 불명확해 기존 키 보존.
+    if (error instanceof ApiError) pendingJobKeys.delete(signature);
+    throw error;
+  }
+}

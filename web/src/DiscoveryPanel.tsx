@@ -70,7 +70,7 @@ export function DiscoveryPanel({
     if (!selectedMeasure) return;
     setRunning(true); setError(""); setFullJobId(null);
     try {
-      const job = await jsonPost<ExplorationJob>("/api/explorations/jobs", {
+      const job = await submitJob<ExplorationJob>("/api/explorations/jobs", {
         dataset_id: datasetId,
         exploration: { column: selectedMeasure, metric, group_by: groupBy || null },
       });

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
@@ -164,7 +164,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             f"http://127.0.0.1:{os.environ.get('SOS_WEB_PORT', '9601')}",
         ],
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
         expose_headers=["X-Request-ID"],
     )
 
@@ -426,12 +426,21 @@ def create_app(home: Path | None = None) -> FastAPI:
         )
 
     @app.post("/api/iceberg/import", status_code=202, response_model=JobOut)
-    def iceberg_import(body: IcebergImport, request: Request, actor: Actor = CREATE_JOB_DEP):
+    def iceberg_import(
+        body: IcebergImport,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None, alias="Idempotency-Key", min_length=8, max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
         existing(body.dataset_id, actor)
         return store.create_job(
             kind="iceberg_import",
             dataset_id=body.dataset_id,
             spec=body.model_dump(),
+            idempotency_key=idempotency_key,
             request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,
@@ -504,12 +513,21 @@ def create_app(home: Path | None = None) -> FastAPI:
         return job_page(limit, cursor, actor, discovery_only=True)
 
     @app.post("/api/jobs", status_code=202, response_model=JobOut)
-    def create_job(body: WorkRequest, request: Request, actor: Actor = CREATE_JOB_DEP):
+    def create_job(
+        body: WorkRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None, alias="Idempotency-Key", min_length=8, max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
         existing(body.dataset_id, actor)
         return store.create_job(
             kind=body.kind,
             dataset_id=body.dataset_id,
             spec=body.model_dump(exclude_none=True),
+            idempotency_key=idempotency_key,
             request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,
@@ -517,13 +535,20 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     @app.post("/api/explorations/jobs", status_code=202, response_model=ExplorationJobOut)
     def create_exploration_job(
-        body: ExplorationJobRequest, request: Request, actor: Actor = CREATE_JOB_DEP
+        body: ExplorationJobRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None, alias="Idempotency-Key", min_length=8, max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
     ):
         existing(body.dataset_id, actor)
         return store.create_job(
             kind="exploration",
             dataset_id=body.dataset_id,
             spec=body.model_dump(exclude_none=True),
+            idempotency_key=idempotency_key,
             request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,

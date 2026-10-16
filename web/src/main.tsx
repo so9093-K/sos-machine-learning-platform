@@ -257,7 +257,7 @@ function Workspace({ actor }: { actor: Identity }) {
       setError("Lag와 Rolling 변환에는 정렬 컬럼을 지정해야 합니다."); return;
     }
     await withFeedback(async () => {
-      const job = await jsonPost<Job>("/api/jobs",
+      const job = await submitJob<Job>("/api/jobs",
         { dataset_id: selected, kind, ...(kind === "transform" ? { transform } : {}) });
       await showSubmittedJob(job, "작업이 등록되었습니다. 별도 Worker가 작업을 실행합니다.");
     });
@@ -315,7 +315,7 @@ function Workspace({ actor }: { actor: Identity }) {
   async function importIceberg() {
     if (!selected) return;
     await withFeedback(async () => {
-      const job = await jsonPost<Job>("/api/iceberg/import",
+      const job = await submitJob<Job>("/api/iceberg/import",
         { dataset_id: selected, table_name: tableName });
       await showSubmittedJob(job, "Iceberg 적재 Job이 등록되었습니다. 완료 후 데이터셋 목록에서 확인할 수 있습니다.");
     });
