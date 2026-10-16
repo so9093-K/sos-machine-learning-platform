@@ -1,8 +1,5 @@
 """데이터 탐색과 비동기 처리를 제공하는 공통 플랫폼 API."""
 
-import base64
-import binascii
-import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -31,6 +28,7 @@ from .examples import list_examples, use_example
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .object_store import ObjectStore
 from .observability import emit
+from .pagination import decode_cursor, page_from_rows
 from .processing import bounded_feature_preview
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
@@ -405,38 +403,13 @@ def create_app(home: Path | None = None) -> FastAPI:
         actor: Actor = READ_DATASET_DEP,
     ):
         """기존 배열 응답을 유지하면서 규모 제한된 새 목록 API를 제공한다."""
-        before = None
-        if cursor:
-            try:
-                raw = base64.b64decode(
-                    cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True
-                )
-                before = json.loads(raw)
-                if (
-                    not isinstance(before, dict)
-                    or set(before) != {"created_at", "id"}
-                    or not all(isinstance(before[key], str) and before[key] for key in before)
-                    or len(before["created_at"]) > 80
-                    or len(before["id"]) != 36
-                ):
-                    raise ValueError("Invalid Dataset cursor")
-            except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
-                raise ValueError("Invalid Dataset cursor") from exc
+        before = decode_cursor(cursor, "Dataset")
         rows = store.dataset_page(
             limit=limit + 1,
             before=before,
             actor_id=None if actor.privileged else actor.id,
         )
-        next_cursor = None
-        if len(rows) > limit:
-            rows = rows[:limit]
-            last = rows[-1]
-            payload = json.dumps(
-                {"created_at": last["created_at"], "id": last["id"]},
-                separators=(",", ":"),
-            )
-            next_cursor = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
-        return {"items": rows, "next_cursor": next_cursor}
+        return page_from_rows(rows, limit)
 
     @app.get("/api/datasets/upload-policy", response_model=UploadPolicyOut)
     def get_upload_policy(actor: Actor = CREATE_DATASET_DEP):
@@ -607,23 +580,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
 
     def job_page(limit: int, cursor: str | None, actor: Actor, *, discovery_only: bool) -> dict:
-        before = None
-        if cursor:
-            try:
-                raw = base64.b64decode(
-                    cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True
-                )
-                before = json.loads(raw)
-                if (
-                    not isinstance(before, dict)
-                    or set(before) != {"created_at", "id"}
-                    or not all(isinstance(before[key], str) and before[key] for key in before)
-                    or len(before["created_at"]) > 80
-                    or len(before["id"]) != 36
-                ):
-                    raise ValueError("Invalid Job cursor")
-            except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
-                raise ValueError("Invalid Job cursor") from exc
+        before = decode_cursor(cursor, "Job")
         rows = store.jobs(
             limit=limit + 1,
             before=before,
@@ -631,15 +588,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             kind="exploration" if discovery_only else None,
             exclude_kind=None if discovery_only else "exploration",
         )
-        next_cursor = None
-        if len(rows) > limit:
-            rows = rows[:limit]
-            last = rows[-1]
-            token = json.dumps(
-                {"created_at": last["created_at"], "id": last["id"]}, separators=(",", ":")
-            )
-            next_cursor = base64.urlsafe_b64encode(token.encode()).decode().rstrip("=")
-        return {"items": rows, "next_cursor": next_cursor}
+        return page_from_rows(rows, limit)
 
     @app.get("/api/jobs", response_model=JobPageOut)
     def list_jobs(
