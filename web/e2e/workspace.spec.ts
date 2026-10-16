@@ -643,13 +643,13 @@ test("unknown CSV opens Understanding, persists profile and runs suggested explo
   await expect(page.getByRole("heading", { name: "unknown.csv" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "개요" })).toHaveAttribute("aria-selected", "true");
   const panel = page.getByRole("tabpanel", { name: "개요" });
-  await expect(panel.getByText("발견된 컬럼 특성")).toBeVisible({ timeout: 30000 });
+  await expect(panel.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });
   await expect(panel.getByText("그룹별 수치 비교")).toBeVisible();
   await panel.getByRole("button", { name: "탐색 실행" }).first().click();
   await expect(panel.getByText(/탐색 결과/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("tab", { name: "개요" })).toBeVisible();
-  await expect(page.getByText("발견된 컬럼 특성")).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });
 });
 
 
