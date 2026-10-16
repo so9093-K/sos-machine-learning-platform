@@ -517,3 +517,37 @@ test("Job reuses submission key when server accepted it before a 503 response", 
   expect(sent[0].key).toBeTruthy();
   expect(sent[1]).toEqual(sent[0]);
 });
+
+
+test("Iceberg browse input never changes the append target or restores stale snapshots", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "append-target.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "append-target.csv" })).toBeVisible();
+  const appendTarget = page.getByRole("textbox", { name: "Iceberg 테이블명", exact: true });
+  const browseTable = page.getByRole("textbox", { name: "Iceberg 테이블 이름" });
+  await appendTarget.fill("keep_append_target");
+  await browseTable.fill("slow_browse");
+  expect(await appendTarget.inputValue()).toBe("keep_append_target");
+  let unblock: () => void = () => {};
+  let markStarted: () => void = () => {};
+  const started = new Promise<void>(resolve => { markStarted = resolve; });
+  const release = new Promise<void>(resolve => { unblock = resolve; });
+  await page.route("**/api/iceberg/slow_browse/snapshots", async route => {
+    markStarted();
+    await release;
+    await route.fulfill({ status: 200, contentType: "application/json",
+      body: JSON.stringify([{ snapshot_id: "12345", timestamp_ms: 1000 }]) });
+  });
+  await page.getByRole("button", { name: "Snapshot 조회" }).click();
+  await started;
+  await browseTable.fill("other_browse");
+  const delivered = page.waitForResponse(res => res.url().includes("slow_browse/snapshots"));
+  unblock();
+  await delivered;
+  await expect(page.getByRole("combobox", { name: "Iceberg Snapshot 선택" })).toHaveCount(0);
+  await expect(appendTarget).toHaveValue("keep_append_target");
+  await expect(browseTable).toHaveValue("other_browse");
+});
