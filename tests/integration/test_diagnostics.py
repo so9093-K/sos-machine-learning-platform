@@ -141,8 +141,10 @@ def test_worker_precommit_and_commit_failures_have_distinct_contracts(
     def fail_precommit(_store, _dataset, _table, _attempt, *, on_commit_start):
         raise RuntimeError(secret)
 
+    # 이 테스트는 자식 프로세스를 생성하지 않으므로 부모 종료 감시만 대체한다.
+    monkeypatch.setattr(worker, "_guard_child_parent", lambda _pid: None)
     monkeypatch.setattr(worker, "import_to_iceberg", fail_precommit)
-    _perform(store.home, store.database_url, job, completed, pending)
+    _perform(store.home, store.database_url, job, completed, pending, 0)
     before = json.loads(completed.read_text())
     assert before["error_code"] == "SOS-JOB-FAILED"
     assert before["failure_stage"] == "iceberg_prepare"
@@ -155,7 +157,7 @@ def test_worker_precommit_and_commit_failures_have_distinct_contracts(
         raise RuntimeError(secret)
 
     monkeypatch.setattr(worker, "import_to_iceberg", fail_after_commit_entry)
-    _perform(store.home, store.database_url, job, completed, pending)
+    _perform(store.home, store.database_url, job, completed, pending, 0)
     after = json.loads(completed.read_text())
     assert after["error_code"] == "SOS-ICEBERG-UNCERTAIN"
     assert after["failure_stage"] == "iceberg_commit"
