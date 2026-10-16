@@ -49,6 +49,7 @@ jobs = Table(
     Column("updated_at", Text, nullable=False),
     Column("owner_actor", Text),
     Index("ix_jobs_created_at_id", "created_at", "id"),
+    Index("ix_jobs_dataset_created_id", "dataset_id", "created_at", "id"),
     Index("ix_jobs_request_id", "request_id"),
 )
 

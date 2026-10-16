@@ -99,10 +99,11 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
         {" · "}{profile.algorithm_version}</p>
       <h4>발견된 컬럼 특성</h4>
       <div className="table-scroll"><table><thead><tr>
-        <th>컬럼</th><th>자료형</th><th>NULL</th><th>고유값</th><th>역할 후보 (미확정)</th>
+        <th>컬럼</th><th>자료형</th><th>NULL</th><th>NaN</th><th>고유값</th><th>역할 후보 (미확정)</th>
       </tr></thead><tbody>{profile.columns.map(col => <tr key={col.name}>
         <td>{col.name}</td><td>{col.dtype}</td>
         <td>{col.null_ratio === null ? "—" : (col.null_ratio * 100).toFixed(1) + "%"}</td>
+        <td>{col.nan_count === null ? "—" : col.nan_count.toLocaleString()}</td>
         <td>{col.distinct_count.toLocaleString()}{col.distinct_exact ? "" : " ≈"}</td>
         <td>{col.is_constant ? "상수 · " : ""}
           {col.roles.map(r => r.role + " (" + r.basis + ")").join(", ") || "미확인"}</td>
@@ -112,7 +113,8 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
       <div className="example-grid">{profile.insights.map((item, i) => <article
         className="example-card" key={item.kind + i}>
         <h4>{item.title}</h4><p>{item.reason}</p>
-        <p className="hint">제한된 샘플 탐색 · 선택 후 실행</p>
+        <p className="hint">추천 근거: {profile.scope === "full" ? "전체 입력" : "Reservoir 표본"}
+          {" · "}실행: 선두 최대 10,000행 기반의 별도 샘플 · 선택 후 실행</p>
         <button disabled={busy} onClick={() => void explore(item.request)}>탐색 실행</button>
       </article>)}</div>
       {result && <div className="result" role="status">

@@ -20,6 +20,11 @@ def test_role_inference_never_confirms_meaning():
         role["role"] == "potentially_sensitive"
         for role in role_candidates("user_name", "String", 10, 10)
     )
+    for name in ("password_hash", "access_token", "client_secret", "api_key", "host_ip"):
+        assert any(
+            role["role"] == "potentially_sensitive"
+            for role in role_candidates(name, "String", 2, 10)
+        )
 
 
 def test_suggestions_only_emit_supported_operations():
@@ -46,6 +51,21 @@ def test_suggestions_only_emit_supported_operations():
     )
     assert proposals[0]["request"]["group_by"] == "group"
     assert suggest_analyses([], 0) == []
+
+    # 식별자나 비밀값으로 추론한 범주 컬럼은 자동 그룹 집계로 권장하지 않는다.
+    secret_group = {
+        "name": "password_hash",
+        "roles": [
+            {"role": "categorical"},
+            {"role": "identifier"},
+            {"role": "potentially_sensitive"},
+        ],
+        "is_constant": False,
+        "distinct_count": 2,
+        "null_count": 0,
+    }
+    restricted = suggest_analyses([secret_group, columns[1]], 10)
+    assert all(p["request"]["group_by"] != "password_hash" for p in restricted)
 
 
 def test_dataset_understanding_job_version_and_executable_suggestions(workspace):

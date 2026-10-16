@@ -45,7 +45,11 @@ def role_candidates(name: str, dtype: str, unique: int, total: int) -> list[dict
         item["role"] == "identifier" for item in values
     ):
         add("numeric_measure", "physical_dtype")
-    if re.search(r"(?:^|_)(?:ip|email|phone|user|name|ssn|token)(?:$|_)", name, re.I):
+    if re.search(
+        r"(?:^|_)(?:ip|email|phone|user|name|ssn|token|secret|password|key|hash)(?:$|_)",
+        name,
+        re.I,
+    ):
         add("potentially_sensitive", "column_name_hint")
     return values
 
@@ -183,7 +187,9 @@ def suggest_analyses(columns: list[dict], row_count: int) -> list[dict]:
         col
         for col in columns
         if any(r["role"] == "categorical" for r in col["roles"])
-        and not any(r["role"] == "potentially_sensitive" for r in col["roles"])
+        and not any(
+            r["role"] in ("potentially_sensitive", "identifier") for r in col["roles"]
+        )
         and not col["is_constant"]
         and col["distinct_count"] > 1
     ]
@@ -215,8 +221,8 @@ def suggest_analyses(columns: list[dict], row_count: int) -> list[dict]:
     if numeric:
         append(
             "numeric_summary",
-            "숫자형 분포 확인",
-            "변동이 있는 숫자형 컬럼이 발견됐습니다.",
+            "숫자형 최댓값 확인",
+            "변동이 있는 숫자형 컬럼이 발견됐습니다. 최댓값을 집계합니다.",
             numeric["name"],
             "max",
         )

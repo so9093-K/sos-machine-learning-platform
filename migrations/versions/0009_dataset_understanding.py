@@ -30,6 +30,14 @@ def upgrade() -> None:
     )
 
 
+    op.create_index(
+        "ix_jobs_dataset_created_id",
+        "jobs",
+        ["dataset_id", "created_at", "id"],
+    )
+
+
 def downgrade() -> None:
+    op.drop_index("ix_jobs_dataset_created_id", table_name="jobs")
     op.drop_index("ix_dataset_profiles_dataset_created", table_name="dataset_profiles")
     op.drop_table("dataset_profiles")
