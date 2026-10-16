@@ -18,6 +18,7 @@ test.describe("token identity and resource permissions", () => {
     await signIn(page, viewer!);
     await expect(page.locator(".auth-status")).toContainText("ci-viewer");
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "표시명 설정" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" }))
       .toHaveCount(0);
     await expect(page.getByRole("button", { name: "Iceberg에 추가" })).toHaveCount(0);

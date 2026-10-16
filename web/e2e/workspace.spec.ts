@@ -651,3 +651,53 @@ test("unknown CSV opens Understanding, persists profile and runs suggested explo
   await expect(page.getByRole("tab", { name: "개요" })).toBeVisible();
   await expect(page.getByText("발견된 컬럼 특성")).toBeVisible({ timeout: 30000 });
 });
+
+
+test("Data Explorer shell, instance name and tab-scoped loading", async ({ page }) => {
+  const previewRequests: string[] = [];
+  const profileRequests: string[] = [];
+  page.on("request", request => {
+    const url = request.url();
+    if (/\/api\/datasets\/[^/]+\/preview\?/.test(url)) previewRequests.push(url);
+    if (/\/api\/datasets\/[^/]+\/profile$/.test(url)) profileRequests.push(url);
+  });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "데이터 탐색" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "전역 메뉴" })).toBeVisible();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "ui-explorer.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("group,value\na,1\nb,2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "ui-explorer.csv" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "개요" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "데이터 프로파일" })).toBeVisible();
+  expect(previewRequests.length).toBe(0);
+  expect(profileRequests.length).toBe(0);
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
+  await expect(page.getByText("2 rows shown")).toBeVisible();
+  expect(previewRequests.length).toBe(1);
+  await page.getByRole("tab", { name: "개요" }).click();
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
+  await expect(page.getByText("2 rows shown")).toBeVisible();
+  expect(previewRequests.length).toBe(1);
+});
+
+test("administrator changes instance name and it survives browser reload", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "표시명 설정" }).click();
+  await page.getByLabel("인스턴스 표시명").fill("UX Research Workspace");
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByText("UX Research Workspace")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("UX Research Workspace")).toBeVisible();
+});
+
+test("Data Explorer navigation stays usable at mobile width", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "데이터 탐색" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "전역 메뉴" })).toBeVisible();
+  const width = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(width).toBeLessThanOrEqual(390);
+});
