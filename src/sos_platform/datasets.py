@@ -2,13 +2,14 @@
 
 import os
 import re
+import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import BinaryIO
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import polars as pl
 import pyarrow as pa
@@ -98,6 +99,34 @@ def iceberg_catalog(store: Store):
     )
 
 
+def _stage_prefix(attempt_id: str) -> str:
+    """내부 Attempt UUID를 검증해 경로 제어 문자를 허용하지 않는다."""
+    return f"attempt-{UUID(attempt_id)}-"
+
+
+def cleanup_iceberg_staging(store: Store, attempt_id: str | None = None) -> None:
+    """실행 종료·Worker 재시작 시 불완전한 로컬 입력만 정리한다.
+
+    Args:
+        store: 작업 로컬 루트.
+        attempt_id: 지정하면 해당 Attempt 임시 파일만 제거한다.
+            None은 독점 Worker lock을 획득한 복구 시점에만 사용한다.
+    """
+    root = store.home / "cache" / "iceberg-staging"
+    if not root.exists():
+        return
+    prefix = _stage_prefix(attempt_id) if attempt_id is not None else "attempt-"
+    for path in root.iterdir():
+        if not path.name.startswith(prefix):
+            continue
+        # 임시 디렉터리만 대상으로 하며 symlink는 따라가지 않는다.
+        if path.is_dir() and not path.is_symlink() and re.fullmatch(
+            r"attempt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[A-Za-z0-9_]+",
+            path.name,
+        ):
+            shutil.rmtree(path)
+
+
 def import_to_iceberg(
     store: Store,
     dataset: dict,
@@ -112,45 +141,45 @@ def import_to_iceberg(
     catalog = iceberg_catalog(store)
     catalog.create_namespace_if_not_exists("default")
     ident = f"default.{table_name}"
-    # Lazy 결과를 로컬 불변 스테이징 Parquet으로 기록한다. 입력 전체를
-    # 메모리에 수집하지 않으며 중간 계산 실패는 Catalog 커밋 이전에 발생한다.
-    scratch = store.home / "cache" / "iceberg-staging"
-    scratch.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix="attempt-", dir=scratch) as directory:
-        staged = Path(directory) / "input.parquet"
+    # Partitioned append는 Reader 기반 쓰기가 지원되지 않으므로
+    # 이전 호환 경로의 제한을 먼저 검증해 불필요한 대형 스테이징을 피한다.
+    try:
+        table = catalog.load_table(ident)
+    except Exception as exc:
+        from pyiceberg.exceptions import NoSuchTableError
+
+        if not isinstance(exc, NoSuchTableError):
+            raise
+        table = None
+
+    if table is not None and table.spec().fields:
+        from .processing import bounded_iceberg_arrow
+
         with pinned_scan_dataset(store, dataset) as source:
-            source.sink_parquet(staged)
-        staged_parquet = pq.ParquetFile(staged)
-        try:
-            table = catalog.load_table(ident)
-        except Exception as exc:
-            from pyiceberg.exceptions import NoSuchTableError
-
-            if not isinstance(exc, NoSuchTableError):
-                raise
-            table = catalog.create_table(ident, schema=staged_parquet.schema_arrow)
-
-        if table.spec().fields:
-            # 기존 파티션 테이블은 PyIceberg 0.12의 Reader append 대상이 아니다.
-            # 이전 작은 입력의 호환 경로를 유지하며 부분 커밋은 수행하지 않는다.
-            from .processing import bounded_iceberg_arrow
-
-            with pinned_scan_dataset(store, dataset) as source:
-                data = bounded_iceberg_arrow(source)
-        else:
-            data = pa.RecordBatchReader.from_batches(
-                staged_parquet.schema_arrow,
-                staged_parquet.iter_batches(batch_size=65_536),
-            )
-
-        # 실제 외부 커밋 진입 여부를 부모 Worker에 명시하고 한 Snapshot에 쓰기.
+            data = bounded_iceberg_arrow(source)
         if on_commit_start is not None:
             on_commit_start()
-        try:
-            table.append(data, snapshot_properties={"sos.attempt-id": attempt_id})
-        finally:
-            if isinstance(data, pa.RecordBatchReader):
-                data.close()
+        table.append(data, snapshot_properties={"sos.attempt-id": attempt_id})
+    else:
+        # Attempt 식별자를 경로에 포함해 강제 종료 후 부모가 자기 임시 파일만 제거한다.
+        scratch = store.home / "cache" / "iceberg-staging"
+        scratch.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(prefix=_stage_prefix(attempt_id), dir=scratch) as directory:
+            staged = Path(directory) / "input.parquet"
+            with pinned_scan_dataset(store, dataset) as source:
+                source.sink_parquet(staged)
+            with pq.ParquetFile(staged) as parquet:
+                if table is None:
+                    table = catalog.create_table(ident, schema=parquet.schema_arrow)
+                reader = pa.RecordBatchReader.from_batches(
+                    parquet.schema_arrow, parquet.iter_batches(batch_size=65_536)
+                )
+                try:
+                    if on_commit_start is not None:
+                        on_commit_start()
+                    table.append(reader, snapshot_properties={"sos.attempt-id": attempt_id})
+                finally:
+                    reader.close()
     snapshots = [
         snapshot
         for snapshot in catalog.load_table(ident).snapshots()

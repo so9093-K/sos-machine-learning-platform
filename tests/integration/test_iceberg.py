@@ -338,3 +338,28 @@ def test_large_unpartitioned_iceberg_import_uses_one_snapshot(workspace):
     assert len(table.snapshots()) == 1
     assert table.scan().to_arrow().num_rows == 65_000
     assert table.current_snapshot().summary["sos.attempt-id"] == finished["attempts"][0]["id"]
+
+
+
+def test_iceberg_staging_cleanup_is_scoped_to_its_attempt(workspace):
+    """강제 종료 후에는 해당 Attempt의 임시 파일만 정리할 수 있어야 한다."""
+    from sos_platform.datasets import cleanup_iceberg_staging
+
+    _client, store = workspace
+    first, second = str(uuid4()), str(uuid4())
+    root = store.home / "cache" / "iceberg-staging"
+    own = root / f"attempt-{first}-test1"
+    other = root / f"attempt-{second}-test2"
+    for path in (own, other):
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "input.parquet").write_bytes(b"partially-written")
+    unexpected = root / "user-original.parquet"
+    unexpected.write_bytes(b"keep-me")
+    cleanup_iceberg_staging(store, first)
+    assert not own.exists()
+    assert other.exists()
+    assert unexpected.read_bytes() == b"keep-me"
+    cleanup_iceberg_staging(store)
+    assert not other.exists()
+    assert unexpected.read_bytes() == b"keep-me"
+    unexpected.unlink()

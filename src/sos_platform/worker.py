@@ -13,7 +13,7 @@ import signal
 import time
 from pathlib import Path
 
-from .datasets import import_to_iceberg, pinned_scan_dataset
+from .datasets import cleanup_iceberg_staging, import_to_iceberg, pinned_scan_dataset
 from .diagnostics import classify_failure
 from .discovery import explore as discovery_explore
 from .discovery import profile as discovery_profile
@@ -246,6 +246,9 @@ def run_once(store: Store) -> bool:
         output.unlink(missing_ok=True)
         pending.unlink(missing_ok=True)
         completed.unlink(missing_ok=True)
+        if job["kind"] == "iceberg_import":
+            # 자식이 SIGKILL되어도 Attempt에 속한 미완성 입력은 부모가 회수한다.
+            cleanup_iceberg_staging(store, attempt_id)
     return True
 
 
@@ -267,6 +270,8 @@ def main():
     previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
     try:
         store.recover()
+        # 단일 Worker 잠금 아래에서는 이전 실행의 자식이 남아 있지 않다.
+        cleanup_iceberg_staging(store)
         store.heartbeat()
         if args.once:
             run_once(store)
