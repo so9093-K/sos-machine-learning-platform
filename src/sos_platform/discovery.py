@@ -7,11 +7,11 @@ Dataset 판본과 접근 권한의 판단은 호출자인 API·Worker가 담당�
 import base64
 import math
 import os
-from datetime import date, datetime, time
-from decimal import Decimal
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import date, datetime, time
+from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -63,9 +63,19 @@ MAX_SAFE_JSON_INTEGER = 2**53 - 1
 
 
 _NUMERIC_SQL_TYPES = {
-    "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT",
-    "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT", "UHUGEINT",
-    "FLOAT", "DOUBLE", "REAL",
+    "TINYINT",
+    "SMALLINT",
+    "INTEGER",
+    "BIGINT",
+    "HUGEINT",
+    "UTINYINT",
+    "USMALLINT",
+    "UINTEGER",
+    "UBIGINT",
+    "UHUGEINT",
+    "FLOAT",
+    "DOUBLE",
+    "REAL",
 }
 
 
@@ -78,10 +88,16 @@ def _dtype(dtype: str) -> str:
     """원본 SQL 타입의 크기·부호·시간대 의미를 보존해 UI에 노출한다."""
     kind = dtype.upper()
     integer = {
-        "TINYINT": "Int8", "SMALLINT": "Int16", "INTEGER": "Int32",
-        "BIGINT": "Int64", "HUGEINT": "Int128",
-        "UTINYINT": "UInt8", "USMALLINT": "UInt16", "UINTEGER": "UInt32",
-        "UBIGINT": "UInt64", "UHUGEINT": "UInt128",
+        "TINYINT": "Int8",
+        "SMALLINT": "Int16",
+        "INTEGER": "Int32",
+        "BIGINT": "Int64",
+        "HUGEINT": "Int128",
+        "UTINYINT": "UInt8",
+        "USMALLINT": "UInt16",
+        "UINTEGER": "UInt32",
+        "UBIGINT": "UInt64",
+        "UHUGEINT": "UInt128",
     }
     if kind in integer:
         return integer[kind]
@@ -350,9 +366,7 @@ def explore(
         actual = {c["name"]: c for c in _columns(conn)}
         if column not in actual or (group_by is not None and group_by not in actual):
             raise ValueError("Unknown exploration column")
-        if metric in ("mean", "min", "max") and not _numeric_type(
-            actual[column]["sql_type"]
-        ):
+        if metric in ("mean", "min", "max") and not _numeric_type(actual[column]["sql_type"]):
             raise ValueError("Numeric metric requires numeric column")
         value = expressions[metric](quoted(column))
         source = (

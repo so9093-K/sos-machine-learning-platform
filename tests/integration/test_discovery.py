@@ -278,7 +278,9 @@ def test_binary_parquet_preview_and_null_group_are_json_safe(workspace):
     preview = client.get(base + "/preview")
     assert preview.status_code == 200, preview.text
     assert [row["binary"] for row in preview.json()["rows"]] == [
-        "base64:/w==", None, "base64:AA==",
+        "base64:/w==",
+        None,
+        "base64:AA==",
     ]
     spec = {"column": "value", "metric": "count", "group_by": "binary"}
     sample = client.post(base + "/explorations", json=spec)
@@ -314,7 +316,8 @@ def test_nonfinite_groups_sort_after_normalization_before_limit(workspace, monke
     assert sample.json()["truncated"] is True
     assert len(rows) == 5
     assert [(row["category"], row["value"]) for row in rows[:2]] == [
-        ("good_b", 8.0), ("good_a", 7.0),
+        ("good_b", 8.0),
+        ("good_a", 7.0),
     ]
     assert all(row["value"] is None for row in rows[2:])
     submitted = client.post(
