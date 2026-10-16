@@ -14,6 +14,8 @@ import type { Dataset, DatasetPage, Preview, Profile, Job, JobSummary, JobPage, 
 import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
+import { useDatasetOverview } from "./useDatasetOverview";
+import { useDatasetInspection } from "./useDatasetInspection";
 import type { ExplorationRequest } from "./types";
 
 
@@ -40,13 +42,6 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [nextDatasetCursor, setNextDatasetCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>("");
-  // 응답의 소유 Dataset과 재조회 세대를 기록해 전환 중 과거 결과 노출을 막는다.
-  const [previewState, setPreviewState] = useState<{
-    datasetId: string; revision: number; data: Preview;
-  } | null>(null);
-  const [profileState, setProfileState] = useState<{
-    datasetId: string; revision: number; data: Profile;
-  } | null>(null);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [nextJobsCursor, setNextJobsCursor] = useState<string | null>(null);
   const [discoveryJobs, setDiscoveryJobs] = useState<ExplorationJobSummary[]>([]);
@@ -55,8 +50,6 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [olderJobsLoaded, setOlderJobsLoaded] = useState(false);
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
-  const [previewStatus, setPreviewStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [profileStatus, setProfileStatus] = useState<"loading" | "ready" | "error">("loading");
   const [reloadRevision, setReloadRevision] = useState(0);
   const [tab, setTab] = useState<Tab>("understanding");
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
@@ -118,10 +111,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setTab("profile");
     requestAnimationFrame(() => document.getElementById("sos-tab-profile")?.focus());
   }
-  const preview = previewState?.datasetId === selected &&
-    previewState.revision === reloadRevision ? previewState.data : null;
-  const profile = profileState?.datasetId === selected &&
-    profileState.revision === reloadRevision ? profileState.data : null;
+  const { overview, overviewStatus, overviewError, retryOverview } =
+    useDatasetOverview(selected, reloadRevision);
+  const { preview, profile, previewStatus, profileStatus, previewError, profileError } =
+    useDatasetInspection(selected, reloadRevision, tab);
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const displayedPreview = queryPreview?.datasetId === selected &&
     queryPreview.revision === reloadRevision ? queryPreview.data : preview;
@@ -233,75 +226,16 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy(""); setGroupBy([]);
     setChosenColumns([]); setQueryPreview(null);
   }, [selected]);
-  // 탭별 기본 데이터는 최초 방문 때만 조회한다. Dataset 전환·명시적 새로고침만 무효화한다.
-  const previewRequestKey = useRef("");
-  const profileRequestKey = useRef("");
   useEffect(() => {
-    setPreviewState(null); setProfileState(null);
-    setPreviewStatus("loading"); setProfileStatus("loading");
-    previewRequestKey.current = "";
-    profileRequestKey.current = "";
-  }, [selected, reloadRevision]);
-  useEffect(() => {
-    if (!selected) return;
-    let active = true;
-    const key = selected + ":" + reloadRevision;
-    let previewStarted = false;
-    let previewSettled = false;
-    let profileStarted = false;
-    let profileSettled = false;
-    if (["preview", "profile", "features"].includes(tab) && previewRequestKey.current !== key) {
-      previewRequestKey.current = key;
-      previewStarted = true;
-      setPreviewStatus("loading");
-      request<Preview>(`/api/datasets/${selected}/preview?limit=100`)
-        .then(data => {
-          previewSettled = true;
-          if (!active) return;
-          setPreviewState({ datasetId: selected, revision: reloadRevision, data });
-          setPreviewStatus("ready");
-          const columns = Object.keys(data.schema);
-          setColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
-          setVisualColumn(current =>
-            columns.includes(current) && /Int|Float|Decimal/.test(data.schema[current])
-              ? current : (columns.find(name => /Int|Float|Decimal/.test(data.schema[name]))
-                ?? columns[0] ?? ""));
-          setTimeColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
-        })
-        .catch(error => {
-          previewSettled = true;
-          if (!active) return;
-          setPreviewStatus("error"); setError(formatError(error));
-        });
-    }
-    if (tab === "profile" && profileRequestKey.current !== key) {
-      profileRequestKey.current = key;
-      profileStarted = true;
-      setProfileStatus("loading");
-      request<Profile>(`/api/datasets/${selected}/profile`)
-        .then(data => {
-          profileSettled = true;
-          if (active) {
-            setProfileState({ datasetId: selected, revision: reloadRevision, data });
-            setProfileStatus("ready");
-          }
-        })
-        .catch(error => {
-          profileSettled = true;
-          if (active) { setProfileStatus("error"); setError(formatError(error)); }
-        });
-    }
-    return () => {
-      active = false;
-      // 진행 중인 응답은 무시하고 재진입하면 재요청한다.
-      if (previewStarted && !previewSettled && previewRequestKey.current === key) {
-        previewRequestKey.current = "";
-      }
-      if (profileStarted && !profileSettled && profileRequestKey.current === key) {
-        profileRequestKey.current = "";
-      }
-    };
-  }, [selected, reloadRevision, tab]);
+    if (!preview) return;
+    const columns = Object.keys(preview.schema);
+    setColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
+    setVisualColumn(current =>
+      columns.includes(current) && /Int|Float|Decimal/.test(preview.schema[current])
+        ? current : (columns.find(name => /Int|Float|Decimal/.test(preview.schema[name]))
+          ?? columns[0] ?? ""));
+    setTimeColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
+  }, [preview]);
   useEffect(() => {
     // 첫 페이지에 없는 과거 성공 Job 때문에 무한히 GET을 반복하지 않는다.
     const unseen = jobs.filter(j => j.status === "Succeeded" && j.result?.dataset_id &&
@@ -649,7 +583,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         {tab === "understanding" && <section className="panel" role="tabpanel"
           id="sos-panel-understanding" aria-labelledby="sos-tab-understanding" tabIndex={0}>
           <UnderstandingPanel key={selected + ":" + reloadRevision} datasetId={selected}
-            canCreate={canRun} onChooseCandidate={selectExplorationCandidate} />
+            canCreate={canRun} onChooseCandidate={selectExplorationCandidate}
+            overview={overview} overviewStatus={overviewStatus}
+            overviewError={overviewError} onRetryOverview={retryOverview} />
         </section>}
         {tab === "preview" && <section className="panel" role="tabpanel"
           id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
@@ -666,6 +602,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               ? <span className="null">NULL</span> : String(r[c])}</td>)}
           </tr>)}</tbody></table></div>{displayedPreview.rows.length === 0 && <p className="muted">조건에 맞는 행이 없습니다.</p>}</>}
           {previewStatus === "loading" && <p className="muted" role="status">미리보기를 불러오는 중입니다.</p>}
+          {previewStatus === "error" && <p role="alert">{previewError}</p>}
           {previewStatus === "error" && <button className="secondary"
             onClick={() => setReloadRevision(v => v + 1)}>미리보기 다시 시도</button>}
           <div className="hint">스키마와 파일·스냅샷 버전은 실행 입력으로 고정됩니다.</div>
@@ -674,11 +611,14 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           id="sos-panel-profile" aria-labelledby="sos-tab-profile" tabIndex={0}>
           <DiscoveryPanel key={selected + ":" + reloadRevision} datasetId={selected}
             canCreate={canRun} draft={activeExplorationDraft} onDraftChange={changeExploration}
+            overview={overview} overviewStatus={overviewStatus}
+            overviewError={overviewError} onRetryOverview={retryOverview}
             onCreated={async () => { await refreshDiscoveryJobs(); setTab("jobs"); }} />
           <div className="panel-head"><div><h3>샘플 프로파일</h3>
             <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
           </div>{canRun && <button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button>}</div>
           {profileStatus === "loading" && <p role="status" className="muted">EDA 통계를 계산하고 있습니다.</p>}
+          {profileStatus === "error" && <p role="alert">{profileError}</p>}
           {profileStatus === "error" && <button className="secondary"
             onClick={() => setReloadRevision(v => v + 1)}>EDA 다시 시도</button>}
           {profile && <>

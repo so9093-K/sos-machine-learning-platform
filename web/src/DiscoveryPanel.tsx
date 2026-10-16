@@ -15,14 +15,18 @@ function analysisLabel(basis: string) {
 /** 사람과 외부 API가 동일하게 사용하는 Dataset Discovery 계약을 표시한다. */
 export function DiscoveryPanel({
   datasetId, canCreate, onCreated, draft, onDraftChange,
+  overview, overviewStatus, overviewError, onRetryOverview,
 }: {
   datasetId: string;
   canCreate: boolean;
   onCreated: () => Promise<void>;
   draft: ExplorationDraft | null;
   onDraftChange: (request: ExplorationRequest) => void;
+  overview: DatasetOverview | null;
+  overviewStatus: "loading" | "ready" | "error";
+  overviewError: string;
+  onRetryOverview: () => void;
 }) {
-  const [overview, setOverview] = useState<DatasetOverview | null>(null);
   const [columns, setColumns] = useState<DatasetColumns | null>(null);
   const [search, setSearch] = useState("");
   const [result, setResult] = useState<Exploration | null>(null);
@@ -33,14 +37,13 @@ export function DiscoveryPanel({
   const [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true;
-    setStatus("loading"); setOverview(null); setColumns(null);
+    setStatus("loading"); setColumns(null);
     setResult(null); setError("");
-    Promise.all([
-      request<DatasetOverview>(`/api/datasets/${datasetId}/overview`),
-      request<DatasetColumns>(`/api/datasets/${datasetId}/columns`),
-    ]).then(([o, c]) => {
+    request<DatasetColumns>(
+      `/api/datasets/${encodeURIComponent(datasetId)}/columns`,
+    ).then(c => {
       if (!active) return;
-      setOverview(o); setColumns(c);
+      setColumns(c);
       setStatus("ready");
     }).catch(e => { if (active) { setError(formatError(e)); setStatus("error"); } });
     return () => { active = false; };
@@ -116,7 +119,12 @@ export function DiscoveryPanel({
   }, [result]);
   return <section className="discovery-panel" aria-label="Dataset Discovery">
     <h4>데이터 개요</h4>
-    {status === "loading" && <p role="status" className="muted">구조와 메타데이터를 확인하는 중입니다.</p>}
+    {status === "loading" && <p role="status" className="muted">컬럼 목록을 확인하는 중입니다.</p>}
+    {overviewStatus === "loading" && <p className="muted" role="status">기본 정보 조회 중</p>}
+    {overviewStatus === "error" && <div role="alert" className="alert">
+      기본 정보 조회 실패: {overviewError}
+      <button className="secondary" onClick={onRetryOverview}>기본 정보 다시 조회</button>
+    </div>}
     {status === "error" && <button className="secondary"
       onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>}
     {overview && <div className="cards">

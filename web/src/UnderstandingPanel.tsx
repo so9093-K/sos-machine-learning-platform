@@ -7,34 +7,27 @@ import type { components } from "./api.generated";
 
 type Understanding = components["schemas"]["UnderstandingOut"];
 
-export function UnderstandingPanel({ datasetId, canCreate, onChooseCandidate }: {
+export function UnderstandingPanel({
+  datasetId, canCreate, onChooseCandidate, overview, overviewStatus, overviewError, onRetryOverview,
+}: {
   datasetId: string;
   canCreate: boolean;
+  overview: DatasetOverview | null;
+  overviewStatus: "loading" | "ready" | "error";
+  overviewError: string;
+  onRetryOverview: () => void;
   onChooseCandidate: (
     candidate: { request: ExplorationRequest; title: string; reason: string },
     version: string, profileScope: "sample" | "full",
   ) => void;
 }) {
   const [state, setState] = useState<Understanding | null>(null);
-  const [overview, setOverview] = useState<DatasetOverview | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [jobError, setJobError] = useState("");
   const [revision, setRevision] = useState(0);
   const [columnSearch, setColumnSearch] = useState("");
   const [columnFilter, setColumnFilter] = useState("all");
-
-  useEffect(() => {
-    let active = true;
-    request<DatasetOverview>(
-      "/api/datasets/" + encodeURIComponent(datasetId) + "/overview"
-    ).then(data => {
-      if (active) setOverview(data);
-    }).catch(() => {
-      // Overview 실패가 Profile 조회나 원본 Dataset 접근을 차단해서는 안 된다.
-    });
-    return () => { active = false; };
-  }, [datasetId]);
 
   useEffect(() => {
     let active = true;
@@ -104,6 +97,11 @@ export function UnderstandingPanel({ datasetId, canCreate, onChooseCandidate }: 
     {state?.job_status === "Failed" && <p role="alert">
       최근 분석에 실패했습니다. Dataset과 이전 완료 결과는 그대로 사용할 수 있습니다.
     </p>}
+    {!profile && overviewStatus === "error" && <div role="alert">
+      기본 메타데이터 조회 실패: {overviewError}
+      <button className="secondary" onClick={onRetryOverview}>기본 정보 다시 조회</button>
+    </div>}
+    {!profile && overviewStatus === "loading" && <p role="status">기본 메타데이터 조회 중</p>}
     {!profile && overview && <>
       <div className="cards">
         <div className="stat"><span>등록된 컬럼</span><strong>{overview.column_count}</strong></div>
