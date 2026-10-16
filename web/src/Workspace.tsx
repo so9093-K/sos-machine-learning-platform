@@ -4,6 +4,7 @@ import { DataChart, CHART_COLORS } from "./DataChart";
 import { histogram, needsTimeOrder } from "./feature-utils";
 import { useFeatureEditor } from "./useFeatureEditor";
 import { FeaturePanel } from "./FeaturePanel";
+import { useIcebergConnector } from "./useIcebergConnector";
 import { request, jsonPost, submitJob, formatError, uploadFile } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
@@ -12,7 +13,7 @@ import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
 import { DatasetQueryPanel } from "./DatasetQueryPanel";
-import type { Dataset, DatasetPage, Preview, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity, Snapshot } from "./types";
+import type { Dataset, DatasetPage, Preview, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
@@ -59,16 +60,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [existingTableName, setExistingTableName] = useState("");
-  const [importTableName, setImportTableName] = useState("");
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
-  const [snapshotId, setSnapshotId] = useState("");
-  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
-  const snapshotRequestVersion = useRef(0);
   const [queryPreview, setQueryPreview] = useState<{
     datasetId: string; revision: number; data: Preview
   } | null>(null);
-  const [featurePreviewResult, setFeaturePreview] = useState<{ signature: string; data: Preview } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
   const showExamples = useRef(false);
@@ -111,6 +105,14 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     datasetId: selected, preview, onError: setError, withFeedback,
   });
   const { steps, orderBy, transform, setColumn } = editor;
+  const {
+    existingTableName, changeExistingTableName, importTableName, setImportTableName,
+    snapshots, snapshotId, setSnapshotId, snapshotsLoading,
+    loadSnapshots, connectExisting, importIceberg,
+  } = useIcebergConnector({
+    selected, onError: setError, withFeedback,
+    onConnected: showRegisteredDataset, onImported: showSubmittedJob,
+  });
   const displayedPreview = queryPreview?.datasetId === selected &&
     queryPreview.revision === reloadRevision ? queryPreview.data : preview;
   const displayedColumns = displayedPreview ? Object.keys(displayedPreview.schema) : [];
@@ -313,42 +315,6 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     });
     setUploadProgress(null);
   }
-  async function loadSnapshots() {
-    if (!existingTableName.trim()) return;
-    const version = ++snapshotRequestVersion.current;
-    setSnapshotsLoading(true);
-    setError("");
-    try {
-      const items = await request<Snapshot[]>(
-        `/api/iceberg/${encodeURIComponent(existingTableName)}/snapshots`);
-      if (version !== snapshotRequestVersion.current) return;
-      setSnapshots(items);
-      setSnapshotId(items[0]?.snapshot_id ?? "");
-    } catch (cause) {
-      if (version !== snapshotRequestVersion.current) return;
-      setSnapshots([]); setSnapshotId("");
-      setError(formatError(cause));
-    } finally {
-      if (version === snapshotRequestVersion.current) setSnapshotsLoading(false);
-    }
-  }
-  async function connectExisting() {
-    await withFeedback(async () => {
-      const data = await jsonPost<Dataset>("/api/datasets/iceberg",
-        { table_name: existingTableName, ...(snapshotId ? { snapshot_id: snapshotId } : {}) });
-      await showRegisteredDataset(data,
-        "기존 Iceberg 테이블의 스냅샷을 연결했습니다.",
-        "Iceberg 스냅샷은 정상 연결됐습니다. 목록 새로고침에 실패했지만 다시 연결할 필요는 없습니다.");
-    });
-  }
-  async function importIceberg() {
-    if (!selected) return;
-    await withFeedback(async () => {
-      const job = await submitJob<Job>("/api/iceberg/import",
-        { dataset_id: selected, table_name: importTableName });
-      await showSubmittedJob(job, "Iceberg 적재 Job이 등록되었습니다. 완료 후 데이터셋 목록에서 확인할 수 있습니다.");
-    });
-  }
   async function cancelJob(id: string) {
     await withFeedback(async () => {
       const path = discoveryJobs.some(job => job.id === id)
@@ -435,11 +401,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       {canWrite && <div className="connect-existing">
         <label>기존 Iceberg 테이블
           <input aria-label="Iceberg 테이블 이름" value={existingTableName}
-            onChange={e => {
-              ++snapshotRequestVersion.current;
-              setExistingTableName(e.target.value);
-              setSnapshots([]); setSnapshotId(""); setSnapshotsLoading(false);
-            }}
+            onChange={e => changeExistingTableName(e.target.value)}
             placeholder="sensor_data" />
         </label>
         <button className="secondary" disabled={busy || snapshotsLoading || !existingTableName.trim()}
