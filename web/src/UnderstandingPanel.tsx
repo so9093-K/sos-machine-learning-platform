@@ -1,7 +1,7 @@
 /** Dataset 판본의 실제 Profile과 실행 가능한 탐색을 공통 API로 표시한다. */
 import { useEffect, useState } from "react";
 import { formatError, jsonPost, request, submitJob } from "./api";
-import type { Exploration, ExplorationRequest, Job } from "./types";
+import type { DatasetOverview, Exploration, ExplorationRequest, Job } from "./types";
 
 import type { components } from "./api.generated";
 
@@ -11,11 +11,24 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
   datasetId: string; canCreate: boolean;
 }) {
   const [state, setState] = useState<Understanding | null>(null);
+  const [overview, setOverview] = useState<DatasetOverview | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Exploration | null>(null);
   const [jobError, setJobError] = useState("");
   const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    request<DatasetOverview>(
+      "/api/datasets/" + encodeURIComponent(datasetId) + "/overview"
+    ).then(data => {
+      if (active) setOverview(data);
+    }).catch(() => {
+      // Overview 실패가 Profile 조회나 원본 Dataset 접근을 차단해서는 안 된다.
+    });
+    return () => { active = false; };
+  }, [datasetId]);
 
   useEffect(() => {
     let active = true;
@@ -83,8 +96,26 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
       state.job_status ?? (profile ? "완료" : "미실행")
     }</p>}
     {state?.job_status === "Failed" && <p role="alert">
-      기본 분석에 실패했습니다. Dataset은 그대로 사용할 수 있습니다.
+      최근 분석에 실패했습니다. Dataset과 이전 완료 결과는 그대로 사용할 수 있습니다.
     </p>}
+    {!profile && overview && <>
+      <div className="cards">
+        <div className="stat"><span>등록된 컬럼</span><strong>{overview.column_count}</strong></div>
+        <div className="stat"><span>원본 행 수</span><strong>{
+          overview.row_count === null ? "미계산" : overview.row_count.toLocaleString()
+        }</strong></div>
+      </div>
+      <p className="hint">{overview.row_count_basis === "parquet_metadata"
+        ? "행 수는 Parquet 메타데이터 기준입니다."
+        : "정확한 전체 행 수는 Profile 실행 후 확인할 수 있습니다."}
+        {" · "}분포와 역할 후보는 별도 분석 중에 계산됩니다.</p>
+      <h4>기본 스키마</h4>
+      <div className="table-scroll"><table><thead><tr>
+        <th>컬럼</th><th>자료형</th>
+      </tr></thead><tbody>{overview.columns.map(col => <tr key={col.name}>
+        <td>{col.name}</td><td>{col.dtype}</td>
+      </tr>)}</tbody></table></div>
+    </>}
     {profile && <>
       <div className="cards">
         <div className="stat"><span>분석한 행</span><strong>{profile.row_count.toLocaleString()}</strong></div>
