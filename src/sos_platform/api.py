@@ -257,7 +257,6 @@ def create_app(home: Path | None = None) -> FastAPI:
             return JSONResponse(status_code=503, content=result)
         return result
 
-    @app.get("/api/auth/me")
     @app.get("/api/v2/auth/me", response_model=AuthMeOut)
     def auth_me(actor: Actor = IDENTITY_DEP):
         return {
@@ -289,7 +288,6 @@ def create_app(home: Path | None = None) -> FastAPI:
         )
         return {"display_name": body.display_name}
 
-    @app.get("/api/audit")
     @app.get("/api/v2/audit", response_model=list[AuditEventOut])
     def audit_events(
         limit: int = Query(default=50, ge=1, le=100),
@@ -300,7 +298,6 @@ def create_app(home: Path | None = None) -> FastAPI:
         """운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다."""
         return store.audit_events(limit=limit, request_id=request_id, resource_id=job_id)
 
-    @app.get("/api/diagnostics/jobs/{job_id}")
     @app.get("/api/v2/diagnostics/jobs/{job_id}", response_model=JobDiagnosticsOut)
     def job_diagnostics(job_id: str, actor: Actor = AUDIT_DEP):
         """권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다."""
@@ -392,17 +389,13 @@ def create_app(home: Path | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Example not found") from exc
 
-    @app.get("/api/datasets", response_model=list[DatasetOut], deprecated=True)
-    def list_datasets(actor: Actor = READ_DATASET_DEP):
-        return store.datasets(actor_id=None if actor.privileged else actor.id)
-
-    @app.get("/api/datasets/pages", response_model=DatasetPageOut)
+    @app.get("/api/datasets", response_model=DatasetPageOut)
     def list_dataset_page(
         limit: int = Query(default=20, ge=1, le=100),
         cursor: str | None = Query(default=None, max_length=512),
         actor: Actor = READ_DATASET_DEP,
     ):
-        """기존 배열 응답을 유지하면서 규모 제한된 새 목록 API를 제공한다."""
+        """Dataset 목록은 키셋 페이지 응답으로 제공한다."""
         before = decode_cursor(cursor, "Dataset")
         rows = store.dataset_page(
             limit=limit + 1,

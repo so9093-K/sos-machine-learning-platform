@@ -42,7 +42,7 @@ def test_unexpected_failure_does_not_expose_exception_message(workspace, monkeyp
     def failure(_store, **_kwargs):
         raise RuntimeError(sentinel)
 
-    monkeypatch.setattr(Store, "datasets", failure)
+    monkeypatch.setattr(Store, "dataset_page", failure)
     with TestClient(create_app(store.home), raise_server_exceptions=False) as safe:
         response = safe.get("/api/datasets")
     assert response.status_code == 500
@@ -99,10 +99,10 @@ def test_audit_filter_finds_older_request_and_preserves_permissions(workspace, m
             resource_type="job",
             resource_id=str(number),
         )
-    found = client.get("/api/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"})
+    found = client.get("/api/v2/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"})
     assert found.status_code == 200
     assert len(found.json()) == 1 and found.json()[0]["action"] == "audit.find-me"
-    by_job = client.get("/api/audit", params={"job_id": "abcdefab-cdef-abcd-efab-cdefabcdefab"})
+    by_job = client.get("/api/v2/audit", params={"job_id": "abcdefab-cdef-abcd-efab-cdefabcdefab"})
     assert by_job.status_code == 200 and len(by_job.json()) == 1
     monkeypatch.setenv("SOS_AUTH_MODE", "token")
     monkeypatch.setenv(
@@ -111,7 +111,7 @@ def test_audit_filter_finds_older_request_and_preserves_permissions(workspace, m
     )
     with TestClient(create_app(store.home)) as protected:
         denied = protected.get(
-            "/api/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"}
+            "/api/v2/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"}
         )
     assert denied.status_code == 401
 
@@ -185,7 +185,7 @@ def test_operator_diagnostics_retains_category_without_raw_exception(workspace, 
 
     monkeypatch.setattr(ObjectStore, "put", fail_write)
     assert run_once(store)
-    details = client.get(f"/api/diagnostics/jobs/{job_id}")
+    details = client.get(f"/api/v2/diagnostics/jobs/{job_id}")
     assert details.status_code == 200
     payload = details.json()
     assert payload["request_id"] == request_id
@@ -196,7 +196,7 @@ def test_operator_diagnostics_retains_category_without_raw_exception(workspace, 
     assert payload["attempts"][0]["failure_category"] == "unclassified"
     assert payload["attempts"][0]["exception_type"] == "RuntimeError"
     assert secret not in details.text
-    audit = client.get("/api/audit", params={"request_id": request_id})
+    audit = client.get("/api/v2/audit", params={"request_id": request_id})
     assert audit.status_code == 200
     assert {"job.create", "job.finish"} <= {row["action"] for row in audit.json()}
     public = client.get(f"/api/jobs/{job_id}")
@@ -218,10 +218,10 @@ def test_invalid_bearer_token_length_preserves_challenge(workspace, monkeypatch)
         json.dumps({token_hash: {"actor_id": "operator", "kind": "human", "roles": ["operator"]}}),
     )
     with TestClient(create_app(store.home)) as secure:
-        response = secure.get("/api/audit", headers={"Authorization": "Bearer short"})
+        response = secure.get("/api/v2/audit", headers={"Authorization": "Bearer short"})
         assert response.status_code == 401
         assert response.headers["WWW-Authenticate"] == "Bearer"
         blocked = secure.get(
-            "/api/diagnostics/jobs/" + "a" * 36, headers={"Authorization": "Bearer short"}
+            "/api/v2/diagnostics/jobs/" + "a" * 36, headers={"Authorization": "Bearer short"}
         )
         assert blocked.status_code == 401

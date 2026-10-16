@@ -191,7 +191,7 @@ def test_tag_failure_keeps_uncertain_intent_without_publishing_dataset(workspace
 
     from sos_platform.datasets import connect_iceberg
 
-    before = len(store.datasets())
+    before = len(store.dataset_page(limit=101))
 
     def fail_tag(_table):
         raise RuntimeError("Tag commit unavailable")
@@ -199,7 +199,7 @@ def test_tag_failure_keeps_uncertain_intent_without_publishing_dataset(workspace
     monkeypatch.setattr(Table, "manage_snapshots", fail_tag)
     with pytest.raises(RuntimeError, match="Tag commit unavailable"):
         connect_iceberg(store, "tag_failure")
-    assert len(store.datasets()) == before
+    assert len(store.dataset_page(limit=101)) == before
     with store.connection() as db:
         rows = (
             db.execute(

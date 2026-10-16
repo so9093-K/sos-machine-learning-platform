@@ -3,7 +3,7 @@
 from .support import upload
 
 
-def test_paginated_dataset_list_preserves_order_and_legacy_response(workspace):
+def test_dataset_list_preserves_order_and_page_contract(workspace):
     client, store = workspace
     base = upload(client)
     for number in range(34):
@@ -20,7 +20,7 @@ def test_paginated_dataset_list_preserves_order_and_legacy_response(workspace):
         options = {"limit": 10}
         if cursor:
             options["cursor"] = cursor
-        response = client.get("/api/datasets/pages", params=options)
+        response = client.get("/api/datasets", params=options)
         assert response.status_code == 200, response.text
         body = response.json()
         assert len(body["items"]) <= 10
@@ -30,6 +30,6 @@ def test_paginated_dataset_list_preserves_order_and_legacy_response(workspace):
             break
     assert len(seen) == 35
     assert len(set(seen)) == 35
-    assert set(seen) == {item["id"] for item in client.get("/api/datasets").json()}
-    assert client.get("/api/datasets/pages", params={"cursor": "invalid"}).status_code == 422
-    assert client.get("/api/datasets/pages", params={"limit": 101}).status_code == 422
+    assert set(seen) == {item["id"] for item in client.get("/api/datasets").json()["items"]}
+    assert client.get("/api/datasets", params={"cursor": "invalid"}).status_code == 422
+    assert client.get("/api/datasets", params={"limit": 101}).status_code == 422

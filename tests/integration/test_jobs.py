@@ -332,7 +332,7 @@ def test_worker_completion_audit_and_atomic_failure(workspace, monkeypatch):
     second = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
     job_id = second.json()["id"]
     assert store.claim()["id"] == job_id
-    before = len(store.datasets())
+    before = len(store.dataset_page(limit=101))
     original_audit = Store._audit
 
     def fail_finished_audit(db, **kwargs):
@@ -352,7 +352,7 @@ def test_worker_completion_audit_and_atomic_failure(workspace, monkeypatch):
             },
         )
     assert store.get_job(job_id)["status"] == "Running"
-    assert len(store.datasets()) == before
+    assert len(store.dataset_page(limit=101)) == before
 
 
 def test_failed_job_completion_is_audited(workspace):

@@ -128,7 +128,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     const version = ++datasetRequestVersion.current;
     let page: DatasetPage;
     try {
-      page = await request<DatasetPage>("/api/datasets/pages?limit=20");
+      page = await request<DatasetPage>("/api/datasets?limit=20");
     } catch (error) {
       // 새 등록·더 최신 조회에서 대체된 실패는 현재 화면의 오류가 아니다.
       if (version !== datasetRequestVersion.current) return;
@@ -170,7 +170,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     await withFeedback(async () => {
       const version = datasetRequestVersion.current;
       const page = await request<DatasetPage>(
-        `/api/datasets/pages?limit=20&cursor=${encodeURIComponent(nextDatasetCursor)}`);
+        `/api/datasets?limit=20&cursor=${encodeURIComponent(nextDatasetCursor)}`);
       if (version !== datasetRequestVersion.current) return;
       setDatasets(previous => mergeById(previous, page.items));
       setNextDatasetCursor(page.next_cursor ?? null);

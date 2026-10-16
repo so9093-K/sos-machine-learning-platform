@@ -494,17 +494,6 @@ class Store:
             )
             return dict(row) if row else None
 
-    def datasets(self, *, actor_id: str | None = None) -> list[dict]:
-        predicate = "WHERE owner_actor=:actor_id" if actor_id is not None else ""
-        with self.connection() as db:
-            return [
-                dict(row)
-                for row in db.execute(
-                    text(f"SELECT * FROM datasets {predicate} ORDER BY created_at DESC"),
-                    {"actor_id": actor_id},
-                ).mappings()
-            ]
-
     def owns_iceberg_table(self, table_name: str, actor_id: str) -> bool:
         """명시적인 기존 Iceberg Dataset 소유권만 테이블 접근 근거로 사용한다."""
         with self.connection() as db:

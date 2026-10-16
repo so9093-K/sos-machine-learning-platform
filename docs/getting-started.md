@@ -60,6 +60,8 @@ Preview는 수치형 NaN·양/음의 무한대를 각각 문자열 `NaN`·`Infin
 
 API 응답 타입을 변경한 경우 Pydantic 모델을 변경하고 `cd web && npm run generate:types`를 실행한다. 이 명령은 FastAPI의 OpenAPI를 임시 파일로 추출해 `web/src/api.generated.ts`를 갱신한다. CI에서 생성 파일의 차이를 검사하며 OpenAPI 자체를 별도 정본 파일로 보관하지 않는다. Scalar API 문서는 기존 `/docs`를 따른다.
 
+Dataset 목록은 `GET /api/datasets?limit=20`의 `items`와 `next_cursor`를 사용하는 키셋 페이지 조회다. 무제한 목록 API나 별도 `/api/datasets/pages` 경로는 제공하지 않는다.
+
 Job 목록은 `GET /api/jobs?limit=20`에서 최근 순으로 조회하며, 응답의 `items`와 `next_cursor`를 사용해 이전 페이지를 가져온다. `limit`는 1~100으로 제한된다. 목록은 `attempt_count`·`latest_attempt`만 제공하므로 전체 실행 시도는 개별 `GET /api/jobs/{job_id}`에서 조회한다.
 
 단일 Iceberg 적재는 현재 최대 50,000행과 64 MiB 추정 메모리 제한을 적용한다. 초과하면 Job이 실패하며 원본 파일·이전 Snapshot은 유지한다. 대용량 배치 적재는 별도의 자원·원자성 정책이 필요하다.

@@ -40,7 +40,7 @@ def test_transform_publish_failure_preserves_unreferenced_attempt_object(workspa
     writes = store.object_writes(location)
     assert len(writes) == 1
     assert writes[0]["state"] == "Failed"
-    assert all(d["location"] != location for d in store.datasets())
+    assert all(d["location"] != location for d in store.dataset_page(limit=101))
     ObjectStore().client.head_object(
         Bucket=ObjectStore().config.s3_bucket,
         Key=ObjectStore().key(location),

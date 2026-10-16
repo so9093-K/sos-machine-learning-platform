@@ -58,9 +58,9 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         assert (
             secure.get("/api/datasets", headers={"Authorization": "Bearer bad"}).status_code == 401
         )
-        assert secure.get("/api/auth/me", headers=headers("alice")).json()["actor_id"] == "alice"
+        assert secure.get("/api/v2/auth/me", headers=headers("alice")).json()["actor_id"] == "alice"
         assert secure.get("/api/storage/inspection", headers=headers("alice")).status_code == 403
-        assert secure.get("/api/audit", headers=headers("alice")).status_code == 403
+        assert secure.get("/api/v2/audit", headers=headers("alice")).status_code == 403
         assert secure.get("/api/storage/policy", headers=headers("ops")).status_code == 200
         # Data 생성·실행과 이미 존재하는 Snapshot의 운영 보존은 서로 다른 권한이다.
         assert (
@@ -131,7 +131,7 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
             == 404
         )
         assert secure.post(f"/api/datasets/{owned}/query", json={"limit": 1}).status_code == 401
-        assert secure.get("/api/datasets", headers=headers("bob")).json() == []
+        assert secure.get("/api/datasets", headers=headers("bob")).json()["items"] == []
         assert (
             secure.post(
                 "/api/datasets/files",
@@ -163,7 +163,7 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         )
         cancelled = secure.post(f"/api/jobs/{job.json()['id']}/cancel", headers=headers("alice"))
         assert cancelled.status_code == 200, cancelled.text
-        history = secure.get("/api/audit", headers=headers("ops"))
+        history = secure.get("/api/v2/audit", headers=headers("ops"))
         assert history.status_code == 200
         events = history.json()
         assert any(x["action"] == "dataset.create" and x["actor_id"] == "alice" for x in events)
@@ -233,7 +233,7 @@ def test_slow_denied_audit_does_not_block_other_requests(workspace, monkeypatch)
     monkeypatch.setattr(Store, "record_audit", slow_audit)
     with ThreadPoolExecutor(max_workers=2) as executor:
         denied = executor.submit(
-            client.get, "/api/auth/me", headers={"X-Forwarded-For": "198.51.100.9"}
+            client.get, "/api/v2/auth/me", headers={"X-Forwarded-For": "198.51.100.9"}
         )
         try:
             assert entered.wait(timeout=10), "Denied audit did not start"
