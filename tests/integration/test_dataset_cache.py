@@ -67,7 +67,9 @@ def test_parallel_readers_share_the_same_cache_lease(workspace):
         assert first.read_bytes() == data
 
 
-def test_unchanged_immutable_cache_avoids_rehash_and_detects_local_corruption(workspace, monkeypatch):
+def test_unchanged_immutable_cache_avoids_rehash_and_detects_local_corruption(
+    workspace, monkeypatch
+):
     """반복 읽기는 불필요한 전체 해시를 피하되 파일 변조 후에는 S3 원본을 검증한다."""
     import sos_platform.cache as cache
 

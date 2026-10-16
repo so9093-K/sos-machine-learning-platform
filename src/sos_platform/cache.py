@@ -41,7 +41,6 @@ def _remember(path: Path, version: str, signature: tuple[int, int, int, int, int
             _VERIFIED.popitem(last=False)
 
 
-
 @dataclass(frozen=True)
 class CachePolicy:
     """원본은 S3에 보존하고, 재구성 가능한 디스크 캐시에만 상한을 둔다."""
