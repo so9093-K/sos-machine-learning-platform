@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import * as echarts from "echarts";
+import type * as echarts from "echarts";
+import { DataChart, CHART_COLORS } from "./DataChart";
 import { createStep, histogram, needsTimeOrder, type FeatureStep } from "./feature-utils";
-import { request, jsonPost, setAccessToken, formatError, uploadFile } from "./api";
+import { ApiError, request, jsonPost, setAccessToken, formatError, uploadFile } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
-import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, Example, UploadPolicy } from "./types";
+import { DiscoveryPanel } from "./DiscoveryPanel";
+import type { Dataset, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy } from "./types";
 import "./style.css";
 
 type Step = FeatureStep;
@@ -22,19 +24,6 @@ const mebibytes = (size: number) => (size / (1024 * 1024)).toFixed(2);
 function readableVersion(d: Dataset) {
   return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
 }
-function Chart({ option }: { option: echarts.EChartsCoreOption }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    const chart = echarts.init(ref.current);
-    chart.setOption(option);
-    const observer = new ResizeObserver(() => chart.resize());
-    observer.observe(ref.current);
-    return () => { observer.disconnect(); chart.dispose(); };
-  }, [option]);
-  return <div ref={ref} className="chart" role="img" aria-label="선택된 데이터의 분석 차트" />;
-}
-
 function Workspace({ actor }: { actor: Identity }) {
   const canManage = actor.roles.some(r => ["administrator", "operator"].includes(r));
   const canWrite = actor.roles.some(r => ["administrator", "researcher"].includes(r));
@@ -44,6 +33,9 @@ function Workspace({ actor }: { actor: Identity }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [nextJobsCursor, setNextJobsCursor] = useState<string | null>(null);
+  const [discoveryJobs, setDiscoveryJobs] = useState<ExplorationJobSummary[]>([]);
+  const [nextDiscoveryCursor, setNextDiscoveryCursor] = useState<string | null>(null);
+  const [olderDiscoveryJobsLoaded, setOlderDiscoveryJobsLoaded] = useState(false);
   const [olderJobsLoaded, setOlderJobsLoaded] = useState(false);
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
@@ -68,6 +60,7 @@ function Workspace({ actor }: { actor: Identity }) {
   const [groupBy, setGroupBy] = useState("");
   const [featurePreviewResult, setFeaturePreview] = useState<{ signature: string; data: Preview } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
+  const datasetRequestVersion = useRef(0);
   const dataset = datasets.find(d => d.id === selected);
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const numeric = profile?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
@@ -75,9 +68,35 @@ function Workspace({ actor }: { actor: Identity }) {
   const [timeColumn, setTimeColumn] = useState("");
 
   async function refreshDatasets() {
+    const version = ++datasetRequestVersion.current;
     const items = await request<Dataset[]>("/api/datasets");
+    // 오래된 GET 응답이 최근 등록·조회 후 확정된 Dataset 선택을 덮지 못하게 한다.
+    if (version !== datasetRequestVersion.current) return;
     setDatasets(items);
     setSelected(previous => items.some(d => d.id === previous) ? previous : (items[0]?.id ?? ""));
+  }
+  /** 서버 등록 성공을 목록 새로고침 실패 때문에 취소된 작업처럼 표시하지 않는다. */
+  async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
+    setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+    setSelected(data.id); setTab("preview");
+    try {
+      await refreshDatasets();
+      setNotice(success);
+    } catch {
+      setError("");
+      setNotice(stale);
+    }
+  }
+  /** HTTP 202 접수 이후의 목록 조회 실패는 Job 제출 실패가 아니다. */
+  async function showSubmittedJob(job: Job, message: string) {
+    setTab("jobs");
+    try {
+      await refreshJobs();
+      setNotice(message);
+    } catch {
+      setError("");
+      setNotice(`Job은 정상 접수됐습니다. 목록을 다시 확인하세요. 작업 ID: ${job.id}`);
+    }
   }
   async function refreshJobs() {
     const page = await request<JobPage>("/api/jobs?limit=20");
@@ -85,6 +104,24 @@ function Workspace({ actor }: { actor: Identity }) {
       ? [...page.items, ...previous.filter(job => !page.items.some(item => item.id === job.id))]
       : page.items);
     if (!olderJobsLoaded) setNextJobsCursor(page.next_cursor ?? null);
+  }
+  async function refreshDiscoveryJobs() {
+    const page = await request<ExplorationJobPage>("/api/explorations/jobs?limit=20");
+    setDiscoveryJobs(previous => olderDiscoveryJobsLoaded
+      ? [...page.items, ...previous.filter(job => !page.items.some(item => item.id === job.id))]
+      : page.items);
+    if (!olderDiscoveryJobsLoaded) setNextDiscoveryCursor(page.next_cursor ?? null);
+  }
+  async function loadMoreDiscoveryJobs() {
+    if (!nextDiscoveryCursor) return;
+    await withFeedback(async () => {
+      const page = await request<ExplorationJobPage>(
+        `/api/explorations/jobs?limit=20&cursor=${encodeURIComponent(nextDiscoveryCursor)}`);
+      setDiscoveryJobs(previous => [...previous, ...page.items.filter(
+        item => !previous.some(job => job.id === item.id))]);
+      setNextDiscoveryCursor(page.next_cursor ?? null);
+      setOlderDiscoveryJobsLoaded(true);
+    });
   }
   async function loadMoreJobs() {
     if (!nextJobsCursor) return;
@@ -104,6 +141,7 @@ function Workspace({ actor }: { actor: Identity }) {
     }
     refreshDatasets().catch(e => setError(String(e)));
     refreshJobs().catch(e => setError(String(e)));
+    refreshDiscoveryJobs().catch(e => setError(String(e)));
     request<Example[]>("/api/examples").then(setExamples)
       .catch(e => setError(String(e)))
       .finally(() => setExamplesLoading(false));
@@ -156,9 +194,12 @@ function Workspace({ actor }: { actor: Identity }) {
       if (jobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
         refreshJobs().catch(e => setError(String(e)));
       }
+      if (discoveryJobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
+        refreshDiscoveryJobs().catch(e => setError(String(e)));
+      }
     }, 2000);
     return () => window.clearInterval(handle);
-  }, [jobs]);
+  }, [jobs, discoveryJobs]);
 
   async function withFeedback(action: () => Promise<void>) {
     setBusy(true); setError(""); setNotice("");
@@ -216,19 +257,17 @@ function Workspace({ actor }: { actor: Identity }) {
       setError("Lag와 Rolling 변환에는 정렬 컬럼을 지정해야 합니다."); return;
     }
     await withFeedback(async () => {
-      await jsonPost("/api/jobs",
+      const job = await jsonPost<Job>("/api/jobs",
         { dataset_id: selected, kind, ...(kind === "transform" ? { transform } : {}) });
-      await refreshJobs();
-      setTab("jobs");
-      setNotice("작업이 등록되었습니다. 별도 Worker가 작업을 실행합니다.");
+      await showSubmittedJob(job, "작업이 등록되었습니다. 별도 Worker가 작업을 실행합니다.");
     });
   }
   async function selectExample(exampleId: string) {
     await withFeedback(async () => {
       const data = await jsonPost<Dataset>(`/api/examples/${exampleId}/use`, {});
-      await refreshDatasets();
-      setSelected(data.id); setTab("preview");
-      setNotice("예제가 일반 데이터셋으로 등록됐습니다. EDA와 피처 변환을 시작할 수 있습니다.");
+      await showRegisteredDataset(data,
+        "예제가 일반 데이터셋으로 등록됐습니다. EDA와 피처 변환을 시작할 수 있습니다.",
+        "예제는 정상 등록됐습니다. 목록 새로고침에 실패했지만 다시 등록할 필요는 없습니다.");
     });
   }
   async function openJobDataset(datasetId: string) {
@@ -257,17 +296,10 @@ function Workspace({ actor }: { actor: Identity }) {
         () => setUploadProgress(previous => previous
           ? { ...previous, phase: "registering" } : null),
       );
-      // HTTP 201이 등록 성공의 정본이다. 후속 목록 조회 실패로 등록 성공을 번복하지 않는다.
-      setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
-      setSelected(data.id); setTab("preview");
-      try {
-        await refreshDatasets();
-        setNotice("파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.");
-      } catch {
-        // 같은 목록 오류가 전역 경고로 표시돼 확정된 등록을 실패로 오해하지 않게 한다.
-        setError("");
-        setNotice("파일은 정상 등록됐습니다. 데이터셋 목록 새로고침에 실패했지만 등록을 다시 시도할 필요는 없습니다.");
-      }
+      // HTTP 201이 등록 성공의 정본이다.
+      await showRegisteredDataset(data,
+        "파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.",
+        "파일은 정상 등록됐습니다. 데이터셋 목록 새로고침에 실패했지만 등록을 다시 시도할 필요는 없습니다.");
     });
     setUploadProgress(null);
   }
@@ -275,23 +307,30 @@ function Workspace({ actor }: { actor: Identity }) {
     await withFeedback(async () => {
       const data = await jsonPost<Dataset>("/api/datasets/iceberg",
         { table_name: tableName });
-      await refreshDatasets(); setSelected(data.id); setTab("preview");
-      setNotice("기존 Iceberg 테이블의 스냅샷을 연결했습니다.");
+      await showRegisteredDataset(data,
+        "기존 Iceberg 테이블의 스냅샷을 연결했습니다.",
+        "Iceberg 스냅샷은 정상 연결됐습니다. 목록 새로고침에 실패했지만 다시 연결할 필요는 없습니다.");
     });
   }
   async function importIceberg() {
     if (!selected) return;
     await withFeedback(async () => {
-      await jsonPost<Job>("/api/iceberg/import",
+      const job = await jsonPost<Job>("/api/iceberg/import",
         { dataset_id: selected, table_name: tableName });
-      await refreshJobs(); setTab("jobs");
-      setNotice("Iceberg 적재 Job이 등록되었습니다. 완료 후 데이터셋 목록에서 확인할 수 있습니다.");
+      await showSubmittedJob(job, "Iceberg 적재 Job이 등록되었습니다. 완료 후 데이터셋 목록에서 확인할 수 있습니다.");
     });
   }
   async function cancelJob(id: string) {
     await withFeedback(async () => {
-      await jsonPost(`/api/jobs/${id}/cancel`, {});
-      await refreshJobs();
+      const path = discoveryJobs.some(job => job.id === id)
+        ? `/api/explorations/jobs/${id}/cancel` : `/api/jobs/${id}/cancel`;
+      await jsonPost(path, {});
+      try {
+        await Promise.all([refreshJobs(), refreshDiscoveryJobs()]);
+      } catch {
+        setError("");
+        setNotice("취소 요청은 접수됐지만 상태 조회에 실패했습니다. 실제 종료 상태를 다시 확인하세요.");
+      }
     });
   }
   const distribution = useMemo(() => histogram(preview?.rows ?? [], visualColumn),
@@ -299,34 +338,34 @@ function Workspace({ actor }: { actor: Identity }) {
   const distributionOption = useMemo<echarts.EChartsCoreOption | null>(() => {
     if (!distribution) return null;
     return {
-      backgroundColor: "transparent", textStyle: { color: "#cbd5e1" },
+      backgroundColor: "transparent", textStyle: { color: CHART_COLORS.text },
       tooltip: { trigger: "axis" },
       grid: { left: 50, right: 15, top: 20, bottom: 48 },
       xAxis: { type: "category", data: distribution.labels,
-        axisLabel: { color: "#94a3b8", rotate: 20, hideOverlap: true } },
-      yAxis: { type: "value", axisLabel: { color: "#94a3b8" },
-        splitLine: { lineStyle: { color: "#334155" } } },
+        axisLabel: { color: CHART_COLORS.label, rotate: 20, hideOverlap: true } },
+      yAxis: { type: "value", axisLabel: { color: CHART_COLORS.label },
+        splitLine: { lineStyle: { color: CHART_COLORS.grid } } },
       series: [{ type: "bar", data: distribution.counts,
-        itemStyle: { color: "#7d92e7" } }],
+        itemStyle: { color: CHART_COLORS.bar } }],
     };
   }, [distribution]);
   const chartOption = useMemo<echarts.EChartsCoreOption | null>(() => {
     if (!preview?.rows.length || !visualColumn) return null;
-    const values = preview.rows.map(r => Number(r[visualColumn]))
-      .filter(n => Number.isFinite(n));
+    const values = preview.rows.map(r => r[visualColumn])
+      .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
     if (!values.length) return null;
     return {
       backgroundColor: "transparent",
-      textStyle: { color: "#cbd5e1" },
+      textStyle: { color: CHART_COLORS.text },
       tooltip: { trigger: "axis" },
       grid: { left: 48, right: 20, top: 25, bottom: 42 },
       xAxis: { type: "category", data: preview.rows.map(r => String(r[timeColumn] ?? "")),
-        axisLabel: { color: "#94a3b8", hideOverlap: true } },
-      yAxis: { type: "value", axisLabel: { color: "#94a3b8" }, splitLine: {
-        lineStyle: { color: "#334155" } } },
+        axisLabel: { color: CHART_COLORS.label, hideOverlap: true } },
+      yAxis: { type: "value", axisLabel: { color: CHART_COLORS.label }, splitLine: {
+        lineStyle: { color: CHART_COLORS.grid } } },
       series: [{ type: "line", showSymbol: false, name: visualColumn, data: preview.rows.map(
         r => typeof r[visualColumn] === "number" ? r[visualColumn] : null
-      ), lineStyle: { color: "#69b9ff" }, itemStyle: { color: "#69b9ff" } }],
+      ), lineStyle: { color: CHART_COLORS.line }, itemStyle: { color: CHART_COLORS.line } }],
     };
   }, [preview, visualColumn, timeColumn]);
 
@@ -405,7 +444,7 @@ function Workspace({ actor }: { actor: Identity }) {
         <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
           onUse={id => void selectExample(id)} />
       </div>}
-      {dataset && tab !== "jobs" && tab !== "storage" && <>
+      {dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <>
         <div className="dataset-hero">
           <div><span className="eyebrow">SELECTED DATASET</span><h2>{dataset.name}</h2>
             <p>{dataset.kind.toUpperCase()} · {readableVersion(dataset)}</p></div>
@@ -459,6 +498,8 @@ function Workspace({ actor }: { actor: Identity }) {
         </section>}
         {tab === "profile" && <section className="panel" role="tabpanel"
           id="sos-panel-profile" aria-labelledby="sos-tab-profile" tabIndex={0}>
+          <DiscoveryPanel key={selected} datasetId={selected} canCreate={canWrite}
+            onCreated={async () => { await refreshDiscoveryJobs(); setTab("jobs"); }} />
           <div className="panel-head"><div><h3>탐색적 데이터 분석</h3>
             <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
           </div>{canWrite && <button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button>}</div>
@@ -487,9 +528,9 @@ function Workspace({ actor }: { actor: Identity }) {
                 {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select></label></div>
             <div className="charts">
-              <div><h4>값의 변화</h4>{chartOption ? <Chart option={chartOption} /> :
+              <div><h4>값의 변화</h4>{chartOption ? <DataChart option={chartOption} ariaLabel="값의 변화 시계열 차트" /> :
                 <p className="muted">표시할 숫자형 데이터가 없습니다.</p>}</div>
-              <div><h4>분포 (Histogram)</h4>{distributionOption ? <Chart option={distributionOption} /> :
+              <div><h4>분포 (Histogram)</h4>{distributionOption ? <DataChart option={distributionOption} ariaLabel="데이터 분포 히스토그램" /> :
                 <p className="muted">분포를 계산할 숫자형 데이터가 없습니다.</p>}</div>
             </div>
             <p className="hint">차트와 히스토그램은 최대 100행의 미리보기 값입니다.</p>
@@ -567,9 +608,15 @@ function Workspace({ actor }: { actor: Identity }) {
       </>}
       {canManage && tab === "storage" && <StoragePanel />}
       {canManage && tab === "audit" && <AuditPanel />}
-      {tab === "jobs" && <JobsPanel jobs={jobs} datasets={datasets} busy={busy} canCancel={canWrite}
-        nextCursor={nextJobsCursor} onLoadMore={() => void loadMoreJobs()}
-        onRefresh={() => void withFeedback(refreshJobs)}
+      {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
+          b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))}
+        datasets={datasets} busy={busy} canCancel={canWrite}
+        nextCursor={nextJobsCursor} discoveryNextCursor={nextDiscoveryCursor}
+        onLoadMore={() => void loadMoreJobs()}
+        onLoadMoreDiscovery={() => void loadMoreDiscoveryJobs()}
+        onRefresh={() => void withFeedback(async () => {
+          await Promise.all([refreshJobs(), refreshDiscoveryJobs()]);
+        })}
         onCancel={id => void cancelJob(id)}
         onOpen={id => void openJobDataset(id)} />}
       <footer>Explore · Experiment · Understand · Evolve <span>개발 환경 · 외부 공개 서비스 아님</span></footer>
@@ -582,11 +629,17 @@ function App() {
   const [token, setToken] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  useEffect(() => {
-    request<Identity>("/api/auth/me").then(setActor)
-      .catch(() => setMessage("인증이 필요합니다. 발급된 액세스 토큰을 입력하세요."))
-      .finally(() => setChecking(false));
-  }, []);
+  async function checkIdentity() {
+    setChecking(true); setMessage("");
+    try {
+      setActor(await request<Identity>("/api/auth/me"));
+    } catch (error) {
+      setMessage(error instanceof ApiError && error.status === 401
+        ? "인증이 필요합니다. 발급된 액세스 토큰을 입력하세요."
+        : `서비스 연결을 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도하세요. ${formatError(error)}`);
+    } finally { setChecking(false); }
+  }
+  useEffect(() => { void checkIdentity(); }, []);
   async function authenticate(event: React.FormEvent) {
     event.preventDefault();
     setSubmitting(true); setMessage("");
@@ -612,6 +665,9 @@ function App() {
         <button disabled={submitting || !token}>인증</button>
       </form>
       {message && <p role="alert">{message}</p>}
+      <button type="button" className="secondary" onClick={() => void checkIdentity()}>
+        연결 다시 확인
+      </button>
     </section>
   </main>;
   const canViewDataset = actor.roles.some(r => ["viewer","researcher","administrator"].includes(r));

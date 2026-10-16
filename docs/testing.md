@@ -29,20 +29,21 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | 검증 내용 | 테스트 |
 | --- | --- |
 | 원본 파일의 판본·등록·마이그레이션 보존 | test_datasets.py |
+| DuckDB 탐색·집계·권한과 파일 접근, NaN·무한대·DECIMAL·큰 정수·바이너리 Preview·전체 Job 직렬화와 그룹 상위 제한 | test_discovery.py |
 | Job 상태·취소·게시 원자성·Attempt·커서 | test_jobs.py |
 | Iceberg Snapshot 고정·Tag 보존·중단 후 자동 재시도 금지 | test_iceberg.py |
 | 객체 쓰기 의도·S3 관측·삭제 없는 Storage Health | test_storage.py |
 | 토큰·역할·리소스 소유권·거부 감사 | test_security.py, auth.spec.ts |
 | Worker 중단·복구 감사·Attempt 식별 | test_recovery.py |
 | 테스트 준비 단계 실패 시 DB/버킷 정리 | test_environment.py, conftest.py |
-| 데이터→EDA→Feature→Job·브라우저 접근성 | workspace.spec.ts |
+| 데이터→EDA→Feature→Job·브라우저 접근성, 재시도·문자형 집계·전체 결과 이해 | workspace.spec.ts |
 | OpenAPI 삭제·필수 입력 추가·필드 변경 위험 | test_api_compat.py와 PR 비교 검사 |
 
 ## CI의 품질 게이트
 
 - python-tests: 잠금·Ruff·API 타입·PR base API 호환성·실제 인프라 통합 테스트·Alembic·Wheel.
 - frontend: TypeScript/Vite 빌드 및 Vitest.
-- ui-e2e: Make up/down/restart, 브라우저 8개, 토큰 역할 3개, 독립 데이터 보존 검사.
+- ui-e2e: Make up/down/restart, Data Workspace 브라우저 시나리오, 토큰 역할 3개, 독립 데이터 보존 검사. 정확한 시나리오 개수와 성패는 각 CI 실행 기록을 기준으로 한다.
 - python-quality: 위 세 작업이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
 - 오래된 PR HEAD만 취소하고 main 검증 결과는 각 실행 ID별로 보존한다.
 - 정기(매일 새벽)·수동 실행에서는 핵심 Iceberg/Job 모듈을 순서를 바꿔 두 번 반복해 격리·재현성을 점검한다. 실패는 일반 CI 실패로 남으며 Retry에 의해 무시되지 않는다.

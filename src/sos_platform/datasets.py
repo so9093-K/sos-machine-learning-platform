@@ -1,4 +1,4 @@
-"""불변 데이터 조회, EDA 프로파일 및 Polars 피처 변환 기능."""
+"""불변 Dataset의 등록·조회와 Iceberg 적재를 연결한다."""
 
 import hashlib
 import os
@@ -202,20 +202,27 @@ def iceberg_snapshots(store: Store, table_name: str) -> list[dict]:
     ]
 
 
+def local_dataset_file(store: Store, dataset: dict) -> Path:
+    """검증된 원본 콘텐츠 해시를 로컬 캐시에 준비한다."""
+    if dataset["kind"] != "file":
+        raise ValueError("File dataset is required")
+    storage = ObjectStore()
+    key = storage.key(dataset["location"])
+    suffix = Path(key).suffix
+    destination = (store.home / "cache" / f"{dataset['version']}{suffix}").resolve()
+    if not destination.is_relative_to(store.home / "cache"):
+        raise ValueError("Dataset cache path is invalid")
+    if not destination.is_file() or file_digest(destination) != dataset["version"]:
+        storage.get(key, destination, expected_sha256=dataset["version"])
+    return destination
+
+
 def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
     if dataset["kind"] == "file":
-        storage = ObjectStore()
-        key = storage.key(dataset["location"])
-        suffix = Path(key).suffix
-        destination = (store.home / "cache" / f"{dataset['version']}{suffix}").resolve()
-        if not destination.is_relative_to(store.home / "cache"):
-            raise ValueError("Dataset cache path is invalid")
-        if not destination.is_file() or file_digest(destination) != dataset["version"]:
-            # 내려받은 임시 파일을 검증한 후에만 게시하므로 다시 읽을 필요가 없다.
-            storage.get(key, destination, expected_sha256=dataset["version"])
+        destination = local_dataset_file(store, dataset)
         return (
             pl.scan_csv(destination, try_parse_dates=True)
-            if suffix == ".csv"
+            if destination.suffix.lower() == ".csv"
             else pl.scan_parquet(destination)
         )
     if dataset["kind"] == "iceberg":

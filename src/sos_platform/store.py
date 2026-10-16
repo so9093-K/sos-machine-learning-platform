@@ -551,9 +551,15 @@ class Store:
             return item
 
     def jobs(
-        self, *, limit: int = 20, before: dict | None = None, actor_id: str | None = None
+        self,
+        *,
+        limit: int = 20,
+        before: dict | None = None,
+        actor_id: str | None = None,
+        kind: str | None = None,
+        exclude_kind: str | None = None,
     ) -> list[dict]:
-        """목록은 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
+        """목록은 종류별 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
         if not 1 <= limit <= 101:
             raise ValueError("Job query limit is out of range")
         filters = []
@@ -561,11 +567,21 @@ class Store:
             filters.append("(created_at, id) < (:created_at, :id)")
         if actor_id is not None:
             filters.append("owner_actor=:actor_id")
+        if kind is not None:
+            filters.append("kind=:kind")
+        if exclude_kind is not None:
+            filters.append("kind!=:exclude_kind")
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(
             f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
         )
-        params = {"limit": limit, "actor_id": actor_id, **(before or {})}
+        params = {
+            "limit": limit,
+            "actor_id": actor_id,
+            "kind": kind,
+            "exclude_kind": exclude_kind,
+            **(before or {}),
+        }
         with self.connection() as db:
             rows = db.execute(query, params).mappings().all()
             items = [dict(row) for row in rows]

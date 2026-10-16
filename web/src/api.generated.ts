@@ -126,6 +126,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/datasets/{dataset_id}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dataset Columns */
+        get: operations["dataset_columns_api_datasets__dataset_id__columns_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/datasets/{dataset_id}/explorations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dataset Exploration */
+        post: operations["dataset_exploration_api_datasets__dataset_id__explorations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/datasets/{dataset_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dataset Overview */
+        get: operations["dataset_overview_api_datasets__dataset_id__overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/datasets/{dataset_id}/preview": {
         parameters: {
             query?: never;
@@ -214,6 +265,58 @@ export interface paths {
          * @description 예제를 명시적으로 선택했을 때만 일반 Dataset으로 등록한다.
          */
         post: operations["start_example_api_examples__example_id__use_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/explorations/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Exploration Jobs */
+        get: operations["list_exploration_jobs_api_explorations_jobs_get"];
+        put?: never;
+        /** Create Exploration Job */
+        post: operations["create_exploration_job_api_explorations_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/explorations/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Exploration Job */
+        get: operations["get_exploration_job_api_explorations_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/explorations/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Exploration Job */
+        post: operations["cancel_exploration_job_api_explorations_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -478,11 +581,11 @@ export interface components {
             /** Dtype */
             dtype: string;
             /** Max */
-            max?: number | null;
+            max?: number | string | null;
             /** Mean */
             mean?: number | null;
             /** Min */
-            min?: number | null;
+            min?: number | string | null;
             /** Name */
             name: string;
             /** Nan Count */
@@ -491,6 +594,17 @@ export interface components {
             nulls: number;
             /** Unique */
             unique: number;
+        };
+        /** DatasetColumnsOut */
+        DatasetColumnsOut: {
+            /** Columns */
+            columns: components["schemas"]["DiscoveryColumnOut"][];
+            /** Dataset Id */
+            dataset_id: string;
+            /** Total */
+            total: number;
+            /** Version */
+            version: string;
         };
         /**
          * DatasetOut
@@ -513,6 +627,33 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** DatasetOverviewOut */
+        DatasetOverviewOut: {
+            /** Column Count */
+            column_count: number;
+            /** Columns */
+            columns: components["schemas"]["DiscoveryColumnOut"][];
+            /** Dataset Id */
+            dataset_id: string;
+            /** Row Count */
+            row_count: number | null;
+            /**
+             * Row Count Basis
+             * @enum {string}
+             */
+            row_count_basis: "parquet_metadata" | "not_computed";
+            /** Size Bytes */
+            size_bytes: number | null;
+            /** Version */
+            version: string;
+        };
+        /** DiscoveryColumnOut */
+        DiscoveryColumnOut: {
+            /** Dtype */
+            dtype: string;
+            /** Name */
+            name: string;
+        };
         /**
          * ExampleOut
          * @description 예제는 별도 가짜 결과가 아니라 Dataset 등록 안내를 제공한다.
@@ -532,6 +673,167 @@ export interface components {
             title: string;
             /** Version */
             version: string;
+        };
+        /**
+         * ExplorationJobOut
+         * @description Discovery Job만 반환하는 신규 API 응답 계약.
+         */
+        ExplorationJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "exploration";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** ExplorationJobPageOut */
+        ExplorationJobPageOut: {
+            /** Items */
+            items: components["schemas"]["ExplorationJobSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** ExplorationJobRequest */
+        ExplorationJobRequest: {
+            /** Dataset Id */
+            dataset_id: string;
+            exploration: components["schemas"]["ExplorationSpec"];
+        };
+        /** ExplorationJobSummaryOut */
+        ExplorationJobSummaryOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "exploration";
+            latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** ExplorationOut */
+        ExplorationOut: {
+            /** Column */
+            column: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Group By */
+            group_by: string | null;
+            /** Metric */
+            metric: string;
+            /** Rows */
+            rows: components["schemas"]["ExplorationRowOut"][];
+            /** Sample Limit */
+            sample_limit: number | null;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "full" | "sample";
+            /** Truncated */
+            truncated: boolean;
+            /** Version */
+            version: string;
+        };
+        /**
+         * ExplorationRequest
+         * @description 대화형 탐색은 제한된 선두 샘플만 분석한다.
+         */
+        ExplorationRequest: {
+            /** Column */
+            column: string;
+            /** Group By */
+            group_by?: string | null;
+            /**
+             * Metric
+             * @enum {string}
+             */
+            metric: "count" | "null_count" | "mean" | "min" | "max";
+        };
+        /** ExplorationRowOut */
+        ExplorationRowOut: {
+            /** Category */
+            category: unknown | null;
+            /** Value */
+            value: number | string | null;
+        };
+        /** ExplorationSpec */
+        ExplorationSpec: {
+            /** Column */
+            column: string;
+            /** Group By */
+            group_by?: string | null;
+            /**
+             * Metric
+             * @enum {string}
+             */
+            metric: "count" | "null_count" | "mean" | "min" | "max";
         };
         /** FeaturePreview */
         FeaturePreview: {
@@ -1087,6 +1389,105 @@ export interface operations {
             };
         };
     };
+    dataset_columns_api_datasets__dataset_id__columns_get: {
+        parameters: {
+            query?: {
+                search?: string;
+            };
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetColumnsOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    dataset_exploration_api_datasets__dataset_id__explorations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplorationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplorationOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    dataset_overview_api_datasets__dataset_id__overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetOverviewOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     dataset_preview_api_datasets__dataset_id__preview_get: {
         parameters: {
             query?: {
@@ -1229,6 +1630,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasetOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_exploration_jobs_api_explorations_jobs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplorationJobPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_exploration_job_api_explorations_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplorationJobRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplorationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_exploration_job_api_explorations_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplorationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_exploration_job_api_explorations_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplorationJobOut"];
                 };
             };
             /** @description Structured API error */

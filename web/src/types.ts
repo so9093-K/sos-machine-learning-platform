@@ -12,3 +12,11 @@ export type StorageInspection = components["schemas"]["StorageInspectionOut"];
 export type StoragePolicy = components["schemas"]["StoragePolicyOut"];
 export type IcebergReference = components["schemas"]["IcebergReferenceOut"];
 export type UploadPolicy = components["schemas"]["UploadPolicyOut"];
+export type DatasetOverview = components["schemas"]["DatasetOverviewOut"];
+export type DatasetColumns = components["schemas"]["DatasetColumnsOut"];
+export type Exploration = components["schemas"]["ExplorationOut"];
+export type ExplorationRequest = components["schemas"]["ExplorationRequest"];
+
+export type ExplorationJob = components["schemas"]["ExplorationJobOut"];
+export type ExplorationJobSummary = components["schemas"]["ExplorationJobSummaryOut"];
+export type ExplorationJobPage = components["schemas"]["ExplorationJobPageOut"];

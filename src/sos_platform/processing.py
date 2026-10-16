@@ -1,4 +1,4 @@
-"""Polars 기반 EDA와 피처 변환을 인프라에 의존하지 않고 처리한다."""
+"""Polars Feature·Transform 계산을 인프라에 의존하지 않고 처리한다."""
 
 import polars as pl
 
@@ -47,54 +47,6 @@ def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
         "schema": {c: str(t) for c, t in lf.collect_schema().items()},
         "rows": frame.to_dicts(),
         "returned_rows": frame.height,
-    }
-
-
-def profile(lf: pl.LazyFrame, sample: int | None = 1000) -> dict:
-    """전체 데이터를 메모리에 적재하지 않고 샘플 또는 전체 통계를 집계한다."""
-    if sample is not None and not 1 <= sample <= 10000:
-        raise ValueError("Sample size must be between 1 and 10000")
-    selected = lf.head(sample) if sample is not None else lf
-    schema = selected.collect_schema()
-    aggregations = [pl.len().alias("__rows")]
-    for number, (name, dtype) in enumerate(schema.items()):
-        col = pl.col(name)
-        key = f"c{number}_"
-        aggregations.extend(
-            [
-                col.null_count().alias(key + "null"),
-                col.n_unique().alias(key + "unique"),
-            ]
-        )
-        if dtype.is_float():
-            aggregations.append(col.is_nan().sum().alias(key + "nan"))
-        if dtype.is_numeric():
-            aggregations.extend(
-                [
-                    col.min().alias(key + "min"),
-                    col.max().alias(key + "max"),
-                    col.mean().alias(key + "mean"),
-                ]
-            )
-    values = selected.select(aggregations).collect().to_dicts()[0]
-    columns = []
-    for number, (name, dtype) in enumerate(schema.items()):
-        key = f"c{number}_"
-        info = {
-            "name": name,
-            "dtype": str(dtype),
-            "nulls": values[key + "null"],
-            "nan_count": values[key + "nan"] if dtype.is_float() else None,
-            "unique": values[key + "unique"],
-        }
-        if dtype.is_numeric():
-            info.update({k: values[key + k] for k in ("min", "max", "mean")})
-        columns.append(info)
-    return {
-        "sampled": sample is not None,
-        "sample_limit": sample,
-        "row_count": values["__rows"],
-        "columns": columns,
     }
 
 

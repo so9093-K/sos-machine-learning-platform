@@ -15,11 +15,13 @@ from pathlib import Path
 
 from .datasets import import_to_iceberg, scan_dataset
 from .diagnostics import classify_failure
+from .discovery import explore as discovery_explore
+from .discovery import profile as discovery_profile
 from .errors import ERRORS
 from .object_store import ObjectStore
 from .observability import emit
-from .processing import profile, transform
-from .schemas import Transform
+from .processing import transform
+from .schemas import ExplorationSpec, Transform
 from .store import Store
 
 
@@ -36,14 +38,19 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
         dataset = store.get_dataset(job["dataset_id"])
         if dataset is None:
             raise ValueError("Input dataset is missing")
-        lf = scan_dataset(store, dataset)
         if job["kind"] == "profile":
             stage = "processing"
-            result = profile(lf, sample=None)
+            result = discovery_profile(store, dataset, sample=None)
+        elif job["kind"] == "exploration":
+            stage = "processing"
+            spec = ExplorationSpec.model_validate(job["spec"]["exploration"])
+            result = discovery_explore(
+                store, dataset, spec.column, spec.metric, spec.group_by, scope="full"
+            )
         elif job["kind"] == "transform":
             stage = "processing"
             spec = Transform.model_validate(job["spec"]["transform"])
-            lf = transform(lf, spec)
+            lf = transform(scan_dataset(store, dataset), spec)
             lf.sink_parquet(pending)
             result = {"input_dataset_id": dataset["id"]}
         elif job["kind"] == "iceberg_import":

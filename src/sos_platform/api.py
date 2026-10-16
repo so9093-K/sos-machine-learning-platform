@@ -20,17 +20,29 @@ from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from .api_errors import problem_response, register_error_handlers
 from .config import StoragePolicy
 from .datasets import connect_iceberg, iceberg_snapshots, save_upload_file, scan_dataset
+from .discovery import columns as discovery_columns
+from .discovery import explore as discovery_explore
+from .discovery import overview as discovery_overview
+from .discovery import preview as discovery_preview
+from .discovery import profile as discovery_profile
 from .errors import ERRORS, PlatformError
 from .examples import list_examples, use_example
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .object_store import ObjectStore
 from .observability import emit
-from .processing import bounded_feature_preview, profile, safe_preview
+from .processing import bounded_feature_preview
 from .reconciler import inspect_iceberg_references, inspect_page
 from .retention import ensure_tag, snapshot_status
 from .schemas import (
+    DatasetColumnsOut,
     DatasetOut,
+    DatasetOverviewOut,
     ExampleOut,
+    ExplorationJobOut,
+    ExplorationJobPageOut,
+    ExplorationJobRequest,
+    ExplorationOut,
+    ExplorationRequest,
     FeaturePreview,
     FeaturePreviewOut,
     IcebergConnect,
@@ -382,11 +394,36 @@ def create_app(home: Path | None = None) -> FastAPI:
         limit: int = Query(default=30, ge=1, le=100),
         actor: Actor = READ_DATASET_DEP,
     ):
-        return safe_preview(scan_dataset(store, existing(dataset_id, actor)), limit)
+        return discovery_preview(store, existing(dataset_id, actor), limit)
 
     @app.get("/api/datasets/{dataset_id}/profile", response_model=ProfileOut)
     def dataset_profile(dataset_id: str, actor: Actor = READ_DATASET_DEP):
-        return profile(scan_dataset(store, existing(dataset_id, actor)), sample=1000)
+        return discovery_profile(store, existing(dataset_id, actor), sample=1000)
+
+    @app.get("/api/datasets/{dataset_id}/overview", response_model=DatasetOverviewOut)
+    def dataset_overview(dataset_id: str, actor: Actor = READ_DATASET_DEP):
+        return discovery_overview(store, existing(dataset_id, actor))
+
+    @app.get("/api/datasets/{dataset_id}/columns", response_model=DatasetColumnsOut)
+    def dataset_columns(
+        dataset_id: str,
+        search: str = Query(default="", max_length=120),
+        actor: Actor = READ_DATASET_DEP,
+    ):
+        return discovery_columns(store, existing(dataset_id, actor), search=search)
+
+    @app.post("/api/datasets/{dataset_id}/explorations", response_model=ExplorationOut)
+    def dataset_exploration(
+        dataset_id: str, body: ExplorationRequest, actor: Actor = READ_DATASET_DEP
+    ):
+        return discovery_explore(
+            store,
+            existing(dataset_id, actor),
+            body.column,
+            body.metric,
+            body.group_by,
+            scope="sample",
+        )
 
     @app.post("/api/iceberg/import", status_code=202, response_model=JobOut)
     def iceberg_import(body: IcebergImport, request: Request, actor: Actor = CREATE_JOB_DEP):
@@ -415,12 +452,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         lf = scan_dataset(store, existing(body.dataset_id, actor))
         return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
 
-    @app.get("/api/jobs", response_model=JobPageOut)
-    def list_jobs(
-        limit: int = Query(default=20, ge=1, le=100),
-        cursor: str | None = Query(default=None, max_length=512),
-        actor: Actor = READ_JOB_DEP,
-    ):
+    def job_page(limit: int, cursor: str | None, actor: Actor, *, discovery_only: bool) -> dict:
         before = None
         if cursor:
             try:
@@ -439,7 +471,11 @@ def create_app(home: Path | None = None) -> FastAPI:
             except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
                 raise ValueError("Invalid Job cursor") from exc
         rows = store.jobs(
-            limit=limit + 1, before=before, actor_id=None if actor.privileged else actor.id
+            limit=limit + 1,
+            before=before,
+            actor_id=None if actor.privileged else actor.id,
+            kind="exploration" if discovery_only else None,
+            exclude_kind=None if discovery_only else "exploration",
         )
         next_cursor = None
         if len(rows) > limit:
@@ -450,6 +486,22 @@ def create_app(home: Path | None = None) -> FastAPI:
             )
             next_cursor = base64.urlsafe_b64encode(token.encode()).decode().rstrip("=")
         return {"items": rows, "next_cursor": next_cursor}
+
+    @app.get("/api/jobs", response_model=JobPageOut)
+    def list_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        return job_page(limit, cursor, actor, discovery_only=False)
+
+    @app.get("/api/explorations/jobs", response_model=ExplorationJobPageOut)
+    def list_exploration_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        return job_page(limit, cursor, actor, discovery_only=True)
 
     @app.post("/api/jobs", status_code=202, response_model=JobOut)
     def create_job(body: WorkRequest, request: Request, actor: Actor = CREATE_JOB_DEP):
@@ -463,13 +515,50 @@ def create_app(home: Path | None = None) -> FastAPI:
             actor_type=actor.kind,
         )
 
+    @app.post("/api/explorations/jobs", status_code=202, response_model=ExplorationJobOut)
+    def create_exploration_job(
+        body: ExplorationJobRequest, request: Request, actor: Actor = CREATE_JOB_DEP
+    ):
+        existing(body.dataset_id, actor)
+        return store.create_job(
+            kind="exploration",
+            dataset_id=body.dataset_id,
+            spec=body.model_dump(exclude_none=True),
+            request_id=request.state.request_id,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+        )
+
+    def exploration_job(job_id: str, actor: Actor) -> dict:
+        item = existing_job(job_id, actor)
+        if item["kind"] != "exploration":
+            raise HTTPException(status_code=404, detail="Job not found")
+        return item
+
+    @app.get("/api/explorations/jobs/{job_id}", response_model=ExplorationJobOut)
+    def get_exploration_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return exploration_job(job_id, actor)
+
+    @app.post("/api/explorations/jobs/{job_id}/cancel", response_model=ExplorationJobOut)
+    def cancel_exploration_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        exploration_job(job_id, actor)
+        result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return result
+
     @app.get("/api/jobs/{job_id}", response_model=JobOut)
     def get_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        return existing_job(job_id, actor)
+        item = existing_job(job_id, actor)
+        if item["kind"] == "exploration":
+            raise HTTPException(status_code=404, detail="Job not found")
+        return item
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobOut)
     def cancel(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        existing_job(job_id, actor)
+        item = existing_job(job_id, actor)
+        if item["kind"] == "exploration":
+            raise HTTPException(status_code=404, detail="Job not found")
         try:
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         except IcebergCancellationConflict as exc:

@@ -96,6 +96,17 @@ class IcebergReferenceOut(BaseModel):
     reason: str
 
 
+class ExplorationSpec(BaseModel):
+    column: str = Field(min_length=1, max_length=256)
+    metric: Literal["count", "null_count", "mean", "min", "max"]
+    group_by: str | None = Field(default=None, max_length=256)
+
+
+class ExplorationJobRequest(BaseModel):
+    dataset_id: str
+    exploration: ExplorationSpec
+
+
 class WorkRequest(BaseModel):
     dataset_id: str
     kind: Literal["profile", "transform"]
@@ -105,8 +116,8 @@ class WorkRequest(BaseModel):
     def validate_request(self):
         if self.kind == "transform" and self.transform is None:
             raise ValueError("transform job requires a transform specification")
-        if self.kind == "profile" and self.transform is not None:
-            raise ValueError("profile job does not accept transformations")
+        if self.kind != "transform" and self.transform is not None:
+            raise ValueError("only transform job accepts transformations")
         return self
 
 
@@ -141,6 +152,49 @@ class UploadPolicyOut(BaseModel):
     supported_extensions: list[str]
 
 
+class DiscoveryColumnOut(BaseModel):
+    name: str
+    dtype: str
+
+
+class DatasetOverviewOut(BaseModel):
+    dataset_id: str
+    version: str
+    row_count: int | None
+    row_count_basis: Literal["parquet_metadata", "not_computed"]
+    column_count: int
+    size_bytes: int | None
+    columns: list[DiscoveryColumnOut]
+
+
+class DatasetColumnsOut(BaseModel):
+    dataset_id: str
+    version: str
+    total: int
+    columns: list[DiscoveryColumnOut]
+
+
+class ExplorationRequest(ExplorationSpec):
+    """대화형 탐색은 제한된 선두 샘플만 분석한다."""
+
+
+class ExplorationRowOut(BaseModel):
+    category: object | None
+    value: int | float | str | None
+
+
+class ExplorationOut(BaseModel):
+    dataset_id: str
+    version: str
+    scope: Literal["full", "sample"]
+    sample_limit: int | None
+    column: str
+    metric: str
+    group_by: str | None
+    truncated: bool
+    rows: list[ExplorationRowOut]
+
+
 class PreviewOut(BaseModel):
     """제한된 행 미리보기와 컬럼 타입."""
 
@@ -160,8 +214,8 @@ class ColumnProfileOut(BaseModel):
     nulls: int
     nan_count: int | None
     unique: int
-    min: float | int | None = None
-    max: float | int | None = None
+    min: int | float | str | None = None
+    max: int | float | str | None = None
     mean: float | None = None
 
 
@@ -202,6 +256,12 @@ class JobOut(BaseModel):
     attempts: list[AttemptOut]
 
 
+class ExplorationJobOut(JobOut):
+    """Discovery Job만 반환하는 신규 API 응답 계약."""
+
+    kind: Literal["exploration"]
+
+
 class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
@@ -221,6 +281,15 @@ class JobSummaryOut(BaseModel):
     updated_at: str
     attempt_count: int
     latest_attempt: AttemptOut | None
+
+
+class ExplorationJobSummaryOut(JobSummaryOut):
+    kind: Literal["exploration"]
+
+
+class ExplorationJobPageOut(BaseModel):
+    items: list[ExplorationJobSummaryOut]
+    next_cursor: str | None = None
 
 
 class JobPageOut(BaseModel):
