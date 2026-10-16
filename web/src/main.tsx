@@ -347,8 +347,8 @@ function Workspace({ actor }: { actor: Identity }) {
   }, [distribution]);
   const chartOption = useMemo<echarts.EChartsCoreOption | null>(() => {
     if (!preview?.rows.length || !visualColumn) return null;
-    const values = preview.rows.map(r => Number(r[visualColumn]))
-      .filter(n => Number.isFinite(n));
+    const values = preview.rows.map(r => r[visualColumn])
+      .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
     if (!values.length) return null;
     return {
       backgroundColor: "transparent",

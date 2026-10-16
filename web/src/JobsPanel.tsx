@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { request, formatError } from "./api";
+import { explorationCategory, explorationValue } from "./exploration-format";
 import type { Dataset, Job, JobSummary, ExplorationJob, ExplorationJobSummary } from "./types";
 
 type AnyJobSummary = JobSummary | ExplorationJobSummary;
@@ -16,8 +17,8 @@ function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
       {result.truncated ? " · 표시 그룹 수 제한으로 일부 결과만 표시됩니다." : ""}</p>
     <div className="table-scroll"><table><thead><tr><th>그룹</th><th>집계값</th></tr></thead>
       <tbody>{rows.map((row, index) => <tr key={index}>
-        <td>{String(row.category ?? "전체")}</td>
-        <td>{typeof row.value === "number" ? row.value.toLocaleString("ko-KR") : "계산 불가 / NULL"}</td>
+        <td>{explorationCategory(row.category, typeof result.group_by === "string" ? result.group_by : null)}</td>
+        <td>{explorationValue(row.value as number | string | null)}</td>
       </tr>)}</tbody></table></div>
     {rows.length === 0 && <p className="muted">표시 가능한 그룹이 없습니다.</p>}
   </section>;

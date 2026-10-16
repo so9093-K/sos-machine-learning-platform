@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Discovery의 DECIMAL·큰 정수 정밀도, 바이너리·시간 타입 JSON 표현 및 NaN 집계 정렬을 샘플·전체 Job에 걸쳐 일관화하고, NULL 그룹/전체 그룹 구분과 정확한 값 표시를 개선했다.
 - Discovery의 NaN·무한대 Preview 및 JSON 집계 의미를 명확히 하고, 메타데이터 재시도·범주형 집계 선택·전체 Job 결과 표와 공통 차트 구현을 보완했다. 등록 성공과 후속 목록 조회 실패를 구분하고 사용자 복구·오류 안내를 개선했다.
 - DuckDB를 Dataset Preview·Profile·Discovery 탐색의 실행기로 도입하고 Polars의 Feature·Transform 책임과 분리했다. 샘플 탐색·전체 분석 Job을 분리하고 기존 Job API 호환성을 보존했다.
 - CSV·Parquet 파일을 메모리 전체 복사 없이 등록하고 업로드 진행·오류 안내 및 캐시 무결성 게시를 보강했다.

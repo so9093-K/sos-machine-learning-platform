@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
+import { chartValue, explorationCategory, explorationValue } from "./exploration-format";
 import { request, jsonPost, formatError } from "./api";
 import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, ExplorationJob } from "./types";
 
@@ -84,15 +85,15 @@ export function DiscoveryPanel({
     finally { setRunning(false); }
   }
   const chart = useMemo<echarts.EChartsCoreOption | null>(() => {
-    if (!result?.rows.some(row => typeof row.value === "number")) return null;
+    if (!result?.rows.some(row => chartValue(row.value) !== null)) return null;
     return {
       backgroundColor: "transparent", textStyle: { color: CHART_COLORS.text },
       tooltip: { trigger: "axis" },
       grid: { left: 52, right: 15, top: 22, bottom: 55 },
-      xAxis: { type: "category", data: result.rows.map(x => String(x.category ?? "전체")),
+      xAxis: { type: "category", data: result.rows.map(x => explorationCategory(x.category, result.group_by)),
         axisLabel: { color: CHART_COLORS.label, hideOverlap: true, rotate: 20 } },
       yAxis: { type: "value", axisLabel: { color: CHART_COLORS.label } },
-      series: [{ type: "bar", data: result.rows.map(x => x.value),
+      series: [{ type: "bar", data: result.rows.map(x => chartValue(x.value)),
         itemStyle: { color: CHART_COLORS.bar } }],
     };
   }, [result]);
@@ -150,11 +151,11 @@ export function DiscoveryPanel({
         <p className="muted">샘플 최대 {result.sample_limit?.toLocaleString()}행 · Dataset 판본 {result.version.slice(0, 12)}
           {result.truncated ? " · 표시 그룹 수 제한 적용" : ""}</p>
         <div className="table-scroll"><table><thead><tr><th>그룹</th><th>결과</th></tr></thead>
-          <tbody>{result.rows.map((r, i) => <tr key={i}><td>{String(r.category ?? "전체")}</td>
-            <td>{r.value == null ? "NULL" : Number(r.value).toLocaleString()}</td></tr>)}</tbody>
+          <tbody>{result.rows.map((r, i) => <tr key={i}><td>{explorationCategory(r.category, result.group_by)}</td>
+            <td>{explorationValue(r.value)}</td></tr>)}</tbody>
         </table></div>
         {chart ? <DataChart option={chart} ariaLabel="샘플 집계 결과 차트" /> :
-          <p className="muted">시각화할 유효한 수치가 없습니다. 위 표에서 값을 확인하세요.</p>}
+          <p className="muted">정밀 수치 문자열이나 계산 불가 값은 차트에서 제외합니다. 정확한 값은 위 표에서 확인하세요.</p>}
       </>}
     </>}
     {error && <p role="alert" className="alert">{error}</p>}
