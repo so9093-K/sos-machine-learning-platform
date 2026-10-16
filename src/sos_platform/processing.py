@@ -3,7 +3,6 @@
 import polars as pl
 
 from .errors import InvalidRequestError
-
 from .schemas import Transform
 
 MAX_PREVIEW = 100
@@ -90,7 +89,9 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
             if not spec.order_by:
                 raise InvalidRequestError("Time-based features require order_by")
             if spec.order_by not in columns or not set(spec.group_by).issubset(columns):
-                raise InvalidRequestError("Time/order and group columns must survive preceding steps")
+                raise InvalidRequestError(
+                    "Time/order and group columns must survive preceding steps"
+                )
             if not validated_window_keys:
                 # 키 값의 변경은 정렬 순서와 유일성을 무효화한다. 행 필터와
                 # 다른 컬럼의 변환은 검증된 키의 유일성을 깨뜨리지 않는다.

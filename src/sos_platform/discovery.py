@@ -274,7 +274,9 @@ def source_connection(
                     table = iceberg_catalog(store).load_table(dataset["location"])
                     snapshot = int(dataset["version"])
                     if snapshot not in {s.snapshot_id for s in table.snapshots()}:
-                        raise InvalidRequestError("Iceberg snapshot is not available; it may have expired")
+                        raise InvalidRequestError(
+                            "Iceberg snapshot is not available; it may have expired"
+                        )
                     reader = table.scan(snapshot_id=snapshot).to_arrow_batch_reader()
                     connection.register("source", reader)
                     connection.execute("SET enable_external_access = false")

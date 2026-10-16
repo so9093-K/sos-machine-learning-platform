@@ -155,4 +155,3 @@ def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
     finally:
         other.release_worker()
         other.engine.dispose()
-
