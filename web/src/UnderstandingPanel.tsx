@@ -183,12 +183,15 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
         className="example-card" key={item.kind + i}>
         <h4>{item.title}</h4><p>{item.reason}</p>
         <p className="hint">추천 근거: {profile.scope === "full" ? "전체 입력" : "Reservoir 표본"}
-          {" · "}실행: 선두 최대 10,000행 기반의 별도 샘플 · 선택 후 실행</p>
+          {" · "}실행: 별도의 제한된 선두 샘플 · 선택 후 실행</p>
         <button disabled={busy} onClick={() => void explore(item.request)}>탐색 실행</button>
       </article>)}</div>
       {result && <div className="result" role="status">
         <h4>탐색 결과 · {result.scope === "sample" ? "샘플" : "전체"}</h4>
-        <p className="hint">입력 판본 {result.version.slice(0, 12)} · 표시 그룹 제한 {result.truncated ? "있음" : "없음"}</p>
+        <p className="hint">입력 판본 {result.version.slice(0, 12)}
+          {result.sample_limit == null ? " · 전체 집계" :
+            ` · 선두 최대 ${result.sample_limit.toLocaleString()}행`}
+          {" · "}표시 그룹 제한 {result.truncated ? "있음" : "없음"}</p>
         <div className="table-scroll"><table><thead><tr><th>그룹</th><th>값</th></tr></thead>
           <tbody>{result.rows.map((row, i) => <tr key={i}>
             <td>{row.category === null ? "전체/NULL" : String(row.category)}</td>

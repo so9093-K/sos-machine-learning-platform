@@ -54,11 +54,16 @@ function App() {
       </button>
     </section>
   </main>;
-  const canViewDataset = actor.roles.some(r => ["viewer","researcher","administrator"].includes(r));
+  const canViewDataset = actor.capabilities.includes("dataset.read");
+  const canInspectStorage = actor.capabilities.includes("storage.inspect");
+  const canViewAudit = actor.capabilities.includes("audit.read");
   return <>
     {canViewDataset ? <Workspace actor={actor}
       onSignOut={() => { setAccessToken(null); setActor(null); }} /> :
-      <main className="main"><h1>운영 진단</h1><StoragePanel /><AuditPanel /></main>}
+      <main className="main"><h1>운영 진단</h1>
+        {canInspectStorage && <StoragePanel />}
+        {canViewAudit && <AuditPanel />}
+      </main>}
   </>;
 }
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);

@@ -67,14 +67,14 @@ class AuthMeOut(BaseModel):
     actor_id: str
     actor_type: Literal["human", "service"]
     roles: list[str]
+    capabilities: list[str]
     mode: Literal["development", "token"]
 
 
 class InstanceSettingsOut(BaseModel):
-    """공통 플랫폼 인스턴스 표시명·인증 환경 정보."""
+    """공통 플랫폼의 표시 전용 설정. 인증·배포 환경과 별개의 계약."""
 
     display_name: str = Field(min_length=1, max_length=48)
-    environment: Literal["development", "token"]
 
 
 class InstanceSettingsUpdate(BaseModel):

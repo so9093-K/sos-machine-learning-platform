@@ -27,8 +27,14 @@ function readableVersion(d: Dataset) {
   return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
 }
 export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: () => void }) {
-  const canManage = actor.roles.some(r => ["administrator", "operator"].includes(r));
-  const canWrite = actor.roles.some(r => ["administrator", "researcher"].includes(r));
+  // 표시 제어도 서버 /auth/me의 실제 capability 집합을 사용한다.
+  // 역할→권한 매핑의 정본은 Python security.GRANTS다.
+  const canWrite = actor.capabilities.includes("dataset.create");
+  const canRun = actor.capabilities.includes("job.create");
+  const canCancel = actor.capabilities.includes("job.cancel");
+  const canInspectStorage = actor.capabilities.includes("storage.inspect");
+  const canViewAudit = actor.capabilities.includes("audit.read");
+  const canConfigure = actor.capabilities.includes("instance.configure");
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [nextDatasetCursor, setNextDatasetCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>("");
@@ -469,16 +475,16 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
 
   return <div className="shell">
     <aside className="sidebar">
-      <InstanceBrand canEdit={actor.roles.includes("administrator")} />
+      <InstanceBrand canEdit={canConfigure} />
       <nav className="global-nav" aria-label="전역 메뉴">
       <div className="section-title">PLATFORM</div>
       <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
         전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
       </button>
-      {canManage && <button className="job-navigation secondary" onClick={() => setTab("storage")}>
+      {canInspectStorage && <button className="job-navigation secondary" onClick={() => setTab("storage")}>
         저장소 상태 보기
       </button>}
-      {canManage && <button className="job-navigation secondary" onClick={() => setTab("audit")}>
+      {canViewAudit && <button className="job-navigation secondary" onClick={() => setTab("audit")}>
         보안 감사 보기
       </button>}
       </nav>
@@ -595,7 +601,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         <WorkspaceTabs active={tab as DatasetTab} onChange={setTab} />
         {tab === "understanding" && <section className="panel" role="tabpanel"
           id="sos-panel-understanding" aria-labelledby="sos-tab-understanding" tabIndex={0}>
-          <UnderstandingPanel key={selected} datasetId={selected} canCreate={canWrite} />
+          <UnderstandingPanel key={selected + ":" + reloadRevision} datasetId={selected}
+            canCreate={canRun} />
         </section>}
         {tab === "preview" && <section className="panel" role="tabpanel"
           id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
@@ -618,11 +625,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </section>}
         {tab === "profile" && <section className="panel" role="tabpanel"
           id="sos-panel-profile" aria-labelledby="sos-tab-profile" tabIndex={0}>
-          <DiscoveryPanel key={selected} datasetId={selected} canCreate={canWrite}
+          <DiscoveryPanel key={selected + ":" + reloadRevision} datasetId={selected} canCreate={canRun}
             onCreated={async () => { await refreshDiscoveryJobs(); setTab("jobs"); }} />
           <div className="panel-head"><div><h3>샘플 프로파일</h3>
             <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
-          </div>{canWrite && <button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button>}</div>
+          </div>{canRun && <button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button>}</div>
           {profileStatus === "loading" && <p role="status" className="muted">EDA 통계를 계산하고 있습니다.</p>}
           {profileStatus === "error" && <button className="secondary"
             onClick={() => setReloadRevision(v => v + 1)}>EDA 다시 시도</button>}
@@ -728,7 +735,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             </div>)}</div>
           <div className="actions"><button disabled={busy || !steps.length} className="secondary"
             onClick={() => void previewFeatures()}>샘플 변환 확인</button>
-            {canWrite && <button disabled={busy || !steps.length} onClick={() => void submit("transform")}>
+            {canRun && <button disabled={busy || !steps.length} onClick={() => void submit("transform")}>
               전체 변환 Job 실행 →
             </button>}</div>
           {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 계산</h4>
@@ -741,11 +748,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </section>}
 
       </>}
-      {canManage && tab === "storage" && <StoragePanel />}
-      {canManage && tab === "audit" && <AuditPanel />}
+      {canInspectStorage && tab === "storage" && <StoragePanel />}
+      {canViewAudit && tab === "audit" && <AuditPanel />}
       {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
           b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))}
-        datasets={datasets} busy={busy} canCancel={canWrite}
+        datasets={datasets} busy={busy} canCancel={canCancel}
         nextCursor={nextJobsCursor} discoveryNextCursor={nextDiscoveryCursor}
         onLoadMore={() => void loadMoreJobs()}
         onLoadMoreDiscovery={() => void loadMoreDiscoveryJobs()}

@@ -36,7 +36,7 @@ export function InstanceBrand({ canEdit }: { canEdit: boolean }) {
     <div className="brandmark" aria-hidden="true">S</div>
     <div className="brand-content">
       <strong>SOS</strong>
-      <span className="instance-name">{instance?.display_name ?? "Workspace"}</span>
+      <span className="instance-name" aria-live="polite">{instance?.display_name ?? "Workspace"}</span>
       {canEdit && !editing && <button type="button" disabled={!instance}
         className="brand-edit ghost"
         onClick={() => { setDraft(instance?.display_name ?? "Local Workspace"); setEditing(true); }}>

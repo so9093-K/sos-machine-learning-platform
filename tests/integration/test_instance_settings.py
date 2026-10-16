@@ -13,7 +13,7 @@ def test_instance_display_name_persists_and_audits(workspace):
     response = client.get("/api/instance")
     assert response.status_code == 200
     assert response.json()["display_name"] == "Local Workspace"
-    assert response.json()["environment"] == "development"
+    assert "environment" not in response.json()
     changed = client.put("/api/instance", json={"display_name": "  Research Lab  "})
     assert changed.status_code == 200, changed.text
     assert changed.json()["display_name"] == "Research Lab"
@@ -61,7 +61,7 @@ def test_instance_display_name_only_admin_can_change(workspace, monkeypatch):
             "/api/instance", json={"display_name": "AI Studio"}, headers=admin_headers
         )
         assert success.status_code == 200, success.text
-        assert success.json() == {"display_name": "AI Studio", "environment": "token"}
+        assert success.json() == {"display_name": "AI Studio"}
         assert secure.get("/api/instance", headers=admin_headers).json()["display_name"] == (
             "AI Studio"
         )

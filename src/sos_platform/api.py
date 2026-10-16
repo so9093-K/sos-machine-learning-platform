@@ -69,7 +69,7 @@ from .schemas import (
     UploadPolicyOut,
     WorkRequest,
 )
-from .security import Actor, IdentitySettings, current_actor, require, resource_allowed
+from .security import ACTIONS, Actor, IdentitySettings, current_actor, require, resource_allowed
 from .store import IcebergCancellationConflict, Store
 
 # Depends 객체는 요청마다 재생성하지 않고 안정적으로 재사용한다.
@@ -266,6 +266,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             "actor_id": actor.id,
             "actor_type": actor.kind,
             "roles": sorted(actor.roles),
+            "capabilities": sorted(action for action in ACTIONS if actor.can(action)),
             "mode": identity.mode,
         }
 
@@ -274,7 +275,6 @@ def create_app(home: Path | None = None) -> FastAPI:
         """인증된 클라이언트가 동일한 인스턴스 정보를 받는다."""
         return {
             "display_name": store.instance_display_name(),
-            "environment": identity.mode,
         }
 
     @app.put("/api/instance", response_model=InstanceSettingsOut)
@@ -289,7 +289,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             actor_type=actor.kind,
             request_id=request.state.request_id,
         )
-        return {"display_name": body.display_name, "environment": identity.mode}
+        return {"display_name": body.display_name}
 
     @app.get("/api/audit")
     @app.get("/api/v2/audit", response_model=list[AuditEventOut])

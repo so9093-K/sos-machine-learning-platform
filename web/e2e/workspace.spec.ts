@@ -705,3 +705,23 @@ test("Data Explorer navigation stays usable at mobile width", async ({ page }) =
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
 });
+
+
+test("Dataset refresh re-fetches the current Understanding profile", async ({ page }) => {
+  let requests = 0;
+  page.on("request", request => {
+    if (/\/api\/datasets\/[^/]+\/understanding$/.test(request.url())
+      && request.method() === "GET") requests += 1;
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "refresh-understanding.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("label,metric\na,1\nb,3\n"),
+  });
+  await expect(page.getByRole("tab", { name: "개요" })).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => requests).toBeGreaterThan(0);
+  const firstCount = requests;
+  await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
+  await expect.poll(() => requests).toBeGreaterThan(firstCount);
+});
