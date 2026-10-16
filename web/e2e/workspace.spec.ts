@@ -605,6 +605,42 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
   await expect(page.locator("#sos-panel-features .result th")).toHaveCount(4);
 });
 
+
+test("an older Jobs GET cannot overwrite a newer manual refresh", async ({ page }) => {
+  let seen = 0;
+  let delivered = false;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/jobs?limit=20", async route => {
+    seen++;
+    if (seen !== 1) return route.continue();
+    const response = await route.fetch();
+    const current = await response.json() as { items: unknown[]; next_cursor: string | null };
+    await held;
+    await route.fulfill({ response, json: {
+      ...current,
+      items: [{
+        id: "stale-polling-result",
+        dataset_id: "stale-dataset",
+        kind: "profile",
+        status: "Running",
+        created_at: "2026-01-01T00:00:00Z",
+        attempt_count: 0,
+        spec: {},
+      }],
+    } });
+    delivered = true;
+  });
+  await page.goto("/");
+  await expect.poll(() => seen).toBe(1);
+  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
+  await page.getByRole("button", { name: "새로고침" }).click();
+  await expect.poll(() => seen).toBe(2);
+  release();
+  await expect.poll(() => delivered).toBe(true);
+  await expect(page.getByText("stale-polling-result")).toHaveCount(0);
+});
+
 test("late feature preview never reappears after Dataset reload", async ({ page }) => {
   await page.goto("/");
   const input = page.locator('input[type="file"]');
