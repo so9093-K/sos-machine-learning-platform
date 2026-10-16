@@ -672,7 +672,9 @@ function Workspace({ actor }: { actor: Identity }) {
               {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
             </select></label>
             <label>그룹 컬럼 (최대 4개) <select aria-label="그룹 컬럼" multiple size={Math.min(5, Math.max(2, columnNames.length))}
-              value={groupBy} onChange={e => setGroupBy(Array.from(e.target.selectedOptions, option => option.value).slice(0, 4))}>
+              value={groupBy} onChange={e => setGroupBy(Array.from(e.target.selectedOptions, option => option.value)
+                .filter(Boolean).slice(0, 4))}>
+              <option value="">그룹 없음</option>
               {columnNames.filter(c => c !== orderBy).map(c => <option key={c} value={c}>{c}</option>)}
             </select></label>
             <p className="hint">Lag / Rolling은 시간 정렬 후 그룹별 계산합니다. Rolling Mean에는 현재 행이 포함됩니다.</p>

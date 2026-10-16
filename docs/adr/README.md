@@ -13,3 +13,4 @@
 - [0004 — DuckDB Discovery와 Polars Feature 실행 책임](0004-duckdb-discovery.md) · Accepted
 
 - [0005 — 비동기 Job 제출 식별과 외부 커밋 안전성](0005-job-submission-identity.md) · Accepted
+- [0006 — 범용 Dataset 조회와 Lazy Preview·Iceberg 배치 쓰기](0006-generic-data-execution.md) · Accepted
