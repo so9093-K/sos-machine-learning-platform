@@ -166,7 +166,8 @@ def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(work
     queued = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
     assert queued.status_code == 202
     assert store.acquire_worker()
-    # DB 자동 재연결로 backend id가 바뀐 상황을 결정적으로 재현한다.
+    # 실제 세션 종료 테스트와 달리 검증용 식별자만 변경하므로 원본을 보존한다.
+    owned_backend = store._worker_backend_pid
     store._worker_backend_pid = -1
     try:
         with pytest.raises(WorkerOwnershipLost):
@@ -176,6 +177,8 @@ def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(work
         assert pending["attempts"][-1]["status"] == "Running"
         assert pending["result"] is None
     finally:
+        # 시뮬레이션 중 실제 PostgreSQL 잠금은 살아 있으므로 정상적으로 해제한다.
+        store._worker_backend_pid = owned_backend
         store.release_worker()
 
     replacement = Store(store.home, database_url=store.database_url)

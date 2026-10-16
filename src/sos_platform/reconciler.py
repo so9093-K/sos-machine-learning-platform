@@ -9,6 +9,7 @@ import binascii
 import json
 from datetime import UTC, datetime, timedelta
 
+from .errors import InvalidRequestError
 from .config import StoragePolicy
 from .object_store import ObjectStore
 from .store import Store
@@ -23,7 +24,7 @@ def _position(cursor: str | None) -> tuple[str, str | None]:
         raw = base64.b64decode(cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True)
         position = json.loads(raw)
     except (ValueError, UnicodeError, binascii.Error) as exc:
-        raise ValueError("Invalid inventory cursor") from exc
+        raise InvalidRequestError("Invalid inventory cursor") from exc
     if (
         not isinstance(position, dict)
         or set(position) != {"prefix", "token"}
@@ -33,7 +34,7 @@ def _position(cursor: str | None) -> tuple[str, str | None]:
             and (not isinstance(position["token"], str) or not position["token"])
         )
     ):
-        raise ValueError("Invalid inventory cursor")
+        raise InvalidRequestError("Invalid inventory cursor")
     return position["prefix"], position["token"]
 
 
