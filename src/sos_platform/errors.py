@@ -180,6 +180,10 @@ if len(ERRORS) != len(DEFINITIONS) + len(
     raise RuntimeError("Duplicate error code in the platform catalog")
 
 
+class RuntimeConfigurationError(ValueError):
+    """서버 자원 설정의 모순·오입력. 클라이언트의 요청 검증 오류가 아니다."""
+
+
 class PlatformError(Exception):
     """안전한 사용자 오류 메시지와 안정적인 오류 코드를 보유한다."""
 

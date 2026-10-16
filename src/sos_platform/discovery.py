@@ -22,7 +22,7 @@ from sqlalchemy import text
 
 from .cache import cached_dataset_file
 from .datasets import iceberg_catalog
-from .errors import PlatformError
+from .errors import PlatformError, RuntimeConfigurationError
 from .resource_admission import reserve_execution_memory
 from .store import Store
 
@@ -50,7 +50,7 @@ class DiscoveryPolicy:
         for field, (name, low, high, default) in names.items():
             raw = os.getenv(name, str(default))
             if not raw.isdecimal() or not low <= int(raw) <= high:
-                raise ValueError(f"{name} must be between {low} and {high}")
+                raise RuntimeConfigurationError(f"{name} must be between {low} and {high}")
             values[field] = int(raw)
         return cls(**values)
 
@@ -184,9 +184,9 @@ class DiscoveryAdmission:
         active = os.getenv("SOS_DISCOVERY_MAX_ACTIVE", "1")
         wait = os.getenv("SOS_DISCOVERY_WAIT_SECONDS", "15")
         if not active.isdecimal() or not 1 <= int(active) <= 8:
-            raise ValueError("SOS_DISCOVERY_MAX_ACTIVE must be between 1 and 8")
+            raise RuntimeConfigurationError("SOS_DISCOVERY_MAX_ACTIVE must be between 1 and 8")
         if not wait.isdecimal() or not 1 <= int(wait) <= 300:
-            raise ValueError("SOS_DISCOVERY_WAIT_SECONDS must be between 1 and 300")
+            raise RuntimeConfigurationError("SOS_DISCOVERY_WAIT_SECONDS must be between 1 and 300")
         return cls(max_active=int(active), wait_seconds=int(wait))
 
 

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import text
 
-from .errors import PlatformError
+from .errors import PlatformError, RuntimeConfigurationError
 
 if TYPE_CHECKING:
     from .store import Store
@@ -38,12 +38,32 @@ class ExecutionCapacity:
             or not 256 <= int(capacity) <= 65536
             or int(capacity) % _QUANTUM_MIB
         ):
-            raise ValueError(
+            raise RuntimeConfigurationError(
                 "SOS_EXECUTION_POOL_MIB must be a multiple of 256 between 256 and 65536"
             )
         if not wait.isdecimal() or not 1 <= int(wait) <= 300:
-            raise ValueError("SOS_EXECUTION_POOL_WAIT_SECONDS must be between 1 and 300")
+            raise RuntimeConfigurationError("SOS_EXECUTION_POOL_WAIT_SECONDS must be between 1 and 300")
         return cls(pool_mib=int(capacity), wait_seconds=float(wait))
+
+    def validate_worker_budget(
+        self, *, worker_rss_mib: int, discovery_memory_mib: int
+    ) -> None:
+        """실행 자원 요청의 포함 관계를 실행 전에 검사한다.
+
+        부모 Worker가 예약한 예산 안에서 DuckDB가 동작하므로 자식의 DuckDB
+        논리 메모리 예산이 부모보다 크면 이중 계상을 피할 수 없다.
+        실제 RSS/컨테이너 메모리 한도는 이 계약과 별도로 집행한다.
+        """
+        if worker_rss_mib <= 0 or discovery_memory_mib <= 0:
+            raise RuntimeConfigurationError("Execution memory budgets must be positive")
+        if worker_rss_mib > self.pool_mib:
+            raise RuntimeConfigurationError(
+                "SOS_EXECUTION_POOL_MIB must cover SOS_WORKER_MAX_RSS_MIB"
+            )
+        if discovery_memory_mib > worker_rss_mib:
+            raise RuntimeConfigurationError(
+                "SOS_WORKER_MAX_RSS_MIB must cover SOS_DISCOVERY_MEMORY_MIB"
+            )
 
     @property
     def slots(self) -> int:
@@ -55,7 +75,7 @@ class ExecutionCapacity:
             raise ValueError("Execution memory requirement must be positive")
         needed = (requested_mib + _QUANTUM_MIB - 1) // _QUANTUM_MIB
         if needed > self.slots:
-            raise ValueError("Execution memory requirement exceeds configured pool")
+            raise RuntimeConfigurationError("Execution memory requirement exceeds configured pool")
         return needed
 
 

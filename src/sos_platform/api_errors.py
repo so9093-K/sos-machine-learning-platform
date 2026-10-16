@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from .errors import ERRORS, PlatformError
+from .errors import ERRORS, PlatformError, RuntimeConfigurationError
 from .observability import emit
 
 
@@ -85,6 +85,21 @@ def register_error_handlers(app: FastAPI) -> None:
                 }
             )
         return problem_response(request, "SOS-API-VALIDATION", 422, fields)
+
+    @app.exception_handler(RuntimeConfigurationError)
+    async def handle_runtime_configuration(request: Request, exc: RuntimeConfigurationError):
+        # 서버의 구성 오류는 사용자 입력 422로 표현하거나 설정 원문을 공개하지 않는다.
+        emit(
+            "api.request.failed",
+            service="sos-api",
+            level=logging.ERROR,
+            request_id=getattr(request.state, "request_id", None),
+            error_code="SOS-API-INTERNAL",
+            exception_type=type(exc).__name__,
+        )
+        return problem_response(
+            request, "SOS-API-INTERNAL", 500, ERRORS["SOS-API-INTERNAL"].message
+        )
 
     @app.exception_handler(ValueError)
     async def handle_value(request: Request, exc: ValueError):

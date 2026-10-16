@@ -20,6 +20,7 @@ from .datasets import (
     pinned_scan_dataset,
 )
 from .diagnostics import classify_failure
+from .discovery import DiscoveryPolicy
 from .discovery import explore as discovery_explore
 from .discovery import profile as discovery_profile
 from .errors import ERRORS, PlatformError
@@ -133,8 +134,10 @@ def run_once(store: Store) -> bool:
     """예약 가능한 실행 용량을 확보한 뒤에만 Job을 Running으로 변경한다."""
     budget = ExecutionBudget.from_env()
     capacity = ExecutionCapacity.from_env()
-    if budget.max_rss_mib > capacity.pool_mib:
-        raise ValueError("SOS_EXECUTION_POOL_MIB must cover SOS_WORKER_MAX_RSS_MIB")
+    capacity.validate_worker_budget(
+        worker_rss_mib=budget.max_rss_mib,
+        discovery_memory_mib=DiscoveryPolicy.from_env().memory_mib,
+    )
     try:
         with reserve_execution_memory(store, budget.max_rss_mib, capacity):
             return _run_once_reserved(store, budget)

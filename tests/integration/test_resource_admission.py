@@ -174,3 +174,30 @@ def test_discovery_reserves_memory_before_occupying_concurrency_slot(workspace, 
         "release_discovery_slot",
         "release_memory",
     ]
+
+def test_bad_worker_discovery_memory_envelope_does_not_claim_job(workspace, monkeypatch):
+    """설정이 서로 모순되면 부모 예약을 잡거나 Job을 Running으로 만들지 않는다."""
+    from sos_platform.errors import RuntimeConfigurationError
+
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
+    assert queued.status_code == 202
+    monkeypatch.setenv("SOS_DISCOVERY_MEMORY_MIB", "3072")
+    with pytest.raises(RuntimeConfigurationError, match="SOS_WORKER_MAX_RSS_MIB"):
+        run_once(store)
+    assert store.get_job(queued.json()["id"])["status"] == "Queued"
+    assert store.get_job(queued.json()["id"])["attempts"] == []
+
+
+def test_invalid_server_resource_configuration_is_not_client_input_error(workspace, monkeypatch):
+    """서버 자원 설정 오류는 안전한 500을 반환하며 422 또는 비밀 설정 원문을 노출하지 않는다."""
+    client, store = workspace
+    dataset = upload(client)
+    monkeypatch.setenv("SOS_DISCOVERY_MEMORY_MIB", "not-a-number-private-credential")
+    response = client.get(f"/api/datasets/{dataset['id']}/preview")
+    assert response.status_code == 500
+    assert response.json()["code"] == "SOS-API-INTERNAL"
+    assert "credential" not in response.text
+    assert response.json()["request_id"] == response.headers["X-Request-ID"]
+
