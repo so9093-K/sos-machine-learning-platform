@@ -9,6 +9,7 @@ import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
+import { DatasetQueryPanel } from "./DatasetQueryPanel";
 import type { Dataset, DatasetPage, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity, Snapshot } from "./types";
 import "./style.css";
 
@@ -62,7 +63,11 @@ function Workspace({ actor }: { actor: Identity }) {
   const [column, setColumn] = useState("");
   const [value, setValue] = useState("");
   const [orderBy, setOrderBy] = useState("");
-  const [groupBy, setGroupBy] = useState("");
+  const [groupBy, setGroupBy] = useState<string[]>([]);
+  const [chosenColumns, setChosenColumns] = useState<string[]>([]);
+  const [queryPreview, setQueryPreview] = useState<{
+    datasetId: string; revision: number; data: Preview
+  } | null>(null);
   const [featurePreviewResult, setFeaturePreview] = useState<{ signature: string; data: Preview } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
@@ -70,6 +75,9 @@ function Workspace({ actor }: { actor: Identity }) {
   const refreshedCompletedJobs = useRef(new Set<string>());
   const dataset = datasets.find(d => d.id === selected);
   const columnNames = preview ? Object.keys(preview.schema) : [];
+  const displayedPreview = queryPreview?.datasetId === selected &&
+    queryPreview.revision === reloadRevision ? queryPreview.data : preview;
+  const displayedColumns = displayedPreview ? Object.keys(displayedPreview.schema) : [];
   const numeric = profile?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
   const [visualColumn, setVisualColumn] = useState("");
   const [timeColumn, setTimeColumn] = useState("");
@@ -174,7 +182,8 @@ function Workspace({ actor }: { actor: Identity }) {
   useEffect(() => {
     // Dataset 전환과 네트워크 재시도를 구분해 작성 중인 변환을 보존한다.
     setFeaturePreview(null); setSteps([]); setEditingStep(null);
-    setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy(""); setGroupBy("");
+    setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy(""); setGroupBy([]);
+    setChosenColumns([]); setQueryPreview(null);
   }, [selected]);
   useEffect(() => {
     if (!selected) {
@@ -237,7 +246,8 @@ function Workspace({ actor }: { actor: Identity }) {
   function addStep() {
     try {
       const next = createStep(op, column, value, preview?.schema[column],
-        op === "lag" ? lagPeriods : op === "rolling_mean" ? rollingWindow : undefined);
+        op === "lag" ? lagPeriods : op === "rolling_mean" ? rollingWindow : undefined,
+        chosenColumns);
       setSteps(existing => editingStep === null ? [...existing, next]
         : existing.map((step, index) => index === editingStep ? next : step));
       setEditingStep(null); setFeaturePreview(null); setError("");
@@ -248,6 +258,7 @@ function Workspace({ actor }: { actor: Identity }) {
     setEditingStep(index);
     setOp(step.op); setColumn(step.column ?? ""); setValue(step.value == null ? "" : String(step.value));
     setLagPeriods(step.periods ?? 1); setRollingWindow(step.window ?? 3);
+    setChosenColumns(step.columns ?? []);
   }
   function moveStep(index: number, direction: -1 | 1) {
     const destination = index + direction;
@@ -262,7 +273,7 @@ function Workspace({ actor }: { actor: Identity }) {
   const transform = {
     steps,
     ...(orderBy ? { order_by: orderBy } : {}),
-    ...(groupBy ? { group_by: [groupBy] } : {}),
+    ...(groupBy.length ? { group_by: groupBy } : {}),
   };
   // 오래된 응답은 현재 Dataset과 변환 설정에 맞을 때만 노출한다.
   const transformSignature = JSON.stringify({ dataset_id: selected, transform });
@@ -560,13 +571,16 @@ function Workspace({ actor }: { actor: Identity }) {
         {tab === "preview" && <section className="panel" role="tabpanel"
           id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
           <div className="panel-head"><div><h3>데이터 미리보기</h3><p>최대 100행 · 전체 데이터가 아닌 일부입니다.</p></div>
-            <span className="chip">{preview?.returned_rows ?? "…"} rows shown</span></div>
-          {preview && <><div className="table-scroll"><table><thead><tr>
-            {columnNames.map(c => <th key={c}>{c}<small>{preview.schema[c]}</small></th>)}
-          </tr></thead><tbody>{preview.rows.map((r, i) => <tr key={i}>
-            {columnNames.map(c => <td key={c}>{r[c] == null
+            <span className="chip">{displayedPreview?.returned_rows ?? "…"} rows shown</span></div>
+          {preview && <DatasetQueryPanel key={selected} datasetId={selected}
+            columns={columnNames} busy={busy}
+            onResult={data => setQueryPreview({ datasetId: selected, revision: reloadRevision, data })} />}
+          {displayedPreview && <><div className="table-scroll"><table><thead><tr>
+            {displayedColumns.map(c => <th key={c}>{c}<small>{displayedPreview.schema[c]}</small></th>)}
+          </tr></thead><tbody>{displayedPreview.rows.map((r, i) => <tr key={i}>
+            {displayedColumns.map(c => <td key={c}>{r[c] == null
               ? <span className="null">NULL</span> : String(r[c])}</td>)}
-          </tr>)}</tbody></table></div>{preview.rows.length === 0 && <p className="muted">행이 없는 데이터셋입니다.</p>}</>}
+          </tr>)}</tbody></table></div>{displayedPreview.rows.length === 0 && <p className="muted">조건에 맞는 행이 없습니다.</p>}</>}
           {previewStatus === "loading" && <p className="muted" role="status">미리보기를 불러오는 중입니다.</p>}
           {previewStatus === "error" && <button className="secondary"
             onClick={() => setReloadRevision(v => v + 1)}>미리보기 다시 시도</button>}
@@ -619,22 +633,35 @@ function Workspace({ actor }: { actor: Identity }) {
           </div></div>
           <div className="form-row">
             <label>변환 <select aria-label="변환" value={op} onChange={e => setOp(e.target.value)}>
+              <option value="select">컬럼 선택</option>
               <option value="filter_not_null">결측 행 제외</option>
               <option value="fill_null">결측값 대체</option>
               <option value="cast">Float64 변환</option>
               <option value="lag">Lag 1</option>
               <option value="rolling_mean">Rolling Mean 3</option>
             </select></label>
-            <label>컬럼 <select aria-label="컬럼" value={column} onChange={e => setColumn(e.target.value)}>
+            {op === "select" && <fieldset className="column-picks">
+              <legend>유지할 컬럼</legend>
+              {columnNames.map(name => <label key={name}>
+                <input type="checkbox" checked={chosenColumns.includes(name)}
+                  onChange={event => setChosenColumns(current => event.target.checked
+                    ? [...current, name] : current.filter(item => item !== name))} />
+                {name}
+              </label>)}
+            </fieldset>}
+            {op !== "select" && <label>컬럼 <select aria-label="컬럼" value={column} onChange={e => setColumn(e.target.value)}>
               {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
-            </select></label>
+            </select></label>}
             {op === "fill_null" && <label>대체 값 <input value={value}
               onChange={e => setValue(e.target.value)} placeholder="0" /></label>}
             {op === "lag" && <label>이전 행 수 <input type="number" min={1} max={1000}
               value={lagPeriods} onChange={e => setLagPeriods(Number(e.target.value))} /></label>}
             {op === "rolling_mean" && <label>윈도 행 수 <input type="number" min={2} max={1000}
               value={rollingWindow} onChange={e => setRollingWindow(Number(e.target.value))} /></label>}
-            <button className="secondary" onClick={addStep} disabled={!column || steps.length >= 30 && editingStep === null}>
+            <button className="secondary" onClick={addStep} disabled={
+              (op === "select" ? chosenColumns.length === 0 : !column) ||
+              (steps.length >= 30 && editingStep === null)
+            }>
               {editingStep === null ? "+ 단계 추가" : "단계 수정 반영"}</button>
             {editingStep !== null && <button className="ghost" onClick={() => setEditingStep(null)}>
               수정 취소</button>}
@@ -644,8 +671,8 @@ function Workspace({ actor }: { actor: Identity }) {
               <option value="">정렬하지 않음</option>
               {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
             </select></label>
-            <label>그룹 컬럼 <select aria-label="그룹 컬럼" value={groupBy} onChange={e => setGroupBy(e.target.value)}>
-              <option value="">전체를 하나로 처리</option>
+            <label>그룹 컬럼 (최대 4개) <select aria-label="그룹 컬럼" multiple size={Math.min(5, Math.max(2, columnNames.length))}
+              value={groupBy} onChange={e => setGroupBy(Array.from(e.target.selectedOptions, option => option.value).slice(0, 4))}>
               {columnNames.filter(c => c !== orderBy).map(c => <option key={c} value={c}>{c}</option>)}
             </select></label>
             <p className="hint">Lag / Rolling은 시간 정렬 후 그룹별 계산합니다. Rolling Mean에는 현재 행이 포함됩니다.</p>
@@ -673,7 +700,7 @@ function Workspace({ actor }: { actor: Identity }) {
               전체 변환 Job 실행 →
             </button>}</div>
           {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 계산</h4>
-             <p className="hint">10만 행 이하 입력에서 실제 Job과 같은 변환을 실행한 뒤 출력 최대 30행을 표시합니다. 더 큰 데이터는 전체 Job을 사용하세요.</p>
+             <p className="hint">결과는 최대 30행입니다. 단순 변환은 큰 Dataset에서도 일부 결과만 읽고, 전역 Window는 동기 예산 초과 시 전체 Job을 안내합니다.</p>
             <div className="table-scroll"><table><thead><tr>{Object.entries(featurePreview.schema).map(
               ([c, t]) => <th key={c}>{c}<small>{t}</small></th>
             )}</tr></thead><tbody>{featurePreview.rows.slice(0, 15).map((r, i) => <tr key={i}>

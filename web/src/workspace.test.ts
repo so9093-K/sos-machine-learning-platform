@@ -10,6 +10,11 @@ describe("Feature Builder contracts", () => {
     expect(createStep("fill_null", "label", "unknown").value).toBe("unknown");
     expect(createStep("fill_null", "code", "001", "String").value).toBe("001");
   });
+  it("constructs a validated reusable select step", () => {
+    expect(createStep("select", "", "", undefined, undefined, ["value", "name"]))
+      .toEqual({ op: "select", columns: ["value", "name"] });
+    expect(() => createStep("select", "", "", undefined, undefined, [])).toThrow();
+  });
   it("detects time dependencies", () => {
     expect(needsTimeOrder([createStep("lag", "temperature", "")])).toBe(true);
     expect(createStep("lag", "temperature", "", "Float64", 5).periods).toBe(5);
