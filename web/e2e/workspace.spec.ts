@@ -80,7 +80,7 @@ test("example onboarding uses the same EDA, Feature and Job contracts", async ({
   await page.getByRole("tab", { name: "탐색" }).click();
   await expect(page.getByText("분석한 행")).toBeVisible();
   await page.getByRole("tab", { name: "변환" }).click();
-  await page.getByLabel("변환", { exact: true }).selectOption("lag");
+  await page.getByLabel("변환 연산", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
@@ -113,7 +113,7 @@ test("feature preview is invalidated when group or ordering changes", async ({ p
   await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
   await page.getByRole("tab", { name: "변환" }).click();
-  await page.getByLabel("변환", { exact: true }).selectOption("lag");
+  await page.getByLabel("변환 연산", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
@@ -151,7 +151,7 @@ test("same dataset reload preserves Feature editor selections", async ({ page })
   await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
   await page.getByRole("tab", { name: "변환" }).click();
-  await page.getByLabel("변환", { exact: true }).selectOption("lag");
+  await page.getByLabel("변환 연산", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
@@ -585,7 +585,7 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
   });
   await expect(page.getByRole("heading", { name: "grouped-features.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "변환" }).click();
-  await page.getByLabel("변환", { exact: true }).selectOption("select");
+  await page.getByLabel("변환 연산", { exact: true }).selectOption("select");
   await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("site").check();
   await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("machine").check();
   await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("time").check();

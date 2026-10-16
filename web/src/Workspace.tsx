@@ -661,7 +661,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             <p>원본은 유지됩니다. 순서대로 변환 단계를 편집·검증하고 전체 Job으로 실행합니다.</p>
           </div></div>
           <div className="form-row">
-            <label>변환 <select aria-label="변환" value={op} onChange={e => setOp(e.target.value)}>
+            <label>변환 연산 <select aria-label="변환 연산" value={op} onChange={e => setOp(e.target.value)}>
               <option value="select">컬럼 선택</option>
               <option value="filter_not_null">결측 행 제외</option>
               <option value="fill_null">결측값 대체</option>
