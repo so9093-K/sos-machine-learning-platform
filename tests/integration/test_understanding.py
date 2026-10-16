@@ -145,10 +145,7 @@ def test_dataset_understanding_job_version_and_executable_suggestions(workspace)
     assert recent["job_id"] == rerun.json()["id"]
 
 
-
-def test_understanding_response_never_mixes_success_with_precommit_profile(
-    workspace, monkeypatch
-):
+def test_understanding_response_never_mixes_success_with_precommit_profile(workspace, monkeypatch):
     """Worker 완료가 Job 조회 직전에 발생해도 Profile 누락 응답을 만들지 않는다."""
     client, store = workspace
     dataset = _upload(client, "race.csv", b"group,metric\na,1\nb,2\n")
@@ -174,6 +171,7 @@ def test_understanding_response_never_mixes_success_with_precommit_profile(
     assert response.status_code == 200, response.text
     assert response.json()["job_status"] == "Succeeded"
     assert response.json()["profile"] is not None
+
 
 def test_cancel_understanding_preserves_dataset_and_previous_profile(workspace):
     client, store = workspace
