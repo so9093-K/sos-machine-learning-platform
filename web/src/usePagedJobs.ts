@@ -10,6 +10,7 @@ export function usePagedJobs<T extends { id: string }>(endpoint: string) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const generation = useRef(0);
   const retainedOldPages = useRef(false);
+  const inFlightCursor = useRef<string | null>(null);
 
   async function refresh(): Promise<void> {
     const current = ++generation.current;
@@ -21,14 +22,20 @@ export function usePagedJobs<T extends { id: string }>(endpoint: string) {
   }
 
   async function loadMore(): Promise<void> {
-    if (!nextCursor) return;
-    const current = generation.current;
-    const page = await request<Page<T>>(
-      `${endpoint}?limit=20&cursor=${encodeURIComponent(nextCursor)}`);
-    if (generation.current !== current) return;
-    setItems(previous => mergeById(previous, page.items));
-    setNextCursor(page.next_cursor ?? null);
-    retainedOldPages.current = true;
+    const cursor = nextCursor;
+    if (!cursor || inFlightCursor.current === cursor) return;
+    inFlightCursor.current = cursor;
+    try {
+      const page = await request<Page<T>>(
+        `${endpoint}?limit=20&cursor=${encodeURIComponent(cursor)}`);
+      // 백그라운드 refresh는 같은 목록의 첫 페이지만 바꾼다.
+      // 안정적인 키셋 cursor로 조회한 과거 페이지는 버리지 않고 최신 상태 뒤에 합친다.
+      setItems(previous => mergeById(previous, page.items));
+      setNextCursor(page.next_cursor ?? null);
+      retainedOldPages.current = true;
+    } finally {
+      if (inFlightCursor.current === cursor) inFlightCursor.current = null;
+    }
   }
 
   return { items, nextCursor, refresh, loadMore };
