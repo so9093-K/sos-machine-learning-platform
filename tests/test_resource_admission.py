@@ -47,3 +47,17 @@ def test_worker_budget_is_nested_inside_reserved_envelope():
         ExecutionCapacity(pool_mib=1024).validate_worker_budget(
             worker_rss_mib=2048, discovery_memory_mib=512
         )
+
+
+def test_feature_preview_admission_defaults_and_configuration(monkeypatch):
+    from sos_platform.errors import RuntimeConfigurationError
+    from sos_platform.resource_admission import FeaturePreviewBudget
+
+    monkeypatch.delenv("SOS_FEATURE_PREVIEW_MEMORY_MIB", raising=False)
+    assert FeaturePreviewBudget.from_env().memory_mib == 1024
+    monkeypatch.setenv("SOS_FEATURE_PREVIEW_MEMORY_MIB", "512")
+    assert FeaturePreviewBudget.from_env().memory_mib == 512
+    monkeypatch.setenv("SOS_FEATURE_PREVIEW_MEMORY_MIB", "513")
+    with pytest.raises(RuntimeConfigurationError, match="SOS_FEATURE_PREVIEW_MEMORY_MIB"):
+        FeaturePreviewBudget.from_env()
+

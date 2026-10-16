@@ -9,7 +9,7 @@ Discovery는 전역 실행 슬롯과 DuckDB 메모리 설정을, Worker는 별�
 ## 결정
 
 1. API와 Worker의 요청 메모리를 PostgreSQL 세션 advisory lock으로 256MiB 슬롯 단위 예약한다. 기본 풀은 3072MiB이고 환경에서 조절한다. 이 값은 실제 실물 RAM을 의미하지 않는다.
-2. Worker는 예약 후에만 Job을 Claim한다. 예약 실패 시 Queued를 유지하며, 동기 Discovery는 429 용량 오류를 반환한다.
+2. Worker는 예약 후에만 Job을 Claim한다. 동기 Polars Feature Preview도 실행·캐시 조회 전 별도 요청 메모리를 같은 풀에서 예약한다. 예약 실패 시 Queued를 유지하며, 동기 Discovery는 429 용량 오류를 반환한다.
 3. Worker 자식의 Discovery는 부모 예약을 이중 계산하지 않는다. Discovery 자체 전역 슬롯은 독립적으로 유지한다.
 4. 예약, RSS 폴링 감시, 물리적인 cgroup/OS 격리는 서로 다르다. 실제 메모리 한도를 강제한다고 주장하지 않는다.
 5. PostgreSQL 세션 종료 시 슬롯이 자동 해제된다. 예약 경합에서 부분 획득된 슬롯은 즉시 반납한다.

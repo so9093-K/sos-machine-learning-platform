@@ -201,3 +201,55 @@ def test_invalid_server_resource_configuration_is_not_client_input_error(workspa
     assert response.json()["code"] == "SOS-API-INTERNAL"
     assert "credential" not in response.text
     assert response.json()["request_id"] == response.headers["X-Request-ID"]
+
+
+def test_feature_preview_does_not_read_data_when_capacity_is_full(workspace, monkeypatch):
+    """공통 풀을 모두 사용하면 Polars를 시작하지 않고 동기 429를 반환한다."""
+    import sos_platform.api as api
+
+    client, store = workspace
+    dataset = upload(client)
+    monkeypatch.setenv("SOS_EXECUTION_POOL_WAIT_SECONDS", "1")
+
+    def must_not_process(*_args, **_kwargs):
+        raise AssertionError("Feature Preview must not execute without admission")
+
+    monkeypatch.setattr(api, "bounded_feature_preview", must_not_process)
+    body = {
+        "dataset_id": dataset["id"],
+        "transform": {"steps": [{"op": "select", "columns": ["temperature"]}]},
+    }
+    with reserve_execution_memory(store, 3072):
+        result = client.post("/api/features/preview", json=body)
+    assert result.status_code == 429
+    assert result.json()["code"] == "SOS-EXECUTION-CAPACITY"
+    assert result.json()["retry_policy"] == "after_delay"
+
+
+def test_feature_preview_reservation_is_released_after_internal_failure(workspace, monkeypatch):
+    """작업 중 내부 실패가 나더라도 예약 슬롯이 남지 않아 다음 호출이 진행된다."""
+    import sos_platform.api as api
+
+    client, store = workspace
+    dataset = upload(client)
+    body = {
+        "dataset_id": dataset["id"],
+        "transform": {"steps": [{"op": "select", "columns": ["temperature"]}]},
+    }
+
+    def fail_preview(*_args, **_kwargs):
+        raise ValueError("private processing detail")
+
+    with monkeypatch.context() as temporary:
+        temporary.setattr(api, "bounded_feature_preview", fail_preview)
+        broken = client.post("/api/features/preview", json=body)
+    assert broken.status_code == 500
+    assert broken.json()["code"] == "SOS-API-INTERNAL"
+    assert "private processing" not in broken.text
+    # 1GiB만 예약할 수 있는 풀에서 정상 호출이 완료된다는 것은 누수가 없다는 뜻이다.
+    monkeypatch.setenv("SOS_EXECUTION_POOL_MIB", "1024")
+    resumed = client.post("/api/features/preview", json=body)
+    assert resumed.status_code == 200, resumed.text
+    with reserve_execution_memory(store, 1024):
+        pass
+

@@ -23,6 +23,22 @@ _LOCK_NAMESPACE = 83420
 
 
 @dataclass(frozen=True)
+class FeaturePreviewBudget:
+    """동기 Polars Preview를 위한 논리적 메모리 요청량. 물리적 강제 한도가 아니다."""
+
+    memory_mib: int = 1024
+
+    @classmethod
+    def from_env(cls) -> "FeaturePreviewBudget":
+        raw = os.getenv("SOS_FEATURE_PREVIEW_MEMORY_MIB", str(cls().memory_mib))
+        if not raw.isdecimal() or not 256 <= int(raw) <= 16384 or int(raw) % _QUANTUM_MIB:
+            raise RuntimeConfigurationError(
+                "SOS_FEATURE_PREVIEW_MEMORY_MIB must be a multiple of 256 between 256 and 16384"
+            )
+        return cls(memory_mib=int(raw))
+
+
+@dataclass(frozen=True)
 class ExecutionCapacity:
     """서버의 실물 RAM과 구별되는 논리적 실행 메모리 수용량."""
 

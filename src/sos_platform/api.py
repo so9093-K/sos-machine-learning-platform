@@ -31,6 +31,7 @@ from .observability import emit
 from .pagination import decode_cursor, page_from_rows
 from .processing import bounded_feature_preview
 from .reconciler import inspect_iceberg_references, inspect_page
+from .resource_admission import FeaturePreviewBudget, reserve_execution_memory
 from .retention import ensure_tag, snapshot_status
 from .schemas import (
     DatasetColumnsOut,
@@ -460,8 +461,11 @@ def create_app(home: Path | None = None) -> FastAPI:
     def feature_preview(body: FeaturePreview, actor: Actor = READ_DATASET_DEP):
         # 입력의 앞 1,000행을 먼저 자르면 정렬·Lag·Rolling 경계가 실제 Job과 달라진다.
         # 전체 입력에서 같은 연산을 수행하고 출력 행 수만 제한한다.
-        with pinned_scan_dataset(store, existing(body.dataset_id, actor)) as lf:
-            return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
+        # 동기 Polars 계산도 Worker·DuckDB와 동일한 논리적 수용 풀을 공유한다.
+        # 예약은 원본 캐시 Lease/입력 스캔 이전에 확보해 경합 시 파일·CPU를 잡지 않는다.
+        with reserve_execution_memory(store, FeaturePreviewBudget.from_env().memory_mib):
+            with pinned_scan_dataset(store, existing(body.dataset_id, actor)) as lf:
+                return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
 
     def job_page(limit: int, cursor: str | None, actor: Actor, *, discovery_only: bool) -> dict:
         before = decode_cursor(cursor, "Job")
