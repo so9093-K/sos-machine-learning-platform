@@ -190,12 +190,16 @@ def test_exploration_counts_all_categorical_columns(workspace):
     response = client.post(f"/api/datasets/{dataset['id']}/explorations", json=spec)
     assert response.status_code == 200, response.text
     assert {row["category"]: row["value"] for row in response.json()["rows"]} == {
-        "a": 1, "b": 0,
+        "a": 1,
+        "b": 0,
     }
-    assert client.post(
-        f"/api/datasets/{dataset['id']}/explorations",
-        json={"column": "label", "metric": "mean"},
-    ).status_code == 422
+    assert (
+        client.post(
+            f"/api/datasets/{dataset['id']}/explorations",
+            json={"column": "label", "metric": "mean"},
+        ).status_code
+        == 422
+    )
 
 
 def test_discovery_query_spill_directory_is_owned_and_released(workspace):

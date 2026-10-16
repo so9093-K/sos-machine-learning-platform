@@ -100,7 +100,7 @@ export function DiscoveryPanel({
     <h4>데이터 발견</h4>
     {status === "loading" && <p role="status" className="muted">구조와 메타데이터를 확인하는 중입니다.</p>}
     {status === "error" && <button className="secondary"
-      onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>
+      onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>}
     {overview && <div className="cards">
       <div className="stat"><span>전체 행</span><strong>{overview.row_count?.toLocaleString() ?? "미계산"}</strong>
         <small>{analysisLabel(overview.row_count_basis)}</small></div>

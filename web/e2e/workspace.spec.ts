@@ -321,8 +321,8 @@ test("Discovery supports categorical-only counts", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "labels.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "EDA & Profile" }).click();
   const discovery = page.getByRole("region", { name: "Dataset Discovery" });
-  await expect(discovery.getByRole("combobox", { name: "집계", exact: true })).toHaveValue("count");
-  await discovery.getByRole("combobox", { name: "집계", exact: true }).selectOption("null_count");
+  await expect(discovery.getByRole("combobox", { name: "집계 방식" })).toHaveValue("count");
+  await discovery.getByRole("combobox", { name: "집계 방식" }).selectOption("null_count");
   await discovery.getByRole("combobox", { name: "분석할 컬럼" }).selectOption("label");
   await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
   await discovery.getByRole("button", { name: "샘플 집계" }).click();
