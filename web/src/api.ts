@@ -44,7 +44,7 @@ export function setAccessToken(value: string | null) {
   accessToken = next;
 }
 
-/** 기존 detail을 읽으면서 오류 코드와 요청 ID·재시도 정책을 별도로 유지한다. */
+/** 구조화된 오류에서 메시지와 요청 ID·재시도 정책을 읽는다. */
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
@@ -58,7 +58,7 @@ export function jsonPost<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 }
 
-/** fetch와 XHR에서 같은 오류 코드·레거시 detail 해석을 사용한다. */
+/** fetch와 XHR에서 같은 구조화된 오류 처리를 사용한다. */
 async function responseError(response: Response): Promise<ApiError> {
     let message = `요청에 실패했습니다. (HTTP ${response.status})`;
     let code: string | null = null;
@@ -76,10 +76,6 @@ async function responseError(response: Response): Promise<ApiError> {
         const field = first.loc?.filter(part => part !== "body").join(".");
         message = field ? `${field}: ${first.msg ?? "입력을 확인하세요."}`
           : (first.msg ?? message);
-      } else if (detail && typeof detail === "object" && !Array.isArray(detail)) {
-        const legacy = detail as { code?: string; message?: string };
-        if (typeof legacy.message === "string") message = legacy.message;
-        if (!code && typeof legacy.code === "string") code = legacy.code;
       }
     } catch { /* JSON이 아니어도 HTTP 상태·요청 ID를 보존한다. */ }
     // 프록시가 HTML 또는 빈 413을 반환해도 오류 코드는 서버가 정의한 경우에만 사용한다.

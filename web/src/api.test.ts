@@ -45,7 +45,7 @@ describe("API failure diagnostic contract", () => {
     expect(formatError(definitive)).not.toContain("재시도");
   });
 
-  it("preserves legacy field validation and request header on non-JSON response", async () => {
+  it("preserves request ID and status on non-JSON error responses", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("temporarily unavailable", {
       status: 503, headers: { "X-Request-ID": "trace-example" },
     })));

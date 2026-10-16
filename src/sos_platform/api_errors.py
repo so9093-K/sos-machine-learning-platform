@@ -1,4 +1,4 @@
-"""레거시 detail을 유지하는 HTTP 오류 계약과 안전한 예외 경계."""
+"""공통 HTTP 오류 계약과 안전한 예외 경계."""
 
 import logging
 from uuid import uuid4

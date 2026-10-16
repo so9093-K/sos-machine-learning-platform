@@ -10,13 +10,13 @@
 
 ## 오류 응답과 호환성
 
-API는 기존 `detail`(문자열·필드 오류 배열·객체)을 유지하면서 `code`, `category`, `retry_policy`, `request_id`, `type`, `title`, `status`, `instance`를 제공한다. HTTP 상태와 `X-Request-ID`도 전달한다. `ProblemOut`이 OpenAPI 계약의 정본이며, 통신 타입은 생성된 TypeScript 타입을 사용한다.
+API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)과 `code`, `category`, `retry_policy`, `request_id`, `type`, `title`, `status`, `instance`를 제공한다. HTTP 상태와 `X-Request-ID`도 전달한다. `ProblemOut`이 OpenAPI 계약의 정본이며, 통신 타입은 생성된 TypeScript 타입을 사용한다.
 
 - `never`: 사용자 입력·권한 또는 상태를 수정해야 한다. 자동 재시도하지 않는다.
 - `after_refresh`: 현재 상태를 재조회하고 재시도가 안전한지 판단한다. 쓰기 재실행을 자동 승인하는 의미가 아니다.
 - `after_delay`: 명시적으로 멱등성을 보장하는 요청에만 지연 재시도할 수 있다.
 - `manual_verification_required`: 외부 커밋 여부를 조사하기 전 반복 실행하지 않는다. 웹은 오류 코드·요청 ID와 함께 중복 제출 금지 안내를 표시한다.
-- 인증 실패의 `WWW-Authenticate` 헤더, 404 리소스 은닉, 이전 `detail` 필드와 API-first OpenAPI 호환성 검사를 유지한다.
+- 인증 실패의 `WWW-Authenticate` 헤더, 404 리소스 은닉, 표준 `detail` 필드와 API-first OpenAPI 검증을 유지한다.
 
 ## Correlation과 로그 보안
 

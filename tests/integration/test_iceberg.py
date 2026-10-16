@@ -108,7 +108,7 @@ def test_running_iceberg_import_refuses_ambiguous_cancellation(workspace):
     assert claimed["id"] == queued["id"]
     refused = client.post(f"/api/jobs/{queued['id']}/cancel")
     assert refused.status_code == 409, refused.text
-    assert refused.json()["detail"]["code"] == "SOS-ICEBERG-CANCEL-409"
+    assert refused.json()["code"] == "SOS-ICEBERG-CANCEL-409"
     running = store.get_job(queued["id"])
     assert running["status"] == "Running"
     assert running["cancel_requested"] is False

@@ -425,10 +425,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         except (PlatformError, ValueError):
             raise
         except Exception as exc:
-            raise HTTPException(
-                status_code=503,
-                detail={"code": "SOS-STORAGE-001", "message": ERRORS["SOS-STORAGE-001"].message},
-            ) from exc
+            raise PlatformError("SOS-STORAGE-001") from exc
         finally:
             await file.close()
 
@@ -682,10 +679,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         try:
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         except IcebergCancellationConflict as exc:
-            raise HTTPException(
-                status_code=409,
-                detail={"code": "SOS-ICEBERG-CANCEL-409", "message": str(exc)},
-            ) from exc
+            raise PlatformError("SOS-ICEBERG-CANCEL-409") from exc
         if result is None:
             raise HTTPException(status_code=404, detail="Job not found")
         return result

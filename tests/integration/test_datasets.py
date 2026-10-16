@@ -106,7 +106,7 @@ def test_file_storage_failure_is_not_user_validation_error(workspace, monkeypatc
         files={"file": ("valid.csv", b"time,value\n1,2\n", "text/csv")},
     )
     assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "SOS-STORAGE-001"
+    assert response.json()["code"] == "SOS-STORAGE-001"
     assert "secret-storage-credential" not in response.text
 
 
