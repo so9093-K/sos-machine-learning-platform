@@ -451,8 +451,11 @@ test("lost HTTP response reuses the original Job submission key", async ({ page 
   const create = page.getByRole("button", { name: /전체 Profile 실행/ });
   await create.click();
   await expect(page.getByRole("alert")).toBeVisible();
+  const secondResponse = page.waitForResponse(res =>
+    res.url().endsWith("/api/jobs") && res.request().method() === "POST"
+      && res.status() === 202);
   await create.click();
-  await expect(page.getByRole("button", { name: "전체 Jobs 보기" })).toBeVisible();
+  await secondResponse;
   expect(submitted).toHaveLength(2);
   expect(submitted[0].key).toMatch(/^[0-9a-f-]{36}$/i);
   expect(submitted[1]).toEqual(submitted[0]);
