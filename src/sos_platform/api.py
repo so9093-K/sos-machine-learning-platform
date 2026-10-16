@@ -62,10 +62,10 @@ from .schemas import (
     SnapshotOut,
     StorageInspectionOut,
     StoragePolicyOut,
+    UnderstandingOut,
+    UnderstandingRequest,
     UploadPolicyOut,
     WorkRequest,
-    UnderstandingRequest,
-    UnderstandingOut,
 )
 from .security import Actor, IdentitySettings, current_actor, require, resource_allowed
 from .store import IcebergCancellationConflict, Store
