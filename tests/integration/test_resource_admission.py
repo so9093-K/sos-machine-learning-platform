@@ -1,14 +1,14 @@
 """여러 DB 세션에서 API·Worker 논리 메모리 용량 수용과 회수를 검증한다."""
 
-import pytest
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event, Lock
 from time import sleep
 
-from sos_platform.store import Store
+import pytest
 
 from sos_platform.errors import PlatformError
 from sos_platform.resource_admission import ExecutionCapacity, reserve_execution_memory
+from sos_platform.store import Store
 from sos_platform.worker import run_once
 
 from .support import upload
