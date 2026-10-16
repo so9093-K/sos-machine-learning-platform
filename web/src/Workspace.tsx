@@ -187,38 +187,71 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setColumn(""); setVisualColumn(""); setTimeColumn(""); setOrderBy(""); setGroupBy([]);
     setChosenColumns([]); setQueryPreview(null);
   }, [selected]);
+  // 탭별 기본 데이터는 최초 방문 때만 조회한다. Dataset 전환·명시적 새로고침만 무효화한다.
+  const previewRequestKey = useRef("");
+  const profileRequestKey = useRef("");
   useEffect(() => {
-    if (!selected) {
-      setPreview(null); setProfile(null);
-      return;
-    }
-    let active = true;
     setPreview(null); setProfile(null);
     setPreviewStatus("loading"); setProfileStatus("loading");
-    request<Preview>(`/api/datasets/${selected}/preview?limit=100`)
-      .then(data => {
-        if (!active) return;
-        setPreview(data); setPreviewStatus("ready");
-        const columns = Object.keys(data.schema);
-        setColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
-        setVisualColumn(current =>
-          columns.includes(current) && /Int|Float|Decimal/.test(data.schema[current])
-            ? current : (columns.find(name => /Int|Float|Decimal/.test(data.schema[name]))
-              ?? columns[0] ?? ""));
-        setTimeColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
-      })
-      .catch(error => {
-        if (!active) return;
-        setPreviewStatus("error"); setError(String(error));
-      });
-    request<Profile>(`/api/datasets/${selected}/profile`)
-      .then(data => { if (active) { setProfile(data); setProfileStatus("ready"); } })
-      .catch(error => {
-        if (!active) return;
-        setProfileStatus("error"); setError(String(error));
-      });
-    return () => { active = false; };
+    previewRequestKey.current = "";
+    profileRequestKey.current = "";
   }, [selected, reloadRevision]);
+  useEffect(() => {
+    if (!selected) return;
+    let active = true;
+    const key = selected + ":" + reloadRevision;
+    let previewStarted = false;
+    let previewSettled = false;
+    let profileStarted = false;
+    let profileSettled = false;
+    if (["preview", "profile", "features"].includes(tab) && previewRequestKey.current !== key) {
+      previewRequestKey.current = key;
+      previewStarted = true;
+      setPreviewStatus("loading");
+      request<Preview>(`/api/datasets/${selected}/preview?limit=100`)
+        .then(data => {
+          previewSettled = true;
+          if (!active) return;
+          setPreview(data); setPreviewStatus("ready");
+          const columns = Object.keys(data.schema);
+          setColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
+          setVisualColumn(current =>
+            columns.includes(current) && /Int|Float|Decimal/.test(data.schema[current])
+              ? current : (columns.find(name => /Int|Float|Decimal/.test(data.schema[name]))
+                ?? columns[0] ?? ""));
+          setTimeColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
+        })
+        .catch(error => {
+          previewSettled = true;
+          if (!active) return;
+          setPreviewStatus("error"); setError(formatError(error));
+        });
+    }
+    if (tab === "profile" && profileRequestKey.current !== key) {
+      profileRequestKey.current = key;
+      profileStarted = true;
+      setProfileStatus("loading");
+      request<Profile>(`/api/datasets/${selected}/profile`)
+        .then(data => {
+          profileSettled = true;
+          if (active) { setProfile(data); setProfileStatus("ready"); }
+        })
+        .catch(error => {
+          profileSettled = true;
+          if (active) { setProfileStatus("error"); setError(formatError(error)); }
+        });
+    }
+    return () => {
+      active = false;
+      // 진행 중인 응답은 무시하고 재진입하면 재요청한다.
+      if (previewStarted && !previewSettled && previewRequestKey.current === key) {
+        previewRequestKey.current = "";
+      }
+      if (profileStarted && !profileSettled && profileRequestKey.current === key) {
+        profileRequestKey.current = "";
+      }
+    };
+  }, [selected, reloadRevision, tab]);
   useEffect(() => {
     // 첫 페이지에 없는 과거 성공 Job 때문에 무한히 GET을 반복하지 않는다.
     const unseen = jobs.filter(j => j.status === "Succeeded" && j.result?.dataset_id &&
