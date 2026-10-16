@@ -107,6 +107,28 @@ def _stop(process: multiprocessing.Process) -> None:
             process.join()
 
 
+def attempt_result_paths(store: Store, job_id: str, attempt_id: str) -> tuple[Path, Path, Path]:
+    """Attempt마다 고유한 로컬 계산 결과 경로를 반환한다."""
+    # Job/Attempt ID는 PostgreSQL에서 발급한 UUID다.
+    root = store.home / "results"
+    stem = f"{job_id}.{attempt_id}"
+    return (
+        root / f"{stem}.parquet",
+        root / f"{stem}.pending.parquet",
+        root / f"{stem}.completed.json",
+    )
+
+
+def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) -> None:
+    """복구가 확정된 Attempt의 로컬 파일만 회수하고 S3·공유 객체는 건드리지 않는다."""
+    for job_id, attempt_id in interrupted:
+        for path in attempt_result_paths(store, job_id, attempt_id):
+            path.unlink(missing_ok=True)
+        # 이전 구현에서 Job 단위 이름으로 남긴 파일도 해당 중단 Job에 한해 회수한다.
+        for suffix in (".parquet", ".pending.parquet", ".completed.json"):
+            (store.home / "results" / f"{job_id}{suffix}").unlink(missing_ok=True)
+
+
 def run_once(store: Store) -> bool:
     budget = ExecutionBudget.from_env()
     job = store.claim()
@@ -122,9 +144,8 @@ def run_once(store: Store) -> bool:
         attempt_id=attempt_id,
         kind=job["kind"],
     )
-    output = store.home / "results" / f"{job_id}.parquet"
-    pending = store.home / "results" / f"{job_id}.pending.parquet"
-    completed = store.home / "results" / f"{job_id}.completed.json"
+    # Worker가 강제 종료돼도 이전 Attempt의 로컬 결과를 새 실행이 재사용하지 않는다.
+    output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
     completed.unlink(missing_ok=True)
     process = multiprocessing.get_context("spawn").Process(
         target=_perform, args=(store.home, store.database_url, job, completed, pending)
@@ -296,8 +317,9 @@ def main():
 
     previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
     try:
-        store.recover()
+        interrupted = store.recover()
         # 단일 Worker 잠금 아래에서는 이전 실행의 자식이 남아 있지 않다.
+        cleanup_recovered_results(store, interrupted)
         cleanup_iceberg_staging(store)
         store.heartbeat()
         if args.once:

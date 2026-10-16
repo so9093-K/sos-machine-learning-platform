@@ -1022,8 +1022,9 @@ class Store:
             )
         return status
 
-    def recover(self):
-        """단일 Worker 소유권이 확보된 후에만 미완료 실행을 복구한다."""
+    def recover(self) -> list[tuple[str, str]]:
+        """미완료 실행을 복구하고 정리 가능한 로컬 Attempt 식별자를 반환한다."""
+        recovered: list[tuple[str, str]] = []
         with self.connection() as db:
             rows = (
                 db.execute(
@@ -1086,6 +1087,7 @@ class Store:
                     .scalars()
                     .all()
                 )
+                recovered.extend((row["id"], item) for item in interrupted)
                 attempt_id = interrupted[-1] if interrupted else "unknown"
                 if unsafe:
                     # 자동 재시도 대신 Catalog 속성으로 커밋 여부를 추적할 근거를 남긴다.
@@ -1115,6 +1117,8 @@ class Store:
                     reason=f"kind={row['kind']};attempt={attempt_id}"[:200],
                     request_id=row["request_id"],
                 )
+
+        return recovered
 
     def acquire_worker(self) -> bool:
         """PostgreSQL 세션 잠금으로 복구 수행자와 Worker를 단일화한다."""
