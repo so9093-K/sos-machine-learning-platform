@@ -605,6 +605,33 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
   await expect(page.locator("#sos-panel-features .result th")).toHaveCount(4);
 });
 
+test("late feature preview never reappears after Dataset reload", async ({ page }) => {
+  await page.goto("/");
+  const input = page.locator('input[type="file"]');
+  await input.setInputFiles({
+    name: "feature-preview-race.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("group,value\\na,1\\nb,2\\n"),
+  });
+  await expect(page.getByRole("heading", { name: "feature-preview-race.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "변환" }).click();
+  await page.getByLabel("컬럼", { exact: true }).selectOption("value");
+  await page.getByRole("button", { name: "+ 단계 추가" }).click();
+  let release: (() => void) | undefined;
+  let intercepted = 0;
+  await page.route("**/api/features/preview", async route => {
+    intercepted++;
+    await new Promise<void>(resolve => { release = resolve; });
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await expect.poll(() => intercepted).toBe(1);
+  await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
+  release?.();
+  await expect(page.getByRole("button", { name: "샘플 변환 확인" })).toBeEnabled();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toHaveCount(0);
+});
+
 test("editing Dataset Query while its response is pending never renders stale rows", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
