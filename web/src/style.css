@@ -29,7 +29,7 @@ a:hover{text-decoration:underline}
 .shell{display:flex;min-height:100vh}
 .sidebar{width:252px;flex-shrink:0;display:flex;flex-direction:column;padding:24px 16px;border-right:1px solid var(--sos-border);background:var(--sos-sidebar)}
 .brand{display:flex;align-items:center;gap:11px;padding:2px 8px 36px}
-.brandmark{height:38px;width:38px;border-radius:12px;background:linear-gradient(140deg,var(--sos-accent),var(--sos-accent));display:grid;place-items:center;color:var(--sos-field);font-weight:900;font-size:22px}
+.brandmark{height:38px;width:38px;border-radius:12px;background:var(--sos-accent);display:grid;place-items:center;color:var(--sos-field);font-weight:900;font-size:22px}
 .brand strong{display:block;font-size:14px}
 .brand small{color:var(--sos-muted);font-size:10px;white-space:nowrap}
 .section-title,.eyebrow{font-size:11px;letter-spacing:.1em;font-weight:700;color:var(--sos-muted)}
@@ -99,7 +99,7 @@ tbody tr:hover{background:var(--sos-raised)}
 .status{font-size:11px;padding:5px 9px;border-radius:99px;background:var(--sos-raised);color:var(--sos-accent);white-space:nowrap}
 .status.succeeded{background:var(--sos-success-bg);color:var(--sos-success)}
 .status.failed{background:var(--sos-danger-bg);color:var(--sos-danger)}
-.status.cancelled{background:var(--sos-neutral);color:var(--sos-neutral)}
+.status.cancelled{background:var(--sos-raised);color:var(--sos-text)}
 .job pre{overflow:auto;white-space:pre-wrap;word-break:break-all;background:var(--sos-sidebar);border-radius:9px;padding:12px;font-size:11px}
 .job-error{color:var(--sos-danger)}
 .job .secondary{justify-self:start}
