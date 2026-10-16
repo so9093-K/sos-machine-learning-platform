@@ -14,12 +14,13 @@ import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
 import { DatasetQueryPanel } from "./DatasetQueryPanel";
-import type { Dataset, DatasetPage, Preview, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity } from "./types";
+import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
 import { useDatasetOverview } from "./useDatasetOverview";
 import { useDatasetInspection } from "./useDatasetInspection";
+import { usePagedJobs } from "./usePagedJobs";
 import type { ExplorationRequest } from "./types";
 
 
@@ -45,12 +46,13 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [nextDatasetCursor, setNextDatasetCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>("");
-  const [jobs, setJobs] = useState<JobSummary[]>([]);
-  const [nextJobsCursor, setNextJobsCursor] = useState<string | null>(null);
-  const [discoveryJobs, setDiscoveryJobs] = useState<ExplorationJobSummary[]>([]);
-  const [nextDiscoveryCursor, setNextDiscoveryCursor] = useState<string | null>(null);
-  const [olderDiscoveryJobsLoaded, setOlderDiscoveryJobsLoaded] = useState(false);
-  const [olderJobsLoaded, setOlderJobsLoaded] = useState(false);
+  const {
+    items: jobs, nextCursor: nextJobsCursor, refresh: refreshJobs, loadMore: loadOlderJobs,
+  } = usePagedJobs<JobSummary>("/api/jobs");
+  const {
+    items: discoveryJobs, nextCursor: nextDiscoveryCursor,
+    refresh: refreshDiscoveryJobs, loadMore: loadOlderDiscoveryJobs,
+  } = usePagedJobs<ExplorationJobSummary>("/api/explorations/jobs");
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
   const [reloadRevision, setReloadRevision] = useState(0);
@@ -66,8 +68,6 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
-  const jobsRequestVersion = useRef(0);
-  const discoveryJobsRequestVersion = useRef(0);
   const feedbackRequests = useRef(0);
   const showExamples = useRef(false);
   const refreshedCompletedJobs = useRef(new Set<string>());
@@ -176,45 +176,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       setNextDatasetCursor(page.next_cursor ?? null);
     });
   }
-  async function refreshJobs() {
-    const version = ++jobsRequestVersion.current;
-    const page = await request<JobPage>("/api/jobs?limit=20");
-    // 폴링과 수동 갱신이 겹쳐도 더 오래된 응답으로 Job 상태를 되돌리지 않는다.
-    if (version !== jobsRequestVersion.current) return;
-    setJobs(previous => olderJobsLoaded ? mergeById(page.items, previous) : page.items);
-    if (!olderJobsLoaded) setNextJobsCursor(page.next_cursor ?? null);
-  }
-  async function refreshDiscoveryJobs() {
-    const version = ++discoveryJobsRequestVersion.current;
-    const page = await request<ExplorationJobPage>("/api/explorations/jobs?limit=20");
-    if (version !== discoveryJobsRequestVersion.current) return;
-    setDiscoveryJobs(previous => olderDiscoveryJobsLoaded
-      ? mergeById(page.items, previous) : page.items);
-    if (!olderDiscoveryJobsLoaded) setNextDiscoveryCursor(page.next_cursor ?? null);
-  }
   async function loadMoreDiscoveryJobs() {
-    if (!nextDiscoveryCursor) return;
-    await withFeedback(async () => {
-      const version = discoveryJobsRequestVersion.current;
-      const page = await request<ExplorationJobPage>(
-        `/api/explorations/jobs?limit=20&cursor=${encodeURIComponent(nextDiscoveryCursor)}`);
-      if (version !== discoveryJobsRequestVersion.current) return;
-      setDiscoveryJobs(previous => mergeById(previous, page.items));
-      setNextDiscoveryCursor(page.next_cursor ?? null);
-      setOlderDiscoveryJobsLoaded(true);
-    });
+    await withFeedback(loadOlderDiscoveryJobs);
   }
   async function loadMoreJobs() {
-    if (!nextJobsCursor) return;
-    await withFeedback(async () => {
-      const version = jobsRequestVersion.current;
-      const page = await request<JobPage>(
-        `/api/jobs?limit=20&cursor=${encodeURIComponent(nextJobsCursor)}`);
-      if (version !== jobsRequestVersion.current) return;
-      setJobs(previous => mergeById(previous, page.items));
-      setNextJobsCursor(page.next_cursor ?? null);
-      setOlderJobsLoaded(true);
-    });
+    await withFeedback(loadOlderJobs);
   }
   useEffect(() => {
     if (canWrite) {
