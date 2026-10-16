@@ -130,4 +130,3 @@ class DatasetStoreMixin:
                 {"id": dataset_id},
             ).scalar_one_or_none()
         return self.get_job(job_id) if job_id else None
-

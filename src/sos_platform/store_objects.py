@@ -145,4 +145,3 @@ class ObjectStoreMixin:
             }
             for location in locations
         }
-

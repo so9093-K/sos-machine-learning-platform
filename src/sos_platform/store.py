@@ -13,11 +13,11 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import bindparam, create_engine, text
 
 from .config import Settings
+from .errors import ERRORS, PlatformError
 from .store_administration import AdministrationStoreMixin, now
 from .store_datasets import DatasetStoreMixin
 from .store_objects import ObjectStoreMixin
 from .store_snapshots import SnapshotStoreMixin
-from .errors import ERRORS, PlatformError
 
 
 class IcebergCancellationConflict(Exception):

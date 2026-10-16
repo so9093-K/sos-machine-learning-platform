@@ -119,4 +119,3 @@ class SnapshotStoreMixin:
                 resource_type="dataset",
                 resource_id=dataset_id,
             )
-

@@ -145,4 +145,3 @@ class AdministrationStoreMixin:
                     params,
                 ).mappings()
             ]
-
