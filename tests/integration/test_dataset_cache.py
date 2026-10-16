@@ -1,6 +1,7 @@
 """캐시의 할당량·사용 중 원본 보호와 재다운로드를 검증한다."""
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 
 import pytest
@@ -46,3 +47,21 @@ def test_file_scan_requires_a_pinned_read_lease(workspace):
         scan_dataset(store, dataset)
     with pinned_scan_dataset(store, dataset) as scan:
         assert scan.collect().height == 2
+
+
+def test_parallel_readers_share_the_same_cache_lease(workspace):
+    """한 쿼리의 읽기 Lease가 동일 원본의 다른 읽기를 직렬화하지 않는다."""
+    _client, store = workspace
+    data = b"signal\\n1\\n2\\n".replace(b"\\n", b"\n")
+    dataset = save_upload_file(store, "concurrent.csv", BytesIO(data))
+    policy = CachePolicy(max_bytes=256 * 1024 * 1024)
+
+    def read_again():
+        with cached_dataset_file(store, dataset, policy) as path:
+            return path.read_bytes()
+
+    with cached_dataset_file(store, dataset, policy) as first:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            # 첫 번째 Lease를 보유한 채 두 번째 읽기가 완료돼야 한다.
+            assert pool.submit(read_again).result(timeout=5) == data
+        assert first.read_bytes() == data
