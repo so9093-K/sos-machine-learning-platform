@@ -38,4 +38,6 @@ Discovery는 요청·Worker 실행별 DuckDB 연결을 사용한다. DuckDB Pyth
 
 가상환경, 컨테이너, 원격 Worker, GPU 관리 도구, 스케줄러는 위 요구를 만족시키는 구현 선택이다. 이 정본은 특정 제품, 배치 구조, 이미지 빌드 방법을 미리 강제하지 않는다. 관련 계약은 [Contracts](contracts.md), 실행 동작은 [Workflows](workflows.md)를 따른다.
 
+Linux Worker 자식은 `PR_SET_PDEATHSIG(SIGKILL)`를 설치하고 원래 부모 PID가 살아 있는지 확인한 뒤에만 Dataset 읽기·Iceberg 커밋을 시작한다. 부모가 비정상 종료되어 DB 잠금이 풀릴 때 살아남은 자식이 새로운 Worker와 같은 작업을 동시에 수행하는 위험을 줄인다. 이는 부모 프로세스가 `SIGKILL`로 종료되는 경우의 **Linux 한정 보호**이고 다른 OS에서 같은 보장을 주장하지 않는다. 외부 Catalog 커밋의 불확실성과 분산 실행 Fencing Token 필요성은 그대로 유지한다.
+
 Worker 소유권은 PostgreSQL 세션의 advisory lock에 귀속된다. 접속이 자동으로 재수립되었더라도 이전 잠금이 살아 있다고 가정할 수 없다. Worker는 잠금 소유 세션의 Backend ID가 바뀌거나 세션 검증이 실패하면 자식 계산을 중단하고 **기존 Job·Attempt를 성공·실패로 확정하지 않는다**. 새 Worker의 독점 복구가 Running 상태와 외부 Iceberg 불확실 커밋을 구별한다. 강제 DB 백엔드 종료의 실제 통합 테스트로 이 계약을 검증한다. 단, 세션 검증과 실제 외부 커밋 사이의 경쟁까지 해결하는 완전한 Fencing Token/원자적 커밋 프로토콜은 아니며, 다중 호스트 실행기의 도입 전에 별도 검토해야 한다.

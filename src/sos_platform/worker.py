@@ -5,11 +5,13 @@
 """
 
 import argparse
+import ctypes
 import json
 import logging
 import multiprocessing
 import os
 import signal
+import sys
 import time
 from pathlib import Path
 
@@ -34,8 +36,27 @@ from .store import Store, WorkerOwnershipLost
 from .understanding import build_understanding
 
 
-def _perform(home: Path, database_url: str, job: dict, completed: Path, pending: Path) -> None:
+def _guard_child_parent(parent_pid: int) -> None:
+    """Linux에서 Worker 부모가 강제 종료되면 자식도 커밋을 계속하지 못하게 한다."""
+    if sys.platform != "linux":
+        # 다른 OS에는 같은 강제 종료 보장을 제공하지 않는다.
+        return
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(1, signal.SIGKILL, 0, 0, 0) != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error))
+    # 부모가 fork/spawn과 prctl 등록 사이에 종료되는 경합도 차단한다.
+    if os.getppid() != parent_pid:
+        os._exit(1)
+
+
+def _perform(
+    home: Path, database_url: str, job: dict, completed: Path, pending: Path, parent_pid: int
+) -> None:
     """계산은 자식 프로세스에서 수행하고 결과 확정은 부모가 담당한다."""
+    # 부모 SIGKILL 시 남은 자식이 Iceberg Commit/파일 게시를 진행하면
+    # 새 Worker가 같은 Job을 복구한 뒤에도 실행이 중복될 수 있다.
+    _guard_child_parent(parent_pid)
     stage = "read_input"
 
     def mark_commit_started() -> None:
@@ -166,7 +187,8 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
     output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
     completed.unlink(missing_ok=True)
     process = multiprocessing.get_context("spawn").Process(
-        target=_perform, args=(store.home, store.database_url, job, completed, pending)
+        target=_perform,
+        args=(store.home, store.database_url, job, completed, pending, os.getpid()),
     )
     # 취소 확인은 100ms 단위로 유지하되 heartbeat는 주기적으로만 기록한다.
     next_heartbeat = time.monotonic() + 2
