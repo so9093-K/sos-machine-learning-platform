@@ -31,9 +31,7 @@ def page_from_rows(rows: list[dict], limit: int) -> dict:
         return {"items": rows, "next_cursor": None}
     visible = rows[:limit]
     last = visible[-1]
-    token = json.dumps(
-        {"created_at": last["created_at"], "id": last["id"]}, separators=(",", ":")
-    )
+    token = json.dumps({"created_at": last["created_at"], "id": last["id"]}, separators=(",", ":"))
     return {
         "items": visible,
         "next_cursor": base64.urlsafe_b64encode(token.encode()).decode().rstrip("="),

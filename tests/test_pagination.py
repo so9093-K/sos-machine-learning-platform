@@ -13,10 +13,12 @@ def test_cursor_round_trip_preserves_existing_contract():
     page = page_from_rows(rows, 2)
     assert page["items"] == rows[:2]
     assert decode_cursor(page["next_cursor"], "Dataset") == {
-        "created_at": rows[1]["created_at"], "id": rows[1]["id"]
+        "created_at": rows[1]["created_at"],
+        "id": rows[1]["id"],
     }
     assert decode_cursor(page["next_cursor"], "Job") == {
-        "created_at": rows[1]["created_at"], "id": rows[1]["id"]
+        "created_at": rows[1]["created_at"],
+        "id": rows[1]["id"],
     }
     assert page_from_rows(rows[:2], 2) == {"items": rows[:2], "next_cursor": None}
 
