@@ -3,11 +3,11 @@ import { useEffect, useRef } from "react";
 import * as echarts from "echarts";
 
 export const CHART_COLORS = {
-  text: "#cbd5e1",
-  label: "#94a3b8",
-  grid: "#334155",
-  bar: "#7d92e7",
-  line: "#69b9ff",
+  text: "#f3f0eb",
+  label: "#c3bab1",
+  grid: "#5d5651",
+  bar: "#9ec6f2",
+  line: "#b6e9c3",
 } as const;
 
 export function DataChart({ option, ariaLabel }: {

@@ -98,7 +98,7 @@ export function DiscoveryPanel({
     };
   }, [result]);
   return <section className="discovery-panel" aria-label="Dataset Discovery">
-    <h4>데이터 발견</h4>
+    <h4>데이터 개요</h4>
     {status === "loading" && <p role="status" className="muted">구조와 메타데이터를 확인하는 중입니다.</p>}
     {status === "error" && <button className="secondary"
       onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>}

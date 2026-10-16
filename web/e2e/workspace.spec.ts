@@ -23,10 +23,10 @@ test("CSV upload → EDA → feature preview → worker → reusable dataset", a
     buffer: Buffer.from("time,temperature\n1,22\n2,24\n3,25\n"),
   });
   await expect(page.getByRole("heading", { name: "sensors.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("tab", { name: "탐색" }).click();
   await expect(page.getByText("분석한 행")).toBeVisible();
   await expect(page.getByText("Histogram")).toBeVisible();
-  await page.getByRole("tab", { name: "Features" }).click();
+  await page.getByRole("tab", { name: "변환" }).click();
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   await page.getByRole("button", { name: "샘플 변환 확인" }).click();
   await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
@@ -57,7 +57,7 @@ test("Iceberg import captures a pinned snapshot", async ({ page }) => {
   await expect(page.locator("nav").getByText(`default.${tableName}`)).toBeVisible();
   await page.locator("nav").getByText(`default.${tableName}`).click();
   await expect(page.locator(".dataset-hero p")).toContainText("Snapshot", { timeout: 30000 });
-  await page.getByRole("tab", { name: "Preview" }).click();
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
   await expect(page.getByText("2 rows shown")).toBeVisible();
   await page.getByRole("textbox", { name: "Iceberg 테이블 이름" }).fill(tableName);
   await page.getByRole("button", { name: "Snapshot 조회" }).click();
@@ -77,9 +77,9 @@ test("example onboarding uses the same EDA, Feature and Job contracts", async ({
   await expect(page.getByText("합성 데이터입니다. 선택할 때만 일반 데이터셋으로 등록됩니다.")).toBeVisible();
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
   await expect(page.getByRole("heading", { name: "example-machine-sensors.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("tab", { name: "탐색" }).click();
   await expect(page.getByText("분석한 행")).toBeVisible();
-  await page.getByRole("tab", { name: "Features" }).click();
+  await page.getByRole("tab", { name: "변환" }).click();
   await page.getByLabel("변환", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
@@ -99,12 +99,12 @@ test("workspace tabs support keyboard navigation", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
-  const preview = page.getByRole("tab", { name: "Preview" });
+  const preview = page.getByRole("tab", { name: "데이터 조회" });
   await preview.focus();
   await preview.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: "EDA & Profile" })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: "탐색" })).toHaveAttribute(
     "aria-selected", "true");
-  await expect(page.getByRole("tabpanel", { name: "EDA & Profile" })).toBeVisible();
+  await expect(page.getByRole("tabpanel", { name: "탐색" })).toBeVisible();
 });
 
 
@@ -112,7 +112,7 @@ test("feature preview is invalidated when group or ordering changes", async ({ p
   await page.goto("/");
   await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
-  await page.getByRole("tab", { name: "Features" }).click();
+  await page.getByRole("tab", { name: "변환" }).click();
   await page.getByLabel("변환", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
@@ -150,7 +150,7 @@ test("same dataset reload preserves Feature editor selections", async ({ page })
   await page.goto("/");
   await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
-  await page.getByRole("tab", { name: "Features" }).click();
+  await page.getByRole("tab", { name: "변환" }).click();
   await page.getByLabel("변환", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
@@ -274,9 +274,9 @@ test("DuckDB Discovery searches columns and runs a full job through global Jobs"
     buffer: Buffer.from("group,value\na,1\na,3\nb,5\n"),
   });
   await expect(page.getByRole("heading", { name: "discovery.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("tab", { name: "탐색" }).click();
   const discovery = page.getByRole("region", { name: "Dataset Discovery" });
-  await expect(discovery.getByRole("heading", { name: "데이터 발견" })).toBeVisible();
+  await expect(discovery.getByRole("heading", { name: "데이터 개요" })).toBeVisible();
   await expect(discovery.getByText("2개 표시 / 전체 2개 컬럼")).toBeVisible();
   await discovery.getByRole("textbox", { name: "컬럼 이름 검색" }).fill("val");
   await expect(discovery.getByText("1개 표시 / 전체 2개 컬럼")).toBeVisible();
@@ -311,7 +311,7 @@ test("Discovery metadata retry restores selection and analysis controls", async 
     name: "recovery.csv", mimeType: "text/csv", buffer: Buffer.from("group,value\na,2\nb,4\n"),
   });
   await expect(page.getByRole("heading", { name: "recovery.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("tab", { name: "탐색" }).click();
   const discovery = page.getByRole("region", { name: "Dataset Discovery" });
   await expect(discovery.getByRole("button", { name: "메타데이터 다시 시도" })).toBeVisible();
   shouldFail = false;
@@ -328,7 +328,7 @@ test("Discovery supports categorical-only counts", async ({ page }) => {
     buffer: Buffer.from("group,label\na,x\na,\nb,y\n"),
   });
   await expect(page.getByRole("heading", { name: "labels.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("tab", { name: "탐색" }).click();
   const discovery = page.getByRole("region", { name: "Dataset Discovery" });
   await expect(discovery.getByRole("combobox", { name: "집계 방식" })).toHaveValue("count");
   await discovery.getByRole("combobox", { name: "집계 방식" }).selectOption("null_count");
@@ -361,7 +361,7 @@ test("accepted Job is not reported as failed when Jobs refresh fails", async ({ 
     buffer: Buffer.from("signal\n1\n2\n"),
   });
   await expect(page.getByRole("heading", { name: "job-accepted.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("tab", { name: "탐색" }).click();
   await page.getByRole("button", { name: /전체 Profile 실행/ }).click();
   await expect(page.getByRole("status").filter({ hasText: "Job은 정상 접수됐습니다." })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
@@ -377,7 +377,7 @@ test("audit navigation does not show unrelated dataset tabs", async ({ page }) =
   await page.getByRole("button", { name: "보안 감사 보기" }).click();
   await expect(page.getByRole("heading", { name: "Security Audit" })).toBeVisible();
   await expect(page.locator(".dataset-hero")).toHaveCount(0);
-  await expect(page.getByRole("tab", { name: "EDA & Profile" })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "탐색" })).toHaveCount(0);
 });
 
 
@@ -388,7 +388,7 @@ test("sample and full Discovery distinguish NULL groups from whole-dataset aggre
     buffer: Buffer.from("group,value\n,1\na,2\n"),
   });
   await expect(page.getByRole("heading", { name: "nullable-group.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("tab", { name: "탐색" }).click();
   const discovery = page.getByRole("region", { name: "Dataset Discovery" });
   await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
   await discovery.getByRole("button", { name: "샘플 집계" }).click();
@@ -427,7 +427,7 @@ test("late initial Dataset list cannot overwrite successful upload selection", a
   await expect(page.getByRole("heading", { name: "stale-list.csv" })).toBeVisible();
   resolveInitial();
   await expect(page.getByRole("heading", { name: "stale-list.csv" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "EDA & Profile" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "탐색" })).toBeVisible();
 });
 
 
@@ -438,7 +438,7 @@ test("lost HTTP response reuses the original Job submission key", async ({ page 
     buffer: Buffer.from("value\n1\n2\n"),
   });
   await expect(page.getByRole("heading", { name: "replay.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("tab", { name: "탐색" }).click();
   const submitted: Array<{ key: string | undefined; id: string }> = [];
   await page.route("**/api/jobs", async route => {
     if (route.request().method() !== "POST") return route.continue();
@@ -499,7 +499,7 @@ test("Job reuses submission key when server accepted it before a 503 response", 
     buffer: Buffer.from("value\n1\n2\n"),
   });
   await expect(page.getByRole("heading", { name: "transient-response.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "EDA & Profile" }).click();
+  await page.getByRole("tab", { name: "탐색" }).click();
   const sent: Array<{ key: string | undefined; id: string }> = [];
   await page.route("**/api/jobs", async route => {
     if (route.request().method() !== "POST") return route.continue();
@@ -563,7 +563,7 @@ test("general Dataset query projects, filters and sorts columns", async ({ page 
     buffer: Buffer.from("group,value,private\na,10,hidden\nb,2,secret\na,5,internal\n"),
   });
   await expect(page.getByRole("heading", { name: "generic-query.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "Preview" }).click();
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
   await page.getByText("컬럼·필터·정렬 선택").click();
   await page.getByLabel("표시할 컬럼 선택").getByLabel("value", { exact: true }).check();
   await page.getByLabel("필터 컬럼").selectOption("group");
@@ -584,7 +584,7 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
     buffer: Buffer.from("site,machine,time,value,private\na,x,1,10,k\na,x,2,20,z\nb,y,1,30,q\n"),
   });
   await expect(page.getByRole("heading", { name: "grouped-features.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "Features" }).click();
+  await page.getByRole("tab", { name: "변환" }).click();
   await page.getByLabel("변환", { exact: true }).selectOption("select");
   await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("site").check();
   await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("machine").check();
@@ -605,7 +605,7 @@ test("editing Dataset Query while its response is pending never renders stale ro
     buffer: Buffer.from("group,value\na,10\nb,20\na,30\n"),
   });
   await expect(page.getByRole("heading", { name: "query-race.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "Preview" }).click();
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
   await page.getByText("컬럼·필터·정렬 선택").click();
   await page.getByLabel("필터 컬럼").selectOption("group");
   await page.getByLabel("비교 값").fill("a");
@@ -641,13 +641,13 @@ test("unknown CSV opens Understanding, persists profile and runs suggested explo
     buffer: Buffer.from("department,score\nalpha,3\nbeta,5\nalpha,7\nbeta,9\n"),
   });
   await expect(page.getByRole("heading", { name: "unknown.csv" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Understand" })).toHaveAttribute("aria-selected", "true");
-  const panel = page.getByRole("tabpanel", { name: "Understand" });
+  await expect(page.getByRole("tab", { name: "개요" })).toHaveAttribute("aria-selected", "true");
+  const panel = page.getByRole("tabpanel", { name: "개요" });
   await expect(panel.getByText("발견된 컬럼 특성")).toBeVisible({ timeout: 30000 });
   await expect(panel.getByText("그룹별 수치 비교")).toBeVisible();
   await panel.getByRole("button", { name: "탐색 실행" }).first().click();
   await expect(panel.getByText(/탐색 결과/)).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("tab", { name: "Understand" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "개요" })).toBeVisible();
   await expect(page.getByText("발견된 컬럼 특성")).toBeVisible({ timeout: 30000 });
 });

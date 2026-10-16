@@ -87,7 +87,7 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
 
   const profile = state?.profile;
   return <section className="panel" aria-label="Dataset Understanding">
-    <div className="panel-head"><div><h3>데이터 이해</h3>
+    <div className="panel-head"><div><h3>데이터 프로파일</h3>
       <p>확인된 통계와 추론된 역할 후보를 구분합니다. 원본은 변경하지 않습니다.</p>
     </div></div>
     {!state && !error && <p role="status">구조와 분석 상태를 확인하는 중입니다.</p>}
@@ -128,7 +128,7 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
         "고정 Seed Reservoir 표본 · 전체 분포를 대표한다고 보장하지 않습니다."}
         {" · "}고유값 수 {profile.scope === "full" ? "근사" : "표본 내 정확"}
         {" · "}{profile.algorithm_version}</p>
-      <h4>발견된 컬럼 특성</h4>
+      <h4>컬럼 특성</h4>
       <div className="table-scroll"><table><thead><tr>
         <th>컬럼</th><th>자료형</th><th>NULL</th><th>NaN</th><th>고유값</th><th>역할 후보 (미확정)</th>
       </tr></thead><tbody>{profile.columns.map(col => <tr key={col.name}>
@@ -139,7 +139,7 @@ export function UnderstandingPanel({ datasetId, canCreate }: {
         <td>{col.is_constant ? "상수 · " : ""}
           {col.roles.map(r => r.role + " (" + r.basis + ")").join(", ") || "미확인"}</td>
       </tr>)}</tbody></table></div>
-      <h4>시작할 수 있는 탐색</h4>
+      <h4>추천 탐색</h4>
       {profile.insights.length === 0 && <p className="muted">현재 확인된 정보만으로 실행 가능한 분석을 제안하지 않습니다. Preview에서 구조를 확인하세요.</p>}
       <div className="example-grid">{profile.insights.map((item, i) => <article
         className="example-card" key={item.kind + i}>
