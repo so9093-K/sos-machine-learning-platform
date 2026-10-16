@@ -611,7 +611,7 @@ test("late feature preview never reappears after Dataset reload", async ({ page 
   await input.setInputFiles({
     name: "feature-preview-race.csv",
     mimeType: "text/csv",
-    buffer: Buffer.from("group,value\\na,1\\nb,2\\n"),
+    buffer: Buffer.from("group,value\na,1\nb,2\n"),
   });
   await expect(page.getByRole("heading", { name: "feature-preview-race.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "변환" }).click();
