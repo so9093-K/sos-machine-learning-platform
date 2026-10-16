@@ -16,7 +16,7 @@
 
 ## 2. 데이터에서 시작하는 연구 경험
 
-![알 수 없는 Dataset → System Discovery → Dataset Understanding → Explore · Prepare · Experiment](references/07-dataset-understanding.svg)
+![알 수 없는 Dataset → System Discovery → Dataset Understanding → Explore · Prepare · Experiment](references/07-dataset-understanding.png)
 
 SOS는 사전에 정의된 데이터 사전이나 특정 ML 시나리오가 없어도 **지원 가능한 Dataset의 구조와 검증 가능한 특성을 발견**할 수 있어야 한다. 시스템은 계산으로 확인한 사실, 해석을 요하는 역할 후보, 아직 알 수 없는 업무적 의미를 구별하며 확정되지 않은 의미를 강요하지 않는다.
 
