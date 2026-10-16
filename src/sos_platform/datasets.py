@@ -3,6 +3,8 @@
 import hashlib
 import os
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO
@@ -10,6 +12,7 @@ from uuid import uuid4
 
 import polars as pl
 
+from .cache import cached_dataset_file
 from .config import Settings
 from .errors import PlatformError
 from .ingestion import UploadPolicy, staged_upload
@@ -119,7 +122,8 @@ def import_to_iceberg(
     # 단일 append의 메모리·행 수 한도를 강제한다. 추후 배치 적재 계약과 구분한다.
     from .processing import bounded_iceberg_arrow
 
-    arrow = bounded_iceberg_arrow(scan_dataset(store, dataset))
+    with pinned_scan_dataset(store, dataset) as source:
+        arrow = bounded_iceberg_arrow(source)
     try:
         table = catalog.load_table(ident)
     except Exception as exc:
@@ -243,3 +247,17 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
             },
         )
     raise ValueError("Unknown dataset type")
+
+
+@contextmanager
+def pinned_scan_dataset(store: Store, dataset: dict) -> Iterator[pl.LazyFrame]:
+    """LazyFrame가 실제로 계산되는 동안 원본 캐시를 축출로부터 보호한다."""
+    if dataset["kind"] == "file":
+        with cached_dataset_file(store, dataset) as path:
+            yield (
+                pl.scan_csv(path, try_parse_dates=True)
+                if path.suffix.lower() == ".csv"
+                else pl.scan_parquet(path)
+            )
+    else:
+        yield scan_dataset(store, dataset)

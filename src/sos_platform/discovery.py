@@ -9,7 +9,7 @@ import math
 import os
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -21,7 +21,8 @@ from tempfile import TemporaryDirectory
 import duckdb
 import pyarrow.parquet as pq
 
-from .datasets import iceberg_catalog, local_dataset_file
+from .cache import cached_dataset_file
+from .datasets import iceberg_catalog
 from .errors import PlatformError
 from .store import Store
 
@@ -230,10 +231,14 @@ def source_connection(
     scratch_root.mkdir(parents=True, exist_ok=True)
     # 각 요청에만 속한 Spill 파일은 연결 종료 후 함께 정리한다.
     # 다른 사용자·Worker가 사용하는 경로나 기존 캐시를 삭제하지 않는다.
-    with discovery_slot(store):
+    with discovery_slot(store), ExitStack() as pins:
         with TemporaryDirectory(prefix="query-", dir=scratch_root) as directory:
             scratch = Path(directory)
-            path = local_dataset_file(store, dataset) if dataset["kind"] == "file" else None
+            path = (
+                pins.enter_context(cached_dataset_file(store, dataset))
+                if dataset["kind"] == "file"
+                else None
+            )
             connection = duckdb.connect(
                 database=":memory:",
                 config={
@@ -304,11 +309,11 @@ def overview(store: Store, dataset: dict) -> dict:
     basis = "not_computed"
     size = None
     if dataset["kind"] == "file":
-        path = local_dataset_file(store, dataset)
-        size = path.stat().st_size
-        if path.suffix.lower() == ".parquet":
-            row_count = pq.read_metadata(path).num_rows
-            basis = "parquet_metadata"
+        with cached_dataset_file(store, dataset) as path:
+            size = path.stat().st_size
+            if path.suffix.lower() == ".parquet":
+                row_count = pq.read_metadata(path).num_rows
+                basis = "parquet_metadata"
     with source_connection(store, dataset) as conn:
         found = _columns(conn)
     return {

@@ -13,11 +13,11 @@ import signal
 import time
 from pathlib import Path
 
-from .datasets import import_to_iceberg, scan_dataset
+from .datasets import import_to_iceberg, pinned_scan_dataset
 from .diagnostics import classify_failure
 from .discovery import explore as discovery_explore
 from .discovery import profile as discovery_profile
-from .errors import ERRORS
+from .errors import ERRORS, PlatformError
 from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
 from .object_store import ObjectStore
 from .observability import emit
@@ -51,8 +51,9 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
         elif job["kind"] == "transform":
             stage = "processing"
             spec = Transform.model_validate(job["spec"]["transform"])
-            lf = transform(scan_dataset(store, dataset), spec)
-            lf.sink_parquet(pending)
+            with pinned_scan_dataset(store, dataset) as source:
+                lf = transform(source, spec)
+                lf.sink_parquet(pending)
             result = {"input_dataset_id": dataset["id"]}
         elif job["kind"] == "iceberg_import":
             stage = "iceberg_prepare"
@@ -72,7 +73,7 @@ def _perform(home: Path, database_url: str, job: dict, completed: Path, pending:
         code = (
             "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
-            else "SOS-JOB-FAILED"
+            else exc.code if isinstance(exc, PlatformError) else "SOS-JOB-FAILED"
         )
         category, exception_type = classify_failure(exc)
         outcome = {

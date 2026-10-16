@@ -116,6 +116,7 @@ def register_error_handlers(app: FastAPI) -> None:
             "commit_uncertain": 409,
             "dependency": 503,
             "capacity": 429,
+            "storage_capacity": 507,
         }.get(entry.category, 500)
         return problem_response(request, exc.code, status, entry.message)
 

@@ -19,7 +19,7 @@ from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from .api_errors import problem_response, register_error_handlers
 from .config import StoragePolicy
-from .datasets import connect_iceberg, iceberg_snapshots, save_upload_file, scan_dataset
+from .datasets import connect_iceberg, iceberg_snapshots, pinned_scan_dataset, save_upload_file
 from .discovery import columns as discovery_columns
 from .discovery import explore as discovery_explore
 from .discovery import overview as discovery_overview
@@ -512,8 +512,8 @@ def create_app(home: Path | None = None) -> FastAPI:
     def feature_preview(body: FeaturePreview, actor: Actor = READ_DATASET_DEP):
         # 입력의 앞 1,000행을 먼저 자르면 정렬·Lag·Rolling 경계가 실제 Job과 달라진다.
         # 전체 입력에서 같은 연산을 수행하고 출력 행 수만 제한한다.
-        lf = scan_dataset(store, existing(body.dataset_id, actor))
-        return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
+        with pinned_scan_dataset(store, existing(body.dataset_id, actor)) as lf:
+            return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
 
     def job_page(limit: int, cursor: str | None, actor: Actor, *, discovery_only: bool) -> dict:
         before = None
