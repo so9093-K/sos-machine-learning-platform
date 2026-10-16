@@ -48,5 +48,3 @@ def test_invalid_dataset_cursor_returns_specific_safe_validation_error(workspace
     assert result.status_code == 422
     assert result.json()["code"] == "SOS-API-VALIDATION"
     assert result.json()["detail"] == "Invalid Dataset cursor"
-
-
