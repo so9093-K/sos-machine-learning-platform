@@ -117,6 +117,7 @@ def register_error_handlers(app: FastAPI) -> None:
             "dependency": 503,
             "capacity": 429,
             "storage_capacity": 507,
+            "precondition": 428,
         }.get(entry.category, 500)
         return problem_response(request, exc.code, status, entry.message)
 

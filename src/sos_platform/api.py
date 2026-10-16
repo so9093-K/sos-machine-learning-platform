@@ -205,6 +205,11 @@ def create_app(home: Path | None = None) -> FastAPI:
         check_ownership(actor, item.get("owner_actor"), "dataset", dataset_id)
         return item
 
+    def require_job_submission_key(value: str | None) -> None:
+        """외부 토큰 API에서 무키 Job 재전송을 기본 거부한다."""
+        if identity.mode == "token" and value is None:
+            raise PlatformError("SOS-JOB-IDEMPOTENCY-REQUIRED")
+
     def existing_job(job_id: str, actor: Actor) -> dict:
         item = store.get_job(job_id)
         if not item:
@@ -487,6 +492,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         ),
     ):
         existing(body.dataset_id, actor)
+        require_job_submission_key(idempotency_key)
         return store.create_job(
             kind="iceberg_import",
             dataset_id=body.dataset_id,
@@ -585,6 +591,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         ),
     ):
         existing(body.dataset_id, actor)
+        require_job_submission_key(idempotency_key)
         return store.create_job(
             kind=body.kind,
             dataset_id=body.dataset_id,
@@ -609,6 +616,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         ),
     ):
         existing(body.dataset_id, actor)
+        require_job_submission_key(idempotency_key)
         return store.create_job(
             kind="exploration",
             dataset_id=body.dataset_id,

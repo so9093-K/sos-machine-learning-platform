@@ -45,6 +45,12 @@ DEFINITIONS = (
     ),
     spec("SOS-API-CONFLICT", "상태 충돌", "현재 상태에서는 처리할 수 없습니다.", "conflict"),
     spec(
+        "SOS-JOB-IDEMPOTENCY-REQUIRED",
+        "제출 키 필요",
+        "토큰 인증 환경에서 비동기 Job 제출에는 Idempotency-Key가 필요합니다.",
+        "precondition",
+    ),
+    spec(
         "SOS-JOB-IDEMPOTENCY-CONFLICT",
         "제출 키 충돌",
         "동일한 제출 키로 다른 작업을 요청했습니다. 새 실행에는 새로운 키를 사용하세요.",

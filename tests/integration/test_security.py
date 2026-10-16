@@ -105,7 +105,7 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         allowed_import = secure.post(
             "/api/iceberg/import",
             json={"dataset_id": owned, "table_name": "allowed_research"},
-            headers=headers("alice"),
+            headers={**headers("alice"), "Idempotency-Key": "alice-import-001"},
         )
         assert allowed_import.status_code == 202, allowed_import.text
         # 신규 Iceberg Dataset 연결은 생성 권한을 통과한 다음 테이블을 검증한다.
@@ -126,10 +126,17 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
             ).status_code
             == 403
         )
-        job = secure.post(
+        missing_key = secure.post(
             "/api/jobs",
             json={"dataset_id": owned, "kind": "profile"},
             headers=headers("alice"),
+        )
+        assert missing_key.status_code == 428
+        assert missing_key.json()["code"] == "SOS-JOB-IDEMPOTENCY-REQUIRED"
+        job = secure.post(
+            "/api/jobs",
+            json={"dataset_id": owned, "kind": "profile"},
+            headers={**headers("alice"), "Idempotency-Key": "alice-profile-001"},
         )
         assert job.status_code == 202, job.text
         assert (
