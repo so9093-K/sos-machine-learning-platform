@@ -263,12 +263,10 @@ def create_app(home: Path | None = None) -> FastAPI:
                 snapshot_id=item["version"],
             )
             store.confirm_existing_retention(dataset_id, actor_id=actor.id, actor_type=actor.kind)
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(
-                status_code=503, detail="Snapshot protection could not be verified"
-            ) from exc
+            # 외부 Catalog에 Tag 쓰기가 이미 성공했을 수 있다. 원문을 공개하거나
+            # 안전한 재시도를 암시하지 않고 수동 확인이 필요한 상태로 표현한다.
+            raise PlatformError("SOS-ICEBERG-RETAIN") from exc
         status, reason = snapshot_status(store, item)
         return {"dataset_id": dataset_id, "status": status, "reason": reason}
 
