@@ -203,15 +203,15 @@ jobs:
           PY
           make restart
           curl -fsS http://127.0.0.1:9602/api/datasets > /tmp/sos-restarted.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restarted.json")); assert any(x["id"]==d["id"] for x in rows)'
+          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restarted.json")); assert any(x["id"]==d["id"] for x in rows["items"])'
           make down
           make up
           curl -fsS http://127.0.0.1:9602/api/datasets > /tmp/sos-restored.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restored.json")); assert any(x["id"]==d["id"] for x in rows)'
+          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restored.json")); assert any(x["id"]==d["id"] for x in rows["items"])'
           data_id=$(python3 -c 'import json; print(json.load(open("/tmp/sos-dataset.json"))["id"])')
           curl -fsS "http://127.0.0.1:9602/api/datasets/$data_id/preview" > /tmp/sos-persisted-preview.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-preview.json")); assert d["returned_rows"]==2, d'
-          iceberg_id=$(python3 -c 'import json,os; d=json.load(open("/tmp/sos-restored.json")); print(next(x["id"] for x in d if x["name"]=="default."+os.environ["SOS_CI_TABLE"]))')
+          iceberg_id=$(python3 -c 'import json,os; d=json.load(open("/tmp/sos-restored.json")); print(next(x["id"] for x in d["items"] if x["name"]=="default."+os.environ["SOS_CI_TABLE"]))')
           curl -fsS "http://127.0.0.1:9602/api/datasets/$iceberg_id/preview" > /tmp/sos-persisted-iceberg.json
           python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-iceberg.json")); assert d["returned_rows"]>=2, d'
           iceberg_table="$SOS_CI_TABLE"
