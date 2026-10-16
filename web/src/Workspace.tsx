@@ -65,6 +65,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
+  const jobsRequestVersion = useRef(0);
+  const discoveryJobsRequestVersion = useRef(0);
+  const feedbackRequests = useRef(0);
   const showExamples = useRef(false);
   const refreshedCompletedJobs = useRef(new Set<string>());
   const dataset = datasets.find(d => d.id === selected);
@@ -170,14 +173,19 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     });
   }
   async function refreshJobs() {
+    const version = ++jobsRequestVersion.current;
     const page = await request<JobPage>("/api/jobs?limit=20");
+    // 폴링과 수동 갱신이 겹쳐도 더 오래된 응답으로 Job 상태를 되돌리지 않는다.
+    if (version !== jobsRequestVersion.current) return;
     setJobs(previous => olderJobsLoaded
       ? [...page.items, ...previous.filter(job => !page.items.some(item => item.id === job.id))]
       : page.items);
     if (!olderJobsLoaded) setNextJobsCursor(page.next_cursor ?? null);
   }
   async function refreshDiscoveryJobs() {
+    const version = ++discoveryJobsRequestVersion.current;
     const page = await request<ExplorationJobPage>("/api/explorations/jobs?limit=20");
+    if (version !== discoveryJobsRequestVersion.current) return;
     setDiscoveryJobs(previous => olderDiscoveryJobsLoaded
       ? [...page.items, ...previous.filter(job => !page.items.some(item => item.id === job.id))]
       : page.items);
@@ -186,8 +194,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   async function loadMoreDiscoveryJobs() {
     if (!nextDiscoveryCursor) return;
     await withFeedback(async () => {
+      const version = discoveryJobsRequestVersion.current;
       const page = await request<ExplorationJobPage>(
         `/api/explorations/jobs?limit=20&cursor=${encodeURIComponent(nextDiscoveryCursor)}`);
+      if (version !== discoveryJobsRequestVersion.current) return;
       setDiscoveryJobs(previous => [...previous, ...page.items.filter(
         item => !previous.some(job => job.id === item.id))]);
       setNextDiscoveryCursor(page.next_cursor ?? null);
@@ -197,8 +207,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   async function loadMoreJobs() {
     if (!nextJobsCursor) return;
     await withFeedback(async () => {
+      const version = jobsRequestVersion.current;
       const page = await request<JobPage>(
         `/api/jobs?limit=20&cursor=${encodeURIComponent(nextJobsCursor)}`);
+      if (version !== jobsRequestVersion.current) return;
       setJobs(previous => [...previous, ...page.items.filter(
         item => !previous.some(job => job.id === item.id))]);
       setNextJobsCursor(page.next_cursor ?? null);
@@ -254,9 +266,13 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   }, [jobs, discoveryJobs]);
 
   async function withFeedback(action: () => Promise<void>) {
+    feedbackRequests.current += 1;
     setBusy(true); setError(""); setNotice("");
     try { await action(); } catch (e) { setError(formatError(e)); }
-    finally { setBusy(false); }
+    finally {
+      feedbackRequests.current -= 1;
+      setBusy(feedbackRequests.current > 0);
+    }
   }
   async function submit(kind: "profile" | "transform") {
     if (!selected) return;
