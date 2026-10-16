@@ -2,6 +2,8 @@
 
 import polars as pl
 
+from .errors import InvalidRequestError
+
 from .schemas import Transform
 
 MAX_PREVIEW = 100
@@ -26,7 +28,7 @@ def bounded_feature_preview(lf: pl.LazyFrame, spec: Transform) -> dict:
     if any(step.op in ("lag", "rolling_mean") for step in spec.steps):
         count = lf.head(MAX_FEATURE_PREVIEW_INPUT_ROWS + 1).select(pl.len()).collect().item()
         if count > MAX_FEATURE_PREVIEW_INPUT_ROWS:
-            raise ValueError(
+            raise InvalidRequestError(
                 "Global window preview exceeds synchronous execution budget; "
                 "submit a full transform Job"
             )
@@ -37,15 +39,15 @@ def bounded_iceberg_arrow(lf: pl.LazyFrame):
     """한 번의 Iceberg append에서 처리할 데이터 크기를 제한한다."""
     frame = lf.head(MAX_ICEBERG_ROWS + 1).collect()
     if frame.height > MAX_ICEBERG_ROWS:
-        raise ValueError("Iceberg import exceeds the supported 50,000-row limit")
+        raise InvalidRequestError("Iceberg import exceeds the supported 50,000-row limit")
     if frame.estimated_size() > MAX_ICEBERG_MEMORY_BYTES:
-        raise ValueError("Iceberg import exceeds the supported 64 MiB memory limit")
+        raise InvalidRequestError("Iceberg import exceeds the supported 64 MiB memory limit")
     return frame.to_arrow()
 
 
 def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
     if not 1 <= limit <= MAX_PREVIEW:
-        raise ValueError("Preview limit must be between 1 and 100")
+        raise InvalidRequestError("Preview limit must be between 1 and 100")
     frame = lf.limit(limit).collect()
     return {
         "schema": {c: str(t) for c, t in lf.collect_schema().items()},
@@ -57,9 +59,9 @@ def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
 def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
     schema = lf.collect_schema()
     if not set(spec.group_by).issubset(schema.names()):
-        raise ValueError("Group column does not exist")
+        raise InvalidRequestError("Group column does not exist")
     if spec.order_by and spec.order_by not in schema:
-        raise ValueError("Time/order column does not exist")
+        raise InvalidRequestError("Time/order column does not exist")
     # Window 단계가 연속되면 동일 입력의 전역 검증과 정렬을 반복하지 않는다.
     # 시간·그룹 키 값이 바뀌면 기존 검증은 더 이상 유효하지 않다.
     validated_window_keys = False
@@ -68,11 +70,11 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
         columns = current_schema.names()
         if step.op == "select":
             if not set(step.columns or []).issubset(columns):
-                raise ValueError("Selected column does not exist")
+                raise InvalidRequestError("Selected column does not exist")
             lf = lf.select(step.columns)
             continue
         if step.column not in columns:
-            raise ValueError(f"Unknown column: {step.column}")
+            raise InvalidRequestError(f"Unknown column: {step.column}")
         col = pl.col(step.column)
         if step.op == "filter_not_null":
             lf = lf.filter(col.is_not_null())
@@ -86,14 +88,14 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
                 validated_window_keys = False
         elif step.op in ("lag", "rolling_mean"):
             if not spec.order_by:
-                raise ValueError("Time-based features require order_by")
+                raise InvalidRequestError("Time-based features require order_by")
             if spec.order_by not in columns or not set(spec.group_by).issubset(columns):
-                raise ValueError("Time/order and group columns must survive preceding steps")
+                raise InvalidRequestError("Time/order and group columns must survive preceding steps")
             if not validated_window_keys:
                 # 키 값의 변경은 정렬 순서와 유일성을 무효화한다. 행 필터와
                 # 다른 컬럼의 변환은 검증된 키의 유일성을 깨뜨리지 않는다.
                 if lf.select(pl.col(spec.order_by).is_null().any()).collect().item():
-                    raise ValueError("Time/order column contains null values")
+                    raise InvalidRequestError("Time/order column contains null values")
                 keys = [*spec.group_by, spec.order_by]
                 duplicates = (
                     lf.group_by(keys)
@@ -103,14 +105,14 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
                     .collect()
                 )
                 if duplicates.height:
-                    raise ValueError("Time/order column must be unique within each group")
+                    raise InvalidRequestError("Time/order column must be unique within each group")
                 lf = lf.sort(keys)
                 validated_window_keys = True
             if step.op == "rolling_mean" and not current_schema[step.column].is_numeric():
-                raise ValueError("Rolling Mean requires a numeric column")
+                raise InvalidRequestError("Rolling Mean requires a numeric column")
             alias = step.alias or f"{step.column}_{step.op}"
             if alias in columns:
-                raise ValueError("Feature output column already exists")
+                raise InvalidRequestError("Feature output column already exists")
             if step.op == "lag":
                 expr = col.shift(step.periods)
                 lf = lf.with_columns(

@@ -22,7 +22,7 @@ from sqlalchemy import text
 
 from .cache import cached_dataset_file
 from .datasets import iceberg_catalog
-from .errors import PlatformError, RuntimeConfigurationError
+from .errors import InvalidRequestError, PlatformError, RuntimeConfigurationError
 from .resource_admission import reserve_execution_memory
 from .store import Store
 
@@ -274,7 +274,7 @@ def source_connection(
                     table = iceberg_catalog(store).load_table(dataset["location"])
                     snapshot = int(dataset["version"])
                     if snapshot not in {s.snapshot_id for s in table.snapshots()}:
-                        raise ValueError("Iceberg snapshot is not available; it may have expired")
+                        raise InvalidRequestError("Iceberg snapshot is not available; it may have expired")
                     reader = table.scan(snapshot_id=snapshot).to_arrow_batch_reader()
                     connection.register("source", reader)
                     connection.execute("SET enable_external_access = false")
@@ -337,7 +337,7 @@ def overview(store: Store, dataset: dict) -> dict:
 
 def preview(store: Store, dataset: dict, limit: int = 30) -> dict:
     if not 1 <= limit <= 100:
-        raise ValueError("Preview limit must be between 1 and 100")
+        raise InvalidRequestError("Preview limit must be between 1 and 100")
     with source_connection(store, dataset) as conn:
         schema = {c["name"]: c["dtype"] for c in _columns(conn)}
         raw = _records(conn.execute("SELECT * FROM source LIMIT ?", [limit]))
@@ -359,7 +359,7 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
         if query.order_by:
             referenced.append(query.order_by)
         if not set(referenced).issubset(available):
-            raise ValueError("Unknown Dataset query column")
+            raise InvalidRequestError("Unknown Dataset query column")
         where = []
         params = []
         for predicate in query.filters:
@@ -384,7 +384,7 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
             raw = _records(conn.execute(sql, [*params, query.limit]))
         except (duckdb.ConversionException, duckdb.BinderException) as exc:
             # 비교 자료형이 맞지 않는 사용자 입력은 Internal 500이 아닌 422다.
-            raise ValueError(
+            raise InvalidRequestError(
                 "Dataset query comparison is incompatible with the column type"
             ) from exc
     return {
@@ -397,7 +397,7 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
 def profile(store: Store, dataset: dict, sample: int | None = 1000) -> dict:
     policy = DiscoveryPolicy.from_env()
     if sample is not None and not 1 <= sample <= policy.max_sample:
-        raise ValueError("Invalid profile sample limit")
+        raise InvalidRequestError("Invalid profile sample limit")
     with source_connection(store, dataset, policy) as conn:
         schema = _columns(conn)
         scope = "source" if sample is None else "(SELECT * FROM source LIMIT ?) AS sampled_source"
@@ -464,7 +464,7 @@ def explore(
 ) -> dict:
     """동일 집계 정의로 제한된 대화형 샘플과 전체 Worker Job을 실행한다."""
     if scope not in ("sample", "full"):
-        raise ValueError("Invalid exploration scope")
+        raise InvalidRequestError("Invalid exploration scope")
     policy = DiscoveryPolicy.from_env()
     expressions = {
         "count": lambda col: "COUNT(*)",
@@ -474,13 +474,13 @@ def explore(
         "max": lambda col: f"MAX({col})",
     }
     if metric not in expressions:
-        raise ValueError("Unsupported exploration metric")
+        raise InvalidRequestError("Unsupported exploration metric")
     with source_connection(store, dataset, policy) as conn:
         actual = {c["name"]: c for c in _columns(conn)}
         if column not in actual or (group_by is not None and group_by not in actual):
-            raise ValueError("Unknown exploration column")
+            raise InvalidRequestError("Unknown exploration column")
         if metric in ("mean", "min", "max") and not _numeric_type(actual[column]["sql_type"]):
-            raise ValueError("Numeric metric requires numeric column")
+            raise InvalidRequestError("Numeric metric requires numeric column")
         value = expressions[metric](quoted(column))
         source = (
             f"(SELECT * FROM source LIMIT {policy.max_sample}) AS sample_source"

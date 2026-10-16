@@ -15,6 +15,7 @@ from .discovery import (
     quoted,
     source_connection,
 )
+from .errors import InvalidRequestError
 from .store import Store
 
 ALGORITHM_VERSION = "understanding-v1"
@@ -61,7 +62,7 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
     호출자가 전체 스캔의 Worker 예산을 적용해야 한다.
     """
     if scope not in ("sample", "full"):
-        raise ValueError("Unsupported understanding scope")
+        raise InvalidRequestError("Unsupported understanding scope")
     # 고정 시드의 재현성은 DuckDB 단일 스레드에서만 보장된다.
     policy = DiscoveryPolicy.from_env()
     if scope == "sample":

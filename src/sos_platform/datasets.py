@@ -17,7 +17,7 @@ import pyarrow.parquet as pq
 
 from .cache import cached_dataset_file
 from .config import Settings
-from .errors import PlatformError
+from .errors import InvalidRequestError, PlatformError
 from .ingestion import UploadPolicy, staged_upload
 from .object_store import ObjectStore
 from .store import Store
@@ -157,7 +157,7 @@ def import_to_iceberg(
 ) -> dict:
     """비용이 큰 데이터 변환은 API가 아닌 Worker 프로세스에서 실행한다."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
-        raise ValueError("Invalid Iceberg table name")
+        raise InvalidRequestError("Invalid Iceberg table name")
     catalog = iceberg_catalog(store)
     catalog.create_namespace_if_not_exists("default")
     ident = f"default.{table_name}"
@@ -228,21 +228,21 @@ def connect_iceberg(
 ) -> dict:
     """기존 테이블의 지정 Snapshot을 Dataset으로 등록한다."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
-        raise ValueError("Invalid Iceberg table name")
+        raise InvalidRequestError("Invalid Iceberg table name")
     from pyiceberg.exceptions import NoSuchTableError
 
     try:
         table = iceberg_catalog(store).load_table(f"default.{table_name}")
     except NoSuchTableError as exc:
-        raise ValueError("Iceberg table does not exist") from exc
+        raise InvalidRequestError("Iceberg table does not exist") from exc
     snapshots = {str(s.snapshot_id) for s in table.snapshots()}
     if snapshot_id is None:
         current = table.current_snapshot()
         if current is None:
-            raise ValueError("Iceberg table has no data snapshot")
+            raise InvalidRequestError("Iceberg table has no data snapshot")
         snapshot_id = str(current.snapshot_id)
     if snapshot_id not in snapshots:
-        raise ValueError("Iceberg snapshot is not available; it may have expired")
+        raise InvalidRequestError("Iceberg snapshot is not available; it may have expired")
     from .retention import ensure_tag
 
     dataset_id = str(uuid4())
@@ -262,7 +262,7 @@ def connect_iceberg(
 
 def iceberg_snapshots(store: Store, table_name: str) -> list[dict]:
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
-        raise ValueError("Invalid Iceberg table name")
+        raise InvalidRequestError("Invalid Iceberg table name")
     table = iceberg_catalog(store).load_table(f"default.{table_name}")
     return [
         {"snapshot_id": str(s.snapshot_id), "timestamp_ms": s.timestamp_ms}
@@ -278,7 +278,7 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
         table = iceberg_catalog(store).load_table(dataset["location"])
         snapshot = int(dataset["version"])
         if snapshot not in {s.snapshot_id for s in table.snapshots()}:
-            raise ValueError("Iceberg snapshot is not available; it may have expired")
+            raise InvalidRequestError("Iceberg snapshot is not available; it may have expired")
         config = Settings.from_env()
         return pl.scan_iceberg(
             table,

@@ -4,6 +4,8 @@ import base64
 import binascii
 import json
 
+from .errors import InvalidRequestError
+
 
 def decode_cursor(token: str | None, resource: str) -> dict[str, str] | None:
     """기존 Base64url 키셋 커서를 검증한다. 공개 커서 형식은 변경하지 않는다."""
@@ -21,7 +23,7 @@ def decode_cursor(token: str | None, resource: str) -> dict[str, str] | None:
         ):
             raise ValueError("Invalid cursor")
     except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
-        raise ValueError(f"Invalid {resource} cursor") from exc
+        raise InvalidRequestError(f"Invalid {resource} cursor") from exc
     return before
 
 

@@ -180,6 +180,10 @@ if len(ERRORS) != len(DEFINITIONS) + len(
     raise RuntimeError("Duplicate error code in the platform catalog")
 
 
+class InvalidRequestError(ValueError):
+    """클라이언트가 입력을 수정해 해결할 수 있는 명시적 오류."""
+
+
 class RuntimeConfigurationError(ValueError):
     """서버 자원 설정의 모순·오입력. 클라이언트의 요청 검증 오류가 아니다."""
 

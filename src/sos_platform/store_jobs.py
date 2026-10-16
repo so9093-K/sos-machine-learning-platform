@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from sqlalchemy import bindparam, text
 
-from .errors import ERRORS, PlatformError
+from .errors import ERRORS, InvalidRequestError, PlatformError
 from .store_administration import now
 
 
@@ -193,7 +193,7 @@ class JobStoreMixin:
     ) -> list[dict]:
         """목록은 종류별 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
         if not 1 <= limit <= 101:
-            raise ValueError("Job query limit is out of range")
+            raise InvalidRequestError("Job query limit is out of range")
         filters = []
         if before:
             filters.append("(created_at, id) < (:created_at, :id)")

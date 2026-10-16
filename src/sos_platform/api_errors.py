@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from .errors import ERRORS, PlatformError, RuntimeConfigurationError
+from .errors import ERRORS, InvalidRequestError, PlatformError, RuntimeConfigurationError
 from .observability import emit
 
 
@@ -101,25 +101,25 @@ def register_error_handlers(app: FastAPI) -> None:
             request, "SOS-API-INTERNAL", 500, ERRORS["SOS-API-INTERNAL"].message
         )
 
+    @app.exception_handler(InvalidRequestError)
+    async def handle_invalid_input(request: Request, exc: InvalidRequestError):
+        # 명시적으로 입력 원인을 분류한 호출자만 안전한 상세를 공개한다.
+        return problem_response(request, "SOS-API-VALIDATION", 422, str(exc))
+
     @app.exception_handler(ValueError)
-    async def handle_value(request: Request, exc: ValueError):
-        known = {
-            "Invalid Job cursor",
-            "Invalid Dataset cursor",
-            "Time/order column must be unique within each group",
-            "Time/order column contains null values",
-            "Time/order column does not exist",
-            "Time-based features require order_by",
-            "Group column does not exist",
-            "Time/order and group columns must survive preceding steps",
-            "Selected column does not exist",
-            "Rolling Mean requires a numeric column",
-            "Feature output column already exists",
-            "Iceberg import exceeds the supported 50,000-row limit",
-            "Iceberg import exceeds the supported 64 MiB memory limit",
-        }
-        detail = str(exc) if str(exc) in known else ERRORS["SOS-API-VALIDATION"].message
-        return problem_response(request, "SOS-API-VALIDATION", 422, detail)
+    async def handle_unexpected_value(request: Request, exc: ValueError):
+        # 라이브러리·서버 내부 ValueError는 입력 오류라고 추정하지 않는다.
+        emit(
+            "api.request.failed",
+            service="sos-api",
+            level=logging.ERROR,
+            request_id=getattr(request.state, "request_id", None),
+            error_code="SOS-API-INTERNAL",
+            exception_type=type(exc).__name__,
+        )
+        return problem_response(
+            request, "SOS-API-INTERNAL", 500, ERRORS["SOS-API-INTERNAL"].message
+        )
 
     @app.exception_handler(PlatformError)
     async def handle_platform(request: Request, exc: PlatformError):
