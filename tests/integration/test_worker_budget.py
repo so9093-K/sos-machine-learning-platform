@@ -33,3 +33,31 @@ def test_staging_budget_configuration(monkeypatch):
 
     with pytest.raises(ValueError, match="SOS_WORKER_MAX_STAGE_MIB"):
         ExecutionBudget.from_env()
+
+
+
+def test_worker_staging_budget_rejects_oversize_attempt_and_keeps_commit_uncertain(
+    workspace, monkeypatch
+):
+    """부모가 스테이징 초과를 감지하면 중단하되 외부 커밋 상태는 추측하지 않는다."""
+    import sos_platform.worker as worker
+
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": dataset["id"], "table_name": "stage_budget"},
+    )
+    assert queued.status_code == 202
+    monkeypatch.setattr(
+        ExecutionBudget,
+        "from_env",
+        classmethod(lambda cls: cls(max_wall_seconds=1800, max_rss_mib=2048, max_stage_mib=1)),
+    )
+    monkeypatch.setattr(worker, "iceberg_staging_bytes", lambda *_args: 2 * 1024 * 1024)
+    assert run_once(store)
+    job = store.get_job(queued.json()["id"])
+    assert job["status"] == "Failed"
+    assert job["error_code"] == "SOS-ICEBERG-UNCERTAIN"
+    assert job["failure_category"] == "storage"
+    assert not list((store.home / "cache" / "iceberg-staging").glob("attempt-*"))

@@ -14,7 +14,7 @@
 3. Iceberg 비파티션 적재는 재읽기 가능한 임시 Parquet으로 먼저 스테이징한 후 Arrow RecordBatchReader로 읽고 PyIceberg가 한 번의 Snapshot 커밋으로 게시한다. 외부 커밋 단계의 실패·중단은 기존 Attempt와 `sos.attempt-id` 기준으로 보수적으로 판정한다. 단계별 부분 Append를 허용하지 않는다.
 4. PyIceberg의 RecordBatchReader 파티션 테이블 쓰기 미지원 범위에는 기존 작은 입력 호환 경로를 유지하고, 확장되기 전까지 명시적인 기술적 제약으로 기록한다.
 5. Dataset 판본·원본 객체의 공유 보존·Snapshot Tag·Actor 권한·Job 멱등성 의미는 기존 ADR을 그대로 따른다.
-6. 메모리·임시 디스크·CPU·실행 시간은 별도의 자원 예산으로 제한한다. Lazy/Streaming 사용만으로 전체 OS 자원 격리가 보장되었다고 주장하지 않는다.
+6. 메모리·임시 디스크·CPU·실행 시간은 별도의 자원 예산으로 제한한다. Worker는 Iceberg 스테이징 파일 크기를 폴링 감시하며 Attempt별로 격리된 임시 디렉터리를 부모 종료·재시작 시 정리한다. 폴링만으로 엄격한 파일시스템 쿼터나 OS 자원 격리를 보장하지 않는다. 커밋 진입 여부가 불명확하면 기존 보수적 오류 계약을 유지한다.
 
 ## 근거와 영향
 
