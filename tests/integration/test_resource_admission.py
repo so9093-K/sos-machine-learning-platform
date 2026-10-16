@@ -252,4 +252,3 @@ def test_feature_preview_reservation_is_released_after_internal_failure(workspac
     assert resumed.status_code == 200, resumed.text
     with reserve_execution_memory(store, 1024):
         pass
-

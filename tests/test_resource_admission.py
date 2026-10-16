@@ -60,4 +60,3 @@ def test_feature_preview_admission_defaults_and_configuration(monkeypatch):
     monkeypatch.setenv("SOS_FEATURE_PREVIEW_MEMORY_MIB", "513")
     with pytest.raises(RuntimeConfigurationError, match="SOS_FEATURE_PREVIEW_MEMORY_MIB"):
         FeaturePreviewBudget.from_env()
-
