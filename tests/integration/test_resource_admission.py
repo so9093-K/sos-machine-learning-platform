@@ -1,6 +1,11 @@
 """여러 DB 세션에서 API·Worker 논리 메모리 용량 수용과 회수를 검증한다."""
 
 import pytest
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, Lock
+from time import sleep
+
+from sos_platform.store import Store
 
 from sos_platform.errors import PlatformError
 from sos_platform.resource_admission import ExecutionCapacity, reserve_execution_memory
@@ -54,3 +59,81 @@ def test_worker_reserved_memory_is_not_double_counted_by_child_discovery(workspa
     assert response.status_code == 202
     assert run_once(store)
     assert store.get_job(response.json()["id"])["status"] == "Succeeded"
+
+
+def test_independent_store_sessions_share_execution_capacity(workspace):
+    """서로 다른 API 인스턴스의 PostgreSQL 세션이 같은 용량을 초과 예약하지 않는다."""
+    _client, store = workspace
+    other = Store(store.home, database_url=store.database_url)
+    policy = ExecutionCapacity(pool_mib=512, wait_seconds=0.1)
+    acquired = Event()
+    release = Event()
+
+    def hold_capacity():
+        with reserve_execution_memory(other, 512, policy):
+            acquired.set()
+            assert release.wait(timeout=5)
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(hold_capacity)
+            try:
+                assert acquired.wait(timeout=3)
+                with pytest.raises(PlatformError) as failure:
+                    with reserve_execution_memory(store, 256, policy):
+                        pytest.fail("Another Store's lock must deny admission")
+                assert failure.value.code == "SOS-EXECUTION-CAPACITY"
+            finally:
+                release.set()
+            future.result(timeout=5)
+        with reserve_execution_memory(store, 512, policy):
+            pass
+    finally:
+        other.engine.dispose()
+
+
+def test_partial_reservation_and_exception_release_every_slot(workspace):
+    """예약의 부분 획득 실패·실행 예외 모두 다른 요청을 방해하지 않는다."""
+    _client, store = workspace
+    policy = ExecutionCapacity(pool_mib=512, wait_seconds=0.1)
+    with reserve_execution_memory(store, 256, policy):
+        with pytest.raises(PlatformError):
+            with reserve_execution_memory(store, 512, policy):
+                pytest.fail("Insufficient memory")
+        # 실패한 512MiB 요청이 잠시 획득한 두 번째 슬롯을 반납했는지 검증한다.
+        with reserve_execution_memory(store, 256, policy):
+            pass
+    with pytest.raises(RuntimeError, match="deliberate failure"):
+        with reserve_execution_memory(store, 512, policy):
+            raise RuntimeError("deliberate failure")
+    with reserve_execution_memory(store, 512, policy):
+        pass
+
+
+def test_parallel_admission_does_not_exceed_logical_capacity(workspace):
+    """여러 작업이 동시에 진입해도 논리적인 활성 자원 총량을 초과하지 않는다."""
+    _client, store = workspace
+    policy = ExecutionCapacity(pool_mib=512, wait_seconds=3)
+    meter = Lock()
+    active = 0
+    peak = 0
+
+    def compute(_index):
+        nonlocal active, peak
+        with reserve_execution_memory(store, 256, policy):
+            with meter:
+                active += 1
+                peak = max(peak, active)
+                assert active <= 2
+            try:
+                sleep(0.02)
+            finally:
+                with meter:
+                    active -= 1
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(compute, range(12)))
+    assert active == 0
+    assert 1 <= peak <= 2
+    with reserve_execution_memory(store, 512, policy):
+        pass
