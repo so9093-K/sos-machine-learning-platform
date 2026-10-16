@@ -134,8 +134,7 @@ def run_once(store: Store) -> bool:
                 raise ExecutionLimitExceeded("SOS-JOB-TIMEOUT", "timeout")
             if (
                 job["kind"] == "iceberg_import"
-                and iceberg_staging_bytes(store, attempt_id)
-                > budget.max_stage_mib * 1024 * 1024
+                and iceberg_staging_bytes(store, attempt_id) > budget.max_stage_mib * 1024 * 1024
             ):
                 # 커밋 진입 여부를 부모가 알지 못하므로 실패 판정은 계속 보수적이다.
                 raise ExecutionLimitExceeded("SOS-ICEBERG-UNCERTAIN", "storage")

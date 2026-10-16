@@ -364,7 +364,6 @@ def test_iceberg_staging_cleanup_is_scoped_to_its_attempt(workspace):
     unexpected.unlink()
 
 
-
 def test_staging_size_tracks_only_the_target_attempt(workspace):
     """임시 디스크 관측은 타 Attempt 및 무관한 캐시 파일을 포함하지 않는다."""
     from sos_platform.datasets import cleanup_iceberg_staging, iceberg_staging_bytes

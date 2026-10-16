@@ -118,15 +118,19 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         assert secure.get(f"/api/datasets/{owned}", headers=headers("bob")).status_code == 404
         assert secure.get(f"/api/datasets/{owned}", headers=headers("alice")).status_code == 200
         # 신규 범용 Query도 기존 Dataset의 소유권을 그대로 적용한다.
-        assert secure.post(
-            f"/api/datasets/{owned}/query", json={"limit": 1}, headers=headers("alice")
-        ).status_code == 200
-        assert secure.post(
-            f"/api/datasets/{owned}/query", json={"limit": 1}, headers=headers("bob")
-        ).status_code == 404
-        assert secure.post(
-            f"/api/datasets/{owned}/query", json={"limit": 1}
-        ).status_code == 401
+        assert (
+            secure.post(
+                f"/api/datasets/{owned}/query", json={"limit": 1}, headers=headers("alice")
+            ).status_code
+            == 200
+        )
+        assert (
+            secure.post(
+                f"/api/datasets/{owned}/query", json={"limit": 1}, headers=headers("bob")
+            ).status_code
+            == 404
+        )
+        assert secure.post(f"/api/datasets/{owned}/query", json={"limit": 1}).status_code == 401
         assert secure.get("/api/datasets", headers=headers("bob")).json() == []
         assert (
             secure.post(
