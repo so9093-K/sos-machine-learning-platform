@@ -86,6 +86,9 @@ def test_dataset_understanding_job_version_and_executable_suggestions(workspace)
     submit = client.post(path + "/jobs", json={"scope": "sample"})
     assert submit.status_code == 202, submit.text
     assert submit.json()["kind"] == "profile"
+    duplicate = client.post(path + "/jobs", json={"scope": "sample"})
+    assert duplicate.status_code == 202, duplicate.text
+    assert duplicate.json()["id"] == submit.json()["id"]
     assert run_once(store)
     result = client.get(path)
     assert result.status_code == 200, result.text

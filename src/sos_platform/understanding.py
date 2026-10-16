@@ -100,8 +100,13 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
                 or sql_type.startswith("TIMESTAMP")
             ):
                 expressions.append(
-                    "(MIN(" + col + ") IS NOT DISTINCT FROM MAX(" + col + ")) AS "
-                    + key + "_constant"
+                    "(MIN("
+                    + col
+                    + ") IS NOT DISTINCT FROM MAX("
+                    + col
+                    + ")) AS "
+                    + key
+                    + "_constant"
                 )
             if sql_type in ("FLOAT", "DOUBLE", "REAL"):
                 expressions.append("COUNT(*) FILTER (WHERE isnan(" + col + ")) AS " + key + "_nan")
@@ -187,9 +192,7 @@ def suggest_analyses(columns: list[dict], row_count: int) -> list[dict]:
         col
         for col in columns
         if any(r["role"] == "categorical" for r in col["roles"])
-        and not any(
-            r["role"] in ("potentially_sensitive", "identifier") for r in col["roles"]
-        )
+        and not any(r["role"] in ("potentially_sensitive", "identifier") for r in col["roles"])
         and not col["is_constant"]
         and col["distinct_count"] > 1
     ]

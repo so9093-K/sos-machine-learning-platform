@@ -572,6 +572,17 @@ class Store:
             updated_at=now(),
         )
         with self.connection() as db:
+            is_understanding = (
+                kind == "profile" and spec.get("mode") == "understanding"
+                and owner_actor is not None
+            )
+            if is_understanding:
+                # 같은 Actor의 여러 탭이 동시에 새 프로파일을 만들지 않게 직렬화한다.
+                # 다른 Actor에게 기존 Job과 요청 메타데이터를 노출하지 않는다.
+                db.execute(
+                    text("SELECT id FROM datasets WHERE id=:id FOR UPDATE"),
+                    {"id": dataset_id},
+                ).scalar_one()
             if idempotency_key is not None:
                 # PostgreSQL 유일성 충돌은 동시 트랜잭션을 직렬화한다.
                 inserted = db.execute(
@@ -604,6 +615,26 @@ class Store:
                     previous_id = previous["job_id"]
                     # get_job은 새 트랜잭션으로 기존 확정 Job을 조회한다.
                     return self.get_job(previous_id)
+            if is_understanding:
+                existing_id = db.execute(
+                    text(
+                        "SELECT id FROM jobs WHERE dataset_id=:dataset AND owner_actor=:actor "
+                        "AND kind='profile' AND spec=:spec "
+                        "AND status IN ('Queued','Running') "
+                        "ORDER BY created_at DESC,id DESC LIMIT 1"
+                    ),
+                    {"dataset": dataset_id, "actor": owner_actor, "spec": item["spec"]},
+                ).scalar_one_or_none()
+                if existing_id:
+                    if idempotency_key is not None:
+                        db.execute(
+                            text(
+                                "UPDATE job_submissions SET job_id=:job "
+                                "WHERE actor_id=:actor AND submission_key=:key"
+                            ),
+                            {"job": existing_id, "actor": owner_actor, "key": idempotency_key},
+                        )
+                    return self.get_job(existing_id)
             db.execute(
                 text(
                     "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at,"
