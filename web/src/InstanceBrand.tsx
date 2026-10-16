@@ -10,13 +10,17 @@ export function InstanceBrand({ canEdit }: { canEdit: boolean }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true;
+    setError("");
     request<InstanceSettings>("/api/instance")
-      .then(value => { if (active) { setInstance(value); setDraft(value.display_name); } })
+      .then(value => {
+        if (active) { setInstance(value); setDraft(value.display_name); setError(""); }
+      })
       .catch(cause => { if (active) setError(formatError(cause)); });
     return () => { active = false; };
-  }, []);
+  }, [reload]);
   async function save(event: React.FormEvent) {
     event.preventDefault();
     const name = draft.trim();
@@ -36,10 +40,12 @@ export function InstanceBrand({ canEdit }: { canEdit: boolean }) {
     <div className="brandmark" aria-hidden="true">S</div>
     <div className="brand-content">
       <strong>SOS</strong>
-      <span className="instance-name" aria-live="polite">{instance?.display_name ?? "Workspace"}</span>
+      <span className="instance-name" aria-live="polite">{
+        instance?.display_name ?? (error ? "설정 조회 실패" : "인스턴스 정보 조회 중")
+      }</span>
       {canEdit && !editing && <button type="button" disabled={!instance}
         className="brand-edit ghost"
-        onClick={() => { setDraft(instance?.display_name ?? "Local Workspace"); setEditing(true); }}>
+        onClick={() => { setDraft(instance!.display_name); setEditing(true); }}>
         표시명 설정
       </button>}
       {editing && <form className="brand-form" onSubmit={event => void save(event)}>
@@ -53,7 +59,11 @@ export function InstanceBrand({ canEdit }: { canEdit: boolean }) {
           }}>취소</button>
         </div>
       </form>}
-      {error && <p className="brand-error" role="alert">{error}</p>}
+      {error && <div className="brand-error" role="alert">
+        <p>{error}</p>
+        {!instance && <button type="button" className="ghost"
+          onClick={() => setReload(value => value + 1)}>설정 다시 조회</button>}
+      </div>}
     </div>
   </div>;
 }

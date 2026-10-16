@@ -725,3 +725,14 @@ test("Dataset refresh re-fetches the current Understanding profile", async ({ pa
   await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
   await expect.poll(() => requests).toBeGreaterThan(firstCount);
 });
+
+
+test("operator navigation marks the active operational section", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
+  await expect(page.getByRole("navigation", { name: "전역 메뉴" })
+    .getByRole("button", { name: "전체 Jobs 보기" })).toHaveAttribute("aria-current", "page");
+  await page.getByRole("button", { name: "저장소 상태 보기" }).click();
+  await expect(page.getByRole("navigation", { name: "전역 메뉴" })
+    .getByRole("button", { name: "저장소 상태 보기" })).toHaveAttribute("aria-current", "page");
+});

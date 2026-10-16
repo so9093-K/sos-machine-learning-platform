@@ -478,13 +478,16 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       <InstanceBrand canEdit={canConfigure} />
       <nav className="global-nav" aria-label="전역 메뉴">
       <div className="section-title">PLATFORM</div>
-      <button className="job-navigation secondary" onClick={() => setTab("jobs")}>
+      <button className="job-navigation secondary" aria-current={tab === "jobs" ? "page" : undefined}
+        onClick={() => setTab("jobs")}>
         전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
       </button>
-      {canInspectStorage && <button className="job-navigation secondary" onClick={() => setTab("storage")}>
+      {canInspectStorage && <button className="job-navigation secondary" aria-current={tab === "storage" ? "page" : undefined}
+        onClick={() => setTab("storage")}>
         저장소 상태 보기
       </button>}
-      {canViewAudit && <button className="job-navigation secondary" onClick={() => setTab("audit")}>
+      {canViewAudit && <button className="job-navigation secondary" aria-current={tab === "audit" ? "page" : undefined}
+        onClick={() => setTab("audit")}>
         보안 감사 보기
       </button>}
       </nav>
@@ -555,7 +558,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         <h1>데이터 탐색</h1>
         <p>Dataset · Profile · Exploration</p></div>
         <div className="header-meta">
-          <span className="environment">{actor.mode === "development" ? "Development" : "Token Authentication"}</span>
+          <span className="environment">{actor.mode === "development" ? "로컬 인증" : "토큰 인증"}</span>
           <div className="auth-status">
             <span>{actor.actor_id} · {actor.roles.join(", ")}</span>
             {actor.mode !== "development" &&
@@ -590,7 +593,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             <button className="secondary" onClick={() => setReloadRevision(value => value + 1)}>
               데이터 다시 불러오기
             </button>
-            {canWrite && <>
+            {canRun && <>
               <input aria-label="Iceberg 테이블명" value={importTableName}
                 onChange={e => setImportTableName(e.target.value)} placeholder="Iceberg table" />
               <button disabled={busy} className="secondary" onClick={() => void importIceberg()}>

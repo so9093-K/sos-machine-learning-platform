@@ -252,3 +252,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   .profile-findings { grid-template-columns:1fr; }
   .profile-filters label { flex:1 1 100%; }
 }
+
+/* 전역 네비게이션은 Dataset 내부 탭과 독립적인 현재 위치를 나타낸다. */
+.global-nav [aria-current="page"] {
+  background:var(--sos-accent-bg)!important;
+  border-color:var(--sos-accent)!important;
+  box-shadow:inset 3px 0 var(--sos-accent);
+}
+.brand-error .ghost { color:var(--sos-accent); padding-left:0; text-decoration:underline; }
