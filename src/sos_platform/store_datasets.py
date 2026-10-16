@@ -65,6 +65,22 @@ class DatasetStoreMixin:
             )
             return dict(row) if row else None
 
+    def find_dataset_by_name_version(
+        self, *, name: str, version: str, actor_id: str | None = None
+    ) -> dict | None:
+        """예제 중복 등록 시 전체 Dataset 목록을 불러오지 않고 바로 조회한다."""
+        owner_filter = " AND owner_actor=:actor_id" if actor_id is not None else ""
+        with self.connection() as db:
+            row = db.execute(
+                text(
+                    "SELECT * FROM datasets WHERE name=:name AND version=:version"
+                    + owner_filter
+                    + " ORDER BY created_at DESC,id DESC LIMIT 1"
+                ),
+                {"name": name, "version": version, "actor_id": actor_id},
+            ).mappings().first()
+        return dict(row) if row else None
+
     def owns_iceberg_table(self, table_name: str, actor_id: str) -> bool:
         """명시적인 기존 Iceberg Dataset 소유권만 테이블 접근 근거로 사용한다."""
         with self.connection() as db:
