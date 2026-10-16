@@ -10,7 +10,7 @@ import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
 import { DatasetQueryPanel } from "./DatasetQueryPanel";
-import type { Dataset, DatasetPage, Preview, Profile, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity, Snapshot } from "./types";
+import type { Dataset, DatasetPage, Preview, Job, JobSummary, JobPage, ExplorationJobSummary, ExplorationJobPage, Example, UploadPolicy, Identity, Snapshot } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
