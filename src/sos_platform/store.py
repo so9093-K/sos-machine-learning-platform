@@ -266,9 +266,12 @@ class Store:
     def instance_display_name(self) -> str:
         """표시 전용 인스턴스명. 제품 브랜드·실행 환경·권한과 독립적이다."""
         with self.connection() as db:
-            return db.execute(
-                text("SELECT value FROM instance_settings WHERE key='display_name'")
-            ).scalar_one_or_none() or "Local Workspace"
+            return (
+                db.execute(
+                    text("SELECT value FROM instance_settings WHERE key='display_name'")
+                ).scalar_one_or_none()
+                or "Local Workspace"
+            )
 
     def set_instance_display_name(
         self, value: str, *, actor_id: str, actor_type: str, request_id: str | None

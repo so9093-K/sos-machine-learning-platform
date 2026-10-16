@@ -41,10 +41,12 @@ def test_instance_display_name_only_admin_can_change(workspace, monkeypatch):
     monkeypatch.setenv("SOS_AUTH_MODE", "token")
     monkeypatch.setenv(
         "SOS_AUTH_TOKEN_HASHES",
-        json.dumps({
-            hashlib.sha256(tokens[name].encode()).hexdigest(): user
-            for name, user in principals.items()
-        }),
+        json.dumps(
+            {
+                hashlib.sha256(tokens[name].encode()).hexdigest(): user
+                for name, user in principals.items()
+            }
+        ),
     )
     with TestClient(create_app(store.home)) as secure:
         for name in ("viewer", "researcher", "operator"):
