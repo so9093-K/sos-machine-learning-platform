@@ -391,3 +391,33 @@ test("sample and full Discovery distinguish NULL groups from whole-dataset aggre
   await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   await expect(job.getByRole("region", { name: "전체 집계 결과" }).getByText("(NULL 그룹)")).toBeVisible();
 });
+
+
+test("late initial Dataset list cannot overwrite successful upload selection", async ({ page }) => {
+  let resolveInitial: () => void = () => {};
+  let initialFetched: () => void = () => {};
+  const gotInitial = new Promise<void>(resolve => { initialFetched = resolve; });
+  const delivery = new Promise<void>(resolve => { resolveInitial = resolve; });
+  let isFirst = true;
+  await page.route("**/api/datasets", async route => {
+    if (isFirst && route.request().method() === "GET") {
+      isFirst = false;
+      const response = await route.fetch(); // 업로드 이전의 오래된 스냅샷
+      initialFetched();
+      await delivery;
+      await route.fulfill({ response });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/");
+  await gotInitial;
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "stale-list.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "stale-list.csv" })).toBeVisible();
+  resolveInitial();
+  await expect(page.getByRole("heading", { name: "stale-list.csv" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "EDA & Profile" })).toBeVisible();
+});
