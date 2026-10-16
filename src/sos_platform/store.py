@@ -13,18 +13,15 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import bindparam, create_engine, text
 
 from .config import Settings
+from .store_administration import AdministrationStoreMixin, now
 from .errors import ERRORS, PlatformError
-
-
-def now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class IcebergCancellationConflict(Exception):
     """외부 Iceberg 커밋의 롤백을 보장할 수 없는 실행 중 취소 요청."""
 
 
-class Store:
+class Store(AdministrationStoreMixin):
     """데이터·작업 이력을 담당하며 실제 연산과 파일 저장은 처리하지 않는다."""
 
     def __init__(self, home: Path, database_url: str | None = None):
@@ -197,136 +194,6 @@ class Store:
             }
             for location in locations
         }
-
-    @staticmethod
-    def _audit(
-        db,
-        *,
-        actor_id: str,
-        actor_type: str,
-        action: str,
-        resource_type: str,
-        resource_id: str | None,
-        decision: str = "allow",
-        outcome: str = "succeeded",
-        reason: str | None = None,
-        request_id: str | None = None,
-    ) -> None:
-        """감사 기록이 실패하면 동일 PostgreSQL 트랜잭션의 변경도 실패한다."""
-        db.execute(
-            text(
-                "INSERT INTO audit_events"
-                "(id,at,actor_id,actor_type,action,resource_type,resource_id,"
-                "decision,outcome,reason,request_id) "
-                "VALUES(:id,:at,:actor_id,:actor_type,:action,:resource_type,"
-                ":resource_id,:decision,:outcome,:reason,:request_id)"
-            ),
-            {
-                "id": str(uuid4()),
-                "at": now(),
-                "actor_id": actor_id,
-                "actor_type": actor_type,
-                "action": action,
-                "resource_type": resource_type,
-                "resource_id": resource_id,
-                "decision": decision,
-                "outcome": outcome,
-                "reason": reason,
-                "request_id": request_id,
-            },
-        )
-
-    def record_audit(
-        self,
-        *,
-        actor_id: str,
-        actor_type: str,
-        action: str,
-        resource_type: str,
-        resource_id: str | None = None,
-        decision: str = "deny",
-        outcome: str = "denied",
-        reason: str | None = None,
-        request_id: str | None = None,
-    ) -> None:
-        with self.connection() as db:
-            self._audit(
-                db,
-                actor_id=actor_id,
-                actor_type=actor_type,
-                action=action,
-                resource_type=resource_type,
-                resource_id=resource_id,
-                decision=decision,
-                outcome=outcome,
-                reason=reason,
-                request_id=request_id,
-            )
-
-    def instance_display_name(self) -> str:
-        """표시 전용 인스턴스명. 제품 브랜드·실행 환경·권한과 독립적이다."""
-        with self.connection() as db:
-            return (
-                db.execute(
-                    text("SELECT value FROM instance_settings WHERE key='display_name'")
-                ).scalar_one_or_none()
-                or "Local Workspace"
-            )
-
-    def set_instance_display_name(
-        self, value: str, *, actor_id: str, actor_type: str, request_id: str | None
-    ) -> None:
-        """이름 변경과 감사 기록을 같은 트랜잭션에 기록한다."""
-        with self.connection() as db:
-            db.execute(
-                text(
-                    "INSERT INTO instance_settings(key,value,updated_at,updated_by) "
-                    "VALUES('display_name',:value,:at,:actor) "
-                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value,"
-                    "updated_at=excluded.updated_at,updated_by=excluded.updated_by"
-                ),
-                {"value": value, "at": now(), "actor": actor_id},
-            )
-            self._audit(
-                db,
-                actor_id=actor_id,
-                actor_type=actor_type,
-                action="instance.configure",
-                resource_type="instance",
-                resource_id="display_name",
-                request_id=request_id,
-            )
-
-    def audit_events(
-        self,
-        *,
-        limit: int = 50,
-        request_id: str | None = None,
-        resource_id: str | None = None,
-    ) -> list[dict]:
-        """운영자만 조회하는 감사 이력을 요청·작업 식별자로 제한한다."""
-        if not 1 <= limit <= 100:
-            raise ValueError("Audit limit out of range")
-        clauses = []
-        params = {"limit": limit}
-        if request_id is not None:
-            clauses.append("request_id=:request_id")
-            params["request_id"] = request_id
-        if resource_id is not None:
-            clauses.append("resource_id=:resource_id")
-            params["resource_id"] = resource_id
-        predicate = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-        with self.connection() as db:
-            return [
-                dict(row)
-                for row in db.execute(
-                    text(
-                        f"SELECT * FROM audit_events {predicate} "
-                        "ORDER BY at DESC,id DESC LIMIT :limit"
-                    ),
-                    params,
-                ).mappings()
-            ]
 
     def begin_snapshot_retention(
         self, *, dataset_id: str, location: str, snapshot_id: str, tag_name: str

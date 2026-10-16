@@ -82,8 +82,8 @@ def test_recovery_audit_failure_rolls_back_state(workspace, monkeypatch):
     assert after == before
 
 
-def test_recovery_reclaims_only_interrupted_attempt_local_artifacts(workspace):
-    """중단된 Attempt와 이전 파일 명명 규칙의 찌꺼기만 제거한다."""
+def test_recovery_reclaims_only_interrupted_attempt_files(workspace):
+    """중단된 Attempt의 로컬 결과만 제거하고 무관한 파일은 보존한다."""
     client, store = workspace
     source = upload(client)
     queued = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
@@ -92,15 +92,14 @@ def test_recovery_reclaims_only_interrupted_attempt_local_artifacts(workspace):
     job_id = queued.json()["id"]
     attempt_id = job["attempts"][-1]["id"]
     paths = attempt_result_paths(store, job_id, attempt_id)
-    legacy = store.home / "results" / f"{job_id}.pending.parquet"
     unrelated = store.home / "results" / "unrelated-file.parquet"
-    for path in (*paths, legacy, unrelated):
+    for path in (*paths, unrelated):
         path.write_bytes(b"transient-local-data")
 
     interrupted = store.recover()
     assert (job_id, attempt_id) in interrupted
     cleanup_recovered_results(store, interrupted)
-    assert all(not path.exists() for path in (*paths, legacy))
+    assert all(not path.exists() for path in paths)
     assert unrelated.read_bytes() == b"transient-local-data"
     unrelated.unlink()
 

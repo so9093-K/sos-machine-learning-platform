@@ -124,9 +124,6 @@ def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) 
     for job_id, attempt_id in interrupted:
         for path in attempt_result_paths(store, job_id, attempt_id):
             path.unlink(missing_ok=True)
-        # 이전 구현에서 Job 단위 이름으로 남긴 파일도 해당 중단 Job에 한해 회수한다.
-        for suffix in (".parquet", ".pending.parquet", ".completed.json"):
-            (store.home / "results" / f"{job_id}{suffix}").unlink(missing_ok=True)
 
 
 def run_once(store: Store) -> bool:
