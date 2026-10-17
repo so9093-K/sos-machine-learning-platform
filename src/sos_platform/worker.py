@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from .cgroup import CgroupIsolation
 from .datasets import (
@@ -162,12 +162,23 @@ def cleanup_orphaned_cgroups_before_recovery(store: Store, isolation: CgroupIsol
     """중단된 자식이 격리 그룹에 남아 있으면 Job 복구를 진행하지 않는다."""
     if isolation.parent is None:
         return
+    # Running 뿐 아니라 DB 확정 직후 부모가 사망한 완료 Attempt의 빈 그룹도 회수한다.
+    # 파일시스템에 실제 남은 그룹만 조회해 Job 이력이 커져도 탐색 비용을 억제한다.
+    existing = isolation.existing_attempt_ids()
+    if not existing:
+        return
+    statement = text("SELECT id FROM attempts WHERE id IN :ids").bindparams(
+        bindparam("ids", expanding=True)
+    )
     with store.connection() as db:
-        attempts = (
-            db.execute(text("SELECT id FROM attempts WHERE status='Running'")).scalars().all()
-        )
-    for attempt_id in attempts:
-        # 아직 프로세스가 속해 있으면 커널 rmdir가 실패해 복구를 중단한다.
+        known = set(db.execute(statement, {"ids": existing}).scalars())
+    if len(known) != len(existing):
+        # 같은 위임 경로의 소유자를 확인할 수 없는 그룹은 임의로 삭제하지 않는다.
+        from .errors import RuntimeConfigurationError
+
+        raise RuntimeConfigurationError("Unknown Worker attempt cgroup requires operator review")
+    for attempt_id in existing:
+        # 자식이 남아 있으면 커널 rmdir가 거부하며 Job 복구도 중단된다.
         isolation.cleanup(attempt_id)
 
 

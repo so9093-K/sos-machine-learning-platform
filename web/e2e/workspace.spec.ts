@@ -69,6 +69,38 @@ test("an expanded Attempt detail catches up with a newer completed Job", async (
   expect(detailRequests).toBeGreaterThanOrEqual(2);
 });
 
+test("failed Attempt detail can be retried without collapsing the Job", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "detail-retry.csv", mimeType: "text/csv", buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "detail-retry.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "탐색" }).click();
+  const jobId = await submittedJob(page, "/api/jobs", () =>
+    page.getByRole("button", { name: /전체 Profile 실행/ }).click());
+  const job = jobById(page, jobId);
+  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
+
+  let unavailable = true;
+  await page.route(`**/api/jobs/${jobId}`, async route => {
+    if (unavailable) {
+      await route.fulfill({
+        status: 503, contentType: "application/json",
+        body: JSON.stringify({ detail: "상세 기록을 가져올 수 없습니다." }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  await job.getByText(/작업 설정 및 실행 시도/).click();
+  await expect(job.getByRole("alert")).toContainText("상세 기록을 가져올 수 없습니다.");
+  unavailable = false;
+  await job.getByRole("button", { name: "상세 다시 시도" }).click();
+  await expect(job.getByText(/Succeeded ·/)).toBeVisible();
+  await expect(job.getByRole("button", { name: "상세 다시 시도" })).toHaveCount(0);
+});
+
+
 test("Iceberg import captures a pinned snapshot", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({

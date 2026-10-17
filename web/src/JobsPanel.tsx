@@ -117,7 +117,11 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
         }}>
           <summary>작업 설정 및 실행 시도 · {job.attempt_count}회</summary>
           <pre>{JSON.stringify(job.spec, null, 2)}</pre>
-          {detailErrors[job.id] && <p role="alert">{detailErrors[job.id]}</p>}
+          {detailErrors[job.id] && <div>
+            <p role="alert">{detailErrors[job.id]}</p>
+            <button type="button" className="secondary"
+              onClick={() => void loadDetails(job.id)}>상세 다시 시도</button>
+          </div>}
           {!detailById[job.id] && !detailErrors[job.id] && <p role="status">상세 이력을 확인하고 있습니다.</p>}
           {detailById[job.id]?.attempts.map(attempt => <p key={attempt.id} className="muted">
             #{attempt.number} {attempt.status} · {attempt.started_at}

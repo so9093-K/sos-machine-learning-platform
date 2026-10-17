@@ -128,6 +128,23 @@ class CgroupIsolation:
             for name, value in (line.split() for line in events.splitlines())
         )
 
+    def existing_attempt_ids(self) -> list[str]:
+        """전용 위임 경로에서 이름이 정확히 일치하는 Attempt cgroup만 찾는다."""
+        if self.parent is None:
+            return []
+        ids = []
+        for path in self._delegated_parent().glob("sos-attempt-*"):
+            if path.is_symlink() or not path.is_dir():
+                continue
+            name = path.name.removeprefix("sos-attempt-")
+            try:
+                attempt_id = UUID(hex=name)
+            except ValueError:
+                continue
+            if path.name == f"sos-attempt-{attempt_id.hex}":
+                ids.append(str(attempt_id))
+        return ids
+
     def cleanup(self, attempt_id: str) -> None:
         """종료된 Attempt가 소유한 빈 cgroup만 회수한다."""
         if self.parent is None:

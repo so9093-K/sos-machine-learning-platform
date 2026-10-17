@@ -31,6 +31,7 @@ def test_orphaned_cgroup_prevents_running_attempt_recovery(workspace, monkeypatc
         seen.append(target_id)
         raise OSError("cgroup still contains a live process")
 
+    monkeypatch.setattr(CgroupIsolation, "existing_attempt_ids", lambda _self: [attempt_id])
     monkeypatch.setattr(CgroupIsolation, "cleanup", busy_attempt)
     with pytest.raises(OSError, match="live process"):
         cleanup_orphaned_cgroups_before_recovery(store, isolation)
@@ -43,6 +44,52 @@ def test_orphaned_cgroup_prevents_running_attempt_recovery(workspace, monkeypatc
     cleanup_orphaned_cgroups_before_recovery(store, isolation)
     assert (running["id"], attempt_id) in store.recover()
     assert store.get_job(running["id"])["status"] == "Queued"
+
+
+def test_restart_reaps_terminal_attempt_cgroup_without_changing_job(workspace, monkeypatch):
+    """DB 성공이 먼저 확정되고 부모가 종료된 뒤에도 빈 격리 그룹을 회수한다."""
+    from sos_platform.cgroup import CgroupIsolation
+    from sos_platform.worker import cleanup_orphaned_cgroups_before_recovery
+
+    client, store = workspace
+    source = upload(client)
+    queued = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    assert queued.status_code == 202
+    claimed = store.claim()
+    attempt_id = claimed["attempts"][-1]["id"]
+    assert store.finish(claimed["id"], "Failed", attempt_id=attempt_id) == "Failed"
+    isolated = CgroupIsolation(parent=store.home, memory_bytes=256 * 1024 * 1024)
+    inspected = []
+    monkeypatch.setattr(CgroupIsolation, "existing_attempt_ids", lambda _self: [attempt_id])
+    monkeypatch.setattr(CgroupIsolation, "cleanup", lambda _self, value: inspected.append(value))
+
+    cleanup_orphaned_cgroups_before_recovery(store, isolated)
+
+    assert inspected == [attempt_id]
+    saved = store.get_job(claimed["id"])
+    assert saved["status"] == "Failed"
+    assert saved["attempts"][-1]["status"] == "Failed"
+    assert store.recover() == []
+
+
+def test_restart_rejects_cgroup_without_matching_attempt(workspace, monkeypatch):
+    """DB가 소유자를 입증하지 못한 격리 그룹은 삭제하거나 무시하지 않는다."""
+    from uuid import uuid4
+
+    from sos_platform.cgroup import CgroupIsolation
+    from sos_platform.errors import RuntimeConfigurationError
+    from sos_platform.worker import cleanup_orphaned_cgroups_before_recovery
+
+    _client, store = workspace
+    orphan = str(uuid4())
+    isolated = CgroupIsolation(parent=store.home, memory_bytes=256 * 1024 * 1024)
+    monkeypatch.setattr(CgroupIsolation, "existing_attempt_ids", lambda _self: [orphan])
+    monkeypatch.setattr(
+        CgroupIsolation, "cleanup", lambda _self, _id: pytest.fail("Unknown group was deleted")
+    )
+
+    with pytest.raises(RuntimeConfigurationError, match="Unknown Worker attempt"):
+        cleanup_orphaned_cgroups_before_recovery(store, isolated)
 
 
 def test_recovery_marks_interrupted_attempt_writes_failed(workspace):

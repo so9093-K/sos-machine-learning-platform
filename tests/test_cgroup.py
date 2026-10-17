@@ -90,6 +90,25 @@ def test_cgroup_probe_child_attachment_limits_and_cleanup(tmp_path, monkeypatch)
         assert not group.exists()
 
 
+def test_existing_attempt_groups_ignore_symlinks_and_unrelated_names(tmp_path, monkeypatch):
+    """위임 경로의 정규 Attempt 디렉터리만 탐지하고 심볼릭 링크를 따르지 않는다."""
+    mount = tmp_path / "cgroup"
+    delegated = mount / "sos"
+    delegated.mkdir(parents=True)
+    (mount / "cgroup.controllers").write_text("memory", encoding="ascii")
+    (delegated / "cgroup.subtree_control").write_text("memory", encoding="ascii")
+    monkeypatch.setattr(cgroup, "CGROUP_MOUNT", mount)
+    attempt = uuid4()
+    (delegated / f"sos-attempt-{attempt.hex}").mkdir()
+    (delegated / "sos-attempt-bad-name").mkdir()
+    (delegated / "sos-other").mkdir()
+    (delegated / f"sos-attempt-{uuid4().hex}").symlink_to(
+        delegated / f"sos-attempt-{attempt.hex}", target_is_directory=True
+    )
+    policy = CgroupIsolation(parent=delegated, memory_bytes=256 * 1024 * 1024)
+    assert policy.existing_attempt_ids() == [str(attempt)]
+
+
 def test_required_cgroup_fails_if_memory_controller_not_enabled(tmp_path, monkeypatch):
     mount = tmp_path / "cgroup"
     delegated = mount / "sos"
