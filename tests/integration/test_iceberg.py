@@ -620,7 +620,10 @@ def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch)
     claim = store.reserve_iceberg_table("partitioned_input", "local-developer")
 
     class ExistingTable:
-        metadata = SimpleNamespace(properties={"sos.write-token": claim["token"]})
+        metadata = SimpleNamespace(
+            properties={"sos.write-token": claim["token"]},
+            table_uuid=uuid4(),
+        )
 
         def spec(self):
             return SimpleNamespace(fields=["part"])
