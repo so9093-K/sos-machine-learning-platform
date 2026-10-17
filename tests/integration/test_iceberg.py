@@ -385,9 +385,7 @@ def test_tag_commit_ack_loss_preserves_uncertain_retention_and_catalog_tag(works
     assert inspect_tag(table, name=retained["tag_name"], snapshot_id=snapshot_id) == "retained"
     checked = client.get("/api/storage/iceberg-references")
     assert checked.status_code == 200
-    unresolved = next(
-        row for row in checked.json() if row["dataset_id"] == retained["dataset_id"]
-    )
+    unresolved = next(row for row in checked.json() if row["dataset_id"] == retained["dataset_id"])
     assert unresolved["status"] == "unknown"
 
 
