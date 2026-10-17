@@ -210,23 +210,30 @@ class DatasetStoreMixin:
                     "ON CONFLICT(table_name) DO NOTHING RETURNING table_name"
                 ),
                 {
-                    "name": name, "actor": owner_actor,
-                    "token": str(uuid4()), "at": now(),
+                    "name": name,
+                    "actor": owner_actor,
+                    "token": str(uuid4()),
+                    "at": now(),
                 },
             ).scalar_one_or_none()
             claim = dict(
                 db.execute(
                     text("SELECT * FROM iceberg_table_owners WHERE table_name=:name"),
                     {"name": name},
-                ).mappings().one()
+                )
+                .mappings()
+                .one()
             )
             if claim["owner_actor"] != owner_actor or claim["state"] != "Adopting":
                 raise PermissionError("Iceberg table has an incompatible write owner")
             if inserted is not None:
                 self._audit(
-                    db, actor_id="local-operator", actor_type="service",
+                    db,
+                    actor_id="local-operator",
+                    actor_type="service",
                     action="iceberg.table.adoption_started",
-                    resource_type="iceberg_table", resource_id=name,
+                    resource_type="iceberg_table",
+                    resource_id=name,
                     reason=f"dataset:{dataset_id}",
                 )
         return claim
@@ -247,9 +254,12 @@ class DatasetStoreMixin:
             if changed.rowcount != 1:
                 raise PermissionError("Iceberg adoption state changed")
             self._audit(
-                db, actor_id="local-operator", actor_type="service",
+                db,
+                actor_id="local-operator",
+                actor_type="service",
                 action="iceberg.table.adoption_completed",
-                resource_type="iceberg_table", resource_id=f"default.{table_name}",
+                resource_type="iceberg_table",
+                resource_id=f"default.{table_name}",
                 reason=f"owner:{owner_actor}",
             )
 

@@ -34,9 +34,14 @@ def inspect_legacy_table(store: Store, table_name: str) -> dict:
     property_token = table.metadata.properties.get("sos.write-token")
     if claim and claim["state"] == "Active" and property_token == claim["token"]:
         state = "active"
-    elif claim and claim["state"] == "Adopting" and property_token in (
-        None,
-        claim["token"],
+    elif (
+        claim
+        and claim["state"] == "Adopting"
+        and property_token
+        in (
+            None,
+            claim["token"],
+        )
     ):
         state = "resume_required"
     elif claim or property_token is not None:
@@ -110,9 +115,7 @@ def adopt_legacy_table(
     if property_token not in (None, claim["token"]):
         raise PermissionError("An unrelated Catalog write owner already exists")
     if property_token is None:
-        table.transaction().set_properties(
-            {"sos.write-token": claim["token"]}
-        ).commit_transaction()
+        table.transaction().set_properties({"sos.write-token": claim["token"]}).commit_transaction()
     # Catalog 응답 유실 시 이 확인이 실행되지 않을 수 있다.
     # 재시행하면 기존 같은 토큰만 허용하며 새 소유권을 만들지 않는다.
     table = catalog.load_table(report["table"])
@@ -141,9 +144,7 @@ def main() -> int:
     try:
         store.initialize()
         if args.apply:
-            if not all((
-                args.owner, args.dataset_id, args.expect_snapshot, args.expect_table_uuid
-            )):
+            if not all((args.owner, args.dataset_id, args.expect_snapshot, args.expect_table_uuid)):
                 parser.error(
                     "--apply requires --owner, --dataset-id, --expect-snapshot and --expect-table-uuid"
                 )

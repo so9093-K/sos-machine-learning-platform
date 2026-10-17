@@ -399,7 +399,6 @@ def test_log_relay_preserves_service_working_directory(monkeypatch, tmp_path):
     assert command[-3:] == ["npm", "run", "dev"]
 
 
-
 def test_iceberg_adoption_cli_rejects_external_database_without_running(monkeypatch, config):
     config["SOS_INFRA_MODE"] = "external"
     monkeypatch.setattr(dev, "configuration", lambda: config)

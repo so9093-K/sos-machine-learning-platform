@@ -12,24 +12,26 @@ from sos_platform.worker import run_once
 def legacy_table(store, name="legacy_sensor"):
     catalog = iceberg_catalog(store)
     catalog.create_namespace_if_not_exists("default")
-    table = catalog.create_table(
-        f"default.{name}", schema=pa.schema([("v", pa.int64())])
-    )
+    table = catalog.create_table(f"default.{name}", schema=pa.schema([("v", pa.int64())]))
     table.append(pa.table({"v": [1, 2, 3]}))
     return catalog.load_table(f"default.{name}")
 
 
 def evidence(store, table, owner="local-developer", name="legacy_sensor"):
     return store.register_dataset(
-        name=name, kind="iceberg",
-        location=f"default.{name}", version=str(table.current_snapshot().snapshot_id),
+        name=name,
+        kind="iceberg",
+        location=f"default.{name}",
+        version=str(table.current_snapshot().snapshot_id),
         owner_actor=owner,
     )
 
 
 def adopt(store, table, source, *, name="legacy_sensor"):
     return adopt_legacy_table(
-        store, table_name=name, owner_actor=source["owner_actor"],
+        store,
+        table_name=name,
+        owner_actor=source["owner_actor"],
         dataset_id=source["id"],
         expected_table_uuid=str(table.metadata.table_uuid),
         expected_snapshot_id=str(table.current_snapshot().snapshot_id),
@@ -45,9 +47,10 @@ def test_legacy_inspect_is_read_only_then_explicit_adoption_restores_append(work
     assert report["owner_candidate"] == "local-developer"
     assert report["dataset_references"] == 1
     assert store.iceberg_write_claim("legacy_sensor") is None
-    assert "sos.write-token" not in iceberg_catalog(store).load_table(
-        "default.legacy_sensor"
-    ).metadata.properties
+    assert (
+        "sos.write-token"
+        not in iceberg_catalog(store).load_table("default.legacy_sensor").metadata.properties
+    )
     uploaded = client.post(
         "/api/datasets/files",
         files={"file": ("extra.csv", b"v\n4\n", "text/csv")},
@@ -84,7 +87,8 @@ def test_legacy_inspect_is_read_only_then_explicit_adoption_restores_append(work
             ).scalars()
         )
     assert set(events) == {
-        "iceberg.table.adoption_started", "iceberg.table.adoption_completed",
+        "iceberg.table.adoption_started",
+        "iceberg.table.adoption_completed",
     }
 
 
@@ -95,13 +99,18 @@ def test_adoption_rejects_ambiguous_missing_and_stale_identity(workspace):
     wrong_uuid = str(__import__("uuid").uuid4())
     with pytest.raises(PermissionError, match="identity"):
         adopt_legacy_table(
-            store, table_name="legacy_sensor", owner_actor="local-developer",
-            dataset_id=source["id"], expected_table_uuid=wrong_uuid,
+            store,
+            table_name="legacy_sensor",
+            owner_actor="local-developer",
+            dataset_id=source["id"],
+            expected_table_uuid=wrong_uuid,
             expected_snapshot_id=str(table.current_snapshot().snapshot_id),
         )
     with pytest.raises(PermissionError, match="identity"):
         adopt_legacy_table(
-            store, table_name="legacy_sensor", owner_actor="local-developer",
+            store,
+            table_name="legacy_sensor",
+            owner_actor="local-developer",
             dataset_id=source["id"],
             expected_table_uuid=str(table.metadata.table_uuid),
             expected_snapshot_id="999999999",

@@ -736,8 +736,14 @@ def main():
             if not args.table:
                 raise StartupError("SOS-ICEBERG-OWNER-001", "--table을 지정하세요.")
             command = [
-                "uv", "run", "--locked", "python", "-m",
-                "sos_platform.iceberg_ownership", "--table", args.table,
+                "uv",
+                "run",
+                "--locked",
+                "python",
+                "-m",
+                "sos_platform.iceberg_ownership",
+                "--table",
+                args.table,
             ]
             for flag, value in (
                 ("--owner", args.owner),
