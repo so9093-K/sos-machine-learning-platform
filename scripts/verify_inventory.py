@@ -147,7 +147,9 @@ def load_registry(path: Path) -> list[dict]:
         if not isinstance(contract, dict):
             raise ValueError("보호 계약 형식 오류")
         identifier = contract.get("id")
-        if not isinstance(identifier, str) or not re.fullmatch(r"[A-Z0-9]+(?:-[A-Z0-9]+)+", identifier):
+        if not isinstance(identifier, str) or not re.fullmatch(
+            r"[A-Z0-9]+(?:-[A-Z0-9]+)+", identifier
+        ):
             raise ValueError("안정적인 Contract ID가 필요합니다.")
         if identifier in seen:
             raise ValueError(f"중복 Contract ID: {identifier}")
@@ -194,8 +196,10 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
                         break
             links.sort()
             risk = (
-                max((contract["risk"] for contract in registry if contract["id"] in links),
-                    key=RISKS.index)
+                max(
+                    (contract["risk"] for contract in registry if contract["id"] in links),
+                    key=RISKS.index,
+                )
                 if links
                 else "review_required"
             )
@@ -224,7 +228,9 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
 def collect() -> dict[str, list[str]]:
     """Native Runner의 실제 수집 출력을 정본으로 반환한다."""
     return {
-        "pytest": python_ids(command(["uv", "run", "--locked", "pytest", "--collect-only", "-q"], ROOT)),
+        "pytest": python_ids(
+            command(["uv", "run", "--locked", "pytest", "--collect-only", "-q"], ROOT)
+        ),
         "vitest": vitest_ids(
             json.loads(command(["npx", "vitest", "list", "src", "--json"], ROOT / "web"))
         ),
@@ -287,16 +293,16 @@ def reconcile(inventory: dict, reports: dict[str, list[Path]]) -> dict[str, int]
 def audit_removed(before: dict, after: dict) -> list[dict]:
     """이전 Inventory에서 사라진 Test ID와 보호 계약을 리뷰 근거로 추출한다."""
     previous = {
-        (row["runner"], stable_key(row["runner"], row["test_id"])): row
-        for row in before["tests"]
+        (row["runner"], stable_key(row["runner"], row["test_id"])): row for row in before["tests"]
     }
-    current = {
-        (row["runner"], stable_key(row["runner"], row["test_id"]))
-        for row in after["tests"]
-    }
+    current = {(row["runner"], stable_key(row["runner"], row["test_id"])) for row in after["tests"]}
     return [
-        {"runner": row["runner"], "source_path": row["source_path"],
-         "contract_ids": row.get("contract_ids", []), "risk": row.get("risk", "review_required")}
+        {
+            "runner": row["runner"],
+            "source_path": row.get("source_path") or source_path(row["runner"], row["test_id"]),
+            "contract_ids": row.get("contract_ids", []),
+            "risk": row.get("risk", "review_required"),
+        }
         for key, row in sorted(previous.items())
         if key not in current
     ]
@@ -317,8 +323,11 @@ def main(argv: list[str] | None = None) -> int:
     diff.add_argument("--before", type=Path, required=True)
     diff.add_argument("--after", type=Path, required=True)
     # 이전 인터페이스 유지: '--output path'만 전달해도 generate 동작
+    effective_argv = sys.argv[1:] if argv is None else argv
     args = parser.parse_args(
-        ["generate", *argv] if argv and argv[0].startswith("--") else argv
+        ["generate", *effective_argv]
+        if effective_argv and effective_argv[0].startswith("--")
+        else effective_argv
     )
     try:
         if args.action == "generate":
@@ -355,7 +364,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 2
     except (OSError, ValueError, KeyError, ET.ParseError, subprocess.CalledProcessError) as exc:
-        print(f"테스트 수명주기 검증 실패: {exc.__class__.__name__}: {str(exc)[:160]}", file=sys.stderr)
+        print(
+            f"테스트 수명주기 검증 실패: {exc.__class__.__name__}: {str(exc)[:160]}",
+            file=sys.stderr,
+        )
         return 1
 
 

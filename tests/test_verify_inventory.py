@@ -1,7 +1,6 @@
 """Native 수집·보호 계약·JUnit 증거의 실패 경로를 검사한다."""
 
 import importlib.util
-import json
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -85,8 +84,11 @@ def test_registry_maps_only_intended_contract_risk():
 def test_contract_selector_not_collected_is_error():
     with pytest.raises(ValueError, match="선택자 미수집"):
         inventory.classify(
-            {"pytest": ["tests/test_a.py::test_one"], "vitest": ["src/a.test.ts::a"],
-             "playwright": ["web/e2e/workspace.spec.ts::other"]},
+            {
+                "pytest": ["tests/test_a.py::test_one"],
+                "vitest": ["src/a.test.ts::a"],
+                "playwright": ["web/e2e/workspace.spec.ts::other"],
+            },
             sample_registry(),
         )
 
@@ -123,7 +125,9 @@ def test_junit_reconcile_recovers_all_playwright_cases(tmp_path):
         cases[runner] = [report]
         records.append({"runner": runner, "test_id": identifier})
     assert inventory.reconcile({"schema_version": 1, "tests": records}, cases) == {
-        "pytest": 1, "vitest": 1, "playwright": 1
+        "pytest": 1,
+        "vitest": 1,
+        "playwright": 1,
     }
     records.pop()
     with pytest.raises(ValueError, match="불일치"):
@@ -131,9 +135,17 @@ def test_junit_reconcile_recovers_all_playwright_cases(tmp_path):
 
 
 def test_retirement_diff_blocks_removed_high_risk():
-    before = {"tests": [{"runner": "pytest", "test_id": "tests/test_a.py::test_one",
-                         "source_path": "tests/test_a.py", "risk": "high",
-                         "contract_ids": ["DATASET-REGISTER-201"]}]}
+    before = {
+        "tests": [
+            {
+                "runner": "pytest",
+                "test_id": "tests/test_a.py::test_one",
+                "source_path": "tests/test_a.py",
+                "risk": "high",
+                "contract_ids": ["DATASET-REGISTER-201"],
+            }
+        ]
+    }
     after = {"tests": []}
     assert inventory.audit_removed(before, after)[0]["risk"] == "high"
 
