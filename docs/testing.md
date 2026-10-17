@@ -82,7 +82,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 - python-quality: 위 세 작업이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
 - 오래된 PR HEAD만 취소하고 main 검증 결과는 각 실행 ID별로 보존한다.
 - 정기(매일 새벽)·수동 실행에서는 핵심 Iceberg/Job 모듈을 순서를 바꿔 두 번 반복해 격리·재현성을 점검한다. 실패는 일반 CI 실패로 남으며 Retry에 의해 무시되지 않는다.
-- 현재 사용자가 없는 사전 출시 단계에서 명시적으로 제거한 API는 `scripts/approved_pre_release_api_breaks.json`에 진단 문자열로 기록한다. 그 밖의 Breaking 변경은 기존 검사가 차단한다. 예외는 PR Base SHA가 `143caccd`인 경우에만 적용되며, 이후 PR은 자동으로 엄격한 검사를 사용한다. 정식 지원 계약이 확정되면 승인 목록을 제거하고 엄격한 검사를 유지한다.
+- 현재 사용자가 없는 사전 출시 단계에서 명시적으로 제거한 API는 `scripts/approved_pre_release_api_breaks.json`에 진단 문자열로 기록한다. 그 밖의 Breaking 변경은 기존 검사가 차단한다. 예외는 PR 번호가 `14`이고 Base SHA가 `143caccd`인 경우에만 적용되며, 같은 Base SHA를 대상으로 하는 다른 PR도 엄격한 검사를 사용한다. 정식 지원 계약이 확정되면 승인 목록을 제거하고 엄격한 검사를 유지한다.
 - API 호환성 검사는 이전 base 코드(의존성 잠금 변경 시 base 자체 환경)와 현재 코드에서 각각 생성한 OpenAPI를 비교한다. 요청과 응답의 호환성 방향을 분리하고 Nullable/배열/$ref를 검사한다. 보수적 가드이지 완전한 JSON Schema 판정기는 아니다.
 
 ## 실패 진단과 안정성 유지
