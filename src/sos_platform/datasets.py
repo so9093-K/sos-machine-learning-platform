@@ -207,9 +207,7 @@ def import_to_iceberg(
     catalog = iceberg_catalog(store)
     catalog.create_namespace_if_not_exists("default")
     ident = f"default.{table_name}"
-    table, claim = reserve_iceberg_write_target(
-        store, table_name, owner_actor, catalog=catalog
-    )
+    table, claim = reserve_iceberg_write_target(store, table_name, owner_actor, catalog=catalog)
     # Partitioned append는 Reader 기반 쓰기가 지원되지 않으므로
     # 이전 호환 경로의 제한을 먼저 검증해 불필요한 대형 스테이징을 피한다.
     if table is not None and table.spec().fields:

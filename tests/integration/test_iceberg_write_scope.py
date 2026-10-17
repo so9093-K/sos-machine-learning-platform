@@ -20,7 +20,9 @@ def test_iceberg_append_requires_actual_table_owner(workspace, monkeypatch):
         json.dumps(
             {
                 hashlib.sha256(value.encode()).hexdigest(): {
-                    "actor_id": name, "kind": "human", "roles": ["researcher"]
+                    "actor_id": name,
+                    "kind": "human",
+                    "roles": ["researcher"],
                 }
                 for name, value in tokens.items()
             }
@@ -71,7 +73,9 @@ def test_iceberg_append_requires_actual_table_owner(workspace, monkeypatch):
             version=str(table.current_snapshot().snapshot_id),
             owner_actor="bob",
         )
-        assert api.get("/api/iceberg/alice_table/snapshots", headers=headers("bob")).status_code == 200
+        assert (
+            api.get("/api/iceberg/alice_table/snapshots", headers=headers("bob")).status_code == 200
+        )
         denied = api.post(
             "/api/iceberg/import",
             json={"dataset_id": bob_id, "table_name": "alice_table"},

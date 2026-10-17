@@ -208,4 +208,3 @@ def test_realistic_query_maximum_narrowing_is_breaking():
         {"in": "query", "name": "limit", "schema": {"type": "integer", "maximum": 10}}
     ]
     assert any("upper bound" in x for x in compat.breaking_changes(before, after))
-
