@@ -115,7 +115,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 
 ## 검증 실행 경계
 
-`scripts/verify.py list`와 `scripts/verify.py run <suite> --output-dir <경로>`는 로컬과 CI가 공통으로 호출하는 인터페이스다. PR 기준 API 호환성 검사에는 `--base-ref`를 지정한다. `make check-fast`는 인프라 없이, `make check`는 필요한 인프라를 준비한 상태에서 전체 검증을 수행한다.
+`scripts/verify.py`의 `list`, `run <suite> --output-dir <경로>`, `inventory --output <경로>`, `reconcile --inventory <경로> --pytest-report ... --vitest-report ... --playwright-report ...`는 로컬과 CI가 공통으로 호출하는 인터페이스다. PR 기준 API 호환성 검사에는 `--base-ref`를 지정한다. `make check-fast`는 인프라 없이, `make check`는 필요한 인프라를 준비한 상태에서 전체 검증을 수행한다.
 
 공통 검증 메커니즘은 Native Runner 실행 결과·JUnit·Manifest/Summary·누락 또는 미실행 판정을 담당한다. Runner별 수집 명령·실행 경로·테스트 출처 경로는 `scripts/inventory_scope.json`에서 관리하고, 실제 SOS 도메인 시나리오는 기존 테스트와 격리 실행기가 소유한다. 다른 프로젝트에서는 Runner 설정과 Suite 구성, 보호 계약만 변경하도록 경계를 유지한다. 범용 테스트 프레임워크나 별도 서비스는 만들지 않는다.
 

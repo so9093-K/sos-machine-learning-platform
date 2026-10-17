@@ -249,6 +249,10 @@ def main(argv: list[str] | None = None) -> int:
     inventory = commands_parser.add_parser("inventory")
     inventory.add_argument("--output", type=Path, required=True)
     inventory.add_argument("--registry", type=Path)
+    reconcile = commands_parser.add_parser("reconcile")
+    reconcile.add_argument("--inventory", type=Path, required=True)
+    for runner in ("pytest", "vitest", "playwright"):
+        reconcile.add_argument(f"--{runner}-report", type=Path, action="append", required=True)
     run = commands_parser.add_parser("run")
     run.add_argument("suite", choices=sorted(SUITES))
     run.add_argument("--output-dir", type=Path)
@@ -273,6 +277,18 @@ def main(argv: list[str] | None = None) -> int:
         ]
         if args.registry is not None:
             command += ["--registry", str(args.registry)]
+        return subprocess.run(command, cwd=ROOT, check=False).returncode
+    if args.action == "reconcile":
+        command = [
+            "python3",
+            "scripts/verify_inventory.py",
+            "reconcile",
+            "--inventory",
+            str(args.inventory),
+        ]
+        for runner in ("pytest", "vitest", "playwright"):
+            for report in getattr(args, f"{runner}_report"):
+                command += [f"--{runner}-report", str(report)]
         return subprocess.run(command, cwd=ROOT, check=False).returncode
     output = args.output_dir or default_output()
     status, outcome = execute(args.suite, output, base_ref=args.base_ref)
