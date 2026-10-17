@@ -97,7 +97,7 @@ signal.pause()
 
         child.kill()
         assert child.wait(timeout=10) == -signal.SIGKILL
-        assert owned_record(runtime, instance) is not None
+        assert isolated.owned_record(runtime, instance) is not None
         # SIGKILL 이후에도 Compose 서비스와 데이터 볼륨은 그대로 남아 있어야 한다.
         assert set(
             docker([*compose_args, "ps", "--services", "--status", "running"], env).splitlines()
