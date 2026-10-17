@@ -32,11 +32,17 @@ def inspect_legacy_table(store: Store, table_name: str) -> dict:
     evidence = store.iceberg_ownership_evidence(table_name)
     claim = store.iceberg_write_claim(table_name)
     property_token = table.metadata.properties.get("sos.write-token")
-    if claim and claim["state"] == "Active" and property_token == claim["token"]:
+    if (
+        claim
+        and claim["state"] == "Active"
+        and claim["table_uuid"] == str(table.metadata.table_uuid)
+        and property_token == claim["token"]
+    ):
         state = "active"
     elif (
         claim
         and claim["state"] == "Adopting"
+        and claim["table_uuid"] == str(table.metadata.table_uuid)
         and property_token
         in (
             None,
@@ -100,7 +106,9 @@ def adopt_legacy_table(
     table = catalog.load_table(report["table"])
     if dataset["version"] not in {str(s.snapshot_id) for s in table.snapshots()}:
         raise PermissionError("Selected Dataset snapshot no longer exists")
-    claim = store.begin_legacy_iceberg_adoption(table_name, owner_actor, dataset_id)
+    claim = store.begin_legacy_iceberg_adoption(
+        table_name, owner_actor, dataset_id, expected_table_uuid
+    )
     # API/Worker는 token 없는 기존 테이블에는 쓰지 못한다.
     # 예약 이후에도 테이블이 교체되거나 Snapshot이 진행됐다면 자동 재시도하지 않는다.
     table = catalog.load_table(report["table"])
@@ -127,7 +135,9 @@ def adopt_legacy_table(
         or str(current.snapshot_id) != expected_snapshot_id
     ):
         raise PermissionError("Catalog adoption has an uncertain outcome; inspect again")
-    store.complete_legacy_iceberg_adoption(table_name, owner_actor, claim["token"])
+    store.complete_legacy_iceberg_adoption(
+        table_name, owner_actor, claim["token"], expected_table_uuid
+    )
     return inspect_legacy_table(store, table_name)
 
 

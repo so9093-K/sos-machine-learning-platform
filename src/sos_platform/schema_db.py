@@ -35,6 +35,8 @@ iceberg_table_owners = Table(
     Column("table_name", Text, primary_key=True),
     Column("owner_actor", Text, nullable=False),
     Column("token", String(36), nullable=False),
+    Column("table_uuid", String(36)),
+    Column("adoption_dataset_id", String(36)),
     Column("state", String(16), nullable=False),
     Column("created_at", Text, nullable=False),
 )

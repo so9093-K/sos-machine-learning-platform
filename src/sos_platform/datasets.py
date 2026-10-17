@@ -183,11 +183,14 @@ def reserve_iceberg_write_target(
         if (
             claim is None
             or claim["owner_actor"] != owner_actor
-            or claim["state"] == "Adopting"
+            or claim["state"] != "Active"
+            or claim["table_uuid"] != str(table.metadata.table_uuid)
             or table.metadata.properties.get("sos.write-token") != claim["token"]
         ):
             raise PermissionError("Iceberg table write access denied")
-        store.activate_iceberg_table(table_name, owner_actor, claim["token"])
+        store.activate_iceberg_table(
+            table_name, owner_actor, claim["token"], str(table.metadata.table_uuid)
+        )
     else:
         claim = store.reserve_iceberg_table(table_name, owner_actor)
         if claim["state"] != "Reserved":
@@ -234,7 +237,9 @@ def import_to_iceberg(
                         schema=parquet.schema_arrow,
                         properties={"sos.write-token": claim["token"]},
                     )
-                    store.activate_iceberg_table(table_name, owner_actor, claim["token"])
+                    store.activate_iceberg_table(
+                        table_name, owner_actor, claim["token"], str(table.metadata.table_uuid)
+                    )
                 reader = pa.RecordBatchReader.from_batches(
                     parquet.schema_arrow, parquet.iter_batches(batch_size=65_536)
                 )

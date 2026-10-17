@@ -136,18 +136,27 @@ class DatasetStoreMixin:
                 raise PermissionError("Iceberg table write access denied")
         return dict(claim)
 
-    def activate_iceberg_table(self, table_name: str, actor_id: str, token: str) -> None:
-        """Catalog의 동일 소유 토큰을 확인한 테이블만 Active로 확정한다."""
+    def activate_iceberg_table(
+        self, table_name: str, actor_id: str, token: str, table_uuid: str
+    ) -> None:
+        """Catalog의 토큰과 물리 Table UUID를 묶어 같은 테이블만 활성화한다."""
         with self.connection() as db:
             changed = db.execute(
                 text(
-                    "UPDATE iceberg_table_owners SET state='Active' "
-                    "WHERE table_name=:name AND owner_actor=:actor AND token=:token"
+                    "UPDATE iceberg_table_owners SET state='Active',table_uuid=:uuid "
+                    "WHERE table_name=:name AND owner_actor=:actor AND token=:token "
+                    "AND ((state='Reserved' AND (table_uuid IS NULL OR table_uuid=:uuid)) "
+                    "OR (state='Active' AND table_uuid=:uuid))"
                 ),
-                {"name": f"default.{table_name}", "actor": actor_id, "token": token},
+                {
+                    "name": f"default.{table_name}",
+                    "actor": actor_id,
+                    "token": token,
+                    "uuid": table_uuid,
+                },
             )
             if changed.rowcount != 1:
-                raise PermissionError("Iceberg table ownership changed")
+                raise PermissionError("Iceberg table identity or ownership changed")
 
     def iceberg_ownership_evidence(self, table_name: str) -> dict:
         """기존 Snapshot 참조가 한 Actor만 가리키는지 집계한다."""
@@ -168,7 +177,7 @@ class DatasetStoreMixin:
             )
 
     def begin_legacy_iceberg_adoption(
-        self, table_name: str, owner_actor: str, dataset_id: str
+        self, table_name: str, owner_actor: str, dataset_id: str, table_uuid: str
     ) -> dict:
         """기존 Catalog 쓰기 소유권 전환을 명시적으로만 원자 예약한다."""
         name = f"default.{table_name}"
@@ -205,14 +214,17 @@ class DatasetStoreMixin:
             inserted = db.execute(
                 text(
                     "INSERT INTO iceberg_table_owners"
-                    "(table_name,owner_actor,token,state,created_at) "
-                    "VALUES(:name,:actor,:token,'Adopting',:at) "
+                    "(table_name,owner_actor,token,table_uuid,adoption_dataset_id,"
+                    "state,created_at) "
+                    "VALUES(:name,:actor,:token,:uuid,:dataset,'Adopting',:at) "
                     "ON CONFLICT(table_name) DO NOTHING RETURNING table_name"
                 ),
                 {
                     "name": name,
                     "actor": owner_actor,
                     "token": str(uuid4()),
+                    "uuid": table_uuid,
+                    "dataset": dataset_id,
                     "at": now(),
                 },
             ).scalar_one_or_none()
@@ -224,8 +236,13 @@ class DatasetStoreMixin:
                 .mappings()
                 .one()
             )
-            if claim["owner_actor"] != owner_actor or claim["state"] != "Adopting":
-                raise PermissionError("Iceberg table has an incompatible write owner")
+            if (
+                claim["owner_actor"] != owner_actor
+                or claim["state"] != "Adopting"
+                or claim["table_uuid"] != table_uuid
+                or claim["adoption_dataset_id"] != dataset_id
+            ):
+                raise PermissionError("Iceberg adoption evidence or identity changed")
             if inserted is not None:
                 self._audit(
                     db,
@@ -239,7 +256,7 @@ class DatasetStoreMixin:
         return claim
 
     def complete_legacy_iceberg_adoption(
-        self, table_name: str, owner_actor: str, token: str
+        self, table_name: str, owner_actor: str, token: str, table_uuid: str
     ) -> None:
         """외부 Catalog 확인 이후 DB·감사를 같은 트랜잭션에서 확정한다."""
         with self.connection() as db:
@@ -247,9 +264,14 @@ class DatasetStoreMixin:
                 text(
                     "UPDATE iceberg_table_owners SET state='Active' "
                     "WHERE table_name=:name AND owner_actor=:actor "
-                    "AND token=:token AND state='Adopting'"
+                    "AND token=:token AND table_uuid=:uuid AND state='Adopting'"
                 ),
-                {"name": f"default.{table_name}", "actor": owner_actor, "token": token},
+                {
+                    "name": f"default.{table_name}",
+                    "actor": owner_actor,
+                    "token": token,
+                    "uuid": table_uuid,
+                },
             )
             if changed.rowcount != 1:
                 raise PermissionError("Iceberg adoption state changed")
