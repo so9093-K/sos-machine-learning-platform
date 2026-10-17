@@ -149,6 +149,110 @@ class DatasetStoreMixin:
             if changed.rowcount != 1:
                 raise PermissionError("Iceberg table ownership changed")
 
+    def iceberg_ownership_evidence(self, table_name: str) -> dict:
+        """기존 Snapshot 참조가 한 Actor만 가리키는지 집계한다."""
+        with self.connection() as db:
+            return dict(
+                db.execute(
+                    text(
+                        "SELECT COUNT(*) AS total, "
+                        "COUNT(*) FILTER (WHERE owner_actor IS NULL) AS anonymous, "
+                        "COUNT(DISTINCT owner_actor) AS owners, "
+                        "MIN(owner_actor) AS candidate "
+                        "FROM datasets WHERE kind='iceberg' AND location=:name"
+                    ),
+                    {"name": f"default.{table_name}"},
+                )
+                .mappings()
+                .one()
+            )
+
+    def begin_legacy_iceberg_adoption(
+        self, table_name: str, owner_actor: str, dataset_id: str
+    ) -> dict:
+        """기존 Catalog 쓰기 소유권 전환을 명시적으로만 원자 예약한다."""
+        name = f"default.{table_name}"
+        with self.connection() as db:
+            evidence = (
+                db.execute(
+                    text(
+                        "SELECT COUNT(*) AS total, "
+                        "COUNT(*) FILTER (WHERE owner_actor IS NULL) AS anonymous, "
+                        "COUNT(DISTINCT owner_actor) AS owners, "
+                        "MIN(owner_actor) AS candidate "
+                        "FROM datasets WHERE kind='iceberg' AND location=:name"
+                    ),
+                    {"name": name},
+                )
+                .mappings()
+                .one()
+            )
+            source = db.execute(
+                text(
+                    "SELECT id FROM datasets WHERE id=:id AND kind='iceberg' "
+                    "AND location=:name AND owner_actor=:actor"
+                ),
+                {"id": dataset_id, "name": name, "actor": owner_actor},
+            ).scalar_one_or_none()
+            if (
+                source is None
+                or evidence["total"] == 0
+                or evidence["anonymous"] != 0
+                or evidence["owners"] != 1
+                or evidence["candidate"] != owner_actor
+            ):
+                raise PermissionError("Unambiguous legacy ownership evidence required")
+            inserted = db.execute(
+                text(
+                    "INSERT INTO iceberg_table_owners"
+                    "(table_name,owner_actor,token,state,created_at) "
+                    "VALUES(:name,:actor,:token,'Adopting',:at) "
+                    "ON CONFLICT(table_name) DO NOTHING RETURNING table_name"
+                ),
+                {
+                    "name": name, "actor": owner_actor,
+                    "token": str(uuid4()), "at": now(),
+                },
+            ).scalar_one_or_none()
+            claim = dict(
+                db.execute(
+                    text("SELECT * FROM iceberg_table_owners WHERE table_name=:name"),
+                    {"name": name},
+                ).mappings().one()
+            )
+            if claim["owner_actor"] != owner_actor or claim["state"] != "Adopting":
+                raise PermissionError("Iceberg table has an incompatible write owner")
+            if inserted is not None:
+                self._audit(
+                    db, actor_id="local-operator", actor_type="service",
+                    action="iceberg.table.adoption_started",
+                    resource_type="iceberg_table", resource_id=name,
+                    reason=f"dataset:{dataset_id}",
+                )
+        return claim
+
+    def complete_legacy_iceberg_adoption(
+        self, table_name: str, owner_actor: str, token: str
+    ) -> None:
+        """외부 Catalog 확인 이후 DB·감사를 같은 트랜잭션에서 확정한다."""
+        with self.connection() as db:
+            changed = db.execute(
+                text(
+                    "UPDATE iceberg_table_owners SET state='Active' "
+                    "WHERE table_name=:name AND owner_actor=:actor "
+                    "AND token=:token AND state='Adopting'"
+                ),
+                {"name": f"default.{table_name}", "actor": owner_actor, "token": token},
+            )
+            if changed.rowcount != 1:
+                raise PermissionError("Iceberg adoption state changed")
+            self._audit(
+                db, actor_id="local-operator", actor_type="service",
+                action="iceberg.table.adoption_completed",
+                resource_type="iceberg_table", resource_id=f"default.{table_name}",
+                reason=f"owner:{owner_actor}",
+            )
+
     def dataset_page(
         self, *, limit: int, before: dict | None = None, actor_id: str | None = None
     ) -> list[dict]:
