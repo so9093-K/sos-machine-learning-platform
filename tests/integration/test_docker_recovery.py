@@ -8,8 +8,6 @@ import subprocess
 import sys
 import time
 
-from pathlib import Path
-
 from scripts.run_isolated_e2e import (
     ROOT,
     RUNS,
