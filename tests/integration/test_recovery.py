@@ -13,6 +13,38 @@ from sos_platform.worker import (
 from .support import upload
 
 
+def test_orphaned_cgroup_prevents_running_attempt_recovery(workspace, monkeypatch):
+    """이전 자식이 격리 그룹에 남으면 Job 재실행 전에 복구 자체를 차단한다."""
+    from sos_platform.cgroup import CgroupIsolation
+    from sos_platform.worker import cleanup_orphaned_cgroups_before_recovery
+
+    client, store = workspace
+    source = upload(client)
+    queued = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    assert queued.status_code == 202
+    running = store.claim()
+    attempt_id = running["attempts"][-1]["id"]
+    isolation = CgroupIsolation(parent=store.home, memory_bytes=256 * 1024 * 1024)
+    seen = []
+
+    def busy_attempt(_self, target_id):
+        seen.append(target_id)
+        raise OSError("cgroup still contains a live process")
+
+    monkeypatch.setattr(CgroupIsolation, "cleanup", busy_attempt)
+    with pytest.raises(OSError, match="live process"):
+        cleanup_orphaned_cgroups_before_recovery(store, isolation)
+    assert seen == [attempt_id]
+    unchanged = store.get_job(running["id"])
+    assert unchanged["status"] == "Running"
+    assert unchanged["attempts"][-1]["status"] == "Running"
+
+    monkeypatch.setattr(CgroupIsolation, "cleanup", lambda _self, _id: None)
+    cleanup_orphaned_cgroups_before_recovery(store, isolation)
+    assert (running["id"], attempt_id) in store.recover()
+    assert store.get_job(running["id"])["status"] == "Queued"
+
+
 def test_recovery_marks_interrupted_attempt_writes_failed(workspace):
     """중단된 Attempt의 Pending 기록은 재시도와 구별되는 실패 기록으로 유지한다."""
     client, store = workspace

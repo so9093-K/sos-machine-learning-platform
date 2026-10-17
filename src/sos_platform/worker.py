@@ -15,6 +15,8 @@ import sys
 import time
 from pathlib import Path
 
+from sqlalchemy import text
+
 from .cgroup import CgroupIsolation
 from .datasets import (
     cleanup_iceberg_staging,
@@ -154,6 +156,19 @@ def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) 
     for job_id, attempt_id in interrupted:
         for path in attempt_result_paths(store, job_id, attempt_id):
             path.unlink(missing_ok=True)
+
+
+def cleanup_orphaned_cgroups_before_recovery(store: Store, isolation: CgroupIsolation) -> None:
+    """중단된 자식이 격리 그룹에 남아 있으면 Job 복구를 진행하지 않는다."""
+    if isolation.parent is None:
+        return
+    with store.connection() as db:
+        attempts = db.execute(
+            text("SELECT id FROM attempts WHERE status='Running'")
+        ).scalars().all()
+    for attempt_id in attempts:
+        # 아직 프로세스가 속해 있으면 커널 rmdir가 실패해 복구를 중단한다.
+        isolation.cleanup(attempt_id)
 
 
 def run_once(store: Store) -> bool:
@@ -409,6 +424,9 @@ def main():
 
     previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
     try:
+        isolation = CgroupIsolation.from_env(ExecutionBudget.from_env().max_rss_mib)
+        isolation.validate_before_claim()
+        cleanup_orphaned_cgroups_before_recovery(store, isolation)
         interrupted = store.recover()
         # 단일 Worker 잠금 아래에서는 이전 실행의 자식이 남아 있지 않다.
         cleanup_recovered_results(store, interrupted)

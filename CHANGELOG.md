@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Linux cgroup v2의 위임된 `memory` 컨트롤러를 사용한 Worker 자식 메모리 격리 필수 모드(`SOS_WORKER_CGROUP_MODE=required`)를 추가했습니다. 사전 설정·쓰기 검사에 실패하면 Job을 Claim하지 않으며, 자식마다 `memory.max`·스왑 차단·OOM 그룹 종료를 설정합니다. 기본 모드는 `off`이며 CPU·디스크 격리나 다중 노드 자원 배치를 보장하지 않습니다.
+- Linux cgroup v2의 위임된 `memory` 컨트롤러를 사용한 Worker 자식 메모리 격리 필수 모드(`SOS_WORKER_CGROUP_MODE=required`)를 추가했습니다. 사전 설정·쓰기 검사에 실패하면 Job을 Claim하지 않으며, 자식마다 `memory.max`·스왑 차단·OOM 그룹 종료를 설정합니다. Worker 재시작 시 이전 Attempt cgroup이 비어 있지 않으면 Job 복구를 거부합니다. 기본 모드는 `off`이며 CPU·디스크 격리나 다중 노드 자원 배치를 보장하지 않습니다.
 
 - Iceberg 실행 중 Attempt별 임시 디스크 사용량 관측에 하위 디렉터리의 정규 파일과 Spill 파일을 포함하고, 다른 Attempt 및 symlink 대상은 제외합니다. 폴링 감시이며 실제 파일시스템 쿼터를 제공하지는 않습니다.
 
