@@ -170,7 +170,9 @@ def load_registry(path: Path) -> list[dict]:
         selected = set()
         for selector in selectors:
             if not isinstance(selector, dict) or set(selector) != {
-                "runner", "path_glob", "title_glob"
+                "runner",
+                "path_glob",
+                "title_glob",
             }:
                 raise ValueError(f"보호 계약 선택자 필드 오류: {identifier}")
             runner = selector["runner"]

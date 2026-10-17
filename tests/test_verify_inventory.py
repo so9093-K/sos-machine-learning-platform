@@ -104,11 +104,13 @@ def test_protected_selector_requires_precise_test_name(tmp_path):
             selector["title_glob"] = title
         data = {
             "schema_version": 1,
-            "protected_contracts": [{
-                "id": "SCOPE-001",
-                "reason": "보호 대상 식별",
-                "selectors": [selector],
-            }],
+            "protected_contracts": [
+                {
+                    "id": "SCOPE-001",
+                    "reason": "보호 대상 식별",
+                    "selectors": [selector],
+                }
+            ],
         }
         path = tmp_path / "contracts.json"
         path.write_text(json.dumps(data), encoding="utf-8")
@@ -122,15 +124,19 @@ def test_protected_selector_rejects_file_glob(tmp_path):
 
     data = {
         "schema_version": 1,
-        "protected_contracts": [{
-            "id": "SCOPE-001",
-            "reason": "보호 대상 식별",
-            "selectors": [{
-                "runner": "pytest",
-                "path_glob": "tests/integration/test_*.py",
-                "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt",
-            }],
-        }],
+        "protected_contracts": [
+            {
+                "id": "SCOPE-001",
+                "reason": "보호 대상 식별",
+                "selectors": [
+                    {
+                        "runner": "pytest",
+                        "path_glob": "tests/integration/test_*.py",
+                        "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt",
+                    }
+                ],
+            }
+        ],
     }
     path = tmp_path / "contracts.json"
     path.write_text(json.dumps(data), encoding="utf-8")
@@ -140,37 +146,49 @@ def test_protected_selector_rejects_file_glob(tmp_path):
 
 def test_specific_protection_leaves_other_tests_in_same_file_standard():
     """같은 파일의 페이지네이션 테스트는 Attempt 게시 계약 보호가 아니다."""
-    contracts = [{
-        "id": "STATE-001",
-        "reason": "구형 Attempt 결과 게시 차단",
-        "selectors": [{
-            "runner": "pytest",
-            "path_glob": "tests/integration/test_jobs.py",
-            "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
-        }],
-    }]
-    ids = {"pytest": [
-        "tests/integration/test_jobs.py::test_stale_attempt_cannot_complete_or_publish_new_attempt",
-        "tests/integration/test_jobs.py::test_job_cursor_pagination_has_no_duplicates_or_missing_items",
-    ]}
+    contracts = [
+        {
+            "id": "STATE-001",
+            "reason": "구형 Attempt 결과 게시 차단",
+            "selectors": [
+                {
+                    "runner": "pytest",
+                    "path_glob": "tests/integration/test_jobs.py",
+                    "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
+                }
+            ],
+        }
+    ]
+    ids = {
+        "pytest": [
+            "tests/integration/test_jobs.py::test_stale_attempt_cannot_complete_or_publish_new_attempt",
+            "tests/integration/test_jobs.py::test_job_cursor_pagination_has_no_duplicates_or_missing_items",
+        ]
+    }
     records = inventory.classify(ids, contracts)
     assert [record["policy"] for record in records] == ["protected", "standard"]
 
 
 def test_protected_test_missing_fails_even_if_file_has_other_tests():
     """보호할 실패 경로가 사라지면 해당 파일 내 다른 테스트가 있어도 실패한다."""
-    contracts = [{
-        "id": "STATE-001",
-        "reason": "구형 Attempt 결과 게시 차단",
-        "selectors": [{
-            "runner": "pytest",
-            "path_glob": "tests/integration/test_jobs.py",
-            "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
-        }],
-    }]
-    ids = {"pytest": [
-        "tests/integration/test_jobs.py::test_job_cursor_pagination_has_no_duplicates_or_missing_items"
-    ]}
+    contracts = [
+        {
+            "id": "STATE-001",
+            "reason": "구형 Attempt 결과 게시 차단",
+            "selectors": [
+                {
+                    "runner": "pytest",
+                    "path_glob": "tests/integration/test_jobs.py",
+                    "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
+                }
+            ],
+        }
+    ]
+    ids = {
+        "pytest": [
+            "tests/integration/test_jobs.py::test_job_cursor_pagination_has_no_duplicates_or_missing_items"
+        ]
+    }
     with pytest.raises(ValueError, match="선택자 미수집"):
         inventory.classify(ids, contracts)
 
