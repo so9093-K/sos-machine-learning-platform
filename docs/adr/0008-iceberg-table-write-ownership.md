@@ -17,7 +17,8 @@ Dataset 참조의 `owner_actor`는 고정 Snapshot을 읽거나 연결하는 권
    무작위 고유 토큰·물리 Table UUID와 예약/활성 상태를 관리한다. 이름의 유일성으로 사용자 간
    동시 예약을 직렬화하며, Snapshot Dataset 등록은 쓰기 권한을 부여하지 않는다.
 2. API는 정상 Dataset 소유권·Job 제출 키를 확인한 뒤 실제 Catalog의 테이블
-   존재 여부와 소유권을 확인한다. 새로운 이름은 원자적으로 예약한다.
+   존재 여부와 소유권을 확인한다. 새로운 이름은 Job 멱등성 확인 이후 같은
+   PostgreSQL 트랜잭션에서 예약한다. 실패한 Job·키 충돌은 테이블명도 남기지 않는다.
 3. Worker는 Catalog에 테이블을 만들 때 `sos.write-token` 속성을 기록한다.
    기존 테이블에 Append하기 전에 PostgreSQL 예약 Actor·Catalog 토큰·물리
    Table UUID가 모두 일치해야 한다. Worker는 Job 제출 Actor를 기준으로 재검증한다.

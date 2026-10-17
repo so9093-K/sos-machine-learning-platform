@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Iceberg Job의 테이블명 예약을 PostgreSQL 멱등성 검사 및 Job 등록과 한 트랜잭션으로 묶어, 키 충돌이나 등록 실패로 쓰지 않을 테이블명이 남지 않도록 수정했습니다.
+
+
 - Iceberg 쓰기 권한에 Catalog의 물리 Table UUID를 고정해 같은 이름·토큰으로 재생성된 테이블에 대한 잘못된 Append를 거부합니다. 예약 후 Catalog 생성과 DB 확정 사이의 중단은 동일 토큰과 UUID를 검증해 복구하며, 관리자 채택 재개 시 원래 Dataset ID도 확인합니다.
 
 

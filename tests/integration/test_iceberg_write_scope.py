@@ -184,3 +184,55 @@ def test_reservation_can_recover_after_table_creation_before_activation(workspac
     assert completed["table_uuid"] == str(created.metadata.table_uuid)
     assert run_once(store)
     assert store.get_job(queued.json()["id"])["status"] == "Succeeded"
+
+
+def test_idempotency_conflict_does_not_reserve_unsubmitted_table(workspace):
+    """Idempotency-Key가 거부된 새 테이블 이름은 남지 않아야 한다."""
+    client, store = workspace
+    uploaded = client.post(
+        "/api/datasets/files",
+        files={"file": ("idempotent.csv", b"v\n1\n", "text/csv")},
+    )
+    assert uploaded.status_code == 201
+    first = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": uploaded.json()["id"], "table_name": "first_request"},
+        headers={"Idempotency-Key": "same-key-for-two-imports"},
+    )
+    assert first.status_code == 202, first.text
+    conflicting = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": uploaded.json()["id"], "table_name": "orphan_request"},
+        headers={"Idempotency-Key": "same-key-for-two-imports"},
+    )
+    assert conflicting.status_code == 409
+    assert store.iceberg_write_claim("orphan_request") is None
+    original = store.iceberg_write_claim("first_request")
+    assert original is not None and original["state"] == "Reserved"
+    repeated = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": uploaded.json()["id"], "table_name": "first_request"},
+        headers={"Idempotency-Key": "same-key-for-two-imports"},
+    )
+    assert repeated.status_code == 202
+    assert repeated.json()["id"] == first.json()["id"]
+
+
+def test_failed_job_transaction_rolls_back_table_reservation(workspace):
+    """Job 외래키 제약에 실패하면 같은 트랜잭션의 테이블 예약도 롤백한다."""
+    from uuid import uuid4
+
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    _client, store = workspace
+    nonexisting = str(uuid4())
+    with pytest.raises(IntegrityError):
+        store.create_job(
+            kind="iceberg_import",
+            dataset_id=nonexisting,
+            spec={"dataset_id": nonexisting, "table_name": "rolled_back"},
+            owner_actor="local-developer",
+            reserve_iceberg_table="rolled_back",
+        )
+    assert store.iceberg_write_claim("rolled_back") is None
