@@ -229,17 +229,17 @@
         {
           "runner": "playwright",
           "path": "web/e2e/auth.spec.ts",
-          "title": "viewer can read datasets but cannot upload or inspect storage"
+          "title": "token identity and resource permissions::viewer can read datasets but cannot upload or inspect storage"
         },
         {
           "runner": "playwright",
           "path": "web/e2e/auth.spec.ts",
-          "title": "researcher can create datasets but cannot use operator tools"
+          "title": "token identity and resource permissions::researcher can create datasets but cannot use operator tools"
         },
         {
           "runner": "playwright",
           "path": "web/e2e/auth.spec.ts",
-          "title": "operator has diagnostic access but cannot read user datasets"
+          "title": "token identity and resource permissions::operator has diagnostic access but cannot read user datasets"
         }
       ]
     },
@@ -281,22 +281,22 @@
         {
           "runner": "vitest",
           "path": "web/src/api.test.ts",
-          "title": "uses a stable network message instead of browser implementation details"
+          "title": "API failure diagnostic contract > uses a stable network message instead of browser implementation details"
         },
         {
           "runner": "vitest",
           "path": "web/src/api.test.ts",
-          "title": "retains status, stable error code, request ID and retry policy"
+          "title": "API failure diagnostic contract > retains status, stable error code, request ID and retry policy"
         },
         {
           "runner": "vitest",
           "path": "web/src/api.test.ts",
-          "title": "preserves request ID and status on non-JSON error responses"
+          "title": "API failure diagnostic contract > preserves request ID and status on non-JSON error responses"
         },
         {
           "runner": "vitest",
           "path": "web/src/api.test.ts",
-          "title": "does not include Bearer credentials in serialized errors"
+          "title": "API failure diagnostic contract > does not include Bearer credentials in serialized errors"
         }
       ]
     }

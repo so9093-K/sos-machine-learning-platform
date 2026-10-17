@@ -40,50 +40,69 @@ def command(args: list[str], cwd: Path) -> str:
     return result.stdout
 
 
+def unique_native_ids(ids: list[str], runner: str) -> list[str]:
+    """Native Runner가 같은 Test ID를 여러 번 보고하면 숨기지 않고 실패한다."""
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{runner} 수집에서 중복 Test ID")
+    return sorted(ids)
+
+
 def python_ids(output: str) -> list[str]:
     """pytest Node ID를 보존하며 요약·경고 메시지는 포함하지 않는다."""
-    return sorted(
-        {
-            line.strip()
-            for line in output.splitlines()
-            if line.strip().startswith(SCOPES["pytest"]["source_root"] + "/") and "::" in line
-        }
-    )
+    ids = [
+        line.strip()
+        for line in output.splitlines()
+        if line.strip().startswith(SCOPES["pytest"]["source_root"] + "/") and "::" in line
+    ]
+    return unique_native_ids(ids, "pytest")
 
 
 def vitest_ids(value: object) -> list[str]:
-    """Vitest의 native JSON 구조를 순회하고 테스트별 제목을 보존한다."""
-    ids = []
+    """Vitest의 파일·중첩 Suite 전체 이름을 Test ID로 보존한다."""
+    ids: list[str] = []
 
-    def walk(item: object, scope: str = "") -> None:
+    def walk(item: object, filename: str = "", ancestors: tuple[str, ...] = ()) -> None:
         if isinstance(item, list):
             for entry in item:
-                walk(entry, scope)
-        elif isinstance(item, dict):
-            name = item.get("name") or item.get("title")
-            filename = item.get("file") or item.get("filepath") or scope
-            if isinstance(filename, dict):
-                filename = filename.get("filepath") or filename.get("name") or scope
-            children = [
-                item.get(key)
-                for key in ("tasks", "children", "tests", "files", "items", "testCases")
-                if item.get(key) is not None
-            ]
-            if children:
-                for child in children:
-                    walk(child, str(filename))
-            elif isinstance(name, str) and name:
-                ids.append(f"{filename}::{name}")
-            elif isinstance(item.get("id"), str):
-                ids.append(item["id"])
+                walk(entry, filename, ancestors)
+            return
+        if not isinstance(item, dict):
+            return
+        source = item.get("file") or item.get("filepath") or filename
+        if isinstance(source, dict):
+            source = source.get("filepath") or source.get("name") or filename
+        source = str(source)
+        name = item.get("name") or item.get("title")
+        full_name = item.get("fullName")
+        children = [
+            item[key]
+            for key in ("tasks", "children", "tests", "files", "items", "testCases")
+            if item.get(key) is not None
+        ]
+        if children:
+            # 파일(모듈) 노드는 Suite가 아니다. 중첩 Suite만 제목에 추가한다.
+            is_file = item.get("type") in {"module", "file"} or name in {
+                source,
+                Path(source).name,
+            }
+            next_ancestors = ancestors + (name,) if isinstance(name, str) and not is_file else ancestors
+            for child in children:
+                walk(child, source, next_ancestors)
+            return
+        title = full_name if isinstance(full_name, str) else name
+        if not isinstance(title, str) or not title or not source:
+            raise ValueError("Vitest 수집 항목의 파일 또는 테스트 제목 누락")
+        prefix = " > ".join(ancestors)
+        if prefix and not isinstance(full_name, str) and not title.startswith(prefix + " > "):
+            title = f"{prefix} > {title}"
+        ids.append(f"{source}::{title}")
 
     walk(value)
-    return sorted(set(ids))
-
+    return unique_native_ids(ids, "vitest")
 
 def playwright_ids(output: str) -> list[str]:
     """최상위·중첩 Playwright 테스트를 파일과 안정적 제목으로 모두 수집한다."""
-    result = set()
+    result: list[str] = []
     for line in output.splitlines():
         match = re.search(
             r"(?P<file>[\w./-]+\.spec\.ts):\d+:\d+\s*›\s*(?P<title>.+)$",
@@ -91,12 +110,15 @@ def playwright_ids(output: str) -> list[str]:
         )
         if not match:
             continue
-        filename = Path(match.group("file")).name
+        filename = match.group("file")
         names = [part.strip() for part in match.group("title").split("›")]
         if not all(names):
             raise ValueError("Playwright 수집 행의 테스트명이 비어 있습니다.")
-        result.add(f"{SCOPES['playwright']['source_root']}/{filename}::{'::'.join(names)}")
-    return sorted(result)
+        source_root = SCOPES["playwright"]["source_root"]
+        local_root = source_root.removeprefix(SCOPES["playwright"]["cwd"] + "/")
+        relative = filename.removeprefix(source_root + "/").removeprefix(local_root + "/")
+        result.append(f"{source_root}/{relative}::{'::'.join(names)}")
+    return unique_native_ids(result, "playwright")
 
 
 def source_path(runner: str, test_id: str) -> str:
@@ -121,7 +143,9 @@ def source_path(runner: str, test_id: str) -> str:
         if source.startswith(SCOPES["playwright"]["source_root"] + "/"):
             return source
         if source.endswith(".spec.ts"):
-            return SCOPES["playwright"]["source_root"] + "/" + Path(source).name
+            root = SCOPES["playwright"]["source_root"]
+            relative = root.removeprefix(SCOPES["playwright"]["cwd"] + "/")
+            return root + "/" + source.removeprefix(relative + "/")
         raise ValueError("Playwright 출처가 설정한 source_root 밖입니다.")
     raise ValueError(f"미지원 Native Runner: {runner}")
 
@@ -211,10 +235,8 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
                     title = selector["title"]
                     if runner == "pytest":
                         title_matches = name == title or name.startswith(title + "[")
-                    elif runner == "playwright":
-                        title_matches = name == title or name.endswith("::" + title)
                     else:
-                        title_matches = name == title or name.endswith(" > " + title)
+                        title_matches = name == title
                     if path == selector["path"] and title_matches:
                         links.append(contract["id"])
                         matched[(contract["id"], index)] += 1
@@ -273,7 +295,7 @@ def junit_keys(report: Path, runner: str) -> list[str]:
         elif runner == "vitest":
             path = classname
         elif runner == "playwright":
-            path = SCOPES["playwright"]["source_root"] + "/" + Path(classname).name
+            path = classname
         else:
             raise ValueError(f"미지원 Runner: {runner}")
         ids.append(stable_key(runner, f"{path}::{name}"))

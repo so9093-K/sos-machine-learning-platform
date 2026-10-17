@@ -47,6 +47,34 @@ def test_vitest_collect_preserves_files_and_titles():
     assert inventory.vitest_ids(data) == ["src/api.test.ts::suite > returns 201"]
 
 
+def test_vitest_nested_suites_preserve_full_unique_test_ids():
+    """서로 다른 Suite의 동일한 테스트 제목도 별개 Test ID로 보존한다."""
+    data = [{
+        "file": "src/api.test.ts",
+        "tasks": [
+            {"name": "Dataset API", "tasks": [{"name": "returns error"}]},
+            {"name": "Job API", "tasks": [{"name": "returns error"}]},
+        ],
+    }]
+    assert inventory.vitest_ids(data) == [
+        "src/api.test.ts::Dataset API > returns error",
+        "src/api.test.ts::Job API > returns error",
+    ]
+
+
+def test_vitest_duplicate_ids_fail_instead_of_being_silently_deduplicated():
+    data = [{"file": "src/api.test.ts", "tasks": [
+        {"name": "suite > same"}, {"name": "suite > same"},
+    ]}]
+    with pytest.raises(ValueError, match="중복 Test ID"):
+        inventory.vitest_ids(data)
+
+
+def test_native_pytest_duplicate_ids_are_not_hidden():
+    with pytest.raises(ValueError, match="중복 Test ID"):
+        inventory.python_ids("tests/test_a.py::test_one\ntests/test_a.py::test_one\n")
+
+
 def test_playwright_collects_top_level_and_nested_test_lines():
     output = (
         "Listing tests:\n"
@@ -72,7 +100,7 @@ def test_nested_runner_titles_require_exact_leaf_names():
                 {
                     "runner": "vitest",
                     "path": "web/src/api.test.ts",
-                    "title": "safe error",
+                    "title": "API client > safe error",
                 }
             ],
         },
@@ -83,7 +111,7 @@ def test_nested_runner_titles_require_exact_leaf_names():
                 {
                     "runner": "playwright",
                     "path": "web/e2e/auth.spec.ts",
-                    "title": "viewer can read data",
+                    "title": "roles::viewer can read data",
                 }
             ],
         },
@@ -102,6 +130,37 @@ def test_nested_runner_titles_require_exact_leaf_names():
         contracts,
     )
     assert [row["policy"] for row in rows] == ["protected", "standard", "protected", "standard"]
+
+
+def test_full_suite_name_is_required_for_protected_vitest_case():
+    """원래 Suite에서 보호 테스트가 사라지면 다른 Suite의 동명 테스트로 대체할 수 없다."""
+    contracts = [{
+        "id": "API-001",
+        "reason": "API 실패 보호",
+        "selectors": [{
+            "runner": "vitest",
+            "path": "web/src/api.test.ts",
+            "title": "original > safe error",
+        }],
+    }]
+    with pytest.raises(ValueError, match="선택자 미수집"):
+        inventory.classify(
+            {"vitest": ["src/api.test.ts::different > safe error"]}, contracts
+        )
+
+
+def test_playwright_same_filename_in_different_directories_remains_unique():
+    output = (
+        "  a/workspace.spec.ts:1:1 › duplicate\n"
+        "  b/workspace.spec.ts:2:2 › duplicate\n"
+    )
+    assert inventory.playwright_ids(output) == [
+        "web/e2e/a/workspace.spec.ts::duplicate",
+        "web/e2e/b/workspace.spec.ts::duplicate",
+    ]
+    assert inventory.source_path(
+        "playwright", "e2e/a/workspace.spec.ts::duplicate"
+    ) == "web/e2e/a/workspace.spec.ts"
 
 
 def test_registry_maps_protection_with_standard_default():
