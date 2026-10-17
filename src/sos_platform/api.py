@@ -16,7 +16,13 @@ from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from .api_control import control_router
 from .api_errors import problem_response, register_error_handlers
 from .config import StoragePolicy
-from .datasets import connect_iceberg, iceberg_snapshots, pinned_scan_dataset, save_upload_file
+from .datasets import (
+    connect_iceberg,
+    iceberg_snapshots,
+    pinned_scan_dataset,
+    reserve_iceberg_write_target,
+    save_upload_file,
+)
 from .discovery import columns as discovery_columns
 from .discovery import explore as discovery_explore
 from .discovery import overview as discovery_overview
@@ -431,6 +437,11 @@ def create_app(home: Path | None = None) -> FastAPI:
     ):
         existing(body.dataset_id, actor)
         require_job_submission_key(idempotency_key)
+        try:
+            reserve_iceberg_write_target(store, body.table_name, actor.id)
+        except PermissionError as exc:
+            # 기존 테이블명·소유권을 다른 Actor에게 노출하지 않는다.
+            raise HTTPException(status_code=404, detail="Iceberg table not found") from exc
         return store.create_job(
             kind="iceberg_import",
             dataset_id=body.dataset_id,

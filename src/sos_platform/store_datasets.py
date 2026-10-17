@@ -98,6 +98,57 @@ class DatasetStoreMixin:
                 ).scalar_one()
             )
 
+    def iceberg_write_claim(self, table_name: str) -> dict | None:
+        """테이블 쓰기 권한은 읽기용 Dataset 참조와 독립적으로 보존한다."""
+        with self.connection() as db:
+            item = (
+                db.execute(
+                    text("SELECT * FROM iceberg_table_owners WHERE table_name=:name"),
+                    {"name": f"default.{table_name}"},
+                )
+                .mappings()
+                .first()
+            )
+        return dict(item) if item else None
+
+    def reserve_iceberg_table(self, table_name: str, actor_id: str) -> dict:
+        """고유 테이블명에 대한 쓰기 소유권을 PostgreSQL에서 원자적으로 예약한다."""
+        name = f"default.{table_name}"
+        with self.connection() as db:
+            db.execute(
+                text(
+                    "INSERT INTO iceberg_table_owners"
+                    "(table_name,owner_actor,token,state,created_at) "
+                    "VALUES(:name,:owner,:token,'Reserved',:at) "
+                    "ON CONFLICT(table_name) DO NOTHING"
+                ),
+                {"name": name, "owner": actor_id, "token": str(uuid4()), "at": now()},
+            )
+            claim = (
+                db.execute(
+                    text("SELECT * FROM iceberg_table_owners WHERE table_name=:name"),
+                    {"name": name},
+                )
+                .mappings()
+                .one()
+            )
+            if claim["owner_actor"] != actor_id:
+                raise PermissionError("Iceberg table write access denied")
+        return dict(claim)
+
+    def activate_iceberg_table(self, table_name: str, actor_id: str, token: str) -> None:
+        """Catalog의 동일 소유 토큰을 확인한 테이블만 Active로 확정한다."""
+        with self.connection() as db:
+            changed = db.execute(
+                text(
+                    "UPDATE iceberg_table_owners SET state='Active' "
+                    "WHERE table_name=:name AND owner_actor=:actor AND token=:token"
+                ),
+                {"name": f"default.{table_name}", "actor": actor_id, "token": token},
+            )
+            if changed.rowcount != 1:
+                raise PermissionError("Iceberg table ownership changed")
+
     def dataset_page(
         self, *, limit: int, before: dict | None = None, actor_id: str | None = None
     ) -> list[dict]:

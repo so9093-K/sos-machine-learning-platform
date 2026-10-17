@@ -268,7 +268,9 @@ def test_two_independent_writers_race_on_existing_iceberg_table(workspace, monke
     client, store = workspace
     source = upload(client)
     table_name = "racing_writers"
-    baseline = import_to_iceberg(store, source, table_name, str(uuid4()))
+    baseline = import_to_iceberg(
+        store, source, table_name, str(uuid4()), owner_actor="local-developer"
+    )
     assert baseline["version"]
 
     attempts = [str(uuid4()), str(uuid4())]
@@ -285,7 +287,9 @@ def test_two_independent_writers_race_on_existing_iceberg_table(workspace, monke
     def writer(attempt_id):
         isolated = Store(store.home, database_url=store.database_url)
         try:
-            return import_to_iceberg(isolated, source, table_name, attempt_id)
+            return import_to_iceberg(
+                isolated, source, table_name, attempt_id, owner_actor="local-developer"
+            )
         finally:
             isolated.engine.dispose()
 

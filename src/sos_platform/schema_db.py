@@ -29,6 +29,16 @@ datasets = Table(
     Index("ix_datasets_owner_created_at_id", "owner_actor", "created_at", "id"),
 )
 
+iceberg_table_owners = Table(
+    "iceberg_table_owners",
+    metadata,
+    Column("table_name", Text, primary_key=True),
+    Column("owner_actor", Text, nullable=False),
+    Column("token", String(36), nullable=False),
+    Column("state", String(16), nullable=False),
+    Column("created_at", Text, nullable=False),
+)
+
 jobs = Table(
     "jobs",
     metadata,
