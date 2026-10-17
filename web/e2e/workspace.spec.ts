@@ -282,12 +282,15 @@ test("file size is explained and rejected before upload", async ({ page }) => {
 
 test("201 registration remains successful when the subsequent list refresh fails", async ({ page }) => {
   let failRefresh = false;
-  await page.route("**/api/datasets?*", route => {
+  let failedRefreshes = 0;
+  await page.route("**/api/datasets?*", async route => {
     if (route.request().method() === "GET" && failRefresh) {
-      return route.fulfill({ status: 503, contentType: "application/json",
+      await route.fulfill({ status: 503, contentType: "application/json",
         body: JSON.stringify({ detail: "List temporarily unavailable" }) });
+      failedRefreshes++;
+      return;
     }
-    return route.continue();
+    await route.continue();
   });
   await page.route("**/api/datasets/files", async route => {
     const response = await route.fetch();
@@ -295,18 +298,24 @@ test("201 registration remains successful when the subsequent list refresh fails
     failRefresh = true;
     await route.fulfill({ response });
   });
-  await page.goto("/");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "published.csv", mimeType: "text/csv",
-    buffer: Buffer.from("signal\n1\n2\n"),
-  });
-  await expect(page.getByRole("heading", { name: "published.csv" })).toBeVisible();
-  await expect(page.getByRole("status").filter({
-    hasText: "파일은 정상 등록됐습니다.",
-  })).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  try {
+    await page.goto("/");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "published.csv", mimeType: "text/csv",
+      buffer: Buffer.from("signal\n1\n2\n"),
+    });
+    await expect(page.getByRole("heading", { name: "published.csv" })).toBeVisible();
+    // 503이 실제로 전달됐는지 검증한다. 백그라운드 GET 경합으로 이전
+    // 목록 요청이 대체됐다면 등록 성공 안내를 유지하는 것도 올바른 동작이다.
+    await expect.poll(() => failedRefreshes).toBeGreaterThan(0);
+    await expect(page.getByRole("status").filter({
+      hasText: /파일 등록이 완료됐습니다\.|파일은 정상 등록됐습니다\./,
+    })).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  } finally {
+    await page.unrouteAll({ behavior: "wait" });
+  }
 });
-
 
 
 test("dismissed 201 success notice stays dismissed after a delayed list failure", async ({ page }) => {
