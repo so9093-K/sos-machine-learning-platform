@@ -340,7 +340,7 @@ def audit_changes(before: dict, after: dict) -> dict:
                     "lost_contract_ids": lost,
                 }
             )
-    for key, row in sorted(removed.items()):
+    for _key, row in sorted(removed.items()):
         if not row["contract_ids"]:
             result["standard_removed"].append(row["source_path"])
             continue
