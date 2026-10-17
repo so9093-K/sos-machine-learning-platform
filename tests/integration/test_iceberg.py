@@ -254,6 +254,75 @@ def test_import_uses_attempt_snapshot_not_latest(workspace, monkeypatch):
     )
 
 
+def test_two_independent_writers_race_on_existing_iceberg_table(workspace, monkeypatch):
+    """서로 다른 Catalog 세션이 같은 기준 Snapshot에서 동시에 Append를 시작한다."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from pyiceberg.table import Table
+
+    from sos_platform.datasets import iceberg_catalog, import_to_iceberg
+    from sos_platform.retention import inspect_tag, tag_name
+    from sos_platform.store import Store
+
+    client, store = workspace
+    source = upload(client)
+    table_name = "racing_writers"
+    baseline = import_to_iceberg(store, source, table_name, str(uuid4()))
+    assert baseline["version"]
+
+    attempts = [str(uuid4()), str(uuid4())]
+    rendezvous = Barrier(2)
+    original_append = Table.append
+
+    def synchronized_append(table, data, **kwargs):
+        if kwargs.get("snapshot_properties", {}).get("sos.attempt-id") in attempts:
+            rendezvous.wait(timeout=20)
+        return original_append(table, data, **kwargs)
+
+    monkeypatch.setattr(Table, "append", synchronized_append)
+
+    def writer(attempt_id):
+        isolated = Store(store.home, database_url=store.database_url)
+        try:
+            return import_to_iceberg(isolated, source, table_name, attempt_id)
+        finally:
+            isolated.engine.dispose()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(writer, attempt_id) for attempt_id in attempts]
+        outcomes = []
+        for future in futures:
+            try:
+                outcomes.append((future.result(timeout=45), None))
+            except Exception as exc:
+                outcomes.append((None, exc))
+
+    # 하나 이상이 커밋되어야 하며 충돌 시 자동으로 중복 Append하지 않는다.
+    assert any(result is not None for result, _error in outcomes), outcomes
+    table = iceberg_catalog(store).load_table(f"default.{table_name}")
+    snapshots = table.snapshots()
+    assert 2 <= len(snapshots) <= 3
+    assert table.scan().to_arrow().num_rows == 3 * len(snapshots)
+    for attempt_id, (result, error) in zip(attempts, outcomes, strict=True):
+        matching = [
+            snapshot
+            for snapshot in snapshots
+            if snapshot.summary and snapshot.summary.get("sos.attempt-id") == attempt_id
+        ]
+        assert len(matching) <= 1, (attempt_id, error)
+        if result is not None:
+            assert len(matching) == 1
+            assert result["version"] == str(matching[0].snapshot_id)
+            assert inspect_tag(
+                table,
+                name=tag_name(result["retention_id"]),
+                snapshot_id=result["version"],
+            ) == "retained"
+            assert store.snapshot_retention(result["retention_id"])["state"] == "Pending"
+    assert not [row for row in store.dataset_page(limit=101) if row["kind"] == "iceberg"]
+
+
 def test_iceberg_commit_response_loss_preserves_snapshot_without_automatic_retry(
     workspace, monkeypatch, tmp_path
 ):

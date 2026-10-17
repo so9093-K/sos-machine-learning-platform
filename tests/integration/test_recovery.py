@@ -119,6 +119,104 @@ def test_new_attempt_uses_distinct_local_paths_after_recovery(workspace):
     assert set(first_paths).isdisjoint(second_paths)
 
 
+@pytest.mark.parametrize(
+    ("job_kind", "recovered_status"),
+    [("profile", "Queued"), ("iceberg_import", "Failed")],
+)
+def test_sigkill_real_running_worker_requires_new_owner_recovery(
+    workspace, monkeypatch, job_kind, recovered_status
+):
+    """실제 Job을 인수한 Worker SIGKILL 후 자식 종료와 Attempt 복구를 확인한다."""
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+    from pathlib import Path
+
+    if sys.platform != "linux":
+        pytest.skip("PR_SET_PDEATHSIG is Linux-only")
+    client, store = workspace
+    source = upload(client)
+    if job_kind == "iceberg_import":
+        request = client.post(
+            "/api/iceberg/import",
+            json={"dataset_id": source["id"], "table_name": "killed_import"},
+        )
+    else:
+        request = client.post(
+            "/api/jobs", json={"dataset_id": source["id"], "kind": "profile"}
+        )
+    assert request.status_code == 202
+    job_id = request.json()["id"]
+    ready = store.home / "worker-test-child.pid"
+    root = Path(__file__).resolve().parents[2]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        (str(root / "tests" / "integration"), str(root / "src"), env.get("PYTHONPATH", ""))
+    )
+    script = (
+        "import sos_platform.worker as worker; "
+        "from worker_kill_helper import paused_execution; "
+        "worker._perform = paused_execution; worker.main()"
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, "--home", str(store.home), "--once"],
+        cwd=root,
+        env=env,
+    )
+    child_pid = None
+    try:
+        deadline = time.monotonic() + 25
+        while not ready.exists() and time.monotonic() < deadline:
+            assert process.poll() is None, "Worker exited before starting its Job child"
+            time.sleep(0.05)
+        assert ready.exists(), "Worker did not start a guarded child"
+        child_pid = int(ready.read_text(encoding="ascii"))
+        running = store.get_job(job_id)
+        assert running["status"] == "Running"
+        attempt_id = running["attempts"][-1]["id"]
+
+        os.kill(process.pid, signal.SIGKILL)
+        process.wait(timeout=8)
+        assert process.returncode == -signal.SIGKILL
+
+        # 강제 종료 후 /proc에 Zombie 항목만 남아 있어도 코드는 실행되지 않는다.
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            status = Path(f"/proc/{child_pid}/stat")
+            if not status.exists() or status.read_text().split(") ", 1)[1].startswith("Z"):
+                break
+            time.sleep(0.05)
+        else:
+            pytest.fail("Worker child survived parent SIGKILL")
+
+        replacement = Store(store.home, database_url=store.database_url)
+        try:
+            assert replacement.acquire_worker()
+            interrupted = replacement.recover()
+            assert (job_id, attempt_id) in interrupted
+            recovered = replacement.get_job(job_id)
+            assert recovered["status"] == recovered_status
+            assert recovered["attempts"][-1]["status"] == "Interrupted"
+            assert recovered["result"] is None
+            if job_kind == "iceberg_import":
+                assert recovered["error_code"] == "SOS-ICEBERG-UNCERTAIN"
+                assert run_once(replacement) is False
+        finally:
+            replacement.release_worker()
+            replacement.engine.dispose()
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=8)
+        if child_pid is not None:
+            try:
+                os.kill(child_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
 def test_worker_unlock_without_backend_change_revokes_ownership(workspace):
     """동일한 DB Backend PID라도 실제 advisory lock이 없으면 소유권이 없다."""
     from sqlalchemy import text
