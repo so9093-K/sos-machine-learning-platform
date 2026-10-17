@@ -440,9 +440,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         try:
             # 실테이블 검사 자체는 부작용 없이 수행한다. 신규 이름 예약은
             # Job의 멱등성 검사 후 같은 PostgreSQL 트랜잭션에서 확정한다.
-            reserve_iceberg_write_target(
-                store, body.table_name, actor.id, reserve_if_missing=False
-            )
+            reserve_iceberg_write_target(store, body.table_name, actor.id, reserve_if_missing=False)
             return store.create_job(
                 kind="iceberg_import",
                 dataset_id=body.dataset_id,

@@ -152,8 +152,17 @@ def test_recreated_table_with_same_token_cannot_reuse_write_authorization(worksp
     )
     assert str(replacement.metadata.table_uuid) != claim["table_uuid"]
     assert client.post("/api/iceberg/import", json=request).status_code == 404
+    # API를 건너뛴 Job도 Worker의 물리 Table UUID 재검증을 우회하지 못한다.
+    forged = store.create_job(
+        kind="iceberg_import",
+        dataset_id=uploaded.json()["id"],
+        spec=request,
+        owner_actor="local-developer",
+    )
+    assert run_once(store)
+    assert store.get_job(forged["id"])["status"] == "Failed"
     assert store.iceberg_write_claim("identity_guard")["table_uuid"] == claim["table_uuid"]
-    assert replacement.current_snapshot() is None
+    assert iceberg_catalog(store).load_table("default.identity_guard").current_snapshot() is None
 
 
 def test_reservation_can_recover_after_table_creation_before_activation(workspace):
