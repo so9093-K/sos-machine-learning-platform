@@ -1142,7 +1142,10 @@ test("EDA asks for explicit value and horizontal axis before drawing a trend", a
     name: "chart-selection.csv", mimeType: "text/csv",
     buffer: Buffer.from("sequence,measure\n1,10\n2,20\n3,30\n"),
   });
+  // 업로드 완료 및 프로파일 응답보다 먼저 과거 Dataset의 탐색 화면을 읽지 않는다.
+  await expect(page.getByRole("heading", { name: "chart-selection.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
+  await expect(page.getByRole("heading", { name: "컬럼 프로파일" })).toBeVisible();
   await expect(page.getByRole("img", { name: "조회 행 순서의 값 차트" })).toHaveCount(0);
   await page.getByRole("combobox", { name: "값 컬럼" }).selectOption("measure");
   await expect(page.getByRole("img", { name: "조회 행 순서의 값 차트" })).toHaveCount(0);
