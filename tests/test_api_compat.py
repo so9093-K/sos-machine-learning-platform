@@ -229,9 +229,9 @@ def test_pre_release_break_list_covers_only_explicit_retired_contracts():
 
 def test_pre_release_api_break_exception_is_scoped_to_pr14_and_original_base():
     """다른 PR이 같은 기준 SHA를 사용해도 Breaking 승인 파일을 재사용하지 못한다."""
-    workflow = (
-        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
-    ).read_text(encoding="utf-8")
+    workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
     assert "PR_NUMBER: ${{ github.event.pull_request.number }}" in workflow
     assert (
         'if [ "$PR_NUMBER" = "14" ] && '
