@@ -10,6 +10,12 @@ SOS는 pytest·Vitest·Playwright와 `make check-fast`·`make check`를 사용�
 
 이 ADR은 이번 PR의 설계 검토를 위한 **제안**이다. 구현과 검증 후 결정 내용과 상태를 최종 검토한다.
 
+## 목표 검증 구조
+
+![SOS 테스트 정의와 관리 정책, 공통 검증 CLI, Native Runner, 표준 실행 증거와 CI 제공자 어댑터의 목표 책임 경계](../references/test-engineering-architecture.png)
+
+이 그림은 **구현 전 목표 아키텍처**를 나타내며, 현재 GitHub·GitLab·로컬에서 모두 검증된 구조라는 의미가 아니다. 테스트 계약과 최종 판정은 SOS가 소유하고, CI 제공자는 공통 검증 인터페이스를 호출한 뒤 결과를 수집한다. 그림의 화살표는 책임 계층을 나타내며, 실제 실행 호출과 결과 반환은 양방향으로 이루어진다.
+
 ## 제안 결정
 
 1. **검증 계약의 소유권:** 테스트 목적, suite 선택, 필수 실행 범위, 실패 판정 기준, 테스트 관리 정책의 정본은 SOS 저장소가 소유한다. GitHub·GitLab의 설정은 이 계약을 새로 정의하지 않는다.
@@ -31,4 +37,4 @@ SOS는 pytest·Vitest·Playwright와 `make check-fast`·`make check`를 사용�
 - 공개 Make 명령, OpenAPI 호환성, Python·Frontend·E2E 필수 검증, DB/S3/Iceberg 데이터 보존과 역할 권한을 유지한다.
 - 기존 필수 검사에서 누락 또는 불완전한 리포트가 발생하는 경우에도 성공으로 처리하지 않는 회귀 검증을 추가한다.
 - GitHub 외 제공자 실행은 지원 범위와 실제 확인 여부를 분리하여 보고한다.
-- 아키텍처 이미지는 사용자가 PR에 별도로 추가하며, 이 ADR은 이미지 파일이나 임시 이미지 참조를 만들지 않는다.
+- 제안 아키텍처 이미지는 `docs/references/test-engineering-architecture.png`를 정본으로 참조한다. 실제 구현의 충족 여부는 코드와 테스트 결과를 기준으로 판단한다.
