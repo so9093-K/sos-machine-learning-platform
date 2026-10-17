@@ -307,28 +307,90 @@ test("201 registration remains successful when the subsequent list refresh fails
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
+
+
+test("dismissed 201 success notice stays dismissed after a delayed list failure", async ({ page }) => {
+  let registered = false;
+  let releaseRefresh: () => void = () => {};
+  let refreshRequested = 0;
+  const heldRefresh = new Promise<void>(resolve => { releaseRefresh = resolve; });
+  await page.route("**/api/datasets?*", async route => {
+    if (!registered) return route.continue();
+    refreshRequested++;
+    await heldRefresh;
+    return route.fulfill({
+      status: 503, contentType: "application/json",
+      body: JSON.stringify({ detail: "List temporarily unavailable" }),
+    });
+  });
+  await page.route("**/api/datasets/files", async route => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(201);
+    registered = true;
+    await route.fulfill({ response });
+  });
+  try {
+    await page.goto("/");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "dismissed.csv", mimeType: "text/csv",
+      buffer: Buffer.from("value\n1\n2\n"),
+    });
+    await expect(page.getByRole("heading", { name: "dismissed.csv" })).toBeVisible();
+    await expect.poll(() => refreshRequested).toBeGreaterThan(0);
+    await expect(page.getByRole("status").filter({
+      hasText: "파일 등록이 완료됐습니다.",
+    })).toBeVisible();
+    await page.getByRole("button", { name: "알림 닫기" }).click();
+    releaseRefresh();
+    // GET 오류를 실제 UI 상태까지 처리한 후에도 닫은 알림이 다시 나오면 안 된다.
+    await expect(page.locator('input[type="file"]')).toBeEnabled();
+    await expect(page.getByRole("status").filter({
+      hasText: "파일은 정상 등록됐습니다.",
+    })).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  } finally {
+    releaseRefresh();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+});
+
 test("upload indicates pending transfer and completes after server response", async ({ page }) => {
   let releaseResponse: () => void = () => {};
+  let releaseRefresh: () => void = () => {};
+  let registered = false;
+  let heldRefreshCount = 0;
   const heldResponse = new Promise<void>(resolve => { releaseResponse = resolve; });
+  const heldRefresh = new Promise<void>(resolve => { releaseRefresh = resolve; });
+  await page.route("**/api/datasets?*", async route => {
+    if (!registered) return route.continue();
+    heldRefreshCount++;
+    await heldRefresh;
+    return route.continue();
+  });
   await page.route("**/api/datasets/files", async route => {
     const response = await route.fetch();
     await heldResponse;
+    registered = true;
     await route.fulfill({ response });
   });
-  await page.goto("/");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "progress.csv", mimeType: "text/csv",
-    buffer: Buffer.from("time,value\n1,2\n2,3\n"),
-  });
   try {
-    // 네트워크 가로채기는 브라우저 전송 완료 이벤트 자체를 보류한다.
-    // 전송 완료 콜백과 등록 대기 상태는 upload.test.ts에서 별도로 검증한다.
+    await page.goto("/");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "progress.csv", mimeType: "text/csv",
+      buffer: Buffer.from("time,value\n1,2\n2,3\n"),
+    });
+    // 서버의 201 전에 '전송 중', 201 뒤에는 목록 GET 완료 전에 등록 성공 안내가 보여야 한다.
     await expect(page.getByText(/전송 중 ·/)).toBeVisible();
+    releaseResponse();
+    await expect(page.getByRole("heading", { name: "progress.csv" })).toBeVisible();
+    await expect.poll(() => heldRefreshCount).toBeGreaterThan(0);
+    await expect(page.getByText("파일 등록이 완료됐습니다.", { exact: false })).toBeVisible();
   } finally {
     releaseResponse();
+    releaseRefresh();
+    // 지연 요청과 Route 콜백을 테스트 종료 전에 정리하되 오류를 무시하지 않는다.
+    await page.unrouteAll({ behavior: "wait" });
   }
-  await expect(page.getByRole("heading", { name: "progress.csv" })).toBeVisible();
-  await expect(page.getByText("파일 등록이 완료됐습니다.", { exact: false })).toBeVisible();
 });
 
 test("DuckDB Discovery searches columns and runs a full job through global Jobs", async ({ page }) => {
@@ -689,16 +751,19 @@ test("loading older Jobs survives a concurrent background refresh", async ({ pag
     const current = await response.json() as { items: unknown[]; next_cursor: string | null };
     return route.fulfill({ response, json: { ...current, next_cursor: "older-page-token" } });
   });
-  await page.goto("/");
-  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
   try {
+    await page.goto("/");
+    await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
     await page.getByRole("button", { name: "이전 작업 더 보기 →" }).click();
     await expect.poll(() => requestedOlder).toBeGreaterThan(0);
     await page.getByRole("button", { name: "새로고침" }).click();
+    release();
+    await expect(page.getByText("older-page-job")).toBeVisible();
   } finally {
     release();
+    // 진행 중인 route.fetch 콜백까지 완료시켜 다음 테스트의 종료와 경합하지 않는다.
+    await page.unrouteAll({ behavior: "wait" });
   }
-  await expect(page.getByText("older-page-job")).toBeVisible();
 });
 
 
@@ -727,15 +792,21 @@ test("an older Jobs GET cannot overwrite a newer manual refresh", async ({ page 
     } });
     delivered = true;
   });
-  await page.goto("/");
-  await expect.poll(() => seen).toBeGreaterThanOrEqual(1);
-  const beforeRefresh = seen;
-  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
-  await page.getByRole("button", { name: "새로고침" }).click();
-  await expect.poll(() => seen).toBeGreaterThan(beforeRefresh);
-  release();
-  await expect.poll(() => delivered).toBe(true);
-  await expect(page.getByText("stale-polling-result")).toHaveCount(0);
+  try {
+    await page.goto("/");
+    await expect.poll(() => seen).toBeGreaterThanOrEqual(1);
+    const beforeRefresh = seen;
+    await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
+    await page.getByRole("button", { name: "새로고침" }).click();
+    await expect.poll(() => seen).toBeGreaterThan(beforeRefresh);
+    release();
+    await expect.poll(() => delivered).toBe(true);
+    await expect(page.getByText("stale-polling-result")).toHaveCount(0);
+  } finally {
+    release();
+    // 늦게 도착한 요청이 UI 결과를 덮어쓰지 않는 계약은 유지하면서 콜백을 모두 회수한다.
+    await page.unrouteAll({ behavior: "wait" });
+  }
 });
 
 test("late feature preview never reappears after Dataset reload", async ({ page }) => {

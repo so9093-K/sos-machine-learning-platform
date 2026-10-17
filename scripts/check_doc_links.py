@@ -10,8 +10,19 @@ FILES += sorted((ROOT / "docs").rglob("*.md"))
 LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 
 
+def unindexed_adrs(directory: Path) -> list[str]:
+    """기존 ADR을 지우지 않고 인덱스 누락만 검사한다."""
+    index = (directory / "README.md").read_text(encoding="utf-8")
+    listed = set(re.findall(r"\]\((\d{4}-[^)#]+\.md)\)", index))
+    return [
+        path.name
+        for path in sorted(directory.glob("[0-9][0-9][0-9][0-9]-*.md"))
+        if path.name not in listed
+    ]
+
+
 def main() -> None:
-    """파일 참조 오류가 있으면 CI에서 실패하도록 한다."""
+    """파일 참조와 ADR 인덱스 누락이 있으면 CI에서 실패하도록 한다."""
     missing = []
     for document in FILES:
         for match in LINK.finditer(document.read_text(encoding="utf-8")):
@@ -21,9 +32,13 @@ def main() -> None:
             path = unquote(target.split("#", 1)[0].split("?", 1)[0])
             if path and not (document.parent / path).exists():
                 missing.append(f"{document.relative_to(ROOT)}: {target}")
+    missing.extend(
+        f"docs/adr/README.md: ADR not indexed: {name}"
+        for name in unindexed_adrs(ROOT / "docs" / "adr")
+    )
     if missing:
-        raise SystemExit("Broken Markdown links:\n" + "\n".join(missing))
-    print(f"Validated relative links in {len(FILES)} Markdown files")
+        raise SystemExit("Broken Markdown links or ADR index:\n" + "\n".join(missing))
+    print(f"Validated relative links and ADR index in {len(FILES)} Markdown files")
 
 
 if __name__ == "__main__":

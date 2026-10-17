@@ -21,7 +21,7 @@
 | Make 재시작·보존 | CI Make lifecycle | PR 필수; 자체 데이터를 생성해야 함 |
 | 장시간 부하·복합 장애 | 별도 확장 검사 | 의미 있는 한도가 마련되면 정기 실행 |
 
-make check-fast는 Ruff, 순수 Python 테스트, Vitest 및 웹 타입·빌드를 확인하며 서비스 기동을 요구하지 않는다.
+make check-fast는 Ruff, 순수 Python 테스트(개발 설정 기본값·문서 ADR 인덱스 검사 포함), Vitest 및 웹 타입·빌드를 확인하며 서비스 기동을 요구하지 않는다.
 make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하다. Fast 통과를 전체 검증 성공으로 해석하지 않는다.
 
 ## 변경 불가능한 필수 불변조건과 담당 테스트
@@ -77,7 +77,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 
 ## CI의 품질 게이트
 
-- python-tests: 잠금·Ruff·API 타입·PR base API 호환성·실제 인프라 통합 테스트·Alembic·Wheel.
+- python-tests: 잠금·Markdown/ADR 인덱스·Ruff·API 타입·PR base API 호환성·전체 Python 테스트(로컬 check-fast 명령 계약 포함)·실제 인프라 통합 테스트·Alembic·Wheel. 로컬 check-fast 전체 명령은 다른 필수 CI 단계와 중복 실행하지 않는다.
 - frontend: TypeScript/Vite 빌드 및 Vitest.
 - ui-e2e: Make up/down/restart, Data Workspace 브라우저 시나리오, 토큰 역할 3개, 독립 데이터 보존 검사. 정확한 시나리오 개수와 성패는 각 CI 실행 기록을 기준으로 한다.
 - python-quality: 위 세 작업이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
