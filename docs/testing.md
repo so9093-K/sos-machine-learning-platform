@@ -126,7 +126,6 @@ JUnit 리포트 손상·누락, 실행 0건, 필수 Skip과 실패는 성공 처
 **Standard by Default, Protected by Exception:** 보호 계약에 연결되지 않은 모든 테스트는 별도 등록 없이 `standard`다. 데이터 보존·권한·소유권·상태 확정·복구 등 특별한 변경 통제가 필요한 계약에 한해 `tests/contracts.json`에 `id`, `reason`, `selectors`를 등록한다. 위험도 점수·전수 품질 분류·테스트 관리 DB는 운영하지 않는다.
 
 - `python scripts/verify.py inventory --output <경로>`는 pytest·Vitest·Playwright의 실제 테스트 ID를 수집하고, `schema_version: 1` JSON에 `policy`(`standard` 또는 `protected`)와 `contract_ids`를 기록한다. 수집 명령 및 테스트 경로는 `scripts/inventory_scope.json`이 정의한다.
-- Registry의 `schema_version: 1`은 현재 내부 데이터 형식의 식별자일 뿐 공개 버전 호환성을 약속하지 않는다. 임시 형식을 위한 별도의 레거시 호환 구현은 없다.
 - 모든 테스트는 정책과 무관하게 CI에서 실행하고 Native 목록과 JUnit Test ID를 일대일로 대조한다. 누락·추가·중복은 실패한다.
 - Protected 선택자는 파일 전체가 아닌 **구체적인 테스트 이름**을 지정한다. 동일 파일의 다른 테스트는 기본 Standard이며, 선택자가 실제 Native 테스트를 가리키지 못하면 CI가 실패한다.
 - Protected 테스트를 수정하는 것 자체에 별도 승인 절차는 없다. 삭제·통합·보호 Assertion 제거 시 보호 계약과 실패 경로의 대체 검증 근거를 일반 PR 리뷰에서 확인한다. Git 이력과 코드 리뷰가 변경 근거의 정본이므로 테스트 ID 이력 추론이나 별도 승인 워크플로를 운영하지 않는다.

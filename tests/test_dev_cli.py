@@ -378,6 +378,30 @@ def test_make_check_fast_is_infrastructure_independent(monkeypatch, config):
     ]
 
 
+def test_log_relay_preserves_service_working_directory(monkeypatch, tmp_path):
+    """npm은 web/에서 실행하며 wrapper만 절대 스크립트 경로로 호출한다."""
+    arguments = []
+
+    class FakeProcess:
+        pid = 19993
+
+    def fake_popen(command, **kwargs):
+        arguments.append((command, kwargs))
+        return FakeProcess()
+
+    monkeypatch.setattr(dev, "LOGDIR", tmp_path / "logs")
+    monkeypatch.setattr(dev, "processes", lambda: {})
+    monkeypatch.setattr(dev, "owned", lambda _record: False)
+    monkeypatch.setattr(dev, "process_birth", lambda _pid: "fixed-birth")
+    monkeypatch.setattr(dev, "persist", lambda _state: None)
+    monkeypatch.setattr(dev.subprocess, "Popen", fake_popen)
+    dev.start_process("web", ["npm", "run", "dev"], {}, cwd=dev.ROOT / "web")
+    command, settings = arguments[0]
+    assert settings["cwd"] == dev.ROOT / "web"
+    assert command[1] == str(dev.ROOT / "scripts" / "log_capture.py")
+    assert command[-3:] == ["npm", "run", "dev"]
+
+
 def test_iceberg_adoption_cli_rejects_external_database_without_running(monkeypatch, config):
     config["SOS_INFRA_MODE"] = "external"
     monkeypatch.setattr(dev, "configuration", lambda: config)

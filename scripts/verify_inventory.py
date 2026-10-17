@@ -105,7 +105,7 @@ def source_path(runner: str, test_id: str) -> str:
     source = test_id.split("::", 1)[0].replace("\\", "/")
     if runner == "pytest":
         if not source.startswith(SCOPES["pytest"]["source_root"] + "/"):
-            raise ValueError(f"pytest 출처가 tests/가 아닙니다: {source}")
+            raise ValueError(f"pytest 출처가 설정한 source_root 밖입니다: {source}")
         return source
     if runner == "vitest":
         root = SCOPES["vitest"]["source_root"]
@@ -123,7 +123,7 @@ def source_path(runner: str, test_id: str) -> str:
             return source
         if source.endswith(".spec.ts"):
             return SCOPES["playwright"]["source_root"] + "/" + Path(source).name
-        raise ValueError("Playwright 출처가 e2e 테스트가 아닙니다.")
+        raise ValueError("Playwright 출처가 설정한 source_root 밖입니다.")
     raise ValueError(f"미지원 Native Runner: {runner}")
 
 
@@ -185,7 +185,7 @@ def load_registry(path: Path) -> list[dict]:
                 or any(char in pattern for char in "*?[]")
             ):
                 raise ValueError(f"보호 계약 경로 오류: {identifier}")
-            title = selector.get("title_glob", "*")
+            title = selector["title_glob"]
             if not isinstance(title, str) or not title.strip() or not title.strip("*?[] "):
                 raise ValueError(f"보호 계약 제목 조건 오류: {identifier}")
             if (runner, pattern, title) in selected:
@@ -210,7 +210,7 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
                     if runner != selector["runner"]:
                         continue
                     if fnmatch.fnmatchcase(path, selector["path_glob"]) and fnmatch.fnmatchcase(
-                        name, selector.get("title_glob", "*")
+                        name, selector["title_glob"]
                     ):
                         links.append(contract["id"])
                         matched[(contract["id"], index)] += 1
@@ -302,7 +302,7 @@ def reconcile(inventory: dict, reports: dict[str, list[Path]]) -> dict[str, int]
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="SOS 테스트 자산 인벤토리 관리")
-    subs = parser.add_subparsers(dest="action")
+    subs = parser.add_subparsers(dest="action", required=True)
     generate = subs.add_parser("generate")
     generate.add_argument("--output", type=Path, required=True)
     generate.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
@@ -311,13 +311,7 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("--pytest-report", action="append", type=Path, required=True)
     compare.add_argument("--vitest-report", action="append", type=Path, required=True)
     compare.add_argument("--playwright-report", action="append", type=Path, required=True)
-    # 이전 인터페이스 유지: '--output path'만 전달해도 generate 동작
-    effective_argv = sys.argv[1:] if argv is None else argv
-    args = parser.parse_args(
-        ["generate", *effective_argv]
-        if effective_argv and effective_argv[0].startswith("--")
-        else effective_argv
-    )
+    args = parser.parse_args(argv)
     try:
         if args.action == "generate":
             groups = collect()
@@ -343,8 +337,6 @@ def main(argv: list[str] | None = None) -> int:
             result = reconcile(inventory, reports)
             print("JUnit 실행·수집 ID 일치: " + ", ".join(f"{k}={v}" for k, v in result.items()))
             return 0
-        parser.print_help()
-        return 2
     except (OSError, ValueError, KeyError, ET.ParseError, subprocess.CalledProcessError) as exc:
         print(
             f"테스트 수명주기 검증 실패: {exc.__class__.__name__}: {str(exc)[:160]}",

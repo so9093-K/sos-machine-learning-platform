@@ -180,11 +180,7 @@ def execute(
         "suite": name,
         "git_sha": None,
         "started_at_utc": datetime.now(UTC).isoformat(),
-        "provider": (
-            "github"
-            if os.getenv("GITHUB_ACTIONS") == "true"
-            else ("gitlab" if os.getenv("GITLAB_CI") == "true" else "local")
-        ),
+        "provider": "github" if os.getenv("GITHUB_ACTIONS") == "true" else "local",
         "platform": sys.platform,
         "status": "failed",
         "exit_code": None,

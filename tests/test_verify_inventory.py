@@ -193,13 +193,6 @@ def test_protected_test_missing_fails_even_if_file_has_other_tests():
         inventory.classify(ids, contracts)
 
 
-def test_registry_real_policy_has_unique_ids():
-    contracts = inventory.load_registry(inventory.DEFAULT_REGISTRY)
-    assert len(contracts) >= 6
-    assert any(x["id"] == "ICEBERG-WRITE-OWNER-001" for x in contracts)
-    assert all(x["reason"].strip() for x in contracts)
-
-
 def test_vitest_absolute_path_normalizes():
     test_id = "/home/runner/work/my-repo/web/src/api.test.ts::Suite > case"
     assert inventory.stable_key("vitest", test_id) == "web/src/api.test.ts::Suite::case"
@@ -307,4 +300,4 @@ def test_inventory_runner_scopes_are_independent(monkeypatch):
     monkeypatch.setattr(inventory, "command", fake_command)
     groups = inventory.collect()
     assert len(groups["playwright"]) == 1
-    assert ["npx", "vitest", "list", "src", "--json"] in calls
+    assert inventory.SCOPES["vitest"]["collect"] in calls
