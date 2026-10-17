@@ -4,7 +4,6 @@
 """
 
 import argparse
-import fnmatch
 import json
 import os
 import re
@@ -171,27 +170,23 @@ def load_registry(path: Path) -> list[dict]:
         for selector in selectors:
             if not isinstance(selector, dict) or set(selector) != {
                 "runner",
-                "path_glob",
-                "title_glob",
+                "path",
+                "title",
             }:
                 raise ValueError(f"보호 계약 선택자 필드 오류: {identifier}")
             runner = selector["runner"]
             if runner not in RUNNERS:
                 raise ValueError(f"보호 계약 Runner 오류: {identifier}")
-            pattern = selector["path_glob"]
+            pattern = selector["path"]
             if (
                 not isinstance(pattern, str)
                 or not pattern.startswith(SCOPES[runner]["source_root"] + "/")
                 or any(char in pattern for char in "*?[]")
             ):
                 raise ValueError(f"보호 계약 경로 오류: {identifier}")
-            title = selector["title_glob"]
-            if not isinstance(title, str) or not title.strip() or not title.strip("*?[] "):
+            title = selector["title"]
+            if not isinstance(title, str) or not title.strip() or any(x in title for x in "*?[]"):
                 raise ValueError(f"보호 계약 제목 조건 오류: {identifier}")
-            if runner == "pytest" and any(char in title for char in "*?[]"):
-                raise ValueError(
-                    f"pytest 보호 계약 제목은 정확한 함수명이어야 합니다: {identifier}"
-                )
             if (runner, pattern, title) in selected:
                 raise ValueError(f"보호 계약 중복 선택자: {identifier}")
             selected.add((runner, pattern, title))
@@ -213,13 +208,14 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
                 for index, selector in enumerate(contract["selectors"]):
                     if runner != selector["runner"]:
                         continue
-                    title = selector["title_glob"]
-                    title_matches = (
-                        name == title or name.startswith(title + "[")
-                        if runner == "pytest"
-                        else fnmatch.fnmatchcase(name, title)
-                    )
-                    if path == selector["path_glob"] and title_matches:
+                    title = selector["title"]
+                    if runner == "pytest":
+                        title_matches = name == title or name.startswith(title + "[")
+                    elif runner == "playwright":
+                        title_matches = name == title or name.endswith("::" + title)
+                    else:
+                        title_matches = name == title or name.endswith(" > " + title)
+                    if path == selector["path"] and title_matches:
                         links.append(contract["id"])
                         matched[(contract["id"], index)] += 1
                         break

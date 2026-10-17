@@ -24,8 +24,8 @@ def sample_registry():
             "selectors": [
                 {
                     "runner": "playwright",
-                    "path_glob": "web/e2e/workspace.spec.ts",
-                    "title_glob": "*registration remains successful*",
+                    "path": "web/e2e/workspace.spec.ts",
+                    "title": "201 registration remains successful",
                 }
             ],
         }
@@ -99,9 +99,9 @@ def test_protected_selector_requires_precise_test_name(tmp_path):
     import json
 
     for title in (None, "*"):
-        selector = {"runner": "pytest", "path_glob": "tests/test_a.py"}
+        selector = {"runner": "pytest", "path": "tests/test_a.py"}
         if title is not None:
-            selector["title_glob"] = title
+            selector["title"] = title
         data = {
             "schema_version": 1,
             "protected_contracts": [
@@ -127,8 +127,8 @@ def test_pytest_protected_name_does_not_match_unrelated_suffix():
             "selectors": [
                 {
                     "runner": "pytest",
-                    "path_glob": "tests/test_a.py",
-                    "title_glob": "test_contract",
+                    "path": "tests/test_a.py",
+                    "title": "test_contract",
                 }
             ],
         }
@@ -146,8 +146,8 @@ def test_pytest_parameterized_protected_name_matches_named_cases():
             "selectors": [
                 {
                     "runner": "pytest",
-                    "path_glob": "tests/test_a.py",
-                    "title_glob": "test_contract",
+                    "path": "tests/test_a.py",
+                    "title": "test_contract",
                 }
             ],
         }
@@ -181,8 +181,8 @@ def test_registry_rejects_pytest_glob_title(tmp_path):
                         "selectors": [
                             {
                                 "runner": "pytest",
-                                "path_glob": "tests/test_a.py",
-                                "title_glob": "test_contract*",
+                                "path": "tests/test_a.py",
+                                "title": "test_contract*",
                             }
                         ],
                     }
@@ -191,7 +191,7 @@ def test_registry_rejects_pytest_glob_title(tmp_path):
         ),
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="정확한 함수명"):
+    with pytest.raises(ValueError, match="제목 조건"):
         inventory.load_registry(path)
 
 
@@ -208,8 +208,8 @@ def test_protected_selector_rejects_file_glob(tmp_path):
                 "selectors": [
                     {
                         "runner": "pytest",
-                        "path_glob": "tests/integration/test_*.py",
-                        "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt",
+                        "path": "tests/integration/test_*.py",
+                        "title": "test_stale_attempt_cannot_complete_or_publish_new_attempt",
                     }
                 ],
             }
@@ -230,8 +230,8 @@ def test_specific_protection_leaves_other_tests_in_same_file_standard():
             "selectors": [
                 {
                     "runner": "pytest",
-                    "path_glob": "tests/integration/test_jobs.py",
-                    "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
+                    "path": "tests/integration/test_jobs.py",
+                    "title": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
                 }
             ],
         }
@@ -255,8 +255,8 @@ def test_protected_test_missing_fails_even_if_file_has_other_tests():
             "selectors": [
                 {
                     "runner": "pytest",
-                    "path_glob": "tests/integration/test_jobs.py",
-                    "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
+                    "path": "tests/integration/test_jobs.py",
+                    "title": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
                 }
             ],
         }
@@ -312,7 +312,7 @@ def test_registry_rejects_missing_reason_and_invalid_schema(tmp_path):
             {
                 "id": "OWNER-001",
                 "reason": "",
-                "selectors": [{"runner": "pytest", "path_glob": "tests/test_a.py"}],
+                "selectors": [{"runner": "pytest", "path": "tests/test_a.py"}],
             }
         ],
     }
