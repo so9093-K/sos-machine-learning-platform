@@ -86,6 +86,8 @@ def vitest_ids(value: object) -> list[str]:
                 Path(source).name,
             }
             next_ancestors = (
+                ancestors + (name,) if isinstance(name, str) and not is_file else ancestors
+            )
             for child in children:
                 walk(child, source, next_ancestors)
             return
@@ -99,6 +101,7 @@ def vitest_ids(value: object) -> list[str]:
 
     walk(value)
     return unique_native_ids(ids, "vitest")
+
 
 def playwright_ids(output: str) -> list[str]:
     """최상위·중첩 Playwright 테스트를 파일과 안정적 제목으로 모두 수집한다."""
