@@ -166,6 +166,41 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         )
         cancelled = secure.post(f"/api/jobs/{job.json()['id']}/cancel", headers=headers("alice"))
         assert cancelled.status_code == 200, cancelled.text
+
+        exploration_body = {
+            "dataset_id": owned,
+            "exploration": {"column": "a", "metric": "count"},
+        }
+        missing_discovery_key = secure.post(
+            "/api/explorations/jobs", json=exploration_body, headers=headers("alice")
+        )
+        assert missing_discovery_key.status_code == 428
+        assert missing_discovery_key.json()["code"] == "SOS-JOB-IDEMPOTENCY-REQUIRED"
+        exploration = secure.post(
+            "/api/explorations/jobs",
+            json=exploration_body,
+            headers={**headers("alice"), "Idempotency-Key": "alice-explore-001"},
+        )
+        assert exploration.status_code == 202, exploration.text
+        exploration_id = exploration.json()["id"]
+        assert secure.get(
+            f"/api/explorations/jobs/{exploration_id}", headers=headers("alice")
+        ).status_code == 200
+        assert secure.get(
+            f"/api/explorations/jobs/{exploration_id}", headers=headers("bob")
+        ).status_code == 404
+        assert secure.get(
+            f"/api/jobs/{exploration_id}", headers=headers("alice")
+        ).status_code == 404
+        assert secure.get(
+            "/api/explorations/jobs", headers=headers("bob")
+        ).json()["items"] == []
+        assert secure.post(
+            f"/api/explorations/jobs/{exploration_id}/cancel", headers=headers("bob")
+        ).status_code == 403
+        assert secure.post(
+            f"/api/explorations/jobs/{exploration_id}/cancel", headers=headers("alice")
+        ).json()["status"] == "Cancelled"
         history = secure.get("/api/v2/audit", headers=headers("ops"))
         assert history.status_code == 200
         events = history.json()
