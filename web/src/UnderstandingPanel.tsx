@@ -120,8 +120,8 @@ export function UnderstandingPanel({
       </div>
       <p className="hint">{overview.row_count_basis === "parquet_metadata"
         ? "행 수는 Parquet 메타데이터 기준입니다."
-        : "정확한 전체 행 수는 Profile 실행 후 확인할 수 있습니다."}
-        {" · "}분포와 역할 후보는 별도 분석 중에 계산됩니다.</p>
+        : "CSV의 원본 행 수는 메타데이터에서 계산하지 않습니다."}
+        {" · "}{profile ? "원본 규모와 분석 결과의 범위는 구별합니다." : "분포와 역할 후보는 별도 분석에서 계산됩니다."}</p>
       {!profile && <><h4>기본 스키마</h4>
       <div className="table-scroll"><table><thead><tr>
         <th>컬럼</th><th>자료형</th>
