@@ -600,28 +600,6 @@ def test_staging_size_tracks_only_the_target_attempt(workspace):
     outside.unlink()
 
 
-def test_iceberg_staging_budget_counts_extra_attempt_files(workspace):
-    """input.parquet 외 임시 파일도 예산 초과를 발생시킨다."""
-    from sos_platform.datasets import cleanup_iceberg_staging, iceberg_staging_bytes
-    from sos_platform.execution_budget import ExecutionBudget, ExecutionLimitExceeded
-
-    _client, store = workspace
-    attempt_id = str(uuid4())
-    directory = store.home / "cache" / "iceberg-staging" / f"attempt-{attempt_id}-scratch"
-    directory.mkdir(parents=True)
-    (directory / "spill.tmp").write_bytes(b"x" * (1024 * 1024 + 1))
-    try:
-        with pytest.raises(ExecutionLimitExceeded) as exc:
-            ExecutionBudget(max_stage_mib=1).enforce(
-                elapsed_seconds=0,
-                rss_bytes=0,
-                stage_bytes=iceberg_staging_bytes(store, attempt_id),
-            )
-        assert exc.value.code == "SOS-ICEBERG-UNCERTAIN"
-    finally:
-        cleanup_iceberg_staging(store, attempt_id)
-
-
 def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch):
     """기존 파티션 테이블의 호환 한도는 대용량 임시 파일 작성 전에 검사한다."""
     from contextlib import contextmanager

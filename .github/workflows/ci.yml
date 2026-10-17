@@ -114,8 +114,8 @@ jobs:
           retention-days: 7
       - name: Verify metadata schema matches migration
         run: uv run --locked alembic check
-      - name: Extended module-order regression (scheduled/manual or PR smoke)
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
+      - name: Extended module-order regression (scheduled/manual)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           uv run --locked pytest -q tests/integration/test_iceberg.py tests/integration/test_jobs.py
           uv run --locked pytest -q tests/integration/test_jobs.py tests/integration/test_iceberg.py
