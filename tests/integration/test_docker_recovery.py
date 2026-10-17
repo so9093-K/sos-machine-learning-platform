@@ -11,7 +11,6 @@ import time
 from scripts.run_isolated_e2e import (
     ROOT,
     RUNS,
-    OWNER_FILE,
     free_ports,
     isolated_environment,
     owned_record,
@@ -67,8 +66,7 @@ signal.pause()
         docker(["volume", "create", foreign], env)
         foreign_created = True
         ports = [
-            int(env[key])
-            for key in ("SOS_DB_PORT", "SOS_S3_PORT", "SOS_API_PORT", "SOS_WEB_PORT")
+            int(env[key]) for key in ("SOS_DB_PORT", "SOS_S3_PORT", "SOS_API_PORT", "SOS_WEB_PORT")
         ]
         child = subprocess.Popen(
             [sys.executable, "-u", "-c", child_code, instance, json.dumps(ports)],
