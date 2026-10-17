@@ -614,7 +614,18 @@ def check(config: dict):
             "통합 검증 전에 플랫폼이 Ready 상태여야 합니다.",
             "make up을 먼저 실행하세요.",
         )
-    suites = ("ruff", "python-unit", "python-integration", "frontend", "workspace-e2e")
+    suites = (
+        "ruff",
+        "python-unit",
+        "python-integration",
+        "frontend",
+        "openapi-types",
+        "wheel",
+        "alembic",
+        "workspace-e2e",
+        "make-lifecycle",
+        "token-rbac",
+    )
     commands = [
         (["uv", "run", "--locked", "python", "scripts/verify.py", "run", suite], ROOT)
         for suite in suites

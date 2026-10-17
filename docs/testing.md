@@ -24,7 +24,7 @@
 | 장시간 부하·복합 장애 | 별도 확장 검사 | 의미 있는 한도가 마련되면 정기 실행 |
 
 make check-fast는 Ruff, 순수 Python 테스트(개발 설정 기본값·문서 ADR 인덱스 검사 포함), Vitest 및 웹 타입·빌드를 확인하며 서비스 기동을 요구하지 않는다.
-make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하다. Fast 통과를 전체 검증 성공으로 해석하지 않는다.
+make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하다. 공통 Suite를 통해 Ruff·단위·통합·Frontend·생성 OpenAPI 타입·Wheel·Alembic·격리 Workspace/권한 E2E·Make 영속성을 포함하며, PR base 비교는 별도로 --base-ref를 전달해야 한다. Fast 통과를 전체 검증 성공으로 해석하지 않는다.
 
 ## 변경 불가능한 필수 불변조건과 담당 테스트
 

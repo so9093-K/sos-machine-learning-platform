@@ -27,6 +27,7 @@ python-tests:
       fi
     - uv run --locked python scripts/verify.py run ruff --output-dir reports/ruff
     - uv run --locked python scripts/verify.py run python-unit --output-dir reports/python-unit
+    - uv run --locked python scripts/verify.py inventory --output reports/test-inventory.json
     - uv run --locked python scripts/verify.py run wheel --output-dir reports/wheel
     - docker compose -f compose.yaml -p sos-platform up -d --wait
     - uv run --locked alembic upgrade head

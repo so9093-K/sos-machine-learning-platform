@@ -321,7 +321,18 @@ def test_make_check_validates_full_contract_once(monkeypatch, config):
 
     monkeypatch.setattr(dev.subprocess, "run", fake_run)
     assert dev.check(config)["status"] == "passed"
-    suites = ("ruff", "python-unit", "python-integration", "frontend", "workspace-e2e")
+    suites = (
+        "ruff",
+        "python-unit",
+        "python-integration",
+        "frontend",
+        "openapi-types",
+        "wheel",
+        "alembic",
+        "workspace-e2e",
+        "make-lifecycle",
+        "token-rbac",
+    )
     assert commands == [
         (["uv", "run", "--locked", "python", "scripts/verify.py", "run", suite], dev.ROOT)
         for suite in suites

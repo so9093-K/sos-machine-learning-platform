@@ -55,6 +55,8 @@ jobs:
         run: uv run --locked ruff format --diff .
       - name: Infrastructure-free Python tests
         run: uv run --locked python scripts/verify.py run python-unit --output-dir /tmp/sos-python-unit
+      - name: Verify native test inventory
+        run: uv run --locked python scripts/verify.py inventory --output /tmp/sos-test-inventory.json
       - name: Start integration infrastructure
         run: docker compose -f compose.yaml -p sos-platform up -d --wait
       - name: Migrate database and prepare object storage
@@ -73,6 +75,7 @@ jobs:
           path: |
             /tmp/sos-python-unit/*.xml
             /tmp/sos-python-unit/python-unit.manifest.json
+            /tmp/sos-test-inventory.json
             /tmp/sos-python-integration/*.xml
             /tmp/sos-python-integration/python-integration.manifest.json
           if-no-files-found: ignore
