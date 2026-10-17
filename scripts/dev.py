@@ -686,6 +686,8 @@ def help_text():
         ("help", "사용 가능한 명령 표시"),
     ):
         print(f"  make {name:<10} {desc}")
+    print("  python3 scripts/dev.py iceberg-ownership --table NAME  기존 테이블 소유권 확인")
+    print("  채택은 --owner/--dataset-id/--expect-table-uuid/--expect-snapshot/--apply를 명시")
 
 
 def render(result: dict, format_: str):
@@ -706,15 +708,60 @@ def render(result: dict, format_: str):
 
 def main():
     parser = argparse.ArgumentParser(description="SOS Platform Development CLI")
-    parser.add_argument("command", choices=COMMANDS, nargs="?", default="help")
+    parser.add_argument(
+        "command", choices=(*COMMANDS, "iceberg-ownership"), nargs="?", default="help"
+    )
     parser.add_argument("--format", choices=["text", "json"], default="text")
     parser.add_argument("--deep", action="store_true")
+    parser.add_argument("--table")
+    parser.add_argument("--owner")
+    parser.add_argument("--dataset-id")
+    parser.add_argument("--expect-table-uuid")
+    parser.add_argument("--expect-snapshot")
+    parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     if args.command == "help":
         help_text()
         return 0
     config = configuration()
     try:
+        if args.command == "iceberg-ownership":
+            # 로컬 관리형 DB 밖의 배포 환경은 배포 소유자가 따로 관리한다.
+            if config["SOS_INFRA_MODE"] != "managed":
+                raise StartupError(
+                    "SOS-CONFIG-004",
+                    "외부 DB의 Iceberg 쓰기 소유권은 이 로컬 명령으로 변경할 수 없습니다.",
+                )
+            validate_managed_targets(config)
+            if not args.table:
+                raise StartupError("SOS-ICEBERG-OWNER-001", "--table을 지정하세요.")
+            command = [
+                "uv", "run", "--locked", "python", "-m",
+                "sos_platform.iceberg_ownership", "--table", args.table,
+            ]
+            for flag, value in (
+                ("--owner", args.owner),
+                ("--dataset-id", args.dataset_id),
+                ("--expect-table-uuid", args.expect_table_uuid),
+                ("--expect-snapshot", args.expect_snapshot),
+            ):
+                if value is not None:
+                    command.extend((flag, value))
+            if args.apply:
+                command.append("--apply")
+            with lifecycle_lock():
+                outcome = run(command, env=config, timeout=120)
+            if outcome.stdout.strip():
+                print(outcome.stdout.strip())
+            if outcome.returncode:
+                if not outcome.stdout.strip():
+                    raise StartupError(
+                        "SOS-ICEBERG-OWNER-002",
+                        "Iceberg 테이블 검사 또는 소유권 채택에 실패했습니다.",
+                        redact(outcome.stderr.strip(), config),
+                    )
+                return EXIT_FAILED
+            return 0
         if args.command in ("up", "down", "restart"):
             with lifecycle_lock():
                 if args.command == "up":

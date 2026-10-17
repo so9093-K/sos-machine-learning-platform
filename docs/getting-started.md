@@ -66,6 +66,40 @@ Job 목록은 `GET /api/jobs?limit=20`에서 최근 순으로 조회하며, 응�
 
 비파티션 Iceberg 테이블은 Polars 스테이징·PyArrow 배치 Reader를 이용해 단일 Snapshot으로 적재한다. 기존 파티션 테이블만 현재 최대 50,000행·64 MiB 추정 메모리 제한의 호환 경로를 사용한다. 실행 시간·메모리·스테이징 디스크 예산은 별도로 적용하며, 제한 초과와 커밋 결과 불확실성을 구별한다.
 
+## 기존 Iceberg 테이블의 안전한 쓰기 복구
+
+`make up`은 **관리형** DB에 Alembic 마이그레이션을 자동 적용한다. 따라서
+업데이트할 때 별도의 `alembic upgrade head` 명령을 실행할 필요가 없다.
+마이그레이션은 기존 Dataset·Snapshot·Tag를 삭제하거나 소유자를 추측해 이전하지 않는다.
+기존 테이블은 읽을 수 있어도, 이전 버전에서 생성되어 새 소유 토큰이 없는 경우
+추가 적재가 거부될 수 있다.
+
+로컬 **관리형** 환경에서 기존 테이블을 계속 수정하려면 다음의 관리 명령을 사용한다.
+새 소유권을 저장하기 전에 항상 읽기 전용 진단을 수행한다.
+
+```bash
+python3 scripts/dev.py iceberg-ownership --table sensor_data
+```
+
+진단 결과가 `candidate`이고 Dataset 참조가 단일 명시적 소유자일 때만
+출력된 `table_uuid`와 `current_snapshot_id`를 확인한다.
+해당 테이블에 대한 기존 Iceberg Dataset의 ID와 소유자까지 확인한 후
+그 값을 그대로 명시해 채택한다.
+
+```bash
+python3 scripts/dev.py iceberg-ownership --table sensor_data \
+  --owner local-developer --dataset-id <기존-Iceberg-Dataset-ID> \
+  --expect-table-uuid <진단-table_uuid> --expect-snapshot <진단-current_snapshot_id> --apply
+```
+
+이 절차는 데이터 변경이 아니라 테이블 Metadata의 쓰기 소유권 토큰과 감사 상태만
+갱신한다. Dataset 소유자가 복수·불명확하거나 참조/테이블 자체가 없거나
+예상 Snapshot·Table UUID가 달라졌다면 채택을 거부한다. 외부 데이터베이스는
+로컬 CLI가 수정하지 않으며 배포 관리자가 별도 검토해야 한다.
+Catalog 커밋이나 감사 확정 중 오류가 발생하면 자동 재시도하지 말고
+같은 진단을 다시 수행해 상태를 확인한다. 보류 상태는 원래
+`--owner`·`--dataset-id`·식별자를 검증한 명시적 실행으로만 이어갈 수 있다.
+
 ## 객체 게시·보존 정책과 저장소 진단
 
 Data Workspace 사이드바의 **저장소 상태 보기**에서 `datasets/`, `results/`의 S3 객체를 페이지 단위로 읽기 전용으로 대조할 수 있다. 대조는 관측 이력을 PostgreSQL에 기록하지만, S3의 객체를 삭제하지 않는다. `iceberg/`는 범용 대조에서 제외되며 별도 **Snapshot 검사**로 Dataset의 고정 Snapshot 존재를 확인한다. 진단은 해당 요청 시 실행되며 백그라운드 정리 스케줄은 없다.
