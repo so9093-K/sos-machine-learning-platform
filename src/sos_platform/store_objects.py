@@ -5,6 +5,8 @@ from uuid import uuid4
 
 from sqlalchemy import bindparam, text
 
+from .errors import WorkerOwnershipLost
+
 from .store_administration import now
 
 
@@ -16,7 +18,26 @@ class ObjectStoreMixin:
         if owner_kind not in ("upload", "attempt"):
             raise ValueError("Invalid object owner")
         write_id = str(uuid4())
-        with self.connection() as db:
+        # 실행 결과의 게시 의도는 해당 Attempt가 여전히 Running이며 Worker
+        # 잠금을 보유한 상태에서만 확정한다. 복구 뒤 늦게 도착한 이전 Worker가
+        # 고아 Pending 게시 의도를 생성하지 못하도록 잠금 세션을 공유한다.
+        connection = (
+            self.worker_ownership_connection()
+            if owner_kind == "attempt"
+            else self.connection()
+        )
+        with connection as db:
+            if owner_kind == "attempt":
+                active = db.execute(
+                    text(
+                        "SELECT a.id FROM attempts a JOIN jobs j ON j.id=a.job_id "
+                        "WHERE a.id=:id AND a.status='Running' AND j.status='Running' "
+                        "FOR UPDATE OF a"
+                    ),
+                    {"id": owner_id},
+                ).scalar_one_or_none()
+                if active is None:
+                    raise WorkerOwnershipLost("Job execution attempt has changed")
             db.execute(
                 text(
                     "INSERT INTO object_writes(id,location,owner_kind,owner_id,state,created_at,updated_at) "

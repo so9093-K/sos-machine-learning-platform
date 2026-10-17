@@ -243,6 +243,45 @@ def test_worker_recovery_rolls_back_if_lock_session_dies_during_audit(workspace,
         replacement.engine.dispose()
 
 
+def test_recovered_attempt_cannot_create_stale_object_write_intent(workspace):
+    """재인수된 Job의 이전 Attempt가 고아 Pending 객체 기록을 만들 수 없다."""
+    from sos_platform.store import WorkerOwnershipLost
+
+    client, store = workspace
+    source = upload(client)
+    created = client.post(
+        "/api/jobs",
+        json={
+            "dataset_id": source["id"],
+            "kind": "transform",
+            "transform": {"steps": [{"op": "fill_null", "column": "temperature", "value": 0}]},
+        },
+    )
+    assert created.status_code == 202
+    first = store.claim()
+    old_id = first["attempts"][-1]["id"]
+    store.recover()
+    current = store.claim()
+    current_id = current["attempts"][-1]["id"]
+    assert current_id != old_id
+
+    location = ObjectStore().location(f"results/{first['id']}/{old_id}.parquet")
+    with pytest.raises(WorkerOwnershipLost, match="attempt"):
+        store.begin_object_write(location=location, owner_kind="attempt", owner_id=old_id)
+    assert store.object_writes(location) == []
+
+    current_location = ObjectStore().location(f"results/{first['id']}/{current_id}.parquet")
+    pending_id = store.begin_object_write(
+        location=current_location, owner_kind="attempt", owner_id=current_id
+    )
+    pending = store.object_writes(current_location)
+    assert len(pending) == 1
+    assert pending[0]["id"] == pending_id
+    assert pending[0]["state"] == "Pending"
+    store.recover()
+    assert store.object_writes(current_location)[0]["state"] == "Failed"
+
+
 def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
     """실제 DB 백엔드를 종료해도 기존 Worker가 Job 완료를 확정하지 않는다."""
     from sqlalchemy import text
@@ -314,9 +353,7 @@ def test_lost_worker_ownership_before_claim_keeps_job_queued(workspace):
         replacement.engine.dispose()
 
 
-def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(
-    workspace, monkeypatch
-):
+def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(workspace, monkeypatch):
     """Claim 이후 소유권을 잃은 실행은 결과를 확정하지 않고 새 Worker 복구에 맡긴다."""
     from sos_platform.store import WorkerOwnershipLost
 

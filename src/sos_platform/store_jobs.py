@@ -292,7 +292,7 @@ class JobStoreMixin:
 
     def claim(self) -> dict | None:
         """행 잠금과 Worker 소유 세션으로 현재 Job을 한 Attempt가 인수한다."""
-        with self.worker_completion_connection() as db:
+        with self.worker_ownership_connection() as db:
             row = (
                 db.execute(
                     text(
@@ -344,7 +344,7 @@ class JobStoreMixin:
             raise ValueError("Invalid Job terminal status")
         if error_code is not None and error_code not in ERRORS:
             raise ValueError("Unregistered error code")
-        with self.worker_completion_connection() as db:
+        with self.worker_ownership_connection() as db:
             row = (
                 db.execute(
                     text(
@@ -487,7 +487,7 @@ class JobStoreMixin:
         """미완료 실행을 복구하고 정리 가능한 로컬 Attempt 식별자를 반환한다."""
         recovered: list[tuple[str, str]] = []
         # 새 잠금 소유자가 복구 도중 소유권을 잃으면 전체 복구를 롤백한다.
-        with self.worker_completion_connection() as db:
+        with self.worker_ownership_connection() as db:
             rows = (
                 db.execute(
                     text(

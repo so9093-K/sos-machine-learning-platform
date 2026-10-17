@@ -62,7 +62,7 @@ Dataset 메타데이터 확정은 PostgreSQL 트랜잭션으로 수행하고 파
 
 Transform Job의 결과는 `results/{job_id}/{attempt_id}.parquet`의 Attempt별 고유 경로로 보관한다. S3 전송 이전 객체 게시 의도를 기록하고 Dataset 등록·게시 상태·Job 성공은 하나의 PostgreSQL 트랜잭션에서 확정한다. DB 게시 실패 또는 취소 경합 시 객체는 즉시 삭제하지 않고 게시 실패 이력을 남기며 보존한다. Worker 강제 종료로 남은 미완료 Attempt의 게시 의도는 복구 시 실패로 기록한 뒤 일반 Transform Job을 새 Attempt로 재실행한다. 업로드 중단과 DB 장애로 상태를 판정할 수 없는 객체는 보존하고 읽기 전용 대조에서 확인 필요로 표시한다. 이 정책은 [ADR 0002](adr/0002-object-lifecycle.md)가 [ADR 0001](adr/0001-data-publication.md)의 즉시 보상 삭제 결정을 대체한 것이다. Iceberg append는 중단된 경우 자동 재시도하지 않는다.
 
-Worker의 Claim·중단 복구·Heartbeat 및 최종 Job 확정은 Worker advisory lock을 보유한 **동일 PostgreSQL 세션의 트랜잭션**에서 수행한다. 최종 확정은 현재 Running Attempt의 식별자를 함께 확인한다. 잠금 세션이 커밋 전 유실되면 데이터베이스가 작업 전체를 롤백하며, 새로운 Attempt가 생성된 뒤 도착한 이전 Attempt의 결과는 거부한다. 이 보호는 Iceberg Catalog·S3 바이트와 PostgreSQL 사이에 분산 트랜잭션을 만드는 것이 아니며 외부 커밋 불확실성은 그대로 수동 확인한다.
+Worker의 Claim·중단 복구·Heartbeat 및 최종 Job 확정은 Worker advisory lock을 보유한 **동일 PostgreSQL 세션의 트랜잭션**에서 수행한다. 최종 확정과 실행 결과 객체의 게시 의도 생성은 현재 Running Attempt의 식별자를 확인한다. 잠금 세션이 커밋 전 유실되면 데이터베이스가 작업 전체를 롤백하며, 새로운 Attempt가 생성된 뒤 도착한 이전 Attempt의 결과는 거부한다. 이 보호는 Iceberg Catalog·S3 바이트와 PostgreSQL 사이에 분산 트랜잭션을 만드는 것이 아니며 외부 커밋 불확실성은 그대로 수동 확인한다.
 
 ## Iceberg Snapshot 보호와 복구
 

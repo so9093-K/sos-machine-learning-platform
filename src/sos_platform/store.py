@@ -43,7 +43,7 @@ class Store(
             yield connection
 
     @contextmanager
-    def worker_completion_connection(self):
+    def worker_ownership_connection(self):
         """Worker 소유 세션에서 DB 결과 확정과 잠금의 수명을 결합한다.
 
         종료 커밋 직전에 세션이 끊기면 PostgreSQL은 해당 트랜잭션을
@@ -125,7 +125,7 @@ class Store(
 
     def heartbeat(self, *, active: bool = True):
         # 실제 잠금 세션의 트랜잭션에 heartbeat를 기록해 소유권 이탈을 막는다.
-        with self.worker_completion_connection() as db:
+        with self.worker_ownership_connection() as db:
             db.execute(
                 text(
                     "INSERT INTO workers(id,heartbeat_at,active) VALUES('data-worker',:at,:active) "
