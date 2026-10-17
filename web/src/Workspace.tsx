@@ -66,7 +66,6 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [queryPreview, setQueryPreview] = useState<{
     datasetId: string; revision: number; data: Preview
   } | null>(null);
-  const [showAllPreviewColumns, setShowAllPreviewColumns] = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
   const feedbackRequests = useRef(0);
@@ -120,6 +119,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     selected, onError: setError, withFeedback,
     onConnected: showRegisteredDataset, onImported: showSubmittedJob,
   });
+  const [showAllPreviewColumns, setShowAllPreviewColumns] = useState(false);
   const displayedPreview = queryPreview?.datasetId === selected &&
     queryPreview.revision === reloadRevision ? queryPreview.data : preview;
   const availableColumns = displayedPreview ? Object.keys(displayedPreview.schema) : [];
