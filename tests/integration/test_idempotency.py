@@ -73,12 +73,10 @@ def test_generic_and_exploration_jobs_share_idempotency_namespace(workspace):
     assert client.get(f"/api/jobs/{first.json()['id']}").status_code == 404
     assert client.get(f"/api/explorations/jobs/{general.json()['id']}").status_code == 404
     assert client.post(f"/api/jobs/{first.json()['id']}/cancel").status_code == 404
-    assert client.post(
-        f"/api/explorations/jobs/{general.json()['id']}/cancel"
-    ).status_code == 404
-    assert [job["id"] for job in client.get("/api/jobs").json()["items"]] == [
-        general.json()["id"]
-    ]
+    wrong_cancel = client.post(f"/api/explorations/jobs/{general.json()['id']}/cancel")
+    assert wrong_cancel.status_code == 404
+    general_ids = [job["id"] for job in client.get("/api/jobs").json()["items"]]
+    assert general_ids == [general.json()["id"]]
     assert [job["id"] for job in client.get("/api/explorations/jobs").json()["items"]] == [
         first.json()["id"]
     ]

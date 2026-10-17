@@ -183,24 +183,26 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         )
         assert exploration.status_code == 202, exploration.text
         exploration_id = exploration.json()["id"]
-        assert secure.get(
+        alice_detail = secure.get(
             f"/api/explorations/jobs/{exploration_id}", headers=headers("alice")
-        ).status_code == 200
-        assert secure.get(
+        )
+        bob_detail = secure.get(
             f"/api/explorations/jobs/{exploration_id}", headers=headers("bob")
-        ).status_code == 404
-        assert secure.get(
-            f"/api/jobs/{exploration_id}", headers=headers("alice")
-        ).status_code == 404
-        assert secure.get(
-            "/api/explorations/jobs", headers=headers("bob")
-        ).json()["items"] == []
-        assert secure.post(
+        )
+        general_detail = secure.get(f"/api/jobs/{exploration_id}", headers=headers("alice"))
+        bob_list = secure.get("/api/explorations/jobs", headers=headers("bob"))
+        bob_cancel = secure.post(
             f"/api/explorations/jobs/{exploration_id}/cancel", headers=headers("bob")
-        ).status_code == 403
-        assert secure.post(
+        )
+        alice_cancel = secure.post(
             f"/api/explorations/jobs/{exploration_id}/cancel", headers=headers("alice")
-        ).json()["status"] == "Cancelled"
+        )
+        assert alice_detail.status_code == 200
+        assert bob_detail.status_code == 404
+        assert general_detail.status_code == 404
+        assert bob_list.json()["items"] == []
+        assert bob_cancel.status_code == 403
+        assert alice_cancel.json()["status"] == "Cancelled"
         history = secure.get("/api/v2/audit", headers=headers("ops"))
         assert history.status_code == 200
         events = history.json()
