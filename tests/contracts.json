@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "contracts": [
+    {
+      "id": "DATASET-PERSIST-001",
+      "domain": "dataset",
+      "risk": "critical",
+      "description": "원본 파일·판본·등록과 마이그레이션의 영속성을 보존한다.",
+      "selectors": [
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_datasets.py"
+        },
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_storage.py"
+        }
+      ]
+    },
+    {
+      "id": "DATASET-REGISTER-201",
+      "domain": "dataset-ux",
+      "risk": "high",
+      "description": "201 등록 성공을 후속 목록 조회 실패가 소급해 실패로 변경하지 않는다.",
+      "selectors": [
+        {
+          "runner": "playwright",
+          "path_glob": "web/e2e/workspace.spec.ts",
+          "title_glob": "*registration remains successful when the subsequent list refresh fails"
+        },
+        {
+          "runner": "playwright",
+          "path_glob": "web/e2e/workspace.spec.ts",
+          "title_glob": "*dismissed 201 success notice stays dismissed*"
+        }
+      ]
+    },
+    {
+      "id": "JOB-ATTEMPT-STATE-001",
+      "domain": "execution",
+      "risk": "critical",
+      "description": "Job/Attempt 상태 전이·취소·멱등성·구형 Attempt의 게시 차단을 보존한다.",
+      "selectors": [
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_jobs.py"
+        },
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_idempotency.py"
+        }
+      ]
+    },
+    {
+      "id": "WORKER-RECOVERY-001",
+      "domain": "execution",
+      "risk": "critical",
+      "description": "Worker 중단·소유권 상실·Attempt 회복 시 데이터의 잘못된 게시를 막는다.",
+      "selectors": [
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_recovery.py"
+        },
+        {
+          "runner": "pytest",
+          "path_glob": "tests/test_worker_parent_lifetime.py"
+        }
+      ]
+    },
+    {
+      "id": "ICEBERG-WRITE-OWNER-001",
+      "domain": "iceberg",
+      "risk": "critical",
+      "description": "Iceberg Table UUID·Owner Token·쓰기 예약 검증과 무권한 Commit 방지를 보존한다.",
+      "selectors": [
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_iceberg_write_scope.py"
+        },
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_iceberg_ownership.py"
+        }
+      ]
+    },
+    {
+      "id": "ICEBERG-SNAPSHOT-001",
+      "domain": "iceberg",
+      "risk": "critical",
+      "description": "불확실한 외부 Commit·Snapshot/Tag 보존·고정 읽기와 삭제 금지를 보존한다.",
+      "selectors": [
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_iceberg.py"
+        },
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_snapshot_scope.py"
+        }
+      ]
+    },
+    {
+      "id": "RBAC-OWNERSHIP-001",
+      "domain": "security",
+      "risk": "critical",
+      "description": "역할·Dataset 소유권·거부 감사 및 Token 신원별 UI 접근 통제를 보호한다.",
+      "selectors": [
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_security.py"
+        },
+        {
+          "runner": "playwright",
+          "path_glob": "web/e2e/auth.spec.ts"
+        }
+      ]
+    },
+    {
+      "id": "DATASET-CACHE-LEASE-001",
+      "domain": "dataset",
+      "risk": "high",
+      "description": "Dataset 캐시와 읽기 Lease가 타인 데이터·활성 데이터를 손상하지 않게 한다.",
+      "selectors": [
+        {
+          "runner": "pytest",
+          "path_glob": "tests/integration/test_dataset_cache.py"
+        }
+      ]
+    },
+    {
+      "id": "API-ERROR-BOUNDARY-001",
+      "domain": "api",
+      "risk": "high",
+      "description": "HTTP 오류·Request ID·안전한 실패 메시지가 자격증명이나 구현 세부사항을 노출하지 않도록 한다.",
+      "selectors": [
+        {
+          "runner": "pytest",
+          "path_glob": "tests/test_api_error_boundary.py"
+        },
+        {
+          "runner": "vitest",
+          "path_glob": "web/src/api.test.ts"
+        }
+      ]
+    }
+  ]
+}

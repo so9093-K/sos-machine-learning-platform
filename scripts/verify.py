@@ -252,6 +252,7 @@ def main(argv: list[str] | None = None) -> int:
     commands_parser.add_parser("list")
     inventory = commands_parser.add_parser("inventory")
     inventory.add_argument("--output", type=Path, required=True)
+    inventory.add_argument("--registry", type=Path)
     run = commands_parser.add_parser("run")
     run.add_argument("suite", choices=sorted(SUITES))
     run.add_argument("--output-dir", type=Path)
@@ -264,19 +265,19 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
     if args.action == "inventory":
-        return subprocess.run(
-            [
-                "uv",
-                "run",
-                "--locked",
-                "python",
-                "scripts/verify_inventory.py",
-                "--output",
-                str(args.output),
-            ],
-            cwd=ROOT,
-            check=False,
-        ).returncode
+        command = [
+            "uv",
+            "run",
+            "--locked",
+            "python",
+            "scripts/verify_inventory.py",
+            "generate",
+            "--output",
+            str(args.output),
+        ]
+        if args.registry is not None:
+            command += ["--registry", str(args.registry)]
+        return subprocess.run(command, cwd=ROOT, check=False).returncode
     output = args.output_dir or default_output()
     status, outcome = execute(args.suite, output, base_ref=args.base_ref)
     print(json.dumps(outcome, ensure_ascii=False, indent=2))
