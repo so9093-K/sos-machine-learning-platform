@@ -41,3 +41,19 @@ def test_playwright_list_collects_each_named_case():
         "auth.spec.ts:4:1::viewer cannot upload",
         "workspace.spec.ts:12:1::registration 201",
     ]
+
+def test_inventory_vitest_uses_same_src_scope_as_frontend(monkeypatch):
+    calls = []
+
+    def fake_command(args, _cwd):
+        calls.append(args)
+        if args[0] == "uv":
+            return "tests/test_a.py::test_case\n"
+        if args[1] == "vitest":
+            return '[{"file":"src/unit.test.ts","tasks":[{"name":"case"}]}]'
+        return "  [chromium] › workspace.spec.ts:1:1 › registration\n"
+
+    monkeypatch.setattr(inventory, "command", fake_command)
+    records = inventory.collect()
+    assert ["npx", "vitest", "list", "src", "--json"] in calls
+    assert {record["runner"] for record in records} == {"pytest", "vitest", "playwright"}
