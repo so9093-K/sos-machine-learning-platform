@@ -44,7 +44,8 @@ def test_managed_defaults_match_compose_example_and_application(monkeypatch, tmp
 
     cli = _dev_module()
     monkeypatch.setattr(cli, "ROOT", tmp_path)
-    for key in (*CONFIG_KEYS, "SOS_DATABASE_URL", "SOS_DB_HOST", "SOS_S3_ENDPOINT", "SOS_S3_REGION"):
+    monkeypatch.delenv("SOS_S3_REGION", raising=False)
+    for key in (*CONFIG_KEYS, "SOS_DATABASE_URL", "SOS_DB_HOST", "SOS_S3_ENDPOINT"):
         monkeypatch.delenv(key, raising=False)
     defaults = cli.configuration()
     for key in CONFIG_KEYS:
