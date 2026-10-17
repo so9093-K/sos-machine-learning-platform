@@ -67,6 +67,8 @@ button.ghost{padding:8px;color:var(--sos-muted);background:transparent;border-ra
 .panel-head h3{font-size:19px;letter-spacing:-.02em}
 .panel-head p{color:var(--sos-muted);font-size:12px;margin-top:8px;max-width:630px}
 .table-scroll{width:100%;overflow:auto;border:1px solid var(--sos-border);border-radius:10px}
+.query-column-summary{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.query-column-summary .hint{margin:0}
 table{width:100%;border-collapse:collapse;min-width:540px;font-size:12px}
 th{background:var(--sos-raised);color:var(--sos-text);text-align:left;padding:13px 15px;font-weight:650;white-space:nowrap}
 th small{display:block;color:var(--sos-muted);font-weight:400;margin-top:5px}
