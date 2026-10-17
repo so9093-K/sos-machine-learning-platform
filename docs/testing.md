@@ -127,3 +127,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 `python scripts/verify.py inventory --output <경로>`는 실제 pytest `--collect-only`, Vitest `list --json`, Playwright `test --list`를 호출해 테스트 ID를 JSON으로 생성한다. 수집 0건·도구 오류는 실패로 처리하며 수집된 목록을 코드 외에 수동으로 복제하지 않는다. 인벤토리에는 실행 계층이 기록되며 보호 계약·위험도는 정당한 검토 전까지 `review_required`로 유지한다.
 
 신규/변경 테스트는 어떤 Dataset·Job·Snapshot·API·UX 계약을 보호하는지와 최소 비용 검증 계층을 리뷰한다. 통합·폐기에는 중복 증거, 남는 계약 범위, 실패 이력과 대체 테스트의 실제 실행 근거가 필요하며, 자동 수집 결과나 낮은 커버리지 수치만으로 삭제하지 않는다. 현재 인벤토리 명령과 정책은 구축 단계이며 플랫폼 간 실제 수집 검증은 최종 리뷰에서 별도로 판정한다.
+
+## CI 제공자 어댑터의 지원 범위
+
+GitHub Actions의 기존 보호 상태 `python-quality`는 세 핵심 Job이 모두 성공할 때만 성공하도록 유지한다. GitLab의 `.gitlab-ci.yml`은 동일 Native Runner/Suite 명령 및 JUnit·Manifest 경로를 사용하도록 구성한다. GitLab 설정은 격리된 `sos-ephemeral-shell` Runner를 전제하며 Python 3.12·uv·Node 24·npm·Docker Compose·브라우저·Make 준비가 필요하다. **실제 GitLab Runner가 없는 동안 GitLab 이식성은 미검증**이다. GitLab 자체 Merge Request 승인·보호 정책도 Runner 실행 검증과 별도 운영 설정이다.

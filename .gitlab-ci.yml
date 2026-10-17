@@ -1,0 +1,83 @@
+# SOS 검증 실행 의미는 scripts/verify.py가 소유한다.
+# 전제: 독립된 임시 Shell Runner (Python 3.12/uv, Node 24/npm, Docker Compose,
+# GNU Make, Chromium 설치 가능, 9600번대 포트 미사용).
+# 해당 태그/Runner의 실제 가용성은 GitLab 환경에서 별도로 검증해야 한다.
+stages:
+  - verify
+
+variables:
+  GIT_DEPTH: "0"
+
+python-tests:
+  stage: verify
+  tags: [sos-ephemeral-shell]
+  before_script:
+    - uv python install
+    - uv sync --locked --group dev
+    - cd web && npm ci --no-audit && cd ..
+  script:
+    - uv lock --check
+    - python3 scripts/check_doc_links.py
+    - uv run --locked python scripts/verify.py run openapi-types --output-dir reports/openapi-types
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+        BASE_SHA="$(git rev-parse "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME")"
+        uv run --locked python scripts/verify.py run openapi-compat --base-ref "$BASE_SHA" --output-dir reports/openapi-compat
+      fi
+    - uv run --locked python scripts/verify.py run ruff --output-dir reports/ruff
+    - uv run --locked python scripts/verify.py run python-unit --output-dir reports/python-unit
+    - uv run --locked python scripts/verify.py run wheel --output-dir reports/wheel
+    - docker compose -f compose.yaml -p sos-platform up -d --wait
+    - uv run --locked alembic upgrade head
+    - uv run --locked python -m sos_platform.bootstrap
+    - uv run --locked python scripts/verify.py run python-integration --output-dir reports/python-integration
+    - uv run --locked python scripts/verify.py run alembic --output-dir reports/alembic
+  after_script:
+    - docker compose -f compose.yaml -p sos-platform down
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    reports:
+      junit:
+        - reports/python-unit/python-unit.xml
+        - reports/python-integration/python-integration.xml
+    expire_in: 7 days
+
+frontend:
+  stage: verify
+  tags: [sos-ephemeral-shell]
+  before_script:
+    - cd web && npm ci --no-audit && cd ..
+  script:
+    - python3 scripts/verify.py run frontend --output-dir reports/frontend
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    reports:
+      junit: reports/frontend/frontend.xml
+    expire_in: 7 days
+
+ui-e2e:
+  stage: verify
+  tags: [sos-ephemeral-shell]
+  before_script:
+    - uv python install
+    - uv sync --locked --group dev
+    - cd web && npm ci --no-audit && npx playwright install --with-deps chromium && cd ..
+  script:
+    - uv run --locked python scripts/verify.py run workspace-e2e --output-dir reports/workspace
+    - uv run --locked python scripts/verify.py run make-lifecycle --output-dir reports/make-lifecycle
+    - uv run --locked python scripts/verify.py run token-rbac --output-dir reports/token-rbac
+  artifacts:
+    when: always
+    paths:
+      - reports/
+      - web/test-results/
+    reports:
+      junit:
+        - reports/workspace/workspace-e2e.xml
+        - reports/token-rbac/token-rbac.xml
+    expire_in: 7 days
