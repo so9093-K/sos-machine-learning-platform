@@ -196,9 +196,7 @@ def test_worker_completion_rolls_back_when_lock_session_dies_mid_transaction(
         replacement.engine.dispose()
 
 
-def test_worker_recovery_rolls_back_if_lock_session_dies_during_audit(
-    workspace, monkeypatch
-):
+def test_worker_recovery_rolls_back_if_lock_session_dies_during_audit(workspace, monkeypatch):
     """중단 복구가 잠금 세션을 잃으면 Job·Attempt·Audit 변경이 함께 롤백된다."""
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
