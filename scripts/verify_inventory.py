@@ -189,7 +189,9 @@ def load_registry(path: Path) -> list[dict]:
             if not isinstance(title, str) or not title.strip() or not title.strip("*?[] "):
                 raise ValueError(f"보호 계약 제목 조건 오류: {identifier}")
             if runner == "pytest" and any(char in title for char in "*?[]"):
-                raise ValueError(f"pytest 보호 계약 제목은 정확한 함수명이어야 합니다: {identifier}")
+                raise ValueError(
+                    f"pytest 보호 계약 제목은 정확한 함수명이어야 합니다: {identifier}"
+                )
             if (runner, pattern, title) in selected:
                 raise ValueError(f"보호 계약 중복 선택자: {identifier}")
             selected.add((runner, pattern, title))
