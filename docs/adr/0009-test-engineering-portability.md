@@ -44,3 +44,10 @@ SOS는 pytest·Vitest·Playwright와 `make check-fast`·`make check`를 사용�
 단계별 실행기 도입을 완료 판정과 혼동하지 않는다. Native Runner가 실제 1개 이상의 테스트를 실행한 증거가 있어야 하며, 리포트가 없거나 무효·필수 Skip 상태인 경우에는 성공으로 인정하지 않는다. 일반 명령형 검사(Ruff·Wheel 등)는 실행 종료 코드와 필수 단계 완료를 증거로 사용한다. 실행별 고유 디렉터리를 사용해 이전 결과를 재사용하지 않는다.
 
 공통 CLI는 CI 제공자 변수에 의존하지 않는다. CI 설정은 필요한 의존성·인프라·PR base 식별자를 제공하고 독립 Suite를 호출한다. 테스트 중단 후 정리 가능한 리소스는 소유 식별을 재확인하며 일반 개발 환경과 외부 자원을 자동 삭제하지 않는다. 실제 GitLab Runner 검증 전에는 설정 수준의 지원만 명시한다.
+
+## 수명주기 구현 및 검증 추적
+
+- Native Runner 수집과 Registry 기반 Critical/High 계약 분류를 분리한다. 테스트 ID는 코드에서 자동 수집하고 안정적 계약 ID는 `tests/contracts.json`에서 관리한다.
+- Playwright 최상위/중첩 테스트 수집과 각 Runner의 JUnit Test ID 대조는 CI 보호 게이트에서 실제 실행 증거로 검증한다.
+- 추가된 Registry는 핵심 계약부터 보호하며 다른 테스트는 `review_required`로 남긴다. 계약별 위험도는 테스트의 변동성이 아닌 손실·보안·무결성 영향으로 결정한다.
+- 설계·정책 확정 후 ADR의 Proposed → Accepted 전환 여부를 별도로 리뷰한다. GitLab 이식성 및 환경 강제 중단 복구는 아직 미검증이다.

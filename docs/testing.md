@@ -122,7 +122,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 
 이 절은 전환 중 구현 상태만 설명하며 ADR 0009의 전체 목표가 완료됐음을 뜻하지 않는다.
 
-## 테스트 인벤토리 및 수명주기 검토
+## 기존 테스트 인벤토리 전환 기록
 
 `python scripts/verify.py inventory --output <경로>`는 실제 pytest `--collect-only`, Vitest `list --json`, Playwright `test --list`를 호출해 테스트 ID를 JSON으로 생성한다. 수집 0건·도구 오류는 실패로 처리하며 수집된 목록을 코드 외에 수동으로 복제하지 않는다. 인벤토리에는 실행 계층이 기록되며 보호 계약·위험도는 정당한 검토 전까지 `review_required`로 유지한다.
 
@@ -131,3 +131,26 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 ## CI 제공자 어댑터의 지원 범위
 
 GitHub Actions의 기존 보호 상태 `python-quality`는 세 핵심 Job이 모두 성공할 때만 성공하도록 유지한다. GitLab의 `.gitlab-ci.yml`은 동일 Native Runner/Suite 명령 및 JUnit·Manifest 경로를 사용하도록 구성한다. GitLab 설정은 격리된 `sos-ephemeral-shell` Runner를 전제하며 Python 3.12·uv·Node 24·npm·Docker Compose·브라우저·Make 준비가 필요하다. **실제 GitLab Runner가 없는 동안 GitLab 이식성은 미검증**이다. GitLab 자체 Merge Request 승인·보호 정책도 Runner 실행 검증과 별도 운영 설정이다.
+
+## 테스트 자산 수명주기 정책
+
+테스트는 **Native Runner가 수집하는 실제 Test ID**와, SOS가 보호하기로 선택한 **안정적인 Contract ID**를 분리해 관리한다. 정본은 이 문서(리뷰 정책), `tests/contracts.json`(핵심 계약 메타데이터), 실제 pytest·Vitest·Playwright 테스트 코드(테스트 정의)이다. 별도 테스트 관리 DB나 복제된 전체 테스트 목록은 두지 않는다.
+
+- **등록(Discover):** `uv run --locked python scripts/verify.py inventory --output /tmp/sos-test-inventory.json`는 pytest `--collect-only`, Vitest `list src --json`, Playwright `test --list`를 실행해 각 테스트의 파일·안정적 제목을 추출한다. Playwright의 행 번호는 변경 식별자로 사용하지 않는다.
+- **분류(Classify):** Registry의 `id`, `domain`, `risk`, `description`, `selectors`를 사용해 다대다로 매핑한다. 새로운 테스트가 미분류일 경우 `review_required`로 남기며, 기존 핵심 계약의 모든 선택자가 실제 테스트를 한 개 이상 선택하지 못하면 실패한다. `risk`는 실패 횟수가 아닌 데이터 무결성·권한·복구 위험에 따라 `critical/high/normal`로 평가한다.
+- **검토(Review):** 기능 변경 시 계약·테스트의 의미·가장 낮은 적절한 실행 계층·중복 보호 이유를 PR에서 확인한다. 기존의 다른 테스트가 API 201을 검사하더라도 UI 상태 보존처럼 다른 계약을 보호하는 E2E는 중복으로 취급하지 않는다.
+- **운영(Monitor):** 수집 Inventory의 Test ID와 실제 Python·Frontend·Workspace·Token JUnit의 Test ID를 파일/이름 단위로 대조한다. 수집 누락, 실행 추가, 중복 ID, 빈 JUnit은 `python-quality` 실패이다. 테스트 수집·실행 건수는 일치해야 하며 Retry/Skip으로 차이를 숨기지 않는다.
+- **변경(Evolve):** 테스트 이름 변경·분리·통합 시 보호 계약이 유지되는지 리뷰하고 Registry 선택자와 근거를 같이 수정한다. 기존 테스트를 실패한다는 이유로 삭제하거나 Skip하지 않는다.
+- **폐기(Retire):** 계약 자체가 폐기됐거나 동일한 실패 경로가 실제 실행되는 대체 테스트에 의해 보호됨을 입증해야 한다. `uv run --locked python scripts/verify_inventory.py diff --before <이전-inventory.json> --after <신규-inventory.json>`로 제거된 ID와 위험을 검토한다. 삭제가 관측되면 자동 승인하지 않고 비영(非零) 종료한다. PR에는 Contract ID, 대체 테스트, 최근 CI/JUnit 실행 근거, 삭제 시 사라지는 실패 경로, 승인 리뷰를 기록한다.
+
+### 위험도와 검토 범위
+
+| 등급 | 기준 | 현 Registry 대상 예시 |
+| --- | --- | --- |
+| Critical | 사용자 데이터 손실, 보안 경계 위반, 불명확한 외부 Commit, Worker 잘못된 게시 | Dataset 원본 보존, Job/Attempt, Worker Recovery, Iceberg 소유권/Snapshot, RBAC |
+| High | 주요 사용자 작업의 잘못된 성공/실패 상태, 데이터 캐시·API 안전성 악화 | Dataset 201 성공 안내, Cache Lease, API 오류 비노출 |
+| Normal | 제한적인 표현·검증 편의성, 주요 불변조건 외 영역 | 기능별 리뷰에서 승인해 Registry로 승격 |
+
+수명주기 `active`는 계약 연결이 유지되는 테스트, `review_required`는 분류가 아직 필요한 테스트를 의미한다. 이 상태는 실행 결과 `passed/failed/skipped`와 독립적이다. **미분류 테스트는 자동 폐기 대상으로 보지 않는다.** 신규 계약은 적절한 테스트 계층·최소 검증 수와 함께 Registry에 등록하고, 기존 Critical 계약의 제거 또는 격하 시 리뷰 증거를 요구한다.
+
+GitHub의 `python-quality`는 세 실행 Job뿐 아니라 수집 목록과 JUnit 대조까지 성공해야 성공한다. GitLab도 동일한 대조 명령을 `test-evidence` 단계에서 호출하지만 **실제 GitLab Runner 검증은 아직 수행되지 않았다.**

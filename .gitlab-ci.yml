@@ -4,6 +4,7 @@
 # 해당 태그/Runner의 실제 가용성은 GitLab 환경에서 별도로 검증해야 한다.
 stages:
   - verify
+  - evidence
 
 variables:
   GIT_DEPTH: "0"
@@ -82,3 +83,25 @@ ui-e2e:
         - reports/workspace/workspace-e2e.xml
         - reports/token-rbac/token-rbac.xml
     expire_in: 7 days
+
+# 자원 소유권과 실행 의미는 동일 CLI가 결정한다.
+# 각 Job이 실패했을 때는 이 Job이 건너뛰고 전체 Pipeline이 실패한다.
+test-evidence:
+  stage: evidence
+  tags: [sos-ephemeral-shell]
+  needs:
+    - job: python-tests
+      artifacts: true
+    - job: frontend
+      artifacts: true
+    - job: ui-e2e
+      artifacts: true
+  script:
+    - >
+      python3 scripts/verify_inventory.py reconcile
+      --inventory reports/test-inventory.json
+      --pytest-report reports/python-unit/python-unit.xml
+      --pytest-report reports/python-integration/python-integration.xml
+      --vitest-report reports/frontend/frontend.xml
+      --playwright-report reports/workspace/workspace-e2e.xml
+      --playwright-report reports/token-rbac/token-rbac.xml
