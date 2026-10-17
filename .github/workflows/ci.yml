@@ -39,36 +39,19 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Install frontend dependencies for API types
+        run: cd web && npm ci --no-audit
       - name: Verify generated OpenAPI types
-        run: |
-          cd web && npm ci --no-audit && npm run generate:types
-          git diff -- src/api.generated.ts
-          git diff --exit-code -- src/api.generated.ts
+        run: uv run --locked python scripts/verify.py run openapi-types --output-dir /tmp/sos-openapi-types
       - name: Verify API backward compatibility
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git worktree add --detach /tmp/sos-ci-base "$BASE_SHA"
-          trap 'git worktree remove --force /tmp/sos-ci-base' EXIT
-          if cmp -s /tmp/sos-ci-base/uv.lock uv.lock; then
-            PYTHONPATH=/tmp/sos-ci-base/src uv run --locked python /tmp/sos-ci-base/scripts/export_openapi.py > /tmp/sos-api-before.json
-          else
-            (cd /tmp/sos-ci-base && uv sync --locked --group dev && uv run --locked python scripts/export_openapi.py) > /tmp/sos-api-before.json
-          fi
-          uv run --locked python scripts/export_openapi.py > /tmp/sos-api-after.json
-          uv run --locked python scripts/check_api_compat.py /tmp/sos-api-before.json /tmp/sos-api-after.json
-      - name: Ruff lint
-        run: uv run --locked ruff check .
-      - name: Explain lint failure
-        if: failure()
-        run: uv run --locked ruff check --diff .
-      - name: Ruff format
-        run: uv run --locked ruff format --check .
-      - name: Explain formatting failure
-        if: failure()
-        run: uv run --locked ruff format --diff .
+        run: uv run --locked python scripts/verify.py run openapi-compat --base-ref "$BASE_SHA" --output-dir /tmp/sos-openapi-compat
+      - name: Ruff lint and format (common Suite)
+        run: uv run --locked python scripts/verify.py run ruff --output-dir /tmp/sos-ruff
+      - name: Infrastructure-free Python tests
+        run: uv run --locked python scripts/verify.py run python-unit --output-dir /tmp/sos-python-unit
       - name: Start integration infrastructure
         run: docker compose -f compose.yaml -p sos-platform up -d --wait
       - name: Migrate database and prepare object storage
@@ -76,35 +59,23 @@ jobs:
           uv run --locked alembic upgrade head
           uv run --locked python -m sos_platform.bootstrap
       - name: Verify installed wheel can read packaged Alembic HEAD
-        run: |
-          uv build --wheel --out-dir /tmp/sos-wheel
-          uv pip install --target /tmp/sos-installed --no-deps /tmp/sos-wheel/*.whl
-          cd /tmp
-          "$GITHUB_WORKSPACE/.venv/bin/python" -I - <<'PY'
-          import sys
-          from pathlib import Path
-          from tempfile import TemporaryDirectory
-          sys.path.insert(0, "/tmp/sos-installed")
-          import sos_platform
-          from sos_platform.store import Store
-          assert Path(sos_platform.__file__).is_relative_to("/tmp/sos-installed")
-          with TemporaryDirectory() as directory:
-              store = Store(Path(directory))
-              store.initialize()
-              store.engine.dispose()
-          PY
-      - name: Unit and integration tests
-        run: uv run --locked pytest -q --junitxml=/tmp/sos-pytest-results.xml
+        run: uv run --locked python scripts/verify.py run wheel --output-dir /tmp/sos-wheel-check
+      - name: Infrastructure integration tests
+        run: uv run --locked python scripts/verify.py run python-integration --output-dir /tmp/sos-python-integration
       - name: Publish Python test report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-test-report
-          path: /tmp/sos-pytest-results.xml
+          path: |
+            /tmp/sos-python-unit/*.xml
+            /tmp/sos-python-unit/manifest.json
+            /tmp/sos-python-integration/*.xml
+            /tmp/sos-python-integration/manifest.json
           if-no-files-found: ignore
           retention-days: 7
       - name: Verify metadata schema matches migration
-        run: uv run --locked alembic check
+        run: uv run --locked python scripts/verify.py run alembic --output-dir /tmp/sos-alembic
       - name: Extended module-order regression (scheduled/manual)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
@@ -121,12 +92,16 @@ jobs:
       - name: Install frontend dependencies
         working-directory: web
         run: npm ci --no-audit
-      - name: TypeScript and Vite build
-        working-directory: web
-        run: npm run build
-      - name: Frontend tests
-        working-directory: web
-        run: npm run test
+      - name: Frontend build and Vitest (common Suite)
+        run: python3 scripts/verify.py run frontend --output-dir /tmp/sos-frontend
+      - name: Save Frontend JUnit and manifest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: frontend-test-report
+          path: /tmp/sos-frontend/
+          if-no-files-found: ignore
+          retention-days: 7
 
   ui-e2e:
     runs-on: ubuntu-latest
@@ -152,7 +127,7 @@ jobs:
       - name: Browser workflow tests in separate E2E volumes
         env:
           SOS_JUNIT_FILE: reports/workspace.xml
-        run: uv run --locked python scripts/run_isolated_e2e.py
+        run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
       - name: Make lifecycle and data persistence
         run: |
           make

@@ -614,13 +614,10 @@ def check(config: dict):
             "통합 검증 전에 플랫폼이 Ready 상태여야 합니다.",
             "make up을 먼저 실행하세요.",
         )
+    suites = ("ruff", "python-unit", "python-integration", "frontend", "workspace-e2e")
     commands = [
-        (["uv", "run", "--locked", "ruff", "check", "."], ROOT),
-        (["uv", "run", "--locked", "ruff", "format", "--check", "."], ROOT),
-        (["uv", "run", "--locked", "pytest", "-q"], ROOT),
-        (["npm", "run", "build"], ROOT / "web"),
-        (["npm", "run", "test"], ROOT / "web"),
-        (["uv", "run", "--locked", "python", "scripts/run_isolated_e2e.py"], ROOT),
+        (["uv", "run", "--locked", "python", "scripts/verify.py", "run", suite], ROOT)
+        for suite in suites
     ]
     return _run_checks(config, commands, operation="check")
 
@@ -640,38 +637,12 @@ def _run_checks(config: dict, commands: list[tuple[list[str], Path]], *, operati
 
 def check_fast(config: dict):
     """DB·S3·Web·Worker가 없어도 실행할 수 있는 빠른 검증."""
-    return _run_checks(
-        config,
-        [
-            (["uv", "run", "--locked", "ruff", "check", "."], ROOT),
-            (["uv", "run", "--locked", "ruff", "format", "--check", "."], ROOT),
-            (
-                [
-                    "uv",
-                    "run",
-                    "--locked",
-                    "pytest",
-                    "-q",
-                    "tests/test_processing.py",
-                    "tests/test_dev_cli.py",
-                    "tests/test_api_compat.py",
-                    "tests/test_configuration_contract.py",
-                    "tests/test_doc_links.py",
-                    "tests/test_pagination.py",
-                    "tests/test_execution_budget.py",
-                    "tests/test_resource_admission.py",
-                    "tests/test_errors.py",
-                    "tests/test_e2e_isolation.py",
-                    "tests/test_diagnostics.py",
-                    "tests/test_log_capture.py",
-                ],
-                ROOT,
-            ),
-            (["npm", "run", "test"], ROOT / "web"),
-            (["npm", "run", "build"], ROOT / "web"),
-        ],
-        operation="check-fast",
-    )
+    suites = ("ruff", "python-unit", "frontend")
+    commands = [
+        (["uv", "run", "--locked", "python", "scripts/verify.py", "run", suite], ROOT)
+        for suite in suites
+    ]
+    return _run_checks(config, commands, operation="check-fast")
 
 
 def help_text():
