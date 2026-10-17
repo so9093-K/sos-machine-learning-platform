@@ -10,15 +10,12 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, text
 
 from .config import Settings
+from .errors import WorkerOwnershipLost
 from .store_administration import AdministrationStoreMixin, now
 from .store_datasets import DatasetStoreMixin
 from .store_jobs import JobStoreMixin
 from .store_objects import ObjectStoreMixin
 from .store_snapshots import SnapshotStoreMixin
-
-
-class WorkerOwnershipLost(RuntimeError):
-    """Worker 소유권을 보장하던 PostgreSQL 세션이 바뀌었거나 끊겼다."""
 
 
 class Store(
@@ -44,6 +41,21 @@ class Store(
     def connection(self):
         with self.engine.begin() as connection:
             yield connection
+
+    @contextmanager
+    def worker_completion_connection(self):
+        """Worker 소유 세션에서 DB 결과 확정과 잠금의 수명을 결합한다.
+
+        종료 커밋 직전에 세션이 끊기면 PostgreSQL은 해당 트랜잭션을
+        롤백한다. 직접 Store를 사용하는 단위·통합 테스트는 일반 연결을 사용한다.
+        """
+        if self._worker_lock is None:
+            with self.connection() as db:
+                yield db
+            return
+        self._assert_worker_ownership()
+        with self._worker_lock.begin():
+            yield self._worker_lock
 
     def initialize(self):
         """현재 Alembic HEAD와 DB 스키마가 일치하는지만 확인한다."""
@@ -95,12 +107,21 @@ class Store(
         if self._worker_lock is None:
             return
         try:
-            backend_pid = self._worker_lock.execute(text("SELECT pg_backend_pid()")).scalar_one()
+            backend_pid, has_lock = self._worker_lock.execute(
+                text(
+                    "SELECT pg_backend_pid(), EXISTS ("
+                    "SELECT 1 FROM pg_locks "
+                    "WHERE pid=pg_backend_pid() AND locktype='advisory' "
+                    "AND mode='ExclusiveLock' AND granted "
+                    "AND classid=0::oid AND objid=hashtext('sos-data-worker')::oid "
+                    "AND objsubid=1)"
+                )
+            ).one()
             self._worker_lock.commit()
         except Exception as exc:
             raise WorkerOwnershipLost("Worker advisory lock session is unavailable") from exc
-        if backend_pid != self._worker_backend_pid:
-            raise WorkerOwnershipLost("Worker advisory lock session has changed")
+        if backend_pid != self._worker_backend_pid or not has_lock:
+            raise WorkerOwnershipLost("Worker advisory lock ownership has changed")
 
     def heartbeat(self, *, active: bool = True):
         # 접속 복구만으로 잃어버린 advisory lock을 소유했다고 주장해서는 안 된다.

@@ -213,14 +213,14 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
             if store.cancellation_requested(job_id):
                 store._assert_worker_ownership()
                 _stop(process)
-                store.finish(job_id, "Cancelled")
+                store.finish(job_id, "Cancelled", attempt_id=attempt_id)
                 return True
 
         # Worker 종료 직후 소유권을 확인한다. 유실 시 이전 Worker는
         # 취소나 성공을 확정하지 않고 새 Worker의 복구에 판단을 맡긴다.
         store._assert_worker_ownership()
         if store.cancellation_requested(job_id):
-            store.finish(job_id, "Cancelled")
+            store.finish(job_id, "Cancelled", attempt_id=attempt_id)
             return True
         if not completed.exists():
             raise RuntimeError(f"Execution process exited ({process.exitcode}) without result")
@@ -241,6 +241,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
             store.finish(
                 job_id,
                 "Failed",
+                attempt_id=attempt_id,
                 error=ERRORS[code].message,
                 error_code=code,
                 failure_stage=outcome.get("failure_stage"),
@@ -267,7 +268,12 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
         result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}
         store._assert_worker_ownership()
         final_status = store.finish(
-            job_id, "Succeeded", result=result, publish=publish, write_id=write_id
+            job_id,
+            "Succeeded",
+            attempt_id=attempt_id,
+            result=result,
+            publish=publish,
+            write_id=write_id,
         )
         if final_status != "Succeeded" and write_id:
             store.fail_object_write(write_id, "Job cancelled during publication")
@@ -335,6 +341,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
         store.finish(
             job_id,
             "Failed",
+            attempt_id=attempt_id,
             error=ERRORS[code].message,
             error_code=code,
             failure_stage="execution" if isinstance(exc, ExecutionLimitExceeded) else "publication",

@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from sqlalchemy import bindparam, text
 
-from .errors import ERRORS, InvalidRequestError, PlatformError
+from .errors import ERRORS, InvalidRequestError, PlatformError, WorkerOwnershipLost
 from .store_administration import now
 
 
@@ -328,6 +328,7 @@ class JobStoreMixin:
         job_id: str,
         status: str,
         *,
+        attempt_id: str,
         result: dict | None = None,
         error: str | None = None,
         publish: dict | None = None,
@@ -343,7 +344,7 @@ class JobStoreMixin:
             raise ValueError("Invalid Job terminal status")
         if error_code is not None and error_code not in ERRORS:
             raise ValueError("Unregistered error code")
-        with self.connection() as db:
+        with self.worker_completion_connection() as db:
             row = (
                 db.execute(
                     text(
@@ -357,6 +358,16 @@ class JobStoreMixin:
             )
             if not row or row["status"] != "Running":
                 raise RuntimeError("Job is not running")
+            # 이전 실행은 새 Claim으로 생성된 Attempt의 결과를 확정할 수 없다.
+            active_attempt = db.execute(
+                text(
+                    "SELECT id FROM attempts WHERE job_id=:job_id AND status='Running' "
+                    "FOR UPDATE"
+                ),
+                {"job_id": job_id},
+            ).scalar_one_or_none()
+            if active_attempt != attempt_id:
+                raise WorkerOwnershipLost("Job execution attempt has changed")
             if row["cancel_requested"]:
                 status, result, publish = "Cancelled", None, None
                 error, error_code, failure_stage = None, None, None
@@ -430,10 +441,11 @@ class JobStoreMixin:
                     "UPDATE attempts SET status=:status,finished_at=:at,error=:error,"
                     "error_code=:error_code,failure_stage=:failure_stage,"
                     "failure_category=:failure_category,exception_type=:exception_type "
-                    "WHERE job_id=:id AND status='Running' RETURNING id"
+                    "WHERE job_id=:id AND id=:attempt_id AND status='Running' RETURNING id"
                 ),
                 dict(
                     id=job_id,
+                    attempt_id=attempt_id,
                     status=status,
                     at=now(),
                     error=error,

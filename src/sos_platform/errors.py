@@ -188,6 +188,10 @@ class RuntimeConfigurationError(ValueError):
     """서버 자원 설정의 모순·오입력. 클라이언트의 요청 검증 오류가 아니다."""
 
 
+class WorkerOwnershipLost(RuntimeError):
+    """Worker 잠금 세션 또는 확정 대상 Attempt의 소유권이 사라졌다."""
+
+
 class PlatformError(Exception):
     """안전한 사용자 오류 메시지와 안정적인 오류 코드를 보유한다."""
 

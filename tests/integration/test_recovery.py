@@ -119,6 +119,83 @@ def test_new_attempt_uses_distinct_local_paths_after_recovery(workspace):
     assert set(first_paths).isdisjoint(second_paths)
 
 
+def test_worker_unlock_without_backend_change_revokes_ownership(workspace):
+    """동일한 DB Backend PID라도 실제 advisory lock이 없으면 소유권이 없다."""
+    from sqlalchemy import text
+
+    from sos_platform.store import WorkerOwnershipLost
+
+    _, store = workspace
+    assert store.acquire_worker()
+    try:
+        assert store._worker_lock.execute(
+            text("SELECT pg_advisory_unlock(hashtext('sos-data-worker'))")
+        ).scalar_one()
+        store._worker_lock.commit()
+        with pytest.raises(WorkerOwnershipLost, match="ownership"):
+            store._assert_worker_ownership()
+    finally:
+        store.release_worker()
+
+
+def test_worker_completion_rolls_back_when_lock_session_dies_mid_transaction(
+    workspace, monkeypatch
+):
+    """Job 결과와 Attempt 업데이트 중 잠금 세션이 죽으면 전체 DB 게시를 롤백한다."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    client, store = workspace
+    source = upload(client)
+    created = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    assert created.status_code == 202
+    assert store.acquire_worker()
+    running = store.claim()
+    assert running is not None
+    original_audit = Store._audit
+    killed = False
+
+    def kill_before_commit(db, **kwargs):
+        nonlocal killed
+        if kwargs["action"] == "job.finish":
+            killed = True
+            with store.engine.begin() as admin:
+                assert admin.execute(
+                    text("SELECT pg_terminate_backend(:pid)"),
+                    {"pid": store._worker_backend_pid},
+                ).scalar_one()
+        return original_audit(db, **kwargs)
+
+    monkeypatch.setattr(Store, "_audit", staticmethod(kill_before_commit))
+    try:
+        with pytest.raises(DBAPIError):
+            store.finish(
+                running["id"],
+                "Succeeded",
+                attempt_id=running["attempts"][-1]["id"],
+                result={"ok": True},
+            )
+        assert killed
+        pending = store.get_job(running["id"])
+        assert pending["status"] == "Running"
+        assert pending["attempts"][-1]["status"] == "Running"
+        assert pending["result"] is None
+    finally:
+        store.release_worker()
+        monkeypatch.setattr(Store, "_audit", staticmethod(original_audit))
+    replacement = Store(store.home, database_url=store.database_url)
+    try:
+        assert replacement.acquire_worker()
+        assert (
+            running["id"],
+            running["attempts"][-1]["id"],
+        ) in replacement.recover()
+        assert replacement.get_job(running["id"])["status"] == "Queued"
+    finally:
+        replacement.release_worker()
+        replacement.engine.dispose()
+
+
 def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
     """실제 DB 백엔드를 종료해도 기존 Worker가 Job 완료를 확정하지 않는다."""
     from sqlalchemy import text
