@@ -273,7 +273,7 @@ def test_specific_protection_leaves_other_tests_in_same_file_standard():
                 {
                     "runner": "pytest",
                     "path": "tests/integration/test_jobs.py",
-                    "title": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
+                    "title": "test_stale_attempt_cannot_complete_or_publish_new_attempt",
                 }
             ],
         }
@@ -298,7 +298,7 @@ def test_protected_test_missing_fails_even_if_file_has_other_tests():
                 {
                     "runner": "pytest",
                     "path": "tests/integration/test_jobs.py",
-                    "title": "test_stale_attempt_cannot_complete_or_publish_new_attempt*",
+                    "title": "test_stale_attempt_cannot_complete_or_publish_new_attempt",
                 }
             ],
         }
