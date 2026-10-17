@@ -22,7 +22,8 @@ from sqlalchemy import text
 
 from .cache import cached_dataset_file
 from .datasets import iceberg_catalog
-from .errors import PlatformError
+from .errors import InvalidRequestError, PlatformError, RuntimeConfigurationError
+from .resource_admission import reserve_execution_memory
 from .store import Store
 
 
@@ -38,18 +39,19 @@ class DiscoveryPolicy:
 
     @classmethod
     def from_env(cls) -> "DiscoveryPolicy":
+        defaults = cls()
         names = {
-            "memory_mib": ("SOS_DISCOVERY_MEMORY_MIB", 128, 16384, 1024),
-            "threads": ("SOS_DISCOVERY_THREADS", 1, 16, 2),
-            "temp_mib": ("SOS_DISCOVERY_TEMP_MIB", 128, 65536, 2048),
-            "max_groups": ("SOS_DISCOVERY_MAX_GROUPS", 1, 1000, 100),
-            "max_sample": ("SOS_DISCOVERY_MAX_SAMPLE", 100, 100000, 10000),
+            "memory_mib": ("SOS_DISCOVERY_MEMORY_MIB", 128, 16384, defaults.memory_mib),
+            "threads": ("SOS_DISCOVERY_THREADS", 1, 16, defaults.threads),
+            "temp_mib": ("SOS_DISCOVERY_TEMP_MIB", 128, 65536, defaults.temp_mib),
+            "max_groups": ("SOS_DISCOVERY_MAX_GROUPS", 1, 1000, defaults.max_groups),
+            "max_sample": ("SOS_DISCOVERY_MAX_SAMPLE", 100, 100000, defaults.max_sample),
         }
         values = {}
         for field, (name, low, high, default) in names.items():
             raw = os.getenv(name, str(default))
             if not raw.isdecimal() or not low <= int(raw) <= high:
-                raise ValueError(f"{name} must be between {low} and {high}")
+                raise RuntimeConfigurationError(f"{name} must be between {low} and {high}")
             values[field] = int(raw)
         return cls(**values)
 
@@ -180,12 +182,13 @@ class DiscoveryAdmission:
 
     @classmethod
     def from_env(cls) -> "DiscoveryAdmission":
-        active = os.getenv("SOS_DISCOVERY_MAX_ACTIVE", "1")
-        wait = os.getenv("SOS_DISCOVERY_WAIT_SECONDS", "15")
+        defaults = cls()
+        active = os.getenv("SOS_DISCOVERY_MAX_ACTIVE", str(defaults.max_active))
+        wait = os.getenv("SOS_DISCOVERY_WAIT_SECONDS", str(defaults.wait_seconds))
         if not active.isdecimal() or not 1 <= int(active) <= 8:
-            raise ValueError("SOS_DISCOVERY_MAX_ACTIVE must be between 1 and 8")
+            raise RuntimeConfigurationError("SOS_DISCOVERY_MAX_ACTIVE must be between 1 and 8")
         if not wait.isdecimal() or not 1 <= int(wait) <= 300:
-            raise ValueError("SOS_DISCOVERY_WAIT_SECONDS must be between 1 and 300")
+            raise RuntimeConfigurationError("SOS_DISCOVERY_WAIT_SECONDS must be between 1 and 300")
         return cls(max_active=int(active), wait_seconds=int(wait))
 
 
@@ -230,7 +233,13 @@ def source_connection(
     scratch_root.mkdir(parents=True, exist_ok=True)
     # 각 요청에만 속한 Spill 파일은 연결 종료 후 함께 정리한다.
     # 다른 사용자·Worker가 사용하는 경로나 기존 캐시를 삭제하지 않는다.
-    with discovery_slot(store), ExitStack() as pins:
+    with ExitStack() as pins:
+        # 작업의 자원 수용을 먼저 확인한다. 용량을 기다리는 요청이 Discovery 슬롯을
+        # 점유하면 이미 예약된 Worker의 탐색 실행이 불필요하게 지연될 수 있다.
+        # Worker 자식은 부모에서 예약했으므로 별도 메모리를 이중 예약하지 않는다.
+        if not getattr(store, "_execution_memory_reserved", False):
+            pins.enter_context(reserve_execution_memory(store, policy.memory_mib))
+        pins.enter_context(discovery_slot(store))
         with TemporaryDirectory(prefix="query-", dir=scratch_root) as directory:
             scratch = Path(directory)
             path = (
@@ -265,7 +274,9 @@ def source_connection(
                     table = iceberg_catalog(store).load_table(dataset["location"])
                     snapshot = int(dataset["version"])
                     if snapshot not in {s.snapshot_id for s in table.snapshots()}:
-                        raise ValueError("Iceberg snapshot is not available; it may have expired")
+                        raise InvalidRequestError(
+                            "Iceberg snapshot is not available; it may have expired"
+                        )
                     reader = table.scan(snapshot_id=snapshot).to_arrow_batch_reader()
                     connection.register("source", reader)
                     connection.execute("SET enable_external_access = false")
@@ -328,7 +339,7 @@ def overview(store: Store, dataset: dict) -> dict:
 
 def preview(store: Store, dataset: dict, limit: int = 30) -> dict:
     if not 1 <= limit <= 100:
-        raise ValueError("Preview limit must be between 1 and 100")
+        raise InvalidRequestError("Preview limit must be between 1 and 100")
     with source_connection(store, dataset) as conn:
         schema = {c["name"]: c["dtype"] for c in _columns(conn)}
         raw = _records(conn.execute("SELECT * FROM source LIMIT ?", [limit]))
@@ -350,7 +361,7 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
         if query.order_by:
             referenced.append(query.order_by)
         if not set(referenced).issubset(available):
-            raise ValueError("Unknown Dataset query column")
+            raise InvalidRequestError("Unknown Dataset query column")
         where = []
         params = []
         for predicate in query.filters:
@@ -375,7 +386,7 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
             raw = _records(conn.execute(sql, [*params, query.limit]))
         except (duckdb.ConversionException, duckdb.BinderException) as exc:
             # 비교 자료형이 맞지 않는 사용자 입력은 Internal 500이 아닌 422다.
-            raise ValueError(
+            raise InvalidRequestError(
                 "Dataset query comparison is incompatible with the column type"
             ) from exc
     return {
@@ -388,7 +399,7 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
 def profile(store: Store, dataset: dict, sample: int | None = 1000) -> dict:
     policy = DiscoveryPolicy.from_env()
     if sample is not None and not 1 <= sample <= policy.max_sample:
-        raise ValueError("Invalid profile sample limit")
+        raise InvalidRequestError("Invalid profile sample limit")
     with source_connection(store, dataset, policy) as conn:
         schema = _columns(conn)
         scope = "source" if sample is None else "(SELECT * FROM source LIMIT ?) AS sampled_source"
@@ -455,7 +466,7 @@ def explore(
 ) -> dict:
     """동일 집계 정의로 제한된 대화형 샘플과 전체 Worker Job을 실행한다."""
     if scope not in ("sample", "full"):
-        raise ValueError("Invalid exploration scope")
+        raise InvalidRequestError("Invalid exploration scope")
     policy = DiscoveryPolicy.from_env()
     expressions = {
         "count": lambda col: "COUNT(*)",
@@ -465,13 +476,13 @@ def explore(
         "max": lambda col: f"MAX({col})",
     }
     if metric not in expressions:
-        raise ValueError("Unsupported exploration metric")
+        raise InvalidRequestError("Unsupported exploration metric")
     with source_connection(store, dataset, policy) as conn:
         actual = {c["name"]: c for c in _columns(conn)}
         if column not in actual or (group_by is not None and group_by not in actual):
-            raise ValueError("Unknown exploration column")
+            raise InvalidRequestError("Unknown exploration column")
         if metric in ("mean", "min", "max") and not _numeric_type(actual[column]["sql_type"]):
-            raise ValueError("Numeric metric requires numeric column")
+            raise InvalidRequestError("Numeric metric requires numeric column")
         value = expressions[metric](quoted(column))
         source = (
             f"(SELECT * FROM source LIMIT {policy.max_sample}) AS sample_source"

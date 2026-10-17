@@ -45,7 +45,7 @@ describe("API failure diagnostic contract", () => {
     expect(formatError(definitive)).not.toContain("재시도");
   });
 
-  it("preserves legacy field validation and request header on non-JSON response", async () => {
+  it("preserves request ID and status on non-JSON error responses", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("temporarily unavailable", {
       status: 503, headers: { "X-Request-ID": "trace-example" },
     })));
@@ -61,9 +61,9 @@ describe("API failure diagnostic contract", () => {
       { status: 401 },
     ));
     vi.stubGlobal("fetch", fetchMock);
-    await expect(request("/api/auth/me")).rejects.toThrow("인증 실패");
+    await expect(request("/api/v2/auth/me")).rejects.toThrow("인증 실패");
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(path).toBe("/api/auth/me");
+    expect(path).toBe("/api/v2/auth/me");
     expect(new Headers(init.headers).has("Authorization")).toBe(true);
   });
 });

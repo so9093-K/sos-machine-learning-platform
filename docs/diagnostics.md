@@ -10,13 +10,14 @@
 
 ## 오류 응답과 호환성
 
-API는 기존 `detail`(문자열·필드 오류 배열·객체)을 유지하면서 `code`, `category`, `retry_policy`, `request_id`, `type`, `title`, `status`, `instance`를 제공한다. HTTP 상태와 `X-Request-ID`도 전달한다. `ProblemOut`이 OpenAPI 계약의 정본이며, 통신 타입은 생성된 TypeScript 타입을 사용한다.
+API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)과 `code`, `category`, `retry_policy`, `request_id`, `type`, `title`, `status`, `instance`를 제공한다. HTTP 상태와 `X-Request-ID`도 전달한다. `ProblemOut`이 OpenAPI 계약의 정본이며, 통신 타입은 생성된 TypeScript 타입을 사용한다.
 
+- 서버 자원 설정이 잘못됐거나 Worker 예산이 하위 실행기의 논리 메모리를 포함하지 못하면 **사용자 입력 422가 아닌 서버 내부 500**이다. 오류 응답은 설정 원문·비밀값을 반환하지 않으며, 관리자는 실행 환경과 자원 정책을 확인해야 한다.
 - `never`: 사용자 입력·권한 또는 상태를 수정해야 한다. 자동 재시도하지 않는다.
 - `after_refresh`: 현재 상태를 재조회하고 재시도가 안전한지 판단한다. 쓰기 재실행을 자동 승인하는 의미가 아니다.
 - `after_delay`: 명시적으로 멱등성을 보장하는 요청에만 지연 재시도할 수 있다.
 - `manual_verification_required`: 외부 커밋 여부를 조사하기 전 반복 실행하지 않는다. 웹은 오류 코드·요청 ID와 함께 중복 제출 금지 안내를 표시한다.
-- 인증 실패의 `WWW-Authenticate` 헤더, 404 리소스 은닉, 이전 `detail` 필드와 API-first OpenAPI 호환성 검사를 유지한다.
+- 인증 실패의 `WWW-Authenticate` 헤더, 404 리소스 은닉, 표준 `detail` 필드와 API-first OpenAPI 검증을 유지한다.
 
 ## Correlation과 로그 보안
 
@@ -64,8 +65,8 @@ API는 기존 `detail`(문자열·필드 오류 배열·객체)을 유지하면�
 
 ### 운영자 원인 조회와 커밋 경계
 
-- `GET /api/audit?request_id=<UUID>` 또는 `?job_id=<UUID>`는 `audit.read` 역할에서 과거 기록을 조회할 수 있다.
-- `GET /api/diagnostics/jobs/{job_id}`는 동일한 감사 권한을 필요로 하며, 작업·실행 시도의 실패 단계, 분류된 원인 및 예외 **클래스명**만 반환한다. 원문 오류·원본 데이터·비밀은 반환하지 않는다.
+- `GET /api/v2/audit?request_id=<UUID>` 또는 `?job_id=<UUID>`는 `audit.read` 역할에서 과거 기록을 조회할 수 있다.
+- `GET /api/v2/diagnostics/jobs/{job_id}`는 동일한 감사 권한을 필요로 하며, 작업·실행 시도의 실패 단계, 분류된 원인 및 예외 **클래스명**만 반환한다. 원문 오류·원본 데이터·비밀은 반환하지 않는다.
 - `iceberg_prepare` 중단은 Append 미진입이 확인된 실패, `iceberg_commit` 진입 이후는 실제 커밋 결과가 불확실한 실패로 분류한다. Worker가 예고 없이 종료되면 단계 확인 자체가 불가능할 수 있어 모든 실행 중 Iceberg 복구에는 보수적으로 수동 Snapshot 검증을 적용한다.
 - `failure_category=unclassified`는 원인 미확정을 의미한다. 임의의 예외 메시지를 자동으로 노출하거나 분류하지 않는다.
 

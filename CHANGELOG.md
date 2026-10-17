@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Worker 재시작 시 완료된 Attempt의 잔여 cgroup도 소유권 확인 후 정리하고, 소유자가 없는 cgroup은 자동 삭제하지 않고 실행을 거부합니다. Job 상세 조회가 실패하면 펼친 패널에서 명시적으로 다시 시도할 수 있습니다.
+
+- Linux cgroup v2의 위임된 `memory` 컨트롤러를 사용한 Worker 자식 메모리 격리 필수 모드(`SOS_WORKER_CGROUP_MODE=required`)를 추가했습니다. 사전 설정·쓰기 검사에 실패하면 Job을 Claim하지 않으며, 자식마다 `memory.max`·스왑 차단·OOM 그룹 종료를 설정합니다. Worker 재시작 시 이전 Attempt cgroup이 비어 있지 않으면 Job 복구를 거부합니다. 기본 모드는 `off`이며 CPU·디스크 격리나 다중 노드 자원 배치를 보장하지 않습니다.
+
+- Iceberg 실행 중 Attempt별 임시 디스크 사용량 관측에 하위 디렉터리의 정규 파일과 Spill 파일을 포함하고, 다른 Attempt 및 symlink 대상은 제외합니다. 폴링 감시이며 실제 파일시스템 쿼터를 제공하지는 않습니다.
+
+- Worker Job 최종 확정 시 실행 Attempt 식별자를 검증하고, PostgreSQL advisory lock 소유 세션에서 결과·Dataset·감사 트랜잭션을 확정하여 소유권 상실·이전 Attempt의 늦은 결과가 새 실행을 덮어쓰는 위험을 방어합니다.
+
+- 실행 중 펼쳐 둔 Job/Attempt 상세가 최신 목록의 확정 상태보다 오래되면 상세를 재조회하고, 동일 목록 판본에 대한 반복 요청을 제한합니다. 브라우저 회귀에서 오래된 상세 응답 이후 최신 상태로 복원되는지 검증합니다.
+
+- 사전 출시 단계에서 사용되지 않는 API 별칭과 무제한 Dataset 목록을 제거하고 Dataset 목록을 키셋 페이지 계약으로 단일화했습니다. 예제 중복 등록은 전체 목록 탐색 대신 판본·이름 조건 조회로 처리합니다.
+- 감사·객체·Snapshot·Dataset·Job/Attempt 저장 책임을 모듈로 분리하고, Window 검증·Job 목록 관리·API 페이지 커서의 중복을 정리했습니다.
+- Worker의 Attempt별 로컬 중간 결과 격리와 공통 논리 실행 메모리 수용 정책을 추가했습니다. 동일 DB의 활성 풀 설정 불일치를 거부하고 Linux에서 부모 강제 종료 시 자식도 종료되도록 보호합니다. 자원 예약은 물리 RAM 격리가 아니며, 운영 환경별 실제 부하 검증이 필요합니다.
+- 불변 Dataset 캐시의 파일시스템 정체성 기반 SHA-256 검증 결과를 프로세스 내에서 제한적으로 재사용하고, 수정된 파일은 다시 검증합니다.
+
 - Understanding 완료 직후 Profile 누락 상태가 표시되는 읽기 경합을 수정하고, 비동기 목록 보강 오류가 성공한 데이터 등록을 실패로 오해시키지 않도록 개선했습니다.
 
 - 탐색 화면의 데이터 요약 렌더링 오류와 유효하지 않은 탐색 초안의 복구를 수정하고, Dataset 새로고침 시 이전 변환·행 조회 결과의 노출을 차단했습니다.
@@ -25,7 +40,7 @@
 - DuckDB를 Dataset Preview·Profile·Discovery 탐색의 실행기로 도입하고 Polars의 Feature·Transform 책임과 분리했다. 샘플 탐색·전체 분석 Job을 분리하고 기존 Job API 호환성을 보존했다.
 - CSV·Parquet 파일을 메모리 전체 복사 없이 등록하고 업로드 진행·오류 안내 및 캐시 무결성 게시를 보강했다.
 - 파일 업로드·인증 거부 감사의 동기 I/O를 비차단 처리하고 해당 동시성·브라우저 회귀 검증을 보강했다.
-- API 오류 코드·Request ID·레거시 `detail` 호환, Worker/Attempt 영속 진단과 구조화 로그를 연결하고 안전한 Iceberg 복구 안내를 제공한다.
+- API 오류 코드·Request ID·구조화된 `detail` 응답, Worker/Attempt 영속 진단과 구조화 로그를 연결하고 안전한 Iceberg 복구 안내를 제공한다.
 - Iceberg Dataset 생성·적재와 기존 Snapshot의 보존 관리 권한을 구분하고 역할별 UI를 일치시켰다.
 - Worker 복구 감사에 Attempt 식별자·복구 결과를 기록하고, 감사 실패 시 DB 상태 변경을 롤백하도록 검증했다.
 - 통합 테스트가 준비 도중 실패해도 독립 DB·버킷이 남지 않도록 정리 수명주기를 보강했다.

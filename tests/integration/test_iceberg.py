@@ -108,7 +108,7 @@ def test_running_iceberg_import_refuses_ambiguous_cancellation(workspace):
     assert claimed["id"] == queued["id"]
     refused = client.post(f"/api/jobs/{queued['id']}/cancel")
     assert refused.status_code == 409, refused.text
-    assert refused.json()["detail"]["code"] == "SOS-ICEBERG-CANCEL-409"
+    assert refused.json()["code"] == "SOS-ICEBERG-CANCEL-409"
     running = store.get_job(queued["id"])
     assert running["status"] == "Running"
     assert running["cancel_requested"] is False
@@ -191,7 +191,7 @@ def test_tag_failure_keeps_uncertain_intent_without_publishing_dataset(workspace
 
     from sos_platform.datasets import connect_iceberg
 
-    before = len(store.datasets())
+    before = len(store.dataset_page(limit=101))
 
     def fail_tag(_table):
         raise RuntimeError("Tag commit unavailable")
@@ -199,7 +199,7 @@ def test_tag_failure_keeps_uncertain_intent_without_publishing_dataset(workspace
     monkeypatch.setattr(Table, "manage_snapshots", fail_tag)
     with pytest.raises(RuntimeError, match="Tag commit unavailable"):
         connect_iceberg(store, "tag_failure")
-    assert len(store.datasets()) == before
+    assert len(store.dataset_page(limit=101)) == before
     with store.connection() as db:
         rows = (
             db.execute(
@@ -252,6 +252,213 @@ def test_import_uses_attempt_snapshot_not_latest(workspace, monkeypatch):
         )
         == "retained"
     )
+
+
+def test_two_independent_writers_race_on_existing_iceberg_table(workspace, monkeypatch):
+    """서로 다른 Catalog 세션이 같은 기준 Snapshot에서 동시에 Append를 시작한다."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from pyiceberg.table import Table
+
+    from sos_platform.datasets import iceberg_catalog, import_to_iceberg
+    from sos_platform.retention import inspect_tag, tag_name
+    from sos_platform.store import Store
+
+    client, store = workspace
+    source = upload(client)
+    table_name = "racing_writers"
+    baseline = import_to_iceberg(store, source, table_name, str(uuid4()))
+    assert baseline["version"]
+
+    attempts = [str(uuid4()), str(uuid4())]
+    rendezvous = Barrier(2)
+    original_append = Table.append
+
+    def synchronized_append(table, data, **kwargs):
+        if kwargs.get("snapshot_properties", {}).get("sos.attempt-id") in attempts:
+            rendezvous.wait(timeout=20)
+        return original_append(table, data, **kwargs)
+
+    monkeypatch.setattr(Table, "append", synchronized_append)
+
+    def writer(attempt_id):
+        isolated = Store(store.home, database_url=store.database_url)
+        try:
+            return import_to_iceberg(isolated, source, table_name, attempt_id)
+        finally:
+            isolated.engine.dispose()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(writer, attempt_id) for attempt_id in attempts]
+        outcomes = []
+        for future in futures:
+            try:
+                outcomes.append((future.result(timeout=45), None))
+            except Exception as exc:
+                outcomes.append((None, exc))
+
+    # 하나 이상이 커밋되어야 하며 충돌 시 자동으로 중복 Append하지 않는다.
+    assert any(result is not None for result, _error in outcomes), outcomes
+    table = iceberg_catalog(store).load_table(f"default.{table_name}")
+    snapshots = table.snapshots()
+    assert 2 <= len(snapshots) <= 3
+    assert table.scan().to_arrow().num_rows == 3 * len(snapshots)
+    for attempt_id, (result, error) in zip(attempts, outcomes, strict=True):
+        matching = [
+            snapshot
+            for snapshot in snapshots
+            if snapshot.summary and snapshot.summary.get("sos.attempt-id") == attempt_id
+        ]
+        assert len(matching) <= 1, (attempt_id, error)
+        if result is not None:
+            assert len(matching) == 1
+            assert result["version"] == str(matching[0].snapshot_id)
+            assert (
+                inspect_tag(
+                    table,
+                    name=tag_name(result["retention_id"]),
+                    snapshot_id=result["version"],
+                )
+                == "retained"
+            )
+            assert store.snapshot_retention(result["retention_id"])["state"] == "Pending"
+    assert not [row for row in store.dataset_page(limit=101) if row["kind"] == "iceberg"]
+
+
+def test_iceberg_commit_response_loss_preserves_snapshot_without_automatic_retry(
+    workspace, monkeypatch, tmp_path
+):
+    """외부 Snapshot 커밋 후 ACK 유실은 미실행이 아닌 불확실성으로 보존한다."""
+    import json
+
+    from pyiceberg.table import Table
+
+    import sos_platform.worker as worker
+    from sos_platform.datasets import iceberg_catalog
+
+    client, store = workspace
+    source = upload(client)
+    request = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source["id"], "table_name": "lost_commit_response"},
+    )
+    assert request.status_code == 202
+    claimed = store.claim()
+    assert claimed["id"] == request.json()["id"]
+    attempt_id = claimed["attempts"][-1]["id"]
+    completed = tmp_path / "lost-ack.completed.json"
+    pending = tmp_path / "lost-ack.pending.parquet"
+    original_append = Table.append
+    commit_count = 0
+    secret = "token=never-expose-this"
+
+    def commit_then_lose_response(table, data, **kwargs):
+        nonlocal commit_count
+        original_append(table, data, **kwargs)
+        commit_count += 1
+        raise TimeoutError(secret)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(worker, "_guard_child_parent", lambda _pid: None)
+        patch.setattr(Table, "append", commit_then_lose_response)
+        worker._perform(store.home, store.database_url, claimed, completed, pending, 0)
+
+    outcome = json.loads(completed.read_text(encoding="utf-8"))
+    assert commit_count == 1
+    assert outcome["error_code"] == "SOS-ICEBERG-UNCERTAIN"
+    assert outcome["failure_stage"] == "iceberg_commit"
+    assert outcome["failure_category"] == "timeout"
+    assert secret not in completed.read_text(encoding="utf-8")
+
+    # Worker의 외부 커밋 결과는 DB에 성공으로 기록되지 않았다.
+    assert store.get_job(claimed["id"])["status"] == "Running"
+    assert not [d for d in store.dataset_page(limit=101) if d["kind"] == "iceberg"]
+    table = iceberg_catalog(store).load_table("default.lost_commit_response")
+    snapshots = [
+        snapshot
+        for snapshot in table.snapshots()
+        if snapshot.summary and snapshot.summary.get("sos.attempt-id") == attempt_id
+    ]
+    assert len(snapshots) == 1
+    assert table.scan().to_arrow().num_rows == 3
+    assert not any(name.startswith("sos_dataset_") for name in table.metadata.refs)
+
+    # 부모 SIGKILL과 동일하게 완료 메시지를 잃으면 새 Worker는 다시 Append하지 않는다.
+    recovered = store.recover()
+    assert (claimed["id"], attempt_id) in recovered
+    job = store.get_job(claimed["id"])
+    assert job["status"] == "Failed"
+    assert job["error_code"] == "SOS-ICEBERG-UNCERTAIN"
+    assert job["attempts"][-1]["status"] == "Interrupted"
+    assert attempt_id in job["error"]
+    assert run_once(store) is False
+    assert len(iceberg_catalog(store).load_table("default.lost_commit_response").snapshots()) == 1
+    assert not [d for d in store.dataset_page(limit=101) if d["kind"] == "iceberg"]
+
+
+def test_tag_commit_ack_loss_preserves_uncertain_retention_and_catalog_tag(workspace, monkeypatch):
+    """보호 Tag 커밋 응답 유실에도 미게시 의도와 실제 Tag를 함께 보존한다."""
+    from pyiceberg.table import Table
+
+    from sos_platform.datasets import connect_iceberg, iceberg_catalog
+    from sos_platform.retention import inspect_tag
+
+    client, store = workspace
+    source = upload(client)
+    job = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source["id"], "table_name": "lost_tag_response"},
+    )
+    assert job.status_code == 202
+    assert run_once(store)
+    table = iceberg_catalog(store).load_table("default.lost_tag_response")
+    snapshot_id = str(table.current_snapshot().snapshot_id)
+    before = len(store.dataset_page(limit=101))
+    original_manage = Table.manage_snapshots
+
+    class LostTagAcknowledgement:
+        def __init__(self, delegate):
+            self.delegate = delegate
+
+        def create_tag(self, snapshot, name):
+            self.delegate = self.delegate.create_tag(snapshot, name)
+            return self
+
+        def commit(self):
+            self.delegate.commit()
+            raise TimeoutError("tag acknowledgement was lost")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            Table,
+            "manage_snapshots",
+            lambda table: LostTagAcknowledgement(original_manage(table)),
+        )
+        with pytest.raises(TimeoutError, match="acknowledgement was lost"):
+            connect_iceberg(store, "lost_tag_response", snapshot_id)
+
+    assert len(store.dataset_page(limit=101)) == before
+    with store.connection() as db:
+        records = (
+            db.execute(
+                text(
+                    "SELECT dataset_id,tag_name,state FROM snapshot_retention "
+                    "WHERE state='Uncertain'"
+                )
+            )
+            .mappings()
+            .all()
+        )
+    assert len(records) == 1
+    retained = records[0]
+    assert store.get_dataset(retained["dataset_id"]) is None
+    table = iceberg_catalog(store).load_table("default.lost_tag_response")
+    assert inspect_tag(table, name=retained["tag_name"], snapshot_id=snapshot_id) == "retained"
+    checked = client.get("/api/storage/iceberg-references")
+    assert checked.status_code == 200
+    unresolved = next(row for row in checked.json() if row["dataset_id"] == retained["dataset_id"])
+    assert unresolved["status"] == "unknown"
 
 
 def test_tag_survives_database_publish_failure(workspace, monkeypatch):
@@ -377,10 +584,20 @@ def test_staging_size_tracks_only_the_target_attempt(workspace):
     path_b.mkdir(parents=True, exist_ok=True)
     (path_a / "input.parquet").write_bytes(b"a" * 19)
     (path_b / "input.parquet").write_bytes(b"b" * 29)
-    assert iceberg_staging_bytes(store, first) == 19
+    (path_a / "spill.tmp").write_bytes(b"x" * 11)
+    nested = path_a / "scratch"
+    nested.mkdir()
+    (nested / "disk.bin").write_bytes(b"y" * 13)
+    outside = root / "user-file.bin"
+    outside.write_bytes(b"z" * 101)
+    (path_a / "outside-link").symlink_to(outside)
+    (path_a / "other-attempt-link").symlink_to(path_b, target_is_directory=True)
+    assert iceberg_staging_bytes(store, first) == 43
     assert iceberg_staging_bytes(store, other) == 29
     cleanup_iceberg_staging(store)
     assert iceberg_staging_bytes(store, first) == 0
+    assert outside.read_bytes() == b"z" * 101
+    outside.unlink()
 
 
 def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch):
@@ -414,3 +631,32 @@ def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch)
     with pytest.raises(ValueError, match="50,000"):
         module.import_to_iceberg(store, {"kind": "file"}, "partitioned_input", str(uuid4()))
     assert not (store.home / "cache" / "iceberg-staging").exists()
+
+
+@pytest.mark.parametrize("failure_type", [ValueError, RuntimeError])
+def test_snapshot_retention_failure_never_exposes_catalog_error(
+    workspace, monkeypatch, failure_type
+):
+    """외부 Tag 커밋이 불확실하면 재실행을 권하지 않고 내부 오류 원문을 숨긴다."""
+    import sos_platform.api as platform_api
+
+    client, store = workspace
+    item = store.register_dataset(
+        name="unverified_snapshot",
+        kind="iceberg",
+        location="default.private_table",
+        version="1234",
+        owner_actor="local-developer",
+    )
+
+    def uncertain_tag(*_args, **_kwargs):
+        raise failure_type("private catalog credential and internal path")
+
+    monkeypatch.setattr(platform_api, "ensure_tag", uncertain_tag)
+    response = client.post(f"/api/storage/iceberg-references/{item['id']}/retain")
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "SOS-ICEBERG-RETAIN"
+    assert body["retry_policy"] == "manual_verification_required"
+    assert "private catalog" not in response.text
+    assert body["request_id"] == response.headers["X-Request-ID"]

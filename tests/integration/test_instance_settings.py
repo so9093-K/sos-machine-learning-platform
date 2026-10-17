@@ -81,3 +81,19 @@ def test_instance_display_name_only_admin_can_change(workspace, monkeypatch):
             "AI Studio"
         )
     assert store.instance_display_name() == "AI Studio"
+
+
+def test_cross_origin_preflight_allows_authorized_instance_put(workspace):
+    """API의 실제 PUT 라우트는 허용된 UI 출처에서 CORS 사전 요청을 통과한다."""
+    client, _store = workspace
+    result = client.options(
+        "/api/instance",
+        headers={
+            "Origin": "http://localhost:9601",
+            "Access-Control-Request-Method": "PUT",
+            "Access-Control-Request-Headers": "content-type,authorization",
+        },
+    )
+    assert result.status_code == 200, result.text
+    assert result.headers["access-control-allow-origin"] == "http://localhost:9601"
+    assert "PUT" in result.headers["access-control-allow-methods"].split(", ")

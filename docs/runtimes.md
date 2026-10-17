@@ -18,11 +18,19 @@ Runtime은 학습·평가·추론 등의 작업을 수행하는 **실제 실행 
 5. **점진적 변경:** Python·프레임워크·이미지 변경 시 기존 모델의 로드·전처리·학습·추론 호환성을 검증한다. 신규 환경을 제공해도 기존 모델의 실행 조건을 잃지 않도록 이력과 전환 방법을 관리한다.
 6. **실행 안전:** 외부 모델·플러그인 및 사용자 코드는 자원 한도, 접근 권한, 비밀정보 경계를 고려해 실행한다.
 
-Worker의 실행 시간·관측 RSS 예산은 `SOS_WORKER_MAX_SECONDS`(기본 1800초)·`SOS_WORKER_MAX_RSS_MIB`(기본 2048MiB)이다. Iceberg Attempt의 스테이징 입력은 `SOS_WORKER_MAX_STAGE_MIB`(기본 2048MiB)로 실행 중 크기를 감시하고, 강제 종료·재시작 시 Attempt별 로컬 임시 파일을 회수한다. 이는 폴링 기반 보호이며 실제 파일시스템 쿼터나 엄격한 OS 격리를 대체하지 않는다. 부모 프로세스는 자식의 초과를 감시해 종료하고 Job·Attempt에 전용 오류 코드를 남긴다. Linux `/proc` RSS 관측은 폴링 방식이며 cgroup·OS 수준의 엄격한 메모리 격리와 같지 않다. 외부 Iceberg 커밋은 시간·메모리 제한으로 중단되어도 성공/실패를 추측하지 않는다.
+동기 Polars Feature Preview도 `SOS_FEATURE_PREVIEW_MEMORY_MIB`(기본 1024MiB)만큼 공통 풀에 예약한 **이후에만** Dataset 캐시와 계산을 실행한다. 부족하면 429를 반환하며 입력 스캔을 시작하지 않는다. 이는 행 수/Window 제한과 다른 축의 **논리적 동시 실행 수용 정책**이다. Polars의 실제 RSS 상한이나 CPU·OS 격리를 제공하지 않으며, 사용자 코드를 실행하도록 허용한다는 뜻도 아니다.
+
+공통 실행 수용 정책은 `SOS_EXECUTION_POOL_MIB`(기본 3072MiB, 256MiB 단위)로 API Discovery와 Worker의 *요청한 메모리 예산*을 PostgreSQL 세션 advisory lock으로 예약한다. `SOS_EXECUTION_POOL_WAIT_SECONDS`(기본 5초) 안에 예약하지 못한 동기 요청은 429를 반환하며, Worker는 Job을 시작하지 않고 Queued로 남겨 다음 폴링을 기다린다. 같은 DB를 사용하는 여러 API 인스턴스에서 예약량을 공유한다. 활성 예약이 존재하는 동안 서로 다른 `SOS_EXECUTION_POOL_MIB` 설정은 PostgreSQL advisory lock 정책 Marker를 통해 충돌로 판단해 실행 전에 거부한다. 모든 예약이 종료된 뒤에는 정책 변경이 가능하지만, 이는 여러 호스트에 걸친 물리 메모리 스케줄링을 구현한 것이 아니다.  부모 Worker의 예약 아래에서 실행하는 DuckDB는 이중 예약하지 않는다. 이는 동시 실행 수용 판단을 위한 **논리적 예산**이며 실물 RAM 확인·cgroup·실제 OOM 보호를 대체하지 않는다. Worker RSS 한도가 풀 용량을 초과하면 구성 오류로 거부한다. Worker의 하위 DuckDB Discovery 예산 역시 Worker RSS 예산 안에 포함돼야 하며, 두 요구가 충돌하면 Job을 인수하기 전에 실패한다. 이는 물리적인 사용량 측정 대신 요청량의 포함 관계를 보증하는 사전 검증이다.
+
+자원 기본값은 특정 CPU·RAM 모델의 최적값이 아니라 로컬 개발 환경에서 사용할 초기 논리 예산이다. 환경별 조정은 **요청한 자원 → 예약된 실행 용량 → 실제 격리/감시 → 관측** 순으로 독립된 계약을 유지해야 한다. 대형 서버로 옮긴다는 이유만으로 무제한 동시 실행이나 Worker 예산 자동 확대를 허용하지 않는다. 반대로 제한된 장비에서는 자원 요청을 수용할 수 없는 원인을 먼저 알려주고 Job을 Queued로 유지한다. 공유 PostgreSQL 잠금은 개별 호스트의 실물 메모리를 관측하지 못하므로 다중 호스트에서는 호스트별 실행 배치·자원 소유 범위를 도입하기 전 글로벌 예약 총량을 물리 보장으로 해석해서는 안 된다.
+
+Worker의 실행 시간·관측 RSS 예산은 `SOS_WORKER_MAX_SECONDS`(기본 1800초)·`SOS_WORKER_MAX_RSS_MIB`(기본 2048MiB)이다. Iceberg Attempt의 스테이징 입력·하위 임시/Spill 파일은 `SOS_WORKER_MAX_STAGE_MIB`(기본 2048MiB)로 실행 중 크기를 감시하고, 강제 종료·재시작 시 Attempt별 로컬 임시 파일을 회수한다. 이는 폴링 기반 보호이며 실제 파일시스템 쿼터나 엄격한 OS 격리를 대체하지 않는다. 부모 프로세스는 자식의 초과를 감시해 종료하고 Job·Attempt에 전용 오류 코드를 남긴다. Linux `/proc` RSS 관측은 폴링 방식이며 cgroup·OS 수준의 엄격한 메모리 격리와 같지 않다. 외부 Iceberg 커밋은 시간·메모리 제한으로 중단되어도 성공/실패를 추측하지 않는다.
+
+Linux Worker 자식의 **물리 메모리 격리가 필수**인 운영자는 `SOS_WORKER_CGROUP_MODE=required`와 `SOS_WORKER_CGROUP_PARENT=/sys/fs/cgroup/<위임받은-그룹>`를 설정한다. 기본값 `off`는 기존의 논리 예약·폴링 RSS 감시만 적용한다. `required`는 Linux cgroup v2의 `memory` 컨트롤러가 위임되고 `cgroup.subtree_control`에서 활성화된 쓰기 가능한 하위 경로만 허용한다. Worker는 **Job Claim 이전**에 별도 검증 그룹을 생성하여 상한 설정·정리 가능성을 확인하며 실패 시 Job을 `Queued`로 유지하고 설정 오류를 반환한다. 실제 Attempt 자식은 계산·S3·Iceberg 접근 전에 고유 cgroup에 들어가고 `memory.max=SOS_WORKER_MAX_RSS_MIB`, `memory.swap.max=0`, `memory.oom.group=1`을 적용한다. 커널 OOM 종료는 `memory.events`로 구분한다. 실행 부모는 그룹 밖에 남고 자식의 후속 프로세스는 cgroup을 상속한다. Worker 재시작은 전용 위임 경로에 실제로 남은 Attempt cgroup을 복구 **전에** 확인한다. DB가 소유자를 입증한 Running·완료 Attempt의 빈 그룹만 정리하고, 소유자를 찾을 수 없거나 프로세스가 남아 삭제를 거부하면 안전하지 않은 재Claim을 중단한다. 같은 위임 경로를 재시작 후에도 유지해야 한다. 이것은 자식 실행의 메모리 경계이지 **디스크·CPU 쿼터, API 동기 실행 격리, 다중 호스트 배치·자원 스케줄링을 제공하는 것은 아니다**. 일반 CI는 위임된 cgroup에 대한 쓰기 권한을 가정하지 않으며, 물리 OOM 격리는 위임 설정이 있는 실제 Linux 호스트에서 별도로 검증해야 한다.
 
 Iceberg의 비파티션 테이블 적재는 Polars 디스크 스테이징과 PyArrow RecordBatchReader를 이용해 입력 전체 Arrow Table을 만들지 않고 하나의 Snapshot으로 커밋한다. 임시 파일은 Attempt가 수행한 로컬 작업에만 속하며, 외부 커밋 실패 시 성공·미실행을 추측하지 않는다. 현재 PyIceberg가 Reader 기반 파티션 쓰기를 지원하지 않으므로, 기존 파티션 테이블만 종전 소규모 호환 경로를 유지한다. 데이터 파일·Snapshot·Tag는 범용 캐시 축출 대상이 아니다.
 
-Dataset 원본 캐시는 `SOS_DATASET_CACHE_MIB`(기본 2048MiB) 한도로 관리한다. 파일별 PostgreSQL advisory lock을 읽기 Lease로 사용해 사용 중인 파일을 축출하지 않으며, 할당량 부족 시 최근 사용되지 않은 불변 해시 캐시 파일만 선택적으로 축출한다. 모든 후보가 사용 중이면 507 자원 오류로 거부한다. S3 원본과 게시 결과·Iceberg Snapshot은 이 정리의 대상이 아니다.
+Dataset 원본 캐시는 `SOS_DATASET_CACHE_MIB`(기본 2048MiB) 한도로 관리한다. 파일별 PostgreSQL advisory lock을 읽기 Lease로 사용해 사용 중인 파일을 축출하지 않으며, 할당량 부족 시 최근 사용되지 않은 불변 해시 캐시 파일만 선택적으로 축출한다. 모든 후보가 사용 중이면 507 자원 오류로 거부한다. 이미 해시 검증을 통과한 불변 캐시 파일은 프로세스 내에서 파일 식별자·크기·변경 시각이 그대로일 때 전체 재해시를 생략한다. 파일이 바뀌거나 프로세스가 바뀌면 SHA-256을 다시 검증한다. 파일 변조가 감지되면 S3 원본에서 새로 받는다. S3 원본과 게시 결과·Iceberg Snapshot은 이 정리의 대상이 아니다.
 
 Discovery는 PostgreSQL advisory lock에 기반한 전역 실행 슬롯(`SOS_DISCOVERY_MAX_ACTIVE`, 기본 1개)을 사용하며 `SOS_DISCOVERY_WAIT_SECONDS`(기본 15초)를 초과하면 429 용량 오류를 반환한다. 잠금은 DuckDB 연결 종료와 함께 해제되며 여러 API 인스턴스에서도 공유된다. 향후 실행 슬롯을 늘리기 전 RSS와 합산 메모리·Spill 예산을 측정해야 한다.
 
@@ -31,3 +39,7 @@ Discovery는 요청·Worker 실행별 DuckDB 연결을 사용한다. DuckDB Pyth
 현재 저장소의 Python **3.12**와 `uv.lock`은 **플랫폼 개발 환경의 기준**이다. 향후 모든 모델 Runtime의 버전이나 전체 OS·GPU 환경까지 고정한 것과 같지 않다. 프로젝트 버전 `0.0.1`도 개별 Runtime·모델·계약 버전의 대체물이 아니다.
 
 가상환경, 컨테이너, 원격 Worker, GPU 관리 도구, 스케줄러는 위 요구를 만족시키는 구현 선택이다. 이 정본은 특정 제품, 배치 구조, 이미지 빌드 방법을 미리 강제하지 않는다. 관련 계약은 [Contracts](contracts.md), 실행 동작은 [Workflows](workflows.md)를 따른다.
+
+Linux Worker 자식은 `PR_SET_PDEATHSIG(SIGKILL)`를 설치하고 원래 부모 PID가 살아 있는지 확인한 뒤에만 Dataset 읽기·Iceberg 커밋을 시작한다. 부모가 비정상 종료되어 DB 잠금이 풀릴 때 살아남은 자식이 새로운 Worker와 같은 작업을 동시에 수행하는 위험을 줄인다. 이는 부모 프로세스가 `SIGKILL`로 종료되는 경우의 **Linux 한정 보호**이고 다른 OS에서 같은 보장을 주장하지 않는다. 외부 Catalog 커밋의 불확실성과 분산 실행 Fencing Token 필요성은 그대로 유지한다.
+
+Worker 소유권은 PostgreSQL 세션의 advisory lock에 귀속된다. 접속이 자동으로 재수립되었더라도 이전 잠금이 살아 있다고 가정할 수 없다. Worker는 잠금 소유 세션의 Backend ID가 바뀌거나 세션 검증이 실패하면 자식 계산을 중단하고 **기존 Job·Attempt를 성공·실패로 확정하지 않는다**. 새 Worker의 독점 복구가 Running 상태와 외부 Iceberg 불확실 커밋을 구별한다. 강제 DB 백엔드 종료의 실제 통합 테스트로 이 계약을 검증한다. 단, 세션 검증과 실제 외부 커밋 사이의 경쟁까지 해결하는 완전한 Fencing Token/원자적 커밋 프로토콜은 아니며, 다중 호스트 실행기의 도입 전에 별도 검토해야 한다.

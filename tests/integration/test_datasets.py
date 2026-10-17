@@ -25,7 +25,7 @@ from .support import upload
 def test_upload_preview_profile_and_scalar(workspace):
     client, _ = workspace
     data = upload(client)
-    assert len(client.get("/api/datasets").json()) == 1
+    assert len(client.get("/api/datasets").json()["items"]) == 1
     preview = client.get(f"/api/datasets/{data['id']}/preview").json()
     assert preview["returned_rows"] == 3
     assert "temperature" in preview["schema"]
@@ -68,11 +68,11 @@ def test_upload_storage_wait_does_not_block_other_api_requests(workspace, monkey
 
 def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
     client, _ = workspace
-    assert client.get("/api/datasets").json() == []
+    assert client.get("/api/datasets").json()["items"] == []
     examples = client.get("/api/examples").json()
     assert {item["id"] for item in examples} == {"machine-sensors", "data-quality"}
     assert all(item["version"] and item["row_count"] > 0 for item in examples)
-    assert client.get("/api/datasets").json() == []
+    assert client.get("/api/datasets").json()["items"] == []
     response = client.post("/api/examples/machine-sensors/use")
     assert response.status_code == 201, response.text
     item = response.json()
@@ -80,8 +80,22 @@ def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
     assert client.get(f"/api/datasets/{item['id']}/preview?limit=100").json()["returned_rows"] == 96
     again = client.post("/api/examples/machine-sensors/use").json()
     assert again["id"] == item["id"]
-    assert len(client.get("/api/datasets").json()) == 1
+    assert len(client.get("/api/datasets").json()["items"]) == 1
     assert client.post("/api/examples/missing/use").status_code == 404
+
+
+def test_example_reuse_does_not_depend_on_unbounded_dataset_listing(workspace, monkeypatch):
+    client, store = workspace
+
+    def unexpected_page(*_args, **_kwargs):
+        raise AssertionError("Example registration must use a targeted dataset lookup")
+
+    monkeypatch.setattr(store, "dataset_page", unexpected_page)
+    first = client.post("/api/examples/data-quality/use")
+    assert first.status_code == 201, first.text
+    second = client.post("/api/examples/data-quality/use")
+    assert second.status_code == 201, second.text
+    assert second.json()["id"] == first.json()["id"]
 
 
 def test_api_openapi_response_contracts(workspace):
@@ -106,7 +120,7 @@ def test_file_storage_failure_is_not_user_validation_error(workspace, monkeypatc
         files={"file": ("valid.csv", b"time,value\n1,2\n", "text/csv")},
     )
     assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "SOS-STORAGE-001"
+    assert response.json()["code"] == "SOS-STORAGE-001"
     assert "secret-storage-credential" not in response.text
 
 
@@ -128,7 +142,7 @@ def test_upload_recovery_preserves_shared_content_addressed_blob(workspace, monk
     monkeypatch.setattr(store, "register_dataset", real_register)
     registered = save_upload(store, "replay.csv", content)
     assert registered["location"] == storage.location(key)
-    assert any(d["location"] == registered["location"] for d in store.datasets())
+    assert any(d["location"] == registered["location"] for d in store.dataset_page(limit=101))
 
 
 def test_upgrade_from_0001_preserves_existing_records(workspace):
@@ -197,7 +211,7 @@ def test_upload_policy_and_raw_request_body_limit(workspace, monkeypatch):
         assert rejected_body.json()["code"] == "SOS-UPLOAD-TOO-LARGE"
         assert rejected_body.headers["X-Request-ID"] == rejected_body.json()["request_id"]
 
-    assert store.datasets() == []
+    assert store.dataset_page(limit=101) == []
 
 
 def test_invalid_format_and_empty_upload_are_user_errors(workspace):
@@ -214,7 +228,7 @@ def test_invalid_format_and_empty_upload_are_user_errors(workspace):
         assert response.status_code == 422, response.text
         assert response.json()["code"] == code
         assert response.json()["detail"] == ERRORS[code].message
-    assert store.datasets() == []
+    assert store.dataset_page(limit=101) == []
 
 
 def test_large_parquet_registers_and_supports_parallel_first_reads(workspace, tmp_path):
@@ -289,4 +303,4 @@ def test_concurrent_uploads_publish_independent_versions_without_staging_leftove
         hashlib.sha256(second).hexdigest(),
     }
     assert set((store.home / "cache").glob("tmp*.csv")) == staged_before
-    assert len(store.datasets()) == 2
+    assert len(store.dataset_page(limit=101)) == 2

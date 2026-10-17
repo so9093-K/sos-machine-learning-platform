@@ -94,7 +94,9 @@ def use_example(store: Store, example_id: str, *, owner_actor: str | None = None
         raise KeyError(example_id)
     example = _EXAMPLES[example_id]
     digest = hashlib.sha256(example["content"]).hexdigest()
-    for dataset in store.datasets(actor_id=owner_actor):
-        if dataset["name"] == example["name"] and dataset["version"] == digest:
-            return dataset
+    existing = store.find_dataset_by_name_version(
+        name=example["name"], version=digest, actor_id=owner_actor
+    )
+    if existing is not None:
+        return existing
     return save_upload(store, example["name"], example["content"], owner_actor=owner_actor)

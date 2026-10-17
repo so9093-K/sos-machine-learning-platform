@@ -170,6 +170,60 @@ def test_time_sort_occurs_after_prior_cast():
     assert [r["previous"] for r in result] == [None, 10, 20]
 
 
+def test_consecutive_windows_reuse_key_validation_without_changing_results(monkeypatch):
+    """같은 키를 사용하는 Window 단계는 검증과 정렬을 한 번만 수행한다."""
+    source = pl.DataFrame(
+        {"machine": ["A", "A", "B", "B"], "time": [2, 1, 2, 1], "value": [20, 10, 40, 30]}
+    ).lazy()
+    spec = Transform.model_validate(
+        {
+            "group_by": ["machine"],
+            "order_by": "time",
+            "steps": [
+                {"op": "lag", "column": "value", "alias": "previous"},
+                {"op": "filter_not_null", "column": "value"},
+                {"op": "rolling_mean", "column": "value", "alias": "moving", "window": 2},
+            ],
+        }
+    )
+    actual_collect = pl.LazyFrame.collect
+    calls = 0
+
+    def counting_collect(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return actual_collect(self, *args, **kwargs)
+
+    monkeypatch.setattr(pl.LazyFrame, "collect", counting_collect)
+    output = transform(source, spec)
+    assert calls == 2  # NULL과 중복 시간 키 검증, 각 한 번씩
+    rows = output.collect().to_dicts()
+    assert [(r["machine"], r["time"], r["previous"]) for r in rows] == [
+        ("A", 1, None),
+        ("A", 2, 10),
+        ("B", 1, None),
+        ("B", 2, 30),
+    ]
+    assert [r["moving"] for r in rows] == [None, 15.0, None, 35.0]
+
+
+def test_time_key_cast_invalidates_prior_window_validation():
+    """기존에 유일했던 시간 키가 캐스트로 충돌하면 다시 검증해야 한다."""
+    source = pl.DataFrame({"time": ["01", "1", "2"], "value": [10, 20, 30]}).lazy()
+    spec = Transform.model_validate(
+        {
+            "order_by": "time",
+            "steps": [
+                {"op": "lag", "column": "value", "alias": "previous"},
+                {"op": "cast", "column": "time", "dtype": "Int64"},
+                {"op": "lag", "column": "value", "alias": "previous_after_cast"},
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="unique within each group"):
+        transform(source, spec)
+
+
 @pytest.mark.parametrize("seed", range(12))
 def test_grouped_lag_is_invariant_to_input_permutation(seed):
     """다양한 값·입력 순서에서도 그룹별 직전 값만 사용한다."""

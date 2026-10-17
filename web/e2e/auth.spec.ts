@@ -65,5 +65,7 @@ test.describe("token identity and resource permissions", () => {
       headers: { Authorization: `Bearer ${operator}` },
     });
     expect(response.status()).toBe(403);
+    await page.getByRole("button", { name: "인증 해제" }).click();
+    await expect(page.getByRole("heading", { name: "SOS Platform 접근 인증" })).toBeVisible();
   });
 });

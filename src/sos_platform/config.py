@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from urllib.parse import quote_plus
 
+from .errors import RuntimeConfigurationError
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -49,13 +51,13 @@ class StoragePolicy:
 
     def __post_init__(self) -> None:
         if self.grace_days < 7:
-            raise ValueError("SOS_OBJECT_GRACE_DAYS must be at least 7")
+            raise RuntimeConfigurationError("SOS_OBJECT_GRACE_DAYS must be at least 7")
         if self.observation_hours < 24:
-            raise ValueError("SOS_OBJECT_OBSERVATION_HOURS must be at least 24")
+            raise RuntimeConfigurationError("SOS_OBJECT_OBSERVATION_HOURS must be at least 24")
         if self.min_observations < 2:
-            raise ValueError("SOS_OBJECT_MIN_OBSERVATIONS must be at least 2")
+            raise RuntimeConfigurationError("SOS_OBJECT_MIN_OBSERVATIONS must be at least 2")
         if not 1 <= self.page_size <= 200:
-            raise ValueError("SOS_OBJECT_PAGE_SIZE must be between 1 and 200")
+            raise RuntimeConfigurationError("SOS_OBJECT_PAGE_SIZE must be between 1 and 200")
 
     @classmethod
     def from_env(cls) -> "StoragePolicy":
@@ -68,7 +70,7 @@ class StoragePolicy:
                 page_size=int(os.getenv("SOS_OBJECT_PAGE_SIZE", "100")),
             )
         except ValueError as exc:
-            raise ValueError(f"Invalid storage policy: {exc}") from exc
+            raise RuntimeConfigurationError(f"Invalid storage policy: {exc}") from exc
 
     def describe(self) -> dict:
         """API의 유효 설정과 기본값 대비 출처를 함께 제공한다."""

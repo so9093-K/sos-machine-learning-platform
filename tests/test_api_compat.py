@@ -208,3 +208,32 @@ def test_realistic_query_maximum_narrowing_is_breaking():
         {"in": "query", "name": "limit", "schema": {"type": "integer", "maximum": 10}}
     ]
     assert any("upper bound" in x for x in compat.breaking_changes(before, after))
+
+
+def test_pre_release_break_list_covers_only_explicit_retired_contracts():
+    """사전 출시 정리의 허용 목록은 구체적인 엔드포인트와 응답 전환만 포함한다."""
+    import json
+
+    approved = json.loads(
+        (
+            Path(__file__).resolve().parents[1] / "scripts" / "approved_pre_release_api_breaks.json"
+        ).read_text(encoding="utf-8")
+    )["issues"]
+    assert len(approved) == len(set(approved))
+    assert "endpoint removed: GET /api/auth/me" in approved
+    assert "endpoint removed: GET /api/datasets/pages" in approved
+    assert all(
+        item.startswith(("endpoint removed: ", "response type changed: ")) for item in approved
+    )
+
+
+def test_pre_release_api_break_exception_is_scoped_to_pr14_and_original_base():
+    """다른 PR이 같은 기준 SHA를 사용해도 Breaking 승인 파일을 재사용하지 못한다."""
+    workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "PR_NUMBER: ${{ github.event.pull_request.number }}" in workflow
+    assert (
+        'if [ "$PR_NUMBER" = "14" ] && '
+        '[ "$BASE_SHA" = "143caccd32a8102b848b56876deb6e1ebee8e07a" ]; then'
+    ) in workflow

@@ -36,6 +36,10 @@ function App() {
       setMessage(formatError(error));
     } finally { setSubmitting(false); }
   }
+  function signOut() {
+    setAccessToken(null);
+    setActor(null);
+  }
   if (checking) return <main className="main" role="status">사용자 권한을 확인하고 있습니다.</main>;
   if (!actor) return <main className="main">
     <section className="panel" aria-label="인증">
@@ -59,8 +63,10 @@ function App() {
   const canViewAudit = actor.capabilities.includes("audit.read");
   return <>
     {canViewDataset ? <Workspace actor={actor}
-      onSignOut={() => { setAccessToken(null); setActor(null); }} /> :
+      onSignOut={signOut} /> :
       <main className="main"><h1>운영 진단</h1>
+        {actor.mode !== "development" &&
+          <button type="button" className="ghost" onClick={signOut}>인증 해제</button>}
         {canInspectStorage && <StoragePanel />}
         {canViewAudit && <AuditPanel />}
       </main>}

@@ -7,18 +7,39 @@
 import hashlib
 import os
 import re
+from collections import OrderedDict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 
 from sqlalchemy import text
 
-from .errors import PlatformError
+from .errors import PlatformError, RuntimeConfigurationError
 from .object_store import ObjectStore
 from .store import Store
 
 _CACHE_FILE = re.compile(r"^[0-9a-f]{64}\.(csv|parquet)$")
+_CACHE_PENDING = re.compile(r"^[0-9a-f]{64}\.(csv|parquet)\.pending-[0-9a-f]{32}$")
+# 프로세스 안에서 이미 SHA-256을 검증한 불변 파일의 파일시스템 정체성을 기억한다.
+# 다른 프로세스는 처음 읽을 때 별도로 검증한다. 최대 항목 수를 제한한다.
+_VERIFIED: OrderedDict[Path, tuple[str, tuple[int, int, int, int, int]]] = OrderedDict()
+_VERIFIED_LOCK = Lock()
+_MAX_VERIFIED = 256
+
+
+def _signature(path: Path) -> tuple[int, int, int, int, int]:
+    item = path.stat()
+    return item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns, item.st_ctime_ns
+
+
+def _remember(path: Path, version: str, signature: tuple[int, int, int, int, int]) -> None:
+    with _VERIFIED_LOCK:
+        _VERIFIED[path] = (version, signature)
+        _VERIFIED.move_to_end(path)
+        if len(_VERIFIED) > _MAX_VERIFIED:
+            _VERIFIED.popitem(last=False)
 
 
 @dataclass(frozen=True)
@@ -29,9 +50,9 @@ class CachePolicy:
 
     @classmethod
     def from_env(cls) -> "CachePolicy":
-        value = os.getenv("SOS_DATASET_CACHE_MIB", "2048")
+        value = os.getenv("SOS_DATASET_CACHE_MIB", str(cls().max_bytes // (1024 * 1024)))
         if not value.isdecimal() or not 256 <= int(value) <= 131072:
-            raise ValueError("SOS_DATASET_CACHE_MIB must be between 256 and 131072")
+            raise RuntimeConfigurationError("SOS_DATASET_CACHE_MIB must be between 256 and 131072")
         return cls(max_bytes=int(value) * 1024 * 1024)
 
 
@@ -50,11 +71,29 @@ def _digest(path: Path) -> str:
 
 
 def _verified_files(root: Path) -> list[Path]:
-    return [item for item in root.iterdir() if item.is_file() and _CACHE_FILE.fullmatch(item.name)]
+    return [
+        item
+        for item in root.iterdir()
+        if _CACHE_FILE.fullmatch(item.name) and item.is_file() and not item.is_symlink()
+    ]
 
 
 def _ready(path: Path, version: str) -> bool:
-    return path.is_file() and _digest(path) == version
+    if path.is_symlink() or not path.is_file():
+        return False
+    signature = _signature(path)
+    with _VERIFIED_LOCK:
+        if _VERIFIED.get(path) == (version, signature):
+            _VERIFIED.move_to_end(path)
+            return True
+    # 파일이 변경됐거나 새 프로세스에서 처음 열면 내용 해시를 다시 확인한다.
+    if _digest(path) != version:
+        return False
+    if _signature(path) != signature:
+        # 검증 도중 파일이 변경됐다면 결과를 신뢰하지 않는다.
+        return False
+    _remember(path, version, signature)
+    return True
 
 
 def _download_under_quota(
@@ -75,6 +114,11 @@ def _download_under_quota(
         quota.commit()
         try:
             root = path.parent
+            # 이 잠금 아래에서는 SOS 캐시 다운로드가 동시에 진행되지 않는다.
+            # 프로세스 사망 후 남은 SOS 고유 임시 파일만 정리하며 원본은 보존한다.
+            for item in root.iterdir():
+                if _CACHE_PENDING.fullmatch(item.name) and item.is_file() and not item.is_symlink():
+                    item.unlink()
             files = [item for item in _verified_files(root) if item != path]
             occupied = sum(item.stat().st_size for item in files)
             # quota lock 아래에서 같은 캐시 공간의 할당을 직렬화한다.
@@ -151,7 +195,10 @@ def cached_dataset_file(
                 finally:
                     lease.execute(text("SELECT pg_advisory_unlock(83418,:slot)"), args)
                     lease.commit()
+            # 직전의 _ready() 검사 또는 S3 다운로드의 SHA-256 검증이 성공했다.
+            # touch로 바뀐 mtime/ctime을 기록해야 다음 읽기에서 재해시하지 않는다.
             os.utime(path, None)
+            _remember(path, version, _signature(path))
             yield path
         finally:
             if shared:

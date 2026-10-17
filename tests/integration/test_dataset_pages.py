@@ -3,7 +3,7 @@
 from .support import upload
 
 
-def test_paginated_dataset_list_preserves_order_and_legacy_response(workspace):
+def test_dataset_list_preserves_order_and_page_contract(workspace):
     client, store = workspace
     base = upload(client)
     for number in range(34):
@@ -20,7 +20,7 @@ def test_paginated_dataset_list_preserves_order_and_legacy_response(workspace):
         options = {"limit": 10}
         if cursor:
             options["cursor"] = cursor
-        response = client.get("/api/datasets/pages", params=options)
+        response = client.get("/api/datasets", params=options)
         assert response.status_code == 200, response.text
         body = response.json()
         assert len(body["items"]) <= 10
@@ -30,6 +30,21 @@ def test_paginated_dataset_list_preserves_order_and_legacy_response(workspace):
             break
     assert len(seen) == 35
     assert len(set(seen)) == 35
-    assert set(seen) == {item["id"] for item in client.get("/api/datasets").json()}
-    assert client.get("/api/datasets/pages", params={"cursor": "invalid"}).status_code == 422
-    assert client.get("/api/datasets/pages", params={"limit": 101}).status_code == 422
+    assert set(seen) == {item["id"] for item in store.dataset_page(limit=101)}
+    assert client.get("/api/datasets", params={"cursor": "invalid"}).status_code == 422
+    assert client.get("/api/datasets", params={"limit": 101}).status_code == 422
+
+
+def test_legacy_dataset_pages_alias_is_not_exposed(workspace):
+    client, _ = workspace
+    response = client.get("/api/datasets/pages")
+    assert response.status_code == 404
+    assert response.json()["code"] == "SOS-API-NOT-FOUND"
+
+
+def test_invalid_dataset_cursor_returns_specific_safe_validation_error(workspace):
+    client, _store = workspace
+    result = client.get("/api/datasets", params={"cursor": "not-a-valid-cursor"})
+    assert result.status_code == 422
+    assert result.json()["code"] == "SOS-API-VALIDATION"
+    assert result.json()["detail"] == "Invalid Dataset cursor"

@@ -48,7 +48,7 @@ class Transform(BaseModel):
 
 
 class ProblemOut(BaseModel):
-    """오류 응답 공통 계약. detail은 이전 클라이언트 호환을 위해 보존한다."""
+    """오류 응답 공통 계약. detail은 안전한 메시지 또는 입력 검증 위치를 담는다."""
 
     type: str
     title: str

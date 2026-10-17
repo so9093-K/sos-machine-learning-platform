@@ -1,8 +1,5 @@
 """데이터 탐색과 비동기 처리를 제공하는 공통 플랫폼 API."""
 
-import base64
-import binascii
-import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -12,11 +9,11 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from scalar_fastapi import get_scalar_api_reference
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
+from .api_control import control_router
 from .api_errors import problem_response, register_error_handlers
 from .config import StoragePolicy
 from .datasets import connect_iceberg, iceberg_snapshots, pinned_scan_dataset, save_upload_file
@@ -31,12 +28,12 @@ from .examples import list_examples, use_example
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .object_store import ObjectStore
 from .observability import emit
+from .pagination import decode_cursor, page_from_rows
 from .processing import bounded_feature_preview
 from .reconciler import inspect_iceberg_references, inspect_page
+from .resource_admission import FeaturePreviewBudget, reserve_execution_memory
 from .retention import ensure_tag, snapshot_status
 from .schemas import (
-    AuditEventOut,
-    AuthMeOut,
     DatasetColumnsOut,
     DatasetOut,
     DatasetOverviewOut,
@@ -53,9 +50,6 @@ from .schemas import (
     IcebergConnect,
     IcebergImport,
     IcebergReferenceOut,
-    InstanceSettingsOut,
-    InstanceSettingsUpdate,
-    JobDiagnosticsOut,
     JobOut,
     JobPageOut,
     PreviewOut,
@@ -69,11 +63,11 @@ from .schemas import (
     UploadPolicyOut,
     WorkRequest,
 )
-from .security import ACTIONS, Actor, IdentitySettings, current_actor, require, resource_allowed
-from .store import IcebergCancellationConflict, Store
+from .security import Actor, IdentitySettings, require, resource_allowed
+from .store import Store
+from .store_jobs import IcebergCancellationConflict
 
 # Depends 객체는 요청마다 재생성하지 않고 안정적으로 재사용한다.
-IDENTITY_DEP = Depends(current_actor)
 READ_DATASET_DEP = Depends(require("dataset.read"))
 CREATE_DATASET_DEP = Depends(require("dataset.create"))
 READ_JOB_DEP = Depends(require("job.read"))
@@ -81,8 +75,6 @@ CREATE_JOB_DEP = Depends(require("job.create"))
 CANCEL_JOB_DEP = Depends(require("job.cancel"))
 INSPECT_DEP = Depends(require("storage.inspect"))
 RETAIN_DEP = Depends(require("snapshot.retain"))
-AUDIT_DEP = Depends(require("audit.read"))
-INSTANCE_CONFIG_DEP = Depends(require("instance.configure"))
 SNAPSHOT_READ_DEP = Depends(require("snapshot.read"))
 
 
@@ -175,7 +167,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             f"http://localhost:{os.environ.get('SOS_WEB_PORT', '9601')}",
             f"http://127.0.0.1:{os.environ.get('SOS_WEB_PORT', '9601')}",
         ],
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT"],
         allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
         expose_headers=["X-Request-ID"],
     )
@@ -228,107 +220,7 @@ def create_app(home: Path | None = None) -> FastAPI:
     def scalar_docs():
         return get_scalar_api_reference(openapi_url=app.openapi_url, title=app.title)
 
-    @app.get("/api/health")
-    def health():
-        """프로세스 자체가 HTTP 응답을 제공하는지 확인한다."""
-        return {"status": "ok"}
-
-    @app.get("/api/ready")
-    def ready():
-        """실제 필수 저장소와 실행기가 준비됐을 때만 200을 반환한다."""
-        checks = {}
-        try:
-            store.initialize()
-            checks["database"] = "ready"
-        except Exception:
-            checks["database"] = "unavailable"
-        try:
-            ObjectStore().ready()
-            checks["storage"] = "ready"
-        except Exception:
-            checks["storage"] = "unavailable"
-        try:
-            checks["worker"] = "ready" if store.worker_ready() else "unavailable"
-        except Exception:
-            checks["worker"] = "unavailable"
-        result = {
-            "status": "ready" if all(v == "ready" for v in checks.values()) else "unavailable",
-            "services": checks,
-        }
-        if result["status"] != "ready":
-            return JSONResponse(status_code=503, content=result)
-        return result
-
-    @app.get("/api/auth/me")
-    @app.get("/api/v2/auth/me", response_model=AuthMeOut)
-    def auth_me(actor: Actor = IDENTITY_DEP):
-        return {
-            "actor_id": actor.id,
-            "actor_type": actor.kind,
-            "roles": sorted(actor.roles),
-            "capabilities": sorted(action for action in ACTIONS if actor.can(action)),
-            "mode": identity.mode,
-        }
-
-    @app.get("/api/instance", response_model=InstanceSettingsOut)
-    def instance_settings(actor: Actor = IDENTITY_DEP):
-        """인증된 클라이언트가 동일한 인스턴스 정보를 받는다."""
-        return {
-            "display_name": store.instance_display_name(),
-        }
-
-    @app.put("/api/instance", response_model=InstanceSettingsOut)
-    def change_instance_settings(
-        body: InstanceSettingsUpdate,
-        request: Request,
-        actor: Actor = INSTANCE_CONFIG_DEP,
-    ):
-        store.set_instance_display_name(
-            body.display_name,
-            actor_id=actor.id,
-            actor_type=actor.kind,
-            request_id=request.state.request_id,
-        )
-        return {"display_name": body.display_name}
-
-    @app.get("/api/audit")
-    @app.get("/api/v2/audit", response_model=list[AuditEventOut])
-    def audit_events(
-        limit: int = Query(default=50, ge=1, le=100),
-        request_id: str | None = Query(default=None, min_length=36, max_length=36),
-        job_id: str | None = Query(default=None, min_length=36, max_length=36),
-        actor: Actor = AUDIT_DEP,
-    ):
-        """운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다."""
-        return store.audit_events(limit=limit, request_id=request_id, resource_id=job_id)
-
-    @app.get("/api/diagnostics/jobs/{job_id}")
-    @app.get("/api/v2/diagnostics/jobs/{job_id}", response_model=JobDiagnosticsOut)
-    def job_diagnostics(job_id: str, actor: Actor = AUDIT_DEP):
-        """권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다."""
-        item = store.get_job(job_id)
-        if item is None:
-            raise HTTPException(status_code=404, detail="Job not found")
-        return {
-            "job_id": item["id"],
-            "request_id": item.get("request_id"),
-            "status": item["status"],
-            "error_code": item.get("error_code"),
-            "failure_stage": item.get("failure_stage"),
-            "failure_category": item.get("failure_category"),
-            "exception_type": item.get("exception_type"),
-            "attempts": [
-                {
-                    "id": attempt["id"],
-                    "status": attempt["status"],
-                    "error_code": attempt.get("error_code"),
-                    "failure_stage": attempt.get("failure_stage"),
-                    "failure_category": attempt.get("failure_category"),
-                    "exception_type": attempt.get("exception_type"),
-                }
-                for attempt in item["attempts"]
-            ],
-        }
+    app.include_router(control_router(store, identity))
 
     @app.get("/api/storage/policy", response_model=StoragePolicyOut)
     def storage_policy(actor: Actor = INSPECT_DEP):
@@ -372,12 +264,10 @@ def create_app(home: Path | None = None) -> FastAPI:
                 snapshot_id=item["version"],
             )
             store.confirm_existing_retention(dataset_id, actor_id=actor.id, actor_type=actor.kind)
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(
-                status_code=503, detail="Snapshot protection could not be verified"
-            ) from exc
+            # 외부 Catalog에 Tag 쓰기가 이미 성공했을 수 있다. 원문을 공개하거나
+            # 안전한 재시도를 암시하지 않고 수동 확인이 필요한 상태로 표현한다.
+            raise PlatformError("SOS-ICEBERG-RETAIN") from exc
         status, reason = snapshot_status(store, item)
         return {"dataset_id": dataset_id, "status": status, "reason": reason}
 
@@ -394,49 +284,20 @@ def create_app(home: Path | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Example not found") from exc
 
-    @app.get("/api/datasets", response_model=list[DatasetOut])
-    def list_datasets(actor: Actor = READ_DATASET_DEP):
-        return store.datasets(actor_id=None if actor.privileged else actor.id)
-
-    @app.get("/api/datasets/pages", response_model=DatasetPageOut)
+    @app.get("/api/datasets", response_model=DatasetPageOut)
     def list_dataset_page(
         limit: int = Query(default=20, ge=1, le=100),
         cursor: str | None = Query(default=None, max_length=512),
         actor: Actor = READ_DATASET_DEP,
     ):
-        """기존 배열 응답을 유지하면서 규모 제한된 새 목록 API를 제공한다."""
-        before = None
-        if cursor:
-            try:
-                raw = base64.b64decode(
-                    cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True
-                )
-                before = json.loads(raw)
-                if (
-                    not isinstance(before, dict)
-                    or set(before) != {"created_at", "id"}
-                    or not all(isinstance(before[key], str) and before[key] for key in before)
-                    or len(before["created_at"]) > 80
-                    or len(before["id"]) != 36
-                ):
-                    raise ValueError("Invalid Dataset cursor")
-            except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
-                raise ValueError("Invalid Dataset cursor") from exc
+        """Dataset 목록은 키셋 페이지 응답으로 제공한다."""
+        before = decode_cursor(cursor, "Dataset")
         rows = store.dataset_page(
             limit=limit + 1,
             before=before,
             actor_id=None if actor.privileged else actor.id,
         )
-        next_cursor = None
-        if len(rows) > limit:
-            rows = rows[:limit]
-            last = rows[-1]
-            payload = json.dumps(
-                {"created_at": last["created_at"], "id": last["id"]},
-                separators=(",", ":"),
-            )
-            next_cursor = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
-        return {"items": rows, "next_cursor": next_cursor}
+        return page_from_rows(rows, limit)
 
     @app.get("/api/datasets/upload-policy", response_model=UploadPolicyOut)
     def get_upload_policy(actor: Actor = CREATE_DATASET_DEP):
@@ -459,10 +320,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         except (PlatformError, ValueError):
             raise
         except Exception as exc:
-            raise HTTPException(
-                status_code=503,
-                detail={"code": "SOS-STORAGE-001", "message": ERRORS["SOS-STORAGE-001"].message},
-            ) from exc
+            raise PlatformError("SOS-STORAGE-001") from exc
         finally:
             await file.close()
 
@@ -603,27 +461,14 @@ def create_app(home: Path | None = None) -> FastAPI:
     def feature_preview(body: FeaturePreview, actor: Actor = READ_DATASET_DEP):
         # 입력의 앞 1,000행을 먼저 자르면 정렬·Lag·Rolling 경계가 실제 Job과 달라진다.
         # 전체 입력에서 같은 연산을 수행하고 출력 행 수만 제한한다.
-        with pinned_scan_dataset(store, existing(body.dataset_id, actor)) as lf:
-            return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
+        # 동기 Polars 계산도 Worker·DuckDB와 동일한 논리적 수용 풀을 공유한다.
+        # 예약은 원본 캐시 Lease/입력 스캔 이전에 확보해 경합 시 파일·CPU를 잡지 않는다.
+        with reserve_execution_memory(store, FeaturePreviewBudget.from_env().memory_mib):
+            with pinned_scan_dataset(store, existing(body.dataset_id, actor)) as lf:
+                return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
 
     def job_page(limit: int, cursor: str | None, actor: Actor, *, discovery_only: bool) -> dict:
-        before = None
-        if cursor:
-            try:
-                raw = base64.b64decode(
-                    cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True
-                )
-                before = json.loads(raw)
-                if (
-                    not isinstance(before, dict)
-                    or set(before) != {"created_at", "id"}
-                    or not all(isinstance(before[key], str) and before[key] for key in before)
-                    or len(before["created_at"]) > 80
-                    or len(before["id"]) != 36
-                ):
-                    raise ValueError("Invalid Job cursor")
-            except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
-                raise ValueError("Invalid Job cursor") from exc
+        before = decode_cursor(cursor, "Job")
         rows = store.jobs(
             limit=limit + 1,
             before=before,
@@ -631,15 +476,7 @@ def create_app(home: Path | None = None) -> FastAPI:
             kind="exploration" if discovery_only else None,
             exclude_kind=None if discovery_only else "exploration",
         )
-        next_cursor = None
-        if len(rows) > limit:
-            rows = rows[:limit]
-            last = rows[-1]
-            token = json.dumps(
-                {"created_at": last["created_at"], "id": last["id"]}, separators=(",", ":")
-            )
-            next_cursor = base64.urlsafe_b64encode(token.encode()).decode().rstrip("=")
-        return {"items": rows, "next_cursor": next_cursor}
+        return page_from_rows(rows, limit)
 
     @app.get("/api/jobs", response_model=JobPageOut)
     def list_jobs(
@@ -740,10 +577,7 @@ def create_app(home: Path | None = None) -> FastAPI:
         try:
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         except IcebergCancellationConflict as exc:
-            raise HTTPException(
-                status_code=409,
-                detail={"code": "SOS-ICEBERG-CANCEL-409", "message": str(exc)},
-            ) from exc
+            raise PlatformError("SOS-ICEBERG-CANCEL-409") from exc
         if result is None:
             raise HTTPException(status_code=404, detail="Job not found")
         return result

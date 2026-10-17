@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import event, text
 
 from sos_platform import worker as worker_module
+from sos_platform.errors import WorkerOwnershipLost
 from sos_platform.object_store import ObjectStore
 from sos_platform.store import Store
 from sos_platform.worker import run_once
@@ -121,6 +122,76 @@ def test_cancel_recovery_and_input_validation(workspace):
     )
 
 
+@pytest.mark.parametrize("invalid", ["Queued", "Running", "Interrupted", "Unknown"])
+def test_job_finish_rejects_nonterminal_status_without_mutation(workspace, invalid):
+    """실행기의 잘못된 종료 상태가 Job·Attempt 정본을 오염시키지 않는다."""
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
+    assert queued.status_code == 202
+    claimed = store.claim()
+    assert claimed["id"] == queued.json()["id"]
+
+    with pytest.raises(ValueError, match="Invalid Job terminal status"):
+        store.finish(claimed["id"], invalid, attempt_id=claimed["attempts"][-1]["id"])
+
+    unchanged = store.get_job(claimed["id"])
+    assert unchanged["status"] == "Running"
+    assert len(unchanged["attempts"]) == 1
+    assert unchanged["attempts"][0]["status"] == "Running"
+    # 잘못된 호출 이후에도 정상적인 종료가 가능해야 한다.
+    assert (
+        store.finish(
+            claimed["id"],
+            "Failed",
+            attempt_id=claimed["attempts"][-1]["id"],
+            error_code="SOS-JOB-FAILED",
+        )
+        == "Failed"
+    )
+    final = store.get_job(claimed["id"])
+    assert final["status"] == "Failed"
+    assert final["attempts"][0]["status"] == "Failed"
+
+
+def test_stale_attempt_cannot_complete_or_publish_new_attempt(workspace):
+    """재Claim 이전 실행의 늦은 완료는 새 Attempt와 Dataset에 영향을 주지 않는다."""
+    client, store = workspace
+    source = upload(client)
+    created = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    assert created.status_code == 202
+    first = store.claim()
+    assert first is not None
+    old_id = first["attempts"][-1]["id"]
+    store.recover()
+    second = store.claim()
+    assert second is not None
+    current_id = second["attempts"][-1]["id"]
+    assert current_id != old_id
+    before_datasets = len(store.dataset_page(limit=101))
+
+    with pytest.raises(WorkerOwnershipLost, match="attempt"):
+        store.finish(
+            first["id"],
+            "Succeeded",
+            attempt_id=old_id,
+            publish={
+                "name": "stale.parquet",
+                "location": ObjectStore().location("results/stale.parquet"),
+                "version": "unpublished",
+            },
+        )
+    unchanged = store.get_job(first["id"])
+    assert unchanged["status"] == "Running"
+    assert unchanged["result"] is None
+    assert [attempt["status"] for attempt in unchanged["attempts"]] == [
+        "Interrupted",
+        "Running",
+    ]
+    assert len(store.dataset_page(limit=101)) == before_datasets
+    assert store.finish(first["id"], "Failed", attempt_id=current_id) == "Failed"
+
+
 def test_cancel_running_execution_and_do_not_publish(workspace):
     client, store = workspace
     dataset = upload(client)
@@ -203,7 +274,7 @@ def test_worker_home_matches_configuration_and_explicit_override(
             return True
 
         def recover(self):
-            pass
+            return []
 
         def heartbeat(self):
             pass
@@ -331,8 +402,9 @@ def test_worker_completion_audit_and_atomic_failure(workspace, monkeypatch):
 
     second = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
     job_id = second.json()["id"]
-    assert store.claim()["id"] == job_id
-    before = len(store.datasets())
+    claimed = store.claim()
+    assert claimed["id"] == job_id
+    before = len(store.dataset_page(limit=101))
     original_audit = Store._audit
 
     def fail_finished_audit(db, **kwargs):
@@ -345,6 +417,7 @@ def test_worker_completion_audit_and_atomic_failure(workspace, monkeypatch):
         store.finish(
             job_id,
             "Succeeded",
+            attempt_id=claimed["attempts"][-1]["id"],
             publish={
                 "name": "never-committed.parquet",
                 "location": ObjectStore().location("results/no-publish.parquet"),
@@ -352,7 +425,7 @@ def test_worker_completion_audit_and_atomic_failure(workspace, monkeypatch):
             },
         )
     assert store.get_job(job_id)["status"] == "Running"
-    assert len(store.datasets()) == before
+    assert len(store.dataset_page(limit=101)) == before
 
 
 def test_failed_job_completion_is_audited(workspace):
@@ -364,7 +437,7 @@ def test_failed_job_completion_is_audited(workspace):
     claimed = store.claim()
     assert claimed["id"] == created.json()["id"]
     attempt_id = claimed["attempts"][-1]["id"]
-    store.finish(claimed["id"], "Failed", error="test failure")
+    store.finish(claimed["id"], "Failed", attempt_id=attempt_id, error="test failure")
     failed = store.get_job(claimed["id"])
     assert failed["status"] == "Failed"
     assert any(

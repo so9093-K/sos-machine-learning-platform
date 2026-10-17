@@ -38,6 +38,53 @@ def test_replayed_submission_and_conflicting_payload(workspace):
     assert different.json()["retry_policy"] == "never"
 
 
+def test_generic_and_exploration_jobs_share_idempotency_namespace(workspace):
+    """서로 다른 Job API를 같은 키로 재전송해도 다른 작업이 생성되지 않는다."""
+    client, store = workspace
+    dataset = upload(client)
+    key = str(uuid4())
+    general = client.post(
+        "/api/jobs",
+        json={"dataset_id": dataset["id"], "kind": "profile"},
+        headers={"Idempotency-Key": key},
+    )
+    assert general.status_code == 202, general.text
+    exploration_body = {
+        "dataset_id": dataset["id"],
+        "exploration": {"column": "temperature", "metric": "mean"},
+    }
+    conflict = client.post(
+        "/api/explorations/jobs",
+        json=exploration_body,
+        headers={"Idempotency-Key": key},
+    )
+    assert conflict.status_code == 409, conflict.text
+    assert conflict.json()["code"] == "SOS-JOB-IDEMPOTENCY-CONFLICT"
+
+    exploration_key = str(uuid4())
+    headers = {"Idempotency-Key": exploration_key}
+    first = client.post("/api/explorations/jobs", json=exploration_body, headers=headers)
+    assert first.status_code == 202, first.text
+    replay = client.post("/api/explorations/jobs", json=exploration_body, headers=headers)
+    assert replay.status_code == 202, replay.text
+    assert replay.json()["id"] == first.json()["id"]
+    assert first.json()["id"] != general.json()["id"]
+
+    assert client.get(f"/api/jobs/{first.json()['id']}").status_code == 404
+    assert client.get(f"/api/explorations/jobs/{general.json()['id']}").status_code == 404
+    assert client.post(f"/api/jobs/{first.json()['id']}/cancel").status_code == 404
+    wrong_cancel = client.post(f"/api/explorations/jobs/{general.json()['id']}/cancel")
+    assert wrong_cancel.status_code == 404
+    general_ids = [job["id"] for job in client.get("/api/jobs").json()["items"]]
+    assert general_ids == [general.json()["id"]]
+    assert [job["id"] for job in client.get("/api/explorations/jobs").json()["items"]] == [
+        first.json()["id"]
+    ]
+    with store.connection() as db:
+        assert db.execute(text("SELECT COUNT(*) FROM jobs")).scalar_one() == 2
+        assert db.execute(text("SELECT COUNT(*) FROM job_submissions")).scalar_one() == 2
+
+
 def test_postgres_serializes_concurrent_submissions(workspace):
     client, store = workspace
     dataset = upload(client)

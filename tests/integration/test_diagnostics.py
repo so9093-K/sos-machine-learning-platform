@@ -42,7 +42,7 @@ def test_unexpected_failure_does_not_expose_exception_message(workspace, monkeyp
     def failure(_store, **_kwargs):
         raise RuntimeError(sentinel)
 
-    monkeypatch.setattr(Store, "datasets", failure)
+    monkeypatch.setattr(Store, "dataset_page", failure)
     with TestClient(create_app(store.home), raise_server_exceptions=False) as safe:
         response = safe.get("/api/datasets")
     assert response.status_code == 500
@@ -99,10 +99,12 @@ def test_audit_filter_finds_older_request_and_preserves_permissions(workspace, m
             resource_type="job",
             resource_id=str(number),
         )
-    found = client.get("/api/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"})
+    found = client.get(
+        "/api/v2/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"}
+    )
     assert found.status_code == 200
     assert len(found.json()) == 1 and found.json()[0]["action"] == "audit.find-me"
-    by_job = client.get("/api/audit", params={"job_id": "abcdefab-cdef-abcd-efab-cdefabcdefab"})
+    by_job = client.get("/api/v2/audit", params={"job_id": "abcdefab-cdef-abcd-efab-cdefabcdefab"})
     assert by_job.status_code == 200 and len(by_job.json()) == 1
     monkeypatch.setenv("SOS_AUTH_MODE", "token")
     monkeypatch.setenv(
@@ -111,7 +113,7 @@ def test_audit_filter_finds_older_request_and_preserves_permissions(workspace, m
     )
     with TestClient(create_app(store.home)) as protected:
         denied = protected.get(
-            "/api/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"}
+            "/api/v2/audit", params={"request_id": "12345678-1234-1234-1234-123456789abc"}
         )
     assert denied.status_code == 401
 
@@ -139,8 +141,10 @@ def test_worker_precommit_and_commit_failures_have_distinct_contracts(
     def fail_precommit(_store, _dataset, _table, _attempt, *, on_commit_start):
         raise RuntimeError(secret)
 
+    # 이 테스트는 자식 프로세스를 생성하지 않으므로 부모 종료 감시만 대체한다.
+    monkeypatch.setattr(worker, "_guard_child_parent", lambda _pid: None)
     monkeypatch.setattr(worker, "import_to_iceberg", fail_precommit)
-    _perform(store.home, store.database_url, job, completed, pending)
+    _perform(store.home, store.database_url, job, completed, pending, 0)
     before = json.loads(completed.read_text())
     assert before["error_code"] == "SOS-JOB-FAILED"
     assert before["failure_stage"] == "iceberg_prepare"
@@ -153,11 +157,63 @@ def test_worker_precommit_and_commit_failures_have_distinct_contracts(
         raise RuntimeError(secret)
 
     monkeypatch.setattr(worker, "import_to_iceberg", fail_after_commit_entry)
-    _perform(store.home, store.database_url, job, completed, pending)
+    _perform(store.home, store.database_url, job, completed, pending, 0)
     after = json.loads(completed.read_text())
     assert after["error_code"] == "SOS-ICEBERG-UNCERTAIN"
     assert after["failure_stage"] == "iceberg_commit"
     assert secret not in completed.read_text()
+
+
+def test_iceberg_disk_full_during_staging_does_not_enter_catalog_commit(
+    workspace, monkeypatch, tmp_path
+):
+    """실제 스테이징 중 ENOSPC가 발생하면 Commit 이전 실패로 기록하고 파일을 회수한다."""
+    import errno
+    import json
+    from pathlib import Path
+
+    import polars as pl
+    import pytest
+    from pyiceberg.exceptions import NoSuchTableError
+
+    import sos_platform.worker as worker
+    from sos_platform.datasets import iceberg_catalog
+
+    client, store = workspace
+    source = upload(client)
+    posted = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source["id"], "table_name": "staging_out_of_space"},
+    )
+    assert posted.status_code == 202
+    job = store.claim()
+    assert job["id"] == posted.json()["id"]
+    attempt_id = job["attempts"][-1]["id"]
+    completed = tmp_path / "staging-disk-full.json"
+    pending = tmp_path / "staging-result.parquet"
+    secret = "password=not-for-job-error"
+
+    def write_partial_then_enospc(_frame, path, *_args, **_kwargs):
+        Path(path).write_bytes(b"partially-written")
+        raise OSError(errno.ENOSPC, secret)
+
+    # 자식 본문의 실제 Catalog·폴라스 경로를 동기 실행해 파일 고갈만 주입한다.
+    with monkeypatch.context() as patch:
+        patch.setattr(worker, "_guard_child_parent", lambda _pid: None)
+        patch.setattr(pl.LazyFrame, "sink_parquet", write_partial_then_enospc)
+        _perform(store.home, store.database_url, job, completed, pending, 0)
+
+    outcome = json.loads(completed.read_text(encoding="utf-8"))
+    assert outcome["error_code"] == "SOS-JOB-FAILED"
+    assert outcome["failure_stage"] == "iceberg_prepare"
+    assert outcome["failure_category"] == "io"
+    assert outcome["exception_type"] == "OSError"
+    assert secret not in completed.read_text(encoding="utf-8")
+    staging = store.home / "cache" / "iceberg-staging"
+    assert not list(staging.glob(f"attempt-{attempt_id}-*"))
+    with pytest.raises(NoSuchTableError):
+        iceberg_catalog(store).load_table("default.staging_out_of_space")
+    assert store.get_job(job["id"])["status"] == "Running"
 
 
 def test_operator_diagnostics_retains_category_without_raw_exception(workspace, monkeypatch):
@@ -185,7 +241,7 @@ def test_operator_diagnostics_retains_category_without_raw_exception(workspace, 
 
     monkeypatch.setattr(ObjectStore, "put", fail_write)
     assert run_once(store)
-    details = client.get(f"/api/diagnostics/jobs/{job_id}")
+    details = client.get(f"/api/v2/diagnostics/jobs/{job_id}")
     assert details.status_code == 200
     payload = details.json()
     assert payload["request_id"] == request_id
@@ -196,7 +252,7 @@ def test_operator_diagnostics_retains_category_without_raw_exception(workspace, 
     assert payload["attempts"][0]["failure_category"] == "unclassified"
     assert payload["attempts"][0]["exception_type"] == "RuntimeError"
     assert secret not in details.text
-    audit = client.get("/api/audit", params={"request_id": request_id})
+    audit = client.get("/api/v2/audit", params={"request_id": request_id})
     assert audit.status_code == 200
     assert {"job.create", "job.finish"} <= {row["action"] for row in audit.json()}
     public = client.get(f"/api/jobs/{job_id}")
@@ -218,10 +274,10 @@ def test_invalid_bearer_token_length_preserves_challenge(workspace, monkeypatch)
         json.dumps({token_hash: {"actor_id": "operator", "kind": "human", "roles": ["operator"]}}),
     )
     with TestClient(create_app(store.home)) as secure:
-        response = secure.get("/api/audit", headers={"Authorization": "Bearer short"})
+        response = secure.get("/api/v2/audit", headers={"Authorization": "Bearer short"})
         assert response.status_code == 401
         assert response.headers["WWW-Authenticate"] == "Bearer"
         blocked = secure.get(
-            "/api/diagnostics/jobs/" + "a" * 36, headers={"Authorization": "Bearer short"}
+            "/api/v2/diagnostics/jobs/" + "a" * 36, headers={"Authorization": "Bearer short"}
         )
         assert blocked.status_code == 401

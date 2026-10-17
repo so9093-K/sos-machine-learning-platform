@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import BinaryIO
 
-from .errors import PlatformError
+from .errors import PlatformError, RuntimeConfigurationError
 
 CHUNK_SIZE = 1024 * 1024
 SUPPORTED_EXTENSIONS = (".csv", ".parquet")
@@ -26,7 +26,7 @@ class UploadPolicy:
     def from_env(cls) -> "UploadPolicy":
         raw = os.getenv("SOS_MAX_UPLOAD_MIB", "256")
         if not raw.isdecimal() or not 1 <= int(raw) <= 2048:
-            raise ValueError("SOS_MAX_UPLOAD_MIB must be between 1 and 2048")
+            raise RuntimeConfigurationError("SOS_MAX_UPLOAD_MIB must be between 1 and 2048")
         return cls(max_bytes=int(raw) * 1024 * 1024)
 
     def describe(self) -> dict:

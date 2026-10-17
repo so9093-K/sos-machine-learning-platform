@@ -40,6 +40,67 @@ test("CSV upload → EDA → feature preview → worker → reusable dataset", a
   await expect(page.locator("nav").getByText(/features-/).first()).toBeVisible();
 });
 
+test("an expanded Attempt detail catches up with a newer completed Job", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "detail-refresh.csv", mimeType: "text/csv", buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "detail-refresh.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "탐색" }).click();
+  const jobId = await submittedJob(page, "/api/jobs", () =>
+    page.getByRole("button", { name: /전체 Profile 실행/ }).click());
+  const job = jobById(page, jobId);
+  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
+  let detailRequests = 0;
+  await page.route(`**/api/jobs/${jobId}`, async route => {
+    const response = await route.fetch();
+    const original = await response.json() as {
+      status: string; updated_at: string; attempts: Array<{ status: string }>;
+    };
+    detailRequests += 1;
+    await route.fulfill({ response, json: detailRequests === 1
+      ? { ...original, status: "Running", updated_at: "2000-01-01T00:00:00+00:00",
+          attempts: original.attempts.map(attempt => ({ ...attempt, status: "Running" })) }
+      : original,
+    });
+  });
+  await job.getByText(/작업 설정 및 실행 시도/).click();
+  await expect(job.getByText(/Succeeded ·/)).toBeVisible({ timeout: 10000 });
+  expect(detailRequests).toBeGreaterThanOrEqual(2);
+});
+
+test("failed Attempt detail can be retried without collapsing the Job", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "detail-retry.csv", mimeType: "text/csv", buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "detail-retry.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "탐색" }).click();
+  const jobId = await submittedJob(page, "/api/jobs", () =>
+    page.getByRole("button", { name: /전체 Profile 실행/ }).click());
+  const job = jobById(page, jobId);
+  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
+
+  let unavailable = true;
+  await page.route(`**/api/jobs/${jobId}`, async route => {
+    if (unavailable) {
+      await route.fulfill({
+        status: 503, contentType: "application/json",
+        body: JSON.stringify({ detail: "상세 기록을 가져올 수 없습니다." }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  await job.getByText(/작업 설정 및 실행 시도/).click();
+  await expect(job.getByRole("alert")).toContainText("상세 기록을 가져올 수 없습니다.");
+  unavailable = false;
+  await job.getByRole("button", { name: "상세 다시 시도" }).click();
+  await expect(job.getByText(/Succeeded ·/)).toBeVisible();
+  await expect(job.getByRole("button", { name: "상세 다시 시도" })).toHaveCount(0);
+});
+
+
 test("Iceberg import captures a pinned snapshot", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
@@ -221,7 +282,7 @@ test("file size is explained and rejected before upload", async ({ page }) => {
 
 test("201 registration remains successful when the subsequent list refresh fails", async ({ page }) => {
   let failRefresh = false;
-  await page.route("**/api/datasets/pages*", route => {
+  await page.route("**/api/datasets?*", route => {
     if (route.request().method() === "GET" && failRefresh) {
       return route.fulfill({ status: 503, contentType: "application/json",
         body: JSON.stringify({ detail: "List temporarily unavailable" }) });
@@ -414,7 +475,7 @@ test("late initial Dataset list cannot overwrite successful upload selection", a
   const gotInitial = new Promise<void>(resolve => { initialFetched = resolve; });
   const delivery = new Promise<void>(resolve => { resolveInitial = resolve; });
   let isFirst = true;
-  await page.route("**/api/datasets/pages*", async route => {
+  await page.route("**/api/datasets?*", async route => {
     if (isFirst && route.request().method() === "GET") {
       isFirst = false;
       const response = await route.fetch(); // 업로드 이전의 오래된 스냅샷
@@ -481,7 +542,7 @@ test("late Dataset list response does not exit explicitly selected example galle
   const started = new Promise<void>(resolve => { fetched = resolve; });
   const release = new Promise<void>(resolve => { unblock = resolve; });
   let held = false;
-  await page.route("**/api/datasets/pages*", async route => {
+  await page.route("**/api/datasets?*", async route => {
     if (route.request().method() === "GET" && !held) {
       held = true;
       const response = await route.fetch();
@@ -603,6 +664,41 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
   await page.getByRole("button", { name: "샘플 변환 확인" }).click();
   await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
   await expect(page.locator("#sos-panel-features .result th")).toHaveCount(4);
+});
+
+
+test("loading older Jobs survives a concurrent background refresh", async ({ page }) => {
+  let requestedOlder = 0;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/jobs?limit=20*", async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has("cursor")) {
+      requestedOlder++;
+      await held;
+      return route.fulfill({ status: 200, json: {
+        items: [{
+          id: "older-page-job", dataset_id: "old-dataset", kind: "profile",
+          status: "Succeeded", created_at: "2026-01-01T00:00:00Z",
+          attempt_count: 0, spec: {}, result: null,
+        }],
+        next_cursor: null,
+      } });
+    }
+    const response = await route.fetch();
+    const current = await response.json() as { items: unknown[]; next_cursor: string | null };
+    return route.fulfill({ response, json: { ...current, next_cursor: "older-page-token" } });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
+  try {
+    await page.getByRole("button", { name: "이전 작업 더 보기 →" }).click();
+    await expect.poll(() => requestedOlder).toBeGreaterThan(0);
+    await page.getByRole("button", { name: "새로고침" }).click();
+  } finally {
+    release();
+  }
+  await expect(page.getByText("older-page-job")).toBeVisible();
 });
 
 

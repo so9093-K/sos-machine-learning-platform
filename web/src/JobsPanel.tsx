@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { request, formatError } from "./api";
 import { explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
 import type { Dataset, Job, JobSummary, ExplorationJob, ExplorationJobSummary } from "./types";
@@ -37,6 +37,8 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
   const [detailById, setDetailById] = useState<Record<string, Job | ExplorationJob>>({});
   const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
   const pending = useRef(new Set<string>());
+  const expanded = useRef(new Set<string>());
+  const refreshedRevision = useRef(new Map<string, string>());
 
   async function loadDetails(jobId: string) {
     if (pending.current.has(jobId)) return;
@@ -56,6 +58,21 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
       pending.current.delete(jobId);
     }
   }
+  // 펼친 상세는 목록에서 관측한 더 새로운 Job/Attempt 판본을 따라간다.
+  // 한 목록 판본에서 상세 응답이 뒤처지더라도 무한 재요청하지 않는다.
+  useEffect(() => {
+    for (const job of jobs) {
+      if (!expanded.current.has(job.id) || pending.current.has(job.id) || detailErrors[job.id]) continue;
+      const detail = detailById[job.id];
+      if (detail && detail.updated_at >= job.updated_at
+          && detail.attempts.length >= job.attempt_count) continue;
+      const revision = [job.updated_at, job.status, job.attempt_count, job.cancel_requested].join(":");
+      if (refreshedRevision.current.get(job.id) === revision) continue;
+      refreshedRevision.current.set(job.id, revision);
+      void loadDetails(job.id);
+    }
+  }, [jobs, detailById, detailErrors]);
+
   return <section className="panel" aria-label="실행 작업">
     <div className="panel-head"><div>
       <h3>Execution Jobs</h3>
@@ -90,10 +107,21 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
           <DiscoveryJobResult result={job.result} />}
         {job.result && <details><summary>실행 결과 상세</summary>
           <pre>{JSON.stringify(job.result, null, 2)}</pre></details>}
-        <details onToggle={event => { if (event.currentTarget.open) void loadDetails(job.id); }}>
+        <details onToggle={event => {
+          if (event.currentTarget.open) {
+            expanded.current.add(job.id);
+            void loadDetails(job.id);
+          } else {
+            expanded.current.delete(job.id);
+          }
+        }}>
           <summary>작업 설정 및 실행 시도 · {job.attempt_count}회</summary>
           <pre>{JSON.stringify(job.spec, null, 2)}</pre>
-          {detailErrors[job.id] && <p role="alert">{detailErrors[job.id]}</p>}
+          {detailErrors[job.id] && <div>
+            <p role="alert">{detailErrors[job.id]}</p>
+            <button type="button" className="secondary"
+              onClick={() => void loadDetails(job.id)}>상세 다시 시도</button>
+          </div>}
           {!detailById[job.id] && !detailErrors[job.id] && <p role="status">상세 이력을 확인하고 있습니다.</p>}
           {detailById[job.id]?.attempts.map(attempt => <p key={attempt.id} className="muted">
             #{attempt.number} {attempt.status} · {attempt.started_at}

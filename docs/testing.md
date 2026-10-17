@@ -15,7 +15,7 @@
 
 | 테스트 계층 | 위치 | 실행 |
 | --- | --- | --- |
-| 순수 로직·CLI·호환성 | tests/test_processing.py, tests/test_dev_cli.py, tests/test_api_compat.py, tests/test_errors.py, tests/test_diagnostics.py, tests/test_log_capture.py, tests/test_e2e_isolation.py | make check-fast; PR 필수 |
+| 순수 로직·CLI·호환성 | tests/test_processing.py, tests/test_dev_cli.py, tests/test_api_compat.py, tests/test_pagination.py, tests/test_execution_budget.py, tests/test_resource_admission.py, tests/test_errors.py, tests/test_diagnostics.py, tests/test_log_capture.py, tests/test_e2e_isolation.py | make check-fast; PR 필수 |
 | 실제 DB·객체 저장소·Catalog | tests/integration/ | PR 필수 Python 작업 |
 | 브라우저 사용자 흐름·RBAC | web/e2e/ | PR 필수 UI 작업 |
 | Make 재시작·보존 | CI Make lifecycle | PR 필수; 자체 데이터를 생성해야 함 |
@@ -33,12 +33,13 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | Job 상태·취소·게시 원자성·Attempt·커서 | test_jobs.py |
 | Job 제출 키 중복·동시성·감사 롤백 | test_idempotency.py |
 | 전역 Discovery 슬롯 경합과 회수 | test_discovery_admission.py |
-| Worker 실행 시간 제한·실패 기록 | test_worker_budget.py |
+| Worker·Discovery 공통 메모리 수용과 예약 회수, 설정의 포함 관계·서버 오류 분리 | test_resource_admission.py (unit·integration) |
+| Worker 시간·메모리 제한, 필수 cgroup 위임 실패 시 Claim 거부·자식 격리 계약 | test_worker_budget.py, test_cgroup.py |
 | Dataset 키셋 페이지와 Snapshot 소유권 | test_dataset_pages.py, test_snapshot_scope.py |
-| Iceberg Snapshot 고정·Tag 보존·중단 후 자동 재시도 금지·대용량 비파티션 단일 Snapshot | test_iceberg.py |
+| Iceberg Snapshot 고정·Tag 보존·외부 커밋/Tag ACK 유실, 독립 Writer 동시 Commit 경합·중단 후 자동 재시도 금지·대용량 비파티션 단일 Snapshot | test_iceberg.py |
 | 객체 쓰기 의도·S3 관측·삭제 없는 Storage Health | test_storage.py |
 | 토큰·역할·리소스 소유권·거부 감사 | test_security.py, auth.spec.ts |
-| Worker 중단·복구 감사·Attempt 식별 | test_recovery.py |
+| Worker 중단·복구 감사·Attempt 식별 및 실제 Job 부모 SIGKILL 후 자식 종료·복구 | test_recovery.py, worker_kill_helper.py |
 | 테스트 준비 단계 실패 시 DB/버킷 정리 | test_environment.py, conftest.py |
 | 데이터→EDA→Feature→Job·브라우저 접근성, 재시도·문자형 집계·전체 결과 이해 | workspace.spec.ts |
 | OpenAPI 삭제·필수 입력 추가·필드 변경 위험 | test_api_compat.py와 PR 비교 검사 |
@@ -81,6 +82,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 - python-quality: 위 세 작업이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
 - 오래된 PR HEAD만 취소하고 main 검증 결과는 각 실행 ID별로 보존한다.
 - 정기(매일 새벽)·수동 실행에서는 핵심 Iceberg/Job 모듈을 순서를 바꿔 두 번 반복해 격리·재현성을 점검한다. 실패는 일반 CI 실패로 남으며 Retry에 의해 무시되지 않는다.
+- 현재 사용자가 없는 사전 출시 단계에서 명시적으로 제거한 API는 `scripts/approved_pre_release_api_breaks.json`에 진단 문자열로 기록한다. 그 밖의 Breaking 변경은 기존 검사가 차단한다. 예외는 PR 번호가 `14`이고 Base SHA가 `143caccd`인 경우에만 적용되며, 같은 Base SHA를 대상으로 하는 다른 PR도 엄격한 검사를 사용한다. 정식 지원 계약이 확정되면 승인 목록을 제거하고 엄격한 검사를 유지한다.
 - API 호환성 검사는 이전 base 코드(의존성 잠금 변경 시 base 자체 환경)와 현재 코드에서 각각 생성한 OpenAPI를 비교한다. 요청과 응답의 호환성 방향을 분리하고 Nullable/배열/$ref를 검사한다. 보수적 가드이지 완전한 JSON Schema 판정기는 아니다.
 
 ## 실패 진단과 안정성 유지
@@ -101,3 +103,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 ## PR 완료 조건
 
 계약·검증 계층이 명확하고, 테스트 독립성·실패 안전 정리가 확인되고, 필수 검사와 API 호환성 평가를 통과해야 한다. 최종 HEAD의 CI를 확인하고 개발자가 직접 PR을 병합한다.
+
+## 독립적인 연산 기준선
+
+`uv run --locked python scripts/benchmark_processing.py --rows 150000 --groups 32 --scenario window`와 `--scenario row_local`을 각각 독립 프로세스로 실행해 같은 합성 입력 생성 규칙에서 **실제 SOS Polars Transform**의 경과 시간·출력 크기·Linux RSS 관측치를 JSON으로 확인한다. 숫자 비교 시 환경·CPU·메모리·Polars 버전·시나리오·행/그룹 수를 함께 기록한다. `VmHWM`은 프로세스 생애 고수위이므로 단일 연산에만 귀속되는 엄격한 Peak RSS가 아니며, 파일 I/O·Iceberg 커밋·여러 동시 실행·cgroup 제한도 검증하지 않는다. 운영 환경의 성능 보장으로 사용하지 않는다.

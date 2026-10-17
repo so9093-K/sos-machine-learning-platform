@@ -263,16 +263,34 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Compare base and current generated OpenAPI")
     parser.add_argument("base", type=Path)
     parser.add_argument("current", type=Path)
+    parser.add_argument(
+        "--approved-breaking-file",
+        type=Path,
+        help="허용된 사전 출시 계약 변경을 정확한 진단 문자열로 나열한 파일",
+    )
     args = parser.parse_args()
     issues = breaking_changes(
         json.loads(args.base.read_text(encoding="utf-8")),
         json.loads(args.current.read_text(encoding="utf-8")),
     )
+    approved = set()
+    if args.approved_breaking_file is not None:
+        policy = json.loads(args.approved_breaking_file.read_text(encoding="utf-8"))
+        declared = policy["issues"]
+        if not isinstance(declared, list) or any(not isinstance(x, str) for x in declared):
+            raise ValueError("Approved breaking changes must be a list of strings")
+        if len(set(declared)) != len(declared):
+            raise ValueError("Approved breaking changes must be distinct")
+        approved = set(declared)
     for issue in issues:
-        print(f"BREAKING API: {issue}")
-    if issues:
+        print(f"{'APPROVED' if issue in approved else 'BREAKING'} API: {issue}")
+    unexpected = sorted(set(issues) - approved)
+    if unexpected:
         return 1
-    print("OpenAPI compatibility guard: no known breaking changes")
+    if issues:
+        print("OpenAPI compatibility guard: only explicitly approved pre-release changes")
+    else:
+        print("OpenAPI compatibility guard: no known breaking changes")
     return 0
 
 

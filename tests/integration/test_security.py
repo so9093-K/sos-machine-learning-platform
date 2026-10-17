@@ -58,9 +58,9 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         assert (
             secure.get("/api/datasets", headers={"Authorization": "Bearer bad"}).status_code == 401
         )
-        assert secure.get("/api/auth/me", headers=headers("alice")).json()["actor_id"] == "alice"
+        assert secure.get("/api/v2/auth/me", headers=headers("alice")).json()["actor_id"] == "alice"
         assert secure.get("/api/storage/inspection", headers=headers("alice")).status_code == 403
-        assert secure.get("/api/audit", headers=headers("alice")).status_code == 403
+        assert secure.get("/api/v2/audit", headers=headers("alice")).status_code == 403
         assert secure.get("/api/storage/policy", headers=headers("ops")).status_code == 200
         # Data 생성·실행과 이미 존재하는 Snapshot의 운영 보존은 서로 다른 권한이다.
         assert (
@@ -131,7 +131,10 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
             == 404
         )
         assert secure.post(f"/api/datasets/{owned}/query", json={"limit": 1}).status_code == 401
-        assert secure.get("/api/datasets", headers=headers("bob")).json() == []
+        assert secure.get("/api/datasets", headers=headers("bob")).json() == {
+            "items": [],
+            "next_cursor": None,
+        }
         assert (
             secure.post(
                 "/api/datasets/files",
@@ -163,7 +166,42 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         )
         cancelled = secure.post(f"/api/jobs/{job.json()['id']}/cancel", headers=headers("alice"))
         assert cancelled.status_code == 200, cancelled.text
-        history = secure.get("/api/audit", headers=headers("ops"))
+
+        exploration_body = {
+            "dataset_id": owned,
+            "exploration": {"column": "a", "metric": "count"},
+        }
+        missing_discovery_key = secure.post(
+            "/api/explorations/jobs", json=exploration_body, headers=headers("alice")
+        )
+        assert missing_discovery_key.status_code == 428
+        assert missing_discovery_key.json()["code"] == "SOS-JOB-IDEMPOTENCY-REQUIRED"
+        exploration = secure.post(
+            "/api/explorations/jobs",
+            json=exploration_body,
+            headers={**headers("alice"), "Idempotency-Key": "alice-explore-001"},
+        )
+        assert exploration.status_code == 202, exploration.text
+        exploration_id = exploration.json()["id"]
+        alice_detail = secure.get(
+            f"/api/explorations/jobs/{exploration_id}", headers=headers("alice")
+        )
+        bob_detail = secure.get(f"/api/explorations/jobs/{exploration_id}", headers=headers("bob"))
+        general_detail = secure.get(f"/api/jobs/{exploration_id}", headers=headers("alice"))
+        bob_list = secure.get("/api/explorations/jobs", headers=headers("bob"))
+        bob_cancel = secure.post(
+            f"/api/explorations/jobs/{exploration_id}/cancel", headers=headers("bob")
+        )
+        alice_cancel = secure.post(
+            f"/api/explorations/jobs/{exploration_id}/cancel", headers=headers("alice")
+        )
+        assert alice_detail.status_code == 200
+        assert bob_detail.status_code == 404
+        assert general_detail.status_code == 404
+        assert bob_list.json()["items"] == []
+        assert bob_cancel.status_code == 403
+        assert alice_cancel.json()["status"] == "Cancelled"
+        history = secure.get("/api/v2/audit", headers=headers("ops"))
         assert history.status_code == 200
         events = history.json()
         assert any(x["action"] == "dataset.create" and x["actor_id"] == "alice" for x in events)
@@ -233,7 +271,7 @@ def test_slow_denied_audit_does_not_block_other_requests(workspace, monkeypatch)
     monkeypatch.setattr(Store, "record_audit", slow_audit)
     with ThreadPoolExecutor(max_workers=2) as executor:
         denied = executor.submit(
-            client.get, "/api/auth/me", headers={"X-Forwarded-For": "198.51.100.9"}
+            client.get, "/api/v2/auth/me", headers={"X-Forwarded-For": "198.51.100.9"}
         )
         try:
             assert entered.wait(timeout=10), "Denied audit did not start"
@@ -287,3 +325,12 @@ def test_configured_cors_allows_token_preflight(workspace, monkeypatch):
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:9765"
     assert "authorization" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_retired_auth_and_operator_paths_are_not_registered(workspace):
+    """실사용자가 없는 사전 출시 계약 정리 후 과거 별칭을 다시 노출하지 않는다."""
+    client, _ = workspace
+    for path in ("/api/auth/me", "/api/audit", "/api/diagnostics/jobs/test-id"):
+        response = client.get(path)
+        assert response.status_code == 404
+        assert response.json()["code"] == "SOS-API-NOT-FOUND"

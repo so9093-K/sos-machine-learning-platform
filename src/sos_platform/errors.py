@@ -109,6 +109,13 @@ DEFINITIONS = (
         "storage_capacity",
     ),
     spec(
+        "SOS-EXECUTION-CAPACITY",
+        "실행 자원 부족",
+        "현재 실행 용량이 가득 찼습니다. 진행 중인 작업이 끝난 뒤 다시 시도하세요.",
+        "capacity",
+        "after_delay",
+    ),
+    spec(
         "SOS-DISCOVERY-CAPACITY",
         "탐색 실행 용량 초과",
         "동시 실행 가능 수를 초과했습니다. 잠시 후 다시 요청하세요.",
@@ -171,6 +178,18 @@ if len(ERRORS) != len(DEFINITIONS) + len(
     [code for code in CLI_CODES if code not in {x.code for x in DEFINITIONS}]
 ):
     raise RuntimeError("Duplicate error code in the platform catalog")
+
+
+class InvalidRequestError(ValueError):
+    """클라이언트가 입력을 수정해 해결할 수 있는 명시적 오류."""
+
+
+class RuntimeConfigurationError(ValueError):
+    """서버 자원 설정의 모순·오입력. 클라이언트의 요청 검증 오류가 아니다."""
+
+
+class WorkerOwnershipLost(RuntimeError):
+    """Worker 잠금 세션 또는 확정 대상 Attempt의 소유권이 사라졌다."""
 
 
 class PlatformError(Exception):
