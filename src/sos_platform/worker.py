@@ -217,9 +217,9 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
         attempt_id=attempt_id,
         kind=job["kind"],
     )
-    # Worker가 강제 종료돼도 이전 Attempt의 로컬 결과를 새 실행이 재사용하지 않는다.
+    # Claim마다 새 Attempt ID를 발급해 이전 실행의 결과 파일과 경로가 겹치지 않는다.
+    # Claim 직후의 사전 파일 삭제는 불필요하며, 실패 시 Running을 남길 수 있다.
     output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
-    completed.unlink(missing_ok=True)
     process = multiprocessing.get_context("spawn").Process(
         target=_perform,
         args=(store.home, store.database_url, job, completed, pending, os.getpid()),
