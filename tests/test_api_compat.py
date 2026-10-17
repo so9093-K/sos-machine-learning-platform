@@ -212,7 +212,6 @@ def test_realistic_query_maximum_narrowing_is_breaking():
     assert any("upper bound" in x for x in compat.breaking_changes(before, after))
 
 
-
 def test_api_compat_cli_rejects_breaking_change_without_override(monkeypatch, tmp_path, capsys):
     """중단된 사전 출시 승인 옵션으로 Breaking 변경을 우회하지 못한다."""
     before = contract()
