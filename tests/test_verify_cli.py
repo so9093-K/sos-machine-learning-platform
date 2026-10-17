@@ -56,7 +56,7 @@ def test_runner_exit_zero_with_missing_report_fails(monkeypatch, tmp_path):
     assert code == verify.EXIT_EVIDENCE
     assert manifest["status"] == "failed"
     assert manifest["evidence"]["reason"] == "JUnit 파일 누락"
-    assert json.loads((tmp_path / "manifest.json").read_text())["exit_code"] == code
+    assert json.loads((tmp_path / "python-unit.manifest.json").read_text())["exit_code"] == code
 
 
 def test_successful_junit_and_nonzero_runner_fail(monkeypatch, tmp_path):
@@ -99,3 +99,28 @@ def test_suite_contract_has_no_undeclared_runners():
         assert suite.kind in {"command", "junit"}
         if suite.name != "openapi-compat":
             assert verify.commands(suite.name, Path("/tmp/report.xml"), None)
+
+
+def test_shared_artifact_dir_keeps_each_suite_manifest(monkeypatch, tmp_path):
+    monkeypatch.setattr(verify, "commands", lambda *_args: [(["true"], tmp_path)])
+    monkeypatch.setattr(
+        verify.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout="abc\n"),
+    )
+    assert verify.execute("ruff", tmp_path)[0] == 0
+    assert verify.execute("wheel", tmp_path)[0] == 0
+    assert (tmp_path / "ruff.manifest.json").is_file()
+    assert (tmp_path / "wheel.manifest.json").is_file()
+
+
+def test_empty_required_command_plan_cannot_succeed(monkeypatch, tmp_path):
+    monkeypatch.setattr(verify, "commands", lambda *_args: [])
+    monkeypatch.setattr(
+        verify.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout="abc\n"),
+    )
+    code, manifest = verify.execute("ruff", tmp_path)
+    assert code == verify.EXIT_USAGE
+    assert "필수 실행 명령" in manifest["error"]

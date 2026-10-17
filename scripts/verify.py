@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import uuid
+from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -178,6 +179,13 @@ def execute(
         "run_id": uuid.uuid4().hex,
         "suite": name,
         "git_sha": None,
+        "started_at_utc": datetime.now(timezone.utc).isoformat(),
+        "provider": (
+            "github"
+            if os.getenv("GITHUB_ACTIONS") == "true"
+            else ("gitlab" if os.getenv("GITLAB_CI") == "true" else "local")
+        ),
+        "platform": sys.platform,
         "status": "failed",
         "exit_code": None,
         "elapsed_seconds": None,
@@ -195,7 +203,10 @@ def execute(
     if name in {"workspace-e2e", "token-rbac"}:
         run_env["SOS_JUNIT_FILE"] = str(report)
     try:
-        for command, cwd in commands(name, report, base_ref):
+        planned = commands(name, report, base_ref)
+        if not planned:
+            raise ValueError("Suite의 필수 실행 명령이 비어 있습니다.")
+        for command, cwd in planned:
             print(f"[SOS Verify] {name}: {' '.join(command)}", flush=True)
             proc = subprocess.run(command, cwd=cwd, env=run_env, check=False)
             if proc.returncode:
@@ -221,11 +232,16 @@ def execute(
     if error:
         result["error"] = error
     try:
-        (output / "manifest.json").write_text(
+        (output / f"{name}.manifest.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
+        (output / f"{name}.summary.txt").write_text(
+            f"{name}: {result['status']} (exit={status}, tests={evidence['tests']}, "
+            f"elapsed={result['elapsed_seconds']}s)\n",
+            encoding="utf-8",
+        )
     except OSError as exc:
-        print(f"[SOS Verify] Manifest 저장 실패: {exc}", file=sys.stderr)
+        print(f"[SOS Verify] Manifest/Summary 저장 실패: {exc}", file=sys.stderr)
         return EXIT_EVIDENCE, result
     return status, result
 
@@ -249,8 +265,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.action == "inventory":
         return subprocess.run(
-            ["uv", "run", "--locked", "python", "scripts/verify_inventory.py", "--output",
-             str(args.output)],
+            [
+                "uv",
+                "run",
+                "--locked",
+                "python",
+                "scripts/verify_inventory.py",
+                "--output",
+                str(args.output),
+            ],
             cwd=ROOT,
             check=False,
         ).returncode

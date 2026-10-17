@@ -116,7 +116,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 `scripts/verify.py`는 SOS가 소유하는 Suite 이름·Runner·실행 증거 경계의 출발점이다. `python scripts/verify.py list`로 Suite와 인프라 요구 여부를 조회하고 `python scripts/verify.py run <suite> --output-dir <경로>`로 개별 검증을 호출한다. PR 비교 Suite에는 `--base-ref`를 지정한다.
 
 - pytest·Vitest·Playwright의 Native Runner를 그대로 사용하고 인프라 없는 Python 검증은 `tests/test_*.py` 수집으로 선택한다.
-- 각 호출은 고유 실행 경로의 `manifest.json`을 남기며 JUnit Suite에서 리포트 누락·손상·실행 0건·필수 테스트 Skip을 성공 처리하지 않는다.
+- 각 호출은 Suite별 `<suite>.manifest.json`과 `<suite>.summary.txt`를 남기며 JUnit Suite에서 리포트 누락·손상·실행 0건·필수 테스트 Skip을 성공 처리하지 않는다.
 - 기존 `make check-fast`·`make check`와 GitHub 필수 Job은 전환 및 회귀 확인이 끝날 때까지 유지한다. 검증되지 않은 새 Suite, GitLab 설정, 실제 운영 이식성은 완료로 취급하지 않는다.
 - 실행 결과에 토큰·환경변수 값은 기록하지 않는다. 실패 원문·Trace 등 상세 산출물은 별도 비밀정보 비노출 기준을 따른다.
 
