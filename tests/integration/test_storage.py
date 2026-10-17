@@ -47,6 +47,54 @@ def test_transform_publish_failure_preserves_unreferenced_attempt_object(workspa
     )
 
 
+def test_lost_s3_upload_response_preserves_object(workspace, monkeypatch):
+    """S3 바이트 쓰기 성공 후 응답만 유실되어도 결과를 성공 게시하지 않는다."""
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post(
+        "/api/jobs",
+        json={
+            "dataset_id": dataset["id"],
+            "kind": "transform",
+            "transform": {"steps": [{"op": "fill_null", "column": "temperature", "value": 0}]},
+        },
+    )
+    assert queued.status_code == 202
+    job_id = queued.json()["id"]
+    original_put = ObjectStore.put
+    written_keys = []
+
+    def put_without_response(self, key, source):
+        original_put(self, key, source)
+        written_keys.append(key)
+        raise ConnectionError("S3 upload acknowledgement was lost")
+
+    monkeypatch.setattr(ObjectStore, "put", put_without_response)
+    assert run_once(store)
+    job = store.get_job(job_id)
+    assert job["status"] == "Failed"
+    assert job["error_code"] == "SOS-JOB-FAILED"
+    assert job["failure_stage"] == "publication"
+    assert job["attempts"][0]["status"] == "Failed"
+    assert "acknowledgement was lost" not in job["error"]
+    attempt_id = job["attempts"][0]["id"]
+    key = f"results/{job_id}/{attempt_id}.parquet"
+    assert written_keys == [key]
+
+    storage = ObjectStore()
+    location = storage.location(key)
+    writes = store.object_writes(location)
+    assert len(writes) == 1
+    assert writes[0]["owner_id"] == attempt_id
+    assert writes[0]["state"] == "Failed"
+    assert all(row["location"] != location for row in store.dataset_page(limit=101))
+    # 응답 유실은 삭제 허가가 아니다. 외부 객체의 실체를 독립적으로 확인한다.
+    remote = storage.client.head_object(Bucket=storage.config.s3_bucket, Key=key)
+    assert remote["ContentLength"] > 0
+    assert store.recover() == []
+    assert store.get_job(job_id)["status"] == "Failed"
+
+
 def test_storage_inventory_policy_and_protection(workspace):
     """진단에서는 참조 중 Dataset을 보호하고 기본 삭제 정책을 노출한다."""
     client, store = workspace

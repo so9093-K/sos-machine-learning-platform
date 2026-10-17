@@ -314,7 +314,9 @@ def test_lost_worker_ownership_before_claim_keeps_job_queued(workspace):
         replacement.engine.dispose()
 
 
-def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(workspace, monkeypatch):
+def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(
+    workspace, monkeypatch
+):
     """Claim 이후 소유권을 잃은 실행은 결과를 확정하지 않고 새 Worker 복구에 맡긴다."""
     from sos_platform.store import WorkerOwnershipLost
 
