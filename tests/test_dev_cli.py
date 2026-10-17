@@ -360,6 +360,8 @@ def test_make_check_fast_is_infrastructure_independent(monkeypatch, config):
                 "tests/test_processing.py",
                 "tests/test_dev_cli.py",
                 "tests/test_api_compat.py",
+                "tests/test_configuration_contract.py",
+                "tests/test_doc_links.py",
                 "tests/test_pagination.py",
                 "tests/test_execution_budget.py",
                 "tests/test_resource_admission.py",

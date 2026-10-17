@@ -307,6 +307,53 @@ test("201 registration remains successful when the subsequent list refresh fails
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
+
+
+test("dismissed 201 success notice stays dismissed after a delayed list failure", async ({ page }) => {
+  let registered = false;
+  let releaseRefresh: () => void = () => {};
+  let refreshRequested = 0;
+  const heldRefresh = new Promise<void>(resolve => { releaseRefresh = resolve; });
+  await page.route("**/api/datasets?*", async route => {
+    if (!registered) return route.continue();
+    refreshRequested++;
+    await heldRefresh;
+    return route.fulfill({
+      status: 503, contentType: "application/json",
+      body: JSON.stringify({ detail: "List temporarily unavailable" }),
+    });
+  });
+  await page.route("**/api/datasets/files", async route => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(201);
+    registered = true;
+    await route.fulfill({ response });
+  });
+  try {
+    await page.goto("/");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "dismissed.csv", mimeType: "text/csv",
+      buffer: Buffer.from("value\n1\n2\n"),
+    });
+    await expect(page.getByRole("heading", { name: "dismissed.csv" })).toBeVisible();
+    await expect.poll(() => refreshRequested).toBeGreaterThan(0);
+    await expect(page.getByRole("status").filter({
+      hasText: "파일 등록이 완료됐습니다.",
+    })).toBeVisible();
+    await page.getByRole("button", { name: "알림 닫기" }).click();
+    releaseRefresh();
+    // GET 오류를 실제 UI 상태까지 처리한 후에도 닫은 알림이 다시 나오면 안 된다.
+    await expect(page.locator('input[type="file"]')).toBeEnabled();
+    await expect(page.getByRole("status").filter({
+      hasText: "파일은 정상 등록됐습니다.",
+    })).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  } finally {
+    releaseRefresh();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+});
+
 test("upload indicates pending transfer and completes after server response", async ({ page }) => {
   let releaseResponse: () => void = () => {};
   let releaseRefresh: () => void = () => {};

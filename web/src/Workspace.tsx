@@ -69,6 +69,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
   const feedbackRequests = useRef(0);
+  // 늦은 목록 GET 오류가 다음 사용자 작업의 알림을 덮지 않도록 작업 세대를 고정한다.
+  const feedbackRevision = useRef(0);
   const showExamples = useRef(false);
   const refreshedCompletedJobs = useRef(new Set<string>());
   const dataset = datasets.find(d => d.id === selected);
@@ -147,15 +149,16 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
     showExamples.current = false;
     setSelected(data.id); setTab("understanding");
+    const revision = feedbackRevision.current;
     // HTTP 201이 등록 완료의 정본이며 목록 GET 응답을 기다리지 않고 먼저 안내한다.
     setNotice(success);
     try {
-      const status = await refreshDatasets();
-      // 최신 요청에 대체된 목록 조회는 성공으로 간주하지 않는다.
-      if (status !== "updated") setNotice(stale);
+      // 새 목록 GET이 이 요청을 대체해도 201 등록 성공 자체를 취소하지 않는다.
+      await refreshDatasets();
     } catch {
-      setError("");
-      setNotice(stale);
+      if (revision !== feedbackRevision.current) return;
+      // 사용자가 닫았거나 다른 작업이 갱신한 알림은 오래된 GET 실패로 다시 표시하지 않는다.
+      setNotice(current => current === success ? stale : current);
     }
   }
   /** HTTP 202 접수 이후의 목록 조회 실패는 Job 제출 실패가 아니다. */
@@ -241,6 +244,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
 
   async function withFeedback(action: () => Promise<void>) {
     feedbackRequests.current += 1;
+    feedbackRevision.current += 1;
     setBusy(true); setError(""); setNotice("");
     try { await action(); } catch (e) { setError(formatError(e)); }
     finally {

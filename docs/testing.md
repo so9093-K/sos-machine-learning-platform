@@ -21,7 +21,7 @@
 | Make 재시작·보존 | CI Make lifecycle | PR 필수; 자체 데이터를 생성해야 함 |
 | 장시간 부하·복합 장애 | 별도 확장 검사 | 의미 있는 한도가 마련되면 정기 실행 |
 
-make check-fast는 Ruff, 순수 Python 테스트, Vitest 및 웹 타입·빌드를 확인하며 서비스 기동을 요구하지 않는다.
+make check-fast는 Ruff, 순수 Python 테스트(개발 설정 기본값·문서 ADR 인덱스 검사 포함), Vitest 및 웹 타입·빌드를 확인하며 서비스 기동을 요구하지 않는다.
 make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하다. Fast 통과를 전체 검증 성공으로 해석하지 않는다.
 
 ## 변경 불가능한 필수 불변조건과 담당 테스트
