@@ -106,11 +106,11 @@ export function UnderstandingPanel({
     {state?.job_status === "Failed" && <p role="alert">
       최근 분석에 실패했습니다. Dataset과 이전 완료 결과는 그대로 사용할 수 있습니다.
     </p>}
-    {!profile && overviewStatus === "error" && <div role="alert">
+    {overviewStatus === "error" && <div role="alert">
       기본 메타데이터 조회 실패: {overviewError}
       <button className="secondary" onClick={onRetryOverview}>기본 정보 다시 조회</button>
     </div>}
-    {!profile && overviewStatus === "loading" && <p role="status">기본 메타데이터 조회 중</p>}
+    {overviewStatus === "loading" && <p role="status">기본 메타데이터 조회 중</p>}
     {overview && <>
       <div className="cards">
         <div className="stat"><span>등록된 컬럼</span><strong>{overview.column_count}</strong></div>

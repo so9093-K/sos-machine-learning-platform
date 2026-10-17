@@ -1122,6 +1122,15 @@ test("Wide Dataset preview defaults to a bounded visible column set", async ({ p
   await expect(page.getByRole("columnheader")).toHaveCount(15);
   await page.getByRole("button", { name: "첫 12개 컬럼만 보기" }).click();
   await expect(page.getByRole("columnheader")).toHaveCount(12);
+  // 명시적으로 13개를 요청하면 기본 12개 표시 제한을 적용하지 않는다.
+  await page.getByText("컬럼·필터·정렬 선택").click();
+  const chosen = page.getByRole("group", { name: "표시할 컬럼 선택" });
+  for (const name of names.slice(0, 13)) {
+    await chosen.getByRole("checkbox", { name, exact: true }).check();
+  }
+  await page.getByRole("button", { name: "조회 적용" }).click();
+  await expect(page.getByRole("columnheader")).toHaveCount(13);
+  await expect(page.getByText("선택한 컬럼 전부 표시", { exact: false })).toBeVisible();
 });
 
 
@@ -1132,9 +1141,58 @@ test("EDA asks for explicit value and horizontal axis before drawing a trend", a
     buffer: Buffer.from("sequence,measure\n1,10\n2,20\n3,30\n"),
   });
   await page.getByRole("tab", { name: "탐색" }).click();
-  await expect(page.getByRole("img", { name: "값의 변화 시계열 차트" })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "조회 행 순서의 값 차트" })).toHaveCount(0);
   await page.getByRole("combobox", { name: "값 컬럼" }).selectOption("measure");
-  await expect(page.getByRole("img", { name: "값의 변화 시계열 차트" })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "조회 행 순서의 값 차트" })).toHaveCount(0);
   await page.getByRole("combobox", { name: "가로축 컬럼" }).selectOption("sequence");
-  await expect(page.getByRole("img", { name: "값의 변화 시계열 차트" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "조회 행 순서의 값 차트" })).toBeVisible();
+});
+
+
+test("Overview retrieval failure remains recoverable after sample Understanding is ready", async ({ page }) => {
+  const overviewEndpoint = "**/api/datasets/*/overview";
+  await page.route(overviewEndpoint, async route => {
+    await route.fulfill({ status: 503, contentType: "application/json",
+      body: JSON.stringify({ detail: "overview temporarily unavailable" }) });
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "overview-retry.csv", mimeType: "text/csv",
+    buffer: Buffer.from("category,value\na,1\nb,2\n"),
+  });
+  const understanding = page.getByRole("tabpanel", { name: "데이터 이해" });
+  await expect(understanding.getByText("분석 범위")).toBeVisible({ timeout: 30000 });
+  await expect(understanding.getByRole("button", { name: "기본 정보 다시 조회" })).toBeVisible();
+  await page.unroute(overviewEndpoint);
+  await understanding.getByRole("button", { name: "기본 정보 다시 조회" }).click();
+  await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
+});
+
+test("Data Preparation reports Preview failures and can retry", async ({ page }) => {
+  const previewEndpoint = /\/api\/datasets\/[^/]+\/preview\?limit=100/;
+  await page.route(previewEndpoint, async route => {
+    await route.fulfill({ status: 503, contentType: "application/json",
+      body: JSON.stringify({ detail: "preview temporarily unavailable" }) });
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "preparation-retry.csv", mimeType: "text/csv",
+    buffer: Buffer.from("metric\n1\n2\n"),
+  });
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
+  await expect(page.getByRole("alert").getByText(/preview temporarily unavailable/)).toBeVisible();
+  await expect(page.getByLabel("변환 연산", { exact: true })).toHaveCount(0);
+  await page.unroute(previewEndpoint);
+  await page.getByRole("button", { name: "데이터 준비 미리보기 다시 시도" }).click();
+  await expect(page.getByLabel("변환 연산", { exact: true })).toBeVisible();
+});
+
+test("Operational pages show their own headings rather than Data Explorer", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
+  await expect(page.getByRole("heading", { name: "전체 Jobs", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "저장소 상태 보기" }).click();
+  await expect(page.getByRole("heading", { name: "저장소 상태", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "보안 감사 보기" }).click();
+  await expect(page.getByRole("heading", { name: "보안 감사", exact: true })).toBeVisible();
 });

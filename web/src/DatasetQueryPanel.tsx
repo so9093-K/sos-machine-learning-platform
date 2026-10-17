@@ -11,7 +11,7 @@ type Props = {
   datasetId: string;
   columns: string[];
   busy: boolean;
-  onResult: (value: Preview) => void;
+  onResult: (value: Preview, explicitProjection: boolean) => void;
   onInvalidate: () => void;
 };
 
@@ -57,7 +57,7 @@ export function DatasetQueryPanel({ datasetId, columns, busy, onResult, onInvali
       const result = await jsonPost<Preview>(
         `/api/datasets/${encodeURIComponent(datasetId)}/query`, body,
       );
-      if (mounted.current && version === requestVersion.current) onResult(result);
+      if (mounted.current && version === requestVersion.current) onResult(result, chosen.length > 0);
     } catch (cause) {
       if (mounted.current && version === requestVersion.current) setError(formatError(cause));
     } finally { if (mounted.current) setLoading(false); }
