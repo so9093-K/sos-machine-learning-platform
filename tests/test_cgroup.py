@@ -49,12 +49,24 @@ def test_cgroup_probe_child_attachment_limits_and_cleanup(tmp_path, monkeypatch)
     def fake_kernel_mkdir(path, *args, **kwargs):
         original_mkdir(path, *args, **kwargs)
         if path.name.startswith("sos-"):
-            for name in ("memory.max", "memory.swap.max", "memory.oom.group", "cgroup.procs", "memory.events"):
+            for name in (
+                "memory.max",
+                "memory.swap.max",
+                "memory.oom.group",
+                "cgroup.procs",
+                "memory.events",
+            ):
                 (path / name).write_text("", encoding="ascii")
 
     def fake_kernel_rmdir(path):
         if path.name.startswith("sos-"):
-            for name in ("memory.max", "memory.swap.max", "memory.oom.group", "cgroup.procs", "memory.events"):
+            for name in (
+                "memory.max",
+                "memory.swap.max",
+                "memory.oom.group",
+                "cgroup.procs",
+                "memory.events",
+            ):
                 (path / name).unlink(missing_ok=True)
         original_rmdir(path)
 

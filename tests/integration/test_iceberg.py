@@ -314,11 +314,14 @@ def test_two_independent_writers_race_on_existing_iceberg_table(workspace, monke
         if result is not None:
             assert len(matching) == 1
             assert result["version"] == str(matching[0].snapshot_id)
-            assert inspect_tag(
-                table,
-                name=tag_name(result["retention_id"]),
-                snapshot_id=result["version"],
-            ) == "retained"
+            assert (
+                inspect_tag(
+                    table,
+                    name=tag_name(result["retention_id"]),
+                    snapshot_id=result["version"],
+                )
+                == "retained"
+            )
             assert store.snapshot_retention(result["retention_id"])["state"] == "Pending"
     assert not [row for row in store.dataset_page(limit=101) if row["kind"] == "iceberg"]
 

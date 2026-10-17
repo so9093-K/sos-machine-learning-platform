@@ -144,9 +144,7 @@ def test_sigkill_real_running_worker_requires_new_owner_recovery(
             json={"dataset_id": source["id"], "table_name": "killed_import"},
         )
     else:
-        request = client.post(
-            "/api/jobs", json={"dataset_id": source["id"], "kind": "profile"}
-        )
+        request = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
     assert request.status_code == 202
     job_id = request.json()["id"]
     ready = store.home / "worker-test-child.pid"

@@ -66,9 +66,9 @@ def _perform(
 
     try:
         # 자식 스스로 cgroup에 들어가기 전에는 Dataset 읽기·외부 Commit을 시작하지 않는다.
-        CgroupIsolation.from_env(
-            ExecutionBudget.from_env().max_rss_mib
-        ).attach_current_child(job["attempts"][-1]["id"])
+        CgroupIsolation.from_env(ExecutionBudget.from_env().max_rss_mib).attach_current_child(
+            job["attempts"][-1]["id"]
+        )
         store = Store(home, database_url=database_url)
         # 부모 Worker의 논리적 메모리 예약 안에서 실행되는 자식이다.
         store._execution_memory_reserved = True
@@ -177,9 +177,7 @@ def run_once(store: Store) -> bool:
         raise
 
 
-def _run_once_reserved(
-    store: Store, budget: ExecutionBudget, cgroup: CgroupIsolation
-) -> bool:
+def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsolation) -> bool:
     job = store.claim()
     if job is None:
         return False

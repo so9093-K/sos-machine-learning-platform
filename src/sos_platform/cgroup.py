@@ -57,9 +57,7 @@ class CgroupIsolation:
                     "memory controller must be enabled in delegated cgroup.subtree_control"
                 )
         except OSError as exc:
-            raise RuntimeConfigurationError(
-                "Required cgroup v2 delegation is unavailable"
-            ) from exc
+            raise RuntimeConfigurationError("Required cgroup v2 delegation is unavailable") from exc
         return parent
 
     def _new_group(self, name: str) -> Path:
@@ -71,8 +69,7 @@ class CgroupIsolation:
             (path / "memory.swap.max").write_text("0", encoding="ascii")
             (path / "memory.oom.group").write_text("1", encoding="ascii")
             if (
-                (path / "memory.max").read_text(encoding="ascii").strip()
-                != str(self.memory_bytes)
+                (path / "memory.max").read_text(encoding="ascii").strip() != str(self.memory_bytes)
                 or (path / "memory.swap.max").read_text(encoding="ascii").strip() != "0"
                 or (path / "memory.oom.group").read_text(encoding="ascii").strip() != "1"
             ):
@@ -83,7 +80,9 @@ class CgroupIsolation:
                 path.rmdir()
             except OSError:
                 pass
-            raise RuntimeConfigurationError("Required cgroup memory limits are unavailable") from exc
+            raise RuntimeConfigurationError(
+                "Required cgroup memory limits are unavailable"
+            ) from exc
         return path
 
     def validate_before_claim(self) -> None:
