@@ -138,7 +138,8 @@ def test_worker_precommit_and_commit_failures_have_distinct_contracts(
     pending = tmp_path / "pending.parquet"
     secret = "password=internal-only-do-not-record"
 
-    def fail_precommit(_store, _dataset, _table, _attempt, *, on_commit_start):
+    def fail_precommit(_store, _dataset, _table, _attempt, *, owner_actor, on_commit_start):
+        assert owner_actor == "local-developer"
         raise RuntimeError(secret)
 
     # 이 테스트는 자식 프로세스를 생성하지 않으므로 부모 종료 감시만 대체한다.
@@ -152,7 +153,10 @@ def test_worker_precommit_and_commit_failures_have_distinct_contracts(
     assert before["exception_type"] == "RuntimeError"
     assert secret not in completed.read_text()
 
-    def fail_after_commit_entry(_store, _dataset, _table, _attempt, *, on_commit_start):
+    def fail_after_commit_entry(
+        _store, _dataset, _table, _attempt, *, owner_actor, on_commit_start
+    ):
+        assert owner_actor == "local-developer"
         on_commit_start()
         raise RuntimeError(secret)
 

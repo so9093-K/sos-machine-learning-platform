@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Iceberg Job의 테이블명 예약을 PostgreSQL 멱등성 검사 및 Job 등록과 한 트랜잭션으로 묶어, 키 충돌이나 등록 실패로 쓰지 않을 테이블명이 남지 않도록 수정했습니다.
+
+
+- Iceberg 쓰기 권한에 Catalog의 물리 Table UUID를 고정해 같은 이름·토큰으로 재생성된 테이블에 대한 잘못된 Append를 거부합니다. 예약 후 Catalog 생성과 DB 확정 사이의 중단은 동일 토큰과 UUID를 검증해 복구하며, 관리자 채택 재개 시 원래 Dataset ID도 확인합니다.
+
+
+- 관리형 환경의 기존 Iceberg 테이블에 읽기 전용 소유권 진단과 관리자의 명시적 채택 경로를 추가했습니다. 단일 명시 소유자·기존 Dataset·Table UUID·현재 Snapshot ID가 일치할 때만 소유 토큰을 등록하며, 충돌·모호한 소유권은 자동 이전하지 않습니다. 중단된 채택은 보류 상태를 유지하고 감사 기록과 수동 재확인을 거칩니다.
+
+
+- Iceberg 테이블에 대한 쓰기 권한을 Snapshot 참조 소유권에서 분리하고, API/Worker에서 테이블 소유자와 Catalog 소유 토큰을 검증합니다. 다른 사용자의 테이블 Append와 소유권 불명 레거시 테이블의 새 적재를 거부하며 기존 읽기·보존은 유지합니다.
+- 파일 등록 HTTP 201 이후 Dataset 목록 조회가 실패하거나 최신 요청에 의해 대체돼도 등록 성공을 잘못 취소하거나 갱신 성공으로 표시하지 않도록 안내 상태를 구분합니다.
+
+
 - Worker 재시작 시 완료된 Attempt의 잔여 cgroup도 소유권 확인 후 정리하고, 소유자가 없는 cgroup은 자동 삭제하지 않고 실행을 거부합니다. Job 상세 조회가 실패하면 펼친 패널에서 명시적으로 다시 시도할 수 있습니다.
 
 - Linux cgroup v2의 위임된 `memory` 컨트롤러를 사용한 Worker 자식 메모리 격리 필수 모드(`SOS_WORKER_CGROUP_MODE=required`)를 추가했습니다. 사전 설정·쓰기 검사에 실패하면 Job을 Claim하지 않으며, 자식마다 `memory.max`·스왑 차단·OOM 그룹 종료를 설정합니다. Worker 재시작 시 이전 Attempt cgroup이 비어 있지 않으면 Job 복구를 거부합니다. 기본 모드는 `off`이며 CPU·디스크 격리나 다중 노드 자원 배치를 보장하지 않습니다.

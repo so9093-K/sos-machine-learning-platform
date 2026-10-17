@@ -16,7 +16,13 @@ from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from .api_control import control_router
 from .api_errors import problem_response, register_error_handlers
 from .config import StoragePolicy
-from .datasets import connect_iceberg, iceberg_snapshots, pinned_scan_dataset, save_upload_file
+from .datasets import (
+    connect_iceberg,
+    iceberg_snapshots,
+    pinned_scan_dataset,
+    reserve_iceberg_write_target,
+    save_upload_file,
+)
 from .discovery import columns as discovery_columns
 from .discovery import explore as discovery_explore
 from .discovery import overview as discovery_overview
@@ -431,15 +437,23 @@ def create_app(home: Path | None = None) -> FastAPI:
     ):
         existing(body.dataset_id, actor)
         require_job_submission_key(idempotency_key)
-        return store.create_job(
-            kind="iceberg_import",
-            dataset_id=body.dataset_id,
-            spec=body.model_dump(),
-            idempotency_key=idempotency_key,
-            request_id=request.state.request_id,
-            owner_actor=actor.id,
-            actor_type=actor.kind,
-        )
+        try:
+            # 실테이블 검사 자체는 부작용 없이 수행한다. 신규 이름 예약은
+            # Job의 멱등성 검사 후 같은 PostgreSQL 트랜잭션에서 확정한다.
+            reserve_iceberg_write_target(store, body.table_name, actor.id, reserve_if_missing=False)
+            return store.create_job(
+                kind="iceberg_import",
+                dataset_id=body.dataset_id,
+                spec=body.model_dump(),
+                idempotency_key=idempotency_key,
+                request_id=request.state.request_id,
+                owner_actor=actor.id,
+                actor_type=actor.kind,
+                reserve_iceberg_table=body.table_name,
+            )
+        except PermissionError as exc:
+            # 이름·소유권 충돌을 다른 Actor에게 노출하지 않는다.
+            raise HTTPException(status_code=404, detail="Iceberg table not found") from exc
 
     def check_table_access(table_name: str, actor: Actor) -> None:
         """테이블명 추측으로 타 사용자 Snapshot을 공개하거나 연결하지 않는다."""

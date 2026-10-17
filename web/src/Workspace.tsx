@@ -124,22 +124,23 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [visualColumn, setVisualColumn] = useState("");
   const [timeColumn, setTimeColumn] = useState("");
 
-  async function refreshDatasets() {
+  async function refreshDatasets(): Promise<"updated" | "superseded"> {
     const version = ++datasetRequestVersion.current;
     let page: DatasetPage;
     try {
       page = await request<DatasetPage>("/api/datasets?limit=20");
     } catch (error) {
       // 새 등록·더 최신 조회에서 대체된 실패는 현재 화면의 오류가 아니다.
-      if (version !== datasetRequestVersion.current) return;
+      if (version !== datasetRequestVersion.current) return "superseded";
       throw error;
     }
     // 오래된 GET 응답이 최근 등록·조회 후 확정된 Dataset 선택을 덮지 못하게 한다.
-    if (version !== datasetRequestVersion.current) return;
+    if (version !== datasetRequestVersion.current) return "superseded";
     // 이미 조회한 옛 Dataset과 결과 화면의 현재 선택은 최신 20개 밖이어도 보존한다.
     setDatasets(previous => mergeById(page.items, previous));
     setNextDatasetCursor(page.next_cursor ?? null);
     setSelected(previous => showExamples.current ? "" : (previous || page.items[0]?.id || ""));
+    return "updated";
   }
   /** 서버 등록 성공을 목록 새로고침 실패 때문에 취소된 작업처럼 표시하지 않는다. */
   async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
@@ -147,8 +148,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     showExamples.current = false;
     setSelected(data.id); setTab("understanding");
     try {
-      await refreshDatasets();
-      setNotice(success);
+      const status = await refreshDatasets();
+      // 더 최신 GET 때문에 무시한 실패를 '갱신 성공'으로 오인하지 않는다.
+      setNotice(status === "updated" ? success : stale);
     } catch {
       setError("");
       setNotice(stale);
@@ -260,7 +262,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       const data = await jsonPost<Dataset>(`/api/examples/${exampleId}/use`, {});
       await showRegisteredDataset(data,
         "예제가 일반 데이터셋으로 등록됐습니다. EDA와 피처 변환을 시작할 수 있습니다.",
-        "예제는 정상 등록됐습니다. 목록 새로고침에 실패했지만 다시 등록할 필요는 없습니다.");
+        "예제는 정상 등록됐습니다. 목록 갱신 결과를 확인하지 못했지만 다시 등록할 필요는 없습니다.");
     });
   }
   async function openJobDataset(datasetId: string) {
@@ -297,7 +299,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       // HTTP 201이 등록 성공의 정본이다.
       await showRegisteredDataset(data,
         "파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.",
-        "파일은 정상 등록됐습니다. 데이터셋 목록 새로고침에 실패했지만 등록을 다시 시도할 필요는 없습니다.");
+        "파일은 정상 등록됐습니다. 데이터셋 목록 갱신 결과를 확인하지 못했지만 다시 등록할 필요는 없습니다.");
     });
     setUploadProgress(null);
   }

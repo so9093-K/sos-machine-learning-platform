@@ -27,10 +27,13 @@ class JobStoreMixin:
         actor_type: str = "human",
         request_id: str | None = None,
         idempotency_key: str | None = None,
+        reserve_iceberg_table: str | None = None,
     ) -> dict:
         """중복 제출을 PostgreSQL 유일성 제약과 같은 트랜잭션으로 처리한다."""
         if idempotency_key is not None and owner_actor is None:
             raise ValueError("Idempotent Job requires an actor")
+        if reserve_iceberg_table is not None and (kind != "iceberg_import" or not owner_actor):
+            raise ValueError("Iceberg table reservation requires an import actor")
         fingerprint = hashlib.sha256(
             json.dumps(
                 {"kind": kind, "dataset_id": dataset_id, "spec": spec},
@@ -96,6 +99,9 @@ class JobStoreMixin:
                     previous_id = previous["job_id"]
                     # get_job은 새 트랜잭션으로 기존 확정 Job을 조회한다.
                     return self.get_job(previous_id)
+            # 실패한 멱등성 요청의 새 테이블 예약은 DB에 남기지 않는다.
+            if reserve_iceberg_table is not None:
+                self._reserve_iceberg_table_in_transaction(db, reserve_iceberg_table, owner_actor)
             if is_understanding:
                 existing_id = db.execute(
                     text(

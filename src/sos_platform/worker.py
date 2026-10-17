@@ -106,6 +106,7 @@ def _perform(
                     dataset,
                     job["spec"]["table_name"],
                     job["attempts"][-1]["id"],
+                    owner_actor=job["owner_actor"],
                     on_commit_start=mark_commit_started,
                 )
             }

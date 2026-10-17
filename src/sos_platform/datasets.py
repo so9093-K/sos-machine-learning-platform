@@ -161,31 +161,72 @@ def cleanup_iceberg_staging(store: Store, attempt_id: str | None = None) -> None
             shutil.rmtree(path)
 
 
+def reserve_iceberg_write_target(
+    store: Store,
+    table_name: str,
+    owner_actor: str,
+    *,
+    catalog=None,
+    reserve_if_missing: bool = True,
+) -> tuple[object | None, dict | None]:
+    """API와 Worker가 공유하는 실제 Catalog 테이블·쓰기 소유권 검사.
+
+    기존 테이블에 소유 토큰이 없거나 예약된 Active 테이블이 사라졌다면
+    다른 테이블을 같은 이름으로 자동 인수하지 않고 쓰기를 거부한다.
+    """
+    from pyiceberg.exceptions import NoSuchTableError
+
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name) or not owner_actor:
+        raise PermissionError("Iceberg table write access denied")
+    active_catalog = catalog if catalog is not None else iceberg_catalog(store)
+    try:
+        table = active_catalog.load_table(f"default.{table_name}")
+    except NoSuchTableError:
+        table = None
+    claim = store.iceberg_write_claim(table_name)
+    if table is not None:
+        table_uuid = str(table.metadata.table_uuid)
+        if (
+            claim is None
+            or claim["owner_actor"] != owner_actor
+            or claim["state"] not in ("Reserved", "Active")
+            or (claim["state"] == "Active" and claim["table_uuid"] != table_uuid)
+            or (claim["state"] == "Reserved" and claim["table_uuid"] not in (None, table_uuid))
+            or table.metadata.properties.get("sos.write-token") != claim["token"]
+        ):
+            raise PermissionError("Iceberg table write access denied")
+        if reserve_if_missing:
+            # API의 read-only preflight는 Reserved 상태를 변경하지 않는다.
+            # Catalog 커밋을 수행하는 Worker만 동일 토큰·UUID를 활성화한다.
+            store.activate_iceberg_table(
+                table_name, owner_actor, claim["token"], str(table.metadata.table_uuid)
+            )
+    else:
+        if reserve_if_missing:
+            claim = store.reserve_iceberg_table(table_name, owner_actor)
+        if claim is not None and (
+            claim["owner_actor"] != owner_actor or claim["state"] != "Reserved"
+        ):
+            raise PermissionError("Previously owned Iceberg table is missing")
+    return table, claim
+
+
 def import_to_iceberg(
     store: Store,
     dataset: dict,
     table_name: str,
     attempt_id: str,
     *,
+    owner_actor: str,
     on_commit_start=None,
 ) -> dict:
     """비용이 큰 데이터 변환은 API가 아닌 Worker 프로세스에서 실행한다."""
-    if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
-        raise InvalidRequestError("Invalid Iceberg table name")
     catalog = iceberg_catalog(store)
     catalog.create_namespace_if_not_exists("default")
     ident = f"default.{table_name}"
+    table, claim = reserve_iceberg_write_target(store, table_name, owner_actor, catalog=catalog)
     # Partitioned append는 Reader 기반 쓰기가 지원되지 않으므로
     # 이전 호환 경로의 제한을 먼저 검증해 불필요한 대형 스테이징을 피한다.
-    try:
-        table = catalog.load_table(ident)
-    except Exception as exc:
-        from pyiceberg.exceptions import NoSuchTableError
-
-        if not isinstance(exc, NoSuchTableError):
-            raise
-        table = None
-
     if table is not None and table.spec().fields:
         from .processing import bounded_iceberg_arrow
 
@@ -204,7 +245,14 @@ def import_to_iceberg(
                 source.sink_parquet(staged)
             with pq.ParquetFile(staged) as parquet:
                 if table is None:
-                    table = catalog.create_table(ident, schema=parquet.schema_arrow)
+                    table = catalog.create_table(
+                        ident,
+                        schema=parquet.schema_arrow,
+                        properties={"sos.write-token": claim["token"]},
+                    )
+                    store.activate_iceberg_table(
+                        table_name, owner_actor, claim["token"], str(table.metadata.table_uuid)
+                    )
                 reader = pa.RecordBatchReader.from_batches(
                     parquet.schema_arrow, parquet.iter_batches(batch_size=65_536)
                 )

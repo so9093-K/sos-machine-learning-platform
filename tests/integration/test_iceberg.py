@@ -238,7 +238,9 @@ def test_import_uses_attempt_snapshot_not_latest(workspace, monkeypatch):
         return result
 
     monkeypatch.setattr(Table, "append", interleaved_append)
-    published = import_to_iceberg(store, source, "interleaved_import", str(uuid4()))
+    published = import_to_iceberg(
+        store, source, "interleaved_import", str(uuid4()), owner_actor="local-developer"
+    )
     table = iceberg_catalog(store).load_table("default.interleaved_import")
     assert published["version"] != str(table.current_snapshot().snapshot_id)
     assert store.snapshot_retention(published["retention_id"])["state"] == "Pending"
@@ -268,7 +270,9 @@ def test_two_independent_writers_race_on_existing_iceberg_table(workspace, monke
     client, store = workspace
     source = upload(client)
     table_name = "racing_writers"
-    baseline = import_to_iceberg(store, source, table_name, str(uuid4()))
+    baseline = import_to_iceberg(
+        store, source, table_name, str(uuid4()), owner_actor="local-developer"
+    )
     assert baseline["version"]
 
     attempts = [str(uuid4()), str(uuid4())]
@@ -285,7 +289,9 @@ def test_two_independent_writers_race_on_existing_iceberg_table(workspace, monke
     def writer(attempt_id):
         isolated = Store(store.home, database_url=store.database_url)
         try:
-            return import_to_iceberg(isolated, source, table_name, attempt_id)
+            return import_to_iceberg(
+                isolated, source, table_name, attempt_id, owner_actor="local-developer"
+            )
         finally:
             isolated.engine.dispose()
 
@@ -611,7 +617,14 @@ def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch)
 
     _client, store = workspace
 
+    claim = store.reserve_iceberg_table("partitioned_input", "local-developer")
+
     class ExistingTable:
+        metadata = SimpleNamespace(
+            properties={"sos.write-token": claim["token"]},
+            table_uuid=uuid4(),
+        )
+
         def spec(self):
             return SimpleNamespace(fields=["part"])
 
@@ -629,7 +642,13 @@ def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch)
     monkeypatch.setattr(module, "iceberg_catalog", lambda _store: ExistingCatalog())
     monkeypatch.setattr(module, "pinned_scan_dataset", fake_source)
     with pytest.raises(ValueError, match="50,000"):
-        module.import_to_iceberg(store, {"kind": "file"}, "partitioned_input", str(uuid4()))
+        module.import_to_iceberg(
+            store,
+            {"kind": "file"},
+            "partitioned_input",
+            str(uuid4()),
+            owner_actor="local-developer",
+        )
     assert not (store.home / "cache" / "iceberg-staging").exists()
 
 
