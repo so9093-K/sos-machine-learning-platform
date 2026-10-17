@@ -24,7 +24,7 @@ import { usePagedJobs } from "./usePagedJobs";
 import type { ExplorationRequest } from "./types";
 
 
-type Tab = DatasetTab | "jobs" | "storage" | "audit";
+type Tab = DatasetTab | "preparation" | "jobs" | "storage" | "audit";
 type UploadProgress = {
   name: string; loaded: number; total: number;
   phase: "transferring" | "registering";
@@ -66,6 +66,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [queryPreview, setQueryPreview] = useState<{
     datasetId: string; revision: number; data: Preview
   } | null>(null);
+  const [showAllPreviewColumns, setShowAllPreviewColumns] = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
   const feedbackRequests = useRef(0);
@@ -121,7 +122,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   });
   const displayedPreview = queryPreview?.datasetId === selected &&
     queryPreview.revision === reloadRevision ? queryPreview.data : preview;
-  const displayedColumns = displayedPreview ? Object.keys(displayedPreview.schema) : [];
+  const availableColumns = displayedPreview ? Object.keys(displayedPreview.schema) : [];
+  const displayedColumns = showAllPreviewColumns ? availableColumns : availableColumns.slice(0, 12);
   const numeric = profile?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
   const [visualColumn, setVisualColumn] = useState("");
   const [timeColumn, setTimeColumn] = useState("");
@@ -203,18 +205,18 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   }, []);
   useEffect(() => {
     // Dataset 전환과 네트워크 재시도를 구분해 작성 중인 변환을 보존한다.
-    setVisualColumn(""); setTimeColumn("");
+    setVisualColumn(""); setTimeColumn(""); setShowAllPreviewColumns(false);
     setQueryPreview(null); setExplorationDraft(null);
   }, [selected]);
   useEffect(() => {
     if (!preview) return;
     const columns = Object.keys(preview.schema);
     setColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
+    // 원본의 첫 컬럼이 의미 있는 지표나 시간축이라는 근거는 없다.
     setVisualColumn(current =>
       columns.includes(current) && /Int|Float|Decimal/.test(preview.schema[current])
-        ? current : (columns.find(name => /Int|Float|Decimal/.test(preview.schema[name]))
-          ?? columns[0] ?? ""));
-    setTimeColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
+        ? current : "");
+    setTimeColumn(current => columns.includes(current) ? current : "");
   }, [preview]);
   useEffect(() => {
     // 첫 페이지에 없는 과거 성공 Job 때문에 무한히 GET을 반복하지 않는다.
@@ -339,10 +341,12 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     };
   }, [distribution]);
   const chartOption = useMemo<echarts.EChartsCoreOption | null>(() => {
-    if (!preview?.rows.length || !visualColumn) return null;
+    if (!preview?.rows.length || !visualColumn || !timeColumn) return null;
     const values = preview.rows.map(r => r[visualColumn])
       .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
-    if (!values.length) return null;
+    // 일정한 값이나 가로축 하나만으로 변화가 존재하는 것처럼 표시하지 않는다.
+    if (new Set(values).size < 2 ||
+        new Set(preview.rows.map(row => String(row[timeColumn] ?? ""))).size < 2) return null;
     return {
       backgroundColor: "transparent",
       textStyle: { color: CHART_COLORS.text },
@@ -362,6 +366,13 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     <aside className="sidebar">
       <InstanceBrand canEdit={canConfigure} />
       <nav className="global-nav" aria-label="전역 메뉴">
+      <div className="section-title">DATA WORKSPACES</div>
+      <button className="job-navigation secondary"
+        aria-current={["understanding", "preview", "profile"].includes(tab) ? "page" : undefined}
+        onClick={() => setTab("understanding")}>데이터 탐색</button>
+      <button className="job-navigation secondary" disabled={!dataset}
+        aria-current={tab === "preparation" ? "page" : undefined}
+        onClick={() => setTab("preparation")}>데이터 준비</button>
       <div className="section-title">PLATFORM</div>
       <button className="job-navigation secondary" aria-current={tab === "jobs" ? "page" : undefined}
         onClick={() => setTab("jobs")}>
@@ -423,7 +434,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       <nav className="dataset-nav" aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
-          onClick={() => { showExamples.current = false; setSelected(d.id); setTab("understanding"); }}>
+          onClick={() => { showExamples.current = false; setSelected(d.id);
+            setTab(current => current === "preparation" ? current : "understanding"); }}>
           <span className="dataset-name">{d.name}</span>
           <span className="dataset-kind">{d.kind === "iceberg" ? "◆ Iceberg" : "◫ File"}</span>
         </button>)}
@@ -435,9 +447,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       <div className="sidebar-bottom"><a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a></div>
     </aside>
     <main className="main">
-      <header className="workspace-header"><div><span className="eyebrow">DATA EXPLORER</span>
-        <h1>데이터 탐색</h1>
-        <p>Dataset · Profile · Exploration</p></div>
+      <header className="workspace-header"><div>
+        <span className="eyebrow">{tab === "preparation" ? "DATA PREPARATION" : "DATA EXPLORER"}</span>
+        <h1>{tab === "preparation" ? "데이터 준비" : "데이터 탐색"}</h1>
+        <p>{tab === "preparation" ? "Dataset · Recipe · Transform" : "Dataset · Profile · Exploration"}</p>
+      </div>
         <div className="header-meta">
           <span className="environment">{actor.mode === "development" ? "로컬 인증" : "토큰 인증"}</span>
           <div className="auth-status">
@@ -474,7 +488,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             <button className="secondary" onClick={() => setReloadRevision(value => value + 1)}>
               데이터 다시 불러오기
             </button>
-            {canRun && <>
+            {canRun && tab === "preparation" && <>
               <input aria-label="Iceberg 테이블명" value={importTableName}
                 onChange={e => setImportTableName(e.target.value)} placeholder="Iceberg table" />
               <button disabled={busy} className="secondary" onClick={() => void importIceberg()}>
@@ -482,7 +496,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               </button>
             </>}</div>
         </div>
-        <WorkspaceTabs active={tab as DatasetTab} onChange={setTab} />
+        {tab !== "preparation" && <WorkspaceTabs active={tab as DatasetTab} onChange={setTab} />}
         {tab === "understanding" && <section className="panel" role="tabpanel"
           id="sos-panel-understanding" aria-labelledby="sos-tab-understanding" tabIndex={0}>
           <UnderstandingPanel key={selected + ":" + reloadRevision} datasetId={selected}
@@ -493,12 +507,19 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         {tab === "preview" && <section className="panel" role="tabpanel"
           id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
           <div className="panel-head"><div><h3>데이터 조회</h3><p>최대 100행 · 전체 데이터가 아닌 일부입니다.</p></div>
-            <span className="chip">{displayedPreview?.returned_rows ?? "…"} rows shown</span></div>
+            <span className="chip">반환 {displayedPreview?.returned_rows ?? "…"}행 · 전체 일치 건수 미계산</span></div>
           {preview && <DatasetQueryPanel key={selected + ":" + reloadRevision} datasetId={selected}
             columns={columnNames} busy={busy}
             onResult={data => setQueryPreview({ datasetId: selected, revision: reloadRevision, data })}
             onInvalidate={() => setQueryPreview(null)} />}
-          {displayedPreview && <><div className="table-scroll"><table><thead><tr>
+          {displayedPreview && <>
+            {availableColumns.length > 12 && <div className="query-column-summary">
+              <span className="hint">전체 {availableColumns.length}개 컬럼 중 {displayedColumns.length}개 표시 · 조회한 값의 표시 범위만 변경합니다.</span>
+              <button className="secondary" onClick={() => setShowAllPreviewColumns(v => !v)}>
+                {showAllPreviewColumns ? "첫 12개 컬럼만 보기" : "전체 컬럼 보기"}
+              </button>
+            </div>}
+            <div className="table-scroll"><table><thead><tr>
             {displayedColumns.map(c => <th key={c}>{c}<small>{displayedPreview.schema[c]}</small></th>)}
           </tr></thead><tbody>{displayedPreview.rows.map((r, i) => <tr key={i}>
             {displayedColumns.map(c => <td key={c}>{r[c] == null
@@ -540,21 +561,23 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             </tr>)}</tbody></table></div>
             <div className="chart-controls"><h4>시계열 / 순서에 따른 데이터</h4>
               <label>값 <select value={visualColumn} onChange={e => setVisualColumn(e.target.value)}>
+                <option value="">값 컬럼 선택</option>
                 {numeric.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
               </select></label>
               <label>가로축 <select value={timeColumn} onChange={e => setTimeColumn(e.target.value)}>
+                <option value="">가로축 선택</option>
                 {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select></label></div>
             <div className="charts">
               <div><h4>값의 변화</h4>{chartOption ? <DataChart option={chartOption} ariaLabel="값의 변화 시계열 차트" /> :
-                <p className="muted">표시할 숫자형 데이터가 없습니다.</p>}</div>
+                <p className="muted">값·가로축 컬럼을 선택하면 변화 여부를 확인합니다. 값이나 축이 일정하면 변화 차트를 만들지 않습니다.</p>}</div>
               <div><h4>분포 (Histogram)</h4>{distributionOption ? <DataChart option={distributionOption} ariaLabel="데이터 분포 히스토그램" /> :
-                <p className="muted">분포를 계산할 숫자형 데이터가 없습니다.</p>}</div>
+                <p className="muted">숫자형 값 컬럼을 선택하면 반환된 행의 분포를 확인합니다.</p>}</div>
             </div>
-            <p className="hint">차트와 히스토그램은 최대 100행의 미리보기 값입니다.</p>
+            <p className="hint">차트와 히스토그램은 최대 100행의 조회 일부만 사용합니다. 선택한 가로축의 시간·업무 의미는 자동 검증되지 않습니다.</p>
           </>}
         </section>}
-        {tab === "features" && <FeaturePanel editor={editor}
+        {tab === "preparation" && <FeaturePanel editor={editor}
           columnNames={columnNames} busy={busy} canRun={canRun}
           onSubmit={() => void submit("transform")} />}
 
