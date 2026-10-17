@@ -361,8 +361,7 @@ class JobStoreMixin:
             # 이전 실행은 새 Claim으로 생성된 Attempt의 결과를 확정할 수 없다.
             active_attempt = db.execute(
                 text(
-                    "SELECT id FROM attempts WHERE job_id=:job_id AND status='Running' "
-                    "FOR UPDATE"
+                    "SELECT id FROM attempts WHERE job_id=:job_id AND status='Running' FOR UPDATE"
                 ),
                 {"job_id": job_id},
             ).scalar_one_or_none()

@@ -140,12 +140,15 @@ def test_job_finish_rejects_nonterminal_status_without_mutation(workspace, inval
     assert len(unchanged["attempts"]) == 1
     assert unchanged["attempts"][0]["status"] == "Running"
     # 잘못된 호출 이후에도 정상적인 종료가 가능해야 한다.
-    assert store.finish(
-        claimed["id"],
-        "Failed",
-        attempt_id=claimed["attempts"][-1]["id"],
-        error_code="SOS-JOB-FAILED",
-    ) == "Failed"
+    assert (
+        store.finish(
+            claimed["id"],
+            "Failed",
+            attempt_id=claimed["attempts"][-1]["id"],
+            error_code="SOS-JOB-FAILED",
+        )
+        == "Failed"
+    )
     final = store.get_job(claimed["id"])
     assert final["status"] == "Failed"
     assert final["attempts"][0]["status"] == "Failed"
