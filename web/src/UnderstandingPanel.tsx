@@ -111,7 +111,7 @@ export function UnderstandingPanel({
       <button className="secondary" onClick={onRetryOverview}>기본 정보 다시 조회</button>
     </div>}
     {!profile && overviewStatus === "loading" && <p role="status">기본 메타데이터 조회 중</p>}
-    {!profile && overview && <>
+    {overview && <>
       <div className="cards">
         <div className="stat"><span>등록된 컬럼</span><strong>{overview.column_count}</strong></div>
         <div className="stat"><span>원본 행 수</span><strong>{
@@ -122,17 +122,17 @@ export function UnderstandingPanel({
         ? "행 수는 Parquet 메타데이터 기준입니다."
         : "정확한 전체 행 수는 Profile 실행 후 확인할 수 있습니다."}
         {" · "}분포와 역할 후보는 별도 분석 중에 계산됩니다.</p>
-      <h4>기본 스키마</h4>
+      {!profile && <><h4>기본 스키마</h4>
       <div className="table-scroll"><table><thead><tr>
         <th>컬럼</th><th>자료형</th>
       </tr></thead><tbody>{overview.columns.map(col => <tr key={col.name}>
         <td>{col.name}</td><td>{col.dtype}</td>
-      </tr>)}</tbody></table></div>
+      </tr>)}</tbody></table></div></>}
     </>}
     {profile && <>
       <div className="cards">
         <div className="stat"><span>분석한 행</span><strong>{profile.row_count.toLocaleString()}</strong></div>
-        <div className="stat"><span>컬럼</span><strong>{profile.columns.length}</strong></div>
+        <div className="stat"><span>분석 범위</span><strong>{profile.scope === "full" ? "전체" : "Reservoir 표본"}</strong></div>
         <div className="stat"><span>결측 셀</span><strong>{
           profile.columns.reduce((sum, col) => sum + col.null_count, 0).toLocaleString()
         }</strong></div>
