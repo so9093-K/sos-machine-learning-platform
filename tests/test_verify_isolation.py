@@ -1,11 +1,10 @@
 """격리 E2E 자원의 소유권과 정리 실패 계약."""
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
-
-import importlib.util
-import sys
 
 source = Path(__file__).resolve().parents[1] / "scripts" / "run_isolated_e2e.py"
 spec = importlib.util.spec_from_file_location("sos_test_isolated_e2e", source)

@@ -1,12 +1,11 @@
 """공통 검증 실행 계약의 실패 전달과 수집 범위를 검사한다."""
 
-import json
-import xml.etree.ElementTree as ET
-from types import SimpleNamespace
-
 import importlib.util
+import json
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
+from types import SimpleNamespace
 
 source = Path(__file__).resolve().parents[1] / "scripts" / "verify.py"
 spec = importlib.util.spec_from_file_location("sos_test_verify", source)

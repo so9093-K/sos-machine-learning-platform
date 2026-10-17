@@ -1,10 +1,10 @@
 """OpenAPI 기준 선택과 Wheel 검증의 안전 계약을 검사한다."""
 
-import pytest
-
 import importlib.util
 import sys
 from pathlib import Path
+
+import pytest
 
 source = Path(__file__).resolve().parents[1] / "scripts" / "verify_openapi.py"
 spec = importlib.util.spec_from_file_location("sos_test_verify_openapi", source)
