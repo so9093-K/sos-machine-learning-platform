@@ -671,6 +671,7 @@ test("Iceberg browse input never changes the append target or restores stale sna
     buffer: Buffer.from("value\n1\n2\n"),
   });
   await expect(page.getByRole("heading", { name: "append-target.csv" })).toBeVisible();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   const appendTarget = page.getByRole("textbox", { name: "Iceberg 테이블명", exact: true });
   const browseTable = page.getByRole("textbox", { name: "Iceberg 테이블 이름" });
   await appendTarget.fill("keep_append_target");
@@ -737,7 +738,7 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
   await page.getByLabel("그룹 컬럼").selectOption(["site", "machine"]);
   await page.getByRole("button", { name: "샘플 변환 확인" }).click();
   await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
-  await expect(page.locator("#sos-panel-features .result th")).toHaveCount(4);
+  await expect(page.locator('[aria-label="데이터 준비"] .result th')).toHaveCount(4);
 });
 
 
@@ -1100,11 +1101,11 @@ test("Dataset original metadata remains visible after Understanding completes", 
     buffer: Buffer.from("category,value\na,1\nb,2\n"),
   });
   const understanding = page.getByRole("tabpanel", { name: "데이터 이해" });
-  await expect(understanding.getByText("원본 행 수")).toBeVisible();
+  await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
   await expect(understanding.getByText("미계산", { exact: true })).toBeVisible();
   await expect(understanding.getByText("분석 범위")).toBeVisible({ timeout: 30000 });
   await expect(understanding.getByText("Reservoir 표본", { exact: true })).toBeVisible();
-  await expect(understanding.getByText("원본 행 수")).toBeVisible();
+  await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
 });
 
 test("Wide Dataset preview defaults to a bounded visible column set", async ({ page }) => {
@@ -1132,8 +1133,8 @@ test("EDA asks for explicit value and horizontal axis before drawing a trend", a
   });
   await page.getByRole("tab", { name: "탐색" }).click();
   await expect(page.getByRole("img", { name: "값의 변화 시계열 차트" })).toHaveCount(0);
-  await page.getByLabel("값", { exact: true }).selectOption("measure");
+  await page.getByRole("combobox", { name: "값 컬럼" }).selectOption("measure");
   await expect(page.getByRole("img", { name: "값의 변화 시계열 차트" })).toHaveCount(0);
-  await page.getByLabel("가로축", { exact: true }).selectOption("sequence");
+  await page.getByRole("combobox", { name: "가로축 컬럼" }).selectOption("sequence");
   await expect(page.getByRole("img", { name: "값의 변화 시계열 차트" })).toBeVisible();
 });
