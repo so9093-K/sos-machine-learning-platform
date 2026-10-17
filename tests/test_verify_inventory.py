@@ -68,20 +68,24 @@ def test_nested_runner_titles_require_exact_leaf_names():
         {
             "id": "API-001",
             "reason": "API 오류 경계",
-            "selectors": [{
-                "runner": "vitest",
-                "path": "web/src/api.test.ts",
-                "title": "safe error",
-            }],
+            "selectors": [
+                {
+                    "runner": "vitest",
+                    "path": "web/src/api.test.ts",
+                    "title": "safe error",
+                }
+            ],
         },
         {
             "id": "RBAC-001",
             "reason": "소유권 검사",
-            "selectors": [{
-                "runner": "playwright",
-                "path": "web/e2e/auth.spec.ts",
-                "title": "viewer can read data",
-            }],
+            "selectors": [
+                {
+                    "runner": "playwright",
+                    "path": "web/e2e/auth.spec.ts",
+                    "title": "viewer can read data",
+                }
+            ],
         },
     ]
     rows = inventory.classify(
@@ -97,9 +101,7 @@ def test_nested_runner_titles_require_exact_leaf_names():
         },
         contracts,
     )
-    assert [row["policy"] for row in rows] == [
-        "protected", "standard", "protected", "standard"
-    ]
+    assert [row["policy"] for row in rows] == ["protected", "standard", "protected", "standard"]
 
 
 def test_registry_maps_protection_with_standard_default():
