@@ -45,7 +45,6 @@ def test_cleanup_failure_is_visible_and_owned_marker_preserved(monkeypatch, tmp_
     assert (runtime / isolated.OWNER_FILE).is_file()
 
 
-
 def test_cleanup_success_only_removes_owned_project(monkeypatch, tmp_path):
     instance = "sos-e2e-123456abcdef"
     monkeypatch.setattr(isolated, "RUNS", tmp_path)
@@ -65,7 +64,14 @@ def test_cleanup_success_only_removes_owned_project(monkeypatch, tmp_path):
     assert (foreign / "important.txt").read_text(encoding="utf-8") == "keep"
     assert calls[0] == ["python3", "scripts/dev.py", "down"]
     assert calls[1] == [
-        "docker", "compose", "-f", "compose.yaml", "-p", instance, "down", "--volumes"
+        "docker",
+        "compose",
+        "-f",
+        "compose.yaml",
+        "-p",
+        instance,
+        "down",
+        "--volumes",
     ]
 
 
@@ -109,8 +115,14 @@ def test_recovery_refuses_invalid_or_foreign_owner_ports(monkeypatch, tmp_path):
         raise AssertionError("소유 기록이 잘못됐는데 자원 종료 명령을 실행했습니다.")
 
     monkeypatch.setattr(isolated.subprocess, "run", forbidden)
-    for ports in ([], [1, 1, 2, 3], [1, 2, 3, "4"], [1, 2, 3, True],
-                  [0, 2, 3, 4], [1, 2, 3, 65536]):
+    for ports in (
+        [],
+        [1, 1, 2, 3],
+        [1, 2, 3, "4"],
+        [1, 2, 3, True],
+        [0, 2, 3, 4],
+        [1, 2, 3, 65536],
+    ):
         marker.write_text(
             json.dumps({"purpose": "sos-test", "instance": instance, "ports": ports}),
             encoding="utf-8",
@@ -155,6 +167,7 @@ def test_sigkill_after_owner_creation_leaves_recoverable_marker(monkeypatch, tmp
         if proc.poll() is None:
             proc.kill()
             proc.wait(timeout=5)
+
 
 def test_token_mode_generates_only_ephemeral_roles():
     env = {"SOS_AUTH_MODE": "development"}

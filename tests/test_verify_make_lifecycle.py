@@ -22,18 +22,18 @@ def test_sigterm_path_reports_failure_and_cleans_owned_environment(monkeypatch, 
     monkeypatch.setattr(lifecycle.signal, "signal", lambda sig, fn: signals.append((sig, fn)))
     monkeypatch.setattr(lifecycle.secrets, "token_hex", lambda _size: "123456abcdef")
     monkeypatch.setattr(lifecycle, "free_ports", lambda: [10001, 10002, 10003, 10004])
-    monkeypatch.setattr(lifecycle, "isolated_environment", lambda _src, _id, _ports: {
-        "SOS_DEV_INSTANCE": instance
-    })
+    monkeypatch.setattr(
+        lifecycle, "isolated_environment", lambda _src, _id, _ports: {"SOS_DEV_INSTANCE": instance}
+    )
     monkeypatch.setattr(lifecycle, "create_owner", lambda _id, _ports: tmp_path)
 
     def interrupted(_env):
         signals[0][1](signal.SIGTERM, None)
 
     monkeypatch.setattr(lifecycle, "verify", interrupted)
-    monkeypatch.setattr(lifecycle, "clean_owned", lambda i, path, env: (
-        calls.append((i, path, env)) or 0
-    ))
+    monkeypatch.setattr(
+        lifecycle, "clean_owned", lambda i, path, env: (calls.append((i, path, env)) or 0)
+    )
     assert lifecycle.main() == 1
     assert signals[0][0] == signal.SIGTERM
     assert calls == [(instance, tmp_path, {"SOS_DEV_INSTANCE": instance})]
@@ -44,9 +44,9 @@ def test_cleanup_failure_prevents_success(monkeypatch, tmp_path):
     monkeypatch.setattr(lifecycle.signal, "signal", lambda *_args: None)
     monkeypatch.setattr(lifecycle.secrets, "token_hex", lambda _size: "123456abcdef")
     monkeypatch.setattr(lifecycle, "free_ports", lambda: [10001, 10002, 10003, 10004])
-    monkeypatch.setattr(lifecycle, "isolated_environment", lambda _src, _id, _ports: {
-        "SOS_DEV_INSTANCE": instance
-    })
+    monkeypatch.setattr(
+        lifecycle, "isolated_environment", lambda _src, _id, _ports: {"SOS_DEV_INSTANCE": instance}
+    )
     monkeypatch.setattr(lifecycle, "create_owner", lambda _id, _ports: tmp_path)
     monkeypatch.setattr(lifecycle, "verify", lambda _env: None)
     monkeypatch.setattr(lifecycle, "clean_owned", lambda _i, _path, _env: 1)
