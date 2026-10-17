@@ -103,7 +103,14 @@ def main() -> int:
     status = 0
     try:
         verify(env)
-    except (OSError, ValueError, KeyError, RuntimeError, AssertionError, subprocess.CalledProcessError):
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        RuntimeError,
+        AssertionError,
+        subprocess.CalledProcessError,
+    ):
         print(f"Make 영속성 검증 실패: {instance}", file=sys.stderr)
         status = 1
     finally:

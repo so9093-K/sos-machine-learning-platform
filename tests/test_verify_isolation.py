@@ -41,7 +41,9 @@ def test_token_mode_generates_only_ephemeral_roles():
     isolated.configure_tokens(env)
     identities = json.loads(env["SOS_AUTH_TOKEN_HASHES"])
     assert {record["roles"][0] for record in identities.values()} == {
-        "viewer", "researcher", "operator"
+        "viewer",
+        "researcher",
+        "operator",
     }
     assert "ci-viewer" in {record["actor_id"] for record in identities.values()}
     assert all(len(key) == 64 for key in identities)

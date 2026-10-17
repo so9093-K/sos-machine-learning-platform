@@ -168,6 +168,7 @@ def execute(
     if name not in SUITES:
         raise ValueError(f"알 수 없는 Suite: {name}")
     output.mkdir(parents=True, exist_ok=True)
+    output = output.resolve()
     report = output / f"{name}.xml"
     report.unlink(missing_ok=True)
     suite = SUITES[name]

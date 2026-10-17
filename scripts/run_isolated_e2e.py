@@ -126,9 +126,7 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
     if owned_record(runtime, instance) is None or env.get("SOS_DEV_INSTANCE") != instance:
         print("소유 증거가 없어 E2E 리소스를 정리하지 않습니다.", file=sys.stderr)
         return 1
-    down = subprocess.run(
-        ["python3", "scripts/dev.py", "down"], cwd=ROOT, env=env, check=False
-    )
+    down = subprocess.run(["python3", "scripts/dev.py", "down"], cwd=ROOT, env=env, check=False)
     # 소유 프로젝트에만 --volumes를 적용한다. 기본 프로젝트에는 적용하지 않는다.
     containers = subprocess.run(
         ["docker", "compose", "-f", "compose.yaml", "-p", instance, "down", "--volumes"],
