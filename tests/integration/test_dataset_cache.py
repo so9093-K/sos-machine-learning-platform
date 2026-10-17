@@ -99,3 +99,34 @@ def test_unchanged_immutable_cache_avoids_rehash_and_detects_local_corruption(
     with cached_dataset_file(store, dataset) as verified:
         assert verified.read_bytes() == content
     assert hashed >= 1
+
+
+def test_abandoned_download_is_reclaimed_without_touching_other_cache_files(workspace):
+    """다운로드 중 종료된 캐시 전용 임시 파일만 소유 잠금 아래 회수한다."""
+    _client, store = workspace
+    content = b"t,value\\n1,2\\n3,4\\n".replace(b"\\n", b"\n")
+    dataset = save_upload_file(store, "recovered.csv", BytesIO(content))
+    root = store.home / "cache"
+    abandoned = root / f"{dataset['version']}.csv.pending-{'a' * 32}"
+    unrelated = root / f"{dataset['version']}.csv.pending-user-file"
+    abandoned.write_bytes(b"x" * 100)
+    unrelated.write_bytes(b"do not touch")
+    # cache/ 아래의 다른 이름으로 만든 링크나 외부 파일도 축출 대상이 아니다.
+    external = store.home / "other-file.csv"
+    external.write_bytes(b"outside" * 40)
+    linked = root / f"{'b' * 64}.csv"
+    linked.symlink_to(external)
+    # 내용이 진짜와 같아도 이 캐시 파일명은 링크이므로 신뢰하지 않는다.
+    expected = root / f"{dataset['version']}.csv"
+    valid_external = store.home / "matching-file.csv"
+    valid_external.write_bytes(content)
+    expected.symlink_to(valid_external)
+
+    with cached_dataset_file(store, dataset, CachePolicy(max_bytes=len(content) + 1)) as path:
+        assert path.read_bytes() == content
+        assert not path.is_symlink()
+    assert not abandoned.exists()
+    assert unrelated.read_bytes() == b"do not touch"
+    assert linked.is_symlink()
+    assert external.read_bytes() == b"outside" * 40
+    assert valid_external.read_bytes() == content

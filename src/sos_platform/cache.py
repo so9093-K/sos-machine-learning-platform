@@ -21,6 +21,7 @@ from .object_store import ObjectStore
 from .store import Store
 
 _CACHE_FILE = re.compile(r"^[0-9a-f]{64}\.(csv|parquet)$")
+_CACHE_PENDING = re.compile(r"^[0-9a-f]{64}\.(csv|parquet)\.pending-[0-9a-f]{32}$")
 # 프로세스 안에서 이미 SHA-256을 검증한 불변 파일의 파일시스템 정체성을 기억한다.
 # 다른 프로세스는 처음 읽을 때 별도로 검증한다. 최대 항목 수를 제한한다.
 _VERIFIED: OrderedDict[Path, tuple[str, tuple[int, int, int, int, int]]] = OrderedDict()
@@ -70,11 +71,15 @@ def _digest(path: Path) -> str:
 
 
 def _verified_files(root: Path) -> list[Path]:
-    return [item for item in root.iterdir() if item.is_file() and _CACHE_FILE.fullmatch(item.name)]
+    return [
+        item
+        for item in root.iterdir()
+        if _CACHE_FILE.fullmatch(item.name) and item.is_file() and not item.is_symlink()
+    ]
 
 
 def _ready(path: Path, version: str) -> bool:
-    if not path.is_file():
+    if path.is_symlink() or not path.is_file():
         return False
     signature = _signature(path)
     with _VERIFIED_LOCK:
@@ -109,6 +114,11 @@ def _download_under_quota(
         quota.commit()
         try:
             root = path.parent
+            # 이 잠금 아래에서는 SOS 캐시 다운로드가 동시에 진행되지 않는다.
+            # 프로세스 사망 후 남은 SOS 고유 임시 파일만 정리하며 원본은 보존한다.
+            for item in root.iterdir():
+                if _CACHE_PENDING.fullmatch(item.name) and item.is_file() and not item.is_symlink():
+                    item.unlink()
             files = [item for item in _verified_files(root) if item != path]
             occupied = sum(item.stat().st_size for item in files)
             # quota lock 아래에서 같은 캐시 공간의 할당을 직렬화한다.
