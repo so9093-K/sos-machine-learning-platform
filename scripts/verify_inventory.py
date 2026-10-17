@@ -267,7 +267,7 @@ def junit_keys(report: Path, runner: str) -> list[str]:
 
 def reconcile(inventory: dict, reports: dict[str, list[Path]]) -> dict[str, int]:
     """누락·추가·중복 testcase가 있으면 총 개수만 같아도 실패 처리한다."""
-    if inventory.get("schema_version") != 1 or not isinstance(inventory.get("tests"), list):
+    if inventory.get("schema_version") != 2 or not isinstance(inventory.get("tests"), list):
         raise ValueError("유효한 Inventory JSON이 아닙니다.")
     counts = {}
     for runner in RUNNERS:
