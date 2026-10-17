@@ -2,10 +2,18 @@
 
 import json
 import xml.etree.ElementTree as ET
-from pathlib import Path
 from types import SimpleNamespace
 
-from scripts import verify
+import importlib.util
+import sys
+from pathlib import Path
+
+source = Path(__file__).resolve().parents[1] / "scripts" / "verify.py"
+spec = importlib.util.spec_from_file_location("sos_test_verify", source)
+assert spec is not None and spec.loader is not None
+verify = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = verify
+spec.loader.exec_module(verify)
 
 
 def test_fast_unit_suite_is_discovered_instead_of_hardcoded():

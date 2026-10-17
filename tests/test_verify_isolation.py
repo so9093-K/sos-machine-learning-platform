@@ -4,7 +4,15 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from scripts import run_isolated_e2e as isolated
+import importlib.util
+import sys
+
+source = Path(__file__).resolve().parents[1] / "scripts" / "run_isolated_e2e.py"
+spec = importlib.util.spec_from_file_location("sos_test_isolated_e2e", source)
+assert spec is not None and spec.loader is not None
+isolated = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = isolated
+spec.loader.exec_module(isolated)
 
 
 def test_cleanup_rejects_missing_or_foreign_owner(tmp_path):

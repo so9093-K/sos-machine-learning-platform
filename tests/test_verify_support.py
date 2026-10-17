@@ -2,7 +2,16 @@
 
 import pytest
 
-from scripts import verify_openapi
+import importlib.util
+import sys
+from pathlib import Path
+
+source = Path(__file__).resolve().parents[1] / "scripts" / "verify_openapi.py"
+spec = importlib.util.spec_from_file_location("sos_test_verify_openapi", source)
+assert spec is not None and spec.loader is not None
+verify_openapi = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = verify_openapi
+spec.loader.exec_module(verify_openapi)
 
 
 def test_base_ref_rejects_branch_names_before_git_access():
