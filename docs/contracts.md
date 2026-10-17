@@ -62,7 +62,7 @@ Dataset Understanding은 Dataset 자체가 아니라 특정 원본 판본과 프
 ## Iceberg 테이블 쓰기 권한
 
 - 테이블에 대한 쓰기 권한은 `datasets.owner_actor`로 표현되는 Snapshot 읽기·연결 권한과 독립적이다.
-- 신규 테이블은 PostgreSQL의 고유 이름·소유 Actor·무작위 토큰을 먼저 예약하고 실제 Iceberg Catalog Table Properties의 동일 토큰을 확인한다. 다른 Actor의 이름 충돌은 거부한다.
+- 신규 테이블은 PostgreSQL의 고유 이름·소유 Actor·무작위 토큰을 먼저 예약하고 실제 Iceberg Catalog Table Properties의 동일 토큰과 물리 Table UUID를 고정·검증한다. 같은 이름·토큰으로 다시 생성된 다른 UUID의 테이블은 기존 소유권을 재사용하지 못한다. 다른 Actor의 이름 충돌은 거부한다.
 - API 제출 및 Worker 외부 커밋 이전의 실제 Table 메타데이터를 모두 검증한다. 미확정·소유권 불명·토큰 불일치·소실된 기존 테이블에는 자동으로 쓰기를 허용하지 않는다. 레거시 Snapshot 참조와 Tag는 그대로 유지한다.
 - 테이블 쓰기 소유권은 현재 한 Actor에게 귀속하며, administrator의 조회 권한을 자동 append 허가로 해석하지 않는다. 관리형 로컬 환경에서 한 명의 명시적 소유자로 확인되는 레거시 테이블만 Table UUID·Snapshot·기존 Dataset ID를 명시한 운영자 CLI로 채택할 수 있다. 임의 소유권 양도나 API를 통한 인수는 지원하지 않는다.
 
