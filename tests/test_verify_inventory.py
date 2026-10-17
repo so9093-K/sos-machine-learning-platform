@@ -42,6 +42,7 @@ def test_playwright_list_collects_each_named_case():
         "workspace.spec.ts:12:1::registration 201",
     ]
 
+
 def test_inventory_vitest_uses_same_src_scope_as_frontend(monkeypatch):
     calls = []
 
