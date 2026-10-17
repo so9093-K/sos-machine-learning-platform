@@ -3,6 +3,7 @@
 import os
 import re
 import shutil
+import stat
 from collections.abc import Iterator
 from contextlib import contextmanager
 from io import BytesIO
@@ -105,18 +106,31 @@ def _stage_prefix(attempt_id: str) -> str:
 
 
 def iceberg_staging_bytes(store: Store, attempt_id: str) -> int:
-    """활성 Attempt 임시 Parquet 크기를 관찰한다. 엄격한 파일시스템 쿼터는 아니다."""
+    """Attempt 소유 임시 파일 전체를 관찰한다. 엄격한 파일시스템 쿼터는 아니다."""
     root = store.home / "cache" / "iceberg-staging"
     if not root.exists():
         return 0
+
+    def fail_on_unreadable_directory(error: OSError) -> None:
+        # 접근 불가 디렉터리를 0바이트로 오인하면 제한을 우회할 수 있다.
+        raise error
+
     total = 0
     for directory in root.glob(_stage_prefix(attempt_id) + "*"):
         if not directory.is_dir() or directory.is_symlink():
             continue
-        try:
-            total += (directory / "input.parquet").stat().st_size
-        except FileNotFoundError:
-            continue
+        for parent, _subdirs, filenames in os.walk(
+            directory, followlinks=False, onerror=fail_on_unreadable_directory
+        ):
+            for filename in filenames:
+                try:
+                    info = (Path(parent) / filename).stat(follow_symlinks=False)
+                except FileNotFoundError:
+                    # 정상 정리와 관측이 경합할 수 있다.
+                    continue
+                # 하위 스크래치·Spill 파일도 포함하되 외부 symlink는 따르지 않는다.
+                if stat.S_ISREG(info.st_mode):
+                    total += info.st_size
     return total
 
 
