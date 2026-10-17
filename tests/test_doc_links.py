@@ -14,9 +14,7 @@ spec.loader.exec_module(checker)
 def test_unindexed_adrs_are_detected_without_deleting_history(tmp_path):
     directory = tmp_path / "adr"
     directory.mkdir()
-    (directory / "README.md").write_text(
-        "- [0001 — 기준](0001-base.md)\n", encoding="utf-8"
-    )
+    (directory / "README.md").write_text("- [0001 — 기준](0001-base.md)\n", encoding="utf-8")
     (directory / "0001-base.md").write_text("# 0001\n", encoding="utf-8")
     (directory / "0002-new.md").write_text("# 0002\n", encoding="utf-8")
     assert checker.unindexed_adrs(directory) == ["0002-new.md"]
