@@ -50,6 +50,9 @@ jobs:
         run: uv run --locked python scripts/verify.py run openapi-compat --base-ref "$BASE_SHA" --output-dir /tmp/sos-openapi-compat
       - name: Ruff lint and format (common Suite)
         run: uv run --locked python scripts/verify.py run ruff --output-dir /tmp/sos-ruff
+      - name: Explain Ruff format failure
+        if: failure()
+        run: uv run --locked ruff format --diff .
       - name: Infrastructure-free Python tests
         run: uv run --locked python scripts/verify.py run python-unit --output-dir /tmp/sos-python-unit
       - name: Start integration infrastructure
