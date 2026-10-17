@@ -309,26 +309,41 @@ test("201 registration remains successful when the subsequent list refresh fails
 
 test("upload indicates pending transfer and completes after server response", async ({ page }) => {
   let releaseResponse: () => void = () => {};
+  let releaseRefresh: () => void = () => {};
+  let registered = false;
+  let heldRefreshCount = 0;
   const heldResponse = new Promise<void>(resolve => { releaseResponse = resolve; });
+  const heldRefresh = new Promise<void>(resolve => { releaseRefresh = resolve; });
+  await page.route("**/api/datasets?*", async route => {
+    if (!registered) return route.continue();
+    heldRefreshCount++;
+    await heldRefresh;
+    return route.continue();
+  });
   await page.route("**/api/datasets/files", async route => {
     const response = await route.fetch();
     await heldResponse;
     await route.fulfill({ response });
-  });
-  await page.goto("/");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "progress.csv", mimeType: "text/csv",
-    buffer: Buffer.from("time,value\n1,2\n2,3\n"),
+    registered = true;
   });
   try {
-    // 네트워크 가로채기는 브라우저 전송 완료 이벤트 자체를 보류한다.
-    // 전송 완료 콜백과 등록 대기 상태는 upload.test.ts에서 별도로 검증한다.
+    await page.goto("/");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "progress.csv", mimeType: "text/csv",
+      buffer: Buffer.from("time,value\n1,2\n2,3\n"),
+    });
+    // 서버의 201 전에 '전송 중', 201 뒤에는 목록 GET 완료 전에 등록 성공 안내가 보여야 한다.
     await expect(page.getByText(/전송 중 ·/)).toBeVisible();
+    releaseResponse();
+    await expect(page.getByRole("heading", { name: "progress.csv" })).toBeVisible();
+    await expect.poll(() => heldRefreshCount).toBeGreaterThan(0);
+    await expect(page.getByText("파일 등록이 완료됐습니다.", { exact: false })).toBeVisible();
   } finally {
     releaseResponse();
+    releaseRefresh();
+    // 지연 요청과 Route 콜백을 테스트 종료 전에 정리하되 오류를 무시하지 않는다.
+    await page.unrouteAll({ behavior: "wait" });
   }
-  await expect(page.getByRole("heading", { name: "progress.csv" })).toBeVisible();
-  await expect(page.getByText("파일 등록이 완료됐습니다.", { exact: false })).toBeVisible();
 });
 
 test("DuckDB Discovery searches columns and runs a full job through global Jobs", async ({ page }) => {

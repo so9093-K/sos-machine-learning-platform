@@ -147,10 +147,12 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
     showExamples.current = false;
     setSelected(data.id); setTab("understanding");
+    // HTTP 201이 등록 완료의 정본이며 목록 GET 응답을 기다리지 않고 먼저 안내한다.
+    setNotice(success);
     try {
       const status = await refreshDatasets();
-      // 더 최신 GET 때문에 무시한 실패를 '갱신 성공'으로 오인하지 않는다.
-      setNotice(status === "updated" ? success : stale);
+      // 최신 요청에 대체된 목록 조회는 성공으로 간주하지 않는다.
+      if (status !== "updated") setNotice(stale);
     } catch {
       setError("");
       setNotice(stale);
