@@ -20,7 +20,7 @@ def sample_registry():
     return [
         {
             "id": "DATASET-REGISTER-201",
-            "risk": "high",
+            "reason": "확정된 등록 성공 상태를 보호한다.",
             "description": "등록 성공 상태",
             "selectors": [
                 {
@@ -63,7 +63,7 @@ def test_playwright_collects_top_level_and_nested_test_lines():
     ]
 
 
-def test_registry_maps_only_intended_contract_risk():
+def test_registry_maps_protection_with_standard_default():
     groups = {
         "pytest": ["tests/test_a.py::test_one"],
         "vitest": ["src/api.test.ts::suite > success"],
@@ -75,10 +75,12 @@ def test_registry_maps_only_intended_contract_risk():
     result = inventory.classify(groups, sample_registry())
     assert len(result) == 4
     protected = next(x for x in result if "201 registration" in x["test_id"])
-    assert protected["risk"] == "high"
+    assert protected["policy"] == "protected"
     assert protected["contract_ids"] == ["DATASET-REGISTER-201"]
     unprotected = next(x for x in result if "unrelated navigation" in x["test_id"])
-    assert unprotected["risk"] == "review_required"
+    assert unprotected["policy"] == "standard"
+    assert unprotected["contract_ids"] == []
+    assert all("risk" not in row and "lifecycle" not in row for row in result)
 
 
 def test_contract_selector_not_collected_is_error():
@@ -97,6 +99,7 @@ def test_registry_real_policy_has_unique_ids():
     contracts = inventory.load_registry(inventory.DEFAULT_REGISTRY)
     assert len(contracts) >= 6
     assert any(x["id"] == "ICEBERG-WRITE-OWNER-001" for x in contracts)
+    assert all(x["reason"].strip() for x in contracts)
 
 
 def test_vitest_absolute_path_normalizes():
@@ -124,7 +127,7 @@ def test_junit_reconcile_recovers_all_playwright_cases(tmp_path):
         ET.ElementTree(root).write(report, encoding="unicode")
         cases[runner] = [report]
         records.append({"runner": runner, "test_id": identifier})
-    assert inventory.reconcile({"schema_version": 1, "tests": records}, cases) == {
+    assert inventory.reconcile({"schema_version": 2, "tests": records}, cases) == {
         "pytest": 1,
         "vitest": 1,
         "playwright": 1,
@@ -134,20 +137,99 @@ def test_junit_reconcile_recovers_all_playwright_cases(tmp_path):
         inventory.reconcile({"schema_version": 1, "tests": records}, cases)
 
 
-def test_retirement_diff_blocks_removed_high_risk():
-    before = {
-        "tests": [
-            {
-                "runner": "pytest",
-                "test_id": "tests/test_a.py::test_one",
-                "source_path": "tests/test_a.py",
-                "risk": "high",
-                "contract_ids": ["DATASET-REGISTER-201"],
-            }
-        ]
-    }
-    after = {"tests": []}
-    assert inventory.audit_removed(before, after)[0]["risk"] == "high"
+def test_standard_removal_needs_no_extra_approval():
+    before = {"schema_version": 2, "tests": [
+        {"runner": "pytest", "test_id": "tests/test_a.py::standard", "contract_ids": []}
+    ]}
+    after = {"schema_version": 2, "tests": []}
+    result = inventory.audit_changes(before, after)
+    assert result["standard_removed"] == ["tests/test_a.py"]
+    assert result["protected_removed"] == []
+    assert result["possible_renames"] == []
+
+
+def test_protected_removal_blocks_even_with_other_test_in_same_contract():
+    before = {"schema_version": 2, "tests": [
+        {"runner": "pytest", "test_id": "tests/test_a.py::removed", "contract_ids": ["OWNER-001"]},
+        {"runner": "pytest", "test_id": "tests/test_a.py::retained", "contract_ids": ["OWNER-001"]},
+    ]}
+    after = {"schema_version": 2, "tests": [before["tests"][1]]}
+    assert inventory.audit_changes(before, after)["protected_removed"][0][
+        "contract_ids"
+    ] == ["OWNER-001"]
+
+
+def test_rename_candidate_never_automatically_approved():
+    before = {"schema_version": 2, "tests": [
+        {"runner": "pytest", "test_id": "tests/test_a.py::old", "contract_ids": ["OWNER-001"]}
+    ]}
+    after = {"schema_version": 2, "tests": [
+        {"runner": "pytest", "test_id": "tests/test_a.py::new", "contract_ids": ["OWNER-001"]}
+    ]}
+    result = inventory.audit_changes(before, after)
+    assert len(result["possible_renames"]) == 1
+    assert result["protected_removed"] == []
+
+
+def test_protection_demotion_detected_without_test_removal():
+    before = {"schema_version": 2, "tests": [
+        {"runner": "pytest", "test_id": "tests/test_a.py::stays", "contract_ids": ["OWNER-001"]}
+    ]}
+    after = {"schema_version": 2, "tests": [
+        {"runner": "pytest", "test_id": "tests/test_a.py::stays", "contract_ids": []}
+    ]}
+    assert inventory.audit_changes(before, after)["lost_protections"]
+
+
+def test_existing_v1_contract_is_still_protected():
+    before = {"schema_version": 1, "tests": [
+        {"runner": "pytest", "test_id": "tests/test_a.py::old",
+         "contract_ids": ["OWNER-001"], "risk": "high"}
+    ]}
+    assert inventory.audit_changes(
+        before, {"schema_version": 2, "tests": []}
+    )["protected_removed"]
+
+
+def test_diff_cli_allows_standard_removal_but_blocks_protection(tmp_path, capsys):
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    old = {"schema_version": 2, "tests": [
+        {"runner": "pytest", "test_id": "tests/test_a.py::old", "contract_ids": []}
+    ]}
+    before.write_text(__import__("json").dumps(old), encoding="utf-8")
+    after.write_text('{"schema_version": 2, "tests": []}', encoding="utf-8")
+    args = ["diff", "--before", str(before), "--after", str(after)]
+    assert inventory.main(args) == 0
+    assert "standard_removed" in capsys.readouterr().out
+    old["tests"][0]["contract_ids"] = ["OWNER-001"]
+    before.write_text(__import__("json").dumps(old), encoding="utf-8")
+    assert inventory.main(args) == 1
+    assert "protected_removed" in capsys.readouterr().out
+
+
+def test_registry_rejects_missing_reason_and_old_schema(tmp_path):
+    bad = {"schema_version": 2, "protected_contracts": [
+        {"id": "OWNER-001", "reason": "", "selectors": [
+            {"runner": "pytest", "path_glob": "tests/test_a.py"}
+        ]}
+    ]}
+    target = tmp_path / "contracts.json"
+    target.write_text(__import__("json").dumps(bad), encoding="utf-8")
+    with pytest.raises(ValueError, match="선정 이유"):
+        inventory.load_registry(target)
+    bad["schema_version"] = 1
+    with pytest.raises(ValueError):
+        inventory.load_registry(target)
+
+
+def test_empty_registry_defaults_to_standard(tmp_path):
+    target = tmp_path / "contracts.json"
+    target.write_text('{"schema_version": 2, "protected_contracts": []}', encoding="utf-8")
+    assert inventory.load_registry(target) == []
+    assert inventory.classify({"pytest": ["tests/test_a.py::case"]}, [])[0][
+        "policy"
+    ] == "standard"
 
 
 def test_inventory_runner_scopes_are_independent(monkeypatch):

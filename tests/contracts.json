@@ -1,11 +1,9 @@
 {
-  "schema_version": 1,
-  "contracts": [
+  "schema_version": 2,
+  "protected_contracts": [
     {
       "id": "DATASET-PERSIST-001",
-      "domain": "dataset",
-      "risk": "critical",
-      "description": "원본 파일·판본·등록과 마이그레이션의 영속성을 보존한다.",
+      "reason": "원본 파일과 Dataset 판본을 보존하고 등록·마이그레이션 중 사용자 데이터 손실을 차단한다.",
       "selectors": [
         {
           "runner": "pytest",
@@ -19,9 +17,7 @@
     },
     {
       "id": "DATASET-REGISTER-201",
-      "domain": "dataset-ux",
-      "risk": "high",
-      "description": "201 등록 성공을 후속 목록 조회 실패가 소급해 실패로 변경하지 않는다.",
+      "reason": "서버가 확정한 등록 성공을 후속 조회 실패가 사용자 화면에서 번복하지 못하게 한다.",
       "selectors": [
         {
           "runner": "playwright",
@@ -37,9 +33,7 @@
     },
     {
       "id": "JOB-ATTEMPT-STATE-001",
-      "domain": "execution",
-      "risk": "critical",
-      "description": "Job/Attempt 상태 전이·취소·멱등성·구형 Attempt의 게시 차단을 보존한다.",
+      "reason": "Job/Attempt 상태 확정과 취소 시 이전 Attempt의 결과 게시를 방지한다.",
       "selectors": [
         {
           "runner": "pytest",
@@ -53,9 +47,7 @@
     },
     {
       "id": "WORKER-RECOVERY-001",
-      "domain": "execution",
-      "risk": "critical",
-      "description": "Worker 중단·소유권 상실·Attempt 회복 시 데이터의 잘못된 게시를 막는다.",
+      "reason": "Worker 중단·소유권 상실 이후 구형 실행이 결과를 덮어쓰거나 게시하지 못하게 한다.",
       "selectors": [
         {
           "runner": "pytest",
@@ -69,9 +61,7 @@
     },
     {
       "id": "ICEBERG-WRITE-OWNER-001",
-      "domain": "iceberg",
-      "risk": "critical",
-      "description": "Iceberg Table UUID·Owner Token·쓰기 예약 검증과 무권한 Commit 방지를 보존한다.",
+      "reason": "Iceberg 테이블의 실소유권 검증 없는 쓰기·예약을 차단한다.",
       "selectors": [
         {
           "runner": "pytest",
@@ -85,9 +75,7 @@
     },
     {
       "id": "ICEBERG-SNAPSHOT-001",
-      "domain": "iceberg",
-      "risk": "critical",
-      "description": "불확실한 외부 Commit·Snapshot/Tag 보존·고정 읽기와 삭제 금지를 보존한다.",
+      "reason": "Iceberg Snapshot·Tag와 불확실한 외부 Commit을 보존하여 무단 덮어쓰기·삭제를 차단한다.",
       "selectors": [
         {
           "runner": "pytest",
@@ -101,9 +89,7 @@
     },
     {
       "id": "RBAC-OWNERSHIP-001",
-      "domain": "security",
-      "risk": "critical",
-      "description": "역할·Dataset 소유권·거부 감사 및 Token 신원별 UI 접근 통제를 보호한다.",
+      "reason": "역할·Dataset 소유권·감사 거부 경계를 보존해 무권한 데이터 접근을 차단한다.",
       "selectors": [
         {
           "runner": "pytest",
@@ -117,9 +103,7 @@
     },
     {
       "id": "DATASET-CACHE-LEASE-001",
-      "domain": "dataset",
-      "risk": "high",
-      "description": "Dataset 캐시와 읽기 Lease가 타인 데이터·활성 데이터를 손상하지 않게 한다.",
+      "reason": "Cache Lease 소유권을 검증해 다른 요청이나 활성 Dataset의 데이터를 손상하지 않게 한다.",
       "selectors": [
         {
           "runner": "pytest",
@@ -129,9 +113,7 @@
     },
     {
       "id": "API-ERROR-BOUNDARY-001",
-      "domain": "api",
-      "risk": "high",
-      "description": "HTTP 오류·Request ID·안전한 실패 메시지가 자격증명이나 구현 세부사항을 노출하지 않도록 한다.",
+      "reason": "예외 처리 중 민감한 내부 오류·비밀값이 사용자에게 노출되지 않도록 한다.",
       "selectors": [
         {
           "runner": "pytest",

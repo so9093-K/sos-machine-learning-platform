@@ -17,8 +17,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REGISTRY = ROOT / "tests" / "contracts.json"
 RUNNERS = ("pytest", "vitest", "playwright")
-RISKS = ("normal", "high", "critical")
-LIFECYCLES = ("active", "review_required")
 
 
 def command(args: list[str], cwd: Path) -> str:
@@ -135,51 +133,60 @@ def stable_key(runner: str, identifier: str) -> str:
 
 
 def load_registry(path: Path) -> list[dict]:
-    """Registry의 스키마·ID·선택자를 검증하고 잘못된 정책을 거부한다."""
+    """위험도 대신 명시적 Protected 계약과 근거만 관리한다."""
     value = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
-        raise ValueError("지원되지 않는 계약 Registry 버전")
-    contracts = value.get("contracts")
-    if not isinstance(contracts, list) or not contracts:
-        raise ValueError("보호 계약 목록이 없습니다.")
+    if not isinstance(value, dict) or set(value) != {"schema_version", "protected_contracts"}:
+        raise ValueError("보호 계약 Registry 필드 오류")
+    if value["schema_version"] != 2:
+        raise ValueError("보호 계약 Registry 버전 오류")
+    contracts = value["protected_contracts"]
+    if not isinstance(contracts, list):
+        raise ValueError("보호 계약 목록 형식 오류")
     seen = set()
     for contract in contracts:
-        if not isinstance(contract, dict):
-            raise ValueError("보호 계약 형식 오류")
-        identifier = contract.get("id")
+        if not isinstance(contract, dict) or set(contract) != {"id", "reason", "selectors"}:
+            raise ValueError("보호 계약 필드 오류")
+        identifier = contract["id"]
         if not isinstance(identifier, str) or not re.fullmatch(
             r"[A-Z0-9]+(?:-[A-Z0-9]+)+", identifier
         ):
-            raise ValueError("안정적인 Contract ID가 필요합니다.")
+            raise ValueError("Contract ID 형식 오류")
         if identifier in seen:
             raise ValueError(f"중복 Contract ID: {identifier}")
         seen.add(identifier)
-        if contract.get("risk") not in RISKS:
-            raise ValueError(f"보호 계약 위험도 오류: {identifier}")
-        if not isinstance(contract.get("description"), str) or not contract["description"]:
-            raise ValueError(f"보호 계약 설명 누락: {identifier}")
-        selectors = contract.get("selectors")
+        if not isinstance(contract["reason"], str) or not contract["reason"].strip():
+            raise ValueError(f"보호 계약 선정 이유 누락: {identifier}")
+        selectors = contract["selectors"]
         if not isinstance(selectors, list) or not selectors:
             raise ValueError(f"보호 계약 연결 선택자 누락: {identifier}")
+        selected = set()
         for selector in selectors:
-            if not isinstance(selector, dict) or selector.get("runner") not in RUNNERS:
+            if not isinstance(selector, dict) or set(selector) - {
+                "runner", "path_glob", "title_glob"
+            } or not {"runner", "path_glob"} <= set(selector):
+                raise ValueError(f"보호 계약 선택자 필드 오류: {identifier}")
+            runner = selector["runner"]
+            if runner not in RUNNERS:
                 raise ValueError(f"보호 계약 Runner 오류: {identifier}")
-            pattern = selector.get("path_glob")
+            pattern = selector["path_glob"]
             if not isinstance(pattern, str) or not pattern.startswith(("tests/", "web/")):
                 raise ValueError(f"보호 계약 경로 오류: {identifier}")
             title = selector.get("title_glob", "*")
             if not isinstance(title, str) or not title:
                 raise ValueError(f"보호 계약 제목 조건 오류: {identifier}")
+            if (runner, pattern, title) in selected:
+                raise ValueError(f"보호 계약 중복 선택자: {identifier}")
+            selected.add((runner, pattern, title))
     return contracts
 
 
 def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
-    """Native 테스트 ID에 다대다 보호 계약을 연결하고 미분류는 리뷰 대상으로 남긴다."""
+    """계약 연결이 있는 테스트만 Protected로, 나머지는 자동 Standard로 둔다."""
     records = []
     matched = Counter()
     for runner, items in groups.items():
-        if not items:
-            raise ValueError(f"Native Runner 테스트 수집 0건: {runner}")
+        if runner not in RUNNERS or not items:
+            raise ValueError(f"Native Runner 수집 누락 또는 미지원: {runner}")
         for identifier in items:
             path = source_path(runner, identifier)
             name = test_title(identifier)
@@ -194,15 +201,6 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
                         links.append(contract["id"])
                         matched[(contract["id"], index)] += 1
                         break
-            links.sort()
-            risk = (
-                max(
-                    (contract["risk"] for contract in registry if contract["id"] in links),
-                    key=RISKS.index,
-                )
-                if links
-                else "review_required"
-            )
             records.append(
                 {
                     "runner": runner,
@@ -213,9 +211,8 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
                         if runner == "pytest" and path.startswith("tests/integration/")
                         else ("browser" if runner == "playwright" else "unit")
                     ),
-                    "contract_ids": links,
-                    "risk": risk,
-                    "lifecycle": "active" if links else "review_required",
+                    "contract_ids": sorted(links),
+                    "policy": "protected" if links else "standard",
                 }
             )
     for contract in registry:
@@ -290,22 +287,85 @@ def reconcile(inventory: dict, reports: dict[str, list[Path]]) -> dict[str, int]
     return counts
 
 
-def audit_removed(before: dict, after: dict) -> list[dict]:
-    """이전 Inventory에서 사라진 Test ID와 보호 계약을 리뷰 근거로 추출한다."""
-    previous = {
-        (row["runner"], stable_key(row["runner"], row["test_id"])): row for row in before["tests"]
-    }
-    current = {(row["runner"], stable_key(row["runner"], row["test_id"])) for row in after["tests"]}
-    return [
-        {
-            "runner": row["runner"],
-            "source_path": row.get("source_path") or source_path(row["runner"], row["test_id"]),
-            "contract_ids": row.get("contract_ids", []),
-            "risk": row.get("risk", "review_required"),
+def _indexed_inventory(value: dict) -> dict[tuple[str, str], dict]:
+    """이전 v1도 계약 연결만 Protected로 해석해 변경 시 보호를 유지한다."""
+    if not isinstance(value, dict) or value.get("schema_version") not in (1, 2):
+        raise ValueError("비교할 Inventory 버전 오류")
+    if not isinstance(value.get("tests"), list):
+        raise ValueError("비교할 Inventory 목록 오류")
+    result = {}
+    for row in value["tests"]:
+        if not isinstance(row, dict):
+            raise ValueError("Inventory 테스트 행 오류")
+        runner, identifier = row.get("runner"), row.get("test_id")
+        if runner not in RUNNERS or not isinstance(identifier, str):
+            raise ValueError("Inventory Runner/Test ID 오류")
+        links = row.get("contract_ids", [])
+        if not isinstance(links, list) or any(not isinstance(x, str) for x in links):
+            raise ValueError("Inventory Contract ID 오류")
+        if row.get("policy") == "protected" and not links:
+            raise ValueError("Contract ID가 없는 Protected 행")
+        key = (runner, stable_key(runner, identifier))
+        if key in result:
+            raise ValueError("Inventory 중복 Test ID")
+        result[key] = {
+            "runner": runner,
+            "source_path": source_path(runner, identifier),
+            "contract_ids": sorted(set(links)),
         }
-        for key, row in sorted(previous.items())
-        if key not in current
-    ]
+    return result
+
+
+def audit_changes(before: dict, after: dict) -> dict:
+    """이름 변경 후보와 실제 계약 연결 해제를 구분하며 자동 승인하지 않는다."""
+    previous = _indexed_inventory(before)
+    current = _indexed_inventory(after)
+    removed = {key: row for key, row in previous.items() if key not in current}
+    added = {key: row for key, row in current.items() if key not in previous}
+    result = {
+        "standard_removed": [],
+        "possible_renames": [],
+        "protected_removed": [],
+        "lost_protections": [],
+    }
+    for key in previous.keys() & current.keys():
+        lost = sorted(
+            set(previous[key]["contract_ids"]) - set(current[key]["contract_ids"])
+        )
+        if lost:
+            result["lost_protections"].append({
+                "runner": key[0],
+                "source_path": previous[key]["source_path"],
+                "lost_contract_ids": lost,
+            })
+    for key, row in sorted(removed.items()):
+        if not row["contract_ids"]:
+            result["standard_removed"].append(row["source_path"])
+            continue
+        related_old = [
+            item for item in removed.values()
+            if item["runner"] == row["runner"]
+            and item["source_path"] == row["source_path"]
+            and item["contract_ids"] == row["contract_ids"]
+        ]
+        related_new = [
+            item for item in added.values()
+            if item["runner"] == row["runner"]
+            and item["source_path"] == row["source_path"]
+            and item["contract_ids"] == row["contract_ids"]
+        ]
+        record = {
+            "runner": row["runner"],
+            "source_path": row["source_path"],
+            "contract_ids": row["contract_ids"],
+        }
+        if len(related_old) == len(related_new) == 1:
+            result["possible_renames"].append(record)
+        else:
+            result["protected_removed"].append(record)
+    result["standard_removed"].sort()
+    result["lost_protections"].sort(key=lambda x: (x["runner"], x["source_path"]))
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -333,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "generate":
             groups = collect()
             records = classify(groups, load_registry(args.registry))
-            report = {"schema_version": 1, "tests": records}
+            report = {"schema_version": 2, "tests": records}
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(
                 json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -341,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 "Native 수집 성공: "
                 + ", ".join(f"{name}={len(groups[name])}" for name in RUNNERS)
-                + f", total={len(records)}, classified={sum(bool(x['contract_ids']) for x in records)}"
+                + f", total={len(records)}, protected={sum(bool(x['contract_ids']) for x in records)}"
             )
             return 0
         if args.action == "reconcile":
@@ -357,10 +417,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "diff":
             previous = json.loads(args.before.read_text(encoding="utf-8"))
             current = json.loads(args.after.read_text(encoding="utf-8"))
-            removed = audit_removed(previous, current)
-            print(json.dumps({"removed": removed}, ensure_ascii=False, indent=2))
-            # 자동 승인/삭제 없음: Review 대상으로 다루기 전까지 Test ID 삭제는 실패
-            return int(bool(removed))
+            changes = audit_changes(previous, current)
+            print(json.dumps(changes, ensure_ascii=False, indent=2))
+            # Standard 삭제는 일반 리뷰. Protected 삭제·이름 변경 후보·연결 해제는 별도 리뷰.
+            return int(bool(
+                changes["protected_removed"]
+                or changes["possible_renames"]
+                or changes["lost_protections"]
+            ))
         parser.print_help()
         return 2
     except (OSError, ValueError, KeyError, ET.ParseError, subprocess.CalledProcessError) as exc:
