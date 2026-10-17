@@ -308,6 +308,8 @@ test("201 registration remains successful when the subsequent list refresh fails
     // 503이 실제로 전달됐는지 검증한다. 백그라운드 GET 경합으로 이전
     // 목록 요청이 대체됐다면 등록 성공 안내를 유지하는 것도 올바른 동작이다.
     await expect.poll(() => failedRefreshes).toBeGreaterThan(0);
+    // 등록 후 후속 목록 요청까지 처리된 시점의 최종 UI를 검사한다.
+    await expect(page.locator('input[type="file"]')).toBeEnabled();
     await expect(page.getByRole("status").filter({
       hasText: /파일 등록이 완료됐습니다\.|파일은 정상 등록됐습니다\./,
     })).toBeVisible();
