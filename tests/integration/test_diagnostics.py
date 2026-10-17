@@ -153,7 +153,9 @@ def test_worker_precommit_and_commit_failures_have_distinct_contracts(
     assert before["exception_type"] == "RuntimeError"
     assert secret not in completed.read_text()
 
-    def fail_after_commit_entry(_store, _dataset, _table, _attempt, *, owner_actor, on_commit_start):
+    def fail_after_commit_entry(
+        _store, _dataset, _table, _attempt, *, owner_actor, on_commit_start
+    ):
         assert owner_actor == "local-developer"
         on_commit_start()
         raise RuntimeError(secret)

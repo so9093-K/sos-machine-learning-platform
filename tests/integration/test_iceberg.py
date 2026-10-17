@@ -640,7 +640,10 @@ def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch)
     monkeypatch.setattr(module, "pinned_scan_dataset", fake_source)
     with pytest.raises(ValueError, match="50,000"):
         module.import_to_iceberg(
-            store, {"kind": "file"}, "partitioned_input", str(uuid4()),
+            store,
+            {"kind": "file"},
+            "partitioned_input",
+            str(uuid4()),
             owner_actor="local-developer",
         )
     assert not (store.home / "cache" / "iceberg-staging").exists()
