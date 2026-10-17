@@ -111,30 +111,35 @@ class DatasetStoreMixin:
             )
         return dict(item) if item else None
 
+    @staticmethod
+    def _reserve_iceberg_table_in_transaction(db, table_name: str, actor_id: str) -> dict:
+        """Job·테이블 예약을 같은 DB 트랜잭션으로 묶는다."""
+        name = f"default.{table_name}"
+        db.execute(
+            text(
+                "INSERT INTO iceberg_table_owners"
+                "(table_name,owner_actor,token,state,created_at) "
+                "VALUES(:name,:owner,:token,'Reserved',:at) "
+                "ON CONFLICT(table_name) DO NOTHING"
+            ),
+            {"name": name, "owner": actor_id, "token": str(uuid4()), "at": now()},
+        )
+        claim = (
+            db.execute(
+                text("SELECT * FROM iceberg_table_owners WHERE table_name=:name"),
+                {"name": name},
+            )
+            .mappings()
+            .one()
+        )
+        if claim["owner_actor"] != actor_id or claim["state"] == "Adopting":
+            raise PermissionError("Iceberg table write access denied")
+        return dict(claim)
+
     def reserve_iceberg_table(self, table_name: str, actor_id: str) -> dict:
         """고유 테이블명에 대한 쓰기 소유권을 PostgreSQL에서 원자적으로 예약한다."""
-        name = f"default.{table_name}"
         with self.connection() as db:
-            db.execute(
-                text(
-                    "INSERT INTO iceberg_table_owners"
-                    "(table_name,owner_actor,token,state,created_at) "
-                    "VALUES(:name,:owner,:token,'Reserved',:at) "
-                    "ON CONFLICT(table_name) DO NOTHING"
-                ),
-                {"name": name, "owner": actor_id, "token": str(uuid4()), "at": now()},
-            )
-            claim = (
-                db.execute(
-                    text("SELECT * FROM iceberg_table_owners WHERE table_name=:name"),
-                    {"name": name},
-                )
-                .mappings()
-                .one()
-            )
-            if claim["owner_actor"] != actor_id:
-                raise PermissionError("Iceberg table write access denied")
-        return dict(claim)
+            return self._reserve_iceberg_table_in_transaction(db, table_name, actor_id)
 
     def activate_iceberg_table(
         self, table_name: str, actor_id: str, token: str, table_uuid: str

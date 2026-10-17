@@ -162,8 +162,13 @@ def cleanup_iceberg_staging(store: Store, attempt_id: str | None = None) -> None
 
 
 def reserve_iceberg_write_target(
-    store: Store, table_name: str, owner_actor: str, *, catalog=None
-) -> tuple[object | None, dict]:
+    store: Store,
+    table_name: str,
+    owner_actor: str,
+    *,
+    catalog=None,
+    reserve_if_missing: bool = True,
+) -> tuple[object | None, dict | None]:
     """API와 Worker가 공유하는 실제 Catalog 테이블·쓰기 소유권 검사.
 
     기존 테이블에 소유 토큰이 없거나 예약된 Active 테이블이 사라졌다면
@@ -194,8 +199,11 @@ def reserve_iceberg_write_target(
             table_name, owner_actor, claim["token"], str(table.metadata.table_uuid)
         )
     else:
-        claim = store.reserve_iceberg_table(table_name, owner_actor)
-        if claim["state"] != "Reserved":
+        if reserve_if_missing:
+            claim = store.reserve_iceberg_table(table_name, owner_actor)
+        if claim is not None and (
+            claim["owner_actor"] != owner_actor or claim["state"] != "Reserved"
+        ):
             raise PermissionError("Previously owned Iceberg table is missing")
     return table, claim
 
