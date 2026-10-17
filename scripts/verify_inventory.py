@@ -16,7 +16,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REGISTRY = ROOT / "tests" / "contracts.json"
+SCOPE_FILE = ROOT / "scripts" / "inventory_scope.json"
+# Runner별 수집 명령·경로만 프로젝트 설정에서 읽으며 테스트 의미와 대조 로직은 공유한다.
+SCOPES = json.loads(SCOPE_FILE.read_text(encoding="utf-8"))
 RUNNERS = ("pytest", "vitest", "playwright")
+if set(SCOPES) != set(RUNNERS):
+    raise ValueError("Native Runner 설정이 누락되었거나 중복되었습니다.")
 
 
 def command(args: list[str], cwd: Path) -> str:
@@ -91,7 +96,7 @@ def playwright_ids(output: str) -> list[str]:
         names = [part.strip() for part in match.group("title").split("›")]
         if not all(names):
             raise ValueError("Playwright 수집 행의 테스트명이 비어 있습니다.")
-        result.add(f"web/e2e/{filename}::{'::'.join(names)}")
+        result.add(f"{SCOPES['playwright']['source_root']}/{filename}::{'::'.join(names)}")
     return sorted(result)
 
 
@@ -99,22 +104,24 @@ def source_path(runner: str, test_id: str) -> str:
     """Native Runner별 경로 표현을 저장소 상대 경로로 정규화한다."""
     source = test_id.split("::", 1)[0].replace("\\", "/")
     if runner == "pytest":
-        if not source.startswith("tests/"):
+        if not source.startswith(SCOPES["pytest"]["source_root"] + "/"):
             raise ValueError(f"pytest 출처가 tests/가 아닙니다: {source}")
         return source
     if runner == "vitest":
-        if "/web/" in source:
-            return "web/" + source.rsplit("/web/", 1)[1]
-        if source.startswith("web/"):
+        if f"/{SCOPES['vitest']['cwd']}/" in source:
+            return SCOPES["vitest"]["cwd"] + "/" + source.rsplit(f"/{SCOPES['vitest']['cwd']}/", 1)[1]
+        if source.startswith(SCOPES["vitest"]["cwd"] + "/"):
+            if not source.startswith(SCOPES["vitest"]["source_root"] + "/"):
+                raise ValueError("Vitest 출처가 범위 밖입니다.")
             return source
         if source.startswith("src/"):
-            return "web/" + source
-        raise ValueError("Vitest 출처가 web/src 내부가 아닙니다.")
+            return SCOPES["vitest"]["cwd"] + "/" + source
+        raise ValueError("Vitest 출처가 정의된 source_root 내부가 아닙니다.")
     if runner == "playwright":
-        if source.startswith("web/e2e/"):
+        if source.startswith(SCOPES["playwright"]["source_root"] + "/"):
             return source
         if source.endswith(".spec.ts"):
-            return "web/e2e/" + Path(source).name
+            return SCOPES["playwright"]["source_root"] + "/" + Path(source).name
         raise ValueError("Playwright 출처가 e2e 테스트가 아닙니다.")
     raise ValueError(f"미지원 Native Runner: {runner}")
 
@@ -137,7 +144,7 @@ def load_registry(path: Path) -> list[dict]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict) or set(value) != {"schema_version", "protected_contracts"}:
         raise ValueError("보호 계약 Registry 필드 오류")
-    if value["schema_version"] != 2:
+    if value["schema_version"] != 1:
         raise ValueError("보호 계약 Registry 버전 오류")
     contracts = value["protected_contracts"]
     if not isinstance(contracts, list):
@@ -171,7 +178,7 @@ def load_registry(path: Path) -> list[dict]:
             if runner not in RUNNERS:
                 raise ValueError(f"보호 계약 Runner 오류: {identifier}")
             pattern = selector["path_glob"]
-            if not isinstance(pattern, str) or not pattern.startswith(("tests/", "web/")):
+            if not isinstance(pattern, str) or not pattern.startswith(SCOPES[runner]["source_root"] + "/"):
                 raise ValueError(f"보호 계약 경로 오류: {identifier}")
             title = selector.get("title_glob", "*")
             if not isinstance(title, str) or not title:
@@ -210,8 +217,8 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
                     "source_path": path,
                     "layer": (
                         "integration"
-                        if runner == "pytest" and path.startswith("tests/integration/")
-                        else ("browser" if runner == "playwright" else "unit")
+                        if runner == "pytest" and path.startswith(SCOPES["pytest"]["integration_root"] + "/")
+                        else SCOPES[runner]["layer"]
                     ),
                     "contract_ids": sorted(links),
                     "policy": "protected" if links else "standard",
@@ -225,17 +232,13 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
 
 
 def collect() -> dict[str, list[str]]:
-    """Native Runner의 실제 수집 출력을 정본으로 반환한다."""
+    """실제 Native Runner 목록을 프로젝트별 수집 설정으로 얻는다."""
+    parsers = {"pytest": python_ids, "vitest": lambda text: vitest_ids(json.loads(text)), "playwright": playwright_ids}
     return {
-        "pytest": python_ids(
-            command(["uv", "run", "--locked", "pytest", "--collect-only", "-q"], ROOT)
-        ),
-        "vitest": vitest_ids(
-            json.loads(command(["npx", "vitest", "list", "src", "--json"], ROOT / "web"))
-        ),
-        "playwright": playwright_ids(
-            command(["npx", "playwright", "test", "--list"], ROOT / "web")
-        ),
+        runner: parsers[runner](
+            command(SCOPES[runner]["collect"], ROOT / SCOPES[runner]["cwd"])
+        )
+        for runner in RUNNERS
     }
 
 
@@ -258,7 +261,7 @@ def junit_keys(report: Path, runner: str) -> list[str]:
         elif runner == "vitest":
             path = classname
         elif runner == "playwright":
-            path = "web/e2e/" + Path(classname).name
+            path = SCOPES["playwright"]["source_root"] + "/" + Path(classname).name
         else:
             raise ValueError(f"미지원 Runner: {runner}")
         ids.append(stable_key(runner, f"{path}::{name}"))
@@ -267,7 +270,7 @@ def junit_keys(report: Path, runner: str) -> list[str]:
 
 def reconcile(inventory: dict, reports: dict[str, list[Path]]) -> dict[str, int]:
     """누락·추가·중복 testcase가 있으면 총 개수만 같아도 실패 처리한다."""
-    if inventory.get("schema_version") != 2 or not isinstance(inventory.get("tests"), list):
+    if inventory.get("schema_version") != 1 or not isinstance(inventory.get("tests"), list):
         raise ValueError("유효한 Inventory JSON이 아닙니다.")
     counts = {}
     for runner in RUNNERS:
@@ -290,8 +293,8 @@ def reconcile(inventory: dict, reports: dict[str, list[Path]]) -> dict[str, int]
 
 
 def _indexed_inventory(value: dict) -> dict[tuple[str, str], dict]:
-    """이전 v1도 계약 연결만 Protected로 해석해 변경 시 보호를 유지한다."""
-    if not isinstance(value, dict) or value.get("schema_version") not in (1, 2):
+    """동일한 Inventory 스키마의 계약 연결 변경을 보수적으로 비교한다."""
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
         raise ValueError("비교할 Inventory 버전 오류")
     if not isinstance(value.get("tests"), list):
         raise ValueError("비교할 Inventory 목록 오류")
@@ -397,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "generate":
             groups = collect()
             records = classify(groups, load_registry(args.registry))
-            report = {"schema_version": 2, "tests": records}
+            report = {"schema_version": 1, "tests": records}
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(
                 json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

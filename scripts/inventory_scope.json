@@ -1,0 +1,39 @@
+{
+  "pytest": {
+    "cwd": ".",
+    "collect": [
+      "uv",
+      "run",
+      "--locked",
+      "pytest",
+      "--collect-only",
+      "-q"
+    ],
+    "source_root": "tests",
+    "integration_root": "tests/integration",
+    "layer": "unit"
+  },
+  "vitest": {
+    "cwd": "web",
+    "collect": [
+      "npx",
+      "vitest",
+      "list",
+      "src",
+      "--json"
+    ],
+    "source_root": "web/src",
+    "layer": "unit"
+  },
+  "playwright": {
+    "cwd": "web",
+    "collect": [
+      "npx",
+      "playwright",
+      "test",
+      "--list"
+    ],
+    "source_root": "web/e2e",
+    "layer": "browser"
+  }
+}
