@@ -33,10 +33,12 @@ def command(args: list[str], cwd: Path) -> str:
             # 비밀값·임의 출력 대신 오류 종류가 드러나는 진단 행만 제한적으로 남긴다.
             for line in result.stderr.splitlines():
                 message = line.strip()
-                if message.startswith(("Error:", "TypeError:", "CACError:", "Unknown option", "Failed to", "ERR_")):
+                if message.startswith(
+                    ("Error:", "TypeError:", "CACError:", "Unknown option", "Failed to", "ERR_")
+                ):
                     message = re.sub(
-                        r"(?i)(password|secret|token|access_key)([=:])[^\\s]+",
-                        r"\\1\\2[REDACTED]",
+                        r"(?i)(password|secret|token|access_key)([=:])[^\s]+",
+                        r"\1\2[REDACTED]",
                         message,
                     )
                     print(f"Native 수집 오류: {message[:160]}", file=sys.stderr)
