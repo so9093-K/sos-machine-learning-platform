@@ -281,8 +281,8 @@ def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
         other.engine.dispose()
 
 
-def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(workspace):
-    """잠금 소유권이 변경됐는데 실행 결과가 나와도 이전 Worker는 성공을 게시하지 않는다."""
+def test_lost_worker_ownership_before_claim_keeps_job_queued(workspace):
+    """소유권이 이미 없으면 새 Attempt를 생성하지 않고 Queued를 보존한다."""
     from sos_platform.store import WorkerOwnershipLost
 
     client, store = workspace
@@ -290,9 +290,52 @@ def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(work
     queued = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
     assert queued.status_code == 202
     assert store.acquire_worker()
-    # 실제 세션 종료 테스트와 달리 검증용 식별자만 변경하므로 원본을 보존한다.
+
     owned_backend = store._worker_backend_pid
     store._worker_backend_pid = -1
+    try:
+        with pytest.raises(WorkerOwnershipLost):
+            run_once(store)
+        unchanged = store.get_job(queued.json()["id"])
+        assert unchanged["status"] == "Queued"
+        assert unchanged["attempts"] == []
+        assert unchanged["result"] is None
+    finally:
+        store._worker_backend_pid = owned_backend
+        store.release_worker()
+
+    replacement = Store(store.home, database_url=store.database_url)
+    try:
+        assert replacement.acquire_worker()
+        assert replacement.recover() == []
+        assert replacement.get_job(queued.json()["id"])["status"] == "Queued"
+    finally:
+        replacement.release_worker()
+        replacement.engine.dispose()
+
+
+def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(workspace, monkeypatch):
+    """Claim 이후 소유권을 잃은 실행은 결과를 확정하지 않고 새 Worker 복구에 맡긴다."""
+    from sos_platform.store import WorkerOwnershipLost
+
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
+    assert queued.status_code == 202
+    assert store.acquire_worker()
+
+    owned_backend = store._worker_backend_pid
+    original_claim = store.claim
+
+    def claim_then_lose_ownership():
+        # 실제 Attempt를 트랜잭션으로 Claim한 직후 소유권 검증값을 변경한다.
+        # DB session lock 자체는 보존하므로 이후 복구 경계를 재현할 수 있다.
+        claimed = original_claim()
+        if claimed is not None:
+            store._worker_backend_pid = -1
+        return claimed
+
+    monkeypatch.setattr(store, "claim", claim_then_lose_ownership)
     try:
         with pytest.raises(WorkerOwnershipLost):
             run_once(store)
@@ -301,7 +344,6 @@ def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(work
         assert pending["attempts"][-1]["status"] == "Running"
         assert pending["result"] is None
     finally:
-        # 시뮬레이션 중 실제 PostgreSQL 잠금은 살아 있으므로 정상적으로 해제한다.
         store._worker_backend_pid = owned_backend
         store.release_worker()
 
@@ -310,7 +352,9 @@ def test_lost_worker_ownership_during_execution_leaves_running_for_recovery(work
         assert replacement.acquire_worker()
         interrupted = replacement.recover()
         assert (pending["id"], pending["attempts"][-1]["id"]) in interrupted
-        assert replacement.get_job(pending["id"])["status"] == "Queued"
+        recovered = replacement.get_job(pending["id"])
+        assert recovered["status"] == "Queued"
+        assert recovered["attempts"][-1]["status"] == "Interrupted"
     finally:
         replacement.release_worker()
         replacement.engine.dispose()
