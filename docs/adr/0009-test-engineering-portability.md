@@ -24,7 +24,7 @@ SOS는 pytest·Vitest·Playwright와 `make check-fast`·`make check`를 사용�
 4. **결과와 실행 증거 분리:** JUnit XML, 실행 식별자·코드 판본·suite·환경 범위가 포함된 Run Manifest, Summary, 로그/Trace를 교환 가능한 산출물로 정의한다. 실패·누락·미실행을 성공으로 해석하지 않으며 비밀값을 기록하지 않는다.
 5. **CI 어댑터의 제한:** 제공자별 워크플로는 트리거, 실행 환경 준비, 공통 CLI 호출, 아티팩트 수집, 품질 게이트 연결을 책임진다. OpenAPI 비교·RBAC·서비스 재시작과 보존 검사 같은 검증 로직은 CI YAML에 복제하지 않는다.
 6. **환경 안전 경계:** 테스트용 DB·S3·Compose 프로젝트는 고유 식별자와 소유권에 따라 생성·정리한다. 기존 개발·운영 데이터, Iceberg Snapshot/Tag와 타인 소유 볼륨을 테스트 정리 대상으로 삼지 않는다.
-7. **테스트 자산 수명주기:** Native Runner에서 실제 테스트 ID를 자동 수집하고, 보호 계약·영역·위험도·중복 여부 및 폐기 근거를 관리한다. 자동 탐지나 커버리지 수치만으로 테스트 또는 제품 코드를 삭제하지 않는다.
+7. **테스트 자산 수명주기:** Native Runner의 실제 Test ID를 자동 수집한다. 테스트는 Standard가 기본이며, 특별한 불변조건만 Protected 계약으로 지정해 선정 이유와 폐기 근거를 검토한다. 자동 탐지나 커버리지 수치만으로 테스트 또는 제품 코드를 삭제하지 않는다.
 8. **이식성의 입증:** CI YAML을 작성한 것만으로 GitLab 호환성을 선언하지 않는다. 동일 CLI 및 실패·결과 계약을 독립 실행 환경에서 실제로 확인하고 미검증 범위를 명시한다.
 
 ## 근거
@@ -47,7 +47,7 @@ SOS는 pytest·Vitest·Playwright와 `make check-fast`·`make check`를 사용�
 
 ## 수명주기 구현 및 검증 추적
 
-- Native Runner 수집과 Registry 기반 Critical/High 계약 분류를 분리한다. 테스트 ID는 코드에서 자동 수집하고 안정적 계약 ID는 `tests/contracts.json`에서 관리한다.
+- Native Runner 수집과 Protected 예외 Registry를 분리한다. Test ID는 코드에서 자동 수집하고 보호 계약과 선정 이유는 `tests/contracts.json` v2로 관리한다.
 - Playwright 최상위/중첩 테스트 수집과 각 Runner의 JUnit Test ID 대조는 CI 보호 게이트에서 실제 실행 증거로 검증한다.
-- 추가된 Registry는 핵심 계약부터 보호하며 다른 테스트는 `review_required`로 남긴다. 계약별 위험도는 테스트의 변동성이 아닌 손실·보안·무결성 영향으로 결정한다.
+- **Standard by Default, Protected by Exception**: 전체 테스트에 위험도·ISO 품질 특성·실패 유형을 강제하지 않는다. Protected 테스트의 제거·이름 변경 후보·계약 해제는 명시적 리뷰 대상으로 남긴다.
 - 설계·정책 확정 후 ADR의 Proposed → Accepted 전환 여부를 별도로 리뷰한다. GitLab 이식성 및 환경 강제 중단 복구는 아직 미검증이다.
