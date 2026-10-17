@@ -323,8 +323,8 @@ test("upload indicates pending transfer and completes after server response", as
   await page.route("**/api/datasets/files", async route => {
     const response = await route.fetch();
     await heldResponse;
-    await route.fulfill({ response });
     registered = true;
+    await route.fulfill({ response });
   });
   try {
     await page.goto("/");
