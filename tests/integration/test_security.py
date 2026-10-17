@@ -186,9 +186,7 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         alice_detail = secure.get(
             f"/api/explorations/jobs/{exploration_id}", headers=headers("alice")
         )
-        bob_detail = secure.get(
-            f"/api/explorations/jobs/{exploration_id}", headers=headers("bob")
-        )
+        bob_detail = secure.get(f"/api/explorations/jobs/{exploration_id}", headers=headers("bob"))
         general_detail = secure.get(f"/api/jobs/{exploration_id}", headers=headers("alice"))
         bob_list = secure.get("/api/explorations/jobs", headers=headers("bob"))
         bob_cancel = secure.post(
