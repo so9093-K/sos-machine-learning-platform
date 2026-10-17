@@ -111,43 +111,22 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 
 `uv run --locked python scripts/benchmark_processing.py --rows 150000 --groups 32 --scenario window`와 `--scenario row_local`을 각각 독립 프로세스로 실행해 같은 합성 입력 생성 규칙에서 **실제 SOS Polars Transform**의 경과 시간·출력 크기·Linux RSS 관측치를 JSON으로 확인한다. 숫자 비교 시 환경·CPU·메모리·Polars 버전·시나리오·행/그룹 수를 함께 기록한다. `VmHWM`은 프로세스 생애 고수위이므로 단일 연산에만 귀속되는 엄격한 Peak RSS가 아니며, 파일 I/O·Iceberg 커밋·여러 동시 실행·cgroup 제한도 검증하지 않는다. 운영 환경의 성능 보장으로 사용하지 않는다.
 
-## 공통 검증 CLI 전환 (진행 중)
+## 검증 실행 경계
 
-`scripts/verify.py`는 SOS가 소유하는 Suite 이름·Runner·실행 증거 경계의 출발점이다. `python scripts/verify.py list`로 Suite와 인프라 요구 여부를 조회하고 `python scripts/verify.py run <suite> --output-dir <경로>`로 개별 검증을 호출한다. PR 비교 Suite에는 `--base-ref`를 지정한다.
+`scripts/verify.py list`와 `scripts/verify.py run <suite> --output-dir <경로>`는 로컬과 CI가 공통으로 호출하는 인터페이스다. PR 기준 API 호환성 검사에는 `--base-ref`를 지정한다. `make check-fast`는 인프라 없이, `make check`는 필요한 인프라를 준비한 상태에서 전체 검증을 수행한다.
 
-- pytest·Vitest·Playwright의 Native Runner를 그대로 사용하고 인프라 없는 Python 검증은 `tests/test_*.py` 수집으로 선택한다.
-- 각 호출은 Suite별 `<suite>.manifest.json`과 `<suite>.summary.txt`를 남기며 JUnit Suite에서 리포트 누락·손상·실행 0건·필수 테스트 Skip을 성공 처리하지 않는다.
-- 기존 `make check-fast`·`make check`와 GitHub 필수 Job은 전환 및 회귀 확인이 끝날 때까지 유지한다. 검증되지 않은 새 Suite, GitLab 설정, 실제 운영 이식성은 완료로 취급하지 않는다.
-- 실행 결과에 토큰·환경변수 값은 기록하지 않는다. 실패 원문·Trace 등 상세 산출물은 별도 비밀정보 비노출 기준을 따른다.
+공통 검증 메커니즘은 Native Runner 실행 결과·JUnit·Manifest/Summary·누락 또는 미실행 판정을 담당한다. Runner별 수집 명령·실행 경로·테스트 출처 경로는 `scripts/inventory_scope.json`에서 관리하고, 실제 SOS 도메인 시나리오는 기존 테스트와 격리 실행기가 소유한다. 다른 프로젝트에서는 Runner 설정과 Suite 구성, 보호 계약만 변경하도록 경계를 유지한다. 범용 테스트 프레임워크나 별도 서비스는 만들지 않는다.
 
-이 절은 전환 중 구현 상태만 설명하며 ADR 0009의 전체 목표가 완료됐음을 뜻하지 않는다.
+JUnit 리포트 손상·누락, 실행 0건, 필수 Skip과 실패는 성공 처리하지 않는다. 실행 증거에 토큰·환경변수 값을 기록하지 않으며 실패 로그·Trace도 비밀정보 비노출 정책을 따른다. GitHub 보호 게이트 `python-quality`는 Python·Frontend·E2E 작업과 전체 JUnit Test ID 대조의 성공을 요구한다.
 
-## 기존 테스트 인벤토리 전환 기록
+## 테스트 자산 수명주기
 
-`python scripts/verify.py inventory --output <경로>`는 실제 pytest `--collect-only`, Vitest `list --json`, Playwright `test --list`를 호출해 테스트 ID를 JSON으로 생성한다. 수집 0건·도구 오류는 실패로 처리하며 수집된 목록을 코드 외에 수동으로 복제하지 않는다. 인벤토리에는 실행 계층과 Standard/Protected 정책을 기록하며, 미연결 테스트는 자동으로 Standard를 적용한다.
+**Standard by Default, Protected by Exception:** 보호 계약에 연결되지 않은 모든 테스트는 별도 등록 없이 `standard`다. 데이터 보존·권한·소유권·상태 확정·복구 등 특별한 변경 통제가 필요한 계약에 한해 `tests/contracts.json`에 `id`, `reason`, `selectors`를 등록한다. 위험도 점수·전수 품질 분류·테스트 관리 DB는 운영하지 않는다.
 
-신규/변경 테스트는 어떤 Dataset·Job·Snapshot·API·UX 계약을 보호하는지와 최소 비용 검증 계층을 리뷰한다. 통합·폐기에는 중복 증거, 남는 계약 범위, 실패 이력과 대체 테스트의 실제 실행 근거가 필요하며, 자동 수집 결과나 낮은 커버리지 수치만으로 삭제하지 않는다. 현재 인벤토리 명령과 정책은 구축 단계이며 플랫폼 간 실제 수집 검증은 최종 리뷰에서 별도로 판정한다.
+- `python scripts/verify.py inventory --output <경로>`는 pytest·Vitest·Playwright의 실제 테스트 ID를 수집하고, `schema_version: 1` JSON에 `policy`(`standard` 또는 `protected`)와 `contract_ids`를 기록한다. 수집 명령 및 테스트 경로는 `scripts/inventory_scope.json`이 정의한다.
+- Registry의 `schema_version: 1`은 현재 내부 데이터 형식의 식별자일 뿐 공개 버전 호환성을 약속하지 않는다. 임시 형식을 위한 별도의 레거시 호환 구현은 없다.
+- 모든 테스트는 정책과 무관하게 CI에서 실행하고 Native 목록과 JUnit Test ID를 일대일로 대조한다. 누락·추가·중복은 실패한다.
+- `python scripts/verify_inventory.py diff --before <이전.json> --after <현재.json>`은 Standard Test ID 제거는 일반 리뷰로 처리하며, Protected Test ID 제거·동일 파일의 1:1 이름 변경 후보·기존 Test ID의 계약 연결 해제에는 별도 리뷰를 요구한다. 이름 변경 후보는 의미적 동등성을 자동 승인하지 않는다.
+- Protected 테스트를 삭제·통합할 때는 보호 계약과 실패 경로를 유지하는 대체 테스트의 실제 실행 근거를 검토한다. `diff`는 이전 Inventory 파일을 명시해야 하며 현재 GitHub CI가 모든 PR의 과거 Inventory 차이를 자동 비교하는 것은 아니다.
 
-## CI 제공자 어댑터의 지원 범위
-
-GitHub Actions의 기존 보호 상태 `python-quality`는 세 핵심 Job이 모두 성공할 때만 성공하도록 유지한다. GitLab의 `.gitlab-ci.yml`은 동일 Native Runner/Suite 명령 및 JUnit·Manifest 경로를 사용하도록 구성한다. GitLab 설정은 격리된 `sos-ephemeral-shell` Runner를 전제하며 Python 3.12·uv·Node 24·npm·Docker Compose·브라우저·Make 준비가 필요하다. **실제 GitLab Runner가 없는 동안 GitLab 이식성은 미검증**이다. GitLab 자체 Merge Request 승인·보호 정책도 Runner 실행 검증과 별도 운영 설정이다.
-
-## 테스트 자산 수명주기 정책 — Standard 기본, Protected 예외
-
-**Standard by Default, Protected by Exception**: 새 테스트는 아무 등록 없이 Standard이며, 별도 보호가 필요한 계약만 `tests/contracts.json`에 등록한다. 테스트 수에 비례하는 전수 분류·위험도 점수·독립 테스트 관리 DB를 도입하지 않는다.
-
-| 정책 | 대상 | 변경·삭제 기준 |
-| --- | --- | --- |
-| **Standard** | Protected 계약에 연결되지 않은 모든 테스트 | 기존 CI와 일반 코드 리뷰. 별도 등록 불필요 |
-| **Protected** | 데이터 보존·권한·소유권·상태 확정·복구 등 별도 변경 통제가 필요한 계약을 검증하는 테스트 | Contract ID, 보호 이유, 대체 검증의 CI/JUnit 증거와 명시적 리뷰 필요 |
-
-두 정책 모두 실제 Runner의 테스트 실행, JUnit 대조, 실패·Skip 판정은 완전히 동일하다. Standard는 중요하지 않은 테스트를 의미하지 않는다.
-
-- **최소 Registry:** 스키마 v2의 `protected_contracts`는 `id`, `reason`, `selectors`만 관리한다. 보호 선정 이유가 없거나 실제 Native Runner 테스트를 선택하지 못하면 실패한다. 기존 9개 핵심 보호 계약은 초기 전환에서 유지한다.
-- **자동 인벤토리:** `uv run --locked python scripts/verify.py inventory --output /tmp/sos-test-inventory.json`으로 Native pytest·Vitest·Playwright Test ID를 수집한다. Inventory v2의 `policy`는 `standard`/`protected`, 연결 근거는 `contract_ids`이다. 미연결 테스트의 수작업 분류는 불필요하다.
-- **실행 근거:** GitHub 보호 게이트 `python-quality`는 수집 Test ID와 Python·Vitest·Playwright JUnit 실행 ID의 누락·중복·미실행을 확인한다. 이 검증은 Standard에도 동일하게 적용된다.
-- **제거·이름 변경:** `python scripts/verify_inventory.py diff --before old.json --after new.json`은 Standard Test ID 제거는 종료 코드 0(일반 리뷰), Protected ID 제거·1:1 이름 변경 후보·기존 ID의 보호 연결 해제는 종료 코드 1(명시적 계약 리뷰)로 보고한다. 이전 Inventory v1도 비교할 수 있다.
-- **단순 이름 변경:** 같은 파일·보호 계약의 ID 교체는 `possible_renames` 후보로 구분하지만 동등성을 자동 승인하지 않는다. 실제 Assertion·실패 경로·대체 테스트의 실행 증거를 PR에서 확인한다.
-- **자동화 범위:** Registry 형식·보호 선택자 존재·JUnit ID 대조는 CI가 검사한다. `diff`는 이전·현재 인벤토리 파일을 명시해야 하며, 현재 CI가 모든 PR의 이전 인벤토리를 자동 비교하는 것은 아니다. 자동 수집 결과만 보고 코드를 삭제·Skip하지 않는다.
-
-GitLab `test-evidence`에도 동일 실행 대조 명령을 설정했으나 **실제 격리 Runner 검증은 여전히 미수행**이다.
+추가 CI 제공자는 실제 필요가 생겼을 때 어댑터를 구성하고 독립 실행 및 실패 경로를 검증한다. 제공자 독립적인 설계 자체가 특정 CI 서비스의 실제 지원을 의미하지는 않는다.

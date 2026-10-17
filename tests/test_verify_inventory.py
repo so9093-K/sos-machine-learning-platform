@@ -127,22 +127,22 @@ def test_junit_reconcile_recovers_all_playwright_cases(tmp_path):
         ET.ElementTree(root).write(report, encoding="unicode")
         cases[runner] = [report]
         records.append({"runner": runner, "test_id": identifier})
-    assert inventory.reconcile({"schema_version": 2, "tests": records}, cases) == {
+    assert inventory.reconcile({"schema_version": 1, "tests": records}, cases) == {
         "pytest": 1,
         "vitest": 1,
         "playwright": 1,
     }
     records.pop()
     with pytest.raises(ValueError, match="불일치"):
-        inventory.reconcile({"schema_version": 2, "tests": records}, cases)
+        inventory.reconcile({"schema_version": 1, "tests": records}, cases)
 
 
 def test_standard_removal_needs_no_extra_approval():
     before = {
-        "schema_version": 2,
+        "schema_version": 1,
         "tests": [{"runner": "pytest", "test_id": "tests/test_a.py::standard", "contract_ids": []}],
     }
-    after = {"schema_version": 2, "tests": []}
+    after = {"schema_version": 1, "tests": []}
     result = inventory.audit_changes(before, after)
     assert result["standard_removed"] == ["tests/test_a.py"]
     assert result["protected_removed"] == []
@@ -151,7 +151,7 @@ def test_standard_removal_needs_no_extra_approval():
 
 def test_protected_removal_blocks_even_with_other_test_in_same_contract():
     before = {
-        "schema_version": 2,
+        "schema_version": 1,
         "tests": [
             {
                 "runner": "pytest",
@@ -165,7 +165,7 @@ def test_protected_removal_blocks_even_with_other_test_in_same_contract():
             },
         ],
     }
-    after = {"schema_version": 2, "tests": [before["tests"][1]]}
+    after = {"schema_version": 1, "tests": [before["tests"][1]]}
     assert inventory.audit_changes(before, after)["protected_removed"][0]["contract_ids"] == [
         "OWNER-001"
     ]
@@ -173,13 +173,13 @@ def test_protected_removal_blocks_even_with_other_test_in_same_contract():
 
 def test_rename_candidate_never_automatically_approved():
     before = {
-        "schema_version": 2,
+        "schema_version": 1,
         "tests": [
             {"runner": "pytest", "test_id": "tests/test_a.py::old", "contract_ids": ["OWNER-001"]}
         ],
     }
     after = {
-        "schema_version": 2,
+        "schema_version": 1,
         "tests": [
             {"runner": "pytest", "test_id": "tests/test_a.py::new", "contract_ids": ["OWNER-001"]}
         ],
@@ -191,42 +191,27 @@ def test_rename_candidate_never_automatically_approved():
 
 def test_protection_demotion_detected_without_test_removal():
     before = {
-        "schema_version": 2,
+        "schema_version": 1,
         "tests": [
             {"runner": "pytest", "test_id": "tests/test_a.py::stays", "contract_ids": ["OWNER-001"]}
         ],
     }
     after = {
-        "schema_version": 2,
+        "schema_version": 1,
         "tests": [{"runner": "pytest", "test_id": "tests/test_a.py::stays", "contract_ids": []}],
     }
     assert inventory.audit_changes(before, after)["lost_protections"]
-
-
-def test_existing_v1_contract_is_still_protected():
-    before = {
-        "schema_version": 1,
-        "tests": [
-            {
-                "runner": "pytest",
-                "test_id": "tests/test_a.py::old",
-                "contract_ids": ["OWNER-001"],
-                "risk": "high",
-            }
-        ],
-    }
-    assert inventory.audit_changes(before, {"schema_version": 2, "tests": []})["protected_removed"]
 
 
 def test_diff_cli_allows_standard_removal_but_blocks_protection(tmp_path, capsys):
     before = tmp_path / "before.json"
     after = tmp_path / "after.json"
     old = {
-        "schema_version": 2,
+        "schema_version": 1,
         "tests": [{"runner": "pytest", "test_id": "tests/test_a.py::old", "contract_ids": []}],
     }
     before.write_text(__import__("json").dumps(old), encoding="utf-8")
-    after.write_text('{"schema_version": 2, "tests": []}', encoding="utf-8")
+    after.write_text('{"schema_version": 1, "tests": []}', encoding="utf-8")
     args = ["diff", "--before", str(before), "--after", str(after)]
     assert inventory.main(args) == 0
     assert "standard_removed" in capsys.readouterr().out
@@ -236,9 +221,9 @@ def test_diff_cli_allows_standard_removal_but_blocks_protection(tmp_path, capsys
     assert "protected_removed" in capsys.readouterr().out
 
 
-def test_registry_rejects_missing_reason_and_old_schema(tmp_path):
+def test_registry_rejects_missing_reason_and_invalid_schema(tmp_path):
     bad = {
-        "schema_version": 2,
+        "schema_version": 1,
         "protected_contracts": [
             {
                 "id": "OWNER-001",
@@ -251,16 +236,28 @@ def test_registry_rejects_missing_reason_and_old_schema(tmp_path):
     target.write_text(__import__("json").dumps(bad), encoding="utf-8")
     with pytest.raises(ValueError, match="선정 이유"):
         inventory.load_registry(target)
-    bad["schema_version"] = 1
-    with pytest.raises(ValueError):
+    bad["reason"] = "보호 계약의 안정적인 선정 이유"
+    bad["schema_version"] = 999
+    target.write_text(__import__("json").dumps(bad), encoding="utf-8")
+    with pytest.raises(ValueError, match="버전"):
         inventory.load_registry(target)
 
 
 def test_empty_registry_defaults_to_standard(tmp_path):
     target = tmp_path / "contracts.json"
-    target.write_text('{"schema_version": 2, "protected_contracts": []}', encoding="utf-8")
+    target.write_text('{"schema_version": 1, "protected_contracts": []}', encoding="utf-8")
     assert inventory.load_registry(target) == []
     assert inventory.classify({"pytest": ["tests/test_a.py::case"]}, [])[0]["policy"] == "standard"
+
+
+def test_project_runner_scope_changes_do_not_require_core_modification(monkeypatch):
+    """Runner별 프로젝트 경로를 설정만으로 변경할 수 있다."""
+    monkeypatch.setitem(inventory.SCOPES["playwright"], "source_root", "browser/specs")
+    listed = inventory.playwright_ids("  workspace.spec.ts:10:2 › sample\n")
+    assert listed == ["browser/specs/workspace.spec.ts::sample"]
+    assert inventory.source_path("playwright", "workspace.spec.ts::sample") == (
+        "browser/specs/workspace.spec.ts"
+    )
 
 
 def test_inventory_runner_scopes_are_independent(monkeypatch):
