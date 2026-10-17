@@ -59,6 +59,18 @@ def verify(env: dict[str, str]) -> None:
     make(env, "up")
     make(env, "status")
     make(env, "doctor")
+    make(env, "help")
+    subprocess.run(["make"], cwd=ROOT, env=env, check=True)
+    deep = subprocess.run(
+        ["python3", "scripts/dev.py", "doctor", "--deep", "--format", "json"],
+        cwd=ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if json.loads(deep.stdout)["status"] != "passed":
+        raise AssertionError("Make deep doctor 검증 실패")
     dataset = upload(url)
     dataset_id = dataset["id"]
     table_name = f"ci_lifecycle_{secrets.token_hex(6)}"
@@ -91,6 +103,7 @@ def verify(env: dict[str, str]) -> None:
     assert ice_preview["returned_rows"] >= 2
     snapshots = request_json(url + f"/api/iceberg/{table_name}/snapshots")
     assert len(snapshots) >= 1
+    make(env, "logs")
     jobs = request_json(url + "/api/jobs")["items"]
     assert any(row["id"] == job["id"] and row["status"] == "Succeeded" for row in jobs)
 
