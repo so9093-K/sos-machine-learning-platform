@@ -163,9 +163,9 @@ def cleanup_orphaned_cgroups_before_recovery(store: Store, isolation: CgroupIsol
     if isolation.parent is None:
         return
     with store.connection() as db:
-        attempts = db.execute(
-            text("SELECT id FROM attempts WHERE status='Running'")
-        ).scalars().all()
+        attempts = (
+            db.execute(text("SELECT id FROM attempts WHERE status='Running'")).scalars().all()
+        )
     for attempt_id in attempts:
         # 아직 프로세스가 속해 있으면 커널 rmdir가 실패해 복구를 중단한다.
         isolation.cleanup(attempt_id)
