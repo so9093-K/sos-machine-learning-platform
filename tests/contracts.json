@@ -8,32 +8,32 @@
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_datasets.py",
-          "title_glob": "test_upload_recovery_preserves_shared_content_addressed_blob*"
+          "title_glob": "test_upload_recovery_preserves_shared_content_addressed_blob"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_datasets.py",
-          "title_glob": "test_upgrade_from_0001_preserves_existing_records*"
+          "title_glob": "test_upgrade_from_0001_preserves_existing_records"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_datasets.py",
-          "title_glob": "test_concurrent_uploads_publish_independent_versions_without_staging_leftovers*"
+          "title_glob": "test_concurrent_uploads_publish_independent_versions_without_staging_leftovers"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_storage.py",
-          "title_glob": "test_transform_publish_failure_preserves_unreferenced_attempt_object*"
+          "title_glob": "test_transform_publish_failure_preserves_unreferenced_attempt_object"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_storage.py",
-          "title_glob": "test_lost_s3_upload_response_preserves_object*"
+          "title_glob": "test_lost_s3_upload_response_preserves_object"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_storage.py",
-          "title_glob": "test_abandoned_upload_intent_is_never_auto_classified_as_candidate*"
+          "title_glob": "test_abandoned_upload_intent_is_never_auto_classified_as_candidate"
         }
       ]
     },
@@ -60,32 +60,32 @@
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_jobs.py",
-          "title_glob": "test_job_finish_rejects_nonterminal_status_without_mutation*"
+          "title_glob": "test_job_finish_rejects_nonterminal_status_without_mutation"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_jobs.py",
-          "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt*"
+          "title_glob": "test_stale_attempt_cannot_complete_or_publish_new_attempt"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_jobs.py",
-          "title_glob": "test_cancel_running_execution_and_do_not_publish*"
+          "title_glob": "test_cancel_running_execution_and_do_not_publish"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_jobs.py",
-          "title_glob": "test_immutable_attempt_results_across_worker_recovery*"
+          "title_glob": "test_immutable_attempt_results_across_worker_recovery"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_idempotency.py",
-          "title_glob": "test_replayed_submission_and_conflicting_payload*"
+          "title_glob": "test_replayed_submission_and_conflicting_payload"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_idempotency.py",
-          "title_glob": "test_postgres_serializes_concurrent_submissions*"
+          "title_glob": "test_postgres_serializes_concurrent_submissions"
         }
       ]
     },
@@ -96,32 +96,32 @@
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_recovery.py",
-          "title_glob": "test_sigkill_real_running_worker_requires_new_owner_recovery*"
+          "title_glob": "test_sigkill_real_running_worker_requires_new_owner_recovery"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_recovery.py",
-          "title_glob": "test_worker_unlock_without_backend_change_revokes_ownership*"
+          "title_glob": "test_worker_unlock_without_backend_change_revokes_ownership"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_recovery.py",
-          "title_glob": "test_worker_completion_rolls_back_when_lock_session_dies_mid_transaction*"
+          "title_glob": "test_worker_completion_rolls_back_when_lock_session_dies_mid_transaction"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_recovery.py",
-          "title_glob": "test_recovered_attempt_cannot_create_stale_object_write_intent*"
+          "title_glob": "test_recovered_attempt_cannot_create_stale_object_write_intent"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_recovery.py",
-          "title_glob": "test_worker_session_loss_does_not_confirm_attempt_or_publish*"
+          "title_glob": "test_worker_session_loss_does_not_confirm_attempt_or_publish"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/test_worker_parent_lifetime.py",
-          "title_glob": "test_linux_worker_child_dies_after_parent_sigkill*"
+          "title_glob": "test_linux_worker_child_dies_after_parent_sigkill"
         }
       ]
     },
@@ -132,37 +132,37 @@
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg_write_scope.py",
-          "title_glob": "test_iceberg_append_requires_actual_table_owner*"
+          "title_glob": "test_iceberg_append_requires_actual_table_owner"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg_write_scope.py",
-          "title_glob": "test_unowned_existing_catalog_table_is_not_silently_claimed*"
+          "title_glob": "test_unowned_existing_catalog_table_is_not_silently_claimed"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg_write_scope.py",
-          "title_glob": "test_recreated_table_with_same_token_cannot_reuse_write_authorization*"
+          "title_glob": "test_recreated_table_with_same_token_cannot_reuse_write_authorization"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg_write_scope.py",
-          "title_glob": "test_reservation_can_recover_after_table_creation_before_activation*"
+          "title_glob": "test_reservation_can_recover_after_table_creation_before_activation"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg_ownership.py",
-          "title_glob": "test_legacy_inspect_is_read_only_then_explicit_adoption_restores_append*"
+          "title_glob": "test_legacy_inspect_is_read_only_then_explicit_adoption_restores_append"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg_ownership.py",
-          "title_glob": "test_adoption_rejects_ambiguous_missing_and_stale_identity*"
+          "title_glob": "test_adoption_rejects_ambiguous_missing_and_stale_identity"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg_ownership.py",
-          "title_glob": "test_adoption_cannot_override_existing_catalog_owner_token*"
+          "title_glob": "test_adoption_cannot_override_existing_catalog_owner_token"
         }
       ]
     },
@@ -173,37 +173,37 @@
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg.py",
-          "title_glob": "test_iceberg_snapshot_reproducibility*"
+          "title_glob": "test_iceberg_snapshot_reproducibility"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg.py",
-          "title_glob": "test_interrupted_iceberg_import_never_retries_implicitly*"
+          "title_glob": "test_interrupted_iceberg_import_never_retries_implicitly"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg.py",
-          "title_glob": "test_tag_failure_keeps_uncertain_intent_without_publishing_dataset*"
+          "title_glob": "test_tag_failure_keeps_uncertain_intent_without_publishing_dataset"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg.py",
-          "title_glob": "test_import_uses_attempt_snapshot_not_latest*"
+          "title_glob": "test_import_uses_attempt_snapshot_not_latest"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg.py",
-          "title_glob": "test_iceberg_commit_response_loss_preserves_snapshot_without_automatic_retry*"
+          "title_glob": "test_iceberg_commit_response_loss_preserves_snapshot_without_automatic_retry"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_iceberg.py",
-          "title_glob": "test_tag_commit_ack_loss_preserves_uncertain_retention_and_catalog_tag*"
+          "title_glob": "test_tag_commit_ack_loss_preserves_uncertain_retention_and_catalog_tag"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_snapshot_scope.py",
-          "title_glob": "test_scoped_snapshot_listing_and_connection*"
+          "title_glob": "test_scoped_snapshot_listing_and_connection"
         }
       ]
     },
@@ -214,17 +214,17 @@
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_security.py",
-          "title_glob": "test_identity_roles_ownership_and_audit*"
+          "title_glob": "test_identity_roles_ownership_and_audit"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_security.py",
-          "title_glob": "test_protected_mode_rejects_invalid_credentials*"
+          "title_glob": "test_protected_mode_rejects_invalid_credentials"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_security.py",
-          "title_glob": "test_denied_audit_failure_does_not_grant_access*"
+          "title_glob": "test_denied_audit_failure_does_not_grant_access"
         },
         {
           "runner": "playwright",
@@ -250,22 +250,22 @@
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_dataset_cache.py",
-          "title_glob": "test_cache_quota_preserves_active_reader_and_source*"
+          "title_glob": "test_cache_quota_preserves_active_reader_and_source"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_dataset_cache.py",
-          "title_glob": "test_file_scan_requires_a_pinned_read_lease*"
+          "title_glob": "test_file_scan_requires_a_pinned_read_lease"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_dataset_cache.py",
-          "title_glob": "test_parallel_readers_share_the_same_cache_lease*"
+          "title_glob": "test_parallel_readers_share_the_same_cache_lease"
         },
         {
           "runner": "pytest",
           "path_glob": "tests/integration/test_dataset_cache.py",
-          "title_glob": "test_abandoned_download_is_reclaimed_without_touching_other_cache_files*"
+          "title_glob": "test_abandoned_download_is_reclaimed_without_touching_other_cache_files"
         }
       ]
     },
@@ -276,7 +276,7 @@
         {
           "runner": "pytest",
           "path_glob": "tests/test_api_error_boundary.py",
-          "title_glob": "test_explicit_request_error_is_422_but_internal_value_error_is_500*"
+          "title_glob": "test_explicit_request_error_is_422_but_internal_value_error_is_500"
         },
         {
           "runner": "vitest",

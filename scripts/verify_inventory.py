@@ -188,6 +188,8 @@ def load_registry(path: Path) -> list[dict]:
             title = selector["title_glob"]
             if not isinstance(title, str) or not title.strip() or not title.strip("*?[] "):
                 raise ValueError(f"보호 계약 제목 조건 오류: {identifier}")
+            if runner == "pytest" and any(char in title for char in "*?[]"):
+                raise ValueError(f"pytest 보호 계약 제목은 정확한 함수명이어야 합니다: {identifier}")
             if (runner, pattern, title) in selected:
                 raise ValueError(f"보호 계약 중복 선택자: {identifier}")
             selected.add((runner, pattern, title))
@@ -209,9 +211,13 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
                 for index, selector in enumerate(contract["selectors"]):
                     if runner != selector["runner"]:
                         continue
-                    if fnmatch.fnmatchcase(path, selector["path_glob"]) and fnmatch.fnmatchcase(
-                        name, selector["title_glob"]
-                    ):
+                    title = selector["title_glob"]
+                    title_matches = (
+                        name == title or name.startswith(title + "[")
+                        if runner == "pytest"
+                        else fnmatch.fnmatchcase(name, title)
+                    )
+                    if path == selector["path_glob"] and title_matches:
                         links.append(contract["id"])
                         matched[(contract["id"], index)] += 1
                         break

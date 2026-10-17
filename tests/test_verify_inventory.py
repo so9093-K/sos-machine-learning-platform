@@ -118,6 +118,66 @@ def test_protected_selector_requires_precise_test_name(tmp_path):
             inventory.load_registry(path)
 
 
+def test_pytest_protected_name_does_not_match_unrelated_suffix():
+    """기존 보호 함수가 삭제돼도 비슷한 새 함수가 이를 대신할 수 없다."""
+    contracts = [{
+        "id": "STATE-001",
+        "reason": "Attempt 상태 보존",
+        "selectors": [{
+            "runner": "pytest",
+            "path_glob": "tests/test_a.py",
+            "title_glob": "test_contract",
+        }],
+    }]
+    with pytest.raises(ValueError, match="선택자 미수집"):
+        inventory.classify(
+            {"pytest": ["tests/test_a.py::test_contract_weakened"]}, contracts
+        )
+
+
+def test_pytest_parameterized_protected_name_matches_named_cases():
+    """정확한 함수명이지만 pytest의 매개변수 ID는 보호 대상으로 유지한다."""
+    contracts = [{
+        "id": "STATE-001",
+        "reason": "Attempt 상태 보존",
+        "selectors": [{
+            "runner": "pytest",
+            "path_glob": "tests/test_a.py",
+            "title_glob": "test_contract",
+        }],
+    }]
+    result = inventory.classify(
+        {"pytest": [
+            "tests/test_a.py::test_contract[case-a]",
+            "tests/test_a.py::test_contract[case-b]",
+            "tests/test_a.py::test_contract_weakened",
+        ]},
+        contracts,
+    )
+    assert [row["policy"] for row in result] == ["protected", "protected", "standard"]
+
+
+def test_registry_rejects_pytest_glob_title(tmp_path):
+    """Pytest에는 실제 함수명을 요구하고 모호한 prefix 보호는 거부한다."""
+    import json
+
+    path = tmp_path / "contracts.json"
+    path.write_text(json.dumps({
+        "schema_version": 1,
+        "protected_contracts": [{
+            "id": "STATE-001",
+            "reason": "Attempt 상태 보존",
+            "selectors": [{
+                "runner": "pytest",
+                "path_glob": "tests/test_a.py",
+                "title_glob": "test_contract*",
+            }],
+        }],
+    }), encoding="utf-8")
+    with pytest.raises(ValueError, match="정확한 함수명"):
+        inventory.load_registry(path)
+
+
 def test_protected_selector_rejects_file_glob(tmp_path):
     """파일 이름 자체를 광범위 패턴으로 지정하지 않는다."""
     import json
