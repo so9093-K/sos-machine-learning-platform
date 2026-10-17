@@ -1103,7 +1103,7 @@ test("Dataset original metadata remains visible after Understanding completes", 
   await expect(understanding.getByText("원본 행 수")).toBeVisible();
   await expect(understanding.getByText("미계산", { exact: true })).toBeVisible();
   await expect(understanding.getByText("분석 범위")).toBeVisible({ timeout: 30000 });
-  await expect(understanding.getByText("Reservoir 표본")).toBeVisible();
+  await expect(understanding.getByText("Reservoir 표본", { exact: true })).toBeVisible();
   await expect(understanding.getByText("원본 행 수")).toBeVisible();
 });
 
