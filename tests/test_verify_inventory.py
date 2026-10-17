@@ -253,9 +253,7 @@ def test_empty_registry_defaults_to_standard(tmp_path):
 def test_python_collector_scope_is_project_configured(monkeypatch):
     """pytest 테스트 루트가 달라도 Native Node ID를 유지한다."""
     monkeypatch.setitem(inventory.SCOPES["pytest"], "source_root", "specs")
-    assert inventory.python_ids("specs/test_a.py::works\n") == [
-        "specs/test_a.py::works"
-    ]
+    assert inventory.python_ids("specs/test_a.py::works\n") == ["specs/test_a.py::works"]
     assert inventory.source_path("pytest", "specs/test_a.py::works") == "specs/test_a.py"
 
 
