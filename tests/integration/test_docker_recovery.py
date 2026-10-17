@@ -1,5 +1,6 @@
 """실제 Docker 컨테이너가 실행 중인 E2E 소유 프로세스의 SIGKILL 복구를 검증한다."""
 
+import importlib.util
 import json
 import os
 import secrets
@@ -7,14 +8,16 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
-from scripts.run_isolated_e2e import (
-    ROOT,
-    RUNS,
-    free_ports,
-    isolated_environment,
-    owned_record,
-)
+source = Path(__file__).resolve().parents[2] / "scripts" / "run_isolated_e2e.py"
+spec = importlib.util.spec_from_file_location("sos_docker_recovery_isolation", source)
+assert spec is not None and spec.loader is not None
+isolated = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = isolated
+spec.loader.exec_module(isolated)
+ROOT = isolated.ROOT
+RUNS = isolated.RUNS
 
 
 def docker(args: list[str], env: dict[str, str], *, timeout: int = 30) -> str:
@@ -35,7 +38,7 @@ def test_sigkill_owned_compose_recovery_keeps_foreign_volume() -> None:
     """Docker 서비스 기동 후 소유 프로세스만 강제 종료하고 실제 볼륨 경계를 검증한다."""
     instance = "sos-e2e-" + secrets.token_hex(6)
     foreign = "sos-test-sentinel-" + secrets.token_hex(6)
-    env = isolated_environment(os.environ, instance, free_ports())
+    env = isolated.isolated_environment(os.environ, instance, isolated.free_ports())
     runtime = RUNS / instance
     compose_args = ["compose", "-f", "compose.yaml", "-p", instance]
     child_code = """
@@ -90,7 +93,7 @@ signal.pause()
             env,
         ).splitlines()
         assert len(owned_volumes) == 2
-        assert owned_record(runtime, instance) is not None
+        assert isolated.owned_record(runtime, instance) is not None
 
         child.kill()
         assert child.wait(timeout=10) == -signal.SIGKILL
@@ -121,7 +124,7 @@ signal.pause()
         if child is not None and child.poll() is None:
             child.kill()
             child.wait(timeout=10)
-        if runtime.exists() and owned_record(runtime, instance) is not None:
+        if runtime.exists() and isolated.owned_record(runtime, instance) is not None:
             # 실패해도 복구를 한 번 시도하되, 성공하지 않으면 소유 기록을 보존한다.
             subprocess.run(
                 [sys.executable, "scripts/run_isolated_e2e.py", "--recover-owned", instance],
