@@ -109,7 +109,9 @@ def source_path(runner: str, test_id: str) -> str:
         return source
     if runner == "vitest":
         if f"/{SCOPES['vitest']['cwd']}/" in source:
-            return SCOPES["vitest"]["cwd"] + "/" + source.rsplit(f"/{SCOPES['vitest']['cwd']}/", 1)[1]
+            return (
+                SCOPES["vitest"]["cwd"] + "/" + source.rsplit(f"/{SCOPES['vitest']['cwd']}/", 1)[1]
+            )
         if source.startswith(SCOPES["vitest"]["cwd"] + "/"):
             if not source.startswith(SCOPES["vitest"]["source_root"] + "/"):
                 raise ValueError("Vitest 출처가 범위 밖입니다.")
@@ -178,7 +180,9 @@ def load_registry(path: Path) -> list[dict]:
             if runner not in RUNNERS:
                 raise ValueError(f"보호 계약 Runner 오류: {identifier}")
             pattern = selector["path_glob"]
-            if not isinstance(pattern, str) or not pattern.startswith(SCOPES[runner]["source_root"] + "/"):
+            if not isinstance(pattern, str) or not pattern.startswith(
+                SCOPES[runner]["source_root"] + "/"
+            ):
                 raise ValueError(f"보호 계약 경로 오류: {identifier}")
             title = selector.get("title_glob", "*")
             if not isinstance(title, str) or not title:
@@ -217,7 +221,8 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
                     "source_path": path,
                     "layer": (
                         "integration"
-                        if runner == "pytest" and path.startswith(SCOPES["pytest"]["integration_root"] + "/")
+                        if runner == "pytest"
+                        and path.startswith(SCOPES["pytest"]["integration_root"] + "/")
                         else SCOPES[runner]["layer"]
                     ),
                     "contract_ids": sorted(links),
@@ -233,11 +238,13 @@ def classify(groups: dict[str, list[str]], registry: list[dict]) -> list[dict]:
 
 def collect() -> dict[str, list[str]]:
     """실제 Native Runner 목록을 프로젝트별 수집 설정으로 얻는다."""
-    parsers = {"pytest": python_ids, "vitest": lambda text: vitest_ids(json.loads(text)), "playwright": playwright_ids}
+    parsers = {
+        "pytest": python_ids,
+        "vitest": lambda text: vitest_ids(json.loads(text)),
+        "playwright": playwright_ids,
+    }
     return {
-        runner: parsers[runner](
-            command(SCOPES[runner]["collect"], ROOT / SCOPES[runner]["cwd"])
-        )
+        runner: parsers[runner](command(SCOPES[runner]["collect"], ROOT / SCOPES[runner]["cwd"]))
         for runner in RUNNERS
     }
 
