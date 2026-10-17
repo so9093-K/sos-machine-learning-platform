@@ -1122,3 +1122,18 @@ test("Wide Dataset preview defaults to a bounded visible column set", async ({ p
   await page.getByRole("button", { name: "첫 12개 컬럼만 보기" }).click();
   await expect(page.getByRole("columnheader")).toHaveCount(12);
 });
+
+
+test("EDA asks for explicit value and horizontal axis before drawing a trend", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "chart-selection.csv", mimeType: "text/csv",
+    buffer: Buffer.from("sequence,measure\n1,10\n2,20\n3,30\n"),
+  });
+  await page.getByRole("tab", { name: "탐색" }).click();
+  await expect(page.getByRole("img", { name: "값의 변화 시계열 차트" })).toHaveCount(0);
+  await page.getByLabel("값", { exact: true }).selectOption("measure");
+  await expect(page.getByRole("img", { name: "값의 변화 시계열 차트" })).toHaveCount(0);
+  await page.getByLabel("가로축", { exact: true }).selectOption("sequence");
+  await expect(page.getByRole("img", { name: "값의 변화 시계열 차트" })).toBeVisible();
+});
