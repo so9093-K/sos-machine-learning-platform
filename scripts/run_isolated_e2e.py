@@ -171,6 +171,7 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
         return 1
     return 0
 
+
 def execute(spec: str, *, token_mode: bool = False) -> int:
     """한 번의 테스트 실행과 정리를 수행한다. 테스트 재시도는 하지 않는다."""
     instance = "sos-e2e-" + secrets.token_hex(6)
