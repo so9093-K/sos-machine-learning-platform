@@ -124,9 +124,8 @@ class Store(
             raise WorkerOwnershipLost("Worker advisory lock ownership has changed")
 
     def heartbeat(self, *, active: bool = True):
-        # 접속 복구만으로 잃어버린 advisory lock을 소유했다고 주장해서는 안 된다.
-        self._assert_worker_ownership()
-        with self.connection() as db:
+        # 실제 잠금 세션의 트랜잭션에 heartbeat를 기록해 소유권 이탈을 막는다.
+        with self.worker_completion_connection() as db:
             db.execute(
                 text(
                     "INSERT INTO workers(id,heartbeat_at,active) VALUES('data-worker',:at,:active) "

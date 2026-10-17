@@ -196,6 +196,55 @@ def test_worker_completion_rolls_back_when_lock_session_dies_mid_transaction(
         replacement.engine.dispose()
 
 
+def test_worker_recovery_rolls_back_if_lock_session_dies_during_audit(
+    workspace, monkeypatch
+):
+    """중단 복구가 잠금 세션을 잃으면 Job·Attempt·Audit 변경이 함께 롤백된다."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    client, store = workspace
+    source = upload(client)
+    created = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    assert created.status_code == 202
+    assert store.acquire_worker()
+    running = store.claim()
+    assert running is not None
+    original_audit = Store._audit
+
+    def terminate_before_recovery_commit(db, **kwargs):
+        if kwargs["action"] == "job.recover":
+            with store.engine.begin() as admin:
+                assert admin.execute(
+                    text("SELECT pg_terminate_backend(:pid)"),
+                    {"pid": store._worker_backend_pid},
+                ).scalar_one()
+        return original_audit(db, **kwargs)
+
+    monkeypatch.setattr(Store, "_audit", staticmethod(terminate_before_recovery_commit))
+    try:
+        with pytest.raises(DBAPIError):
+            store.recover()
+        state = store.get_job(running["id"])
+        assert state["status"] == "Running"
+        assert state["attempts"][-1]["status"] == "Running"
+    finally:
+        store.release_worker()
+        monkeypatch.setattr(Store, "_audit", staticmethod(original_audit))
+
+    replacement = Store(store.home, database_url=store.database_url)
+    try:
+        assert replacement.acquire_worker()
+        assert (
+            running["id"],
+            running["attempts"][-1]["id"],
+        ) in replacement.recover()
+        assert replacement.get_job(running["id"])["status"] == "Queued"
+    finally:
+        replacement.release_worker()
+        replacement.engine.dispose()
+
+
 def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
     """실제 DB 백엔드를 종료해도 기존 Worker가 Job 완료를 확정하지 않는다."""
     from sqlalchemy import text

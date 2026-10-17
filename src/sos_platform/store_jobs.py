@@ -291,8 +291,8 @@ class JobStoreMixin:
         return bool(value)
 
     def claim(self) -> dict | None:
-        """행 잠금으로 하나의 Job을 정확히 한 실행 시도가 인수하도록 한다."""
-        with self.connection() as db:
+        """행 잠금과 Worker 소유 세션으로 현재 Job을 한 Attempt가 인수한다."""
+        with self.worker_completion_connection() as db:
             row = (
                 db.execute(
                     text(
@@ -486,7 +486,8 @@ class JobStoreMixin:
     def recover(self) -> list[tuple[str, str]]:
         """미완료 실행을 복구하고 정리 가능한 로컬 Attempt 식별자를 반환한다."""
         recovered: list[tuple[str, str]] = []
-        with self.connection() as db:
+        # 새 잠금 소유자가 복구 도중 소유권을 잃으면 전체 복구를 롤백한다.
+        with self.worker_completion_connection() as db:
             rows = (
                 db.execute(
                     text(
