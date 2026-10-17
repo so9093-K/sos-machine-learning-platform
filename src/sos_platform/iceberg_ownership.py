@@ -6,7 +6,9 @@
 
 import argparse
 import json
+import os
 import re
+from pathlib import Path
 from uuid import UUID
 
 from pyiceberg.exceptions import NoSuchTableError
@@ -135,7 +137,7 @@ def main() -> int:
     parser.add_argument("--expect-table-uuid")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
-    store = Store(__import__("pathlib").Path(__import__("os").environ.get("SOS_HOME", ".sos")))
+    store = Store(Path(os.environ.get("SOS_HOME", ".sos")))
     try:
         store.initialize()
         if args.apply:

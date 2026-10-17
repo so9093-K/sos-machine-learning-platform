@@ -183,6 +183,7 @@ def reserve_iceberg_write_target(
         if (
             claim is None
             or claim["owner_actor"] != owner_actor
+            or claim["state"] == "Adopting"
             or table.metadata.properties.get("sos.write-token") != claim["token"]
         ):
             raise PermissionError("Iceberg table write access denied")

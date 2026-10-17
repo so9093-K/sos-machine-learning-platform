@@ -397,3 +397,36 @@ def test_log_relay_preserves_service_working_directory(monkeypatch, tmp_path):
     assert settings["cwd"] == dev.ROOT / "web"
     assert command[1] == str(dev.ROOT / "scripts" / "log_capture.py")
     assert command[-3:] == ["npm", "run", "dev"]
+
+
+
+def test_iceberg_adoption_cli_rejects_external_database_without_running(monkeypatch, config):
+    config["SOS_INFRA_MODE"] = "external"
+    monkeypatch.setattr(dev, "configuration", lambda: config)
+    monkeypatch.setattr(dev, "status", lambda _config: {"services": []})
+    monkeypatch.setattr(dev.sys, "argv", ["dev.py", "iceberg-ownership", "--table", "sensor"])
+    results = []
+    monkeypatch.setattr(dev, "render", lambda value, _format: results.append(value))
+    monkeypatch.setattr(
+        dev, "run", lambda *_args, **_kwargs: pytest.fail("CLI must not access external DB")
+    )
+    assert dev.main() != 0
+    assert results[0]["error_code"] == "SOS-CONFIG-004"
+
+
+def test_iceberg_adoption_cli_previews_without_apply(monkeypatch, tmp_path, config, capsys):
+    monkeypatch.setattr(dev, "configuration", lambda: config)
+    monkeypatch.setattr(dev, "RUNTIME", tmp_path)
+    monkeypatch.setattr(dev, "validate_managed_targets", lambda _config: None)
+    monkeypatch.setattr(dev.sys, "argv", ["dev.py", "iceberg-ownership", "--table", "sensor"])
+    recorded = []
+
+    def invoke(command, **_kwargs):
+        recorded.append(command)
+        return type("Result", (), {"returncode": 0, "stdout": '{"state":"candidate"}'})()
+
+    monkeypatch.setattr(dev, "run", invoke)
+    assert dev.main() == 0
+    assert "--table" in recorded[0]
+    assert "--apply" not in recorded[0]
+    assert '"candidate"' in capsys.readouterr().out
