@@ -69,8 +69,6 @@ jobs:
       - name: Explain formatting failure
         if: failure()
         run: uv run --locked ruff format --diff .
-      - name: Validate fast local command without infrastructure
-        run: python3 scripts/dev.py check-fast
       - name: Start integration infrastructure
         run: docker compose -f compose.yaml -p sos-platform up -d --wait
       - name: Migrate database and prepare object storage

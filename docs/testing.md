@@ -77,7 +77,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 
 ## CI의 품질 게이트
 
-- python-tests: 잠금·Ruff·API 타입·PR base API 호환성·실제 인프라 통합 테스트·Alembic·Wheel.
+- python-tests: 잠금·Markdown/ADR 인덱스·Ruff·API 타입·PR base API 호환성·전체 Python 테스트(로컬 check-fast 명령 계약 포함)·실제 인프라 통합 테스트·Alembic·Wheel. 로컬 check-fast 전체 명령은 다른 필수 CI 단계와 중복 실행하지 않는다.
 - frontend: TypeScript/Vite 빌드 및 Vitest.
 - ui-e2e: Make up/down/restart, Data Workspace 브라우저 시나리오, 토큰 역할 3개, 독립 데이터 보존 검사. 정확한 시나리오 개수와 성패는 각 CI 실행 기록을 기준으로 한다.
 - python-quality: 위 세 작업이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
