@@ -62,6 +62,46 @@ def test_playwright_collects_top_level_and_nested_test_lines():
     ]
 
 
+def test_nested_runner_titles_require_exact_leaf_names():
+    """중첩 Suite 접두사와 무관하게 최종 테스트 제목을 정확히 매칭한다."""
+    contracts = [
+        {
+            "id": "API-001",
+            "reason": "API 오류 경계",
+            "selectors": [{
+                "runner": "vitest",
+                "path": "web/src/api.test.ts",
+                "title": "safe error",
+            }],
+        },
+        {
+            "id": "RBAC-001",
+            "reason": "소유권 검사",
+            "selectors": [{
+                "runner": "playwright",
+                "path": "web/e2e/auth.spec.ts",
+                "title": "viewer can read data",
+            }],
+        },
+    ]
+    rows = inventory.classify(
+        {
+            "vitest": [
+                "src/api.test.ts::API client > safe error",
+                "src/api.test.ts::API client > unsafe error",
+            ],
+            "playwright": [
+                "web/e2e/auth.spec.ts::roles::viewer can read data",
+                "web/e2e/auth.spec.ts::roles::other viewer can read data",
+            ],
+        },
+        contracts,
+    )
+    assert [row["policy"] for row in rows] == [
+        "protected", "standard", "protected", "standard"
+    ]
+
+
 def test_registry_maps_protection_with_standard_default():
     groups = {
         "pytest": ["tests/test_a.py::test_one"],

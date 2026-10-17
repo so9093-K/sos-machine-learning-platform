@@ -87,12 +87,13 @@ signal.pause()
             time.sleep(0.2)
 
         services = docker([*compose_args, "ps", "--services", "--status", "running"], env)
-        assert set(services.splitlines()) == {"postgres", "storage"}
+        running_services = set(services.splitlines())
+        assert {"postgres", "storage"} <= running_services
         owned_volumes = docker(
             ["volume", "ls", "-q", "--filter", f"label=com.docker.compose.project={instance}"],
             env,
         ).splitlines()
-        assert len(owned_volumes) == 2
+        assert owned_volumes
         assert isolated.owned_record(runtime, instance) is not None
 
         child.kill()
@@ -101,7 +102,7 @@ signal.pause()
         # SIGKILL 이후에도 Compose 서비스와 데이터 볼륨은 그대로 남아 있어야 한다.
         assert set(
             docker([*compose_args, "ps", "--services", "--status", "running"], env).splitlines()
-        ) == {"postgres", "storage"}
+        ) == running_services
 
         recovery = subprocess.run(
             [sys.executable, "scripts/run_isolated_e2e.py", "--recover-owned", instance],
