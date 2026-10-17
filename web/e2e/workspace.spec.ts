@@ -689,16 +689,19 @@ test("loading older Jobs survives a concurrent background refresh", async ({ pag
     const current = await response.json() as { items: unknown[]; next_cursor: string | null };
     return route.fulfill({ response, json: { ...current, next_cursor: "older-page-token" } });
   });
-  await page.goto("/");
-  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
   try {
+    await page.goto("/");
+    await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
     await page.getByRole("button", { name: "이전 작업 더 보기 →" }).click();
     await expect.poll(() => requestedOlder).toBeGreaterThan(0);
     await page.getByRole("button", { name: "새로고침" }).click();
+    release();
+    await expect(page.getByText("older-page-job")).toBeVisible();
   } finally {
     release();
+    // 진행 중인 route.fetch 콜백까지 완료시켜 다음 테스트의 종료와 경합하지 않는다.
+    await page.unrouteAll({ behavior: "wait" });
   }
-  await expect(page.getByText("older-page-job")).toBeVisible();
 });
 
 
@@ -727,15 +730,21 @@ test("an older Jobs GET cannot overwrite a newer manual refresh", async ({ page 
     } });
     delivered = true;
   });
-  await page.goto("/");
-  await expect.poll(() => seen).toBeGreaterThanOrEqual(1);
-  const beforeRefresh = seen;
-  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
-  await page.getByRole("button", { name: "새로고침" }).click();
-  await expect.poll(() => seen).toBeGreaterThan(beforeRefresh);
-  release();
-  await expect.poll(() => delivered).toBe(true);
-  await expect(page.getByText("stale-polling-result")).toHaveCount(0);
+  try {
+    await page.goto("/");
+    await expect.poll(() => seen).toBeGreaterThanOrEqual(1);
+    const beforeRefresh = seen;
+    await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
+    await page.getByRole("button", { name: "새로고침" }).click();
+    await expect.poll(() => seen).toBeGreaterThan(beforeRefresh);
+    release();
+    await expect.poll(() => delivered).toBe(true);
+    await expect(page.getByText("stale-polling-result")).toHaveCount(0);
+  } finally {
+    release();
+    // 늦게 도착한 요청이 UI 결과를 덮어쓰지 않는 계약은 유지하면서 콜백을 모두 회수한다.
+    await page.unrouteAll({ behavior: "wait" });
+  }
 });
 
 test("late feature preview never reappears after Dataset reload", async ({ page }) => {
