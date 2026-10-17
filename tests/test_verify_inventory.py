@@ -236,7 +236,7 @@ def test_registry_rejects_missing_reason_and_invalid_schema(tmp_path):
     target.write_text(__import__("json").dumps(bad), encoding="utf-8")
     with pytest.raises(ValueError, match="선정 이유"):
         inventory.load_registry(target)
-    bad["reason"] = "보호 계약의 안정적인 선정 이유"
+    bad["protected_contracts"][0]["reason"] = "보호 계약의 안정적인 선정 이유"
     bad["schema_version"] = 999
     target.write_text(__import__("json").dumps(bad), encoding="utf-8")
     with pytest.raises(ValueError, match="버전"):
