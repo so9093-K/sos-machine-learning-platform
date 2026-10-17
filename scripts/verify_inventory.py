@@ -21,8 +21,14 @@ def command(args: list[str], cwd: Path) -> str:
         env={**os.environ, "NO_COLOR": "1"},
         text=True,
         capture_output=True,
-        check=True,
+        check=False,
     )
+    if result.returncode:
+        # 원본 stderr는 환경/테스트 값이 포함될 수 있어 출력하지 않는다.
+        step = {"uv": "pytest", "npx": args[1] if len(args) > 1 else "node"}
+        name = step.get(args[0], "collector")
+        print(f"Native 수집 실패: {name}, exit={result.returncode}", file=sys.stderr)
+        raise subprocess.CalledProcessError(result.returncode, args)
     return result.stdout
 
 
