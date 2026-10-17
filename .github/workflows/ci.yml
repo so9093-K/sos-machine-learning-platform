@@ -67,6 +67,8 @@ jobs:
         run: uv run --locked python scripts/verify.py run wheel --output-dir /tmp/sos-wheel-check
       - name: Infrastructure integration tests
         run: uv run --locked python scripts/verify.py run python-integration --output-dir /tmp/sos-python-integration
+      - name: Verify metadata schema matches migration
+        run: uv run --locked python scripts/verify.py run alembic --output-dir /tmp/sos-alembic
       - name: Publish Python test report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -80,8 +82,6 @@ jobs:
             /tmp/sos-*/**/*.summary.txt
           if-no-files-found: ignore
           retention-days: 7
-      - name: Verify metadata schema matches migration
-        run: uv run --locked python scripts/verify.py run alembic --output-dir /tmp/sos-alembic
       - name: Extended module-order regression (scheduled/manual)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
