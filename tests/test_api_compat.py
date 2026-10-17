@@ -1,6 +1,8 @@
 """실제 OpenAPI의 입력·출력 방향과 참조 스키마 변경 회귀 검증."""
 
 import importlib.util
+import json
+import sys
 from pathlib import Path
 
 source = Path(__file__).resolve().parents[1] / "scripts" / "check_api_compat.py"
@@ -208,3 +210,20 @@ def test_realistic_query_maximum_narrowing_is_breaking():
         {"in": "query", "name": "limit", "schema": {"type": "integer", "maximum": 10}}
     ]
     assert any("upper bound" in x for x in compat.breaking_changes(before, after))
+
+
+
+def test_api_compat_cli_rejects_breaking_change_without_override(
+    monkeypatch, tmp_path, capsys
+):
+    """중단된 사전 출시 승인 옵션으로 Breaking 변경을 우회하지 못한다."""
+    before = contract()
+    after = contract()
+    after["paths"] = {}
+    original = tmp_path / "before.json"
+    changed = tmp_path / "after.json"
+    original.write_text(json.dumps(before), encoding="utf-8")
+    changed.write_text(json.dumps(after), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["check_api_compat.py", str(original), str(changed)])
+    assert compat.main() == 1
+    assert "BREAKING API: endpoint removed" in capsys.readouterr().out
