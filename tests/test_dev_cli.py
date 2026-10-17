@@ -88,6 +88,23 @@ def test_preflight_rejects_foreign_port(monkeypatch, config):
     assert exc.value.code == "SOS-NET-001"
 
 
+def test_real_port_collision_does_not_stop_foreign_listener(monkeypatch, config):
+    """실제 루프백 포트 충돌은 실행 전에 거부하며 외부 Listener를 닫지 않는다."""
+    import socket
+
+    config["SOS_INFRA_MODE"] = "external"
+    monkeypatch.setattr(dev.shutil, "which", lambda _name: "/usr/bin/tool")
+    monkeypatch.setattr(dev, "processes", lambda: {})
+    with socket.socket() as foreign:
+        foreign.bind(("127.0.0.1", 0))
+        foreign.listen(1)
+        config["SOS_API_PORT"] = str(foreign.getsockname()[1])
+        with pytest.raises(dev.StartupError) as exc:
+            dev.preflight(config, need_docker=False)
+        assert exc.value.code == "SOS-NET-001"
+        assert foreign.fileno() >= 0
+
+
 def test_lifecycle_lock_rejects_concurrent_commands(monkeypatch, tmp_path):
     monkeypatch.setattr(dev, "RUNTIME", tmp_path)
     with dev.lifecycle_lock():
