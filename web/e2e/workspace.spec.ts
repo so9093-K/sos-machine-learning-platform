@@ -40,6 +40,35 @@ test("CSV upload → EDA → feature preview → worker → reusable dataset", a
   await expect(page.locator("nav").getByText(/features-/).first()).toBeVisible();
 });
 
+test("an expanded Attempt detail catches up with a newer completed Job", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "detail-refresh.csv", mimeType: "text/csv", buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await expect(page.getByRole("heading", { name: "detail-refresh.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "탐색" }).click();
+  const jobId = await submittedJob(page, "/api/jobs", () =>
+    page.getByRole("button", { name: /전체 Profile 실행/ }).click());
+  const job = jobById(page, jobId);
+  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
+  let detailRequests = 0;
+  await page.route(`**/api/jobs/${jobId}`, async route => {
+    const response = await route.fetch();
+    const original = await response.json() as {
+      status: string; updated_at: string; attempts: Array<{ status: string }>;
+    };
+    detailRequests += 1;
+    await route.fulfill({ response, json: detailRequests === 1
+      ? { ...original, status: "Running", updated_at: "2000-01-01T00:00:00+00:00",
+          attempts: original.attempts.map(attempt => ({ ...attempt, status: "Running" })) }
+      : original,
+    });
+  });
+  await job.getByText(/작업 설정 및 실행 시도/).click();
+  await expect(job.getByText(/Succeeded ·/)).toBeVisible({ timeout: 10000 });
+  expect(detailRequests).toBeGreaterThanOrEqual(2);
+});
+
 test("Iceberg import captures a pinned snapshot", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
