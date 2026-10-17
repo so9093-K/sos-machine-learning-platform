@@ -11,11 +11,11 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from run_isolated_e2e import (
+    _interrupted,
     clean_owned,
     create_owner,
     free_ports,
     isolated_environment,
-    _interrupted,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
