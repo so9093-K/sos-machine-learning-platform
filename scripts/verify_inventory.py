@@ -85,7 +85,7 @@ def vitest_ids(value: object) -> list[str]:
                 source,
                 Path(source).name,
             }
-            next_ancestors = ancestors + (name,) if isinstance(name, str) and not is_file else ancestors
+            next_ancestors = (
             for child in children:
                 walk(child, source, next_ancestors)
             return
