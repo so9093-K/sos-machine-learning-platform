@@ -560,11 +560,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               <td>{typeof c.mean === "number" ? c.mean.toFixed(3) : "—"}</td>
             </tr>)}</tbody></table></div>
             <div className="chart-controls"><h4>시계열 / 순서에 따른 데이터</h4>
-              <label>값 <select value={visualColumn} onChange={e => setVisualColumn(e.target.value)}>
+              <label>값 <select aria-label="값 컬럼" value={visualColumn} onChange={e => setVisualColumn(e.target.value)}>
                 <option value="">값 컬럼 선택</option>
                 {numeric.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
               </select></label>
-              <label>가로축 <select value={timeColumn} onChange={e => setTimeColumn(e.target.value)}>
+              <label>가로축 <select aria-label="가로축 컬럼" value={timeColumn} onChange={e => setTimeColumn(e.target.value)}>
                 <option value="">가로축 선택</option>
                 {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select></label></div>
