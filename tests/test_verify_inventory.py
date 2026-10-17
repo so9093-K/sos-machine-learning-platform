@@ -134,7 +134,7 @@ def test_junit_reconcile_recovers_all_playwright_cases(tmp_path):
     }
     records.pop()
     with pytest.raises(ValueError, match="불일치"):
-        inventory.reconcile({"schema_version": 1, "tests": records}, cases)
+        inventory.reconcile({"schema_version": 2, "tests": records}, cases)
 
 
 def test_standard_removal_needs_no_extra_approval():
