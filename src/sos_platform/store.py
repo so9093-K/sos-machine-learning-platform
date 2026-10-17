@@ -53,8 +53,10 @@ class Store(
             with self.connection() as db:
                 yield db
             return
-        self._assert_worker_ownership()
         with self._worker_lock.begin():
+            # 소유권 검사를 같은 트랜잭션 안에서 수행해 재연결 시점의
+            # 잠금 교체가 Claim·복구·게시를 우회하지 못하게 한다.
+            self._assert_worker_ownership(within_transaction=True)
             yield self._worker_lock
 
     def initialize(self):
@@ -102,7 +104,7 @@ class Store(
         conn.close()
         return False
 
-    def _assert_worker_ownership(self) -> None:
+    def _assert_worker_ownership(self, *, within_transaction: bool = False) -> None:
         """자동 DB 재연결은 session-level advisory lock의 소유권 복원이 아니다."""
         if self._worker_lock is None:
             return
@@ -117,7 +119,8 @@ class Store(
                     "AND objsubid=1)"
                 )
             ).one()
-            self._worker_lock.commit()
+            if not within_transaction:
+                self._worker_lock.commit()
         except Exception as exc:
             raise WorkerOwnershipLost("Worker advisory lock session is unavailable") from exc
         if backend_pid != self._worker_backend_pid or not has_lock:

@@ -282,6 +282,42 @@ def test_recovered_attempt_cannot_create_stale_object_write_intent(workspace):
     assert store.object_writes(current_location)[0]["state"] == "Failed"
 
 
+def test_worker_claim_checks_lock_inside_mutation_transaction(workspace, monkeypatch):
+    """Claim 직전 잠금 세션이 종료돼도 새 연결로 Job을 인수하지 않는다."""
+    from sqlalchemy import text
+
+    from sos_platform.store import WorkerOwnershipLost
+
+    client, store = workspace
+    source = upload(client)
+    queued = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    assert queued.status_code == 202
+    assert store.acquire_worker()
+    original_guard = store._assert_worker_ownership
+
+    def terminate_before_ownership_query(*, within_transaction=False):
+        # 잠금 검사는 상태 변경 트랜잭션에서 실행되어야 한다.
+        assert within_transaction
+        assert store._worker_lock.in_transaction()
+        with store.engine.begin() as admin:
+            assert admin.execute(
+                text("SELECT pg_terminate_backend(:pid)"),
+                {"pid": store._worker_backend_pid},
+            ).scalar_one()
+        return original_guard(within_transaction=within_transaction)
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(store, "_assert_worker_ownership", terminate_before_ownership_query)
+            with pytest.raises(WorkerOwnershipLost):
+                store.claim()
+        unchanged = store.get_job(queued.json()["id"])
+        assert unchanged["status"] == "Queued"
+        assert unchanged["attempts"] == []
+    finally:
+        store.release_worker()
+
+
 def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
     """실제 DB 백엔드를 종료해도 기존 Worker가 Job 완료를 확정하지 않는다."""
     from sqlalchemy import text
