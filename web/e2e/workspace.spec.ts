@@ -1102,7 +1102,9 @@ test("Dataset original metadata remains visible after Understanding completes", 
   });
   const understanding = page.getByRole("tabpanel", { name: "데이터 이해" });
   await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
+  await expect(understanding.getByText("등록 파일 크기", { exact: true })).toBeVisible();
   await expect(understanding.getByText("미계산", { exact: true })).toBeVisible();
+  await expect(understanding.getByText(/이 데이터 소스의 원본 행 수/)).toBeVisible();
   await expect(understanding.getByText("분석 범위")).toBeVisible({ timeout: 30000 });
   await expect(understanding.getByText("Reservoir 표본", { exact: true })).toBeVisible();
   await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();

@@ -117,10 +117,17 @@ export function UnderstandingPanel({
         <div className="stat"><span>원본 행 수</span><strong>{
           overview.row_count === null ? "미계산" : overview.row_count.toLocaleString()
         }</strong></div>
+        {overview.size_bytes !== null && <div className="stat">
+          <span>등록 파일 크기</span><strong>{overview.size_bytes < 1024
+            ? overview.size_bytes.toLocaleString() + " B"
+            : overview.size_bytes < 1024 * 1024
+              ? (overview.size_bytes / 1024).toFixed(1) + " KiB"
+              : (overview.size_bytes / (1024 * 1024)).toFixed(2) + " MiB"}</strong>
+        </div>}
       </div>
       <p className="hint">{overview.row_count_basis === "parquet_metadata"
         ? "행 수는 Parquet 메타데이터 기준입니다."
-        : "CSV의 원본 행 수는 메타데이터에서 계산하지 않습니다."}
+        : "이 데이터 소스의 원본 행 수는 메타데이터에서 계산하지 않았습니다."}
         {" · "}{profile ? "원본 규모와 분석 결과의 범위는 구별합니다." : "분포와 역할 후보는 별도 분석에서 계산됩니다."}</p>
       {!profile && <><h4>기본 스키마</h4>
       <div className="table-scroll"><table><thead><tr>
