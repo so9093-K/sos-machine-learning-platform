@@ -234,6 +234,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="SOS 공통 검증 실행 계약")
     commands_parser = parser.add_subparsers(dest="action", required=True)
     commands_parser.add_parser("list")
+    inventory = commands_parser.add_parser("inventory")
+    inventory.add_argument("--output", type=Path, required=True)
     run = commands_parser.add_parser("run")
     run.add_argument("suite", choices=sorted(SUITES))
     run.add_argument("--output-dir", type=Path)
@@ -245,6 +247,13 @@ def main(argv: list[str] | None = None) -> int:
                 f"{suite.name:<20} {'infra' if suite.infrastructure else 'fast':<6} {suite.description}"
             )
         return 0
+    if args.action == "inventory":
+        return subprocess.run(
+            ["uv", "run", "--locked", "python", "scripts/verify_inventory.py", "--output",
+             str(args.output)],
+            cwd=ROOT,
+            check=False,
+        ).returncode
     output = args.output_dir or default_output()
     status, outcome = execute(args.suite, output, base_ref=args.base_ref)
     print(json.dumps(outcome, ensure_ascii=False, indent=2))
