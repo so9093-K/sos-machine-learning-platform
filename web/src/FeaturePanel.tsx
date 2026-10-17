@@ -17,9 +17,8 @@ export function FeaturePanel({
     featurePreview, addStep, editStep, moveStep, deleteStep, cancelEdit, previewFeatures,
   } = editor;
   return (
-        <section className="panel" role="tabpanel"
-          id="sos-panel-features" aria-labelledby="sos-tab-features" tabIndex={0}>
-          <div className="panel-head"><div><h3>변환</h3>
+        <section className="panel" aria-label="데이터 준비">
+          <div className="panel-head"><div><h3>데이터 변환</h3>
             <p>원본은 유지됩니다. 순서대로 변환 단계를 편집·검증하고 전체 Job으로 실행합니다.</p>
           </div></div>
           <div className="form-row">
