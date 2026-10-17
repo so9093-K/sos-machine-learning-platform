@@ -164,6 +164,58 @@ def test_worker_precommit_and_commit_failures_have_distinct_contracts(
     assert secret not in completed.read_text()
 
 
+def test_iceberg_disk_full_during_staging_does_not_enter_catalog_commit(
+    workspace, monkeypatch, tmp_path
+):
+    """실제 스테이징 중 ENOSPC가 발생하면 Commit 이전 실패로 기록하고 파일을 회수한다."""
+    import errno
+    import json
+    from pathlib import Path
+
+    import polars as pl
+    import pytest
+    from pyiceberg.exceptions import NoSuchTableError
+
+    import sos_platform.worker as worker
+    from sos_platform.datasets import iceberg_catalog
+
+    client, store = workspace
+    source = upload(client)
+    posted = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source["id"], "table_name": "staging_out_of_space"},
+    )
+    assert posted.status_code == 202
+    job = store.claim()
+    assert job["id"] == posted.json()["id"]
+    attempt_id = job["attempts"][-1]["id"]
+    completed = tmp_path / "staging-disk-full.json"
+    pending = tmp_path / "staging-result.parquet"
+    secret = "password=not-for-job-error"
+
+    def write_partial_then_enospc(_frame, path, *_args, **_kwargs):
+        Path(path).write_bytes(b"partially-written")
+        raise OSError(errno.ENOSPC, secret)
+
+    # 자식 본문의 실제 Catalog·폴라스 경로를 동기 실행해 파일 고갈만 주입한다.
+    with monkeypatch.context() as patch:
+        patch.setattr(worker, "_guard_child_parent", lambda _pid: None)
+        patch.setattr(pl.LazyFrame, "sink_parquet", write_partial_then_enospc)
+        _perform(store.home, store.database_url, job, completed, pending, 0)
+
+    outcome = json.loads(completed.read_text(encoding="utf-8"))
+    assert outcome["error_code"] == "SOS-JOB-FAILED"
+    assert outcome["failure_stage"] == "iceberg_prepare"
+    assert outcome["failure_category"] == "io"
+    assert outcome["exception_type"] == "OSError"
+    assert secret not in completed.read_text(encoding="utf-8")
+    staging = store.home / "cache" / "iceberg-staging"
+    assert not list(staging.glob(f"attempt-{attempt_id}-*"))
+    with pytest.raises(NoSuchTableError):
+        iceberg_catalog(store).load_table("default.staging_out_of_space")
+    assert store.get_job(job["id"])["status"] == "Running"
+
+
 def test_operator_diagnostics_retains_category_without_raw_exception(workspace, monkeypatch):
     """운영자만 원인 종류를 조회하며 Job·Attempt·감사 상관관계가 이어진다."""
     from sos_platform.object_store import ObjectStore
