@@ -195,9 +195,12 @@ def reserve_iceberg_write_target(
             or table.metadata.properties.get("sos.write-token") != claim["token"]
         ):
             raise PermissionError("Iceberg table write access denied")
-        store.activate_iceberg_table(
-            table_name, owner_actor, claim["token"], str(table.metadata.table_uuid)
-        )
+        if reserve_if_missing:
+            # API의 read-only preflight는 Reserved 상태를 변경하지 않는다.
+            # Catalog 커밋을 수행하는 Worker만 동일 토큰·UUID를 활성화한다.
+            store.activate_iceberg_table(
+                table_name, owner_actor, claim["token"], str(table.metadata.table_uuid)
+            )
     else:
         if reserve_if_missing:
             claim = store.reserve_iceberg_table(table_name, owner_actor)

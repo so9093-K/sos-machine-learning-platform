@@ -188,10 +188,12 @@ def test_reservation_can_recover_after_table_creation_before_activation(workspac
         json={"dataset_id": uploaded.json()["id"], "table_name": "pending_create"},
     )
     assert queued.status_code == 202, queued.text
+    # 아직 Worker가 실행되지 않았으므로 예약도 활성화되지 않는다.
+    assert store.iceberg_write_claim("pending_create")["state"] == "Reserved"
+    assert run_once(store)
     completed = store.iceberg_write_claim("pending_create")
     assert completed["state"] == "Active"
     assert completed["table_uuid"] == str(created.metadata.table_uuid)
-    assert run_once(store)
     assert store.get_job(queued.json()["id"])["status"] == "Succeeded"
 
 

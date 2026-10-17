@@ -1,5 +1,7 @@
 """기존 Iceberg 테이블의 명시적 채택은 읽기와 쓰기를 분리해 복구한다."""
 
+import os
+
 import pyarrow as pa
 import pytest
 from sqlalchemy import text
@@ -83,15 +85,16 @@ def test_legacy_inspect_is_read_only_then_explicit_adoption_restores_append(work
         events = list(
             db.execute(
                 text(
-                    "SELECT action FROM audit_events WHERE resource_type='iceberg_table'"
+                    "SELECT action,actor_id FROM audit_events WHERE resource_type='iceberg_table'"
                     " AND resource_id='default.legacy_sensor' ORDER BY at"
                 )
-            ).scalars()
+            ).all()
         )
-    assert set(events) == {
+    assert {item[0] for item in events} == {
         "iceberg.table.adoption_started",
         "iceberg.table.adoption_completed",
     }
+    assert all(item[1] == f"local-uid:{os.geteuid()}" for item in events)
 
 
 def test_adoption_rejects_ambiguous_missing_and_stale_identity(workspace):

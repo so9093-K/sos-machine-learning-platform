@@ -1,6 +1,7 @@
 """Dataset 등록·소유권·키셋 페이지 및 결과 프로파일 조회를 담당한다."""
 
 import json
+import os
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -251,7 +252,7 @@ class DatasetStoreMixin:
             if inserted is not None:
                 self._audit(
                     db,
-                    actor_id="local-operator",
+                    actor_id=f"local-uid:{os.geteuid()}",
                     actor_type="service",
                     action="iceberg.table.adoption_started",
                     resource_type="iceberg_table",
@@ -282,7 +283,7 @@ class DatasetStoreMixin:
                 raise PermissionError("Iceberg adoption state changed")
             self._audit(
                 db,
-                actor_id="local-operator",
+                actor_id=f"local-uid:{os.geteuid()}",
                 actor_type="service",
                 action="iceberg.table.adoption_completed",
                 resource_type="iceberg_table",
