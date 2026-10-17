@@ -12,9 +12,7 @@ spec.loader.exec_module(inventory)
 
 def test_pytest_collection_does_not_include_summary():
     result = inventory.python_ids(
-        "tests/test_a.py::test_one\n"
-        "tests/integration/test_b.py::test_two\n"
-        "2 tests collected\n"
+        "tests/test_a.py::test_one\ntests/integration/test_b.py::test_two\n2 tests collected\n"
     )
     assert result == [
         "tests/integration/test_b.py::test_two",

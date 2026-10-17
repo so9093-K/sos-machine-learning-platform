@@ -83,9 +83,7 @@ def playwright_ids(output: str) -> list[str]:
 def collect() -> list[dict]:
     """Native Runner 결과가 비어 있으면 인벤토리도 성공으로 만들지 않는다."""
     python = python_ids(command(["uv", "run", "--locked", "pytest", "--collect-only", "-q"], ROOT))
-    vitest = vitest_ids(
-        json.loads(command(["npx", "vitest", "list", "--json"], ROOT / "web"))
-    )
+    vitest = vitest_ids(json.loads(command(["npx", "vitest", "list", "--json"], ROOT / "web")))
     playwright = playwright_ids(command(["npx", "playwright", "test", "--list"], ROOT / "web"))
     groups = {"pytest": python, "vitest": vitest, "playwright": playwright}
     if any(not ids for ids in groups.values()):
