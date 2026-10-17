@@ -161,9 +161,11 @@ def load_registry(path: Path) -> list[dict]:
             raise ValueError(f"보호 계약 연결 선택자 누락: {identifier}")
         selected = set()
         for selector in selectors:
-            if not isinstance(selector, dict) or set(selector) - {
-                "runner", "path_glob", "title_glob"
-            } or not {"runner", "path_glob"} <= set(selector):
+            if (
+                not isinstance(selector, dict)
+                or set(selector) - {"runner", "path_glob", "title_glob"}
+                or not {"runner", "path_glob"} <= set(selector)
+            ):
                 raise ValueError(f"보호 계약 선택자 필드 오류: {identifier}")
             runner = selector["runner"]
             if runner not in RUNNERS:
@@ -329,27 +331,29 @@ def audit_changes(before: dict, after: dict) -> dict:
         "lost_protections": [],
     }
     for key in previous.keys() & current.keys():
-        lost = sorted(
-            set(previous[key]["contract_ids"]) - set(current[key]["contract_ids"])
-        )
+        lost = sorted(set(previous[key]["contract_ids"]) - set(current[key]["contract_ids"]))
         if lost:
-            result["lost_protections"].append({
-                "runner": key[0],
-                "source_path": previous[key]["source_path"],
-                "lost_contract_ids": lost,
-            })
+            result["lost_protections"].append(
+                {
+                    "runner": key[0],
+                    "source_path": previous[key]["source_path"],
+                    "lost_contract_ids": lost,
+                }
+            )
     for key, row in sorted(removed.items()):
         if not row["contract_ids"]:
             result["standard_removed"].append(row["source_path"])
             continue
         related_old = [
-            item for item in removed.values()
+            item
+            for item in removed.values()
             if item["runner"] == row["runner"]
             and item["source_path"] == row["source_path"]
             and item["contract_ids"] == row["contract_ids"]
         ]
         related_new = [
-            item for item in added.values()
+            item
+            for item in added.values()
             if item["runner"] == row["runner"]
             and item["source_path"] == row["source_path"]
             and item["contract_ids"] == row["contract_ids"]
@@ -420,11 +424,13 @@ def main(argv: list[str] | None = None) -> int:
             changes = audit_changes(previous, current)
             print(json.dumps(changes, ensure_ascii=False, indent=2))
             # Standard 삭제는 일반 리뷰. Protected 삭제·이름 변경 후보·연결 해제는 별도 리뷰.
-            return int(bool(
-                changes["protected_removed"]
-                or changes["possible_renames"]
-                or changes["lost_protections"]
-            ))
+            return int(
+                bool(
+                    changes["protected_removed"]
+                    or changes["possible_renames"]
+                    or changes["lost_protections"]
+                )
+            )
         parser.print_help()
         return 2
     except (OSError, ValueError, KeyError, ET.ParseError, subprocess.CalledProcessError) as exc:
