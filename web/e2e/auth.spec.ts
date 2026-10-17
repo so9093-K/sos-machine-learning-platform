@@ -54,6 +54,7 @@ test.describe("token identity and resource permissions", () => {
     const dataset = await response.json() as { id: string; name: string };
     expect(dataset.name).toBe("authorized.csv");
     await expect(page.getByRole("heading", { name: dataset.name })).toBeVisible();
+    await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
     await expect(page.getByRole("button", { name: "Iceberg에 추가" })).toBeVisible();
   });
 
