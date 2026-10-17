@@ -337,6 +337,10 @@ class JobStoreMixin:
         failure_category: str | None = None,
         exception_type: str | None = None,
     ) -> str:
+        # Job/Attempt 최종 상태를 검증하지 않으면 잘못된 내부 호출이 DB에
+        # Queued·Running 같은 미완료 상태를 확정하고 복구 불가능하게 만들 수 있다.
+        if status not in ("Succeeded", "Failed", "Cancelled"):
+            raise ValueError("Invalid Job terminal status")
         if error_code is not None and error_code not in ERRORS:
             raise ValueError("Unregistered error code")
         with self.connection() as db:

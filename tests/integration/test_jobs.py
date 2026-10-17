@@ -121,6 +121,30 @@ def test_cancel_recovery_and_input_validation(workspace):
     )
 
 
+@pytest.mark.parametrize("invalid", ["Queued", "Running", "Interrupted", "Unknown"])
+def test_job_finish_rejects_nonterminal_status_without_mutation(workspace, invalid):
+    """실행기의 잘못된 종료 상태가 Job·Attempt 정본을 오염시키지 않는다."""
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
+    assert queued.status_code == 202
+    claimed = store.claim()
+    assert claimed["id"] == queued.json()["id"]
+
+    with pytest.raises(ValueError, match="Invalid Job terminal status"):
+        store.finish(claimed["id"], invalid)
+
+    unchanged = store.get_job(claimed["id"])
+    assert unchanged["status"] == "Running"
+    assert len(unchanged["attempts"]) == 1
+    assert unchanged["attempts"][0]["status"] == "Running"
+    # 잘못된 호출 이후에도 정상적인 종료가 가능해야 한다.
+    assert store.finish(claimed["id"], "Failed", error_code="SOS-JOB-FAILED") == "Failed"
+    final = store.get_job(claimed["id"])
+    assert final["status"] == "Failed"
+    assert final["attempts"][0]["status"] == "Failed"
+
+
 def test_cancel_running_execution_and_do_not_publish(workspace):
     client, store = workspace
     dataset = upload(client)
