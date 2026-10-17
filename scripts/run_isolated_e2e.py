@@ -36,9 +36,19 @@ def free_ports(count: int = 4) -> list[int]:
             sock.close()
 
 
+def valid_ports(ports: object) -> bool:
+    """복구 기록이 조작됐더라도 유효하지 않은 포트를 사용하지 않는다."""
+    return (
+        isinstance(ports, list)
+        and len(ports) == 4
+        and all(type(port) is int and 1 <= port <= 65535 for port in ports)
+        and len(set(ports)) == 4
+    )
+
+
 def isolated_environment(source: dict[str, str], instance: str, ports: list[int]) -> dict:
     """부모의 외부 스토리지·사용자 권한 설정을 격리 환경에 전달하지 않는다."""
-    if not INSTANCE_PATTERN.fullmatch(instance) or len(set(ports)) != 4:
+    if not INSTANCE_PATTERN.fullmatch(instance) or not valid_ports(ports):
         raise ValueError("Invalid isolated E2E project or ports")
     env = dict(source)
     for key in (
@@ -89,8 +99,8 @@ def configure_tokens(env: dict[str, str]) -> None:
 
 def create_owner(instance: str, ports: list[int]) -> Path:
     """새 고유 실행 경로와 소유 증거를 먼저 만든다."""
-    if not INSTANCE_PATTERN.fullmatch(instance):
-        raise ValueError("Invalid isolated E2E project")
+    if not INSTANCE_PATTERN.fullmatch(instance) or not valid_ports(ports):
+        raise ValueError("Invalid isolated E2E project or ports")
     runtime = RUNS / instance
     runtime.mkdir(parents=True, exist_ok=False)
     marker = runtime / OWNER_FILE
@@ -116,37 +126,50 @@ def owned_record(runtime: Path, instance: str) -> dict | None:
         not isinstance(data, dict)
         or data.get("purpose") != "sos-test"
         or data.get("instance") != instance
+        or not valid_ports(data.get("ports"))
+        or runtime != RUNS / instance
+        or RUNS.is_symlink()
     ):
         return None
     return data
 
 
 def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
-    """검증 소유 환경만 종료·제거하고 정리 실패를 호출자에게 전달한다."""
+    """소유 증거를 확인하고 서비스 종료 후 소유 볼륨만 정리한다.
+
+    서비스 종료가 실패하면 살아 있는 프로세스의 저장소를 삭제하지 않으며
+    소유 기록을 남겨 명시적인 복구를 허용한다.
+    """
     if owned_record(runtime, instance) is None or env.get("SOS_DEV_INSTANCE") != instance:
         print("소유 증거가 없어 E2E 리소스를 정리하지 않습니다.", file=sys.stderr)
         return 1
-    down = subprocess.run(["python3", "scripts/dev.py", "down"], cwd=ROOT, env=env, check=False)
-    # 소유 프로젝트에만 --volumes를 적용한다. 기본 프로젝트에는 적용하지 않는다.
-    containers = subprocess.run(
-        ["docker", "compose", "-f", "compose.yaml", "-p", instance, "down", "--volumes"],
-        cwd=ROOT,
-        env=env,
-        check=False,
-    )
-    if down.returncode or containers.returncode:
-        print(
-            f"E2E 정리 실패: {instance} (서비스 {down.returncode}, Compose {containers.returncode})",
-            file=sys.stderr,
-        )
-        return 1
     try:
+        down = subprocess.run(
+            ["python3", "scripts/dev.py", "down"],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            timeout=240,
+        )
+        if down.returncode:
+            print(f"E2E 서비스 종료 실패: {instance}", file=sys.stderr)
+            return 1
+        # 실행 중인 소유 프로세스를 종료한 경우에만 이 프로젝트의 볼륨을 제거한다.
+        containers = subprocess.run(
+            ["docker", "compose", "-f", "compose.yaml", "-p", instance, "down", "--volumes"],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            timeout=240,
+        )
+        if containers.returncode:
+            print(f"E2E Compose 정리 실패: {instance}", file=sys.stderr)
+            return 1
         shutil.rmtree(runtime)
-    except OSError as exc:
-        print(f"E2E 로컬 실행 기록 정리 실패: {type(exc).__name__}", file=sys.stderr)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"E2E 소유 리소스 정리 오류: {instance} ({type(exc).__name__})", file=sys.stderr)
         return 1
     return 0
-
 
 def execute(spec: str, *, token_mode: bool = False) -> int:
     """한 번의 테스트 실행과 정리를 수행한다. 테스트 재시도는 하지 않는다."""
@@ -189,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         instance = args.recover_owned
         runtime = RUNS / instance
         data = owned_record(runtime, instance)
-        if data is None or not isinstance(data.get("ports"), list):
+        if data is None:
             print("유효한 소유 기록을 확인하지 못했습니다.", file=sys.stderr)
             return 1
         env = isolated_environment(os.environ, instance, data["ports"])

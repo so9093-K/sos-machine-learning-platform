@@ -3,6 +3,7 @@
 import json
 import os
 import secrets
+import signal
 import subprocess
 import sys
 import time
@@ -14,6 +15,7 @@ from run_isolated_e2e import (
     create_owner,
     free_ports,
     isolated_environment,
+    _interrupted,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -109,6 +111,7 @@ def verify(env: dict[str, str]) -> None:
 
 
 def main() -> int:
+    signal.signal(signal.SIGTERM, _interrupted)
     instance = "sos-e2e-" + secrets.token_hex(6)
     ports = free_ports()
     env = isolated_environment(os.environ, instance, ports)
@@ -123,6 +126,8 @@ def main() -> int:
         RuntimeError,
         AssertionError,
         subprocess.CalledProcessError,
+        KeyboardInterrupt,
+        InterruptedError,
     ):
         print(f"Make 영속성 검증 실패: {instance}", file=sys.stderr)
         status = 1
