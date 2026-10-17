@@ -13,7 +13,6 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -241,7 +240,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.action == "list":
         for suite in SUITES.values():
-            print(f"{suite.name:<20} {'infra' if suite.infrastructure else 'fast':<6} {suite.description}")
+            print(
+                f"{suite.name:<20} {'infra' if suite.infrastructure else 'fast':<6} {suite.description}"
+            )
         return 0
     output = args.output_dir or default_output()
     status, outcome = execute(args.suite, output, base_ref=args.base_ref)
