@@ -12,5 +12,9 @@ def paused_execution(
 ) -> None:
     """부모 종료 보호를 장착하고 PID를 기록한 뒤 강제 종료를 기다린다."""
     _guard_child_parent(parent_pid)
-    (home / "worker-test-child.pid").write_text(str(os.getpid()), encoding="ascii")
+    # 파일 존재와 PID 기록을 원자적으로 게시해 부모 테스트의 빈 파일 읽기 경합을 방지한다.
+    marker = home / "worker-test-child.pid"
+    temporary = home / f"worker-test-child.{os.getpid()}.tmp"
+    temporary.write_text(str(os.getpid()), encoding="ascii")
+    temporary.replace(marker)
     time.sleep(60)
