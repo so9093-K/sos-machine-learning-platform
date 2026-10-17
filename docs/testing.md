@@ -110,3 +110,14 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 ## 독립적인 연산 기준선
 
 `uv run --locked python scripts/benchmark_processing.py --rows 150000 --groups 32 --scenario window`와 `--scenario row_local`을 각각 독립 프로세스로 실행해 같은 합성 입력 생성 규칙에서 **실제 SOS Polars Transform**의 경과 시간·출력 크기·Linux RSS 관측치를 JSON으로 확인한다. 숫자 비교 시 환경·CPU·메모리·Polars 버전·시나리오·행/그룹 수를 함께 기록한다. `VmHWM`은 프로세스 생애 고수위이므로 단일 연산에만 귀속되는 엄격한 Peak RSS가 아니며, 파일 I/O·Iceberg 커밋·여러 동시 실행·cgroup 제한도 검증하지 않는다. 운영 환경의 성능 보장으로 사용하지 않는다.
+
+## 공통 검증 CLI 전환 (진행 중)
+
+`scripts/verify.py`는 SOS가 소유하는 Suite 이름·Runner·실행 증거 경계의 출발점이다. `python scripts/verify.py list`로 Suite와 인프라 요구 여부를 조회하고 `python scripts/verify.py run <suite> --output-dir <경로>`로 개별 검증을 호출한다. PR 비교 Suite에는 `--base-ref`를 지정한다.
+
+- pytest·Vitest·Playwright의 Native Runner를 그대로 사용하고 인프라 없는 Python 검증은 `tests/test_*.py` 수집으로 선택한다.
+- 각 호출은 고유 실행 경로의 `manifest.json`을 남기며 JUnit Suite에서 리포트 누락·손상·실행 0건·필수 테스트 Skip을 성공 처리하지 않는다.
+- 기존 `make check-fast`·`make check`와 GitHub 필수 Job은 전환 및 회귀 확인이 끝날 때까지 유지한다. 검증되지 않은 새 Suite, GitLab 설정, 실제 운영 이식성은 완료로 취급하지 않는다.
+- 실행 결과에 토큰·환경변수 값은 기록하지 않는다. 실패 원문·Trace 등 상세 산출물은 별도 비밀정보 비노출 기준을 따른다.
+
+이 절은 전환 중 구현 상태만 설명하며 ADR 0009의 전체 목표가 완료됐음을 뜻하지 않는다.
