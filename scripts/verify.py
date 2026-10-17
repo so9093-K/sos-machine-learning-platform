@@ -11,9 +11,9 @@ import sys
 import tempfile
 import time
 import uuid
-from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -179,7 +179,7 @@ def execute(
         "run_id": uuid.uuid4().hex,
         "suite": name,
         "git_sha": None,
-        "started_at_utc": datetime.now(timezone.utc).isoformat(),
+        "started_at_utc": datetime.now(UTC).isoformat(),
         "provider": (
             "github"
             if os.getenv("GITHUB_ACTIONS") == "true"
