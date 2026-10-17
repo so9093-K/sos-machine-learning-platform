@@ -35,7 +35,8 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | 전역 Discovery 슬롯 경합과 회수 | test_discovery_admission.py |
 | Worker·Discovery 공통 메모리 수용과 예약 회수, 설정의 포함 관계·서버 오류 분리 | test_resource_admission.py (unit·integration) |
 | Worker 시간·메모리 제한, 필수 cgroup 위임 실패 시 Claim 거부·자식 격리 계약 | test_worker_budget.py, test_cgroup.py |
-| Dataset 키셋 페이지와 Snapshot 소유권 | test_dataset_pages.py, test_snapshot_scope.py |
+| Dataset 키셋 페이지와 Snapshot 읽기 소유권 | test_dataset_pages.py, test_snapshot_scope.py |
+| Iceberg 테이블 쓰기 예약·Owner Token·API/Worker 재검증·레거시 쓰기 거부 | test_iceberg_write_scope.py |
 | Iceberg Snapshot 고정·Tag 보존·외부 커밋/Tag ACK 유실, 독립 Writer 동시 Commit 경합·중단 후 자동 재시도 금지·대용량 비파티션 단일 Snapshot | test_iceberg.py |
 | 객체 쓰기 의도·S3 관측·삭제 없는 Storage Health | test_storage.py |
 | 토큰·역할·리소스 소유권·거부 감사 | test_security.py, auth.spec.ts |
@@ -82,7 +83,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 - python-quality: 위 세 작업이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
 - 오래된 PR HEAD만 취소하고 main 검증 결과는 각 실행 ID별로 보존한다.
 - 정기(매일 새벽)·수동 실행에서는 핵심 Iceberg/Job 모듈을 순서를 바꿔 두 번 반복해 격리·재현성을 점검한다. 실패는 일반 CI 실패로 남으며 Retry에 의해 무시되지 않는다.
-- 현재 사용자가 없는 사전 출시 단계에서 명시적으로 제거한 API는 `scripts/approved_pre_release_api_breaks.json`에 진단 문자열로 기록한다. 그 밖의 Breaking 변경은 기존 검사가 차단한다. 예외는 PR 번호가 `14`이고 Base SHA가 `143caccd`인 경우에만 적용되며, 같은 Base SHA를 대상으로 하는 다른 PR도 엄격한 검사를 사용한다. 정식 지원 계약이 확정되면 승인 목록을 제거하고 엄격한 검사를 유지한다.
+- PR의 OpenAPI 후방 호환성 검사는 기준 브랜치와 변경 브랜치를 직접 비교하며, 과거 PR 전용 Breaking 승인 예외를 적용하지 않는다.
 - API 호환성 검사는 이전 base 코드(의존성 잠금 변경 시 base 자체 환경)와 현재 코드에서 각각 생성한 OpenAPI를 비교한다. 요청과 응답의 호환성 방향을 분리하고 Nullable/배열/$ref를 검사한다. 보수적 가드이지 완전한 JSON Schema 판정기는 아니다.
 
 ## 실패 진단과 안정성 유지

@@ -58,6 +58,8 @@ DuckDB 기반 Profiler는 원본 판본에서 통계·품질을 계산하며 역
 
 장기적인 도메인 경계는 이 실행 형태에 종속되지 않는다. 새로운 Catalog나 저장소 제공자를 추가할 때 Dataset과 Job의 의미를 유지하고, 실제 교체 필요성이 있는 경계에만 어댑터를 도입한다.
 
+Iceberg 테이블의 쓰기 소유권과 Catalog 정체성은 별도 `iceberg_table_owners` 레지스트리와 Iceberg Table Property의 무작위 토큰을 대조한다. Snapshot Dataset 참조는 읽기·보존의 근거이지 append 소유권이 아니다. 기존 레지스트리가 없는 테이블은 자동 소유권 이전 없이 쓰기를 거부한다. 세부 결정은 [ADR 0008](adr/0008-iceberg-table-write-ownership.md)을 따른다.
+
 S3 전송 전 객체 게시 의도를 PostgreSQL `object_writes`에 기록하고, Dataset과 객체의 확정 상태를 하나의 DB 트랜잭션으로 갱신한다. Transform 결과는 Attempt별 불변 경로를 사용한다. 읽기 전용 Reconciler는 `datasets/`와 `results/` 객체 목록을 페이지 단위로 조회하고, `object_observations`에 날짜 간 관측 근거를 남긴다. 이는 실제 삭제 승인이 아니다. Iceberg Snapshot 보호 여부는 별도 Catalog 검사로 확인하며 범용 S3 정리 범위에서 제외한다. 장기 계약은 [ADR 0002](adr/0002-object-lifecycle.md)를 따른다.
 
 ## 인증·보존·감사 경계

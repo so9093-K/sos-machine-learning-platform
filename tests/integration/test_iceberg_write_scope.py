@@ -36,12 +36,12 @@ def test_iceberg_append_requires_actual_table_owner(workspace, monkeypatch):
     with TestClient(create_app(store.home)) as api:
         alice = api.post(
             "/api/datasets/files",
-            files={"file": ("alice.csv", b"v\\n1\\n", "text/csv")},
+            files={"file": ("alice.csv", b"v\n1\n", "text/csv")},
             headers=headers("alice"),
         )
         bob = api.post(
             "/api/datasets/files",
-            files={"file": ("bob.csv", b"v\\n2\\n", "text/csv")},
+            files={"file": ("bob.csv", b"v\n2\n", "text/csv")},
             headers=headers("bob"),
         )
         assert alice.status_code == bob.status_code == 201
@@ -109,7 +109,7 @@ def test_unowned_existing_catalog_table_is_not_silently_claimed(workspace):
     catalog.create_table("default.external_table", schema=pa.schema([("v", pa.int64())]))
     source = client.post(
         "/api/datasets/files",
-        files={"file": ("x.csv", b"v\\n1\\n", "text/csv")},
+        files={"file": ("x.csv", b"v\n1\n", "text/csv")},
     )
     assert source.status_code == 201
     denied = client.post(

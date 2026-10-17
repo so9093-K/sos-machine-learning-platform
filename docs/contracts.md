@@ -59,6 +59,13 @@ Dataset Understanding은 Dataset 자체가 아니라 특정 원본 판본과 프
 - **Iceberg 적재:** 비파티션 테이블은 스트리밍 스테이징과 배치 읽기를 단일 Snapshot으로 커밋한다. 외부 커밋이 불확실한 상황에서는 자동 재적재하지 않는다. 기존 파티션 테이블은 Reader 쓰기 미지원으로 소규모 호환 경로를 유지한다. 로컬 임시 디스크와 실제 부하 예산은 환경별 검증 대상이다.
 - **Job 목록:** 최신 생성 시각·식별자 역순으로 커서를 통해 페이지 단위로 조회한다. 목록은 최대 100개 요청을 허용하며 Attempt 전체가 아닌 총 시도 횟수·마지막 시도 요약만 포함한다. 개별 Job 조회는 전체 Attempt 이력을 유지한다.
 
+## Iceberg 테이블 쓰기 권한
+
+- 테이블에 대한 쓰기 권한은 `datasets.owner_actor`로 표현되는 Snapshot 읽기·연결 권한과 독립적이다.
+- 신규 테이블은 PostgreSQL의 고유 이름·소유 Actor·무작위 토큰을 먼저 예약하고 실제 Iceberg Catalog Table Properties의 동일 토큰을 확인한다. 다른 Actor의 이름 충돌은 거부한다.
+- API 제출 및 Worker 외부 커밋 이전의 실제 Table 메타데이터를 모두 검증한다. 미확정·소유권 불명·토큰 불일치·소실된 기존 테이블에는 자동으로 쓰기를 허용하지 않는다. 레거시 Snapshot 참조와 Tag는 그대로 유지한다.
+- 테이블 쓰기 소유권은 현재 한 Actor에게 귀속하며, administrator의 조회 권한을 자동 append 허가로 해석하지 않는다. 별도 관리자 인수·양도 기능은 지원하지 않는다.
+
 ## Actor·보존 참조 계약
 
 인증 제공자가 달라져도 검증된 Actor·Action·Resource에 대한 접근 판단 의미는 유지한다. 기존 데이터의 소유자가 기록되지 않았다고 해서 최초 접근자가 자동 소유자가 되지 않는다. Iceberg Dataset의 Snapshot ID는 읽을 판본을 식별하며, 실제 보존 상태는 Catalog에서 Tag 참조와 만료 정책을 재확인해야 한다. 보존되지 않은 과거 Snapshot은 사용 가능과 보존 보장을 혼동하지 않는다. 자세한 운영 결정은 [ADR 0003](adr/0003-snapshot-identity-audit.md)을 따른다.

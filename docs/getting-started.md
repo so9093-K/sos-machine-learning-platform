@@ -64,7 +64,7 @@ Dataset 목록은 `GET /api/datasets?limit=20`의 `items`와 `next_cursor`를 �
 
 Job 목록은 `GET /api/jobs?limit=20`에서 최근 순으로 조회하며, 응답의 `items`와 `next_cursor`를 사용해 이전 페이지를 가져온다. `limit`는 1~100으로 제한된다. 목록은 `attempt_count`·`latest_attempt`만 제공하므로 전체 실행 시도는 개별 `GET /api/jobs/{job_id}`에서 조회한다.
 
-단일 Iceberg 적재는 현재 최대 50,000행과 64 MiB 추정 메모리 제한을 적용한다. 초과하면 Job이 실패하며 원본 파일·이전 Snapshot은 유지한다. 대용량 배치 적재는 별도의 자원·원자성 정책이 필요하다.
+비파티션 Iceberg 테이블은 Polars 스테이징·PyArrow 배치 Reader를 이용해 단일 Snapshot으로 적재한다. 기존 파티션 테이블만 현재 최대 50,000행·64 MiB 추정 메모리 제한의 호환 경로를 사용한다. 실행 시간·메모리·스테이징 디스크 예산은 별도로 적용하며, 제한 초과와 커밋 결과 불확실성을 구별한다.
 
 ## 객체 게시·보존 정책과 저장소 진단
 
@@ -78,4 +78,4 @@ Data Workspace 사이드바의 **저장소 상태 보기**에서 `datasets/`, `r
 
 현재 로컬 개발 실행은 `SOS_AUTH_MODE=development`이고 개발자 신원이 자동 적용된다. 이 모드의 API는 루프백과 테스트 클라이언트 요청만 허용하며 **역방향 프록시를 통해 외부에 노출해서는 안 된다**. 인증 필수 테스트·사설 API 연동은 `SOS_AUTH_MODE=token`으로 변경하고 `SOS_AUTH_TOKEN_HASHES`에 JSON 객체로 고엔트로피 토큰의 SHA-256 해시(64자리 소문자 16진수)를 키, `{"actor_id":"...", "kind":"human"|"service", "roles":["viewer"|"researcher"|"operator"|"administrator"]}`를 값으로 설정한다. 원본 토큰은 해당 환경변수에 저장하지 않는다. API 요청은 `Authorization: Bearer <token>`을 사용하며, 브라우저에서는 현재 화면 메모리에만 보관한다. 토큰 모드에서 유효한 설정이 없다면 서비스 시작을 거부한다. 외부 공개는 아직 지원하지 않으며 TLS와 OIDC 로그인·계정 생명주기를 포함한 별도 운영 보안 구성이 필요하다.
 
-Iceberg 테이블에 Dataset을 연결할 때는 데이터 생성 권한, Iceberg 적재 Job을 제출할 때는 실행 권한이 필요하다. 기존 Dataset의 보존 Tag를 수동으로 재확인하는 동작은 운영 보존 권한을 사용한다. 신규 Iceberg Dataset은 Snapshot의 SOS Tag를 만들고 재검증한 후에만 등록한다. 예전 Dataset은 Storage Health에서 `읽기 가능 · 보존 미보장`으로 표시될 수 있으며, 운영자 권한으로 해당 Dataset의 Tag를 생성할 수 있다. 데이터가 없는 Tag·Catalog 장애에서는 보존을 확정하지 않으며 기존 데이터 파일과 Tag를 자동 삭제하지 않는다. 보안 감사 조회는 `GET /api/audit`에서 운영 권한으로 가능하다. 기존 소유권이 없는 Dataset은 관리자가 명시적으로 마이그레이션하기 전까지 일반 사용자에게 노출되지 않는다.
+Iceberg 테이블에 Dataset을 연결할 때는 데이터 생성 권한과 해당 Dataset 참조를 통한 읽기 접근이 필요하다. Iceberg 적재 Job을 제출할 때는 실행 권한뿐 아니라 별도 테이블 쓰기 소유권도 필요하며, API 제출과 Worker의 Catalog 커밋 직전 모두 검증한다. 신규 테이블은 PostgreSQL에 소유권·고유 토큰을 예약하고 Catalog 생성 시 동일 토큰을 기록한다. 이 권한은 Snapshot 참조 Dataset의 소유권으로 자동 부여되지 않는다. 기존 테이블 중 이 소유 토큰이 없는 대상은 읽기·보존을 유지하되 자동 인수하지 않고 새 적재를 거부한다. 테이블 이름이 소실되거나 재생성됐어도 자동 쓰기를 허용하지 않는다. 기존 테이블에 대한 명시적 소유권 이전/채택 기능은 현재 제공하지 않는다. 기존 Dataset의 보존 Tag를 수동으로 재확인하는 동작은 운영 보존 권한을 사용한다. 신규 Iceberg Dataset은 Snapshot의 SOS Tag를 만들고 재검증한 후에만 등록한다. 예전 Dataset은 Storage Health에서 `읽기 가능 · 보존 미보장`으로 표시될 수 있으며, 운영자 권한으로 해당 Dataset의 Tag를 생성할 수 있다. 데이터가 없는 Tag·Catalog 장애에서는 보존을 확정하지 않으며 기존 데이터 파일과 Tag를 자동 삭제하지 않는다. 보안 감사 조회는 `GET /api/v2/audit`에서 운영 권한으로 가능하다. 기존 소유권이 없는 Dataset은 관리자가 명시적으로 마이그레이션하기 전까지 일반 사용자에게 노출되지 않는다.
