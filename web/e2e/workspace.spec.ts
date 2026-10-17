@@ -1196,3 +1196,22 @@ test("Operational pages show their own headings rather than Data Explorer", asyn
   await page.getByRole("button", { name: "보안 감사 보기" }).click();
   await expect(page.getByRole("heading", { name: "보안 감사", exact: true })).toBeVisible();
 });
+
+test("Registering another Dataset inside Preparation does not force Explorer navigation", async ({ page }) => {
+  await page.goto("/");
+  const input = page.locator('input[type="file"]');
+  await input.setInputFiles({
+    name: "prep-source-a.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
+  await expect(page.getByLabel("변환 연산", { exact: true })).toBeVisible();
+  await input.setInputFiles({
+    name: "prep-source-b.csv", mimeType: "text/csv",
+    buffer: Buffer.from("score\n10\n20\n"),
+  });
+  await expect(page.getByRole("heading", { name: "prep-source-b.csv" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "데이터 준비", exact: true })).toBeVisible();
+  await expect(page.getByLabel("변환 연산", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "데이터 작업 영역" })).toHaveCount(0);
+});

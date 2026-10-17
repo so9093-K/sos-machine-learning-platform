@@ -162,7 +162,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
     setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
     showExamples.current = false;
-    setSelected(data.id); setTab("understanding");
+    // 데이터 준비에서 명시적으로 데이터를 등록했다면 Explorer로 강제 이동하지 않는다.
+    setSelected(data.id); setTab(current => current === "preparation" ? current : "understanding");
     const revision = feedbackRevision.current;
     // HTTP 201이 등록 완료의 정본이며 목록 GET 응답을 기다리지 않고 먼저 안내한다.
     setNotice(success);
