@@ -15,6 +15,7 @@ import sys
 import time
 from pathlib import Path
 
+from .cgroup import CgroupIsolation
 from .datasets import (
     cleanup_iceberg_staging,
     iceberg_staging_bytes,
@@ -64,6 +65,10 @@ def _perform(
         stage = "iceberg_commit"
 
     try:
+        # 자식 스스로 cgroup에 들어가기 전에는 Dataset 읽기·외부 Commit을 시작하지 않는다.
+        CgroupIsolation.from_env(
+            ExecutionBudget.from_env().max_rss_mib
+        ).attach_current_child(job["attempts"][-1]["id"])
         store = Store(home, database_url=database_url)
         # 부모 Worker의 논리적 메모리 예약 안에서 실행되는 자식이다.
         store._execution_memory_reserved = True
@@ -154,6 +159,9 @@ def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) 
 def run_once(store: Store) -> bool:
     """예약 가능한 실행 용량을 확보한 뒤에만 Job을 Running으로 변경한다."""
     budget = ExecutionBudget.from_env()
+    # required 모드에서 위임·쓰기 권한이 없으면 Attempt를 Claim하기 전에 거부한다.
+    cgroup = CgroupIsolation.from_env(budget.max_rss_mib)
+    cgroup.validate_before_claim()
     capacity = ExecutionCapacity.from_env()
     capacity.validate_worker_budget(
         worker_rss_mib=budget.max_rss_mib,
@@ -161,7 +169,7 @@ def run_once(store: Store) -> bool:
     )
     try:
         with reserve_execution_memory(store, budget.max_rss_mib, capacity):
-            return _run_once_reserved(store, budget)
+            return _run_once_reserved(store, budget, cgroup)
     except PlatformError as exc:
         if exc.code == "SOS-EXECUTION-CAPACITY":
             # Job을 Claim하지 않았으므로 Queued 상태를 유지하고 다음 폴링에서 재시도한다.
@@ -169,7 +177,9 @@ def run_once(store: Store) -> bool:
         raise
 
 
-def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
+def _run_once_reserved(
+    store: Store, budget: ExecutionBudget, cgroup: CgroupIsolation
+) -> bool:
     job = store.claim()
     if job is None:
         return False
@@ -223,6 +233,8 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
             store.finish(job_id, "Cancelled", attempt_id=attempt_id)
             return True
         if not completed.exists():
+            if cgroup.oom_killed(attempt_id):
+                raise ExecutionLimitExceeded("SOS-JOB-MEMORY-LIMIT", "memory")
             raise RuntimeError(f"Execution process exited ({process.exitcode}) without result")
         outcome = json.loads(completed.read_text(encoding="utf-8"))
         if "error_code" in outcome:
@@ -354,6 +366,18 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget) -> bool:
         output.unlink(missing_ok=True)
         pending.unlink(missing_ok=True)
         completed.unlink(missing_ok=True)
+        try:
+            cgroup.cleanup(attempt_id)
+        except (OSError, ValueError) as exc:
+            # 커널이 아직 하위 프로세스를 회수하지 않았으면 격리 실패로 숨기지 않는다.
+            emit(
+                "worker.cgroup.cleanup_failed",
+                service="sos-worker",
+                level=logging.ERROR,
+                job_id=job_id,
+                attempt_id=attempt_id,
+                exception_type=type(exc).__name__,
+            )
         if job["kind"] == "iceberg_import":
             # 자식이 SIGKILL되어도 Attempt에 속한 미완성 입력은 부모가 회수한다.
             try:

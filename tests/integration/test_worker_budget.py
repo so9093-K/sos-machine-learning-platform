@@ -60,3 +60,23 @@ def test_worker_staging_budget_rejects_oversize_attempt_and_keeps_commit_uncerta
     assert job["error_code"] == "SOS-ICEBERG-UNCERTAIN"
     assert job["failure_category"] == "storage"
     assert not list((store.home / "cache" / "iceberg-staging").glob("attempt-*"))
+
+
+def test_required_cgroup_rejects_job_before_claim_when_not_delegated(workspace, monkeypatch):
+    """물리 격리가 필수인데 cgroup 위임이 없으면 실행을 받아서는 안 된다."""
+    import pytest
+
+    from sos_platform.errors import RuntimeConfigurationError
+
+    client, store = workspace
+    dataset = upload(client)
+    queued = client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
+    assert queued.status_code == 202
+    monkeypatch.setenv("SOS_WORKER_CGROUP_MODE", "required")
+    # /sys/fs/cgroup 아래에 위임된 별도 디렉터리가 아니므로 절대 실행하지 않는다.
+    monkeypatch.setenv("SOS_WORKER_CGROUP_PARENT", str(store.home))
+    with pytest.raises(RuntimeConfigurationError, match="cgroup v2 mount"):
+        run_once(store)
+    saved = store.get_job(queued.json()["id"])
+    assert saved["status"] == "Queued"
+    assert saved["attempts"] == []

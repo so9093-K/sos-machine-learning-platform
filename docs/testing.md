@@ -34,12 +34,12 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | Job 제출 키 중복·동시성·감사 롤백 | test_idempotency.py |
 | 전역 Discovery 슬롯 경합과 회수 | test_discovery_admission.py |
 | Worker·Discovery 공통 메모리 수용과 예약 회수, 설정의 포함 관계·서버 오류 분리 | test_resource_admission.py (unit·integration) |
-| Worker 실행 시간 제한·실패 기록 | test_worker_budget.py |
+| Worker 시간·메모리 제한, 필수 cgroup 위임 실패 시 Claim 거부·자식 격리 계약 | test_worker_budget.py, test_cgroup.py |
 | Dataset 키셋 페이지와 Snapshot 소유권 | test_dataset_pages.py, test_snapshot_scope.py |
-| Iceberg Snapshot 고정·Tag 보존·외부 커밋/Tag ACK 유실 시 불확실성·중단 후 자동 재시도 금지·대용량 비파티션 단일 Snapshot | test_iceberg.py |
+| Iceberg Snapshot 고정·Tag 보존·외부 커밋/Tag ACK 유실, 독립 Writer 동시 Commit 경합·중단 후 자동 재시도 금지·대용량 비파티션 단일 Snapshot | test_iceberg.py |
 | 객체 쓰기 의도·S3 관측·삭제 없는 Storage Health | test_storage.py |
 | 토큰·역할·리소스 소유권·거부 감사 | test_security.py, auth.spec.ts |
-| Worker 중단·복구 감사·Attempt 식별 | test_recovery.py |
+| Worker 중단·복구 감사·Attempt 식별 및 실제 Job 부모 SIGKILL 후 자식 종료·복구 | test_recovery.py, worker_kill_helper.py |
 | 테스트 준비 단계 실패 시 DB/버킷 정리 | test_environment.py, conftest.py |
 | 데이터→EDA→Feature→Job·브라우저 접근성, 재시도·문자형 집계·전체 결과 이해 | workspace.spec.ts |
 | OpenAPI 삭제·필수 입력 추가·필드 변경 위험 | test_api_compat.py와 PR 비교 검사 |
