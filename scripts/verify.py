@@ -109,7 +109,7 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
     if name == "workspace-e2e":
         return [(uv + ["python", "scripts/run_isolated_e2e.py"], ROOT)]
     if name == "token-rbac":
-        return [(uv + ["python", "scripts/verify_token_rbac.py", str(report)], ROOT)]
+        return [(uv + ["python", "scripts/verify_token_rbac.py"], ROOT)]
     if name == "make-lifecycle":
         return [(uv + ["python", "scripts/verify_make_lifecycle.py"], ROOT)]
     raise ValueError(f"알 수 없는 Suite: {name}")

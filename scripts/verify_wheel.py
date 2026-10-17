@@ -26,15 +26,14 @@ def main() -> None:
         folder = Path(temp)
         build = folder / "dist"
         target = folder / "site"
-        subprocess.run(
-            ["uv", "build", "--wheel", "--out-dir", str(build)], cwd=ROOT, check=True
-        )
+        subprocess.run(["uv", "build", "--wheel", "--out-dir", str(build)], cwd=ROOT, check=True)
         wheels = list(build.glob("*.whl"))
         if len(wheels) != 1:
             raise RuntimeError("빌드 Wheel이 정확히 하나여야 합니다.")
         subprocess.run(
             ["uv", "pip", "install", "--target", str(target), "--no-deps", str(wheels[0])],
-            cwd=ROOT, check=True,
+            cwd=ROOT,
+            check=True,
         )
         subprocess.run([sys.executable, "-I", "-c", SMOKE, str(target)], cwd=temp, check=True)
 

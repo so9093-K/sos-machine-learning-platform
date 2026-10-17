@@ -12,9 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def run(args: list[str], cwd: Path, *, env: dict | None = None) -> str:
     """실패한 명령의 종료 코드를 숨기지 않는다."""
-    result = subprocess.run(
-        args, cwd=cwd, env=env, check=True, capture_output=True, text=True
-    )
+    result = subprocess.run(args, cwd=cwd, env=env, check=True, capture_output=True, text=True)
     return result.stdout
 
 
@@ -40,20 +38,21 @@ def check(base_ref: str) -> None:
                 )
             else:
                 run(["uv", "sync", "--locked", "--group", "dev"], old)
-                before = run(
-                    ["uv", "run", "--locked", "python", "scripts/export_openapi.py"], old
-                )
-            after = run(
-                ["uv", "run", "--locked", "python", "scripts/export_openapi.py"], ROOT
-            )
+                before = run(["uv", "run", "--locked", "python", "scripts/export_openapi.py"], old)
+            after = run(["uv", "run", "--locked", "python", "scripts/export_openapi.py"], ROOT)
             old_json = Path(temporary) / "before.json"
             new_json = Path(temporary) / "after.json"
             old_json.write_text(before, encoding="utf-8")
             new_json.write_text(after, encoding="utf-8")
             run(
                 [
-                    "uv", "run", "--locked", "python", "scripts/check_api_compat.py",
-                    str(old_json), str(new_json),
+                    "uv",
+                    "run",
+                    "--locked",
+                    "python",
+                    "scripts/check_api_compat.py",
+                    str(old_json),
+                    str(new_json),
                 ],
                 ROOT,
             )
