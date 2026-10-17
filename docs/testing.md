@@ -2,11 +2,15 @@
 
 이 문서는 SOS의 테스트·CI 체계 정본이다. 데이터 및 API의 의미는 Contracts, Workflows와 실제 구현이 정본이며, 이 문서는 중복 명세를 만들지 않는다.
 
+검증 실행의 CI 독립성·공통 결과·테스트 수명주기의 책임 경계는 [ADR 0009](adr/0009-test-engineering-portability.md)에 기록한다. 실제 지원·검증 범위는 아래 실행 정책과 CI 결과를 기준으로 확인한다.
+
 ## 기본 원칙
 
 - 사용자·데이터·실행 불변조건을 정의한 뒤 그 계약을 제대로 검사할 수 있는 가장 저렴한 테스트 계층을 선택한다.
 - 모든 테스트는 단독·순서 변경·반복 실행이 가능해야 한다. 다른 테스트에서 생성한 데이터를 요구하지 않는다.
+- 검증 강도는 실행 시간의 길이가 아니라 자원 한계, 동시 경합, 실패 주입 지점, 상태 불변조건과 정리·복구 결과로 판단한다. TTL·Timeout 등 시간 자체가 계약인 경우에만 필요한 시간 범위를 명시해 검증한다.
 - `make check`의 브라우저 쓰기 테스트는 UUID 별도 Compose 프로젝트와 DB·버킷·서비스에만 연결한다. 일반 개발 프로젝트/외부 저장소에 쓰기 E2E를 실행하지 않는다. 생성한 E2E 프로젝트만 명시적으로 종료·볼륨 정리한다.
+- SIGKILL·호스트 종료 등으로 정리가 중단된 경우, `.sos-dev/runs/<sos-e2e-인스턴스>/validation-owner.json`의 소유 기록을 먼저 확인하고 `python scripts/run_isolated_e2e.py --recover-owned <sos-e2e-인스턴스>`를 실행한다. 복구는 기록된 프로젝트에 한정되며, 서비스 종료나 Compose 정리에 실패하면 소유 기록을 보존하고 다른 데이터·볼륨을 임의 삭제하지 않는다.
 - Fixture는 자신이 만든 DB·UUID 버킷만 생성·정리한다. 사용자 데이터를 삭제하거나 Iceberg Tag를 임의 정리하지 않는다.
 - 필수 테스트의 실패를 Retry·Skip으로 숨기지 않는다. 최초 실패와 재현 정보를 보존한다.
 - 검증 수준마다 책임을 정하고 불필요한 Mock과 복잡한 테스트 DSL을 피한다.
@@ -19,10 +23,10 @@
 | 실제 DB·객체 저장소·Catalog | tests/integration/ | PR 필수 Python 작업 |
 | 브라우저 사용자 흐름·RBAC | web/e2e/ | PR 필수 UI 작업 |
 | Make 재시작·보존 | CI Make lifecycle | PR 필수; 자체 데이터를 생성해야 함 |
-| 장시간 부하·복합 장애 | 별도 확장 검사 | 의미 있는 한도가 마련되면 정기 실행 |
+| 자원 한계·경합·복합 장애 | 해당 불변조건의 단위·통합·장애 주입 테스트 | 소유권·실패 시점·복구 결과와 자원 예산을 기준으로 필요한 범위에서 실행 |
 
 make check-fast는 Ruff, 순수 Python 테스트(개발 설정 기본값·문서 ADR 인덱스 검사 포함), Vitest 및 웹 타입·빌드를 확인하며 서비스 기동을 요구하지 않는다.
-make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하다. Fast 통과를 전체 검증 성공으로 해석하지 않는다.
+make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하다. 공통 Suite를 통해 Ruff·단위·통합·Frontend·생성 OpenAPI 타입·Wheel·Alembic·격리 Workspace/권한 E2E·Make 영속성을 포함하며, PR base 비교는 별도로 --base-ref를 전달해야 한다. Fast 통과를 전체 검증 성공으로 해석하지 않는다.
 
 ## 변경 불가능한 필수 불변조건과 담당 테스트
 
@@ -108,3 +112,22 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 ## 독립적인 연산 기준선
 
 `uv run --locked python scripts/benchmark_processing.py --rows 150000 --groups 32 --scenario window`와 `--scenario row_local`을 각각 독립 프로세스로 실행해 같은 합성 입력 생성 규칙에서 **실제 SOS Polars Transform**의 경과 시간·출력 크기·Linux RSS 관측치를 JSON으로 확인한다. 숫자 비교 시 환경·CPU·메모리·Polars 버전·시나리오·행/그룹 수를 함께 기록한다. `VmHWM`은 프로세스 생애 고수위이므로 단일 연산에만 귀속되는 엄격한 Peak RSS가 아니며, 파일 I/O·Iceberg 커밋·여러 동시 실행·cgroup 제한도 검증하지 않는다. 운영 환경의 성능 보장으로 사용하지 않는다.
+
+## 검증 실행 경계
+
+`scripts/verify.py`의 `list`, `run <suite> --output-dir <경로>`, `inventory --output <경로>`, `reconcile --inventory <경로> --pytest-report ... --vitest-report ... --playwright-report ...`는 로컬과 CI가 공통으로 호출하는 인터페이스다. PR 기준 API 호환성 검사에는 `--base-ref`를 지정한다. `make check-fast`는 인프라 없이, `make check`는 필요한 인프라를 준비한 상태에서 전체 검증을 수행한다.
+
+공통 검증 메커니즘은 Native Runner 실행 결과·JUnit·Manifest/Summary·누락 또는 미실행 판정을 담당한다. Runner별 수집 명령·실행 경로·테스트 출처 경로는 `scripts/inventory_scope.json`에서 관리하고, 실제 SOS 도메인 시나리오는 기존 테스트와 격리 실행기가 소유한다. 다른 프로젝트에서는 Runner 설정과 Suite 구성, 보호 계약만 변경하도록 경계를 유지한다. 범용 테스트 프레임워크나 별도 서비스는 만들지 않는다.
+
+JUnit 리포트 손상·누락, 실행 0건, 필수 Skip과 실패는 성공 처리하지 않는다. 실행 증거에 토큰·환경변수 값을 기록하지 않으며 실패 로그·Trace도 비밀정보 비노출 정책을 따른다. GitHub 보호 게이트 `python-quality`는 Python·Frontend·E2E 작업과 전체 JUnit Test ID 대조의 성공을 요구한다.
+
+## 테스트 자산 수명주기
+
+**Standard by Default, Protected by Exception:** 보호 계약에 연결되지 않은 모든 테스트는 별도 등록 없이 `standard`다. 데이터 보존·권한·소유권·상태 확정·복구 등 특별한 변경 통제가 필요한 계약에 한해 `tests/contracts.json`에 `id`, `reason`, `selectors`를 등록한다. 위험도 점수·전수 품질 분류·테스트 관리 DB는 운영하지 않는다.
+
+- `python scripts/verify.py inventory --output <경로>`는 pytest·Vitest·Playwright의 실제 테스트 ID를 수집하고, `schema_version: 1` JSON에 `policy`(`standard` 또는 `protected`)와 `contract_ids`를 기록한다. 수집 명령 및 테스트 경로는 `scripts/inventory_scope.json`이 정의한다.
+- 모든 테스트는 정책과 무관하게 CI에서 실행하고 Native 목록과 JUnit Test ID를 일대일로 대조한다. 누락·추가·중복은 실패한다.
+- Protected 선택자는 파일 전체가 아닌 **구체적인 테스트 이름**을 지정한다. 동일 파일의 다른 테스트는 기본 Standard이며, 선택자가 실제 Native 테스트를 가리키지 못하면 CI가 실패한다.
+- Protected 테스트를 수정하는 것 자체에 별도 승인 절차는 없다. 삭제·통합·보호 Assertion 제거 시 보호 계약과 실패 경로의 대체 검증 근거를 일반 PR 리뷰에서 확인한다. Git 이력과 코드 리뷰가 변경 근거의 정본이므로 테스트 ID 이력 추론이나 별도 승인 워크플로를 운영하지 않는다.
+
+추가 CI 제공자는 실제 필요가 생겼을 때 어댑터를 구성하고 독립 실행 및 실패 경로를 검증한다. 제공자 독립적인 설계 자체가 특정 CI 서비스의 실제 지원을 의미하지는 않는다.

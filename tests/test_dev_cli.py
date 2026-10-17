@@ -88,6 +88,23 @@ def test_preflight_rejects_foreign_port(monkeypatch, config):
     assert exc.value.code == "SOS-NET-001"
 
 
+def test_real_port_collision_does_not_stop_foreign_listener(monkeypatch, config):
+    """실제 루프백 포트 충돌은 실행 전에 거부하며 외부 Listener를 닫지 않는다."""
+    import socket
+
+    config["SOS_INFRA_MODE"] = "external"
+    monkeypatch.setattr(dev.shutil, "which", lambda _name: "/usr/bin/tool")
+    monkeypatch.setattr(dev, "processes", lambda: {})
+    with socket.socket() as foreign:
+        foreign.bind(("127.0.0.1", 0))
+        foreign.listen(1)
+        config["SOS_API_PORT"] = str(foreign.getsockname()[1])
+        with pytest.raises(dev.StartupError) as exc:
+            dev.preflight(config, need_docker=False)
+        assert exc.value.code == "SOS-NET-001"
+        assert foreign.fileno() >= 0
+
+
 def test_lifecycle_lock_rejects_concurrent_commands(monkeypatch, tmp_path):
     monkeypatch.setattr(dev, "RUNTIME", tmp_path)
     with dev.lifecycle_lock():
@@ -310,7 +327,7 @@ def test_s3_endpoint_default_uses_configured_port(monkeypatch):
 
 
 def test_make_check_validates_full_contract_once(monkeypatch, config):
-    """CI는 검사 종류별로 실행하더라도 로컬 make check는 완전한 검증을 유지한다."""
+    """공통 Suite를 재사용해 전체 검증을 한 번씩 호출한다."""
     monkeypatch.setattr(dev, "status", lambda _config: {"status": "ready"})
     commands = []
 
@@ -321,18 +338,26 @@ def test_make_check_validates_full_contract_once(monkeypatch, config):
 
     monkeypatch.setattr(dev.subprocess, "run", fake_run)
     assert dev.check(config)["status"] == "passed"
+    suites = (
+        "ruff",
+        "python-unit",
+        "python-integration",
+        "frontend",
+        "openapi-types",
+        "wheel",
+        "alembic",
+        "workspace-e2e",
+        "make-lifecycle",
+        "token-rbac",
+    )
     assert commands == [
-        (["uv", "run", "--locked", "ruff", "check", "."], dev.ROOT),
-        (["uv", "run", "--locked", "ruff", "format", "--check", "."], dev.ROOT),
-        (["uv", "run", "--locked", "pytest", "-q"], dev.ROOT),
-        (["npm", "run", "build"], dev.ROOT / "web"),
-        (["npm", "run", "test"], dev.ROOT / "web"),
-        (["uv", "run", "--locked", "python", "scripts/run_isolated_e2e.py"], dev.ROOT),
+        (["uv", "run", "--locked", "python", "scripts/verify.py", "run", suite], dev.ROOT)
+        for suite in suites
     ]
 
 
 def test_make_check_fast_is_infrastructure_independent(monkeypatch, config):
-    """빠른 검사는 Ready 조회 없이 순수 검사만 실행하고 전체 검사와 명령을 구분한다."""
+    """빠른 검증은 Ready 조회 없이 인프라 없는 Suite만 선택한다."""
 
     def refuse_ready(_config):
         raise AssertionError("Fast checks must not connect to running services")
@@ -348,32 +373,8 @@ def test_make_check_fast_is_infrastructure_independent(monkeypatch, config):
     monkeypatch.setattr(dev.subprocess, "run", fake_run)
     assert dev.check_fast(config)["status"] == "passed"
     assert commands == [
-        (["uv", "run", "--locked", "ruff", "check", "."], dev.ROOT),
-        (["uv", "run", "--locked", "ruff", "format", "--check", "."], dev.ROOT),
-        (
-            [
-                "uv",
-                "run",
-                "--locked",
-                "pytest",
-                "-q",
-                "tests/test_processing.py",
-                "tests/test_dev_cli.py",
-                "tests/test_api_compat.py",
-                "tests/test_configuration_contract.py",
-                "tests/test_doc_links.py",
-                "tests/test_pagination.py",
-                "tests/test_execution_budget.py",
-                "tests/test_resource_admission.py",
-                "tests/test_errors.py",
-                "tests/test_e2e_isolation.py",
-                "tests/test_diagnostics.py",
-                "tests/test_log_capture.py",
-            ],
-            dev.ROOT,
-        ),
-        (["npm", "run", "test"], dev.ROOT / "web"),
-        (["npm", "run", "build"], dev.ROOT / "web"),
+        (["uv", "run", "--locked", "python", "scripts/verify.py", "run", suite], dev.ROOT)
+        for suite in ("ruff", "python-unit", "frontend")
     ]
 
 

@@ -39,36 +39,24 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Install frontend dependencies for API types
+        run: cd web && npm ci --no-audit
       - name: Verify generated OpenAPI types
-        run: |
-          cd web && npm ci --no-audit && npm run generate:types
-          git diff -- src/api.generated.ts
-          git diff --exit-code -- src/api.generated.ts
+        run: uv run --locked python scripts/verify.py run openapi-types --output-dir /tmp/sos-openapi-types
       - name: Verify API backward compatibility
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git worktree add --detach /tmp/sos-ci-base "$BASE_SHA"
-          trap 'git worktree remove --force /tmp/sos-ci-base' EXIT
-          if cmp -s /tmp/sos-ci-base/uv.lock uv.lock; then
-            PYTHONPATH=/tmp/sos-ci-base/src uv run --locked python /tmp/sos-ci-base/scripts/export_openapi.py > /tmp/sos-api-before.json
-          else
-            (cd /tmp/sos-ci-base && uv sync --locked --group dev && uv run --locked python scripts/export_openapi.py) > /tmp/sos-api-before.json
-          fi
-          uv run --locked python scripts/export_openapi.py > /tmp/sos-api-after.json
-          uv run --locked python scripts/check_api_compat.py /tmp/sos-api-before.json /tmp/sos-api-after.json
-      - name: Ruff lint
-        run: uv run --locked ruff check .
-      - name: Explain lint failure
-        if: failure()
-        run: uv run --locked ruff check --diff .
-      - name: Ruff format
-        run: uv run --locked ruff format --check .
-      - name: Explain formatting failure
+        run: uv run --locked python scripts/verify.py run openapi-compat --base-ref "$BASE_SHA" --output-dir /tmp/sos-openapi-compat
+      - name: Ruff lint and format (common Suite)
+        run: uv run --locked python scripts/verify.py run ruff --output-dir /tmp/sos-ruff
+      - name: Explain Ruff format failure
         if: failure()
         run: uv run --locked ruff format --diff .
+      - name: Infrastructure-free Python tests
+        run: uv run --locked python scripts/verify.py run python-unit --output-dir /tmp/sos-python-unit
+      - name: Verify native test inventory
+        run: uv run --locked python scripts/verify.py inventory --output /tmp/sos-test-inventory.json
       - name: Start integration infrastructure
         run: docker compose -f compose.yaml -p sos-platform up -d --wait
       - name: Migrate database and prepare object storage
@@ -76,35 +64,24 @@ jobs:
           uv run --locked alembic upgrade head
           uv run --locked python -m sos_platform.bootstrap
       - name: Verify installed wheel can read packaged Alembic HEAD
-        run: |
-          uv build --wheel --out-dir /tmp/sos-wheel
-          uv pip install --target /tmp/sos-installed --no-deps /tmp/sos-wheel/*.whl
-          cd /tmp
-          "$GITHUB_WORKSPACE/.venv/bin/python" -I - <<'PY'
-          import sys
-          from pathlib import Path
-          from tempfile import TemporaryDirectory
-          sys.path.insert(0, "/tmp/sos-installed")
-          import sos_platform
-          from sos_platform.store import Store
-          assert Path(sos_platform.__file__).is_relative_to("/tmp/sos-installed")
-          with TemporaryDirectory() as directory:
-              store = Store(Path(directory))
-              store.initialize()
-              store.engine.dispose()
-          PY
-      - name: Unit and integration tests
-        run: uv run --locked pytest -q --junitxml=/tmp/sos-pytest-results.xml
+        run: uv run --locked python scripts/verify.py run wheel --output-dir /tmp/sos-wheel-check
+      - name: Infrastructure integration tests
+        run: uv run --locked python scripts/verify.py run python-integration --output-dir /tmp/sos-python-integration
+      - name: Verify metadata schema matches migration
+        run: uv run --locked python scripts/verify.py run alembic --output-dir /tmp/sos-alembic
       - name: Publish Python test report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-test-report
-          path: /tmp/sos-pytest-results.xml
+          path: |
+            /tmp/sos-python-unit/*.xml
+            /tmp/sos-python-integration/*.xml
+            /tmp/sos-test-inventory.json
+            /tmp/sos-*/**/*.manifest.json
+            /tmp/sos-*/**/*.summary.txt
           if-no-files-found: ignore
           retention-days: 7
-      - name: Verify metadata schema matches migration
-        run: uv run --locked alembic check
       - name: Extended module-order regression (scheduled/manual)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
@@ -121,12 +98,16 @@ jobs:
       - name: Install frontend dependencies
         working-directory: web
         run: npm ci --no-audit
-      - name: TypeScript and Vite build
-        working-directory: web
-        run: npm run build
-      - name: Frontend tests
-        working-directory: web
-        run: npm run test
+      - name: Frontend build and Vitest (common Suite)
+        run: python3 scripts/verify.py run frontend --output-dir /tmp/sos-frontend
+      - name: Save Frontend JUnit and manifest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: frontend-test-report
+          path: /tmp/sos-frontend/
+          if-no-files-found: ignore
+          retention-days: 7
 
   ui-e2e:
     runs-on: ubuntu-latest
@@ -146,88 +127,12 @@ jobs:
       - name: Install browser
         working-directory: web
         run: npx playwright install --with-deps chromium
-      - name: Start SOS using public Make interface
-        run: make up
-      # pytest·Vitest·빌드는 앞선 병렬 작업에서 검증하므로 브라우저만 실행한다.
       - name: Browser workflow tests in separate E2E volumes
-        env:
-          SOS_JUNIT_FILE: reports/workspace.xml
-        run: uv run --locked python scripts/run_isolated_e2e.py
-      - name: Make lifecycle and data persistence
-        run: |
-          make
-          make help
-          make up
-          make status
-          make doctor
-          python3 scripts/dev.py doctor --deep --format json > /tmp/sos-doctor.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-doctor.json")); assert d["status"]=="passed", d'
-          make up
-          cat > /tmp/sos-lifecycle.csv <<'CSV'
-          timestamp,value
-          1,10
-          2,20
-          CSV
-          curl -fsS -F 'file=@/tmp/sos-lifecycle.csv' http://127.0.0.1:9602/api/datasets/files > /tmp/sos-dataset.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); assert d["id"]'
-          # 다른 Playwright 시나리오의 S3·DB 데이터에 의존하지 않고 이번 검사에서 Iceberg를 만든다.
-          export SOS_CI_TABLE="ci_lifecycle_${GITHUB_RUN_ID}"
-          export SOS_CI_DATASET_ID="$(python3 -c 'import json; print(json.load(open("/tmp/sos-dataset.json"))["id"])')"
-          curl -fsS -X POST -H 'Content-Type: application/json' \
-            -d "{\"dataset_id\":\"${SOS_CI_DATASET_ID}\",\"table_name\":\"${SOS_CI_TABLE}\"}" \
-            http://127.0.0.1:9602/api/iceberg/import > /tmp/sos-ci-import.json
-          python3 - <<'PY'
-          import json
-          import time
-          from urllib.request import urlopen
-          job_id = json.load(open("/tmp/sos-ci-import.json"))["id"]
-          deadline = time.monotonic() + 60
-          while time.monotonic() < deadline:
-              with urlopen(f"http://127.0.0.1:9602/api/jobs/{job_id}", timeout=5) as reply:
-                  job = json.load(reply)
-              if job["status"] == "Succeeded":
-                  break
-              if job["status"] in ("Failed", "Cancelled"):
-                  raise RuntimeError(f"Independent lifecycle import failed: {job['error']}")
-              time.sleep(0.25)
-          else:
-              raise TimeoutError("Independent Iceberg import did not finish")
-          PY
-          make restart
-          curl -fsS http://127.0.0.1:9602/api/datasets > /tmp/sos-restarted.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restarted.json")); assert any(x["id"]==d["id"] for x in rows["items"])'
-          make down
-          make up
-          curl -fsS http://127.0.0.1:9602/api/datasets > /tmp/sos-restored.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-dataset.json")); rows=json.load(open("/tmp/sos-restored.json")); assert any(x["id"]==d["id"] for x in rows["items"])'
-          data_id=$(python3 -c 'import json; print(json.load(open("/tmp/sos-dataset.json"))["id"])')
-          curl -fsS "http://127.0.0.1:9602/api/datasets/$data_id/preview" > /tmp/sos-persisted-preview.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-preview.json")); assert d["returned_rows"]==2, d'
-          iceberg_id=$(python3 -c 'import json,os; d=json.load(open("/tmp/sos-restored.json")); print(next(x["id"] for x in d["items"] if x["name"]=="default."+os.environ["SOS_CI_TABLE"]))')
-          curl -fsS "http://127.0.0.1:9602/api/datasets/$iceberg_id/preview" > /tmp/sos-persisted-iceberg.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-iceberg.json")); assert d["returned_rows"]>=2, d'
-          iceberg_table="$SOS_CI_TABLE"
-          curl -fsS "http://127.0.0.1:9602/api/iceberg/$iceberg_table/snapshots" > /tmp/sos-persisted-snapshots.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-snapshots.json")); assert len(d)>=1, d'
-          curl -fsS http://127.0.0.1:9602/api/jobs > /tmp/sos-persisted-jobs.json
-          python3 -c 'import json; d=json.load(open("/tmp/sos-persisted-jobs.json")); assert any(x["status"]=="Succeeded" for x in d["items"]), d'
-          make logs > /tmp/sos-sanitized-logs.txt
-      - name: Verify token-mode browser permissions
-        run: |
-          export SOS_E2E_VIEWER_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-          export SOS_E2E_RESEARCHER_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-          export SOS_E2E_OPERATOR_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-          export SOS_AUTH_MODE=token
-          export SOS_AUTH_TOKEN_HASHES="$(python3 -c "import os,json,hashlib; roles=('viewer','researcher','operator'); print(json.dumps({hashlib.sha256(os.environ['SOS_E2E_'+r.upper()+'_TOKEN'].encode()).hexdigest(): {'actor_id': 'ci-'+r, 'kind': 'human', 'roles':[r]} for r in roles}))")"
-          make restart
-          cd web && SOS_JUNIT_FILE=reports/auth.xml npx playwright test auth.spec.ts
-          cd .. && python3 - <<'PY'
-          from xml.etree import ElementTree
-          cases = ElementTree.parse("web/reports/auth.xml").findall(".//testcase")
-          assert len(cases) == 3 and all(case.find("skipped") is None for case in cases), (
-              "CI must execute all three token-mode role cases"
-          )
-          PY
+        run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
+      - name: Make lifecycle and data persistence (owned environment)
+        run: uv run --locked python scripts/verify.py run make-lifecycle --output-dir web/reports
+      - name: Verify token-mode browser permissions (owned environment)
+        run: uv run --locked python scripts/verify.py run token-rbac --output-dir web/reports
 
       - name: Save browser JUnit and failure trace
         if: always()
@@ -236,17 +141,11 @@ jobs:
           name: browser-test-report
           path: |
             web/reports/*.xml
+            web/reports/*.json
+            web/reports/*.summary.txt
             web/test-results/
           if-no-files-found: ignore
           retention-days: 7
-      - name: Stop managed services without deleting data
-        if: always()
-        run: make down
-      - name: Service diagnostics on failure
-        if: failure()
-        run: |
-          # 비밀정보가 포함될 수 있는 원본 로그를 직접 출력하지 않는다.
-          make logs
 
 
   # 보호 규칙의 python-quality 상태가 3개 핵심 검증을 모두 대표하도록 한다.
@@ -264,3 +163,20 @@ jobs:
           test "$PYTHON_RESULT" = "success"
           test "$FRONTEND_RESULT" = "success"
           test "$E2E_RESULT" = "success"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download native JUnit and inventory reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: '*-test-report'
+          path: validation-artifacts
+          merge-multiple: false
+      - name: Reconcile native inventory with every required JUnit report
+        run: |
+          python3 scripts/verify.py reconcile \
+            --inventory validation-artifacts/python-test-report/sos-test-inventory.json \
+            --pytest-report validation-artifacts/python-test-report/sos-python-unit/python-unit.xml \
+            --pytest-report validation-artifacts/python-test-report/sos-python-integration/python-integration.xml \
+            --vitest-report validation-artifacts/frontend-test-report/frontend.xml \
+            --playwright-report validation-artifacts/browser-test-report/reports/workspace-e2e.xml \
+            --playwright-report validation-artifacts/browser-test-report/reports/token-rbac.xml
