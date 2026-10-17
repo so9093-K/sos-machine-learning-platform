@@ -47,7 +47,7 @@ def python_ids(output: str) -> list[str]:
         {
             line.strip()
             for line in output.splitlines()
-            if line.strip().startswith("tests/") and "::" in line
+            if line.strip().startswith(SCOPES["pytest"]["source_root"] + "/") and "::" in line
         }
     )
 
@@ -108,16 +108,15 @@ def source_path(runner: str, test_id: str) -> str:
             raise ValueError(f"pytest 출처가 tests/가 아닙니다: {source}")
         return source
     if runner == "vitest":
-        if f"/{SCOPES['vitest']['cwd']}/" in source:
-            return (
-                SCOPES["vitest"]["cwd"] + "/" + source.rsplit(f"/{SCOPES['vitest']['cwd']}/", 1)[1]
-            )
-        if source.startswith(SCOPES["vitest"]["cwd"] + "/"):
-            if not source.startswith(SCOPES["vitest"]["source_root"] + "/"):
-                raise ValueError("Vitest 출처가 범위 밖입니다.")
+        root = SCOPES["vitest"]["source_root"]
+        cwd = SCOPES["vitest"]["cwd"]
+        if source.startswith(root + "/"):
             return source
-        if source.startswith("src/"):
-            return SCOPES["vitest"]["cwd"] + "/" + source
+        if f"/{root}/" in source:
+            return root + "/" + source.rsplit(f"/{root}/", 1)[1]
+        relative = root.removeprefix(cwd + "/")
+        if source.startswith(relative + "/"):
+            return cwd + "/" + source
         raise ValueError("Vitest 출처가 정의된 source_root 내부가 아닙니다.")
     if runner == "playwright":
         if source.startswith(SCOPES["playwright"]["source_root"] + "/"):

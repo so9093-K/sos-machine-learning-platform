@@ -250,6 +250,27 @@ def test_empty_registry_defaults_to_standard(tmp_path):
     assert inventory.classify({"pytest": ["tests/test_a.py::case"]}, [])[0]["policy"] == "standard"
 
 
+def test_python_collector_scope_is_project_configured(monkeypatch):
+    """pytest 테스트 루트가 달라도 Native Node ID를 유지한다."""
+    monkeypatch.setitem(inventory.SCOPES["pytest"], "source_root", "specs")
+    assert inventory.python_ids("specs/test_a.py::works\n") == [
+        "specs/test_a.py::works"
+    ]
+    assert inventory.source_path("pytest", "specs/test_a.py::works") == "specs/test_a.py"
+
+
+def test_vitest_source_scope_is_project_configured(monkeypatch):
+    """Vitest 경로를 변경해도 JUnit/Native 정규화가 일치한다."""
+    monkeypatch.setitem(inventory.SCOPES["vitest"], "cwd", "frontend")
+    monkeypatch.setitem(inventory.SCOPES["vitest"], "source_root", "frontend/specs")
+    assert inventory.source_path("vitest", "specs/api.test.ts::case") == (
+        "frontend/specs/api.test.ts"
+    )
+    assert inventory.source_path("vitest", "/workspace/frontend/specs/api.test.ts::case") == (
+        "frontend/specs/api.test.ts"
+    )
+
+
 def test_project_runner_scope_changes_do_not_require_core_modification(monkeypatch):
     """Runner별 프로젝트 경로를 설정만으로 변경할 수 있다."""
     monkeypatch.setitem(inventory.SCOPES["playwright"], "source_root", "browser/specs")
