@@ -169,22 +169,22 @@ def load_registry(path: Path) -> list[dict]:
             raise ValueError(f"보호 계약 연결 선택자 누락: {identifier}")
         selected = set()
         for selector in selectors:
-            if (
-                not isinstance(selector, dict)
-                or set(selector) - {"runner", "path_glob", "title_glob"}
-                or not {"runner", "path_glob"} <= set(selector)
-            ):
+            if not isinstance(selector, dict) or set(selector) != {
+                "runner", "path_glob", "title_glob"
+            }:
                 raise ValueError(f"보호 계약 선택자 필드 오류: {identifier}")
             runner = selector["runner"]
             if runner not in RUNNERS:
                 raise ValueError(f"보호 계약 Runner 오류: {identifier}")
             pattern = selector["path_glob"]
-            if not isinstance(pattern, str) or not pattern.startswith(
-                SCOPES[runner]["source_root"] + "/"
+            if (
+                not isinstance(pattern, str)
+                or not pattern.startswith(SCOPES[runner]["source_root"] + "/")
+                or any(char in pattern for char in "*?[]")
             ):
                 raise ValueError(f"보호 계약 경로 오류: {identifier}")
             title = selector.get("title_glob", "*")
-            if not isinstance(title, str) or not title:
+            if not isinstance(title, str) or not title.strip() or not title.strip("*?[] "):
                 raise ValueError(f"보호 계약 제목 조건 오류: {identifier}")
             if (runner, pattern, title) in selected:
                 raise ValueError(f"보호 계약 중복 선택자: {identifier}")
@@ -298,89 +298,6 @@ def reconcile(inventory: dict, reports: dict[str, list[Path]]) -> dict[str, int]
     return counts
 
 
-def _indexed_inventory(value: dict) -> dict[tuple[str, str], dict]:
-    """동일한 Inventory 스키마의 계약 연결 변경을 보수적으로 비교한다."""
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
-        raise ValueError("비교할 Inventory 버전 오류")
-    if not isinstance(value.get("tests"), list):
-        raise ValueError("비교할 Inventory 목록 오류")
-    result = {}
-    for row in value["tests"]:
-        if not isinstance(row, dict):
-            raise ValueError("Inventory 테스트 행 오류")
-        runner, identifier = row.get("runner"), row.get("test_id")
-        if runner not in RUNNERS or not isinstance(identifier, str):
-            raise ValueError("Inventory Runner/Test ID 오류")
-        links = row.get("contract_ids", [])
-        if not isinstance(links, list) or any(not isinstance(x, str) for x in links):
-            raise ValueError("Inventory Contract ID 오류")
-        if row.get("policy") == "protected" and not links:
-            raise ValueError("Contract ID가 없는 Protected 행")
-        key = (runner, stable_key(runner, identifier))
-        if key in result:
-            raise ValueError("Inventory 중복 Test ID")
-        result[key] = {
-            "runner": runner,
-            "source_path": source_path(runner, identifier),
-            "contract_ids": sorted(set(links)),
-        }
-    return result
-
-
-def audit_changes(before: dict, after: dict) -> dict:
-    """이름 변경 후보와 실제 계약 연결 해제를 구분하며 자동 승인하지 않는다."""
-    previous = _indexed_inventory(before)
-    current = _indexed_inventory(after)
-    removed = {key: row for key, row in previous.items() if key not in current}
-    added = {key: row for key, row in current.items() if key not in previous}
-    result = {
-        "standard_removed": [],
-        "possible_renames": [],
-        "protected_removed": [],
-        "lost_protections": [],
-    }
-    for key in previous.keys() & current.keys():
-        lost = sorted(set(previous[key]["contract_ids"]) - set(current[key]["contract_ids"]))
-        if lost:
-            result["lost_protections"].append(
-                {
-                    "runner": key[0],
-                    "source_path": previous[key]["source_path"],
-                    "lost_contract_ids": lost,
-                }
-            )
-    for _key, row in sorted(removed.items()):
-        if not row["contract_ids"]:
-            result["standard_removed"].append(row["source_path"])
-            continue
-        related_old = [
-            item
-            for item in removed.values()
-            if item["runner"] == row["runner"]
-            and item["source_path"] == row["source_path"]
-            and item["contract_ids"] == row["contract_ids"]
-        ]
-        related_new = [
-            item
-            for item in added.values()
-            if item["runner"] == row["runner"]
-            and item["source_path"] == row["source_path"]
-            and item["contract_ids"] == row["contract_ids"]
-        ]
-        record = {
-            "runner": row["runner"],
-            "source_path": row["source_path"],
-            "contract_ids": row["contract_ids"],
-        }
-        if len(related_old) == len(related_new) == 1:
-            result["possible_renames"].append(record)
-        else:
-            result["protected_removed"].append(record)
-    result["standard_removed"].sort()
-    result["lost_protections"].sort(key=lambda x: (x["runner"], x["source_path"]))
-    return result
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="SOS 테스트 자산 인벤토리 관리")
     subs = parser.add_subparsers(dest="action")
@@ -392,9 +309,6 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("--pytest-report", action="append", type=Path, required=True)
     compare.add_argument("--vitest-report", action="append", type=Path, required=True)
     compare.add_argument("--playwright-report", action="append", type=Path, required=True)
-    diff = subs.add_parser("diff")
-    diff.add_argument("--before", type=Path, required=True)
-    diff.add_argument("--after", type=Path, required=True)
     # 이전 인터페이스 유지: '--output path'만 전달해도 generate 동작
     effective_argv = sys.argv[1:] if argv is None else argv
     args = parser.parse_args(
@@ -427,19 +341,6 @@ def main(argv: list[str] | None = None) -> int:
             result = reconcile(inventory, reports)
             print("JUnit 실행·수집 ID 일치: " + ", ".join(f"{k}={v}" for k, v in result.items()))
             return 0
-        if args.action == "diff":
-            previous = json.loads(args.before.read_text(encoding="utf-8"))
-            current = json.loads(args.after.read_text(encoding="utf-8"))
-            changes = audit_changes(previous, current)
-            print(json.dumps(changes, ensure_ascii=False, indent=2))
-            # Standard 삭제는 일반 리뷰. Protected 삭제·이름 변경 후보·연결 해제는 별도 리뷰.
-            return int(
-                bool(
-                    changes["protected_removed"]
-                    or changes["possible_renames"]
-                    or changes["lost_protections"]
-                )
-            )
         parser.print_help()
         return 2
     except (OSError, ValueError, KeyError, ET.ParseError, subprocess.CalledProcessError) as exc:
