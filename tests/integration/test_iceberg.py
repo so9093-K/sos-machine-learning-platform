@@ -254,6 +254,143 @@ def test_import_uses_attempt_snapshot_not_latest(workspace, monkeypatch):
     )
 
 
+def test_iceberg_commit_response_loss_preserves_snapshot_without_automatic_retry(
+    workspace, monkeypatch, tmp_path
+):
+    """외부 Snapshot 커밋 후 ACK 유실은 미실행이 아닌 불확실성으로 보존한다."""
+    import json
+
+    from pyiceberg.table import Table
+
+    import sos_platform.worker as worker
+    from sos_platform.datasets import iceberg_catalog
+
+    client, store = workspace
+    source = upload(client)
+    request = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source["id"], "table_name": "lost_commit_response"},
+    )
+    assert request.status_code == 202
+    claimed = store.claim()
+    assert claimed["id"] == request.json()["id"]
+    attempt_id = claimed["attempts"][-1]["id"]
+    completed = tmp_path / "lost-ack.completed.json"
+    pending = tmp_path / "lost-ack.pending.parquet"
+    original_append = Table.append
+    commit_count = 0
+    secret = "token=never-expose-this"
+
+    def commit_then_lose_response(table, data, **kwargs):
+        nonlocal commit_count
+        original_append(table, data, **kwargs)
+        commit_count += 1
+        raise TimeoutError(secret)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(worker, "_guard_child_parent", lambda _pid: None)
+        patch.setattr(Table, "append", commit_then_lose_response)
+        worker._perform(store.home, store.database_url, claimed, completed, pending, 0)
+
+    outcome = json.loads(completed.read_text(encoding="utf-8"))
+    assert commit_count == 1
+    assert outcome["error_code"] == "SOS-ICEBERG-UNCERTAIN"
+    assert outcome["failure_stage"] == "iceberg_commit"
+    assert outcome["failure_category"] == "timeout"
+    assert secret not in completed.read_text(encoding="utf-8")
+
+    # Worker의 외부 커밋 결과는 DB에 성공으로 기록되지 않았다.
+    assert store.get_job(claimed["id"])["status"] == "Running"
+    assert not [d for d in store.dataset_page(limit=101) if d["kind"] == "iceberg"]
+    table = iceberg_catalog(store).load_table("default.lost_commit_response")
+    snapshots = [
+        snapshot
+        for snapshot in table.snapshots()
+        if snapshot.summary and snapshot.summary.get("sos.attempt-id") == attempt_id
+    ]
+    assert len(snapshots) == 1
+    assert table.scan().to_arrow().num_rows == 3
+    assert not any(name.startswith("sos_dataset_") for name in table.metadata.refs)
+
+    # 부모 SIGKILL과 동일하게 완료 메시지를 잃으면 새 Worker는 다시 Append하지 않는다.
+    recovered = store.recover()
+    assert (claimed["id"], attempt_id) in recovered
+    job = store.get_job(claimed["id"])
+    assert job["status"] == "Failed"
+    assert job["error_code"] == "SOS-ICEBERG-UNCERTAIN"
+    assert job["attempts"][-1]["status"] == "Interrupted"
+    assert attempt_id in job["error"]
+    assert run_once(store) is False
+    assert len(iceberg_catalog(store).load_table("default.lost_commit_response").snapshots()) == 1
+    assert not [d for d in store.dataset_page(limit=101) if d["kind"] == "iceberg"]
+
+
+def test_tag_commit_ack_loss_preserves_uncertain_retention_and_catalog_tag(workspace, monkeypatch):
+    """보호 Tag 커밋 응답 유실에도 미게시 의도와 실제 Tag를 함께 보존한다."""
+    from pyiceberg.table import Table
+
+    from sos_platform.datasets import connect_iceberg, iceberg_catalog
+    from sos_platform.retention import inspect_tag
+
+    client, store = workspace
+    source = upload(client)
+    job = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source["id"], "table_name": "lost_tag_response"},
+    )
+    assert job.status_code == 202
+    assert run_once(store)
+    table = iceberg_catalog(store).load_table("default.lost_tag_response")
+    snapshot_id = str(table.current_snapshot().snapshot_id)
+    before = len(store.dataset_page(limit=101))
+    original_manage = Table.manage_snapshots
+
+    class LostTagAcknowledgement:
+        def __init__(self, delegate):
+            self.delegate = delegate
+
+        def create_tag(self, snapshot, name):
+            self.delegate = self.delegate.create_tag(snapshot, name)
+            return self
+
+        def commit(self):
+            self.delegate.commit()
+            raise TimeoutError("tag acknowledgement was lost")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            Table,
+            "manage_snapshots",
+            lambda table: LostTagAcknowledgement(original_manage(table)),
+        )
+        with pytest.raises(TimeoutError, match="acknowledgement was lost"):
+            connect_iceberg(store, "lost_tag_response", snapshot_id)
+
+    assert len(store.dataset_page(limit=101)) == before
+    with store.connection() as db:
+        records = (
+            db.execute(
+                text(
+                    "SELECT dataset_id,tag_name,state FROM snapshot_retention "
+                    "WHERE state='Uncertain'"
+                )
+            )
+            .mappings()
+            .all()
+        )
+    assert len(records) == 1
+    retained = records[0]
+    assert store.get_dataset(retained["dataset_id"]) is None
+    table = iceberg_catalog(store).load_table("default.lost_tag_response")
+    assert inspect_tag(table, name=retained["tag_name"], snapshot_id=snapshot_id) == "retained"
+    checked = client.get("/api/storage/iceberg-references")
+    assert checked.status_code == 200
+    unresolved = next(
+        row for row in checked.json() if row["dataset_id"] == retained["dataset_id"]
+    )
+    assert unresolved["status"] == "unknown"
+
+
 def test_tag_survives_database_publish_failure(workspace, monkeypatch):
     """Catalog Tag 커밋 후 DB 게시 실패는 미게시 의도로 남아 운영자가 확인할 수 있다."""
     client, store = workspace

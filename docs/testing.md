@@ -36,7 +36,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | Worker·Discovery 공통 메모리 수용과 예약 회수, 설정의 포함 관계·서버 오류 분리 | test_resource_admission.py (unit·integration) |
 | Worker 실행 시간 제한·실패 기록 | test_worker_budget.py |
 | Dataset 키셋 페이지와 Snapshot 소유권 | test_dataset_pages.py, test_snapshot_scope.py |
-| Iceberg Snapshot 고정·Tag 보존·중단 후 자동 재시도 금지·대용량 비파티션 단일 Snapshot | test_iceberg.py |
+| Iceberg Snapshot 고정·Tag 보존·외부 커밋/Tag ACK 유실 시 불확실성·중단 후 자동 재시도 금지·대용량 비파티션 단일 Snapshot | test_iceberg.py |
 | 객체 쓰기 의도·S3 관측·삭제 없는 Storage Health | test_storage.py |
 | 토큰·역할·리소스 소유권·거부 감사 | test_security.py, auth.spec.ts |
 | Worker 중단·복구 감사·Attempt 식별 | test_recovery.py |
