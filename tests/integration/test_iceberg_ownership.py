@@ -65,6 +65,8 @@ def test_legacy_inspect_is_read_only_then_explicit_adoption_restores_append(work
     claimed = store.iceberg_write_claim("legacy_sensor")
     assert claimed["owner_actor"] == "local-developer"
     assert claimed["state"] == "Active"
+    assert claimed["table_uuid"] == str(table.metadata.table_uuid)
+    assert claimed["adoption_dataset_id"] == source["id"]
     after = iceberg_catalog(store).load_table("default.legacy_sensor")
     assert after.metadata.properties["sos.write-token"] == claimed["token"]
     assert len(after.snapshots()) == 1
@@ -170,3 +172,23 @@ def test_adoption_cannot_override_existing_catalog_owner_token(workspace):
     with pytest.raises(PermissionError):
         adopt(store, table, source)
     assert store.iceberg_write_claim("legacy_sensor") is None
+
+
+def test_pending_adoption_rejects_different_dataset_reference(workspace, monkeypatch):
+    """같은 Actor의 다른 Dataset도 중단된 채택 근거를 바꾸지 못한다."""
+    _client, store = workspace
+    table = legacy_table(store)
+    source = evidence(store, table)
+    alternate = evidence(store, table)
+
+    def lost_completion(*_args, **_kwargs):
+        raise RuntimeError("simulated uncertain completion")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(store, "complete_legacy_iceberg_adoption", lost_completion)
+        with pytest.raises(RuntimeError, match="uncertain"):
+            adopt(store, table, source)
+    with pytest.raises(PermissionError, match="evidence"):
+        adopt(store, table, alternate)
+    assert store.iceberg_write_claim("legacy_sensor")["adoption_dataset_id"] == source["id"]
+    assert adopt(store, table, source)["state"] == "active"

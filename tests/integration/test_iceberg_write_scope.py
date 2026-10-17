@@ -123,3 +123,64 @@ def test_unowned_existing_catalog_table_is_not_silently_claimed(workspace):
     assert denied.status_code == 404
     assert store.iceberg_write_claim("external_table") is None
     assert len(catalog.load_table("default.external_table").snapshots()) == 0
+
+
+def test_recreated_table_with_same_token_cannot_reuse_write_authorization(workspace):
+    """동일 이름·토큰으로 새로 만들어진 물리 테이블에는 기존 쓰기 권한이 없다."""
+    client, store = workspace
+    uploaded = client.post(
+        "/api/datasets/files",
+        files={"file": ("guard.csv", b"v\n1\n", "text/csv")},
+    )
+    assert uploaded.status_code == 201
+    request = {"dataset_id": uploaded.json()["id"], "table_name": "identity_guard"}
+    posted = client.post("/api/iceberg/import", json=request)
+    assert posted.status_code == 202, posted.text
+    assert run_once(store)
+    assert store.get_job(posted.json()["id"])["status"] == "Succeeded"
+    catalog = iceberg_catalog(store)
+    original = catalog.load_table("default.identity_guard")
+    claim = store.iceberg_write_claim("identity_guard")
+    assert claim["state"] == "Active"
+    assert claim["table_uuid"] == str(original.metadata.table_uuid)
+
+    catalog.drop_table("default.identity_guard")
+    replacement = catalog.create_table(
+        "default.identity_guard",
+        schema=pa.schema([("v", pa.int64())]),
+        properties={"sos.write-token": claim["token"]},
+    )
+    assert str(replacement.metadata.table_uuid) != claim["table_uuid"]
+    assert client.post("/api/iceberg/import", json=request).status_code == 404
+    assert store.iceberg_write_claim("identity_guard")["table_uuid"] == claim["table_uuid"]
+    assert replacement.current_snapshot() is None
+
+
+def test_reservation_can_recover_after_table_creation_before_activation(workspace):
+    """Catalog 생성과 DB 활성화 사이의 중단은 같은 예약 토큰으로 복구한다."""
+    client, store = workspace
+    uploaded = client.post(
+        "/api/datasets/files",
+        files={"file": ("staged.csv", b"v\n1\n", "text/csv")},
+    )
+    assert uploaded.status_code == 201
+    claim = store.reserve_iceberg_table("pending_create", "local-developer")
+    assert claim["state"] == "Reserved"
+    assert claim["table_uuid"] is None
+    catalog = iceberg_catalog(store)
+    catalog.create_namespace_if_not_exists("default")
+    created = catalog.create_table(
+        "default.pending_create",
+        schema=pa.schema([("v", pa.int64())]),
+        properties={"sos.write-token": claim["token"]},
+    )
+    queued = client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": uploaded.json()["id"], "table_name": "pending_create"},
+    )
+    assert queued.status_code == 202, queued.text
+    completed = store.iceberg_write_claim("pending_create")
+    assert completed["state"] == "Active"
+    assert completed["table_uuid"] == str(created.metadata.table_uuid)
+    assert run_once(store)
+    assert store.get_job(queued.json()["id"])["status"] == "Succeeded"

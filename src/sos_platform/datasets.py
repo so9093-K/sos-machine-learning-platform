@@ -180,11 +180,13 @@ def reserve_iceberg_write_target(
         table = None
     claim = store.iceberg_write_claim(table_name)
     if table is not None:
+        table_uuid = str(table.metadata.table_uuid)
         if (
             claim is None
             or claim["owner_actor"] != owner_actor
-            or claim["state"] != "Active"
-            or claim["table_uuid"] != str(table.metadata.table_uuid)
+            or claim["state"] not in ("Reserved", "Active")
+            or (claim["state"] == "Active" and claim["table_uuid"] != table_uuid)
+            or (claim["state"] == "Reserved" and claim["table_uuid"] not in (None, table_uuid))
             or table.metadata.properties.get("sos.write-token") != claim["token"]
         ):
             raise PermissionError("Iceberg table write access denied")
