@@ -1,4 +1,4 @@
-"""Error Catalog 코드의 중복·CLI 정합성·비밀정보 보호 정책."""
+"""Error Catalog 코드 중복·구조화 로그의 비밀정보 보호 정책."""
 
 import io
 import logging

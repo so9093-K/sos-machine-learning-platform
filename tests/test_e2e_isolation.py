@@ -1,6 +1,7 @@
 """E2E 격리 실행기가 기존 개발 구성과 데이터를 건드리지 않는지 검증한다."""
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -36,6 +37,7 @@ def test_isolated_e2e_never_reuses_parent_data_or_auth():
     assert "SOS_AUTH_MODE" not in isolated_env
     assert isolated_env["SOS_AUTH_TOKEN_HASHES"] != "production-credentials"
     assert "SOS_E2E_ADMIN_TOKEN" in isolated_env
-    assert "administrator" in {r["roles"][0] for r in __import__("json").loads(isolated_env["SOS_AUTH_TOKEN_HASHES"]).values()}
+    identities = json.loads(isolated_env["SOS_AUTH_TOKEN_HASHES"])
+    assert "administrator" in {actor["roles"][0] for actor in identities.values()}
     assert isolated_env["COMPOSE_PROJECT_NAME"] == "sos-e2e-012345abcdef"
     assert "SOS_S3_ENDPOINT" not in isolated_env

@@ -64,8 +64,6 @@ def test_api_requires_explicit_authentication_mode(monkeypatch, tmp_path):
     from sos_platform.api import create_app
     from sos_platform.security import IdentitySettings
 
-    cli = _dev_module()
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
     monkeypatch.delenv("SOS_AUTH_MODE", raising=False)
     with pytest.raises(ValueError, match="SOS_AUTH_MODE"):
         IdentitySettings.from_env()

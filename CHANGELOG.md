@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- API·Worker 공통 Python 이미지, Web 개발 이미지와 Docker Compose 단일 구성(`app` 프로필)을 추가했습니다. 공개 `make up`은 컨테이너 실행으로 통합하고, 호스트 실행기는 독립 테스트 전용으로 남겼습니다. Token 인증을 요구하고 데이터 볼륨은 보존합니다.
+- API·Worker 공통 Python 이미지, Web 개발 이미지와 Docker Compose 단일 구성(`app` 프로필)을 추가했습니다. 공개 `make up`은 컨테이너 실행으로 통합하고, 호스트 실행기와 로그 릴레이를 제거하고 브라우저 E2E도 고유 Compose 프로젝트에서 실행합니다. Token 인증을 요구하고 데이터 볼륨은 보존합니다.
 
 - `make up`은 개발 기본값을 유지하고 API를 직접 실행할 때는 인증 모드를 명시해야 합니다. 실행 서버는 `sos_platform.api:create_app --factory`를 사용해 앱 import와 기동을 구별하며, OpenAPI 생성과 테스트 수집이 전역 인증 모드를 설정하지 않도록 분리했습니다. 기존 API가 실행 중인 상태에서 인증 모드·토큰 목록이 바뀌면 `make up`은 불일치를 알리고 `make restart`를 안내합니다. 기존 Token RBAC·Dataset/Job 소유권과 API 계약은 유지합니다.
 

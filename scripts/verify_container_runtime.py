@@ -9,10 +9,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-
-import isolated_compose as isolation
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+import isolated_compose as isolation
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE = ("docker", "compose", "--profile", "app", "-f", "compose.yaml")

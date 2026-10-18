@@ -19,7 +19,7 @@
 
 | 테스트 계층 | 위치 | 실행 |
 | --- | --- | --- |
-| 순수 로직·CLI·호환성 | tests/test_processing.py, tests/test_dev_cli.py, tests/test_api_compat.py, tests/test_pagination.py, tests/test_execution_budget.py, tests/test_resource_admission.py, tests/test_errors.py, tests/test_diagnostics.py, tests/test_log_capture.py, tests/test_e2e_isolation.py | make check-fast; PR 필수 |
+| 순수 로직·CLI·호환성 | tests/test_processing.py, tests/test_api_compat.py, tests/test_pagination.py, tests/test_execution_budget.py, tests/test_resource_admission.py, tests/test_errors.py, tests/test_diagnostics.py, tests/test_e2e_isolation.py | make check-fast; PR 필수 |
 | 실제 DB·객체 저장소·Catalog | tests/integration/ | PR 필수 Python 작업 |
 | 브라우저 사용자 흐름·RBAC | web/e2e/ | PR 필수 UI 작업 |
 | 전체 컨테이너 재시작·보존 | CI container-runtime | PR 필수; 자체 데이터를 생성해야 함 |
@@ -85,7 +85,7 @@ make check는 실제 컨테이너 Ready 상태가 필요하다. 공통 Suite를 
 
 - python-tests: 잠금·Markdown/ADR 인덱스·Ruff·API 타입·PR base API 호환성·전체 Python 테스트(로컬 check-fast 명령 계약 포함)·실제 인프라 통합 테스트·Alembic·Wheel. 로컬 check-fast 전체 명령은 다른 필수 CI 단계와 중복 실행하지 않는다.
 - frontend: TypeScript/Vite 빌드 및 Vitest.
-- ui-e2e: 별도 호스트 기반 격리 실행기의 Data Workspace 브라우저 시나리오, 토큰 역할 3개 및 독립 테스트 자원 정리 검사. 정확한 시나리오 개수와 성패는 각 CI 실행 기록을 기준으로 한다.
+- ui-e2e: 고유 Docker Compose 프로젝트에서 실행되는 Data Workspace 브라우저 시나리오, 토큰 역할 3개 및 독립 테스트 자원 정리 검사. 정확한 시나리오 개수와 성패는 각 CI 실행 기록을 기준으로 한다.
 - container-runtime: 고유 Compose 프로젝트에서 공개 Make up/status/doctor/restart/down, Token 역할/소유권, Web 프록시, Job·Iceberg, 재기동 후 데이터·Snapshot 보존 검증. 공통 Suite의 Manifest/Summary를 CI 증거로 보존한다.
 - python-quality: Python·Frontend·UI E2E 및 container-runtime이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
 - 오래된 PR HEAD만 취소하고 main 검증 결과는 각 실행 ID별로 보존한다.

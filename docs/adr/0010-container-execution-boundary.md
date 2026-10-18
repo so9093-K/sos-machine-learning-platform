@@ -1,6 +1,6 @@
 # 0010 — 컨테이너 실행 기반과 플랫폼 계약 분리
 
-상태: **Accepted**
+상태: **Superseded by [0011](0011-compose-native-validation.md)**
 
 ## 배경
 

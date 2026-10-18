@@ -140,8 +140,17 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
         # 소유 기록과 정확히 일치하는 프로젝트의 볼륨만 제거한다.
         containers = subprocess.run(
             [
-                "docker", "compose", "--profile", "app", "-f", "compose.yaml",
-                "-p", instance, "down", "--volumes", "--remove-orphans",
+                "docker",
+                "compose",
+                "--profile",
+                "app",
+                "-f",
+                "compose.yaml",
+                "-p",
+                instance,
+                "down",
+                "--volumes",
+                "--remove-orphans",
             ],
             cwd=ROOT,
             env=env,
@@ -168,8 +177,18 @@ def execute(spec: str) -> int:
     try:
         subprocess.run(
             [
-                "docker", "compose", "--profile", "app", "-f", "compose.yaml",
-                "-p", instance, "up", "--build", "-d", "--wait",
+                "docker",
+                "compose",
+                "--profile",
+                "app",
+                "-f",
+                "compose.yaml",
+                "-p",
+                instance,
+                "up",
+                "--build",
+                "-d",
+                "--wait",
             ],
             cwd=ROOT,
             env=env,

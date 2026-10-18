@@ -25,7 +25,6 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 - API의 비동기 작업 생성 시 Request ID를 Job에 저장하고 생성·종료·복구 감사에 연결한다. Attempt는 해당 Job의 일부이다.
 - `job_id`, `attempt_id`, `error_code`, `failure_stage`는 단계와 원인 검색의 핵심 식별자다. Metrics Label에는 고유 ID를 사용하지 않는다.
 - `observability.emit()`은 허용된 이벤트 속성만 구조화 로그로 내보낸다. 토큰·S3 Key·SQL·환경 변수·예외 원문·데이터 Payload·Stack Trace를 기록하지 않는다.
-- 컨테이너 로그는 `make logs`에서 Compose를 통해 조회한다. 애플리케이션은 비밀정보를 구조화 로그에 쓰지 않으며, 원본 로그·Trace·CI 아티팩트에서 비밀정보 비노출을 검증한다. 내부 호스트 테스트 실행기의 로그 마스킹은 별도로 유지한다.
 - API/Worker 실행에 로그 수집기나 외부 APM 서비스는 필수가 아니다. 로그 저장소를 상태·감사·커밋 판정의 원본으로 만들지 않는다.
 
 ## Runbooks — 반복 가능한 수동 진단
@@ -72,5 +71,3 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 
 ### 로그 크기·보관 정책
 
-- 컨테이너 로그는 Docker Engine의 로그 정책을 따른다. 내부 호스트 격리 테스트 실행기에서는 `scripts/log_capture.py`가 2 MiB씩 3개 백업 파일로 회전한다.
-- `make logs`는 `docker compose logs --tail 80`로 제한된 최신 로그를 조회한다. 내부 호스트 테스트 도구는 64 KiB·70줄 제한과 비밀 문자열 마스킹을 별도로 유지한다. 백업 로그도 임의 삭제하거나 사용자 데이터 저장 경로에 접근하지 않는다.
