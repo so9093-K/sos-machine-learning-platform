@@ -127,6 +127,8 @@ class TabDelimitedReader(FileReader):
             quote_char=None,
             has_header=self._header(options),
             try_parse_dates=True,
+            # 일부 앞 행만 추론하면 뒤늦은 문자열 때문에 Worker 실행이 실패할 수 있다.
+            infer_schema_length=None,
         )
         if not self._header(options):
             names = frame.collect_schema().names()
@@ -139,7 +141,7 @@ class TabDelimitedReader(FileReader):
         header = self._header(options)
         source = (
             f"read_csv({literal(str(path))}, delim={literal(chr(9))}, quote='', "
-            f"header={str(header).lower()})"
+            f"header={str(header).lower()}, sample_size=-1)"
         )
         if header:
             conn.execute(f"CREATE TEMP VIEW source AS SELECT * FROM {source}")
