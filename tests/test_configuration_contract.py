@@ -83,8 +83,10 @@ def test_api_requires_explicit_authentication_mode_but_dev_cli_keeps_local_defau
     monkeypatch.delenv("SOS_AUTH_MODE", raising=False)
     with pytest.raises(ValueError, match="SOS_AUTH_MODE"):
         IdentitySettings.from_env()
+    unused_home = tmp_path / "invalid-auth-home"
     with pytest.raises(ValueError, match="SOS_AUTH_MODE"):
-        create_app(tmp_path)
+        create_app(unused_home)
+    assert not unused_home.exists()
 
     assert cli.configuration()["SOS_AUTH_MODE"] == "development"
 
