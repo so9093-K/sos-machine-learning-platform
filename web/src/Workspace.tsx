@@ -333,6 +333,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       await showRegisteredDataset(data,
         "파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.",
         "파일은 정상 등록됐습니다. 데이터셋 목록 갱신 결과를 확인하지 못했지만 다시 등록할 필요는 없습니다.");
+      // 등록을 확정한 뒤에만 입력 확인 화면을 닫는다. 4xx·네트워크 오류는 수정·재시도 가능해야 한다.
+      setPendingDelimited(null);
     });
     setUploadProgress(null);
   }
@@ -496,7 +498,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         <button onClick={() => setNotice("")} aria-label="알림 닫기">×</button></div>}
       {pendingDelimited && <DelimitedImport file={pendingDelimited} disabled={busy}
         onCancel={() => setPendingDelimited(null)}
-        onConfirm={file => { setPendingDelimited(null); void upload(file); }} />}
+        onConfirm={file => { void upload(file); }} />}
       {uploadProgress && <div className="upload-status" role="status" aria-live="polite">
         <strong>{uploadProgress.name}</strong>
         <span>{uploadProgress.phase === "transferring"
