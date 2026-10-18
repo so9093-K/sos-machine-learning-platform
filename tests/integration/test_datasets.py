@@ -37,7 +37,6 @@ def test_upload_preview_profile_and_scalar(workspace):
     assert client.get("/openapi.json").status_code == 200
 
 
-
 def test_headerless_tabular_txt_keeps_first_row_and_consistent_columns(workspace):
     """따옴표가 포함된 실제 리뷰 유형도 첫 행·원본 해시·컬럼을 보존한다."""
     client, store = workspace
@@ -71,6 +70,7 @@ def test_tabular_header_option_is_part_of_dataset_interpretation(workspace):
     """원본 SHA가 같아도 헤더 설정을 달리한 Dataset의 스키마는 섞이지 않는다."""
     client, store = workspace
     raw = b"score\treview\n5\tgood\n2\tbad\n"
+
     def submit(flag):
         return client.post(
             "/api/datasets/files",
@@ -85,7 +85,8 @@ def test_tabular_header_option_is_part_of_dataset_interpretation(workspace):
     assert with_header["id"] != without["id"]
     assert with_header["version"] == without["version"]
     assert list(client.get(f"/api/datasets/{with_header['id']}/preview").json()["schema"]) == [
-        "score", "review"
+        "score",
+        "review",
     ]
     p = client.get(f"/api/datasets/{without['id']}/preview").json()
     assert list(p["schema"]) == ["unnamed_1", "unnamed_2"]
@@ -103,11 +104,10 @@ def test_tabular_txt_rejects_ambiguous_or_malformed_input(workspace):
         (b"a\ta\n1\t2\n", "text/tab-separated-values; header=present"),
     ]
     for content, mime in cases:
-        response = client.post(
-            "/api/datasets/files", files={"file": ("text.txt", content, mime)}
-        )
+        response = client.post("/api/datasets/files", files={"file": ("text.txt", content, mime)})
         assert response.status_code == 400, response.text
         assert response.json()["code"] == "SOS-UPLOAD-INVALID"
+
 
 def test_upload_storage_wait_does_not_block_other_api_requests(workspace, monkeypatch):
     """객체 저장소가 느려도 API 이벤트 루프의 별도 조회는 진행되어야 한다."""

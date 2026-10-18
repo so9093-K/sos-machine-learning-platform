@@ -60,8 +60,10 @@ def test_suggestions_only_emit_supported_operations():
         "null_count": 0,
     }
     self_grouped = suggest_analyses([score], 10)
-    assert all(item["request"].get("group_by") != "unnamed_1" or
-               item["request"]["metric"] == "count" for item in self_grouped)
+    assert all(
+        item["request"].get("group_by") != "unnamed_1" or item["request"]["metric"] == "count"
+        for item in self_grouped
+    )
 
     # 식별자나 비밀값으로 추론한 범주 컬럼은 자동 그룹 집계로 권장하지 않는다.
     secret_group = {

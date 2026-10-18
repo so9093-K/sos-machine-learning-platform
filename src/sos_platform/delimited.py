@@ -52,7 +52,9 @@ def scan_file(path: Path, dataset: dict) -> pl.LazyFrame:
         or not isinstance(opts.get("has_header"), bool)
     ):
         raise ValueError("Missing tabular Dataset parse settings")
-    frame = pl.scan_csv(path, separator="\t", quote_char=None, has_header=opts["has_header"], try_parse_dates=True)
+    frame = pl.scan_csv(
+        path, separator="\t", quote_char=None, has_header=opts["has_header"], try_parse_dates=True
+    )
     if not opts["has_header"]:
         names = frame.collect_schema().names()
         frame = frame.rename({name: f"unnamed_{index}" for index, name in enumerate(names, 1)})
