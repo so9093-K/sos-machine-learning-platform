@@ -85,9 +85,12 @@ RETAIN_DEP = Depends(require("snapshot.retain"))
 SNAPSHOT_READ_DEP = Depends(require("snapshot.read"))
 
 
-def create_app(home: Path | None = None) -> FastAPI:
+def create_app(
+    home: Path | None = None, *, identity: IdentitySettings | None = None
+) -> FastAPI:
+    """인증 설정은 실행 시 검증하고, 명세 생성에는 명시적 신원을 사용할 수 있다."""
     # 잘못된 인증 설정은 저장소·로컬 디렉터리를 만들기 전에 거부한다.
-    identity = IdentitySettings.from_env()
+    identity = identity if identity is not None else IdentitySettings.from_env()
     store = Store(home or Path(os.environ.get("SOS_HOME", ".sos")))
     upload_policy = UploadPolicy.from_env()
 
@@ -602,5 +605,3 @@ def create_app(home: Path | None = None) -> FastAPI:
 
     return app
 
-
-app = create_app()
