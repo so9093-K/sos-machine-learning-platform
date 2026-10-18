@@ -54,7 +54,7 @@ DuckDB 기반 Profiler는 원본 판본에서 통계·품질을 계산하며 역
 
 ## 현재 코드의 모듈 경계
 
-`discovery.py`는 DuckDB를 사용해 CSV·Parquet·고정 Iceberg Snapshot의 Preview·EDA·Profile·집계를 전담한다. `processing.py`는 Polars Feature·Transform 의미를 담당하며 DB·HTTP·S3에 의존하지 않는다. `datasets.py`는 Dataset 등록·검증된 원본 캐시·Iceberg 적재를 연결하고, `object_store.py`가 S3 전송을 관리하고 `store.py`의 공통 트랜잭션 경계와 `store_objects.py`·`store_snapshots.py`·`store_datasets.py`·`store_jobs.py`·`store_administration.py`가 도메인별 PostgreSQL 상태를 관리한다. `resource_admission.py`는 Discovery·Worker 공통 논리 메모리 수용 판단을 담당하고, 실제 RSS 감시와 프로세스 실행은 Worker의 책임이다. UI의 예제·작업 화면도 일반 API를 사용하며 별도의 가짜 실행 경로를 만들지 않는다.
+`discovery.py`는 DuckDB를 사용해 파일 Dataset·고정 Iceberg Snapshot의 Preview·EDA·Profile·집계를 전담한다. 파일 입력 형식별 검증·DuckDB/Polars 읽기 설정은 `file_formats.py`의 제한된 Reader 등록 지점이 소유한다. 등록된 Reader의 의미는 Dataset에 귀속된 해석 설정을 따르며 새로운 포맷을 이유로 Discovery·Preparation의 공통 작업 계약을 변경하지 않는다. `processing.py`는 Polars Feature·Transform 의미를 담당하며 DB·HTTP·S3에 의존하지 않는다. `datasets.py`는 Dataset 등록·검증된 원본 캐시·Iceberg 적재를 연결하고, `object_store.py`가 S3 전송을 관리하고 `store.py`의 공통 트랜잭션 경계와 `store_objects.py`·`store_snapshots.py`·`store_datasets.py`·`store_jobs.py`·`store_administration.py`가 도메인별 PostgreSQL 상태를 관리한다. `resource_admission.py`는 Discovery·Worker 공통 논리 메모리 수용 판단을 담당하고, 실제 RSS 감시와 프로세스 실행은 Worker의 책임이다. UI의 예제·작업 화면도 일반 API를 사용하며 별도의 가짜 실행 경로를 만들지 않는다.
 
 장기적인 도메인 경계는 이 실행 형태에 종속되지 않는다. 새로운 Catalog나 저장소 제공자를 추가할 때 Dataset과 Job의 의미를 유지하고, 실제 교체 필요성이 있는 경계에만 어댑터를 도입한다.
 
