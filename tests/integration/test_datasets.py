@@ -76,6 +76,7 @@ def test_tabular_header_option_is_part_of_dataset_interpretation(workspace):
             "/api/datasets/files",
             files={"file": ("reviews.tsv", raw, f"text/tab-separated-values; header={flag}")},
         )
+
     headered = submit("present")
     headerless = submit("absent")
     assert headered.status_code == 201, headered.text
