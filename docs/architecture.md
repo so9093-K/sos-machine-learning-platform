@@ -46,7 +46,7 @@ Human / External System / AI Agent
 
 플랫폼 메타데이터(Dataset, Job, Execution Attempt)는 PostgreSQL에 영속화하고, 실제 원본 데이터·변환 결과는 S3 호환 객체 저장소에 보관한다. 서로 다른 저장소의 원자성을 가정하지 않으며, 게시 실패 시 공유 가능한 원본 객체와 Attempt별 결과 객체의 소유권·보존 및 복구 정책을 구분한다. Iceberg Catalog는 테이블·Snapshot의 메타데이터를 담당하며 데이터 파일은 객체 저장소를 활용한다. 공통 Dataset 계약은 특정 제품의 내부 객체에 종속되지 않는다.
 
-Makefile은 Docker Compose 실행 인터페이스이고, `compose.yaml`의 `app` 프로필이 API·Worker·Web을 구성한다. 프로필 없는 인프라 기동은 CI·격리 테스트가 재사용한다. 기존 호스트 실행기는 독립적인 브라우저 테스트 어댑터로만 유지한다. 개발 환경의 Compose 구성이 플랫폼 서비스의 의존 방향을 결정하지 않는다. 외부 관리형 데이터베이스·스토리지 또는 독립적으로 배치된 Worker를 사용할 수 있으며, 실행 중(Running)과 실제 서비스 준비(Ready)는 구별하여 판정한다.
+Makefile은 Docker Compose 실행 인터페이스이고, `compose.yaml`의 `app` 프로필이 API·Worker·Web을 구성한다. 프로필 없는 인프라 기동은 CI·격리 테스트가 재사용한다. 브라우저 테스트도 고유 Compose 프로젝트에서 API·Worker·Web 서비스를 실행하고 Playwright는 네이티브 Runner로 유지한다. 개발 환경의 Compose 구성이 플랫폼 서비스의 의존 방향을 결정하지 않는다. 외부 관리형 데이터베이스·스토리지 또는 독립적으로 배치된 Worker를 사용할 수 있으며, 실행 중(Running)과 실제 서비스 준비(Ready)는 구별하여 판정한다.
 
 ## 범용 Dataset Understanding 책임
 

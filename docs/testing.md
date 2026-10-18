@@ -10,7 +10,7 @@
 - 모든 테스트는 단독·순서 변경·반복 실행이 가능해야 한다. 다른 테스트에서 생성한 데이터를 요구하지 않는다.
 - 검증 강도는 실행 시간의 길이가 아니라 자원 한계, 동시 경합, 실패 주입 지점, 상태 불변조건과 정리·복구 결과로 판단한다. TTL·Timeout 등 시간 자체가 계약인 경우에만 필요한 시간 범위를 명시해 검증한다.
 - `make check`의 브라우저 쓰기 테스트는 UUID 별도 Compose 프로젝트와 DB·버킷·서비스에만 연결한다. 일반 개발 프로젝트/외부 저장소에 쓰기 E2E를 실행하지 않는다. 생성한 E2E 프로젝트만 명시적으로 종료·볼륨 정리한다.
-- SIGKILL·호스트 종료 등으로 정리가 중단된 경우, `.sos-dev/runs/<sos-e2e-인스턴스>/validation-owner.json`의 소유 기록을 먼저 확인하고 `python scripts/run_isolated_e2e.py --recover-owned <sos-e2e-인스턴스>`를 실행한다. 복구는 기록된 프로젝트에 한정되며, 서비스 종료나 Compose 정리에 실패하면 소유 기록을 보존하고 다른 데이터·볼륨을 임의 삭제하지 않는다.
+- SIGKILL·호스트 종료 등으로 정리가 중단된 경우, `.sos-test/runs/<sos-e2e-인스턴스>/validation-owner.json`의 소유 기록을 먼저 확인하고 `python scripts/isolated_compose.py --recover-owned <sos-e2e-인스턴스>`를 실행한다. 복구는 기록된 프로젝트에 한정되며, 서비스 종료나 Compose 정리에 실패하면 소유 기록을 보존하고 다른 데이터·볼륨을 임의 삭제하지 않는다.
 - Fixture는 자신이 만든 DB·UUID 버킷만 생성·정리한다. 사용자 데이터를 삭제하거나 Iceberg Tag를 임의 정리하지 않는다.
 - 필수 테스트의 실패를 Retry·Skip으로 숨기지 않는다. 최초 실패와 재현 정보를 보존한다.
 - 검증 수준마다 책임을 정하고 불필요한 Mock과 복잡한 테스트 DSL을 피한다.

@@ -24,7 +24,7 @@ CONFIG_KEYS = (
 )
 
 
-def test_managed_defaults_match_compose_example_and_application(monkeypatch, tmp_path):
+def test_managed_defaults_match_compose_example_and_application(monkeypatch):
     """Compose·환경 예제·Settings의 데이터 서비스 기본값을 대조한다."""
     example = {}
     for line in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
