@@ -28,7 +28,8 @@ function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
           ? dataSelectionLabel("full_scan") : "선택 방식 미확인" },
         { label: "실제 분석 행 수", value: "현재 결과에 제공되지 않음" },
         { label: "그룹 표시", value: result.truncated === true
-          ? "일부 그룹만 표시" : "그룹 제한으로 생략된 결과 없음" },
+          ? "일부 그룹만 표시" : result.truncated === false
+            ? "그룹 제한으로 생략된 결과 없음" : "표시 범위 미확인" },
         { label: "집계 계산", value: result.metric === "mean"
           ? "부동소수 평균 계산 (근사 가능)" : "개별 지표의 정확도는 별도 확인" },
         { label: "Dataset 판본", value: typeof result.version === "string"

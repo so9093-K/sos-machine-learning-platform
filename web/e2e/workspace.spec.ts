@@ -28,8 +28,8 @@ test("CSV upload → EDA → feature preview → worker → reusable dataset", a
   await expect(page.getByText("Histogram")).toBeVisible();
   await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
   const jobId = await submittedJob(page, "/api/jobs", () =>
     page.getByRole("button", { name: /전체 변환 Job 실행/ }).click());
   const latestTransform = jobById(page, jobId);
@@ -48,7 +48,7 @@ test("an expanded Attempt detail catches up with a newer completed Job", async (
   await expect(page.getByRole("heading", { name: "detail-refresh.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
   const jobId = await submittedJob(page, "/api/jobs", () =>
-    page.getByRole("button", { name: /전체 Profile 실행/ }).click());
+    page.getByRole("button", { name: /전체 데이터 프로파일 실행/ }).click());
   const job = jobById(page, jobId);
   await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   let detailRequests = 0;
@@ -77,7 +77,7 @@ test("failed Attempt detail can be retried without collapsing the Job", async ({
   await expect(page.getByRole("heading", { name: "detail-retry.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
   const jobId = await submittedJob(page, "/api/jobs", () =>
-    page.getByRole("button", { name: /전체 Profile 실행/ }).click());
+    page.getByRole("button", { name: /전체 데이터 프로파일 실행/ }).click());
   const job = jobById(page, jobId);
   await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
 
@@ -147,8 +147,8 @@ test("example onboarding uses the same EDA, Feature and Job contracts", async ({
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
   const jobId = await submittedJob(page, "/api/jobs", () =>
     page.getByRole("button", { name: /전체 변환 Job 실행/ }).click());
   const job = jobById(page, jobId);
@@ -180,15 +180,15 @@ test("feature preview is invalidated when group or ordering changes", async ({ p
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
   await page.getByLabel("그룹 컬럼").selectOption("");
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toHaveCount(0);
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toHaveCount(0);
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
   await expect(page.getByRole("alert")).toContainText("unique within each group");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
 });
 
 
@@ -228,8 +228,8 @@ test("same dataset reload preserves Feature editor selections", async ({ page })
   await expect(page.getByLabel("시간·정렬 컬럼")).toHaveValue("time");
   await expect(page.getByLabel("그룹 컬럼")).toHaveValue("machine_id");
   await expect(page.locator(".step")).toHaveCount(1);
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
 });
 
 
@@ -423,8 +423,8 @@ test("DuckDB Discovery searches columns and runs a full job through global Jobs"
   await discovery.getByRole("textbox", { name: "컬럼 이름 검색" }).fill("val");
   await expect(discovery.getByText("1개 표시 / 전체 2개 컬럼")).toBeVisible();
   await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
-  await discovery.getByRole("button", { name: "샘플 집계" }).click();
-  await expect(discovery.getByText(/샘플 최대/)).toBeVisible();
+  await discovery.getByRole("button", { name: "부분 데이터 집계" }).click();
+  await expect(discovery.getByText(/부분 데이터 분석 · 최대/)).toBeVisible();
   await expect(discovery.getByRole("table").getByText("2", { exact: true })).toBeVisible();
   const jobId = await submittedJob(page, "/api/explorations/jobs", () =>
     discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
@@ -458,9 +458,9 @@ test("Discovery metadata retry restores selection and analysis controls", async 
   await expect(discovery.getByRole("button", { name: "메타데이터 다시 시도" })).toBeVisible();
   shouldFail = false;
   await discovery.getByRole("button", { name: "메타데이터 다시 시도" }).click();
-  await expect(discovery.getByRole("button", { name: "샘플 집계" })).toBeEnabled();
-  await discovery.getByRole("button", { name: "샘플 집계" }).click();
-  await expect(discovery.getByText(/샘플 최대/)).toBeVisible();
+  await expect(discovery.getByRole("button", { name: "부분 데이터 집계" })).toBeEnabled();
+  await discovery.getByRole("button", { name: "부분 데이터 집계" }).click();
+  await expect(discovery.getByText(/부분 데이터 분석 · 최대/)).toBeVisible();
 });
 
 test("Discovery supports categorical-only counts", async ({ page }) => {
@@ -476,7 +476,7 @@ test("Discovery supports categorical-only counts", async ({ page }) => {
   await discovery.getByRole("combobox", { name: "집계 방식" }).selectOption("null_count");
   await discovery.getByRole("combobox", { name: "분석할 컬럼" }).selectOption("label");
   await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
-  await discovery.getByRole("button", { name: "샘플 집계" }).click();
+  await discovery.getByRole("button", { name: "부분 데이터 집계" }).click();
   await expect(discovery.getByRole("table").getByText("1", { exact: true })).toBeVisible();
 });
 
@@ -504,7 +504,7 @@ test("accepted Job is not reported as failed when Jobs refresh fails", async ({ 
   });
   await expect(page.getByRole("heading", { name: "job-accepted.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
-  await page.getByRole("button", { name: /전체 Profile 실행/ }).click();
+  await page.getByRole("button", { name: /전체 데이터 프로파일 실행/ }).click();
   await expect(page.getByRole("status").filter({ hasText: "Job은 정상 접수됐습니다." })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
@@ -533,7 +533,7 @@ test("sample and full Discovery distinguish NULL groups from whole-dataset aggre
   await page.getByRole("tab", { name: "탐색" }).click();
   const discovery = page.getByRole("region", { name: "Dataset Discovery" });
   await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
-  await discovery.getByRole("button", { name: "샘플 집계" }).click();
+  await discovery.getByRole("button", { name: "부분 데이터 집계" }).click();
   await expect(discovery.getByRole("table").getByText("(NULL 그룹)")).toBeVisible();
   const jobId = await submittedJob(page, "/api/explorations/jobs", () =>
     discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
@@ -590,7 +590,7 @@ test("lost HTTP response reuses the original Job submission key", async ({ page 
     if (submitted.length === 1) await route.abort("failed");
     else await route.fulfill({ response });
   });
-  const create = page.getByRole("button", { name: /전체 Profile 실행/ });
+  const create = page.getByRole("button", { name: /전체 데이터 프로파일 실행/ });
   await create.click();
   await expect(page.getByRole("alert")).toBeVisible();
   const secondResponse = page.waitForResponse(res =>
@@ -653,7 +653,7 @@ test("Job reuses submission key when server accepted it before a 503 response", 
         body: JSON.stringify({ detail: "Response unavailable" }) });
     } else await route.fulfill({ response });
   });
-  const create = page.getByRole("button", { name: /전체 Profile 실행/ });
+  const create = page.getByRole("button", { name: /전체 데이터 프로파일 실행/ });
   await create.click();
   await expect(page.getByRole("alert")).toContainText("Response unavailable");
   await create.click();
@@ -736,8 +736,8 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption(["site", "machine"]);
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
   await expect(page.locator('[aria-label="데이터 준비"] .result th')).toHaveCount(4);
 });
 
@@ -841,12 +841,12 @@ test("late feature preview never reappears after Dataset reload", async ({ page 
     await new Promise<void>(resolve => { release = resolve; });
     await route.continue();
   });
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
   await expect.poll(() => intercepted).toBe(1);
   await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
   release?.();
-  await expect(page.getByRole("button", { name: "샘플 변환 확인" })).toBeEnabled();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "변환 결과 미리보기" })).toBeEnabled();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toHaveCount(0);
 });
 
 test("editing Dataset Query while its response is pending never renders stale rows", async ({ page }) => {
@@ -919,7 +919,7 @@ test("unknown CSV opens Understanding and transfers a candidate to editable Expl
   await page.getByRole("tab", { name: "탐색" }).click();
   await expect(exploration.getByLabel("집계 방식")).toHaveValue("max");
   expect(explorationRequests).toBe(0);
-  await exploration.getByRole("button", { name: "샘플 집계" }).click();
+  await exploration.getByRole("button", { name: "부분 데이터 집계" }).click();
   await expect.poll(() => explorationRequests).toBe(1);
   await expect(exploration.getByText(/Dataset 판본/)).toBeVisible();
   await page.reload();
@@ -1106,7 +1106,8 @@ test("Dataset original metadata remains visible after Understanding completes", 
   await expect(understanding.getByText("미계산", { exact: true })).toBeVisible();
   await expect(understanding.getByText(/이 데이터 소스의 원본 행 수/)).toBeVisible();
   await expect(understanding.getByText("분석 범위")).toBeVisible({ timeout: 30000 });
-  await expect(understanding.getByText("Reservoir 표본", { exact: true })).toBeVisible();
+  await understanding.getByText("분석 근거 자세히").click();
+  await expect(understanding.getByText("무작위 추출 (Reservoir)", { exact: true })).toBeVisible();
   await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
 });
 

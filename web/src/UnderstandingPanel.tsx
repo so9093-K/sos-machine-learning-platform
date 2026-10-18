@@ -146,7 +146,7 @@ export function UnderstandingPanel({
       </div>
       <AnalysisEvidence
         summary={analysisScopeLabel(profile.scope) + " · " + profile.row_count.toLocaleString() + "행 분석"}
-        note={profile.scope === "sample"
+        note={profile.scope === "sample" && profile.sampling_method === "reservoir"
           ? "무작위로 선택된 데이터의 결과입니다. 전체 분포를 대표한다고 보장하지 않습니다."
           : "전체 데이터를 대상으로 분석했습니다. 고유값 수 등 지표별 계산 정확도는 별도로 확인하세요."}
         details={[

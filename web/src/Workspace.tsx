@@ -574,10 +574,14 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
                 (s, c) => s + c.nulls, 0).toLocaleString()}</strong></div>
             </div>
             <AnalysisEvidence
-              summary={"부분 데이터 분석 · " + profile.row_count.toLocaleString() + "행 분석"}
-              note="정렬 기준 없는 제한 조회 결과입니다. 전체 데이터의 분포를 대표하지 않습니다."
+              summary={(profile.sampled ? "부분 데이터 분석 · " : "전체 데이터 분석 · ")
+                + profile.row_count.toLocaleString() + "행 분석"}
+              note={profile.sampled
+                ? "정렬 기준 없는 제한 조회 결과입니다. 전체 데이터의 분포를 대표하지 않습니다."
+                : "전체 데이터 대상 분석입니다. 개별 수치의 계산 정확도는 별도 확인이 필요합니다."}
               details={[
-                { label: "데이터 선택 방식", value: dataSelectionLabel("limited_rows") },
+                { label: "데이터 선택 방식", value: dataSelectionLabel(profile.sampled
+                  ? "limited_rows" : "full_scan") },
                 { label: "조회 행 수 상한", value: profile.sample_limit === null
                   ? "미확인" : profile.sample_limit.toLocaleString() + "행" },
                 { label: "실제 분석한 행", value: profile.row_count.toLocaleString() + "행" },
