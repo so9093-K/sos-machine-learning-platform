@@ -151,6 +151,7 @@ CLI_CODES = (
     "SOS-CONFIG-002",
     "SOS-CONFIG-003",
     "SOS-CONFIG-004",
+    "SOS-CONFIG-005",
     "SOS-NET-001",
     "SOS-PROC-001",
     "SOS-PROC-002",
