@@ -21,7 +21,7 @@ def validate_tabular_text(path: Path, *, has_header: bool) -> None:
     """UTF-8 탭 테이블의 행 폭과 헤더를 전체 입력에서 확인한다."""
     try:
         with path.open("r", encoding="utf-8-sig", newline="") as stream:
-            reader = csv.reader(stream, delimiter="\t", strict=True)
+            reader = csv.reader(stream, delimiter="\t", quoting=csv.QUOTE_NONE)
             header = next(reader, None)
             if header is None or len(header) < 2:
                 raise PlatformError("SOS-UPLOAD-INVALID")
@@ -47,7 +47,7 @@ def scan_file(path: Path, dataset: dict) -> pl.LazyFrame:
     opts = parse_options(dataset)
     if not isinstance(opts, dict) or opts.get("format") != "tsv" or not isinstance(opts.get("has_header"), bool):
         raise ValueError("Missing tabular Dataset parse settings")
-    frame = pl.scan_csv(path, separator="\t", has_header=opts["has_header"], try_parse_dates=True)
+    frame = pl.scan_csv(path, separator="\t", quote_char=None, has_header=opts["has_header"], try_parse_dates=True)
     if not opts["has_header"]:
         names = frame.collect_schema().names()
         frame = frame.rename({name: f"unnamed_{index}" for index, name in enumerate(names, 1)})

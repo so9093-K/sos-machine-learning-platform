@@ -12,23 +12,15 @@ function firstRows(text: string, maxRows: number): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
-  let quoted = false;
-  let atStart = true;
   for (let i = 0; i < text.length && rows.length < maxRows; i++) {
     const ch = text[i];
-    if (quoted) {
-      if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (ch === '"') quoted = false;
-      else field += ch;
-    } else if (ch === '"' && atStart) {
-      quoted = true; atStart = false;
-    } else if (ch === "\t") {
-      row.push(field); field = ""; atStart = true;
+    if (ch === "\t") {
+      row.push(field); field = "";
     } else if (ch === "\n" || ch === "\r") {
       if (ch === "\r" && text[i + 1] === "\n") i++;
-      row.push(field); rows.push(row); row = []; field = ""; atStart = true;
+      row.push(field); rows.push(row); row = []; field = "";
     } else {
-      field += ch; atStart = false;
+      field += ch;
     }
   }
   // 미완성인 마지막 행은 파일 앞부분만 읽을 때 완결되지 않을 수 있다.
@@ -51,7 +43,7 @@ export function DelimitedImport({ file, disabled, onConfirm, onCancel }: Props) 
   const examples = hasHeader ? rows.slice(1, 4) : rows.slice(0, 3);
   return <section className="panel" aria-label="파일 구조 확인">
     <div className="panel-head"><div><h3>파일 구조 확인 · 등록 전</h3>
-      <p>{file.name} · 탭으로 구분된 UTF-8 테이블만 지원합니다.</p>
+      <p>{file.name} · 탭 구분 UTF-8 표만 지원하며 따옴표는 일반 문자로 취급합니다.</p>
     </div></div>
     <p className="muted">구분자: Tab · 원본 파일을 변경하지 않고 등록합니다. 아래는 파일 앞부분의 확인용 미리보기이며 서버에서 전체 행을 검증합니다.</p>
     <label>첫 행의 의미
