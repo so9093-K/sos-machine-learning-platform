@@ -44,7 +44,7 @@ def test_tabular_reader_keeps_same_columns_and_rows_across_engines(
     tmp_path: Path, suffix: str, has_header: bool
 ):
     """같은 해석 설정은 행·컬럼을 두 실행 엔진에서 동일하게 보존한다."""
-    payload = "score\treview\n5\t배공빠르고 굿\n2\t문장에 \"따옴표\" 포함\n"
+    payload = 'score\treview\n5\t배공빠르고 굿\n2\t문장에 "따옴표" 포함\n'
     path = tmp_path / ("sample" + suffix)
     path.write_bytes(payload.encode("utf-8"))
     reader = reader_for_suffix(suffix)
@@ -86,12 +86,12 @@ def test_legacy_csv_defaults_and_parquet_metadata_are_preserved(tmp_path: Path):
 
 
 def test_tabular_upload_requires_header_and_rejects_wrong_mime():
-    assert upload_header_from_mime(
-        "example.txt", "text/tab-separated-values; header=absent"
-    ) is False
-    assert upload_header_from_mime(
-        "example.tsv", "text/tab-separated-values; header=present"
-    ) is True
+    assert (
+        upload_header_from_mime("example.txt", "text/tab-separated-values; header=absent") is False
+    )
+    assert (
+        upload_header_from_mime("example.tsv", "text/tab-separated-values; header=present") is True
+    )
     assert upload_header_from_mime("example.csv", "text/csv") is None
     for name, content_type in [
         ("example.txt", "text/plain"),
@@ -111,11 +111,15 @@ def test_invalid_stored_reader_options_are_not_silently_ignored(tmp_path: Path):
     file = tmp_path / "sample.tsv"
     file.write_text("5\tgood\n", encoding="utf-8")
     reader = reader_for_suffix(".tsv")
-    for options in [None, {}, {"format": "tsv", "has_header": "false"}, {
-        "format": "tsv", "has_header": False, "unrecognized": True
-    }]:
+    for options in [
+        None,
+        {},
+        {"format": "tsv", "has_header": "false"},
+        {"format": "tsv", "has_header": False, "unrecognized": True},
+    ]:
         with pytest.raises(ValueError, match="read settings"):
             reader.scan_polars(file, options)
     assert parse_options({"parse_options": '{"format":"tsv","has_header":false}'}) == {
-        "format": "tsv", "has_header": False
+        "format": "tsv",
+        "has_header": False,
     }
