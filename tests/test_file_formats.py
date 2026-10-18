@@ -13,7 +13,7 @@ from sos_platform.file_formats import (
     SUPPORTED_EXTENSIONS,
     reader_for_suffix,
     scan_file,
-    upload_header_from_mime,
+    upload_options_from_mime,
 )
 
 
@@ -48,7 +48,7 @@ def test_tabular_reader_keeps_same_columns_and_rows_across_engines(
     path = tmp_path / ("sample" + suffix)
     path.write_bytes(payload.encode("utf-8"))
     reader = reader_for_suffix(suffix)
-    options = reader.upload_options(has_header)
+    options = reader.upload_options({"has_header": has_header})
     reader.validate(path, options)
     rows = reader.scan_polars(path, options).collect().to_dicts()
 
@@ -86,13 +86,13 @@ def test_legacy_csv_defaults_and_parquet_metadata_are_preserved(tmp_path: Path):
 
 
 def test_tabular_upload_requires_header_and_rejects_wrong_mime():
-    assert (
-        upload_header_from_mime("example.txt", "text/tab-separated-values; header=absent") is False
-    )
-    assert (
-        upload_header_from_mime("example.tsv", "text/tab-separated-values; header=present") is True
-    )
-    assert upload_header_from_mime("example.csv", "text/csv") is None
+    assert upload_options_from_mime(
+        "example.txt", "text/tab-separated-values; header=absent"
+    ) == {"has_header": False}
+    assert upload_options_from_mime(
+        "example.tsv", "text/tab-separated-values; header=present"
+    ) == {"has_header": True}
+    assert upload_options_from_mime("example.csv", "text/csv") is None
     for name, content_type in [
         ("example.txt", "text/plain"),
         ("example.tsv", "text/tab-separated-values"),
@@ -100,11 +100,11 @@ def test_tabular_upload_requires_header_and_rejects_wrong_mime():
         ("example.unknown", "application/octet-stream"),
     ]:
         with pytest.raises(PlatformError):
-            upload_header_from_mime(name, content_type)
+            upload_options_from_mime(name, content_type)
     with pytest.raises(PlatformError):
         reader_for_suffix(".txt").upload_options(None)
     with pytest.raises(PlatformError):
-        reader_for_suffix(".csv").upload_options(False)
+        reader_for_suffix(".csv").upload_options({"has_header": False})
 
 
 def test_invalid_stored_reader_options_are_not_silently_ignored(tmp_path: Path):
