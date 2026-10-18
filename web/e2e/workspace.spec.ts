@@ -1198,6 +1198,7 @@ test("Wide Dataset preview defaults to a bounded visible column set", async ({ p
     name: "wide-preview.csv", mimeType: "text/csv",
     buffer: Buffer.from(names.join(",") + "\n" + names.map((_, i) => i + 1).join(",") + "\n"),
   });
+  await expect(page.getByRole("heading", { name: "wide-preview.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "데이터 조회" }).click();
   await expect(page.getByRole("columnheader")).toHaveCount(12);
   await expect(page.getByText("전체 15개 컬럼 중 12개 표시", { exact: false })).toBeVisible();

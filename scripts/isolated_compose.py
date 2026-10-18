@@ -71,6 +71,9 @@ def isolated_environment(source: dict[str, str], instance: str, ports: list[int]
         SOS_PYTHON_IMAGE=f"sos-python-e2e:{instance}",
         SOS_WEB_IMAGE=f"sos-web-e2e:{instance}",
     )
+    # 공통 검증 CLI가 소유한 출력 위치만 Playwright에 전달한다.
+    if source.get("SOS_JUNIT_FILE"):
+        env["SOS_JUNIT_FILE"] = source["SOS_JUNIT_FILE"]
     configure_tokens(env)
     return env
 
