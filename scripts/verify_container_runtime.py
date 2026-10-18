@@ -54,6 +54,19 @@ def await_ready(url: str, timeout: int = 150) -> None:
     raise TimeoutError("Container API/Worker readiness did not converge")
 
 
+def await_web_proxy(url: str, token: str, timeout: int = 60) -> None:
+    """Web 시작과 HTTP/프록시 준비는 별도로 관찰한다."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            if request(url + "/api/v2/auth/me", token)[0] == 200:
+                return
+        except (URLError, TimeoutError, OSError, ValueError):
+            pass
+        time.sleep(1)
+    raise TimeoutError("Container Web proxy readiness did not converge")
+
+
 def compose(project: str, env: dict[str, str], *args: str) -> None:
     subprocess.run([*COMPOSE, "-p", project, *args], cwd=ROOT, env=env, check=True)
 
@@ -93,7 +106,7 @@ def main() -> int:
         assert request(url + "/api/v2/auth/me")[0] == 401
         status, actor = request(url + "/api/v2/auth/me", researcher)
         assert status == 200 and actor["actor_id"] == "container-researcher"
-        assert request(f"http://127.0.0.1:{web_port}/api/v2/auth/me", researcher)[0] == 200
+        await_web_proxy(f"http://127.0.0.1:{web_port}", researcher)
         assert request(url + "/api/datasets", viewer)[0] == 200
 
         boundary = "sos-container-" + secrets.token_hex(7)
@@ -139,7 +152,14 @@ def main() -> int:
         assert status == 200 and snapshots
         print("Container contract: Token RBAC, Web proxy, Dataset, Worker, Iceberg, restart passed")
         return 0
-    except (AssertionError, TimeoutError, URLError, ValueError, subprocess.CalledProcessError) as exc:
+    except (
+        AssertionError,
+        TimeoutError,
+        URLError,
+        ValueError,
+        OSError,
+        subprocess.CalledProcessError,
+    ) as exc:
         print(f"Container verification failed: {type(exc).__name__}", file=sys.stderr)
         subprocess.run([*COMPOSE, "-p", project, "ps"], cwd=ROOT, env=env, check=False)
         return 1
