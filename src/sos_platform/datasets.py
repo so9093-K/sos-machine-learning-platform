@@ -37,13 +37,13 @@ def save_upload_file(
     *,
     owner_actor: str | None = None,
     max_bytes: int | None = None,
-    has_header: bool | None = None,
+    read_options: dict | None = None,
 ) -> dict:
     """원본 바이트의 SHA-256과 해석 설정을 별개로 보존해 Dataset을 등록한다."""
     limit = max_bytes if max_bytes is not None else UploadPolicy.from_env().max_bytes
     with staged_upload(source, name, store.home / "cache", max_bytes=limit) as staged:
         reader = reader_for_suffix(staged.suffix)
-        options = reader.upload_options(has_header)
+        options = reader.upload_options(read_options)
         try:
             reader.validate(staged.path, options)
             lf = reader.scan_polars(staged.path, options)
