@@ -103,11 +103,16 @@ def test_openapi_export_has_no_authentication_environment_side_effects(
     monkeypatch, tmp_path, capsys
 ):
     """OpenAPI 생성은 인증 모드나 로컬 개발 저장소를 암묵적으로 설정하지 않는다."""
-    from scripts.export_openapi import main
+    spec = importlib.util.spec_from_file_location(
+        "sos_test_export_openapi", ROOT / "scripts" / "export_openapi.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
 
     monkeypatch.delenv("SOS_AUTH_MODE", raising=False)
     monkeypatch.chdir(tmp_path)
-    main()
+    module.main()
     schema = json.loads(capsys.readouterr().out)
     assert "/api/v2/auth/me" in schema["paths"]
     assert "SOS_AUTH_MODE" not in os.environ
