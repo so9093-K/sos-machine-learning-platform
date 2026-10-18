@@ -6,8 +6,9 @@ type Props = {
   loading: boolean;
   onUse: (id: string) => void;
   canUse: boolean;
+  startLabel?: string;
 };
-export function ExampleGallery({ examples, busy, loading, canUse, onUse }: Props) {
+export function ExampleGallery({ examples, busy, loading, canUse, onUse, startLabel = "이 예제로 탐색 시작 →" }: Props) {
   return <section className="example-gallery" aria-label="예제 데이터">
     <div className="panel-head"><div>
       <h3>예제 데이터로 먼저 살펴보기</h3>
@@ -23,7 +24,7 @@ export function ExampleGallery({ examples, busy, loading, canUse, onUse }: Props
         <p className="muted">컬럼: {item.columns.join(" · ")}</p>
         <p className="guide">{item.guide}</p>
         <button disabled={busy || !canUse} onClick={() => onUse(item.id)}>
-          이 예제로 탐색 시작 →
+          {startLabel}
         </button>
       </article>)}
     </div>

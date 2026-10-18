@@ -502,7 +502,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           CSV / Parquet 파일 선택
         </button>}
         <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
-          canUse={canWrite} onUse={id => void selectExample(id)} />
+          canUse={canWrite} startLabel={tab === "preparation"
+            ? "이 예제로 데이터 준비 시작 →" : undefined}
+          onUse={id => void selectExample(id)} />
       </div>}
       {dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <>
         <div className="dataset-hero">
@@ -527,10 +529,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             canCreate={canRun} onChooseCandidate={selectExplorationCandidate}
             onJobCreated={() => {
               // Job 등록은 이미 성공했다. 목록 갱신 실패를 제출 실패로 표현하지 않는다.
-              void refreshJobs().catch(() => setNotice(
+              void refreshJobs().catch(() => setNotice(current => current ||
                 "분석 Job은 접수됐습니다. 전체 Jobs에서 목록을 다시 조회할 수 있습니다."
               ));
             }}
+            onViewJobs={() => setTab("jobs")}
             overview={overview} overviewStatus={overviewStatus}
             overviewError={overviewError} onRetryOverview={retryOverview} />
         </section>}
