@@ -21,8 +21,8 @@ from sqlalchemy import text
 
 from .cache import cached_dataset_file
 from .datasets import iceberg_catalog
-from .file_formats import create_duckdb_file_view, dataset_reader
 from .errors import InvalidRequestError, PlatformError, RuntimeConfigurationError
+from .file_formats import create_duckdb_file_view, dataset_reader
 from .resource_admission import reserve_execution_memory
 from .store import Store
 
