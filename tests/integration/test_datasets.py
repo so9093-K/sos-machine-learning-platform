@@ -66,6 +66,31 @@ def test_headerless_tabular_txt_keeps_first_row_and_consistent_columns(workspace
         assert frame.select("unnamed_2").collect().height == 3
 
 
+def test_tabular_late_mixed_values_remain_readable_after_registration(workspace):
+    """등록 시 허용한 혼합형 텍스트 값을 탐색·Preparation에서 모두 읽는다."""
+    client, store = workspace
+    raw = (
+        "".join(f"{index}\titem-{index}\n" for index in range(150))
+        + "unknown\tlast-row\n"
+    ).encode()
+    response = client.post(
+        "/api/datasets/files",
+        files={"file": ("mixed.txt", raw, "text/tab-separated-values; header=absent")},
+    )
+    assert response.status_code == 201, response.text
+    dataset = response.json()
+    selected = client.post(
+        f"/api/datasets/{dataset['id']}/query",
+        json={"filters": [{"column": "unnamed_1", "op": "eq", "value": "unknown"}]},
+    )
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["rows"][0]["unnamed_2"] == "last-row"
+    with pinned_scan_dataset(store, store.get_dataset(dataset["id"])) as frame:
+        rows = frame.collect().to_dicts()
+    assert len(rows) == 151
+    assert rows[-1]["unnamed_1"] == "unknown"
+
+
 def test_tabular_header_option_is_part_of_dataset_interpretation(workspace):
     """원본 SHA가 같아도 헤더 설정을 달리한 Dataset의 스키마는 섞이지 않는다."""
     client, store = workspace
