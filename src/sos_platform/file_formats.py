@@ -126,9 +126,7 @@ class TabDelimitedReader(FileReader):
         )
         if not self._header(options):
             names = frame.collect_schema().names()
-            frame = frame.rename(
-                {name: f"unnamed_{index}" for index, name in enumerate(names, 1)}
-            )
+            frame = frame.rename({name: f"unnamed_{index}" for index, name in enumerate(names, 1)})
         return frame
 
     def create_duckdb_view(
@@ -142,22 +140,16 @@ class TabDelimitedReader(FileReader):
         if header:
             conn.execute(f"CREATE TEMP VIEW source AS SELECT * FROM {source}")
             return
-        names = [
-            row[0]
-            for row in conn.execute(f"DESCRIBE SELECT * FROM {source}").fetchall()
-        ]
+        names = [row[0] for row in conn.execute(f"DESCRIBE SELECT * FROM {source}").fetchall()]
         projection = ", ".join(
-            f"{quoted(name)} AS {quoted('unnamed_' + str(i))}"
-            for i, name in enumerate(names, 1)
+            f"{quoted(name)} AS {quoted('unnamed_' + str(i))}" for i, name in enumerate(names, 1)
         )
         conn.execute(f"CREATE TEMP VIEW source AS SELECT {projection} FROM {source}")
 
 
 # 고정된 내부 레지스트리. 임의의 사용자 파일을 실행 코드로 로드하지 않는다.
 _READERS: tuple[FileReader, ...] = (CsvReader(), ParquetReader(), TabDelimitedReader())
-_BY_SUFFIX = {
-    suffix: reader for reader in _READERS for suffix in reader.extensions
-}
+_BY_SUFFIX = {suffix: reader for reader in _READERS for suffix in reader.extensions}
 SUPPORTED_EXTENSIONS: tuple[str, ...] = tuple(_BY_SUFFIX)
 
 
