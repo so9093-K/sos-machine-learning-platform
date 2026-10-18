@@ -1,12 +1,11 @@
 import { useRef } from "react";
 
-export type DatasetTab = "understanding" | "preview" | "profile" | "features";
+export type DatasetTab = "understanding" | "preview" | "profile";
 
 const tabs: ReadonlyArray<{ id: DatasetTab; label: string }> = [
-  { id: "understanding", label: "개요" },
+  { id: "understanding", label: "데이터 이해" },
   { id: "preview", label: "데이터 조회" },
   { id: "profile", label: "탐색" },
-  { id: "features", label: "변환" },
 ];
 
 /** 페이지 내 Dataset 작업만 담당한다. 전역 Jobs/Storage는 별도 메뉴다. */

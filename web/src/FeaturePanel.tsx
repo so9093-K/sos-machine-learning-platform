@@ -17,9 +17,8 @@ export function FeaturePanel({
     featurePreview, addStep, editStep, moveStep, deleteStep, cancelEdit, previewFeatures,
   } = editor;
   return (
-        <section className="panel" role="tabpanel"
-          id="sos-panel-features" aria-labelledby="sos-tab-features" tabIndex={0}>
-          <div className="panel-head"><div><h3>변환</h3>
+        <section className="panel" aria-label="데이터 준비">
+          <div className="panel-head"><div><h3>데이터 변환</h3>
             <p>원본은 유지됩니다. 순서대로 변환 단계를 편집·검증하고 전체 Job으로 실행합니다.</p>
           </div></div>
           <div className="form-row">
@@ -85,15 +84,15 @@ export function FeaturePanel({
                 onClick={() => deleteStep(i)}>삭제</button>
             </div>)}</div>
           <div className="actions"><button disabled={busy || !steps.length} className="secondary"
-            onClick={() => void previewFeatures()}>샘플 변환 확인</button>
+            onClick={() => void previewFeatures()}>변환 결과 미리보기</button>
             {canRun && <button disabled={busy || !steps.length} onClick={onSubmit}>
               전체 변환 Job 실행 →
             </button>}</div>
-          {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 계산</h4>
-             <p className="hint">결과는 최대 30행입니다. 단순 변환은 큰 Dataset에서도 일부 결과만 읽고, 전역 Window는 동기 예산 초과 시 전체 Job을 안내합니다.</p>
+          {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 연산</h4>
+             <p className="hint">입력을 표본 추출하는 것이 아니라 실제 변환 순서를 적용한 결과를 최대 30행 반환합니다. 단순 변환은 필요한 행만 읽고, 전역 Window는 동기 예산 초과 시 전체 Job을 안내합니다.</p>
             <div className="table-scroll"><table><thead><tr>{Object.entries(featurePreview.schema).map(
               ([c, t]) => <th key={c}>{c}<small>{t}</small></th>
-            )}</tr></thead><tbody>{featurePreview.rows.slice(0, 15).map((r, i) => <tr key={i}>
+            )}</tr></thead><tbody>{featurePreview.rows.map((r, i) => <tr key={i}>
               {Object.keys(featurePreview.schema).map(c => <td key={c}>{r[c] == null ? "—" : String(r[c])}</td>)}
             </tr>)}</tbody></table></div></div>}
         </section>

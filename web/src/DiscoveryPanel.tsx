@@ -3,6 +3,7 @@ import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
 import { chartValue, explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
 import { request, jsonPost, submitJob, formatError } from "./api";
+import { AnalysisEvidence, analysisScopeLabel, dataSelectionLabel } from "./AnalysisEvidence";
 import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, ExplorationJob } from "./types";
 import type { ExplorationDraft } from "./ExplorationDraft";
 
@@ -128,14 +129,15 @@ export function DiscoveryPanel({
     {status === "error" && <button className="secondary"
       onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>}
     {overview && <p className="hint">분석 대상 · {overview.column_count.toLocaleString()}컬럼
-      {" · "}{overview.row_count?.toLocaleString() ?? "미계산"}행
-      {" · "}{analysisLabel(overview.row_count_basis)}</p>}
+      {" · "}{overview.row_count === null
+        ? "원본 행 수 미계산"
+        : overview.row_count.toLocaleString() + "행 · " + analysisLabel(overview.row_count_basis)}</p>}
     {columns && <>
       <h4>탐색 조건</h4>
       {draft?.source && <div className="exploration-origin" role="status">
         <strong>탐색 후보에서 가져온 조건 · {draft.source.title}</strong>
         <p>{draft.source.reason}</p>
-        <small>구성 근거: {draft.source.profileScope === "full" ? "전체 프로파일" : "Reservoir 표본"} · 사용자가 조건을 확인하고 실행합니다.</small>
+        <small>구성 근거: {analysisScopeLabel(draft.source.profileScope)} · 사용자가 조건을 확인하고 실행합니다.</small>
       </div>}
       {invalidDraft && <div role="alert" className="alert">
         이전 탐색 조건이 현재 Dataset 스키마 또는 집계 방식과 일치하지 않습니다.
@@ -143,7 +145,7 @@ export function DiscoveryPanel({
           column: selectedMeasure, metric, group_by: null,
         })} disabled={!selectedMeasure}>기본 탐색 조건 적용</button>
       </div>}
-      <p className="muted">대화형 탐색은 제한된 선두 샘플을 사용하고, 정확한 전체 집계는 별도 Worker Job으로 실행합니다.</p>
+      <p className="muted">부분 데이터 집계는 정렬 기준 없이 제한 조회한 행을 대상으로 합니다. 전체 데이터를 확인하려면 별도 Job을 실행하세요.</p>
       <div className="chart-controls">
         <label>분석할 컬럼 <select aria-label="분석할 컬럼" value={selectedMeasure}
           disabled={running || candidates.length === 0}
@@ -166,11 +168,11 @@ export function DiscoveryPanel({
         </select></label>
         <label>그룹 <select aria-label="집계 그룹" value={groupBy} disabled={running}
           onChange={e => updateRequest({ group_by: e.target.value || null })}>
-          <option value="">전체</option>
+          <option value="">그룹 없음</option>
           {columns.columns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select></label>
         <button disabled={running || !selectedMeasure || invalidDraft} onClick={() => void run()}>
-          {running ? "분석 중…" : "샘플 집계"}
+          {running ? "분석 중…" : "부분 데이터 집계"}
         </button>
         {canCreate && <button className="secondary" disabled={running || !selectedMeasure || invalidDraft}
           onClick={() => void runFullJob()}>전체 집계 Job 실행</button>}
@@ -179,13 +181,31 @@ export function DiscoveryPanel({
         전체 집계 Job을 제출했습니다. Jobs에서 상태와 결과를 확인하세요. 작업 ID: {fullJobId}
       </p>}
       {result && <>
-        <p className="muted">샘플 최대 {result.sample_limit?.toLocaleString()}행 · Dataset 판본 {result.version.slice(0, 12)}
-          {result.truncated ? " · 표시 그룹 수 제한 적용" : ""}</p>
+        <AnalysisEvidence
+          summary={analysisScopeLabel(result.scope) + (result.sample_limit === null
+            ? " · 전체 행 대상" : " · 최대 " + result.sample_limit.toLocaleString() + "행 대상")}
+          note={result.scope === "sample"
+            ? "제한 조회한 행의 집계 결과로, 전체 데이터의 분포를 대표하지 않습니다."
+              + (result.truncated ? " 집계한 그룹 중 일부만 표시됩니다." : "")
+            : result.truncated ? "전체 데이터를 집계했지만 표시되는 그룹은 일부입니다." : undefined}
+          details={[
+            { label: "데이터 선택 방식", value: result.scope === "sample"
+              ? dataSelectionLabel("limited_rows") : dataSelectionLabel("full_scan") },
+            { label: "실제 분석 행 수", value: "현재 결과에 제공되지 않음" },
+            ...(result.sample_limit === null ? [] : [{
+              label: "조회 행 수 상한", value: result.sample_limit.toLocaleString() + "행",
+            }]),
+            { label: "그룹 표시", value: result.truncated ? "일부 그룹만 표시" : "그룹 제한으로 생략된 결과 없음" },
+            { label: "집계 계산", value: result.metric === "mean"
+              ? "부동소수 평균 계산 (근사 가능)" : "분석 범위와 결과 정확도는 별개" },
+            { label: "Dataset 판본", value: result.version },
+          ]}
+        />
         <div className="table-scroll"><table><thead><tr><th>그룹</th><th>결과</th></tr></thead>
           <tbody>{result.rows.map((r, i) => <tr key={i}><td>{explorationCategory(r.category, result.group_by)}</td>
             <td>{explorationValue(r.value)}</td></tr>)}</tbody>
         </table></div>
-        {chart ? <DataChart option={chart} ariaLabel="샘플 집계 결과 차트" /> :
+        {chart ? <DataChart option={chart} ariaLabel="부분 데이터 집계 결과 차트" /> :
           <p className="muted">정밀 수치 문자열이나 계산 불가 값은 차트에서 제외합니다. 정확한 값은 위 표에서 확인하세요.</p>}
       </>}
       <details className="column-catalog">
