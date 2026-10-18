@@ -15,7 +15,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from sos_platform.api import create_app
-from sos_platform.datasets import save_upload
+from sos_platform.datasets import pinned_scan_dataset, save_upload
+from sos_platform.delimited import parse_options
 from sos_platform.errors import ERRORS
 from sos_platform.object_store import ObjectStore
 
@@ -35,6 +36,78 @@ def test_upload_preview_profile_and_scalar(workspace):
     assert "openapi.json" in client.get("/docs").text
     assert client.get("/openapi.json").status_code == 200
 
+
+
+def test_headerless_tabular_txt_keeps_first_row_and_consistent_columns(workspace):
+    """따옴표가 포함된 실제 리뷰 유형도 첫 행·원본 해시·컬럼을 보존한다."""
+    client, store = workspace
+    raw = '5\t배공빠르고 굿\n2\t표현에 "따옴표"가 있어요\n5\t정말 좋음\n'.encode()
+    response = client.post(
+        "/api/datasets/files",
+        files={"file": ("reviews.txt", raw, "text/tab-separated-values; header=absent")},
+    )
+    assert response.status_code == 201, response.text
+    dataset = response.json()
+    assert dataset["version"] == hashlib.sha256(raw).hexdigest()
+    stored = store.get_dataset(dataset["id"])
+    assert parse_options(stored) == {"format": "tsv", "has_header": False}
+    base = f"/api/datasets/{dataset['id']}"
+    preview = client.get(base + "/preview")
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert list(body["schema"]) == ["unnamed_1", "unnamed_2"]
+    assert body["returned_rows"] == 3
+    assert body["rows"][0]["unnamed_2"] == "배공빠르고 굿"
+    assert body["rows"][1]["unnamed_2"] == '표현에 "따옴표"가 있어요'
+    profile = client.get(base + "/profile")
+    assert profile.status_code == 200, profile.text
+    assert profile.json()["row_count"] == 3
+    with pinned_scan_dataset(store, stored) as frame:
+        assert frame.collect_schema().names() == ["unnamed_1", "unnamed_2"]
+        assert frame.select("unnamed_2").collect().height == 3
+
+
+def test_tabular_header_option_is_part_of_dataset_interpretation(workspace):
+    """원본 SHA가 같아도 헤더 설정을 달리한 Dataset의 스키마는 섞이지 않는다."""
+    client, store = workspace
+    raw = b"score\treview\n5\tgood\n2\tbad\n"
+    def submit(flag):
+        return client.post(
+            "/api/datasets/files",
+            files={"file": ("reviews.tsv", raw, f"text/tab-separated-values; header={flag}")},
+        )
+    headered = submit("present")
+    headerless = submit("absent")
+    assert headered.status_code == 201, headered.text
+    assert headerless.status_code == 201, headerless.text
+    with_header = headered.json()
+    without = headerless.json()
+    assert with_header["id"] != without["id"]
+    assert with_header["version"] == without["version"]
+    assert list(client.get(f"/api/datasets/{with_header['id']}/preview").json()["schema"]) == [
+        "score", "review"
+    ]
+    p = client.get(f"/api/datasets/{without['id']}/preview").json()
+    assert list(p["schema"]) == ["unnamed_1", "unnamed_2"]
+    assert p["returned_rows"] == 3
+    assert parse_options(store.get_dataset(with_header["id"]))["has_header"] is True
+
+
+def test_tabular_txt_rejects_ambiguous_or_malformed_input(workspace):
+    client, _ = workspace
+    cases = [
+        (b"5\tgood\n", "text/plain"),
+        (b"just free text\n", "text/tab-separated-values; header=absent"),
+        (b"5\tgood\n2\n", "text/tab-separated-values; header=absent"),
+        (b"5\tgood\n2\t\xff\n", "text/tab-separated-values; header=absent"),
+        (b"a\ta\n1\t2\n", "text/tab-separated-values; header=present"),
+    ]
+    for content, mime in cases:
+        response = client.post(
+            "/api/datasets/files", files={"file": ("text.txt", content, mime)}
+        )
+        assert response.status_code == 400, response.text
+        assert response.json()["code"] == "SOS-UPLOAD-INVALID"
 
 def test_upload_storage_wait_does_not_block_other_api_requests(workspace, monkeypatch):
     """객체 저장소가 느려도 API 이벤트 루프의 별도 조회는 진행되어야 한다."""
