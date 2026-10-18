@@ -79,6 +79,11 @@ def compose(project: str, env: dict[str, str], *args: str) -> None:
     subprocess.run([*COMPOSE, "-p", project, *args], cwd=ROOT, env=env, check=True)
 
 
+def make(env: dict[str, str], operation: str) -> None:
+    """공개 Make 경로를 고유 Compose 프로젝트로 격리하여 검증한다."""
+    subprocess.run(["make", operation], cwd=ROOT, env=env, check=True)
+
+
 def stop_on_sigterm(_signum: int, _frame: object) -> None:
     """취소 시에도 소유 프로젝트 정리를 실행하도록 제어권을 반환한다."""
     raise KeyboardInterrupt
@@ -101,6 +106,7 @@ def main() -> int:
     # 부모의 외부 DB·버킷·인증 설정을 상속하지 않는다.
     env = {k: v for k, v in os.environ.items() if not k.startswith("SOS_")}
     env.update(
+        COMPOSE_PROJECT_NAME=project,
         SOS_AUTH_TOKEN_HASHES=json.dumps(subjects),
         SOS_DB_PASSWORD=secrets.token_urlsafe(24),
         SOS_S3_ACCESS_KEY="sos-container-test",
@@ -116,7 +122,10 @@ def main() -> int:
     step = "configuration"
     try:
         compose(project, env, "config", "--quiet")
-        compose(project, env, "up", "--build", "-d")
+        step = "public make up/status/doctor"
+        make(env, "up")
+        make(env, "status")
+        make(env, "doctor")
         await_ready(url)
         step = "unauthenticated access"
         assert request(url + "/api/v2/auth/me")[0] == 401
@@ -184,7 +193,7 @@ def main() -> int:
             raise TimeoutError("Worker did not complete Iceberg import")
 
         step = "restart and data preservation"
-        compose(project, env, "restart", "api", "worker", "web")
+        make(env, "restart")
         await_ready(url)
         status, listing = request(url + "/api/datasets", researcher)
         assert status == 200 and any(row["id"] == dataset_id for row in listing["items"])
@@ -194,8 +203,8 @@ def main() -> int:
 
         # restart는 컨테이너를 재생성하지 않으므로, named volume 보존을 별도로 검증한다.
         step = "full down/up data preservation"
-        compose(project, env, "down")
-        compose(project, env, "up", "-d", "--wait")
+        make(env, "down")
+        make(env, "up")
         await_ready(url)
         status, listing = request(url + "/api/datasets", researcher)
         assert status == 200 and any(row["id"] == dataset_id for row in listing["items"])
@@ -203,7 +212,7 @@ def main() -> int:
         assert denied == 404
         status, snapshots = request(url + f"/api/iceberg/{table}/snapshots", researcher)
         assert status == 200 and snapshots
-        print("Container contract: RBAC, isolation, Job, Iceberg, restart and down/up passed")
+        print("Container contract: Make, RBAC, isolation, Job, Iceberg, restart and down/up passed")
         return 0
     except (
         AssertionError,

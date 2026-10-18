@@ -6,6 +6,23 @@ SOS는 기본적으로 전체 플랫폼을 Docker Compose로 실행한다. 이 �
 
 Docker Compose와 GNU Make가 필요하다. `SOS_AUTH_TOKEN_HASHES`에 원본 토큰의 SHA-256 지문을 키로 사용하는 Actor JSON을 명시해야 한다. 실제 원본 Bearer Token은 별도로 안전하게 보관하며, `.env`는 커밋하지 않는다. Python 3.12·uv·Node.js 24·npm은 호스트 테스트에 사용한다.
 
+개발용 관리자 Token과 지문 매핑은 다음처럼 한 번 생성할 수 있다. 출력된 **Bearer Token은 별도 보관**하고 매핑 JSON 한 줄만 커밋하지 않는 `.env`에 넣는다.
+
+```bash
+python3 - <<'PY'
+import hashlib
+import json
+import secrets
+
+token = secrets.token_urlsafe(48)
+fingerprint = hashlib.sha256(token.encode()).hexdigest()
+print("Bearer Token (별도 안전 보관):", token)
+print("SOS_AUTH_TOKEN_HASHES=" + json.dumps({
+    fingerprint: {"actor_id": "local-admin", "kind": "human", "roles": ["administrator"]}
+}, separators=(",", ":")))
+PY
+```
+
 ```bash
 # .env 또는 환경변수에 설정: SOS_AUTH_TOKEN_HASHES={"<token-sha256>":{"actor_id":"local","kind":"human","roles":["administrator"]}}
 make up          # Docker의 API·Worker·Web·PostgreSQL·S3 실행 및 Ready 확인

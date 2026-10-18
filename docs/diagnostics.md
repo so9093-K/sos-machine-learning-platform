@@ -40,7 +40,7 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 ### PostgreSQL·S3 저장 실패
 
 1. API Request ID 또는 Job ID에서 관련 Attempt 및 실패 단계(`processing`, `publication`)를 찾는다.
-2. `make doctor --deep`으로 서비스 준비 상태를 읽기 전용으로 확인한다.
+2. `make doctor`로 컨테이너의 Health 상태를 확인하고, `/api/ready` 응답으로 DB·S3·Worker 준비 상태를 대조한다.
 3. DB 객체 게시 의도 `Pending`·`Failed`와 S3 실제 객체, Dataset 참조를 대조한다.
 4. `candidate`는 삭제 허가가 아니다. Storage Health는 관측 도구이며 사용자 객체를 자동 삭제하지 않는다.
 5. 원인 확정 전 재실행·공유 객체 삭제를 수행하지 않는다.
