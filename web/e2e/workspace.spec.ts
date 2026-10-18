@@ -1170,6 +1170,8 @@ test("Dataset original metadata remains visible after Understanding completes", 
     name: "profile-scope.csv", mimeType: "text/csv",
     buffer: Buffer.from("category,value\na,1\nb,2\n"),
   });
+  // 비동기 등록과 목록 갱신이 완료되어 실제 신규 Dataset이 선택된 뒤 분석을 제출한다.
+  await expect(page.getByRole("heading", { name: "profile-scope.csv" })).toBeVisible();
   const understanding = page.getByRole("tabpanel", { name: "데이터 이해" });
   await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
   await expect(understanding.getByText("등록 파일 크기", { exact: true })).toBeVisible();
