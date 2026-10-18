@@ -1,0 +1,96 @@
+# 현재 compose.yaml의 PostgreSQL/SeaweedFS/볼륨 정의를 보존하며, 앱 서비스만 추가한다.
+# Docker Compose 개발 경로는 명시적인 Token 인증만 지원한다.
+x-sos-storage-env: &sos-storage-env
+  SOS_DB_HOST: postgres
+  SOS_DB_PORT: "5432"
+  SOS_DB_USER: ${SOS_DB_USER:-sos}
+  SOS_DB_PASSWORD: ${SOS_DB_PASSWORD:-sos-dev-only}
+  SOS_DB_NAME: ${SOS_DB_NAME:-sos}
+  SOS_S3_ENDPOINT: http://storage:8333
+  SOS_S3_ACCESS_KEY: ${SOS_S3_ACCESS_KEY:-sos-dev}
+  SOS_S3_SECRET_KEY: ${SOS_S3_SECRET_KEY:-sos-dev-secret}
+  SOS_S3_BUCKET: ${SOS_S3_BUCKET:-sos-data}
+  SOS_S3_REGION: ${SOS_S3_REGION:-us-east-1}
+
+x-sos-python-build: &sos-python-build
+  context: .
+  dockerfile: Dockerfile
+
+services:
+  init:
+    image: sos-platform-python:local
+    build: *sos-python-build
+    environment: *sos-storage-env
+    command: ["sh", "-c", "alembic upgrade head && python -m sos_platform.bootstrap"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage:
+        condition: service_started
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  api:
+    image: sos-platform-python:local
+    build: *sos-python-build
+    environment:
+      <<: *sos-storage-env
+      SOS_AUTH_MODE: token
+      SOS_AUTH_TOKEN_HASHES: ${SOS_AUTH_TOKEN_HASHES:?Provide token fingerprints for the Compose API}
+    command:
+      - uvicorn
+      - sos_platform.api:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "9602"
+      - --no-proxy-headers
+    volumes:
+      - api_state:/var/lib/sos
+    ports:
+      - "127.0.0.1:${SOS_API_PORT:-9602}:9602"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9602/openapi.json', timeout=3).close()"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  worker:
+    image: sos-platform-python:local
+    build: *sos-python-build
+    environment: *sos-storage-env
+    command: ["python", "-m", "sos_platform.worker"]
+    volumes:
+      - worker_state:/var/lib/sos
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    stop_grace_period: 35s
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: sos-platform-web-dev:local
+    environment:
+      SOS_WEB_PORT: "9601"
+      SOS_API_INTERNAL_URL: http://api:9602
+    ports:
+      - "127.0.0.1:${SOS_WEB_PORT:-9601}:9601"
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+volumes:
+  api_state:
+  worker_state:
