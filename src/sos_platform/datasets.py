@@ -18,8 +18,8 @@ import pyarrow.parquet as pq
 
 from .cache import cached_dataset_file
 from .config import Settings
-from .file_formats import reader_for_suffix, scan_file
 from .errors import InvalidRequestError, PlatformError
+from .file_formats import reader_for_suffix, scan_file
 from .ingestion import UploadPolicy, staged_upload
 from .object_store import ObjectStore
 from .store import Store
