@@ -27,13 +27,13 @@ def config():
     }
 
 
-def test_help_and_makefile_are_public_interface(capsys):
+def test_makefile_uses_compose_as_public_entrypoint(capsys):
     dev.help_text()
-    value = capsys.readouterr().out
-    assert all(f"make {name}" in value for name in dev.COMMANDS)
+    assert "내부 호스트 테스트 실행기" in capsys.readouterr().out
     content = Path("Makefile").read_text()
     assert ".DEFAULT_GOAL := help" in content
-    assert "python3 scripts/dev.py $@" in content
+    assert "docker compose --profile app" in content
+    assert "scripts/dev.py $@" not in content
 
 
 def test_database_tcp_only_is_not_ready(monkeypatch, config):
