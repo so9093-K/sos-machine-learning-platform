@@ -106,7 +106,7 @@ def test_tabular_txt_rejects_ambiguous_or_malformed_input(workspace):
     ]
     for content, mime in cases:
         response = client.post("/api/datasets/files", files={"file": ("text.txt", content, mime)})
-        assert response.status_code == 400, response.text
+        assert response.status_code == 422, response.text
         assert response.json()["code"] == "SOS-UPLOAD-INVALID"
 
 
