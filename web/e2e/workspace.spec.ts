@@ -24,12 +24,12 @@ test("CSV upload → EDA → feature preview → worker → reusable dataset", a
   });
   await expect(page.getByRole("heading", { name: "sensors.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
-  await expect(page.getByText("분석한 행")).toBeVisible();
+  await expect(page.getByText("분석한 행", { exact: true })).toBeVisible();
   await expect(page.getByText("Histogram")).toBeVisible();
-  await page.getByRole("tab", { name: "변환" }).click();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
   const jobId = await submittedJob(page, "/api/jobs", () =>
     page.getByRole("button", { name: /전체 변환 Job 실행/ }).click());
   const latestTransform = jobById(page, jobId);
@@ -48,7 +48,7 @@ test("an expanded Attempt detail catches up with a newer completed Job", async (
   await expect(page.getByRole("heading", { name: "detail-refresh.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
   const jobId = await submittedJob(page, "/api/jobs", () =>
-    page.getByRole("button", { name: /전체 Profile 실행/ }).click());
+    page.getByRole("button", { name: /전체 데이터 프로파일 실행/ }).click());
   const job = jobById(page, jobId);
   await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   let detailRequests = 0;
@@ -77,7 +77,7 @@ test("failed Attempt detail can be retried without collapsing the Job", async ({
   await expect(page.getByRole("heading", { name: "detail-retry.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
   const jobId = await submittedJob(page, "/api/jobs", () =>
-    page.getByRole("button", { name: /전체 Profile 실행/ }).click());
+    page.getByRole("button", { name: /전체 데이터 프로파일 실행/ }).click());
   const job = jobById(page, jobId);
   await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
 
@@ -109,6 +109,7 @@ test("Iceberg import captures a pinned snapshot", async ({ page }) => {
     buffer: Buffer.from("time,value\n1,5\n2,6\n"),
   });
   await expect(page.getByRole("heading", { name: "repeat.csv" })).toBeVisible();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   const tableName = `sensor_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
   await page.getByRole("textbox", { name: "Iceberg 테이블명" }).fill(tableName);
   const jobId = await submittedJob(page, "/api/iceberg/import", () =>
@@ -119,7 +120,7 @@ test("Iceberg import captures a pinned snapshot", async ({ page }) => {
   await page.locator("nav").getByText(`default.${tableName}`).click();
   await expect(page.locator(".dataset-hero p")).toContainText("Snapshot", { timeout: 30000 });
   await page.getByRole("tab", { name: "데이터 조회" }).click();
-  await expect(page.getByText("2 rows shown")).toBeVisible();
+  await expect(page.getByText("반환 2행 · 전체 일치 건수 미계산")).toBeVisible();
   await page.getByRole("textbox", { name: "Iceberg 테이블 이름" }).fill(tableName);
   await page.getByRole("button", { name: "Snapshot 조회" }).click();
   const selector = page.getByRole("combobox", { name: "Iceberg Snapshot 선택" });
@@ -139,15 +140,15 @@ test("example onboarding uses the same EDA, Feature and Job contracts", async ({
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
   await expect(page.getByRole("heading", { name: "example-machine-sensors.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
-  await expect(page.getByText("분석한 행")).toBeVisible();
-  await page.getByRole("tab", { name: "변환" }).click();
+  await expect(page.getByText("분석한 행", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await page.getByLabel("변환 연산", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
   const jobId = await submittedJob(page, "/api/jobs", () =>
     page.getByRole("button", { name: /전체 변환 Job 실행/ }).click());
   const job = jobById(page, jobId);
@@ -173,21 +174,21 @@ test("feature preview is invalidated when group or ordering changes", async ({ p
   await page.goto("/");
   await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
-  await page.getByRole("tab", { name: "변환" }).click();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await page.getByLabel("변환 연산", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
   await page.getByLabel("그룹 컬럼").selectOption("");
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toHaveCount(0);
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toHaveCount(0);
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
   await expect(page.getByRole("alert")).toContainText("unique within each group");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
 });
 
 
@@ -211,15 +212,15 @@ test("same dataset reload preserves Feature editor selections", async ({ page })
   await page.goto("/");
   await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
-  await page.getByRole("tab", { name: "변환" }).click();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await page.getByLabel("변환 연산", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption("machine_id");
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   await page.getByLabel("컬럼", { exact: true }).selectOption("vibration");
-  await page.getByRole("tab", { name: "개요" }).click();
-  await page.getByRole("tab", { name: "변환" }).click();
+  await page.getByRole("button", { name: "데이터 탐색", exact: true }).click();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await expect(page.getByLabel("컬럼", { exact: true })).toHaveValue("vibration");
   await expect(page.locator(".step")).toHaveCount(1);
   await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
@@ -227,8 +228,8 @@ test("same dataset reload preserves Feature editor selections", async ({ page })
   await expect(page.getByLabel("시간·정렬 컬럼")).toHaveValue("time");
   await expect(page.getByLabel("그룹 컬럼")).toHaveValue("machine_id");
   await expect(page.locator(".step")).toHaveCount(1);
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
 });
 
 
@@ -422,8 +423,8 @@ test("DuckDB Discovery searches columns and runs a full job through global Jobs"
   await discovery.getByRole("textbox", { name: "컬럼 이름 검색" }).fill("val");
   await expect(discovery.getByText("1개 표시 / 전체 2개 컬럼")).toBeVisible();
   await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
-  await discovery.getByRole("button", { name: "샘플 집계" }).click();
-  await expect(discovery.getByText(/샘플 최대/)).toBeVisible();
+  await discovery.getByRole("button", { name: "부분 데이터 집계" }).click();
+  await expect(discovery.getByText(/부분 데이터 분석 · 최대/)).toBeVisible();
   await expect(discovery.getByRole("table").getByText("2", { exact: true })).toBeVisible();
   const jobId = await submittedJob(page, "/api/explorations/jobs", () =>
     discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
@@ -457,9 +458,9 @@ test("Discovery metadata retry restores selection and analysis controls", async 
   await expect(discovery.getByRole("button", { name: "메타데이터 다시 시도" })).toBeVisible();
   shouldFail = false;
   await discovery.getByRole("button", { name: "메타데이터 다시 시도" }).click();
-  await expect(discovery.getByRole("button", { name: "샘플 집계" })).toBeEnabled();
-  await discovery.getByRole("button", { name: "샘플 집계" }).click();
-  await expect(discovery.getByText(/샘플 최대/)).toBeVisible();
+  await expect(discovery.getByRole("button", { name: "부분 데이터 집계" })).toBeEnabled();
+  await discovery.getByRole("button", { name: "부분 데이터 집계" }).click();
+  await expect(discovery.getByText(/부분 데이터 분석 · 최대/)).toBeVisible();
 });
 
 test("Discovery supports categorical-only counts", async ({ page }) => {
@@ -475,7 +476,7 @@ test("Discovery supports categorical-only counts", async ({ page }) => {
   await discovery.getByRole("combobox", { name: "집계 방식" }).selectOption("null_count");
   await discovery.getByRole("combobox", { name: "분석할 컬럼" }).selectOption("label");
   await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
-  await discovery.getByRole("button", { name: "샘플 집계" }).click();
+  await discovery.getByRole("button", { name: "부분 데이터 집계" }).click();
   await expect(discovery.getByRole("table").getByText("1", { exact: true })).toBeVisible();
 });
 
@@ -503,7 +504,7 @@ test("accepted Job is not reported as failed when Jobs refresh fails", async ({ 
   });
   await expect(page.getByRole("heading", { name: "job-accepted.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
-  await page.getByRole("button", { name: /전체 Profile 실행/ }).click();
+  await page.getByRole("button", { name: /전체 데이터 프로파일 실행/ }).click();
   await expect(page.getByRole("status").filter({ hasText: "Job은 정상 접수됐습니다." })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
@@ -532,7 +533,7 @@ test("sample and full Discovery distinguish NULL groups from whole-dataset aggre
   await page.getByRole("tab", { name: "탐색" }).click();
   const discovery = page.getByRole("region", { name: "Dataset Discovery" });
   await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
-  await discovery.getByRole("button", { name: "샘플 집계" }).click();
+  await discovery.getByRole("button", { name: "부분 데이터 집계" }).click();
   await expect(discovery.getByRole("table").getByText("(NULL 그룹)")).toBeVisible();
   const jobId = await submittedJob(page, "/api/explorations/jobs", () =>
     discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
@@ -589,7 +590,7 @@ test("lost HTTP response reuses the original Job submission key", async ({ page 
     if (submitted.length === 1) await route.abort("failed");
     else await route.fulfill({ response });
   });
-  const create = page.getByRole("button", { name: /전체 Profile 실행/ });
+  const create = page.getByRole("button", { name: /전체 데이터 프로파일 실행/ });
   await create.click();
   await expect(page.getByRole("alert")).toBeVisible();
   const secondResponse = page.waitForResponse(res =>
@@ -652,7 +653,7 @@ test("Job reuses submission key when server accepted it before a 503 response", 
         body: JSON.stringify({ detail: "Response unavailable" }) });
     } else await route.fulfill({ response });
   });
-  const create = page.getByRole("button", { name: /전체 Profile 실행/ });
+  const create = page.getByRole("button", { name: /전체 데이터 프로파일 실행/ });
   await create.click();
   await expect(page.getByRole("alert")).toContainText("Response unavailable");
   await create.click();
@@ -670,6 +671,7 @@ test("Iceberg browse input never changes the append target or restores stale sna
     buffer: Buffer.from("value\n1\n2\n"),
   });
   await expect(page.getByRole("heading", { name: "append-target.csv" })).toBeVisible();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   const appendTarget = page.getByRole("textbox", { name: "Iceberg 테이블명", exact: true });
   const browseTable = page.getByRole("textbox", { name: "Iceberg 테이블 이름" });
   await appendTarget.fill("keep_append_target");
@@ -725,7 +727,7 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
     buffer: Buffer.from("site,machine,time,value,private\na,x,1,10,k\na,x,2,20,z\nb,y,1,30,q\n"),
   });
   await expect(page.getByRole("heading", { name: "grouped-features.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "변환" }).click();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await page.getByLabel("변환 연산", { exact: true }).selectOption("select");
   await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("site").check();
   await page.getByRole("group", { name: "유지할 컬럼" }).getByLabel("machine").check();
@@ -734,9 +736,9 @@ test("Feature Builder can select columns and multiple grouping keys", async ({ p
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   await page.getByLabel("시간·정렬 컬럼").selectOption("time");
   await page.getByLabel("그룹 컬럼").selectOption(["site", "machine"]);
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toBeVisible();
-  await expect(page.locator("#sos-panel-features .result th")).toHaveCount(4);
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
+  await expect(page.locator('[aria-label="데이터 준비"] .result th')).toHaveCount(4);
 });
 
 
@@ -829,7 +831,7 @@ test("late feature preview never reappears after Dataset reload", async ({ page 
     buffer: Buffer.from("group,value\na,1\nb,2\n"),
   });
   await expect(page.getByRole("heading", { name: "feature-preview-race.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "변환" }).click();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await page.getByLabel("컬럼", { exact: true }).selectOption("value");
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
   let release: (() => void) | undefined;
@@ -839,12 +841,12 @@ test("late feature preview never reappears after Dataset reload", async ({ page 
     await new Promise<void>(resolve => { release = resolve; });
     await route.continue();
   });
-  await page.getByRole("button", { name: "샘플 변환 확인" }).click();
+  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
   await expect.poll(() => intercepted).toBe(1);
   await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
   release?.();
-  await expect(page.getByRole("button", { name: "샘플 변환 확인" })).toBeEnabled();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 계산")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "변환 결과 미리보기" })).toBeEnabled();
+  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toHaveCount(0);
 });
 
 test("editing Dataset Query while its response is pending never renders stale rows", async ({ page }) => {
@@ -890,8 +892,8 @@ test("unknown CSV opens Understanding and transfers a candidate to editable Expl
     buffer: Buffer.from("department,score\nalpha,3\nbeta,5\nalpha,7\nbeta,9\n"),
   });
   await expect(page.getByRole("heading", { name: "unknown.csv" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "개요" })).toHaveAttribute("aria-selected", "true");
-  const panel = page.getByRole("tabpanel", { name: "개요" });
+  await expect(page.getByRole("tab", { name: "데이터 이해" })).toHaveAttribute("aria-selected", "true");
+  const panel = page.getByRole("tabpanel", { name: "데이터 이해" });
   await expect(panel.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });
   await expect(panel.getByText("그룹별 수치 비교")).toBeVisible();
   await panel.getByRole("searchbox", { name: "프로파일 컬럼 검색" }).fill("score");
@@ -913,15 +915,17 @@ test("unknown CSV opens Understanding and transfers a candidate to editable Expl
   await expect(exploration.getByLabel("집계 그룹")).toHaveValue("department");
   expect(explorationRequests).toBe(0);
   await exploration.getByLabel("집계 방식").selectOption("max");
-  await page.getByRole("tab", { name: "개요" }).click();
+  await page.getByRole("tab", { name: "데이터 이해" }).click();
   await page.getByRole("tab", { name: "탐색" }).click();
   await expect(exploration.getByLabel("집계 방식")).toHaveValue("max");
   expect(explorationRequests).toBe(0);
-  await exploration.getByRole("button", { name: "샘플 집계" }).click();
+  await exploration.getByRole("button", { name: "부분 데이터 집계" }).click();
   await expect.poll(() => explorationRequests).toBe(1);
-  await expect(exploration.getByText(/Dataset 판본/)).toBeVisible();
+  const explorationBasis = exploration.locator(".discovery-panel .analysis-evidence");
+  await explorationBasis.getByText("분석 근거 자세히").click();
+  await expect(explorationBasis.getByText(/Dataset 판본/)).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("tab", { name: "개요" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "데이터 이해" })).toBeVisible();
   await expect(page.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });
 });
 
@@ -947,19 +951,19 @@ test("Data Explorer shell, instance name and tab-scoped loading", async ({ page 
   await expect(page.getByRole("heading", { name: "ui-explorer.csv" })).toBeVisible();
   await expect.poll(() => overviewRequests.filter(url => url.includes("/overview")).length).toBeGreaterThan(0);
   const overviewCount = overviewRequests.length;
-  await expect(page.getByRole("tab", { name: "개요" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "데이터 이해" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("heading", { name: "데이터 프로파일" })).toBeVisible();
   expect(previewRequests.length).toBe(0);
   expect(profileRequests.length).toBe(0);
   await page.getByRole("tab", { name: "데이터 조회" }).click();
-  await expect(page.getByText("2 rows shown")).toBeVisible();
+  await expect(page.getByText("반환 2행 · 전체 일치 건수 미계산")).toBeVisible();
   expect(previewRequests.length).toBe(1);
   await page.getByRole("tab", { name: "탐색" }).click();
   await expect(page.getByRole("heading", { name: "탐색 조건" })).toBeVisible();
   expect(overviewRequests.length).toBe(overviewCount);
-  await page.getByRole("tab", { name: "개요" }).click();
+  await page.getByRole("tab", { name: "데이터 이해" }).click();
   await page.getByRole("tab", { name: "데이터 조회" }).click();
-  await expect(page.getByText("2 rows shown")).toBeVisible();
+  await expect(page.getByText("반환 2행 · 전체 일치 건수 미계산")).toBeVisible();
   expect(previewRequests.length).toBe(1);
 });
 
@@ -995,7 +999,7 @@ test("Dataset refresh re-fetches the current Understanding profile", async ({ pa
     mimeType: "text/csv",
     buffer: Buffer.from("label,metric\na,1\nb,3\n"),
   });
-  await expect(page.getByRole("tab", { name: "개요" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "데이터 이해" })).toHaveAttribute("aria-selected", "true");
   await expect.poll(() => requests).toBeGreaterThan(0);
   const firstCount = requests;
   await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
@@ -1054,7 +1058,7 @@ test("Dataset switch clears a previously chosen exploration candidate", async ({
     buffer: Buffer.from("department,score\nalpha,3\nbeta,5\nalpha,7\n"),
   });
   await expect(page.getByRole("heading", { name: "candidate-a.csv" })).toBeVisible();
-  const overview = page.getByRole("tabpanel", { name: "개요" });
+  const overview = page.getByRole("tabpanel", { name: "데이터 이해" });
   await expect(overview.getByRole("heading", { name: "탐색 후보" })).toBeVisible({ timeout: 30000 });
   await overview.getByRole("button", { name: "탐색 조건 보기" }).first().click();
   await expect(page.getByRole("tabpanel", { name: "탐색" })
@@ -1069,4 +1073,153 @@ test("Dataset switch clears a previously chosen exploration candidate", async ({
   await expect(exploration.getByText(/탐색 후보에서 가져온 조건/)).toHaveCount(0);
   await expect(exploration.getByLabel("집계 그룹")).toHaveValue("");
   await expect(exploration.getByLabel("분석할 컬럼")).not.toHaveValue("score");
+});
+
+
+test("Data Explorer and Data Preparation remain independent workspaces", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "boundary.csv", mimeType: "text/csv",
+    buffer: Buffer.from("category,value\na,1\nb,2\n"),
+  });
+  await expect(page.getByRole("tab", { name: "데이터 이해" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "변환" })).toHaveCount(0);
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "데이터 준비" })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "데이터 작업 영역" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "데이터 준비", exact: true }))
+    .toHaveAttribute("aria-current", "page");
+  await page.getByLabel("변환 연산", { exact: true }).selectOption("select");
+  await page.getByRole("button", { name: "데이터 탐색", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "데이터 이해" })).toBeVisible();
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
+  await expect(page.getByLabel("변환 연산", { exact: true })).toHaveValue("select");
+});
+
+test("Dataset original metadata remains visible after Understanding completes", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "profile-scope.csv", mimeType: "text/csv",
+    buffer: Buffer.from("category,value\na,1\nb,2\n"),
+  });
+  const understanding = page.getByRole("tabpanel", { name: "데이터 이해" });
+  await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
+  await expect(understanding.getByText("등록 파일 크기", { exact: true })).toBeVisible();
+  await expect(understanding.getByText("미계산", { exact: true })).toBeVisible();
+  await expect(understanding.getByText(/이 데이터 소스의 원본 행 수/)).toBeVisible();
+  await expect(understanding.locator(".analysis-evidence-summary")).toContainText("부분 데이터 분석 ·", { timeout: 30000 });
+  await understanding.getByText("분석 근거 자세히").click();
+  await expect(understanding.getByText("무작위 추출 (Reservoir)", { exact: true })).toBeVisible();
+  await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
+});
+
+test("Wide Dataset preview defaults to a bounded visible column set", async ({ page }) => {
+  await page.goto("/");
+  const names = Array.from({ length: 15 }, (_, i) => `metric_${i}`);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "wide-preview.csv", mimeType: "text/csv",
+    buffer: Buffer.from(names.join(",") + "\n" + names.map((_, i) => i + 1).join(",") + "\n"),
+  });
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
+  await expect(page.getByRole("columnheader")).toHaveCount(12);
+  await expect(page.getByText("전체 15개 컬럼 중 12개 표시", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "전체 컬럼 보기" }).click();
+  await expect(page.getByRole("columnheader")).toHaveCount(15);
+  await page.getByRole("button", { name: "첫 12개 컬럼만 보기" }).click();
+  await expect(page.getByRole("columnheader")).toHaveCount(12);
+  // 명시적으로 13개를 요청하면 기본 12개 표시 제한을 적용하지 않는다.
+  await page.getByText("컬럼·필터·정렬 선택").click();
+  const chosen = page.getByRole("group", { name: "표시할 컬럼 선택" });
+  for (const name of names.slice(0, 13)) {
+    await chosen.getByRole("checkbox", { name, exact: true }).check();
+  }
+  await page.getByRole("button", { name: "조회 적용" }).click();
+  await expect(page.getByRole("columnheader")).toHaveCount(13);
+  await expect(page.getByText("선택한 컬럼 전부 표시", { exact: false })).toBeVisible();
+});
+
+
+test("EDA asks for explicit value and horizontal axis before drawing a trend", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "chart-selection.csv", mimeType: "text/csv",
+    buffer: Buffer.from("sequence,measure\n1,10\n2,20\n3,30\n"),
+  });
+  // 업로드 완료 및 프로파일 응답보다 먼저 과거 Dataset의 탐색 화면을 읽지 않는다.
+  await expect(page.getByRole("heading", { name: "chart-selection.csv" })).toBeVisible();
+  await page.getByRole("tab", { name: "탐색" }).click();
+  await expect(page.getByRole("heading", { name: "컬럼 프로파일" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "조회 행 순서의 값 차트" })).toHaveCount(0);
+  await page.getByRole("combobox", { name: "값 컬럼" }).selectOption("measure");
+  await expect(page.getByRole("img", { name: "조회 행 순서의 값 차트" })).toHaveCount(0);
+  await page.getByRole("combobox", { name: "가로축 컬럼" }).selectOption("sequence");
+  await expect(page.getByRole("img", { name: "조회 행 순서의 값 차트" })).toBeVisible();
+});
+
+
+test("Overview retrieval failure remains recoverable after sample Understanding is ready", async ({ page }) => {
+  const overviewEndpoint = "**/api/datasets/*/overview";
+  await page.route(overviewEndpoint, async route => {
+    await route.fulfill({ status: 503, contentType: "application/json",
+      body: JSON.stringify({ detail: "overview temporarily unavailable" }) });
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "overview-retry.csv", mimeType: "text/csv",
+    buffer: Buffer.from("category,value\na,1\nb,2\n"),
+  });
+  const understanding = page.getByRole("tabpanel", { name: "데이터 이해" });
+  await expect(understanding.locator(".analysis-evidence-summary")).toContainText("부분 데이터 분석 ·", { timeout: 30000 });
+  await expect(understanding.getByRole("button", { name: "기본 정보 다시 조회" })).toBeVisible();
+  await page.unroute(overviewEndpoint);
+  await understanding.getByRole("button", { name: "기본 정보 다시 조회" }).click();
+  await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
+});
+
+test("Data Preparation reports Preview failures and can retry", async ({ page }) => {
+  const previewEndpoint = /\/api\/datasets\/[^/]+\/preview\?limit=100/;
+  await page.route(previewEndpoint, async route => {
+    await route.fulfill({ status: 503, contentType: "application/json",
+      body: JSON.stringify({ detail: "preview temporarily unavailable" }) });
+  });
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "preparation-retry.csv", mimeType: "text/csv",
+    buffer: Buffer.from("metric\n1\n2\n"),
+  });
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
+  await expect(page.getByRole("alert").getByText(/preview temporarily unavailable/)).toBeVisible();
+  await expect(page.getByLabel("변환 연산", { exact: true })).toHaveCount(0);
+  await page.unroute(previewEndpoint);
+  await page.getByRole("button", { name: "데이터 준비 미리보기 다시 시도" }).click();
+  await expect(page.getByLabel("변환 연산", { exact: true })).toBeVisible();
+});
+
+test("Operational pages show their own headings rather than Data Explorer", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "전체 Jobs 보기" }).click();
+  await expect(page.getByRole("heading", { name: "전체 Jobs", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "저장소 상태 보기" }).click();
+  await expect(page.getByRole("heading", { name: "저장소 상태", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "보안 감사 보기" }).click();
+  await expect(page.getByRole("heading", { name: "보안 감사", exact: true })).toBeVisible();
+});
+
+test("Registering another Dataset inside Preparation does not force Explorer navigation", async ({ page }) => {
+  await page.goto("/");
+  const input = page.locator('input[type="file"]');
+  await input.setInputFiles({
+    name: "prep-source-a.csv", mimeType: "text/csv",
+    buffer: Buffer.from("value\n1\n2\n"),
+  });
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
+  await expect(page.getByLabel("변환 연산", { exact: true })).toBeVisible();
+  await input.setInputFiles({
+    name: "prep-source-b.csv", mimeType: "text/csv",
+    buffer: Buffer.from("score\n10\n20\n"),
+  });
+  await expect(page.getByRole("heading", { name: "prep-source-b.csv" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "데이터 준비", exact: true })).toBeVisible();
+  await expect(page.getByLabel("변환 연산", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "데이터 작업 영역" })).toHaveCount(0);
 });

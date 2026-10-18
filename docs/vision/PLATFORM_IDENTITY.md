@@ -22,6 +22,12 @@ SOS의 중심 책임은 **모델의 실행·평가·불변 판본·배포·추�
 
 연구자는 SOS 밖에서 작성·실행한 코드와 모델도 가져올 수 있다. SOS는 특정 연구 UI나 학습 프레임워크를 강요하지 않으며, 연결된 실행·모델·평가·배포의 근거를 제공한다. 이는 장기 제품 방향으로, 현재 모든 학습·서빙·관측 기능이 구현됐음을 의미하지 않는다.
 
+### 플랫폼의 기능적 책임 영역
+
+![SOS 플랫폼의 기능적 책임 영역 — Data, Research & Experiment, Model Operations, Activity & Jobs](references/11-platform-capability-areas.png)
+
+그림은 Research Platform·ML Execution Platform·ML Service Platform이라는 제품 정체성을 대체하지 않는다. 공통 계약 위에서 Data Explorer·Data Preparation, 연구·실험, 모델 운영, 작업·이력 관리가 맡는 **기능적 책임**을 설명한다. 고정된 화면 메뉴, 독립 서비스의 수, 필수 실행 순서 또는 현재 기능 구현 완료를 의미하지 않는다.
+
 ## 2. Data Explorer — 데이터 이해와 탐색
 
 ![알 수 없는 Dataset → System Discovery → Dataset Understanding → Explore · Prepare · Experiment](references/07-dataset-understanding.png)
@@ -29,6 +35,18 @@ SOS의 중심 책임은 **모델의 실행·평가·불변 판본·배포·추�
 Dataset Understanding은 **Data Explorer에서 처음 보는 데이터를 이해하는 진입 경험**의 예시다. 사전 데이터 사전이나 특정 ML 시나리오가 없어도 지원 가능한 Dataset의 구조와 검증 가능한 특성을 발견할 수 있어야 한다. 계산으로 확인한 사실, 해석이 필요한 역할 후보, 확인되지 않은 업무적 의미를 구별하고 원본을 변경하지 않는다.
 
 데이터 이해만으로도 작업이 완결될 수 있으며 탐색·준비·실험은 선택적으로 연결된다. 그림의 Explore · Prepare · Experiment는 필수 파이프라인이 아니다. 학습·배포나 외부에서 개발된 모델의 운영은 Dataset Understanding 없이도 시작할 수 있다. 분석 근거와 데이터 판본을 보존하며 사람과 API 클라이언트에 동일한 계약을 제공한다. 모든 데이터 형식과 업무 의미를 자동으로 이해한다고 약속하지 않는다.
+
+### 데이터 경험의 책임 경계
+
+![Data Explorer·Data Preparation·Feature Engineering의 목적과 산출물 구분](references/10-data-experience-responsibilities.png)
+
+이 세 영역은 연산의 종류나 필수 단계가 아니라 **사용자의 목적과 결과물**로 구분한다. Data Explorer는 구조·분포·관계·품질을 이해하고 탐색 근거를 검증하는 경험, Data Preparation은 분석·연동·ML 등 여러 목적에 맞게 데이터를 가공하는 경험이다. Feature Engineering은 모델의 학습·추론 입력과 시간적 정합성을 설계하는 경험이다. 탐색을 위한 임시 계산이 곧 새로운 Dataset 생성이나 모델 입력 정의를 뜻하지 않는다.
+
+### Data Explorer의 완결성과 선택적 연결
+
+![Dataset 등록·연결, Data Explorer의 개요·이해·조회·탐색, 선택적인 Data Preparation·ML Workbench 연결](references/09-data-explorer-experience-flow.png)
+
+데이터 등록·연결은 플랫폼 공통 진입 기능이다. Explorer에서 데이터에 대한 이해와 근거를 얻은 뒤 **다른 작업 없이 종료할 수 있다**. Data Preparation과 ML Workbench는 Explorer를 거치지 않고도 데이터 참조에서 직접 시작할 수 있는 독립 영역이다. 그림은 목표 경험의 개념도이며 화면 구성을 고정하거나 미구현 기능을 구현된 것으로 표현하지 않는다.
 
 ## 3. 지속적 개선 과정
 

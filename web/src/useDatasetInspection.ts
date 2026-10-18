@@ -8,7 +8,7 @@ type LoadStatus = "loading" | "ready" | "error";
 
 /** 필요 탭에서만 Preview·EDA Profile을 조회하며 데이터 귀속과 요청 경합을 관리한다. */
 export function useDatasetInspection(
-  datasetId: string, revision: number, tab: DatasetTab | "jobs" | "storage" | "audit",
+  datasetId: string, revision: number, tab: DatasetTab | "preparation" | "jobs" | "storage" | "audit",
 ) {
   const [previewState, setPreviewState] = useState<InspectionResult<Preview> | null>(null);
   const [profileState, setProfileState] = useState<InspectionResult<Profile> | null>(null);
@@ -30,7 +30,7 @@ export function useDatasetInspection(
     const key = datasetId + ":" + revision;
     let previewStarted = false, previewSettled = false;
     let profileStarted = false, profileSettled = false;
-    if (["preview", "profile", "features"].includes(tab) && previewKey.current !== key) {
+    if (["preview", "profile", "preparation"].includes(tab) && previewKey.current !== key) {
       previewKey.current = key;
       previewStarted = true;
       setPreviewStatus("loading"); setPreviewError("");

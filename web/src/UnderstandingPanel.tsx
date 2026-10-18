@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { explorationMetricLabel } from "./exploration-format";
+import { AnalysisEvidence, analysisScopeLabel, dataSelectionLabel } from "./AnalysisEvidence";
 import type { DatasetOverview, ExplorationRequest, Job } from "./types";
 
 import type { components } from "./api.generated";
@@ -106,41 +107,65 @@ export function UnderstandingPanel({
     {state?.job_status === "Failed" && <p role="alert">
       최근 분석에 실패했습니다. Dataset과 이전 완료 결과는 그대로 사용할 수 있습니다.
     </p>}
-    {!profile && overviewStatus === "error" && <div role="alert">
+    {overviewStatus === "error" && <div role="alert">
       기본 메타데이터 조회 실패: {overviewError}
       <button className="secondary" onClick={onRetryOverview}>기본 정보 다시 조회</button>
     </div>}
-    {!profile && overviewStatus === "loading" && <p role="status">기본 메타데이터 조회 중</p>}
-    {!profile && overview && <>
+    {overviewStatus === "loading" && <p role="status">기본 메타데이터 조회 중</p>}
+    {overview && <>
       <div className="cards">
         <div className="stat"><span>등록된 컬럼</span><strong>{overview.column_count}</strong></div>
         <div className="stat"><span>원본 행 수</span><strong>{
           overview.row_count === null ? "미계산" : overview.row_count.toLocaleString()
         }</strong></div>
+        {overview.size_bytes !== null && <div className="stat">
+          <span>등록 파일 크기</span><strong>{overview.size_bytes < 1024
+            ? overview.size_bytes.toLocaleString() + " B"
+            : overview.size_bytes < 1024 * 1024
+              ? (overview.size_bytes / 1024).toFixed(1) + " KiB"
+              : (overview.size_bytes / (1024 * 1024)).toFixed(2) + " MiB"}</strong>
+        </div>}
       </div>
       <p className="hint">{overview.row_count_basis === "parquet_metadata"
         ? "행 수는 Parquet 메타데이터 기준입니다."
-        : "정확한 전체 행 수는 Profile 실행 후 확인할 수 있습니다."}
-        {" · "}분포와 역할 후보는 별도 분석 중에 계산됩니다.</p>
-      <h4>기본 스키마</h4>
+        : "이 데이터 소스의 원본 행 수는 메타데이터에서 계산하지 않았습니다."}
+        {" · "}{profile ? "원본 규모와 분석 결과의 범위는 구별합니다." : "분포와 역할 후보는 별도 분석에서 계산됩니다."}</p>
+      {!profile && <><h4>기본 스키마</h4>
       <div className="table-scroll"><table><thead><tr>
         <th>컬럼</th><th>자료형</th>
       </tr></thead><tbody>{overview.columns.map(col => <tr key={col.name}>
         <td>{col.name}</td><td>{col.dtype}</td>
-      </tr>)}</tbody></table></div>
+      </tr>)}</tbody></table></div></>}
     </>}
     {profile && <>
       <div className="cards">
         <div className="stat"><span>분석한 행</span><strong>{profile.row_count.toLocaleString()}</strong></div>
-        <div className="stat"><span>컬럼</span><strong>{profile.columns.length}</strong></div>
         <div className="stat"><span>결측 셀</span><strong>{
           profile.columns.reduce((sum, col) => sum + col.null_count, 0).toLocaleString()
         }</strong></div>
       </div>
-      <p className="hint">{profile.scope === "full" ? "전체 데이터 계산" :
-        "고정 Seed Reservoir 표본 · 전체 분포를 대표한다고 보장하지 않습니다."}
-        {" · "}고유값 수 {profile.scope === "full" ? "근사" : "표본 내 정확"}
-        {" · "}{profile.algorithm_version}</p>
+      <AnalysisEvidence
+        summary={analysisScopeLabel(profile.scope) + " · " + profile.row_count.toLocaleString() + "행 분석"}
+        note={profile.scope === "sample"
+          ? profile.sampling_method === "reservoir"
+            ? "무작위로 선택된 데이터의 결과입니다. 전체 분포를 대표한다고 보장하지 않습니다."
+            : "부분 데이터 분석 결과입니다. 전체 데이터의 특성으로 단정하지 마세요."
+          : "전체 데이터를 대상으로 분석했습니다. 고유값 수 등 지표별 계산 정확도는 별도로 확인하세요."}
+        details={[
+          { label: "데이터 선택 방식", value: dataSelectionLabel(profile.sampling_method) },
+          { label: "계산 대상 행 수", value: profile.row_count.toLocaleString() + "행" },
+          ...(profile.sample_limit === null ? [] : [{
+            label: "표본 크기 상한", value: profile.sample_limit.toLocaleString() + "행",
+          }]),
+          ...(profile.sample_seed == null ? [] : [{
+            label: "무작위 추출 Seed", value: String(profile.sample_seed),
+          }]),
+          { label: "고유값 수", value: profile.columns.some(col => !col.distinct_exact)
+            ? "근사값 포함 (≈ 표시)" : "분석한 범위 내 정확" },
+          { label: "Dataset 판본", value: profile.version },
+          { label: "분석 알고리즘 판본", value: profile.algorithm_version },
+        ]}
+      />
       <div className="profile-findings" aria-label="주요 데이터 특성">
         <div><strong>{constantCount.toLocaleString()}</strong>
           <span>{profile.scope === "sample" ? "표본 내 상수 후보" : "전체 상수 컬럼"}</span></div>
@@ -167,7 +192,7 @@ export function UnderstandingPanel({
         <span className="filter-count" role="status">{filteredColumns.length.toLocaleString()} / {columns.length.toLocaleString()} 컬럼</span>
       </div>
       <div className="table-scroll"><table><thead><tr>
-        <th>컬럼</th><th>자료형</th><th>NULL</th><th>NaN</th><th>고유값</th><th>역할 후보 (미확정)</th>
+        <th>컬럼</th><th>자료형</th><th>NULL</th><th>NaN</th><th>고유값 (≈ 근사)</th><th>역할 후보 (미확정)</th>
       </tr></thead><tbody>{filteredColumns.map(col => <tr key={col.name}>
         <td>{col.name}</td><td>{col.dtype}</td>
         <td>{col.null_ratio === null ? "—" : (col.null_ratio * 100).toFixed(1) + "%"}</td>
@@ -183,8 +208,8 @@ export function UnderstandingPanel({
       <div className="example-grid">{profile.insights.map((item, i) => <article
         className="example-card" key={item.kind + i}>
         <h4>{item.title}</h4><p>{item.reason}</p>
-        <p className="hint">구성 근거: {profile.scope === "full" ? "전체 프로파일" : "Reservoir 표본"}
-          {" · "}실행 범위: 별도의 제한된 선두 샘플</p>
+        <p className="hint">구성 근거: {analysisScopeLabel(profile.scope)}
+          {" · "}실행 범위: 별도로 제한 조회한 부분 데이터</p>
         <p className="hint">분석 조건: {item.request.column} · {explorationMetricLabel(item.request.metric)}{
           item.request.group_by ? ` · 그룹 ${item.request.group_by}` : " · 전체 그룹"
         }</p>
