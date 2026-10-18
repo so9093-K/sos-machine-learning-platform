@@ -33,7 +33,9 @@ class DatasetStoreMixin:
             kind=kind,
             location=location,
             version=str(version),
-            parse_options=json.dumps(parse_options, sort_keys=True) if parse_options is not None else None,
+            parse_options=json.dumps(parse_options, sort_keys=True)
+            if parse_options is not None
+            else None,
             created_at=now(),
         )
         with self.connection() as db:

@@ -17,8 +17,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from .cache import cached_dataset_file
-from .delimited import TABULAR_SUFFIXES, scan_file, validate_tabular_text
 from .config import Settings
+from .delimited import TABULAR_SUFFIXES, scan_file, validate_tabular_text
 from .errors import InvalidRequestError, PlatformError
 from .ingestion import UploadPolicy, staged_upload
 from .object_store import ObjectStore

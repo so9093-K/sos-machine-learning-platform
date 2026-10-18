@@ -25,8 +25,9 @@ def validate_tabular_text(path: Path, *, has_header: bool) -> None:
             header = next(reader, None)
             if header is None or len(header) < 2:
                 raise PlatformError("SOS-UPLOAD-INVALID")
-            if has_header and (any(not name.strip() for name in header) or
-                               len(set(header)) != len(header)):
+            if has_header and (
+                any(not name.strip() for name in header) or len(set(header)) != len(header)
+            ):
                 raise PlatformError("SOS-UPLOAD-INVALID")
             for row in reader:
                 if len(row) != len(header):
@@ -45,7 +46,11 @@ def scan_file(path: Path, dataset: dict) -> pl.LazyFrame:
     if ext not in TABULAR_SUFFIXES:
         raise ValueError("Unsupported file Dataset extension")
     opts = parse_options(dataset)
-    if not isinstance(opts, dict) or opts.get("format") != "tsv" or not isinstance(opts.get("has_header"), bool):
+    if (
+        not isinstance(opts, dict)
+        or opts.get("format") != "tsv"
+        or not isinstance(opts.get("has_header"), bool)
+    ):
         raise ValueError("Missing tabular Dataset parse settings")
     frame = pl.scan_csv(path, separator="\t", quote_char=None, has_header=opts["has_header"], try_parse_dates=True)
     if not opts["has_header"]:
