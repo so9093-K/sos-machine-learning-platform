@@ -33,7 +33,7 @@ def request(
     *,
     data: bytes | None = None,
     content_type: str = "",
-    idempotency_key: str | None = None
+    idempotency_key: str | None = None,
 ) -> tuple[int, dict]:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     if content_type:
@@ -55,7 +55,7 @@ def await_ready(url: str, timeout: int = 150) -> None:
         try:
             if request(url + "/api/ready")[0] == 200:
                 return
-        except (URLError, TimeoutError, ValueError):
+        except (URLError, TimeoutError, OSError, ValueError):
             pass
         time.sleep(1)
     raise TimeoutError("Container API/Worker readiness did not converge")
