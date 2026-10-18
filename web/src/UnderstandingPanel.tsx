@@ -192,15 +192,18 @@ export function UnderstandingPanel({
         <span className="filter-count" role="status">{filteredColumns.length.toLocaleString()} / {columns.length.toLocaleString()} 컬럼</span>
       </div>
       <div className="table-scroll"><table><thead><tr>
-        <th>컬럼</th><th>자료형</th><th>NULL</th><th>NaN</th><th>고유값 (≈ 근사)</th><th>역할 후보 (미확정)</th>
+        <th>컬럼</th><th>자료형</th><th>NULL</th><th>NaN</th><th>고유값</th><th>역할 후보 (미확정)</th>
       </tr></thead><tbody>{filteredColumns.map(col => <tr key={col.name}>
         <td>{col.name}</td><td>{col.dtype}</td>
         <td>{col.null_ratio === null ? "—" : (col.null_ratio * 100).toFixed(1) + "%"}</td>
         <td>{col.nan_count === null ? "—" : col.nan_count.toLocaleString()}</td>
-        <td>{col.distinct_count.toLocaleString()}{col.distinct_exact ? "" : " ≈"}</td>
+        <td>{col.distinct_exact ? "" : "≈ "}{col.distinct_count.toLocaleString()}</td>
         <td>{col.is_constant ? "상수 · " : ""}
           {col.roles.map(r => r.role + " (" + r.basis + ")").join(", ") || "미확인"}</td>
       </tr>)}</tbody></table></div>
+      {columns.some(col => !col.distinct_exact) && <p className="hint">
+        ≈ 표시는 고유값 수가 근사 계산되었음을 뜻합니다. 다른 컬럼 통계까지 근사라는 의미는 아닙니다.
+      </p>}
       {filteredColumns.length === 0 && <p className="muted" role="status">선택한 조건에 해당하는 컬럼이 없습니다.</p>}
       <h4>탐색 후보</h4>
       <p className="hint">데이터 특성과 지원 연산을 기준으로 구성된 항목입니다. 분석 적합성이나 업무적 의미를 확정하지 않습니다.</p>

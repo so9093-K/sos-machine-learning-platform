@@ -185,6 +185,7 @@ export function DiscoveryPanel({
             ? " · 전체 행 대상" : " · 최대 " + result.sample_limit.toLocaleString() + "행 대상")}
           note={result.scope === "sample"
             ? "제한 조회한 행의 집계 결과로, 전체 데이터의 분포를 대표하지 않습니다."
+              + (result.truncated ? " 집계한 그룹 중 일부만 표시됩니다." : "")
             : result.truncated ? "전체 데이터를 집계했지만 표시되는 그룹은 일부입니다." : undefined}
           details={[
             { label: "데이터 선택 방식", value: result.scope === "sample"

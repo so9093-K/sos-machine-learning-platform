@@ -92,7 +92,7 @@ export function FeaturePanel({
              <p className="hint">입력을 표본 추출하는 것이 아니라 실제 변환 순서를 적용한 결과를 최대 30행 반환합니다. 단순 변환은 필요한 행만 읽고, 전역 Window는 동기 예산 초과 시 전체 Job을 안내합니다.</p>
             <div className="table-scroll"><table><thead><tr>{Object.entries(featurePreview.schema).map(
               ([c, t]) => <th key={c}>{c}<small>{t}</small></th>
-            )}</tr></thead><tbody>{featurePreview.rows.slice(0, 15).map((r, i) => <tr key={i}>
+            )}</tr></thead><tbody>{featurePreview.rows.map((r, i) => <tr key={i}>
               {Object.keys(featurePreview.schema).map(c => <td key={c}>{r[c] == null ? "—" : String(r[c])}</td>)}
             </tr>)}</tbody></table></div></div>}
         </section>
