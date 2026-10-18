@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { request, formatError } from "./api";
 import { explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
+import { AnalysisEvidence, analysisScopeLabel, dataSelectionLabel } from "./AnalysisEvidence";
 import type { Dataset, Job, JobSummary, ExplorationJob, ExplorationJobSummary } from "./types";
 
 type AnyJobSummary = JobSummary | ExplorationJobSummary;
@@ -17,8 +18,23 @@ function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
     <h4>전체 집계 결과</h4>
     <p className="muted">전체 입력 · 컬럼 {String(result.column)} · 집계 {metricLabel}
       {result.group_by ? ` · 그룹 ${String(result.group_by)}` : " · 그룹 없음"}</p>
-    <p className="hint">Dataset 판본 {String(result.version).slice(0, 12)}
-      {result.truncated ? " · 표시 그룹 수 제한으로 일부 결과만 표시됩니다." : ""}</p>
+    <AnalysisEvidence
+      summary={analysisScopeLabel(String(result.scope)) + " · " + metricLabel}
+      note={result.truncated === true
+        ? "전체 데이터를 집계했지만 표시되는 그룹은 일부입니다."
+        : undefined}
+      details={[
+        { label: "데이터 선택 방식", value: result.scope === "full"
+          ? dataSelectionLabel("full_scan") : "선택 방식 미확인" },
+        { label: "실제 분석 행 수", value: "현재 결과에 제공되지 않음" },
+        { label: "그룹 표시", value: result.truncated === true
+          ? "일부 그룹만 표시" : "그룹 제한으로 생략된 결과 없음" },
+        { label: "집계 계산", value: result.metric === "mean"
+          ? "부동소수 평균 계산 (근사 가능)" : "개별 지표의 정확도는 별도 확인" },
+        { label: "Dataset 판본", value: typeof result.version === "string"
+          ? result.version : "미확인" },
+      ]}
+    />
     <div className="table-scroll"><table><thead><tr><th>그룹</th><th>집계값</th></tr></thead>
       <tbody>{rows.map((row, index) => <tr key={index}>
         <td>{explorationCategory(row.category, typeof result.group_by === "string" ? result.group_by : null)}</td>

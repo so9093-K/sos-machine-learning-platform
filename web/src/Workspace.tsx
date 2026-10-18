@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { mergeById } from "./collections";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
+import { AnalysisEvidence, dataSelectionLabel } from "./AnalysisEvidence";
 import { histogram, needsTimeOrder } from "./feature-utils";
 import { useFeatureEditor } from "./useFeatureEditor";
 import { FeaturePanel } from "./FeaturePanel";
@@ -558,9 +559,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             overview={overview} overviewStatus={overviewStatus}
             overviewError={overviewError} onRetryOverview={retryOverview}
             onCreated={async () => { await refreshDiscoveryJobs(); setTab("jobs"); }} />
-          <div className="panel-head"><div><h3>샘플 프로파일</h3>
-            <p>미리보기 통계는 상위 1,000행 기준입니다. 전체 분석은 Job으로 요청할 수 있습니다.</p>
-          </div>{canRun && <button disabled={busy} onClick={() => void submit("profile")}>전체 Profile 실행 ↗</button>}</div>
+          <div className="panel-head"><div><h3>부분 데이터 프로파일</h3>
+            <p>정렬 기준 없이 제한 조회한 최대 1,000행에서 계산합니다. 전체 데이터 분석은 별도 Job으로 실행할 수 있습니다.</p>
+          </div>{canRun && <button disabled={busy} onClick={() => void submit("profile")}>전체 데이터 프로파일 실행 ↗</button>}</div>
           {profileStatus === "loading" && <p role="status" className="muted">EDA 통계를 계산하고 있습니다.</p>}
           {profileStatus === "error" && <p role="alert">{profileError}</p>}
           {profileStatus === "error" && <button className="secondary"
@@ -572,6 +573,17 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               <div className="stat"><span>결측 셀</span><strong>{profile.columns.reduce(
                 (s, c) => s + c.nulls, 0).toLocaleString()}</strong></div>
             </div>
+            <AnalysisEvidence
+              summary={"부분 데이터 분석 · " + profile.row_count.toLocaleString() + "행 분석"}
+              note="정렬 기준 없는 제한 조회 결과입니다. 전체 데이터의 분포를 대표하지 않습니다."
+              details={[
+                { label: "데이터 선택 방식", value: dataSelectionLabel("limited_rows") },
+                { label: "조회 행 수 상한", value: profile.sample_limit === null
+                  ? "미확인" : profile.sample_limit.toLocaleString() + "행" },
+                { label: "실제 분석한 행", value: profile.row_count.toLocaleString() + "행" },
+                { label: "고유값 수", value: "분석한 행 내 정확 (NULL 포함)" },
+              ]}
+            />
             <h4>컬럼 프로파일</h4><div className="table-scroll"><table><thead><tr>
               <th>컬럼</th><th>dtype</th><th>NULL</th><th>NaN</th><th>고유 값</th><th>평균</th>
             </tr></thead><tbody>{profile.columns.map(c => <tr key={c.name}>
