@@ -154,7 +154,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify container runtime in a dedicated Compose project
-        run: python3 scripts/verify_container_runtime.py
+        run: python3 scripts/verify.py run container-runtime --output-dir /tmp/sos-container-runtime
+      - name: Preserve container verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: container-runtime-test-report
+          path: /tmp/sos-container-runtime/
+          if-no-files-found: error
+          retention-days: 7
 
   # 보호 규칙의 python-quality 상태가 컨테이너 실행을 포함한 필수 검증을 대표한다.
   python-quality:

@@ -46,7 +46,7 @@ docker compose -f compose.yaml -f compose.app.yaml down
 - 기존 DB·S3 명명된 볼륨은 `compose.yaml`이 소유한다. API·Worker는 별도 `SOS_HOME` 볼륨을 사용한다. `down`은 데이터를 보존하지만 `down --volumes`는 삭제할 수 있으므로 일반 개발 환경에서 사용하지 않는다.
 - 초기화 서비스가 **로컬 관리형** DB 마이그레이션과 S3 버킷 준비를 수행한다. 외부 DB 연결을 위한 Compose 배포는 지원하지 않는다. 호스트 `make up`과 같은 포트를 동시에 사용하지 않는다.
 - 코드 수정 중 빠른 피드백은 현재 호스트 `make up`이 우선이며, 컨테이너의 기본 개발 명령 전환은 성능·디버깅·데이터·보안 회귀 검증 이후 결정한다. Worker의 컨테이너 실행은 비신뢰 코드의 강한 샌드박스나 cgroup 위임을 자동 제공하지 않는다.
-- `scripts/verify_container_runtime.py`는 무작위 소유 프로젝트에서 데이터 등록·Iceberg Job·재시작을 검증하고 **그 테스트 프로젝트의 볼륨만** 정리한다.
+- `scripts/verify_container_runtime.py`는 무작위 소유 프로젝트에서 데이터 등록·타 사용자 접근 거부·Iceberg Job·재시작·전체 종료/재기동 후 보존을 검증하고 **그 테스트 프로젝트의 볼륨만** 정리한다.
 
 ## 구성과 안전
 

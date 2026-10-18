@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import secrets
+import signal
 import socket
 import subprocess
 import sys
@@ -78,8 +79,14 @@ def compose(project: str, env: dict[str, str], *args: str) -> None:
     subprocess.run([*COMPOSE, "-p", project, *args], cwd=ROOT, env=env, check=True)
 
 
+def stop_on_sigterm(_signum: int, _frame: object) -> None:
+    """취소 시에도 소유 프로젝트 정리를 실행하도록 제어권을 반환한다."""
+    raise KeyboardInterrupt
+
+
 def main() -> int:
     """테스트 소유 프로젝트에서 쓰기·인증·복구를 검증하고 해당 볼륨만 정리한다."""
+    previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
     project = "sos-container-e2e-" + secrets.token_hex(6)
     db_port, s3_port, api_port, web_port = free_ports()
     viewer, researcher = secrets.token_hex(32), secrets.token_hex(32)
@@ -138,6 +145,11 @@ def main() -> int:
         status, dataset = request(upload, researcher, data=body, content_type=mime)
         assert status == 201, f"dataset upload response: {status}"
         dataset_id = dataset["id"]
+        step = "cross-actor dataset isolation"
+        denied, _ = request(url + f"/api/datasets/{dataset_id}", viewer)
+        assert denied == 404, f"cross-actor dataset access: {denied}"
+        status, viewer_page = request(url + "/api/datasets", viewer)
+        assert status == 200 and not any(row["id"] == dataset_id for row in viewer_page["items"])
 
         step = "Iceberg job submission"
         table = "container_" + secrets.token_hex(5)
@@ -179,7 +191,19 @@ def main() -> int:
         step = "post-restart Iceberg snapshots"
         status, snapshots = request(url + f"/api/iceberg/{table}/snapshots", researcher)
         assert status == 200 and snapshots
-        print("Container contract: Token RBAC, Web proxy, Dataset, Worker, Iceberg, restart passed")
+
+        # restart는 컨테이너를 재생성하지 않으므로, named volume 보존을 별도로 검증한다.
+        step = "full down/up data preservation"
+        compose(project, env, "down")
+        compose(project, env, "up", "-d", "--wait")
+        await_ready(url)
+        status, listing = request(url + "/api/datasets", researcher)
+        assert status == 200 and any(row["id"] == dataset_id for row in listing["items"])
+        denied, _ = request(url + f"/api/datasets/{dataset_id}", viewer)
+        assert denied == 404
+        status, snapshots = request(url + f"/api/iceberg/{table}/snapshots", researcher)
+        assert status == 200 and snapshots
+        print("Container contract: RBAC, isolation, Job, Iceberg, restart and down/up passed")
         return 0
     except (
         AssertionError,
@@ -188,6 +212,7 @@ def main() -> int:
         ValueError,
         OSError,
         subprocess.CalledProcessError,
+        KeyboardInterrupt,
     ) as exc:
         print(
             f"Container verification failed at {step}: {type(exc).__name__} {exc}",
@@ -197,12 +222,15 @@ def main() -> int:
         return 1
     finally:
         # 유일한 임의 프로젝트만 정리한다. 기존 sos-platform 볼륨은 절대 삭제하지 않는다.
-        subprocess.run(
+        cleanup = subprocess.run(
             [*COMPOSE, "-p", project, "down", "--volumes", "--remove-orphans"],
             cwd=ROOT,
             env=env,
             check=False,
         )
+        signal.signal(signal.SIGTERM, previous)
+        if cleanup.returncode:
+            raise RuntimeError("Test-owned Compose resources could not be cleaned")
 
 
 if __name__ == "__main__":

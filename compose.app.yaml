@@ -54,7 +54,7 @@ services:
       init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9602/openapi.json', timeout=3).close()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9602/api/ready', timeout=3).close()"]
       interval: 5s
       timeout: 5s
       retries: 30

@@ -86,7 +86,8 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 - python-tests: 잠금·Markdown/ADR 인덱스·Ruff·API 타입·PR base API 호환성·전체 Python 테스트(로컬 check-fast 명령 계약 포함)·실제 인프라 통합 테스트·Alembic·Wheel. 로컬 check-fast 전체 명령은 다른 필수 CI 단계와 중복 실행하지 않는다.
 - frontend: TypeScript/Vite 빌드 및 Vitest.
 - ui-e2e: Make up/down/restart, Data Workspace 브라우저 시나리오, 토큰 역할 3개, 독립 데이터 보존 검사. 정확한 시나리오 개수와 성패는 각 CI 실행 기록을 기준으로 한다.
-- python-quality: 위 세 작업이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
+- container-runtime: 별도 전체 Compose 환경에서 Token 역할/소유권, Web 프록시, Job·Iceberg, restart와 down/up 데이터·Snapshot 보존 검증. 공통 Suite의 Manifest/Summary를 CI 증거로 보존한다.
+- python-quality: Python·Frontend·UI E2E 및 container-runtime이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
 - 오래된 PR HEAD만 취소하고 main 검증 결과는 각 실행 ID별로 보존한다.
 - 정기(매일 새벽)·수동 실행에서는 핵심 Iceberg/Job 모듈을 순서를 바꿔 두 번 반복해 격리·재현성을 점검한다. 실패는 일반 CI 실패로 남으며 Retry에 의해 무시되지 않는다.
 - PR의 OpenAPI 후방 호환성 검사는 기준 브랜치와 변경 브랜치를 직접 비교하며, 과거 PR 전용 Breaking 승인 예외를 적용하지 않는다.

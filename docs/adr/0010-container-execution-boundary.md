@@ -12,7 +12,7 @@ SOS는 호스트에서 API·Worker·Vite, Compose에서 PostgreSQL·SeaweedFS를
 2. **실행 경계:** 기존 `compose.yaml`·명명 볼륨·호스트 `make up`은 유지한다. `compose.app.yaml`을 추가 검증 경로로 제공하며 사용자 경험 검증 전 기본 실행을 변경하지 않는다.
 3. **보안:** Docker 네트워크를 개발 인증의 루프백으로 간주하지 않는다. 컨테이너 경로는 명시적 Token 신원·호스트 루프백 포트만 허용한다.
 4. **데이터와 복구:** 기존 PostgreSQL·S3 영속 볼륨과 Job/Attempt/Iceberg 판본 계약을 보존한다. API·Worker 캐시는 별도의 지속 볼륨에 둔다. 초기화는 관리형 DB·스토리지에만 수행한다.
-5. **검증:** 고유 Compose 프로젝트에서 인증 거부·권한·Web 프록시·Dataset·Worker·Iceberg·재시작 후 판본 보존을 검사한다. CI `python-quality`는 새 컨테이너 검증의 성공을 요구한다.
+5. **검증:** 고유 Compose 프로젝트에서 인증 거부·권한·Web 프록시·Dataset·Worker·Iceberg·재시작 및 전체 종료·재기동 후 판본 보존을 검사한다. CI `python-quality`는 새 컨테이너 검증의 성공을 요구한다.
 
 ## 근거
 

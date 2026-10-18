@@ -46,6 +46,7 @@ SUITES = {
         Suite("workspace-e2e", "junit", True, "격리된 브라우저 사용자 흐름"),
         Suite("token-rbac", "junit", True, "토큰 역할별 브라우저 흐름"),
         Suite("make-lifecycle", "command", True, "Make 재시작·데이터 보존"),
+        Suite("container-runtime", "command", True, "전체 Compose 컨테이너·권한·데이터 보존"),
     )
 }
 
@@ -113,6 +114,8 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
         return [(uv + ["python", "scripts/verify_token_rbac.py"], ROOT)]
     if name == "make-lifecycle":
         return [(uv + ["python", "scripts/verify_make_lifecycle.py"], ROOT)]
+    if name == "container-runtime":
+        return [(["python3", "scripts/verify_container_runtime.py"], ROOT)]
     raise ValueError(f"알 수 없는 Suite: {name}")
 
 
