@@ -34,6 +34,36 @@ test("헤더 없는 한국어 TXT는 등록 전 확인하고 첫 행을 보존�
   await expect(table.getByText("배공빠르고 굿")).toBeVisible();
 });
 
+test("TSV 업로드 실패 후 파일을 재선택하지 않고 설정을 수정해 재시도한다", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "retry-import.tsv",
+    mimeType: "text/tab-separated-values",
+    buffer: Buffer.from("score\\treview\\n5\\tgood\\n2\\tbad\\n"),
+  });
+  const heading = page.getByRole("heading", { name: "파일 구조 확인 · 등록 전" });
+  await expect(heading).toBeVisible();
+  const header = page.getByRole("combobox", { name: "첫 행의 의미" });
+  await header.selectOption("header");
+  let rejected = false;
+  await page.route("**/api/datasets/files", async route => {
+    if (rejected) return route.continue();
+    rejected = true;
+    await route.fulfill({
+      status: 422, contentType: "application/json",
+      body: JSON.stringify({ code: "SOS-UPLOAD-INVALID", message: "invalid input" }),
+    });
+  });
+  await page.getByRole("button", { name: "이 설정으로 Dataset 등록" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(heading).toBeVisible();
+  await expect(header).toHaveValue("header");
+  await page.unroute("**/api/datasets/files");
+  await page.getByRole("button", { name: "이 설정으로 Dataset 등록" }).click();
+  await expect(page.getByRole("heading", { name: "retry-import.tsv" })).toBeVisible();
+  await expect(heading).toHaveCount(0);
+});
+
 test("CSV upload → EDA → feature preview → worker → reusable dataset", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
