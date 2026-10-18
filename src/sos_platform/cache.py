@@ -17,11 +17,14 @@ from threading import Lock
 from sqlalchemy import text
 
 from .errors import PlatformError, RuntimeConfigurationError
+from .file_formats import SUPPORTED_EXTENSIONS
 from .object_store import ObjectStore
 from .store import Store
 
-_CACHE_FILE = re.compile(r"^[0-9a-f]{64}\.(csv|parquet|tsv|txt)$")
-_CACHE_PENDING = re.compile(r"^[0-9a-f]{64}\.(csv|parquet|tsv|txt)\.pending-[0-9a-f]{32}$")
+# 등록된 파일 포맷만 캐시 대상으로 허용하며 안전한 파일명 패턴을 유지한다.
+_CACHE_SUFFIXES = "|".join(re.escape(ext.lstrip(".")) for ext in SUPPORTED_EXTENSIONS)
+_CACHE_FILE = re.compile(rf"^[0-9a-f]{{64}}\.({_CACHE_SUFFIXES})$")
+_CACHE_PENDING = re.compile(rf"^[0-9a-f]{{64}}\.({_CACHE_SUFFIXES})\.pending-[0-9a-f]{{32}}$")
 # 프로세스 안에서 이미 SHA-256을 검증한 불변 파일의 파일시스템 정체성을 기억한다.
 # 다른 프로세스는 처음 읽을 때 별도로 검증한다. 최대 항목 수를 제한한다.
 _VERIFIED: OrderedDict[Path, tuple[str, tuple[int, int, int, int, int]]] = OrderedDict()
@@ -164,7 +167,7 @@ def cached_dataset_file(
     storage = ObjectStore()
     key = storage.key(dataset["location"])
     suffix = Path(key).suffix.lower()
-    if suffix not in (".csv", ".parquet", ".tsv", ".txt"):
+    if suffix not in SUPPORTED_EXTENSIONS:
         raise ValueError("Unsupported cache file extension")
     root = store.home / "cache"
     root.mkdir(parents=True, exist_ok=True)
