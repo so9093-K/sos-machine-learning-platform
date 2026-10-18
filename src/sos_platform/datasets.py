@@ -17,6 +17,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from .cache import cached_dataset_file
+from .delimited import TABULAR_SUFFIXES, scan_file, validate_tabular_text
 from .config import Settings
 from .errors import InvalidRequestError, PlatformError
 from .ingestion import UploadPolicy, staged_upload
@@ -36,16 +37,21 @@ def save_upload_file(
     *,
     owner_actor: str | None = None,
     max_bytes: int | None = None,
+    has_header: bool | None = None,
 ) -> dict:
-    """파일 입력을 검증하고 SHA-256 불변 원본과 Dataset 참조를 게시한다."""
+    """원본 바이트의 SHA-256과 해석 설정을 별개로 보존해 Dataset을 등록한다."""
     limit = max_bytes if max_bytes is not None else UploadPolicy.from_env().max_bytes
     with staged_upload(source, name, store.home / "cache", max_bytes=limit) as staged:
+        options = None
+        if staged.suffix in TABULAR_SUFFIXES:
+            if has_header is None:
+                raise PlatformError("SOS-UPLOAD-INVALID")
+            validate_tabular_text(staged.path, has_header=has_header)
+            options = {"format": "tsv", "has_header": has_header}
+        elif has_header is not None:
+            raise PlatformError("SOS-UPLOAD-INVALID")
         try:
-            lf = (
-                pl.scan_csv(staged.path, try_parse_dates=True)
-                if staged.suffix == ".csv"
-                else pl.scan_parquet(staged.path)
-            )
+            lf = scan_file(staged.path, {"parse_options": options})
             if not lf.collect_schema().names():
                 raise PlatformError("SOS-UPLOAD-INVALID")
         except (pl.exceptions.PolarsError, OSError, UnicodeError, ValueError) as exc:
@@ -64,6 +70,7 @@ def save_upload_file(
                 kind="file",
                 location=location,
                 version=staged.sha256,
+                parse_options=options,
                 write_id=write_id,
                 owner_actor=owner_actor,
             )
@@ -361,10 +368,6 @@ def pinned_scan_dataset(store: Store, dataset: dict) -> Iterator[pl.LazyFrame]:
     """LazyFrame가 실제로 계산되는 동안 원본 캐시를 축출로부터 보호한다."""
     if dataset["kind"] == "file":
         with cached_dataset_file(store, dataset) as path:
-            yield (
-                pl.scan_csv(path, try_parse_dates=True)
-                if path.suffix.lower() == ".csv"
-                else pl.scan_parquet(path)
-            )
+            yield scan_file(path, dataset)
     else:
         yield scan_dataset(store, dataset)

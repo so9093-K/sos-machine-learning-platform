@@ -3,6 +3,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from email.message import Message
 from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
@@ -312,6 +313,17 @@ def create_app(home: Path | None = None) -> FastAPI:
     @app.post("/api/datasets/files", status_code=201, response_model=DatasetOut)
     async def upload(file: Annotated[UploadFile, File()], actor: Actor = CREATE_DATASET_DEP):
         try:
+            suffix = Path(file.filename or "").suffix.lower()
+            has_header = None
+            if suffix in (".tsv", ".txt"):
+                mime = Message()
+                mime["Content-Type"] = file.content_type or ""
+                if mime.get_content_type() != "text/tab-separated-values":
+                    raise PlatformError("SOS-UPLOAD-INVALID")
+                declaration = mime.get_param("header")
+                if declaration not in ("present", "absent"):
+                    raise PlatformError("SOS-UPLOAD-INVALID")
+                has_header = declaration == "present"
             if file.size is not None and file.size > upload_policy.max_bytes:
                 raise PlatformError("SOS-UPLOAD-TOO-LARGE")
             # UploadFile의 스풀 파일을 사용해 전체 bytes 사본을 만들지 않는다.
@@ -322,6 +334,7 @@ def create_app(home: Path | None = None) -> FastAPI:
                 file.file,
                 owner_actor=actor.id,
                 max_bytes=upload_policy.max_bytes,
+                has_header=has_header,
             )
         except (PlatformError, ValueError):
             raise

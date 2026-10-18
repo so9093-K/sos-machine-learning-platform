@@ -12,7 +12,7 @@ from typing import BinaryIO
 from .errors import PlatformError, RuntimeConfigurationError
 
 CHUNK_SIZE = 1024 * 1024
-SUPPORTED_EXTENSIONS = (".csv", ".parquet")
+SUPPORTED_EXTENSIONS = (".csv", ".parquet", ".tsv", ".txt")
 MULTIPART_OVERHEAD_BYTES = 64 * 1024
 
 

@@ -20,8 +20,8 @@ from .errors import PlatformError, RuntimeConfigurationError
 from .object_store import ObjectStore
 from .store import Store
 
-_CACHE_FILE = re.compile(r"^[0-9a-f]{64}\.(csv|parquet)$")
-_CACHE_PENDING = re.compile(r"^[0-9a-f]{64}\.(csv|parquet)\.pending-[0-9a-f]{32}$")
+_CACHE_FILE = re.compile(r"^[0-9a-f]{64}\.(csv|parquet|tsv|txt)$")
+_CACHE_PENDING = re.compile(r"^[0-9a-f]{64}\.(csv|parquet|tsv|txt)\.pending-[0-9a-f]{32}$")
 # 프로세스 안에서 이미 SHA-256을 검증한 불변 파일의 파일시스템 정체성을 기억한다.
 # 다른 프로세스는 처음 읽을 때 별도로 검증한다. 최대 항목 수를 제한한다.
 _VERIFIED: OrderedDict[Path, tuple[str, tuple[int, int, int, int, int]]] = OrderedDict()
@@ -164,7 +164,7 @@ def cached_dataset_file(
     storage = ObjectStore()
     key = storage.key(dataset["location"])
     suffix = Path(key).suffix.lower()
-    if suffix not in (".csv", ".parquet"):
+    if suffix not in (".csv", ".parquet", ".tsv", ".txt"):
         raise ValueError("Unsupported cache file extension")
     root = store.home / "cache"
     root.mkdir(parents=True, exist_ok=True)

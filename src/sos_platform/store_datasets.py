@@ -23,6 +23,7 @@ class DatasetStoreMixin:
         dataset_id: str | None = None,
         owner_actor: str | None = None,
         retention_id: str | None = None,
+        parse_options: dict | None = None,
         actor_type: str = "human",
     ) -> dict:
         item = dict(
@@ -32,13 +33,14 @@ class DatasetStoreMixin:
             kind=kind,
             location=location,
             version=str(version),
+            parse_options=json.dumps(parse_options, sort_keys=True) if parse_options is not None else None,
             created_at=now(),
         )
         with self.connection() as db:
             db.execute(
                 text(
-                    "INSERT INTO datasets(id,name,kind,location,version,created_at,owner_actor) "
-                    "VALUES(:id,:name,:kind,:location,:version,:created_at,:owner_actor)"
+                    "INSERT INTO datasets(id,name,kind,location,version,parse_options,created_at,owner_actor) "
+                    "VALUES(:id,:name,:kind,:location,:version,:parse_options,:created_at,:owner_actor)"
                 ),
                 item,
             )
