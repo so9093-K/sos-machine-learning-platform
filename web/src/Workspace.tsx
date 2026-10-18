@@ -551,7 +551,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               ? "변경 사항 미적용 · 아래 표는 이전에 적용한 조회 결과입니다. 조회 적용을 누르면 새 조건으로 갱신됩니다."
               : currentQuery ? "적용된 조회 결과 · 현재 Dataset 판본 기준"
                 : "기본 미리보기 · 필터·정렬 조건을 적용하지 않은 결과입니다."}
-          </p>
+          </p>}
           {displayedPreview && <>
             {availableColumns.length > 12 && <div className="query-column-summary">
               <span className="hint">전체 {availableColumns.length}개 컬럼 중 {displayedColumns.length}개 표시 · {
