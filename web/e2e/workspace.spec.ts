@@ -921,8 +921,9 @@ test("unknown CSV opens Understanding and transfers a candidate to editable Expl
   expect(explorationRequests).toBe(0);
   await exploration.getByRole("button", { name: "부분 데이터 집계" }).click();
   await expect.poll(() => explorationRequests).toBe(1);
-  await exploration.getByText("분석 근거 자세히").click();
-  await expect(exploration.getByText(/Dataset 판본/)).toBeVisible();
+  const explorationBasis = exploration.locator(".discovery-panel .analysis-evidence");
+  await explorationBasis.getByText("분석 근거 자세히").click();
+  await expect(explorationBasis.getByText(/Dataset 판본/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("tab", { name: "데이터 이해" })).toBeVisible();
   await expect(page.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });
