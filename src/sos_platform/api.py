@@ -602,4 +602,3 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         return result
 
     return app
-
