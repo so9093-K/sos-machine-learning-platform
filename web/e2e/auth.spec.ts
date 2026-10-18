@@ -19,7 +19,7 @@ test.describe("token identity and resource permissions", () => {
     await expect(page.locator(".auth-status")).toContainText("ci-viewer");
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "표시명 설정" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" }))
+    await expect(page.getByRole("button", { name: "CSV·Parquet·TSV·TXT 파일 업로드" }))
       .toHaveCount(0);
     await expect(page.getByRole("button", { name: "Iceberg에 추가" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "최신 Snapshot 연결" })).toHaveCount(0);
@@ -35,7 +35,7 @@ test.describe("token identity and resource permissions", () => {
 
   test("researcher can create datasets but cannot use operator tools", async ({ page }) => {
     await signIn(page, researcher!);
-    await expect(page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" }))
+    await expect(page.getByRole("button", { name: "CSV·Parquet·TSV·TXT 파일 업로드" }))
       .toBeVisible();
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "최신 Snapshot 연결" })).toBeVisible();
