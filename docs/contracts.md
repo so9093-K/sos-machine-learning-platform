@@ -46,7 +46,7 @@
 
 ## 구분 텍스트 Dataset 해석 계약
 
-기존 CSV·Parquet 등록 의미를 유지하며 탭 구분 TSV/TXT에는 등록 시 확정한 헤더 유무를 Dataset에 귀속시킨다. 헤더가 없는 컬럼은 순서대로 `unnamed_1`부터 식별한다. 원본 바이트의 SHA-256은 무결성·캐시 기준이고 Dataset의 해석은 Dataset ID·원본 판본·입력 해석 설정을 함께 고려해야 한다. 같은 원본 바이트라도 다른 헤더 설정이면 서로 다른 Dataset 참조로 등록한다. Preview·Profile·Worker·Feature 연산은 같은 설정을 사용한다. 탭이 없는 일반 TXT, 일관되지 않은 열 수, 잘못된 UTF-8과 헤더는 임의로 추측·복구하지 않고 거부한다.
+파일 Dataset은 제한된 포맷 Reader 등록 지점에서 입력 옵션·유효성·DuckDB/Polars 읽기 책임을 분리한다. 확장자는 지원 Reader를 선택하는 단서이며 원본 바이트 해시와 Dataset별 해석 옵션을 대체하지 않는다. 기존 CSV·Parquet 등록 의미를 유지하며 탭 구분 TSV/TXT에는 등록 시 확정한 헤더 유무를 Dataset에 귀속시킨다. 헤더가 없는 컬럼은 순서대로 `unnamed_1`부터 식별한다. 원본 바이트의 SHA-256은 무결성·캐시 기준이고 Dataset의 해석은 Dataset ID·원본 판본·입력 해석 설정을 함께 고려해야 한다. 같은 원본 바이트라도 다른 헤더 설정이면 서로 다른 Dataset 참조로 등록한다. Preview·Profile·Worker·Feature 연산은 같은 설정을 사용한다. 탭이 없는 일반 TXT, 일관되지 않은 열 수, 잘못된 UTF-8과 헤더는 임의로 추측·복구하지 않고 거부한다.
 
 TSV/TXT Multipart 업로드 파일 파트의 MIME은 `text/tab-separated-values; header=absent` 또는 `text/tab-separated-values; header=present`로 선언한다. 서버는 선언을 확인하여 Dataset 해석 설정으로 보존한다. CSV·Parquet 기존 API 계약은 변경하지 않는다. 이 지원 범위에서는 따옴표를 일반 문자로 해석하므로 탭·줄바꿈을 인용하는 다른 TSV 방언은 지원하지 않는다.
 
