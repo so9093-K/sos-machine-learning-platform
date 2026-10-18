@@ -112,3 +112,10 @@ def test_container_compose_keeps_token_auth_and_host_ports_private():
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     assert "--force-recreate" in makefile
     assert "scripts/dev.py" not in makefile
+
+
+def test_docker_build_excludes_test_runtime_state():
+    """E2E 소유 기록과 JUnit 결과를 이미지 빌드 컨텍스트로 보내지 않는다."""
+    ignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    assert ".sos-test" in ignore
+    assert ".sos-dev" not in ignore

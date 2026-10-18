@@ -229,9 +229,7 @@ def test_cleanup_skips_images_that_were_never_built(monkeypatch, tmp_path):
 
     def inspect_missing(command, **_kwargs):
         commands.append(command)
-        return SimpleNamespace(
-            returncode=1 if command[:3] == ["docker", "image", "inspect"] else 0
-        )
+        return SimpleNamespace(returncode=1 if command[:3] == ["docker", "image", "inspect"] else 0)
 
     monkeypatch.setattr(isolated.subprocess, "run", inspect_missing)
     assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) == 0
