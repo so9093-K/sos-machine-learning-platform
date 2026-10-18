@@ -9,6 +9,7 @@ import { FeaturePanel } from "./FeaturePanel";
 import { useIcebergConnector } from "./useIcebergConnector";
 import { request, jsonPost, submitJob, formatError, uploadFile } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
+import { DelimitedImport } from "./DelimitedImport";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
@@ -71,6 +72,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [busy, setBusy] = useState(false);
   const [uploadPolicy, setUploadPolicy] = useState<UploadPolicy | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [pendingDelimited, setPendingDelimited] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [queryPreview, setQueryPreview] = useState<{
@@ -309,7 +311,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     if (uploadPolicy && !uploadPolicy.supported_extensions.some(ext =>
       file.name.toLowerCase().endsWith(ext.toLowerCase()))) {
       setNotice("");
-      setError("서버가 지원하지 않는 파일 형식입니다. CSV 또는 Parquet 파일을 선택하세요.");
+      setError("지원하지 않는 파일 형식입니다. CSV·Parquet 또는 탭으로 구분된 TSV·TXT를 선택하세요.");
       return;
     }
     if (uploadPolicy && file.size > uploadPolicy.max_size_bytes) {
@@ -412,17 +414,20 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       </nav>
 
       <div className="section-title">DATA SOURCES</div>
-      {canWrite && <label className="upload" role="button" tabIndex={0} aria-label="CSV 또는 Parquet 파일 업로드"
+      {canWrite && <label className="upload" role="button" tabIndex={0} aria-label="CSV·Parquet·TSV·TXT 파일 업로드"
         aria-disabled={busy} onKeyDown={event => {
           if (busy || !["Enter", " "].includes(event.key)) return;
           event.preventDefault(); uploadRef.current?.click();
         }}>
-        + CSV / Parquet 가져오기
+        + 파일 가져오기 (CSV·Parquet·TSV·TXT)
         {uploadPolicy && <small>최대 {mebibytes(uploadPolicy.max_size_bytes)} MiB</small>}
         <input ref={uploadRef} type="file"
-          accept={uploadPolicy?.supported_extensions.join(",") ?? ".csv,.parquet"} disabled={busy}
+          accept={uploadPolicy?.supported_extensions.join(",") ?? ".csv,.parquet,.tsv,.txt"} disabled={busy}
           onChange={event => {
-            const file = event.target.files?.[0]; if (file) void upload(file);
+            const file = event.target.files?.[0];
+            if (file && /\.(tsv|txt)$/i.test(file.name)) {
+              setPendingDelimited(file); setError(""); setNotice("");
+            } else if (file) void upload(file);
             event.target.value = "";
           }} />
       </label>}
@@ -489,6 +494,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
       {notice && <div role="status" className="alert success">{notice}
         <button onClick={() => setNotice("")} aria-label="알림 닫기">×</button></div>}
+      {pendingDelimited && <DelimitedImport file={pendingDelimited} disabled={busy}
+        onCancel={() => setPendingDelimited(null)}
+        onConfirm={file => { setPendingDelimited(null); void upload(file); }} />}
       {uploadProgress && <div className="upload-status" role="status" aria-live="polite">
         <strong>{uploadProgress.name}</strong>
         <span>{uploadProgress.phase === "transferring"
@@ -502,9 +510,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
         <p>{tab === "preparation"
           ? "Data Preparation은 Explorer 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
-          : "CSV·Parquet 파일, Iceberg 테이블 또는 합성 예제로 데이터 탐색을 시작하세요."}</p>
+          : "CSV·Parquet·탭 구분 TSV/TXT, Iceberg 테이블 또는 합성 예제로 시작하세요."}</p>
         {canWrite && <button className="secondary" onClick={() => uploadRef.current?.click()}>
-          CSV / Parquet 파일 선택
+          파일 선택 (CSV·Parquet·TSV·TXT)
         </button>}
         <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
           canUse={canWrite} startLabel={tab === "preparation"
