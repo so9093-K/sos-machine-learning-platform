@@ -70,8 +70,7 @@ def test_tabular_late_mixed_values_remain_readable_after_registration(workspace)
     """등록 시 허용한 혼합형 텍스트 값을 탐색·Preparation에서 모두 읽는다."""
     client, store = workspace
     raw = (
-        "".join(f"{index}\titem-{index}\n" for index in range(150))
-        + "unknown\tlast-row\n"
+        "".join(f"{index}\titem-{index}\n" for index in range(150)) + "unknown\tlast-row\n"
     ).encode()
     response = client.post(
         "/api/datasets/files",
