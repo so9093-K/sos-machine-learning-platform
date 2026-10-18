@@ -18,7 +18,7 @@ import pyarrow.parquet as pq
 
 from .cache import cached_dataset_file
 from .config import Settings
-from .delimited import TABULAR_SUFFIXES, scan_file, validate_tabular_text
+from .file_formats import reader_for_suffix, scan_file
 from .errors import InvalidRequestError, PlatformError
 from .ingestion import UploadPolicy, staged_upload
 from .object_store import ObjectStore
@@ -42,16 +42,11 @@ def save_upload_file(
     """원본 바이트의 SHA-256과 해석 설정을 별개로 보존해 Dataset을 등록한다."""
     limit = max_bytes if max_bytes is not None else UploadPolicy.from_env().max_bytes
     with staged_upload(source, name, store.home / "cache", max_bytes=limit) as staged:
-        options = None
-        if staged.suffix in TABULAR_SUFFIXES:
-            if has_header is None:
-                raise PlatformError("SOS-UPLOAD-INVALID")
-            validate_tabular_text(staged.path, has_header=has_header)
-            options = {"format": "tsv", "has_header": has_header}
-        elif has_header is not None:
-            raise PlatformError("SOS-UPLOAD-INVALID")
+        reader = reader_for_suffix(staged.suffix)
+        options = reader.upload_options(has_header)
         try:
-            lf = scan_file(staged.path, {"parse_options": options})
+            reader.validate(staged.path, options)
+            lf = reader.scan_polars(staged.path, options)
             if not lf.collect_schema().names():
                 raise PlatformError("SOS-UPLOAD-INVALID")
         except (pl.exceptions.PolarsError, OSError, UnicodeError, ValueError) as exc:
