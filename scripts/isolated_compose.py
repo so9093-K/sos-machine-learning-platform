@@ -163,6 +163,25 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
         if containers.returncode:
             print(f"E2E Compose 정리 실패: {instance}", file=sys.stderr)
             return 1
+        # 임시 고유 태그는 Compose down --volumes의 삭제 대상이 아니다.
+        # 프로젝트 이름에서 파생한 이미지 태그만 제거한다. 공유 이미지/기반 이미지는 건드리지 않는다.
+        for image in (f"sos-python-e2e:{instance}", f"sos-web-e2e:{instance}"):
+            inspection = subprocess.run(
+                ["docker", "image", "inspect", image],
+                check=False,
+                capture_output=True,
+                timeout=30,
+            )
+            if inspection.returncode:
+                continue  # 초기 빌드 전에 실패한 실행에는 이미지가 없을 수 있다.
+            removed = subprocess.run(
+                ["docker", "image", "rm", image],
+                check=False,
+                timeout=120,
+            )
+            if removed.returncode:
+                print(f"E2E 테스트 전용 이미지 정리 실패: {instance}", file=sys.stderr)
+                return 1
         shutil.rmtree(runtime)
     except (OSError, subprocess.TimeoutExpired) as exc:
         print(f"E2E 소유 리소스 정리 오류: {instance} ({type(exc).__name__})", file=sys.stderr)

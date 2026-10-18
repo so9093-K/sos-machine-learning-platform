@@ -1,4 +1,4 @@
-# 공개 개발 진입점은 Docker Compose 한 개이며, Host 실행은 격리 테스트 도구에서만 사용한다.
+# 공개 서비스 실행과 격리 E2E 대상은 동일한 Docker Compose 구성을 사용한다.
 .DEFAULT_GOAL := help
 .PHONY: up down restart status logs doctor check check-fast help
 

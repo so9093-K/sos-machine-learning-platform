@@ -180,7 +180,7 @@ def main() -> int:
         status, snapshots = request(url + f"/api/iceberg/{table}/snapshots", researcher)
         assert status == 200 and snapshots
 
-        # restart는 컨테이너를 재생성하지 않으므로, named volume 보존을 별도로 검증한다.
+        # restart는 설정 반영을 위해 앱 컨테이너를 재생성한다. 전체 down/up의 볼륨 보존도 따로 검증한다.
         step = "full down/up data preservation"
         make(env, "down")
         make(env, "up")
