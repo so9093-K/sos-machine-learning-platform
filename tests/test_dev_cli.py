@@ -54,7 +54,12 @@ def test_database_tcp_only_is_not_ready(monkeypatch, config):
 
 
 def test_ready_requires_all_dependencies(monkeypatch, config):
-    monkeypatch.setattr(dev, "processes", lambda: {name: {"pid": 1} for name in dev.PROCESS_NAMES})
+    def running():
+        state = {name: {"pid": 1} for name in dev.PROCESS_NAMES}
+        state["api"]["auth_fingerprint"] = dev.auth_fingerprint(config)
+        return state
+
+    monkeypatch.setattr(dev, "processes", running)
     monkeypatch.setattr(dev, "owned", lambda record: True)
     monkeypatch.setattr(dev, "port_open", lambda _port: True)
 
@@ -76,6 +81,61 @@ def test_doctor_reports_invalid_port_without_mutation(monkeypatch, tmp_path, con
     assert result["status"] == "failed"
     assert any(item["check"] == "SOS_API_PORT" for item in result["diagnostics"])
     assert not (tmp_path / "never-created").exists()
+
+
+@pytest.mark.parametrize(
+    ("running_mode", "running_tokens", "requested_mode", "requested_tokens"),
+    [
+        ("development", "", "token", '{"first":"actor"}'),
+        ("token", '{"first":"actor"}', "token", '{"rotated":"actor"}'),
+    ],
+)
+def test_existing_api_rejects_auth_changes_without_restarting(
+    monkeypatch, config, running_mode, running_tokens, requested_mode, requested_tokens
+):
+    """기존 서버가 다른 인증 설정으로 계속 실행되는데 성공을 보고해서는 안 된다."""
+    config["SOS_INFRA_MODE"] = "external"
+    config["SOS_AUTH_MODE"] = requested_mode
+    config["SOS_AUTH_TOKEN_HASHES"] = requested_tokens
+    running = {
+        "SOS_AUTH_MODE": running_mode,
+        "SOS_AUTH_TOKEN_HASHES": running_tokens,
+    }
+    state = {"api": {"pid": 7, "birth": "same", "auth_fingerprint": dev.auth_fingerprint(running)}}
+    monkeypatch.setattr(dev, "processes", lambda: state)
+    monkeypatch.setattr(dev, "owned", lambda record: bool(record))
+    monkeypatch.setattr(dev.shutil, "which", lambda _name: "/usr/bin/tool")
+    monkeypatch.setattr(dev, "port_open", lambda _port: False)
+
+    with pytest.raises(dev.StartupError) as exc:
+        dev.preflight(config, need_docker=False)
+    assert exc.value.code == "SOS-CONFIG-005"
+    assert "make restart" in exc.value.detail
+
+
+def test_api_status_is_not_ready_if_requested_auth_changed(monkeypatch, config):
+    """유효한 준비 응답이 있어도 실행 중 인증 설정이 다르면 Ready로 보고하지 않는다."""
+    config["SOS_AUTH_MODE"] = "token"
+    state = {
+        name: {"pid": 7, "birth": "same"} for name in dev.PROCESS_NAMES
+    }
+    state["api"]["auth_fingerprint"] = dev.auth_fingerprint({"SOS_AUTH_MODE": "development"})
+    monkeypatch.setattr(dev, "processes", lambda: state)
+    monkeypatch.setattr(dev, "owned", lambda record: bool(record))
+    monkeypatch.setattr(dev, "port_open", lambda _port: True)
+    monkeypatch.setattr(
+        dev,
+        "http_ok",
+        lambda url: (
+            True,
+            {"services": {"database": "ready", "storage": "ready", "worker": "ready"}},
+        ),
+    )
+
+    result = dev.status(config)
+    assert result["status"] == "unavailable"
+    assert any(row["name"] == "api" and row["status"] != "ready" for row in result["services"])
+    assert result["diagnostics"][0]["check"] == "SOS_AUTH_MODE"
 
 
 def test_preflight_rejects_foreign_port(monkeypatch, config):

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- `make up`은 개발 기본값을 유지하고 API를 직접 실행할 때는 인증 모드를 명시해야 합니다. 실행 서버는 `sos_platform.api:create_app --factory`를 사용해 앱 import와 기동을 구별하며, OpenAPI 생성과 테스트 수집이 전역 인증 모드를 설정하지 않도록 분리했습니다. 기존 Token RBAC·Dataset/Job 소유권과 API 계약은 유지합니다.
+- `make up`은 개발 기본값을 유지하고 API를 직접 실행할 때는 인증 모드를 명시해야 합니다. 실행 서버는 `sos_platform.api:create_app --factory`를 사용해 앱 import와 기동을 구별하며, OpenAPI 생성과 테스트 수집이 전역 인증 모드를 설정하지 않도록 분리했습니다. 기존 API가 실행 중인 상태에서 인증 모드·토큰 목록이 바뀌면 `make up`은 불일치를 알리고 `make restart`를 안내합니다. 기존 Token RBAC·Dataset/Job 소유권과 API 계약은 유지합니다.
 
 - 헤더 유무를 확인하는 탭 구분 TSV/TXT 등록을 지원하고 원본 SHA-256과 Dataset별 해석 설정을 보존합니다. 파일 포맷 Reader를 공통 진입점에 모아 CSV·Parquet 기존 동작을 유지하면서 DuckDB·Polars·캐시의 확장자별 분기 중복을 줄였습니다. 헤더 없는 입력은 중립적인 `unnamed_*` 컬럼명으로 해석하며, 무의미한 자기 비교 자동 분석 예시는 생성하지 않습니다.
 

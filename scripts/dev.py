@@ -63,6 +63,12 @@ def redact(value: str, config: dict | None = None) -> str:
     return re.sub(r"(?i)(postgresql(?:\+\w+)?://)[^@\s]+@", r"\1[REDACTED]@", value)
 
 
+def auth_fingerprint(config: dict[str, str]) -> str:
+    """실행 중 API와 요청된 인증 설정을 비교하며 원문 토큰은 기록하지 않는다."""
+    values = (config.get("SOS_AUTH_MODE"), config.get("SOS_AUTH_TOKEN_HASHES"))
+    return hashlib.sha256(json.dumps(values).encode("utf-8")).hexdigest()
+
+
 def configuration() -> dict[str, str]:
     """쉘 환경변수가 .env 파일보다 우선한다. 값을 출력하지 않는다."""
     values = {}
@@ -233,6 +239,14 @@ def preflight(config: dict, *, need_docker: bool = True):
     if len(set(numbers)) != len(numbers) or any(p < 1 or p > 65535 for p in numbers):
         raise StartupError("SOS-CONFIG-002", "포트 번호가 중복되거나 유효하지 않습니다.")
     state = processes()
+    if owned(state.get("api")) and state["api"].get("auth_fingerprint") != auth_fingerprint(
+        config
+    ):
+        raise StartupError(
+            "SOS-CONFIG-005",
+            "실행 중인 API의 인증 설정이 요청한 설정과 다릅니다.",
+            "인증 모드 또는 토큰 목록을 변경하려면 make restart를 실행하세요.",
+        )
     for name, port_key in (("api", "SOS_API_PORT"), ("web", "SOS_WEB_PORT")):
         if port_open(int(config[port_key])) and not owned(state.get(name)):
             raise StartupError(
@@ -251,6 +265,10 @@ def status(config: dict) -> dict:
     web_ready, _ = http_ok(f"http://127.0.0.1:{web_port}/")
     api_ready, details = http_ok(f"http://127.0.0.1:{api_port}/api/ready")
     health = details.get("services", {}) if isinstance(details, dict) else {}
+    api_record = state.get("api")
+    auth_mismatch = owned(api_record) and api_record.get("auth_fingerprint") != auth_fingerprint(
+        config
+    )
     checks = []
     for name, key in (("database", "SOS_DB_PORT"), ("storage", "SOS_S3_PORT")):
         ready = health.get(name) == "ready"
@@ -274,7 +292,7 @@ def status(config: dict) -> dict:
             {
                 "name": name,
                 "status": "ready"
-                if ready and owned(record)
+                if ready and owned(record) and (name != "api" or not auth_mismatch)
                 else "running"
                 if owned(record)
                 else "stopped",
@@ -285,7 +303,18 @@ def status(config: dict) -> dict:
         "environment": config["SOS_INFRA_MODE"],
         "status": "ready" if all(x["status"] == "ready" for x in checks) else "unavailable",
         "services": checks,
-        "diagnostics": [],
+        "diagnostics": (
+            [
+                {
+                    "check": "SOS_AUTH_MODE",
+                    "status": "failed",
+                    "message": "실행 중인 API의 인증 설정이 현재 설정과 다릅니다.",
+                    "recommendation": "make restart로 변경한 인증 설정을 적용하세요.",
+                }
+            ]
+            if auth_mismatch
+            else []
+        ),
         "urls": {
             "web": f"http://localhost:{web_port}",
             "api": f"http://localhost:{api_port}",
@@ -323,6 +352,8 @@ def start_process(name: str, command: list[str], env: dict, cwd: Path = ROOT):
     if not birth:
         raise StartupError("SOS-PROC-001", f"{name} 프로세스가 시작되지 않았습니다.")
     state[name] = {"pid": proc.pid, "birth": birth}
+    if name == "api":
+        state[name]["auth_fingerprint"] = auth_fingerprint(env)
     persist(state)
 
 
