@@ -17,13 +17,13 @@ class FileReader:
 
     extensions: tuple[str, ...] = ()
 
-    def header_from_mime(self, content_type: str | None) -> bool | None:
-        """기존 업로드 API의 파일 파트에서 필요한 입력 옵션을 읽는다."""
+    def options_from_mime(self, content_type: str | None) -> dict | None:
+        """기존 업로드 API의 파일 파트에서 포맷별 옵션을 읽는다."""
         return None
 
-    def upload_options(self, has_header: bool | None) -> dict | None:
-        """업로드 옵션을 검증해 불변 Dataset에 저장할 값을 반환한다."""
-        if has_header is not None:
+    def upload_options(self, options: dict | None) -> dict | None:
+        """입력 옵션을 검증해 불변 Dataset에 저장할 값을 반환한다."""
+        if options is not None:
             raise PlatformError("SOS-UPLOAD-INVALID")
         return None
 
@@ -87,7 +87,7 @@ class TabDelimitedReader(FileReader):
 
     extensions = TABULAR_SUFFIXES
 
-    def header_from_mime(self, content_type: str | None) -> bool:
+    def options_from_mime(self, content_type: str | None) -> dict:
         mime = Message()
         mime["Content-Type"] = content_type or ""
         if mime.get_content_type() != "text/tab-separated-values":
@@ -95,12 +95,16 @@ class TabDelimitedReader(FileReader):
         declaration = mime.get_param("header")
         if declaration not in ("present", "absent"):
             raise PlatformError("SOS-UPLOAD-INVALID")
-        return declaration == "present"
+        return {"has_header": declaration == "present"}
 
-    def upload_options(self, has_header: bool | None) -> dict:
-        if not isinstance(has_header, bool):
+    def upload_options(self, options: dict | None) -> dict:
+        if (
+            not isinstance(options, dict)
+            or set(options) != {"has_header"}
+            or not isinstance(options["has_header"], bool)
+        ):
             raise PlatformError("SOS-UPLOAD-INVALID")
-        return {"format": "tsv", "has_header": has_header}
+        return {"format": "tsv", "has_header": options["has_header"]}
 
     @staticmethod
     def _header(options: dict | None) -> bool:
@@ -161,13 +165,13 @@ def reader_for_suffix(suffix: str) -> FileReader:
         raise ValueError("Unsupported file Dataset extension") from exc
 
 
-def upload_header_from_mime(name: str, content_type: str | None) -> bool | None:
-    """호환 업로드 API에서 형식별 MIME 해석을 어댑터에 위임한다."""
+def upload_options_from_mime(name: str, content_type: str | None) -> dict | None:
+    """기존 업로드 API에서 형식별 입력 옵션을 어댑터에 위임한다."""
     try:
         reader = reader_for_suffix(Path(name).suffix)
     except ValueError as exc:
         raise PlatformError("SOS-UPLOAD-FORMAT") from exc
-    return reader.header_from_mime(content_type)
+    return reader.options_from_mime(content_type)
 
 
 def dataset_reader(dataset: dict, path: Path) -> tuple[FileReader, dict | None]:
