@@ -31,7 +31,7 @@ from .discovery import profile as discovery_profile
 from .discovery import query_dataset
 from .errors import ERRORS, PlatformError
 from .examples import list_examples, use_example
-from .file_formats import upload_header_from_mime
+from .file_formats import upload_options_from_mime
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .object_store import ObjectStore
 from .observability import emit
@@ -313,7 +313,7 @@ def create_app(home: Path | None = None) -> FastAPI:
     @app.post("/api/datasets/files", status_code=201, response_model=DatasetOut)
     async def upload(file: Annotated[UploadFile, File()], actor: Actor = CREATE_DATASET_DEP):
         try:
-            has_header = upload_header_from_mime(file.filename or "", file.content_type)
+            read_options = upload_options_from_mime(file.filename or "", file.content_type)
             if file.size is not None and file.size > upload_policy.max_bytes:
                 raise PlatformError("SOS-UPLOAD-TOO-LARGE")
             # UploadFile의 스풀 파일을 사용해 전체 bytes 사본을 만들지 않는다.
@@ -324,7 +324,7 @@ def create_app(home: Path | None = None) -> FastAPI:
                 file.file,
                 owner_actor=actor.id,
                 max_bytes=upload_policy.max_bytes,
-                has_header=has_header,
+                read_options=read_options,
             )
         except (PlatformError, ValueError):
             raise
