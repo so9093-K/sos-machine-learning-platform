@@ -99,14 +99,19 @@ def main() -> int:
         SOS_WEB_IMAGE=f"sos-web-e2e:{project}",
     )
     url = f"http://127.0.0.1:{api_port}"
+    step = "configuration"
     try:
         compose(project, env, "config", "--quiet")
         compose(project, env, "up", "--build", "-d")
         await_ready(url)
+        step = "unauthenticated access"
         assert request(url + "/api/v2/auth/me")[0] == 401
+        step = "researcher identity"
         status, actor = request(url + "/api/v2/auth/me", researcher)
         assert status == 200 and actor["actor_id"] == "container-researcher"
+        step = "web proxy"
         await_web_proxy(f"http://127.0.0.1:{web_port}", researcher)
+        step = "viewer dataset read"
         assert request(url + "/api/datasets", viewer)[0] == 200
 
         boundary = "sos-container-" + secrets.token_hex(7)
@@ -119,11 +124,15 @@ def main() -> int:
         ).encode()
         upload = url + "/api/datasets/files"
         mime = f"multipart/form-data; boundary={boundary}"
-        assert request(upload, viewer, data=body, content_type=mime)[0] == 403
+        step = "viewer write rejected"
+        denied, _ = request(upload, viewer, data=body, content_type=mime)
+        assert denied == 403, f"viewer write response: {denied}"
+        step = "researcher upload"
         status, dataset = request(upload, researcher, data=body, content_type=mime)
-        assert status == 201
+        assert status == 201, f"dataset upload response: {status}"
         dataset_id = dataset["id"]
 
+        step = "Iceberg job submission"
         table = "container_" + secrets.token_hex(5)
         status, job = request(
             url + "/api/iceberg/import",
@@ -132,6 +141,7 @@ def main() -> int:
             content_type="application/json",
         )
         assert status in (200, 201, 202), (status, job)
+        step = "Iceberg job execution"
         limit = time.monotonic() + 150
         while time.monotonic() < limit:
             status, result = request(url + "/api/jobs/" + job["id"], researcher)
@@ -144,10 +154,12 @@ def main() -> int:
         else:
             raise TimeoutError("Worker did not complete Iceberg import")
 
+        step = "restart and data preservation"
         compose(project, env, "restart", "api", "worker", "web")
         await_ready(url)
         status, listing = request(url + "/api/datasets", researcher)
         assert status == 200 and any(row["id"] == dataset_id for row in listing["items"])
+        step = "post-restart Iceberg snapshots"
         status, snapshots = request(url + f"/api/iceberg/{table}/snapshots", researcher)
         assert status == 200 and snapshots
         print("Container contract: Token RBAC, Web proxy, Dataset, Worker, Iceberg, restart passed")
@@ -160,7 +172,7 @@ def main() -> int:
         OSError,
         subprocess.CalledProcessError,
     ) as exc:
-        print(f"Container verification failed: {type(exc).__name__}", file=sys.stderr)
+        print(f"Container verification failed at {step}: {type(exc).__name__} {exc}", file=sys.stderr)
         subprocess.run([*COMPOSE, "-p", project, "ps"], cwd=ROOT, env=env, check=False)
         return 1
     finally:
