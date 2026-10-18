@@ -86,12 +86,12 @@ def test_legacy_csv_defaults_and_parquet_metadata_are_preserved(tmp_path: Path):
 
 
 def test_tabular_upload_requires_header_and_rejects_wrong_mime():
-    assert upload_options_from_mime(
-        "example.txt", "text/tab-separated-values; header=absent"
-    ) == {"has_header": False}
-    assert upload_options_from_mime(
-        "example.tsv", "text/tab-separated-values; header=present"
-    ) == {"has_header": True}
+    assert upload_options_from_mime("example.txt", "text/tab-separated-values; header=absent") == {
+        "has_header": False
+    }
+    assert upload_options_from_mime("example.tsv", "text/tab-separated-values; header=present") == {
+        "has_header": True
+    }
     assert upload_options_from_mime("example.csv", "text/csv") is None
     for name, content_type in [
         ("example.txt", "text/plain"),
