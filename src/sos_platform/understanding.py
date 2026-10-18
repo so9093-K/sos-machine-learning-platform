@@ -216,16 +216,18 @@ def suggest_analyses(columns: list[dict], row_count: int) -> list[dict]:
             }
         )
 
-    if numeric and categories:
+    # 같은 컬럼을 그룹과 값으로 선택하면 유효한 SQL이어도 정보 가치가 없다.
+    independent_categories = [c for c in categories if not numeric or c["name"] != numeric["name"]]
+    if numeric and independent_categories:
         append(
             "group_comparison",
             "그룹별 수치 비교",
             "범주형 후보와 변동이 있는 숫자형 컬럼이 발견됐습니다.",
             numeric["name"],
             "mean",
-            categories[0]["name"],
+            independent_categories[0]["name"],
         )
-    if numeric:
+    if numeric and not any(r["role"] == "categorical" for r in numeric["roles"]):
         append(
             "numeric_summary",
             "숫자형 최댓값 확인",
