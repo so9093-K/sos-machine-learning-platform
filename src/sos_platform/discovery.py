@@ -272,7 +272,7 @@ def source_connection(
                         if not isinstance(options, dict) or options.get("format") != "tsv" or not isinstance(options.get("has_header"), bool):
                             raise ValueError("Missing tabular Dataset parse settings")
                         source_sql = (
-                            f"read_csv({_literal(str(path))}, delim='\\t', "
+                            f"read_csv({_literal(str(path))}, delim={_literal(chr(9))}, "
                             f"header={str(options['has_header']).lower()})"
                         )
                         if options["has_header"]:
