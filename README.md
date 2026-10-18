@@ -12,7 +12,7 @@
 
 ## 시작하기
 
-Python 3.12, uv, Node.js 24, npm, Docker Compose, GNU Make를 사용합니다.
+개발 실행에는 Docker Compose와 GNU Make가 필요합니다. Python 3.12·uv·Node.js 24·npm은 호스트에서 테스트·타입 검증을 실행할 때 사용합니다. 컨테이너 실행은 Token 인증 설정이 필요합니다.
 
 ```bash
 make up

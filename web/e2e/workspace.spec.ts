@@ -1,5 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
+// 제품 인증을 우회하지 않고 브라우저 Context에 임시 테스트 Token을 전달한다.
+test.beforeEach(async ({ context }) => {
+  const token = process.env.SOS_E2E_ADMIN_TOKEN;
+  if (!token) throw new Error("격리 Workspace E2E 관리자 Token이 필요합니다.");
+  await context.setExtraHTTPHeaders({ Authorization: `Bearer ${token}` });
+});
+
 async function submittedJob(page: Page, route: string, click: () => Promise<void>): Promise<string> {
   const [response] = await Promise.all([
     page.waitForResponse(res => res.url().includes(route) && res.request().method() === "POST"),
@@ -1170,6 +1177,8 @@ test("Dataset original metadata remains visible after Understanding completes", 
     name: "profile-scope.csv", mimeType: "text/csv",
     buffer: Buffer.from("category,value\na,1\nb,2\n"),
   });
+  // 비동기 등록과 목록 갱신이 완료되어 실제 신규 Dataset이 선택된 뒤 분석을 제출한다.
+  await expect(page.getByRole("heading", { name: "profile-scope.csv" })).toBeVisible();
   const understanding = page.getByRole("tabpanel", { name: "데이터 이해" });
   await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
   await expect(understanding.getByText("등록 파일 크기", { exact: true })).toBeVisible();
@@ -1189,6 +1198,7 @@ test("Wide Dataset preview defaults to a bounded visible column set", async ({ p
     name: "wide-preview.csv", mimeType: "text/csv",
     buffer: Buffer.from(names.join(",") + "\n" + names.map((_, i) => i + 1).join(",") + "\n"),
   });
+  await expect(page.getByRole("heading", { name: "wide-preview.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "데이터 조회" }).click();
   await expect(page.getByRole("columnheader")).toHaveCount(12);
   await expect(page.getByText("전체 15개 컬럼 중 12개 표시", { exact: false })).toBeVisible();

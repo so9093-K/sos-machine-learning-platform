@@ -45,7 +45,7 @@ SUITES = {
         Suite("alembic", "command", True, "Alembic 스키마 정합성"),
         Suite("workspace-e2e", "junit", True, "격리된 브라우저 사용자 흐름"),
         Suite("token-rbac", "junit", True, "토큰 역할별 브라우저 흐름"),
-        Suite("make-lifecycle", "command", True, "Make 재시작·데이터 보존"),
+        Suite("container-runtime", "command", True, "전체 Compose 컨테이너·권한·데이터 보존"),
     )
 }
 
@@ -108,11 +108,13 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
     if name == "alembic":
         return [(uv + ["alembic", "check"], ROOT)]
     if name == "workspace-e2e":
-        return [(uv + ["python", "scripts/run_isolated_e2e.py"], ROOT)]
+        return [
+            (uv + ["python", "scripts/isolated_compose.py", "--spec", "workspace.spec.ts"], ROOT)
+        ]
     if name == "token-rbac":
-        return [(uv + ["python", "scripts/verify_token_rbac.py"], ROOT)]
-    if name == "make-lifecycle":
-        return [(uv + ["python", "scripts/verify_make_lifecycle.py"], ROOT)]
+        return [(uv + ["python", "scripts/isolated_compose.py", "--spec", "auth.spec.ts"], ROOT)]
+    if name == "container-runtime":
+        return [(["python3", "scripts/verify_container_runtime.py"], ROOT)]
     raise ValueError(f"알 수 없는 Suite: {name}")
 
 
@@ -157,7 +159,7 @@ def verify_evidence(report: Path, *, required: bool) -> dict:
 
 def default_output() -> Path:
     """기존 JUnit의 stale 결과와 충돌하지 않는 고유 실행 경로."""
-    base = ROOT / ".sos-dev" / "validation"
+    base = ROOT / ".sos-test" / "validation"
     base.mkdir(parents=True, exist_ok=True)
     return Path(tempfile.mkdtemp(prefix="run-", dir=base))
 

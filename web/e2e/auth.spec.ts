@@ -3,9 +3,13 @@ import { expect, test } from "@playwright/test";
 const viewer = process.env.SOS_E2E_VIEWER_TOKEN;
 const researcher = process.env.SOS_E2E_RESEARCHER_TOKEN;
 const operator = process.env.SOS_E2E_OPERATOR_TOKEN;
+const administrator = process.env.SOS_E2E_ADMIN_TOKEN;
 
 test.describe("token identity and resource permissions", () => {
-  test.skip(!viewer || !researcher || !operator, "Requires isolated CI token-mode service");
+  test.skip(
+    !viewer || !researcher || !operator || !administrator,
+    "Requires isolated CI token-mode service",
+  );
 
   async function signIn(page: import("@playwright/test").Page, token: string) {
     await page.goto("/");
@@ -13,6 +17,15 @@ test.describe("token identity and resource permissions", () => {
     await page.getByLabel("액세스 토큰").fill(token);
     await page.getByRole("button", { name: "인증", exact: true }).click();
   }
+
+  test("administrator authenticates through login UI and can open Workspace", async ({ page }) => {
+    await signIn(page, administrator!);
+    await expect(page.locator(".auth-status")).toContainText("ci-administrator");
+    await expect(page.getByRole("button", { name: "CSV·Parquet·TSV·TXT 파일 업로드" }))
+      .toBeVisible();
+    await page.getByRole("button", { name: "인증 해제" }).click();
+    await expect(page.getByRole("heading", { name: "SOS Platform 접근 인증" })).toBeVisible();
+  });
 
   test("viewer can read datasets but cannot upload or inspect storage", async ({ page }) => {
     await signIn(page, viewer!);

@@ -1,46 +1,68 @@
 # 시작하기
 
-SOS의 Data Workspace를 실제 API·Worker·데이터 서비스와 함께 실행한다. **개발 환경에서 검증하지만 플랫폼 아키텍처는 로컬 전용이 아니다.**
+SOS는 기본적으로 전체 플랫폼을 Docker Compose로 실행한다. 이 실행 방식은 로컬에 국한된 플랫폼 계약이 아니다.
 
 ## 실행
 
-Python 3.12, uv, Node.js 24, npm, Docker Compose, GNU Make가 필요하다. 필요하면 `.env.example`을 바탕으로 `.env`를 작성한다. 비밀정보가 포함된 `.env`는 커밋하지 않는다.
+Docker Compose와 GNU Make가 필요하다. `SOS_AUTH_TOKEN_HASHES`에 원본 토큰의 SHA-256 지문을 키로 사용하는 Actor JSON을 명시해야 한다. 실제 원본 Bearer Token은 별도로 안전하게 보관하며, `.env`는 커밋하지 않는다. Python 3.12·uv·Node.js 24·npm은 호스트 테스트에 사용한다.
+
+개발용 관리자 Token과 지문 매핑은 다음처럼 한 번 생성할 수 있다. 출력된 **Bearer Token은 별도 보관**하고 매핑 JSON 한 줄만 커밋하지 않는 `.env`에 넣는다.
 
 ```bash
-make           # 사용 가능한 명령 보기
-make up        # 환경 확인 · 스키마 확인/초기화 · 서비스 시작 · Readiness 확인
-make status    # 서비스별 상태
-make doctor    # 읽기 전용 환경 진단
-make check     # Ruff · pytest · UI 빌드/테스트 · 격리된 별도 Playwright (make up 필요)
-make check-fast # 인프라 없이 Ruff · Python 순수 로직·CLI · UI 테스트·빌드
-make restart   # DB 재초기화 없이 애플리케이션 재시작
-make logs      # API · Worker · Web 로그
-make down      # 관리 대상만 종료하고 데이터 보존
+python3 - <<'PY'
+import hashlib
+import json
+import secrets
+
+token = secrets.token_urlsafe(48)
+fingerprint = hashlib.sha256(token.encode()).hexdigest()
+print("Bearer Token (별도 안전 보관):", token)
+print("SOS_AUTH_TOKEN_HASHES=" + json.dumps({
+    fingerprint: {"actor_id": "local-admin", "kind": "human", "roles": ["administrator"]}
+}, separators=(",", ":")))
+PY
+```
+
+```bash
+# .env 또는 환경변수에 설정: SOS_AUTH_TOKEN_HASHES={"<token-sha256>":{"actor_id":"local","kind":"human","roles":["administrator"]}}
+make up          # Docker의 API·Worker·Web·PostgreSQL·S3 실행 및 Ready 확인
+make status
+make doctor
+make check-fast  # 서비스 없이 Ruff·단위·Web 검사
+make check       # 전체 검증
+make restart
+make logs
+make down        # 컨테이너만 종료, 데이터 볼륨 보존
 ```
 
 - Web UI: `http://localhost:9601`
-- Common API: `http://localhost:9602`
-- Scalar API Reference: `http://localhost:9602/docs`
-- PostgreSQL 호스트 포트: `9603`
-- S3 호환 스토리지 호스트 포트: `9605`
+- API: `http://localhost:9602`
+- API Reference: `http://localhost:9602/docs`
+- PostgreSQL 개발 포트: `9603`
+- S3 개발 포트: `9605`
 
-`python3 scripts/dev.py status --format json`으로 JSON 진단을 받을 수 있다. `python3 scripts/dev.py doctor --deep`은 API 및 의존성 준비 상태도 확인한다. `make check`는 실행 중인 서비스가 Ready인 상태에서 사용한다. 브라우저 쓰기 테스트는 개발 서비스가 아닌 UUID 식별자를 가진 별도 PostgreSQL/S3 Compose 프로젝트·API·Worker·Web에서 실행하며, 검사로 만든 테스트 프로젝트의 볼륨만 종료 시 정리한다. 일반 개발 프로젝트의 데이터·볼륨·Snapshot Tag는 수정하거나 삭제하지 않는다.
+`compose.yaml`이 실행 구성의 정본이다. 기본 `make up`은 `app` 프로필을 사용하며, CI의 인프라 전용 기동은 프로필 없이 PostgreSQL·SeaweedFS만 실행한다. `docker compose --profile app up --build -d --wait`를 사용하면 Make 없이 동일하게 기동할 수 있다. `SOS_AUTH_TOKEN_HASHES`를 생략하면 API가 시작을 거부한다.
+
+- 개발 컨테이너는 Token 인증을 요구하며 Docker 네트워크를 관리자 신원으로 취급하지 않는다. 외부 공개용 TLS·OIDC·격리는 구현하지 않았다.
+- 내부 연결은 `postgres:5432`, `storage:8333`, `api:9602`를 사용한다. 호스트 포트는 루프백으로만 공개한다.
+- `make down`은 볼륨을 보존한다. `down --volumes`는 데이터 삭제를 포함하므로 일반 환경에서 사용하지 않는다.
+- E2E 테스트는 고유 Compose 프로젝트를 생성하고, 소유권을 확인한 해당 프로젝트만 정리한다.
+- Worker의 강한 물리 메모리 격리나 비신뢰 코드 샌드박스는 Docker 기동만으로 보장되지 않는다.
 
 ## 구성과 안전
 
-기본 개발 환경에서는 Compose가 PostgreSQL과 S3 호환 저장소를 관리한다. 현재 기본 객체 저장소는 공식 SeaweedFS 이미지를 사용하되, 애플리케이션은 S3 API를 사용하므로 다른 호환 서비스와 관리형 스토리지로 교체할 수 있다. Iceberg SQL Catalog 메타데이터는 PostgreSQL에, 데이터 파일은 객체 저장소에 보관한다.
+Compose가 PostgreSQL과 S3 호환 저장소를 관리한다. 기본 객체 저장소는 SeaweedFS이고 애플리케이션은 S3 API로 접근한다. Iceberg Catalog 메타데이터는 PostgreSQL에, 실제 데이터는 객체 저장소에 보관한다.
 
-`SOS_INFRA_MODE=managed`에서는 로컬 Compose 포트와 일치하지 않는 DB·S3 연결 대상을 감지하면 마이그레이션·스토리지 변경 전에 기동을 거부한다. `SOS_DATABASE_URL`로 외부 DB를 지정하려면 `external` 모드를 사용한다.
+현재 Compose 기본 경로는 관리형 로컬 DB·객체 저장소를 초기화한다. 외부 관리형 연결과 호스트 실행은 공개 Make 경로의 옵션이 아니며, 별도 배포 어댑터의 책임이다. Token 인증이 설정되지 않으면 API는 기동을 거부하며 Docker 네트워크를 신뢰된 개발 관리자 연결로 간주하지 않는다.
 
-`SOS_INFRA_MODE=external`에서는 CLI가 DB·객체 저장소를 시작·종료·마이그레이션하지 않는다. `make up`은 외부 서비스의 스키마 호환성과 객체 저장소 접근을 읽기 전용으로 확인한다. 외부 서비스에 연결하려면 `SOS_DATABASE_URL`과 `SOS_S3_ENDPOINT`·자격 증명 등을 제공한다. 개발 프로세스는 기본적으로 루프백 주소에서만 HTTP를 수신한다. 로컬 개발 신원과 사설 토큰 인증·권한 검사가 구현되어 있지만, OIDC·TLS·역방향 프록시를 포함한 외부 공개 서비스 배포 구성은 제공하지 않는다. 개발 모드에서는 프록시 전달 헤더가 있는 요청도 거부하지만, 프록시가 헤더를 제거하면 원격 사용자를 완전히 식별할 수 없으므로 네트워크 경계 자체를 유지해야 한다. 루프백에 바인딩된 개발용 서비스를 외부 프록시로 공개하면 개발 관리자 신원이 우회적으로 노출될 수 있으므로 금지한다.
-
-`make down`과 `make restart`는 DB 볼륨·Iceberg 데이터·아티팩트를 삭제하지 않는다. 실행용 로컬 캐시와 로그는 `.sos/`와 `.sos-dev/`에서 별도로 관리되며 DB·객체 저장소 볼륨과 다른 수명주기를 갖는다. `SOS_HOME`은 API·Worker·초기화/검증 도구가 사용하는 로컬 캐시 및 임시 실행 파일 경로를 함께 변경하며, `--home`을 명시한 Worker에서는 CLI 인자가 우선한다.
+`make down`과 `make restart`는 DB 볼륨·Iceberg 데이터·아티팩트를 삭제하지 않는다. API·Worker 캐시는 각자의 Compose 볼륨에서 관리되며 DB·객체 저장소 볼륨과 다른 수명주기를 갖는다. 테스트 소유 기록·검증 증거는 `.sos-test/`에 저장한다. `SOS_HOME`은 API·Worker·초기화/검증 도구가 사용하는 로컬 캐시 및 임시 실행 파일 경로를 함께 변경하며, `--home`을 명시한 Worker에서는 CLI 인자가 우선한다.
 
 CSV·Parquet·구조화된 TSV/TXT 업로드는 기본 256 MiB 이하이고 `SOS_MAX_UPLOAD_MIB`로 1~2048 MiB 범위를 설정할 수 있다. Multipart 본문은 파일 한도에 최대 64 KiB의 전송 헤더·필드 여유를 더해 제한하며 이 범위를 넘으면 파일 크기와 무관하게 거부될 수 있다. 여러 업로드를 동시에 진행하면 임시 디스크에 파서 스풀과 검증용 임시 파일이 함께 존재할 수 있으므로 운영 환경에서 여유 용량을 확보한다. HTTP `201`은 원본을 저장하고 Dataset 참조를 확정한 상태를 뜻하며, 목록 새로고침 실패는 등록 실패가 아니다. 파일 등록 시에는 기본 형식과 스키마를 검사하지만 전체 행의 품질·타입 일관성까지 보장하지 않으며, 이후 Preview·Profile·Job에서 추가 데이터 오류가 발견될 수 있다.
 
 데이터 미리보기는 최대 100행을 반환하고, 기본 EDA 프로파일은 정렬 없는 제한 조회 최대 1,000행을 계산한다. Dataset Understanding의 무작위 표본 분석은 고정 Seed Reservoir 방식을 사용하며 전체 분포의 대표성을 보장하지 않는다. 변환 결과 미리보기(Feature Preview)는 입력을 먼저 표본 추출하지 않고 실제 Job과 같은 변환 순서를 적용한 결과를 최대 30행 보여준다. Row-local Feature Preview는 원본 전체 행 수 때문에 거부하지 않으며 Lazy 출력 제한을 적용한다. 전역 정렬·Lag·Rolling은 동기 입력 예산을 확인하고 초과하면 전체 Transform Job을 사용하도록 안내한다. 전체 프로파일·피처 처리·Iceberg 적재는 Job으로 실행한다. Snapshot ID를 기록했더라도 만료 정책으로 사라질 수 있으므로 유효성 확인과 보존 정책이 필요하다.
 
 코드·환경·UX의 기준은 [Architecture](architecture.md), [Experience](experience.md), [Contracts](contracts.md), [Workflows](workflows.md), [Runtimes](runtimes.md)를 따른다. ML 모델 학습·평가·추론은 아직 이번 기능에 포함되지 않는다.
+
 
 ## 첫 데이터 탐색
 
@@ -80,7 +102,7 @@ Job 목록은 `GET /api/jobs?limit=20`에서 최근 순으로 조회하며, 응�
 새 소유권을 저장하기 전에 항상 읽기 전용 진단을 수행한다.
 
 ```bash
-python3 scripts/dev.py iceberg-ownership --table sensor_data
+docker compose --profile app exec api python -m sos_platform.iceberg_ownership --table sensor_data
 ```
 
 진단 결과가 `candidate`이고 Dataset 참조가 단일 명시적 소유자일 때만
@@ -89,8 +111,8 @@ python3 scripts/dev.py iceberg-ownership --table sensor_data
 그 값을 그대로 명시해 채택한다.
 
 ```bash
-python3 scripts/dev.py iceberg-ownership --table sensor_data \
-  --owner local-developer --dataset-id <기존-Iceberg-Dataset-ID> \
+docker compose --profile app exec api python -m sos_platform.iceberg_ownership --table sensor_data \
+  --owner <확인된-Actor-ID> --dataset-id <기존-Iceberg-Dataset-ID> \
   --expect-table-uuid <진단-table_uuid> --expect-snapshot <진단-current_snapshot_id> --apply
 ```
 
@@ -110,8 +132,8 @@ Data Workspace 사이드바의 **저장소 상태 보기**에서 `datasets/`, `r
 
 `GET /api/storage/inspection`은 한 번에 한 접두사의 한 페이지만 조회하고 `next_cursor`를 반환한다. `protected`는 참조 또는 실행으로 보호 중, `waiting`은 유예·관측 대기, `unknown`은 소유권·게시 상태가 불명확하여 삭제 금지, `candidate`는 복수 관측된 실패 객체에 대한 검토 신호이다. **candidate도 삭제 허가가 아니다.** S3 또는 DB가 장애 상태이면 추측해 결과를 확정하지 않는다. 새 Transform 결과는 `results/{job_id}/{attempt_id}.parquet`에 저장되며 기존 결과 참조를 변경하지 않는다.
 
-## 실험적 권한 경계와 Snapshot 보존
+## Token 인증과 Snapshot 보존
 
-`make up`은 실행 환경에 `SOS_AUTH_MODE=development`를 명시적으로 설정해 기존 로컬 개발 경험을 유지한다. API를 독립적으로 실행할 때 인증 모드를 설정하지 않으면 기동을 거부한다. 실행 방식과 관계없이 최종 인증 설정의 유효성은 `IdentitySettings`가 판단한다. 직접 로컬 개발 서버를 실행하려면 `SOS_AUTH_MODE=development uv run --locked uvicorn sos_platform.api:create_app --factory --host 127.0.0.1 --port 9602`처럼 명시적으로 선택한다. 이 모드의 API는 루프백과 테스트 클라이언트 요청만 허용하며 **역방향 프록시를 통해 외부에 노출해서는 안 된다**. 인증 모드나 토큰 목록을 변경한 경우 실행 중인 API에는 자동 반영되지 않으므로 `make restart`로 적용한다. 이미 실행 중인 API와 요청한 인증 설정이 다르면 `make up`은 성공으로 보고하지 않고 중단한다. 인증 필수 테스트·사설 API 연동은 `SOS_AUTH_MODE=token`으로 변경하고 `SOS_AUTH_TOKEN_HASHES`에 JSON 객체로 고엔트로피 토큰의 SHA-256 해시(64자리 소문자 16진수)를 키, `{"actor_id":"...", "kind":"human"|"service", "roles":["viewer"|"researcher"|"operator"|"administrator"]}`를 값으로 설정한다. 원본 토큰은 해당 환경변수에 저장하지 않는다. API 요청은 `Authorization: Bearer <token>`을 사용하며, 브라우저에서는 현재 화면 메모리에만 보관한다. 토큰 모드에서 유효한 설정이 없다면 서비스 시작을 거부한다. 외부 공개는 아직 지원하지 않으며 TLS와 OIDC 로그인·계정 생명주기를 포함한 별도 운영 보안 구성이 필요하다.
+공개 `make up`은 API를 Token 인증 모드로 실행한다. `SOS_AUTH_TOKEN_HASHES`에 SHA-256 지문(64자리 소문자 16진수)을 키로 하고 `{"actor_id":"...","kind":"human"|"service","roles":["viewer"|"researcher"|"operator"|"administrator"]}`를 값으로 하는 JSON을 명시한다. 원본 Token은 별도로 보관하며 HTTP 요청은 `Authorization: Bearer <token>`으로 인증한다. 브라우저는 현재 화면 메모리에서만 Token을 보관한다. 누락·잘못된 Token 설정은 API가 기동을 거부한다. 개발 컨테이너를 외부 공개 TLS·OIDC 서비스로 사용하지 않는다.
 
 Iceberg 테이블에 Dataset을 연결할 때는 데이터 생성 권한과 해당 Dataset 참조를 통한 읽기 접근이 필요하다. Iceberg 적재 Job을 제출할 때는 실행 권한뿐 아니라 별도 테이블 쓰기 소유권도 필요하며, API 제출과 Worker의 Catalog 커밋 직전 모두 검증한다. 신규 테이블은 PostgreSQL에 소유권·고유 토큰을 예약하고 Catalog 생성 시 동일 토큰을 기록한다. 이 권한은 Snapshot 참조 Dataset의 소유권으로 자동 부여되지 않는다. 기존 테이블 중 이 소유 토큰이 없는 대상은 읽기·보존을 유지하되 자동 인수하지 않고 새 적재를 거부한다. 테이블 이름이 소실되거나 재생성됐어도 자동 쓰기를 허용하지 않는다. 관리형 로컬 환경에서는 소유권이 단일 Actor로 확인된 기존 테이블에 한해 명시적 진단·채택 CLI를 제공하며, 외부 DB와 모호한 테이블에 대한 자동 인수·양도는 제공하지 않는다. 기존 Dataset의 보존 Tag를 수동으로 재확인하는 동작은 운영 보존 권한을 사용한다. 신규 Iceberg Dataset은 Snapshot의 SOS Tag를 만들고 재검증한 후에만 등록한다. 예전 Dataset은 Storage Health에서 `읽기 가능 · 보존 미보장`으로 표시될 수 있으며, 운영자 권한으로 해당 Dataset의 Tag를 생성할 수 있다. 데이터가 없는 Tag·Catalog 장애에서는 보존을 확정하지 않으며 기존 데이터 파일과 Tag를 자동 삭제하지 않는다. 보안 감사 조회는 `GET /api/v2/audit`에서 운영 권한으로 가능하다. 기존 소유권이 없는 Dataset은 관리자가 명시적으로 마이그레이션하기 전까지 일반 사용자에게 노출되지 않는다.

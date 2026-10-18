@@ -144,42 +144,8 @@ DEFINITIONS = (
 )
 
 
-CLI_CODES = (
-    "SOS-LIFE-001",
-    "SOS-CMD-001",
-    "SOS-CONFIG-001",
-    "SOS-CONFIG-002",
-    "SOS-CONFIG-003",
-    "SOS-CONFIG-004",
-    "SOS-CONFIG-005",
-    "SOS-NET-001",
-    "SOS-PROC-001",
-    "SOS-PROC-002",
-    "SOS-READY-001",
-    "SOS-INFRA-001",
-    "SOS-INFRA-002",
-    "SOS-ENV-001",
-    "SOS-ENV-002",
-    "SOS-ENV-003",
-    "SOS-ENV-004",
-    "SOS-ICEBERG-OWNER-001",
-    "SOS-ICEBERG-OWNER-002",
-    "SOS-DB-001",
-    "SOS-EXTERNAL-001",
-    "SOS-CHECK-001",
-    "SOS-CHECK-002",
-)
 ERRORS = {item.code: item for item in DEFINITIONS}
-ERRORS.update(
-    {
-        code: spec(code, "개발 환경 진단", "make doctor 및 make logs를 확인하세요.", "cli")
-        for code in CLI_CODES
-        if code not in ERRORS
-    }
-)
-if len(ERRORS) != len(DEFINITIONS) + len(
-    [code for code in CLI_CODES if code not in {x.code for x in DEFINITIONS}]
-):
+if len(ERRORS) != len(DEFINITIONS):
     raise RuntimeError("Duplicate error code in the platform catalog")
 
 

@@ -25,7 +25,6 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 - API의 비동기 작업 생성 시 Request ID를 Job에 저장하고 생성·종료·복구 감사에 연결한다. Attempt는 해당 Job의 일부이다.
 - `job_id`, `attempt_id`, `error_code`, `failure_stage`는 단계와 원인 검색의 핵심 식별자다. Metrics Label에는 고유 ID를 사용하지 않는다.
 - `observability.emit()`은 허용된 이벤트 속성만 구조화 로그로 내보낸다. 토큰·S3 Key·SQL·환경 변수·예외 원문·데이터 Payload·Stack Trace를 기록하지 않는다.
-- 개발 인스턴스 로그는 `make logs`에서 민감값을 추가 마스킹한다. 원본 로그·Trace·CI 아티팩트에 실데이터나 비밀정보가 있는지 주기적으로 검증한다.
 - API/Worker 실행에 로그 수집기나 외부 APM 서비스는 필수가 아니다. 로그 저장소를 상태·감사·커밋 판정의 원본으로 만들지 않는다.
 
 ## Runbooks — 반복 가능한 수동 진단
@@ -40,7 +39,7 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 ### PostgreSQL·S3 저장 실패
 
 1. API Request ID 또는 Job ID에서 관련 Attempt 및 실패 단계(`processing`, `publication`)를 찾는다.
-2. `make doctor --deep`으로 서비스 준비 상태를 읽기 전용으로 확인한다.
+2. `make doctor`로 컨테이너의 Health 상태를 확인하고, `/api/ready` 응답으로 DB·S3·Worker 준비 상태를 대조한다.
 3. DB 객체 게시 의도 `Pending`·`Failed`와 S3 실제 객체, Dataset 참조를 대조한다.
 4. `candidate`는 삭제 허가가 아니다. Storage Health는 관측 도구이며 사용자 객체를 자동 삭제하지 않는다.
 5. 원인 확정 전 재실행·공유 객체 삭제를 수행하지 않는다.
@@ -72,5 +71,6 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 
 ### 로그 크기·보관 정책
 
-- 로컬 개발 서비스의 stdout/stderr는 `scripts/log_capture.py`가 2 MiB씩 3개 백업 파일로 회전해 총 용량을 제한한다. 로그 relay와 실제 서비스는 기존 단일 프로세스 그룹 안에서 관리되므로 `make down`이 둘 다 종료한다.
-- `make logs`는 파일 전체를 읽지 않고 마지막 64 KiB 범위에서 최대 70줄만 추출하며, 터미널 표시 전에 비밀 문자열을 마스킹한다. 백업 로그도 임의 삭제하거나 사용자 데이터 저장 경로에 접근하지 않는다.
+- `make logs`는 `docker compose logs --tail 80`로 최근 서비스 로그만 조회한다.
+- Compose의 `json-file` 로그 드라이버는 서비스별 2 MiB × 3개 파일로 회전한다. 이 로그는 시스템 상태·감사·커밋의 정본이 아니며, Token·S3 Key·원본 데이터가 출력되지 않도록 구조화 로그 허용 목록을 적용한다.
+

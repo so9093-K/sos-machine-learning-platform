@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-source = Path(__file__).resolve().parents[1] / "scripts" / "run_isolated_e2e.py"
+source = Path(__file__).resolve().parents[1] / "scripts" / "isolated_compose.py"
 spec = importlib.util.spec_from_file_location("sos_test_isolated_e2e", source)
 assert spec is not None and spec.loader is not None
 isolated = importlib.util.module_from_spec(spec)
@@ -17,7 +17,7 @@ spec.loader.exec_module(isolated)
 
 def test_cleanup_rejects_missing_or_foreign_owner(tmp_path):
     instance = "sos-e2e-123456abcdef"
-    env = {"SOS_DEV_INSTANCE": instance}
+    env = {"COMPOSE_PROJECT_NAME": instance}
     assert isolated.clean_owned(instance, tmp_path / instance, env) != 0
     runtime = tmp_path / instance
     runtime.mkdir()
@@ -39,7 +39,7 @@ def test_cleanup_failure_is_visible_and_owned_marker_preserved(monkeypatch, tmp_
         return SimpleNamespace(returncode=1)
 
     monkeypatch.setattr(isolated.subprocess, "run", fail)
-    assert isolated.clean_owned(instance, runtime, {"SOS_DEV_INSTANCE": instance}) != 0
+    assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) != 0
     # 서비스 종료 실패 시 볼륨을 삭제하지 않고 복구 기록을 남긴다.
     assert len(calls) == 1
     assert (runtime / isolated.OWNER_FILE).is_file()
@@ -59,19 +59,21 @@ def test_cleanup_success_only_removes_owned_project(monkeypatch, tmp_path):
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(isolated.subprocess, "run", succeed)
-    assert isolated.clean_owned(instance, runtime, {"SOS_DEV_INSTANCE": instance}) == 0
+    assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) == 0
     assert not runtime.exists()
     assert (foreign / "important.txt").read_text(encoding="utf-8") == "keep"
-    assert calls[0] == ["python3", "scripts/dev.py", "down"]
-    assert calls[1] == [
+    assert calls[0] == [
         "docker",
         "compose",
+        "--profile",
+        "app",
         "-f",
         "compose.yaml",
         "-p",
         instance,
         "down",
         "--volumes",
+        "--remove-orphans",
     ]
 
 
@@ -86,8 +88,8 @@ def test_cleanup_compose_failure_preserves_owned_marker(monkeypatch, tmp_path):
         return SimpleNamespace(returncode=1 if command[0] == "docker" else 0)
 
     monkeypatch.setattr(isolated.subprocess, "run", process)
-    assert isolated.clean_owned(instance, runtime, {"SOS_DEV_INSTANCE": instance}) != 0
-    assert len(calls) == 2
+    assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) != 0
+    assert len(calls) == 1
     assert (runtime / isolated.OWNER_FILE).exists()
 
 
@@ -100,7 +102,7 @@ def test_cleanup_timeout_never_removes_owned_marker(monkeypatch, tmp_path):
         raise subprocess.TimeoutExpired(command, 240)
 
     monkeypatch.setattr(isolated.subprocess, "run", timeout)
-    assert isolated.clean_owned(instance, runtime, {"SOS_DEV_INSTANCE": instance}) != 0
+    assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) != 0
     assert (runtime / isolated.OWNER_FILE).is_file()
 
 
@@ -138,7 +140,7 @@ def test_sigkill_after_owner_creation_leaves_recoverable_marker(monkeypatch, tmp
     monkeypatch.setattr(isolated, "RUNS", tmp_path)
     script = (
         "import sys, time; from pathlib import Path; "
-        "from run_isolated_e2e import create_owner; import run_isolated_e2e as iso; "
+        "from isolated_compose import create_owner; import isolated_compose as iso; "
         "iso.RUNS=Path(sys.argv[1]); "
         "create_owner(sys.argv[2], [10001, 10002, 10003, 10004]); "
         "print('owned', flush=True); time.sleep(30)"
@@ -170,13 +172,65 @@ def test_sigkill_after_owner_creation_leaves_recoverable_marker(monkeypatch, tmp
 
 
 def test_token_mode_generates_only_ephemeral_roles():
-    env = {"SOS_AUTH_MODE": "development"}
+    env = {}
     isolated.configure_tokens(env)
     identities = json.loads(env["SOS_AUTH_TOKEN_HASHES"])
     assert {record["roles"][0] for record in identities.values()} == {
         "viewer",
         "researcher",
         "operator",
+        "administrator",
     }
     assert "ci-viewer" in {record["actor_id"] for record in identities.values()}
     assert all(len(key) == 64 for key in identities)
+
+
+def test_cleanup_removes_only_its_two_ephemeral_image_tags(monkeypatch, tmp_path):
+    """소유 프로젝트 정리 시 다른 실행의 이미지 태그를 삭제하지 않는다."""
+    instance = "sos-e2e-123456abcdef"
+    monkeypatch.setattr(isolated, "RUNS", tmp_path)
+    runtime = isolated.create_owner(instance, [10001, 10002, 10003, 10004])
+    commands = []
+
+    def succeed(command, **_kwargs):
+        commands.append(command)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(isolated.subprocess, "run", succeed)
+    assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) == 0
+    assert [command for command in commands if command[:3] == ["docker", "image", "rm"]] == [
+        ["docker", "image", "rm", f"sos-python-e2e:{instance}"],
+        ["docker", "image", "rm", f"sos-web-e2e:{instance}"],
+    ]
+    assert not runtime.exists()
+
+
+def test_cleanup_image_removal_failure_keeps_owner_record(monkeypatch, tmp_path):
+    """이미지 정리가 실패하면 소유 증거를 보존해 복구 재시도를 허용한다."""
+    instance = "sos-e2e-123456abcdef"
+    monkeypatch.setattr(isolated, "RUNS", tmp_path)
+    runtime = isolated.create_owner(instance, [10001, 10002, 10003, 10004])
+
+    def fail_image(command, **_kwargs):
+        failed = command[:3] == ["docker", "image", "rm"]
+        return SimpleNamespace(returncode=1 if failed else 0)
+
+    monkeypatch.setattr(isolated.subprocess, "run", fail_image)
+    assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) != 0
+    assert (runtime / isolated.OWNER_FILE).is_file()
+
+
+def test_cleanup_skips_images_that_were_never_built(monkeypatch, tmp_path):
+    """인프라 전용 SIGKILL 테스트에서는 미생성 이미지가 정리 장애가 아니다."""
+    instance = "sos-e2e-123456abcdef"
+    monkeypatch.setattr(isolated, "RUNS", tmp_path)
+    runtime = isolated.create_owner(instance, [10001, 10002, 10003, 10004])
+    commands = []
+
+    def inspect_missing(command, **_kwargs):
+        commands.append(command)
+        return SimpleNamespace(returncode=1 if command[:3] == ["docker", "image", "inspect"] else 0)
+
+    monkeypatch.setattr(isolated.subprocess, "run", inspect_missing)
+    assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) == 0
+    assert not any(command[:3] == ["docker", "image", "rm"] for command in commands)

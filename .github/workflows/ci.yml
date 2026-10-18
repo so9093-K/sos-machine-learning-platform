@@ -129,8 +129,6 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser workflow tests in separate E2E volumes
         run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
-      - name: Make lifecycle and data persistence (owned environment)
-        run: uv run --locked python scripts/verify.py run make-lifecycle --output-dir web/reports
       - name: Verify token-mode browser permissions (owned environment)
         run: uv run --locked python scripts/verify.py run token-rbac --output-dir web/reports
 
@@ -148,10 +146,26 @@ jobs:
           retention-days: 7
 
 
-  # 보호 규칙의 python-quality 상태가 3개 핵심 검증을 모두 대표하도록 한다.
+  container-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify container runtime in a dedicated Compose project
+        run: python3 scripts/verify.py run container-runtime --output-dir /tmp/sos-container-runtime
+      - name: Preserve container verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: container-runtime-test-report
+          path: /tmp/sos-container-runtime/
+          if-no-files-found: error
+          retention-days: 7
+
+  # 보호 규칙의 python-quality 상태가 컨테이너 실행을 포함한 필수 검증을 대표한다.
   python-quality:
     if: always()
-    needs: [python-tests, frontend, ui-e2e]
+    needs: [python-tests, frontend, ui-e2e, container-runtime]
     runs-on: ubuntu-latest
     steps:
       - name: Require every critical CI job
@@ -159,10 +173,12 @@ jobs:
           PYTHON_RESULT: ${{ needs.python-tests.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           E2E_RESULT: ${{ needs.ui-e2e.result }}
+          CONTAINER_RESULT: ${{ needs.container-runtime.result }}
         run: |
           test "$PYTHON_RESULT" = "success"
           test "$FRONTEND_RESULT" = "success"
           test "$E2E_RESULT" = "success"
+          test "$CONTAINER_RESULT" = "success"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Download native JUnit and inventory reports

@@ -10,7 +10,7 @@
 - 모든 테스트는 단독·순서 변경·반복 실행이 가능해야 한다. 다른 테스트에서 생성한 데이터를 요구하지 않는다.
 - 검증 강도는 실행 시간의 길이가 아니라 자원 한계, 동시 경합, 실패 주입 지점, 상태 불변조건과 정리·복구 결과로 판단한다. TTL·Timeout 등 시간 자체가 계약인 경우에만 필요한 시간 범위를 명시해 검증한다.
 - `make check`의 브라우저 쓰기 테스트는 UUID 별도 Compose 프로젝트와 DB·버킷·서비스에만 연결한다. 일반 개발 프로젝트/외부 저장소에 쓰기 E2E를 실행하지 않는다. 생성한 E2E 프로젝트만 명시적으로 종료·볼륨 정리한다.
-- SIGKILL·호스트 종료 등으로 정리가 중단된 경우, `.sos-dev/runs/<sos-e2e-인스턴스>/validation-owner.json`의 소유 기록을 먼저 확인하고 `python scripts/run_isolated_e2e.py --recover-owned <sos-e2e-인스턴스>`를 실행한다. 복구는 기록된 프로젝트에 한정되며, 서비스 종료나 Compose 정리에 실패하면 소유 기록을 보존하고 다른 데이터·볼륨을 임의 삭제하지 않는다.
+- SIGKILL·호스트 종료 등으로 정리가 중단된 경우, `.sos-test/runs/<sos-e2e-인스턴스>/validation-owner.json`의 소유 기록을 먼저 확인하고 `python scripts/isolated_compose.py --recover-owned <sos-e2e-인스턴스>`를 실행한다. 복구는 기록된 프로젝트에 한정되며, 서비스 종료·Compose·테스트 고유 이미지 정리에 실패하면 소유 기록을 보존하고 다른 데이터·볼륨·공유 이미지를 임의 삭제하지 않는다.
 - Fixture는 자신이 만든 DB·UUID 버킷만 생성·정리한다. 사용자 데이터를 삭제하거나 Iceberg Tag를 임의 정리하지 않는다.
 - 필수 테스트의 실패를 Retry·Skip으로 숨기지 않는다. 최초 실패와 재현 정보를 보존한다.
 - 검증 수준마다 책임을 정하고 불필요한 Mock과 복잡한 테스트 DSL을 피한다.
@@ -19,14 +19,14 @@
 
 | 테스트 계층 | 위치 | 실행 |
 | --- | --- | --- |
-| 순수 로직·CLI·호환성 | tests/test_processing.py, tests/test_dev_cli.py, tests/test_api_compat.py, tests/test_pagination.py, tests/test_execution_budget.py, tests/test_resource_admission.py, tests/test_errors.py, tests/test_diagnostics.py, tests/test_log_capture.py, tests/test_e2e_isolation.py | make check-fast; PR 필수 |
+| 순수 로직·CLI·호환성 | tests/test_processing.py, tests/test_api_compat.py, tests/test_pagination.py, tests/test_execution_budget.py, tests/test_resource_admission.py, tests/test_errors.py, tests/test_diagnostics.py, tests/test_e2e_isolation.py | make check-fast; PR 필수 |
 | 실제 DB·객체 저장소·Catalog | tests/integration/ | PR 필수 Python 작업 |
 | 브라우저 사용자 흐름·RBAC | web/e2e/ | PR 필수 UI 작업 |
-| Make 재시작·보존 | CI Make lifecycle | PR 필수; 자체 데이터를 생성해야 함 |
+| 전체 컨테이너 재시작·보존 | CI container-runtime | PR 필수; 자체 데이터를 생성해야 함 |
 | 자원 한계·경합·복합 장애 | 해당 불변조건의 단위·통합·장애 주입 테스트 | 소유권·실패 시점·복구 결과와 자원 예산을 기준으로 필요한 범위에서 실행 |
 
 make check-fast는 Ruff, 순수 Python 테스트(개발 설정 기본값·문서 ADR 인덱스 검사 포함), Vitest 및 웹 타입·빌드를 확인하며 서비스 기동을 요구하지 않는다.
-make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하다. 공통 Suite를 통해 Ruff·단위·통합·Frontend·생성 OpenAPI 타입·Wheel·Alembic·격리 Workspace/권한 E2E·Make 영속성을 포함하며, PR base 비교는 별도로 --base-ref를 전달해야 한다. Fast 통과를 전체 검증 성공으로 해석하지 않는다.
+make check는 실제 컨테이너 Ready 상태가 필요하다. 공통 Suite를 통해 Ruff·단위·통합·Frontend·생성 OpenAPI 타입·Wheel·Alembic·격리 Workspace/권한 E2E·컨테이너 영속성을 포함하며, PR base 비교는 별도로 --base-ref를 전달해야 한다. Fast 통과를 전체 검증 성공으로 해석하지 않는다.
 
 ## 변경 불가능한 필수 불변조건과 담당 테스트
 
@@ -85,8 +85,9 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 
 - python-tests: 잠금·Markdown/ADR 인덱스·Ruff·API 타입·PR base API 호환성·전체 Python 테스트(로컬 check-fast 명령 계약 포함)·실제 인프라 통합 테스트·Alembic·Wheel. 로컬 check-fast 전체 명령은 다른 필수 CI 단계와 중복 실행하지 않는다.
 - frontend: TypeScript/Vite 빌드 및 Vitest.
-- ui-e2e: Make up/down/restart, Data Workspace 브라우저 시나리오, 토큰 역할 3개, 독립 데이터 보존 검사. 정확한 시나리오 개수와 성패는 각 CI 실행 기록을 기준으로 한다.
-- python-quality: 위 세 작업이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
+- ui-e2e: 고유 Docker Compose 프로젝트에서 실행되는 Data Workspace 브라우저 시나리오, 토큰 역할 3개 및 독립 테스트 자원 정리 검사. 정확한 시나리오 개수와 성패는 각 CI 실행 기록을 기준으로 한다.
+- container-runtime: 고유 Compose 프로젝트에서 공개 Make up/status/doctor/restart/down, Token 역할/소유권, Web 프록시, Job·Iceberg, 재기동 후 데이터·Snapshot 보존 검증. 공통 Suite의 Manifest/Summary를 CI 증거로 보존한다.
+- python-quality: Python·Frontend·UI E2E 및 container-runtime이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
 - 오래된 PR HEAD만 취소하고 main 검증 결과는 각 실행 ID별로 보존한다.
 - 정기(매일 새벽)·수동 실행에서는 핵심 Iceberg/Job 모듈을 순서를 바꿔 두 번 반복해 격리·재현성을 점검한다. 실패는 일반 CI 실패로 남으며 Retry에 의해 무시되지 않는다.
 - PR의 OpenAPI 후방 호환성 검사는 기준 브랜치와 변경 브랜치를 직접 비교하며, 과거 PR 전용 Breaking 승인 예외를 적용하지 않는다.
