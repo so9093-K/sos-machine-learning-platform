@@ -718,6 +718,18 @@ test("general Dataset query projects, filters and sorts columns", async ({ page 
   await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(2);
   await expect(page.locator("#sos-panel-preview tbody tr").first()).toContainText("10");
   await expect(page.locator("#sos-panel-preview tbody tr").last()).toContainText("5");
+  await page.getByLabel("비교 값").fill("b");
+  await expect(page.getByRole("status").getByText(/변경 사항 미적용/)).toBeVisible();
+  // 마지막 적용 결과는 남아 있고, 편집 중인 조건만 아직 반영되지 않는다.
+  await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(2);
+  await page.getByRole("tab", { name: "데이터 이해" }).click();
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
+  await page.getByText("컬럼·필터·정렬 선택").click();
+  await expect(page.getByLabel("비교 값")).toHaveValue("b");
+  await expect(page.getByRole("status").getByText(/변경 사항 미적용/)).toBeVisible();
+  await page.getByRole("button", { name: "조회 적용" }).click();
+  await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(1);
+  await expect(page.locator("#sos-panel-preview tbody tr")).toContainText("2");
 });
 
 test("Feature Builder can select columns and multiple grouping keys", async ({ page }) => {
@@ -892,8 +904,11 @@ test("unknown CSV opens Understanding and transfers a candidate to editable Expl
     buffer: Buffer.from("department,score\nalpha,3\nbeta,5\nalpha,7\nbeta,9\n"),
   });
   await expect(page.getByRole("heading", { name: "unknown.csv" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "원본 데이터 개요" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "데이터 이해" })).toHaveAttribute("aria-selected", "true");
   const panel = page.getByRole("tabpanel", { name: "데이터 이해" });
+  await expect(panel.getByRole("button", { name: "기본 분석 실행" })).toBeVisible();
+  await panel.getByRole("button", { name: "기본 분석 실행" }).click();
   await expect(panel.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });
   await expect(panel.getByText("그룹별 수치 비교")).toBeVisible();
   await panel.getByRole("searchbox", { name: "프로파일 컬럼 검색" }).fill("score");
@@ -1059,6 +1074,7 @@ test("Dataset switch clears a previously chosen exploration candidate", async ({
   });
   await expect(page.getByRole("heading", { name: "candidate-a.csv" })).toBeVisible();
   const overview = page.getByRole("tabpanel", { name: "데이터 이해" });
+  await overview.getByRole("button", { name: "기본 분석 실행" }).click();
   await expect(overview.getByRole("heading", { name: "탐색 후보" })).toBeVisible({ timeout: 30000 });
   await overview.getByRole("button", { name: "탐색 조건 보기" }).first().click();
   await expect(page.getByRole("tabpanel", { name: "탐색" })
@@ -1107,6 +1123,7 @@ test("Dataset original metadata remains visible after Understanding completes", 
   await expect(understanding.getByText("등록 파일 크기", { exact: true })).toBeVisible();
   await expect(understanding.getByText("미계산", { exact: true })).toBeVisible();
   await expect(understanding.getByText(/이 데이터 소스의 원본 행 수/)).toBeVisible();
+  await understanding.getByRole("button", { name: "기본 분석 실행" }).click();
   await expect(understanding.locator(".analysis-evidence-summary")).toContainText("부분 데이터 분석 ·", { timeout: 30000 });
   await understanding.getByText("분석 근거 자세히").click();
   await expect(understanding.getByText("무작위 추출 (Reservoir)", { exact: true })).toBeVisible();
@@ -1169,6 +1186,7 @@ test("Overview retrieval failure remains recoverable after sample Understanding 
     buffer: Buffer.from("category,value\na,1\nb,2\n"),
   });
   const understanding = page.getByRole("tabpanel", { name: "데이터 이해" });
+  await understanding.getByRole("button", { name: "기본 분석 실행" }).click();
   await expect(understanding.locator(".analysis-evidence-summary")).toContainText("부분 데이터 분석 ·", { timeout: 30000 });
   await expect(understanding.getByRole("button", { name: "기본 정보 다시 조회" })).toBeVisible();
   await page.unroute(overviewEndpoint);
@@ -1207,6 +1225,8 @@ test("Operational pages show their own headings rather than Data Explorer", asyn
 
 test("Registering another Dataset inside Preparation does not force Explorer navigation", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "데이터 준비 시작" })).toBeVisible();
   const input = page.locator('input[type="file"]');
   await input.setInputFiles({
     name: "prep-source-a.csv", mimeType: "text/csv",

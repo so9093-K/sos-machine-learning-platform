@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Dataset 등록 직후 원본 개요를 우선 보여주고 기본 표본 프로파일은 사용자 요청 시 Job으로 실행하도록 했습니다. 해당 Job을 전역 Jobs 목록과 연결하고, 조회 조건의 미적용 상태·마지막 적용 결과·탭 왕복 편집 상태를 구별했습니다. Dataset 없이 Data Preparation 진입, 권한별 예제 등록 제어, 기존 Dataset 전환 시 작업 탭 유지를 보완했습니다.
+
 - Data Explorer·Jobs 결과에 범위와 분석 근거의 요약·상세 보기를 통일하고, 제한 조회·Reservoir 표본·전체 대상 계산, 근사 통계 및 그룹 표시 제한을 구별했습니다. Data Preparation의 변환 결과 미리보기가 입력 표본 추출로 오해되지 않도록 표시를 정리했습니다.
 
 - Data Explorer의 데이터 이해·조회·탐색을 독립 경험으로 정리하고, 기존 Feature 변환과 Iceberg 적재를 별도 Data Preparation 작업 영역에서 이용할 수 있게 했습니다. 기존 Dataset·Job·Transform API는 유지합니다.

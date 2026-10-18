@@ -23,6 +23,8 @@ test.describe("token identity and resource permissions", () => {
       .toHaveCount(0);
     await expect(page.getByRole("button", { name: "Iceberg에 추가" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "최신 Snapshot 연결" })).toHaveCount(0);
+    await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
+    await expect(page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first()).toBeDisabled();
     const response = await page.request.get("/api/storage/policy", {
       headers: { Authorization: `Bearer ${viewer}` },
     });
