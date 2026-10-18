@@ -128,7 +128,7 @@ def test_invalid_stored_reader_options_are_not_silently_ignored(tmp_path: Path):
 def test_tabular_reader_preserves_late_mixed_type_values(tmp_path: Path):
     """초기 추론 범위 밖의 문자열도 원본 행의 유효한 값으로 읽혀야 한다."""
     path = tmp_path / "late-mixed.tsv"
-    content = "".join(f"{i}\\titem-{i}\\n" for i in range(150)) + "unknown\\tlast-row\\n"
+    content = "".join(f"{i}\titem-{i}\n" for i in range(150)) + "unknown\tlast-row\n"
     path.write_text(content, encoding="utf-8")
     reader = reader_for_suffix(".tsv")
     options = reader.upload_options({"has_header": False})
