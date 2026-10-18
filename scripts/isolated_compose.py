@@ -54,15 +54,25 @@ def isolated_environment(source: dict[str, str], instance: str, ports: list[int]
     env = {
         key: value
         for key, value in source.items()
-        if not key.startswith("SOS_") and key not in {"COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES"}
+        if not key.startswith("SOS_")
+        and key not in {
+            "COMPOSE_PROJECT_NAME",
+            "COMPOSE_PROFILES",
+            "COMPOSE_FILE",
+            "COMPOSE_ENV_FILES",
+            "COMPOSE_DISABLE_ENV_FILE",
+        }
     }
     db_port, s3_port, api_port, web_port = ports
     env.update(
         COMPOSE_PROJECT_NAME=instance,
+        COMPOSE_DISABLE_ENV_FILE="1",
+        SOS_DB_USER="sos",
         SOS_DB_NAME=instance.replace("-", "_"),
         SOS_DB_PASSWORD=secrets.token_urlsafe(24),
         SOS_S3_ACCESS_KEY="sos-test",
         SOS_S3_SECRET_KEY=secrets.token_urlsafe(24),
+        SOS_S3_REGION="us-east-1",
         SOS_S3_BUCKET=instance,
         SOS_DB_PORT=str(db_port),
         SOS_S3_PORT=str(s3_port),

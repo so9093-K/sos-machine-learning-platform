@@ -27,6 +27,9 @@ def test_isolated_e2e_never_reuses_parent_data_or_auth():
         "SOS_DB_NAME": "production",
         "SOS_S3_BUCKET": "production-data",
         "SOS_INFRA_MODE": "external",
+        "COMPOSE_ENV_FILES": "/tmp/foreign.env",
+        "COMPOSE_FILE": "/tmp/foreign-compose.yaml",
+        "COMPOSE_DISABLE_ENV_FILE": "0",
         "SOS_JUNIT_FILE": "/tmp/workspace-e2e.xml",
     }
     isolated_env = isolated.isolated_environment(
@@ -42,4 +45,9 @@ def test_isolated_e2e_never_reuses_parent_data_or_auth():
     identities = json.loads(isolated_env["SOS_AUTH_TOKEN_HASHES"])
     assert "administrator" in {actor["roles"][0] for actor in identities.values()}
     assert isolated_env["COMPOSE_PROJECT_NAME"] == "sos-e2e-012345abcdef"
+    assert isolated_env["COMPOSE_DISABLE_ENV_FILE"] == "1"
+    assert "COMPOSE_ENV_FILES" not in isolated_env
+    assert "COMPOSE_FILE" not in isolated_env
+    assert isolated_env["SOS_DB_USER"] == "sos"
+    assert isolated_env["SOS_S3_REGION"] == "us-east-1"
     assert "SOS_S3_ENDPOINT" not in isolated_env
