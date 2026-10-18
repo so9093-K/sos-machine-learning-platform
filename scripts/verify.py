@@ -157,7 +157,7 @@ def verify_evidence(report: Path, *, required: bool) -> dict:
 
 def default_output() -> Path:
     """기존 JUnit의 stale 결과와 충돌하지 않는 고유 실행 경로."""
-    base = ROOT / ".sos-dev" / "validation"
+    base = ROOT / ".sos-test" / "validation"
     base.mkdir(parents=True, exist_ok=True)
     return Path(tempfile.mkdtemp(prefix="run-", dir=base))
 

@@ -16,8 +16,15 @@ x-sos-python-build: &sos-python-build
   context: .
   dockerfile: Dockerfile
 
+x-sos-logging: &sos-logging
+  driver: json-file
+  options:
+    max-size: "2m"
+    max-file: "3"
+
 services:
   init:
+    logging: *sos-logging
     profiles: [app]
     image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
     build: *sos-python-build
@@ -32,6 +39,7 @@ services:
     restart: "no"
 
   api:
+    logging: *sos-logging
     profiles: [app]
     image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
     build: *sos-python-build
@@ -64,6 +72,7 @@ services:
     restart: unless-stopped
 
   worker:
+    logging: *sos-logging
     profiles: [app]
     image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
     build: *sos-python-build
@@ -79,6 +88,7 @@ services:
     restart: unless-stopped
 
   web:
+    logging: *sos-logging
     profiles: [app]
     build:
       context: .
@@ -100,6 +110,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
   postgres:
+    logging: *sos-logging
     image: postgres:17
     environment:
       POSTGRES_USER: ${SOS_DB_USER:-sos}
@@ -115,6 +126,7 @@ services:
       retries: 30
       timeout: 3s
   storage:
+    logging: *sos-logging
     # 객체 저장소 공급자는 S3 계약 뒤에서 교체할 수 있다.
     image: chrislusf/seaweedfs:4.48
     environment:

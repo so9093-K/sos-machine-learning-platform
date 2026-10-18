@@ -51,7 +51,11 @@ def isolated_environment(source: dict[str, str], instance: str, ports: list[int]
     if not INSTANCE_PATTERN.fullmatch(instance) or not valid_ports(ports):
         raise ValueError("Invalid isolated E2E project or ports")
     # 부모의 외부 DB·S3·권한·Compose 프로젝트 설정을 전혀 상속하지 않는다.
-    env = {key: value for key, value in source.items() if not key.startswith("SOS_") and key not in {"COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES"}}
+    env = {
+        key: value
+        for key, value in source.items()
+        if not key.startswith("SOS_") and key not in {"COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES"}
+    }
     db_port, s3_port, api_port, web_port = ports
     env.update(
         COMPOSE_PROJECT_NAME=instance,
@@ -83,7 +87,7 @@ def configure_tokens(env: dict[str, str]) -> None:
             "kind": "human",
             "roles": [role],
         }
-     env["SOS_AUTH_TOKEN_HASHES"] = json.dumps(identities)
+    env["SOS_AUTH_TOKEN_HASHES"] = json.dumps(identities)
 
 
 def create_owner(instance: str, ports: list[int]) -> Path:
@@ -135,7 +139,10 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
     try:
         # 소유 기록과 정확히 일치하는 프로젝트의 볼륨만 제거한다.
         containers = subprocess.run(
-            ["docker", "compose", "--profile", "app", "-f", "compose.yaml", "-p", instance, "down", "--volumes", "--remove-orphans"],
+            [
+                "docker", "compose", "--profile", "app", "-f", "compose.yaml",
+                "-p", instance, "down", "--volumes", "--remove-orphans",
+            ],
             cwd=ROOT,
             env=env,
             check=False,
@@ -160,9 +167,14 @@ def execute(spec: str) -> int:
     result = 1
     try:
         subprocess.run(
-            ["docker", "compose", "--profile", "app", "-f", "compose.yaml", "-p", instance,
-             "up", "--build", "-d", "--wait"],
-            cwd=ROOT, env=env, check=True, timeout=900,
+            [
+                "docker", "compose", "--profile", "app", "-f", "compose.yaml",
+                "-p", instance, "up", "--build", "-d", "--wait",
+            ],
+            cwd=ROOT,
+            env=env,
+            check=True,
+            timeout=900,
         )
         subprocess.run(
             ["npx", "playwright", "test", spec],

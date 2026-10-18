@@ -11,7 +11,7 @@ down:
 	@$(COMPOSE) down
 
 restart:
-	@$(COMPOSE) restart api worker web
+	@$(COMPOSE) up --build -d --wait --force-recreate api worker web
 
 status:
 	@$(COMPOSE) ps --all
@@ -22,6 +22,7 @@ logs:
 doctor:
 	@$(COMPOSE) config --quiet
 	@$(COMPOSE) ps --all
+	@$(COMPOSE) exec -T api python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:9602/api/ready', timeout=5).close()"
 
 check-fast:
 	@set -eu; for suite in ruff python-unit frontend; do \

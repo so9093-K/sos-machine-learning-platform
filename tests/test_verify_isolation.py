@@ -172,7 +172,7 @@ def test_sigkill_after_owner_creation_leaves_recoverable_marker(monkeypatch, tmp
 
 
 def test_token_mode_generates_only_ephemeral_roles():
-    env = {"SOS_AUTH_MODE": "development"}
+    env = {}
     isolated.configure_tokens(env)
     identities = json.loads(env["SOS_AUTH_TOKEN_HASHES"])
     assert {record["roles"][0] for record in identities.values()} == {

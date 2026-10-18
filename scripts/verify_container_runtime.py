@@ -5,27 +5,17 @@ import json
 import os
 import secrets
 import signal
-import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+import isolated_compose as isolation
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE = ("docker", "compose", "--profile", "app", "-f", "compose.yaml")
-
-
-def free_ports() -> list[int]:
-    sockets = [socket.socket() for _ in range(4)]
-    try:
-        for sock in sockets:
-            sock.bind(("127.0.0.1", 0))
-        return [sock.getsockname()[1] for sock in sockets]
-    finally:
-        for sock in sockets:
-            sock.close()
 
 
 def request(
@@ -92,32 +82,13 @@ def stop_on_sigterm(_signum: int, _frame: object) -> None:
 def main() -> int:
     """테스트 소유 프로젝트에서 쓰기·인증·복구를 검증하고 해당 볼륨만 정리한다."""
     previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
-    project = "sos-container-e2e-" + secrets.token_hex(6)
-    db_port, s3_port, api_port, web_port = free_ports()
-    viewer, researcher = secrets.token_hex(32), secrets.token_hex(32)
-    subjects = {
-        hashlib.sha256(token.encode()).hexdigest(): {
-            "actor_id": f"container-{role}",
-            "kind": "human",
-            "roles": [role],
-        }
-        for role, token in (("viewer", viewer), ("researcher", researcher))
-    }
-    # 부모의 외부 DB·버킷·인증 설정을 상속하지 않는다.
-    env = {k: v for k, v in os.environ.items() if not k.startswith("SOS_")}
-    env.update(
-        COMPOSE_PROJECT_NAME=project,
-        SOS_AUTH_TOKEN_HASHES=json.dumps(subjects),
-        SOS_DB_PASSWORD=secrets.token_urlsafe(24),
-        SOS_S3_ACCESS_KEY="sos-container-test",
-        SOS_S3_SECRET_KEY=secrets.token_urlsafe(24),
-        SOS_DB_PORT=str(db_port),
-        SOS_S3_PORT=str(s3_port),
-        SOS_API_PORT=str(api_port),
-        SOS_WEB_PORT=str(web_port),
-        SOS_PYTHON_IMAGE=f"sos-python-e2e:{project}",
-        SOS_WEB_IMAGE=f"sos-web-e2e:{project}",
-    )
+    project = "sos-e2e-" + secrets.token_hex(6)
+    ports = isolation.free_ports()
+    _, _, api_port, web_port = ports
+    env = isolation.isolated_environment(os.environ, project, ports)
+    viewer = env["SOS_E2E_VIEWER_TOKEN"]
+    researcher = env["SOS_E2E_RESEARCHER_TOKEN"]
+    runtime = isolation.create_owner(project, ports)
     url = f"http://127.0.0.1:{api_port}"
     step = "configuration"
     try:
@@ -131,7 +102,7 @@ def main() -> int:
         assert request(url + "/api/v2/auth/me")[0] == 401
         step = "researcher identity"
         status, actor = request(url + "/api/v2/auth/me", researcher)
-        assert status == 200 and actor["actor_id"] == "container-researcher"
+        assert status == 200 and actor["actor_id"] == "ci-researcher"
         step = "web proxy"
         await_web_proxy(f"http://127.0.0.1:{web_port}", researcher)
         step = "viewer dataset read"
@@ -192,9 +163,17 @@ def main() -> int:
         else:
             raise TimeoutError("Worker did not complete Iceberg import")
 
-        step = "restart and data preservation"
+        step = "restart and authentication rotation"
+        former_researcher = researcher
+        researcher = secrets.token_hex(32)
+        identities = json.loads(env["SOS_AUTH_TOKEN_HASHES"])
+        old_digest = hashlib.sha256(former_researcher.encode()).hexdigest()
+        identities[hashlib.sha256(researcher.encode()).hexdigest()] = identities.pop(old_digest)
+        env["SOS_AUTH_TOKEN_HASHES"] = json.dumps(identities)
         make(env, "restart")
         await_ready(url)
+        assert request(url + "/api/v2/auth/me", former_researcher)[0] == 401
+        assert request(url + "/api/v2/auth/me", researcher)[0] == 200
         status, listing = request(url + "/api/datasets", researcher)
         assert status == 200 and any(row["id"] == dataset_id for row in listing["items"])
         step = "post-restart Iceberg snapshots"
@@ -230,15 +209,10 @@ def main() -> int:
         subprocess.run([*COMPOSE, "-p", project, "ps"], cwd=ROOT, env=env, check=False)
         return 1
     finally:
-        # 유일한 임의 프로젝트만 정리한다. 기존 sos-platform 볼륨은 절대 삭제하지 않는다.
-        cleanup = subprocess.run(
-            [*COMPOSE, "-p", project, "down", "--volumes", "--remove-orphans"],
-            cwd=ROOT,
-            env=env,
-            check=False,
-        )
+        # 소유 증거를 확인한 테스트 프로젝트만 정리하며 외부 볼륨은 보존한다.
+        cleanup = isolation.clean_owned(project, runtime, env)
         signal.signal(signal.SIGTERM, previous)
-        if cleanup.returncode:
+        if cleanup:
             raise RuntimeError("Test-owned Compose resources could not be cleaned")
 
 
