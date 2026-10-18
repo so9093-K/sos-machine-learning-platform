@@ -1225,6 +1225,8 @@ test("Operational pages show their own headings rather than Data Explorer", asyn
 
 test("Registering another Dataset inside Preparation does not force Explorer navigation", async ({ page }) => {
   await page.goto("/");
+  // 다른 테스트가 등록한 Dataset이 초기 선택됐더라도 '미선택' 상태를 명시적으로 검증한다.
+  await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
   await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await expect(page.getByRole("heading", { name: "데이터 준비 시작" })).toBeVisible();
   const input = page.locator('input[type="file"]');
