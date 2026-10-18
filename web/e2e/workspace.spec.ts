@@ -24,7 +24,7 @@ test("CSV upload → EDA → feature preview → worker → reusable dataset", a
   });
   await expect(page.getByRole("heading", { name: "sensors.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
-  await expect(page.getByText("분석한 행")).toBeVisible();
+  await expect(page.getByText("분석한 행", { exact: true })).toBeVisible();
   await expect(page.getByText("Histogram")).toBeVisible();
   await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await page.getByRole("button", { name: "+ 단계 추가" }).click();
@@ -140,7 +140,7 @@ test("example onboarding uses the same EDA, Feature and Job contracts", async ({
   await page.getByRole("button", { name: /이 예제로 탐색 시작/ }).first().click();
   await expect(page.getByRole("heading", { name: "example-machine-sensors.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
-  await expect(page.getByText("분석한 행")).toBeVisible();
+  await expect(page.getByText("분석한 행", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await page.getByLabel("변환 연산", { exact: true }).selectOption("lag");
   await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
@@ -921,6 +921,7 @@ test("unknown CSV opens Understanding and transfers a candidate to editable Expl
   expect(explorationRequests).toBe(0);
   await exploration.getByRole("button", { name: "부분 데이터 집계" }).click();
   await expect.poll(() => explorationRequests).toBe(1);
+  await exploration.getByText("분석 근거 자세히").click();
   await expect(exploration.getByText(/Dataset 판본/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("tab", { name: "데이터 이해" })).toBeVisible();
@@ -1105,7 +1106,7 @@ test("Dataset original metadata remains visible after Understanding completes", 
   await expect(understanding.getByText("등록 파일 크기", { exact: true })).toBeVisible();
   await expect(understanding.getByText("미계산", { exact: true })).toBeVisible();
   await expect(understanding.getByText(/이 데이터 소스의 원본 행 수/)).toBeVisible();
-  await expect(understanding.getByText(/부분 데이터 분석 ·/)).toBeVisible({ timeout: 30000 });
+  await expect(understanding.locator(".analysis-evidence-summary").getByText(/부분 데이터 분석 ·/)).toBeVisible({ timeout: 30000 });
   await understanding.getByText("분석 근거 자세히").click();
   await expect(understanding.getByText("무작위 추출 (Reservoir)", { exact: true })).toBeVisible();
   await expect(understanding.getByText("원본 행 수", { exact: true })).toBeVisible();
@@ -1167,7 +1168,7 @@ test("Overview retrieval failure remains recoverable after sample Understanding 
     buffer: Buffer.from("category,value\na,1\nb,2\n"),
   });
   const understanding = page.getByRole("tabpanel", { name: "데이터 이해" });
-  await expect(understanding.getByText(/부분 데이터 분석 ·/)).toBeVisible({ timeout: 30000 });
+  await expect(understanding.locator(".analysis-evidence-summary").getByText(/부분 데이터 분석 ·/)).toBeVisible({ timeout: 30000 });
   await expect(understanding.getByRole("button", { name: "기본 정보 다시 조회" })).toBeVisible();
   await page.unroute(overviewEndpoint);
   await understanding.getByRole("button", { name: "기본 정보 다시 조회" }).click();

@@ -585,7 +585,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
                 { label: "조회 행 수 상한", value: !profile.sampled ? "해당 없음 (전체 대상)"
                   : profile.sample_limit === null ? "미확인" : profile.sample_limit.toLocaleString() + "행" },
                 { label: "계산 대상 행 수", value: profile.row_count.toLocaleString() + "행" },
-                { label: "고유값 수", value: "분석한 행 내 정확 (NULL 포함)" },
+                { label: "고유값 수", value: "조회 범위 내 정확 (NULL 포함)" },
               ]}
             />
             <h4>컬럼 프로파일</h4><div className="table-scroll"><table><thead><tr>
