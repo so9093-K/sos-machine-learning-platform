@@ -123,3 +123,22 @@ def test_invalid_stored_reader_options_are_not_silently_ignored(tmp_path: Path):
         "format": "tsv",
         "has_header": False,
     }
+
+
+def test_tabular_reader_preserves_late_mixed_type_values(tmp_path: Path):
+    """초기 추론 범위 밖의 문자열도 원본 행의 유효한 값으로 읽혀야 한다."""
+    path = tmp_path / "late-mixed.tsv"
+    content = "".join(f"{i}\\titem-{i}\\n" for i in range(150)) + "unknown\\tlast-row\\n"
+    path.write_text(content, encoding="utf-8")
+    reader = reader_for_suffix(".tsv")
+    options = reader.upload_options({"has_header": False})
+    reader.validate(path, options)
+
+    polars_rows = reader.scan_polars(path, options).collect().to_dicts()
+    with duckdb.connect(":memory:") as conn:
+        reader.create_duckdb_view(conn, path, options, _literal, _quoted)
+        duckdb_rows = conn.execute("SELECT * FROM source").fetchall()
+
+    assert len(polars_rows) == len(duckdb_rows) == 151
+    assert polars_rows[-1]["unnamed_1"] == "unknown"
+    assert duckdb_rows[-1][0] == "unknown"
