@@ -44,6 +44,12 @@
 - 후보를 선택해도 계산하지 않는다. 선택된 `ExplorationSpec`는 탐색 화면에서 편집할 수 있고, 직접 작성한 조건과 동일한 API로 실행한다. 전체 분석은 기존 Job 계약을 통해 별도로 제출한다.
 - 웹 초안은 Dataset ID와 버전에 귀속시키며, Dataset 전환 시 기존 후보·조건·결과를 폐기한다. 기존 API의 `insights` 필드명은 호환성을 위해 유지한다.
 
+## 구분 텍스트 Dataset 해석 계약
+
+기존 CSV·Parquet 등록 의미를 유지하며 탭 구분 TSV/TXT에는 등록 시 확정한 헤더 유무를 Dataset에 귀속시킨다. 헤더가 없는 컬럼은 순서대로 `unnamed_1`부터 식별한다. 원본 바이트의 SHA-256은 무결성·캐시 기준이고 Dataset의 해석은 Dataset ID·원본 판본·입력 해석 설정을 함께 고려해야 한다. 같은 원본 바이트라도 다른 헤더 설정이면 서로 다른 Dataset 참조로 등록한다. Preview·Profile·Worker·Feature 연산은 같은 설정을 사용한다. 탭이 없는 일반 TXT, 일관되지 않은 열 수, 잘못된 UTF-8과 헤더는 임의로 추측·복구하지 않고 거부한다.
+
+TSV/TXT Multipart 업로드 파일 파트의 MIME은 `text/tab-separated-values; header=absent` 또는 `text/tab-separated-values; header=present`로 선언한다. 서버는 선언을 확인하여 Dataset 해석 설정으로 보존한다. CSV·Parquet 기존 API 계약은 변경하지 않는다. 이 지원 범위에서는 따옴표를 일반 문자로 해석하므로 탭·줄바꿈을 인용하는 다른 TSV 방언은 지원하지 않는다.
+
 ## Dataset Understanding 결과 계약
 
 Dataset Understanding은 Dataset 자체가 아니라 특정 원본 판본과 프로파일 알고리즘·샘플링/전체 분석 범위에 대한 **불변 결과**다. Job/Attempt가 실행의 정본이며 성공한 Profile은 별도 참조로 확정된다. 동일 원본에 대한 재계산은 기존 결과를 덮어쓰지 않는다. 행 수·결측·고유값 계산의 범위와 정확도(정확/근사)는 독립적인 속성이다. 컬럼의 역할은 근거가 있는 후보이며 확인되지 않은 업무 의미나 Target으로 확정하지 않는다. 사용자에게 제안하는 분석은 현재 API가 검증·실행할 수 있는 정의여야 하고 변환은 사용자의 선택을 필요로 한다. 탐색 제안을 생성한 입력 범위와 제안을 실행하는 인터랙티브 표본의 범위가 다르면 사용자에게 구별해서 안내한다.
