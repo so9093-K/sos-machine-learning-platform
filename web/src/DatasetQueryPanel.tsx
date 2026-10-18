@@ -7,15 +7,34 @@ import type { components } from "./api.generated";
 type DatasetQuery = components["schemas"]["DatasetQuery"];
 type FilterOp = components["schemas"]["DatasetFilter"]["op"];
 
+export type QueryDraft = {
+  chosen: string[];
+  filterColumn: string;
+  filterValue: string;
+  filterOp: FilterOp;
+  sortColumn: string;
+  descending: boolean;
+  limit: number;
+};
+
+export const emptyQueryDraft = (): QueryDraft => ({
+  chosen: [], filterColumn: "", filterValue: "", filterOp: "eq",
+  sortColumn: "", descending: false, limit: 30,
+});
+
 type Props = {
   datasetId: string;
   columns: string[];
   busy: boolean;
+  draft: QueryDraft;
+  onDraftChange: (draft: QueryDraft) => void;
   onResult: (value: Preview, explicitProjection: boolean) => void;
   onInvalidate: () => void;
 };
 
-export function DatasetQueryPanel({ datasetId, columns, busy, onResult, onInvalidate }: Props) {
+export function DatasetQueryPanel({
+  datasetId, columns, busy, draft, onDraftChange, onResult, onInvalidate,
+}: Props) {
   const requestVersion = useRef(0);
   const mounted = useRef(true);
   useEffect(() => {
@@ -27,16 +46,14 @@ export function DatasetQueryPanel({ datasetId, columns, busy, onResult, onInvali
     ++requestVersion.current;
     onInvalidate();
   }
-  const [chosen, setChosen] = useState<string[]>([]);
   const [search, setSearch] = useState("");
-  const [filterColumn, setFilterColumn] = useState("");
-  const [filterValue, setFilterValue] = useState("");
-  const [filterOp, setFilterOp] = useState<FilterOp>("eq");
-  const [sortColumn, setSortColumn] = useState("");
-  const [descending, setDescending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [limit, setLimit] = useState(30);
+  const { chosen, filterColumn, filterValue, filterOp, sortColumn, descending, limit } = draft;
+  function edit(change: Partial<QueryDraft>) {
+    invalidate();
+    onDraftChange({ ...draft, ...change });
+  }
   const found = columns.filter(column => column.toLowerCase().includes(search.toLowerCase()));
 
   async function apply() {
@@ -69,7 +86,7 @@ export function DatasetQueryPanel({ datasetId, columns, busy, onResult, onInvali
         <label>컬럼 검색 <input aria-label="컬럼 검색" value={search}
           onChange={event => { setSearch(event.target.value); }} placeholder="컬럼명 검색" /></label>
         <label>반환 행 수 <select aria-label="반환 행 수" value={limit}
-          onChange={event => { invalidate(); setLimit(Number(event.target.value)); }}>
+          onChange={event => edit({ limit: Number(event.target.value) })}>
           {[10, 30, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
         </select></label>
       </div>
@@ -78,33 +95,32 @@ export function DatasetQueryPanel({ datasetId, columns, busy, onResult, onInvali
         {found.map(name => <label key={name}>
           <input type="checkbox" checked={chosen.includes(name)}
             onChange={event => {
-              invalidate();
-              setChosen(current => event.target.checked
-                ? [...current, name] : current.filter(c => c !== name));
+              edit({ chosen: event.target.checked
+                ? [...chosen, name] : chosen.filter(c => c !== name) });
             }} />{name}
         </label>)}
       </div>
       <div className="form-row">
         <label>필터 컬럼 <select aria-label="필터 컬럼" value={filterColumn}
-          onChange={event => { invalidate(); setFilterColumn(event.target.value); }}>
+          onChange={event => edit({ filterColumn: event.target.value })}>
           <option value="">필터 없음</option>
           {columns.map(c => <option key={c} value={c}>{c}</option>)}
         </select></label>
         <label>비교 연산 <select aria-label="비교 연산" value={filterOp}
-          onChange={event => { invalidate(); setFilterOp(event.target.value as FilterOp); }}>
+          onChange={event => edit({ filterOp: event.target.value as FilterOp })}>
           {["eq", "ne", "lt", "lte", "gt", "gte", "is_null", "is_not_null"].map(op =>
             <option key={op} value={op}>{op}</option>)}
         </select></label>
         {filterColumn && !["is_null", "is_not_null"].includes(filterOp) &&
           <label>비교 값 <input aria-label="비교 값" value={filterValue}
-            onChange={event => { invalidate(); setFilterValue(event.target.value); }} /></label>}
+            onChange={event => edit({ filterValue: event.target.value })} /></label>}
         <label>정렬 컬럼 <select aria-label="정렬 컬럼" value={sortColumn}
-          onChange={event => { invalidate(); setSortColumn(event.target.value); }}>
-          <option value="">원본 순서</option>
+          onChange={event => edit({ sortColumn: event.target.value })}>
+          <option value="">정렬 지정 없음</option>
           {columns.map(c => <option key={c} value={c}>{c}</option>)}
         </select></label>
         <label>내림차순 <input aria-label="내림차순" type="checkbox" checked={descending}
-          onChange={event => { invalidate(); setDescending(event.target.checked); }} /></label>
+          onChange={event => edit({ descending: event.target.checked })} /></label>
       </div>
       <button className="secondary" disabled={busy || loading} onClick={() => void apply()}>
         {loading ? "조회 중" : "조회 적용"}</button>

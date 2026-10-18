@@ -10,10 +10,11 @@ import type { components } from "./api.generated";
 type Understanding = components["schemas"]["UnderstandingOut"];
 
 export function UnderstandingPanel({
-  datasetId, canCreate, onChooseCandidate, overview, overviewStatus, overviewError, onRetryOverview,
+  datasetId, canCreate, onChooseCandidate, onJobCreated, overview, overviewStatus, overviewError, onRetryOverview,
 }: {
   datasetId: string;
   canCreate: boolean;
+  onJobCreated: (job: Job) => void;
   overview: DatasetOverview | null;
   overviewStatus: "loading" | "ready" | "error";
   overviewError: string;
@@ -53,31 +54,23 @@ export function UnderstandingPanel({
             setError("완료된 분석의 프로파일을 조회하지 못했습니다. 상태를 다시 조회하세요.");
           }
         }
-        // 한 Dataset에서 분석 접수가 여러 번 반복되지 않도록 서버 상태를 먼저 확인한다.
-        if (!data.profile && !data.job_status && canCreate) {
-          const job = await submitJob<Job>(
-            "/api/datasets/" + encodeURIComponent(datasetId) + "/understanding/jobs",
-            { scope: "sample" }
-          );
-          if (!active) return;
-          setState(previous => previous ? { ...previous, job_id: job.id, job_status: job.status } : null);
-          timer = setTimeout(() => { void refresh(); }, 1500);
-        }
       } catch (cause) {
         if (active) setError(formatError(cause));
       }
     }
     void refresh();
     return () => { active = false; if (timer) clearTimeout(timer); };
-  }, [datasetId, canCreate, revision]);
+  }, [datasetId, revision]);
 
   async function start(scope: "sample" | "full") {
     setBusy(true); setJobError(""); setError("");
     try {
-      await submitJob<Job>(
+      const job = await submitJob<Job>(
         "/api/datasets/" + encodeURIComponent(datasetId) + "/understanding/jobs",
         { scope },
       );
+      setState(previous => previous ? { ...previous, job_id: job.id, job_status: job.status } : previous);
+      onJobCreated(job);
       setRevision(n => n + 1);
     } catch (cause) { setJobError(formatError(cause)); }
     finally { setBusy(false); }
@@ -96,17 +89,9 @@ export function UnderstandingPanel({
   const missingCount = columns.filter(col => col.null_count > 0).length;
   const timeCount = columns.filter(col => col.roles.some(r => r.role === "temporal")).length;
   return <section className="understanding-content" aria-label="Dataset Understanding">
-    <div className="panel-head"><div><h3>데이터 프로파일</h3>
-      <p>확인된 통계와 추론된 역할 후보를 구분합니다. 원본은 변경하지 않습니다.</p>
+    <div className="panel-head"><div><h3>원본 데이터 개요</h3>
+      <p>데이터 등록과 프로파일 계산은 별도 작업입니다. 원본 정보부터 확인하세요.</p>
     </div></div>
-    {!state && !error && <p role="status">구조와 분석 상태를 확인하는 중입니다.</p>}
-    {error && <div role="alert">{error} <button onClick={() => setRevision(n => n + 1)}>다시 조회</button></div>}
-    {state && <p className="hint">원본 판본 {state.version.slice(0, 12)} · 분석 상태 {
-      state.job_status ?? (profile ? "완료" : "미실행")
-    }</p>}
-    {state?.job_status === "Failed" && <p role="alert">
-      최근 분석에 실패했습니다. Dataset과 이전 완료 결과는 그대로 사용할 수 있습니다.
-    </p>}
     {overviewStatus === "error" && <div role="alert">
       기본 메타데이터 조회 실패: {overviewError}
       <button className="secondary" onClick={onRetryOverview}>기본 정보 다시 조회</button>
@@ -137,6 +122,20 @@ export function UnderstandingPanel({
         <td>{col.name}</td><td>{col.dtype}</td>
       </tr>)}</tbody></table></div></>}
     </>}
+    <div className="panel-head"><div><h3>데이터 프로파일</h3>
+      <p>통계·역할 후보는 별도 분석 결과이며 원본을 변경하지 않습니다.</p></div></div>
+    {!state && !error && <p role="status">분석 실행 상태를 확인하는 중입니다.</p>}
+    {error && <div role="alert">{error} <button onClick={() => setRevision(n => n + 1)}>다시 조회</button></div>}
+    {state && <p className="hint">원본 판본 {state.version.slice(0, 12)} · 분석 상태 {
+      state.job_status ?? (profile ? "완료" : "미실행")
+    }{state.job_id && <> · Job {state.job_id}</>}</p>}
+    {state?.job_status === "Failed" && <p role="alert">
+      최근 분석에 실패했습니다. Dataset과 이전 완료 결과는 그대로 사용할 수 있습니다.
+    </p>}
+    {!profile && !state?.job_status && canCreate && <p className="hint">
+      기본 분석은 Reservoir 방식으로 최대 1,000행을 선택합니다. 원본 읽기와 Worker 자원을 사용하므로 실행할 때에만 Job을 접수합니다.
+      분석 없이 데이터 조회나 Preparation으로 이동할 수도 있습니다.
+    </p>}
     {profile && <>
       <div className="cards">
         <div className="stat"><span>분석한 행</span><strong>{profile.row_count.toLocaleString()}</strong></div>
@@ -224,7 +223,8 @@ export function UnderstandingPanel({
     {canCreate && <div className="actions">
       <button className="secondary" disabled={busy ||
         state?.job_status === "Queued" || state?.job_status === "Running"}
-        onClick={() => void start("sample")}>기본 분석 다시 실행</button>
+        onClick={() => void start("sample")}>{profile ? "기본 분석 다시 실행" :
+          state?.job_status === "Failed" ? "기본 분석 재시도" : "기본 분석 실행"}</button>
       <button disabled={busy ||
         state?.job_status === "Queued" || state?.job_status === "Running"}
         onClick={() => void start("full")}>전체 데이터 분석 실행</button>

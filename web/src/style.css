@@ -173,6 +173,9 @@ nav{flex-direction:row;overflow:auto;max-height:100px}
 .upload-status strong{overflow-wrap:anywhere}
 .upload-status span{color:var(--sos-text)}
 .upload-status progress{width:100%;height:9px;accent-color:var(--sos-accent)}
+.query-result-context{margin:14px 0 8px;padding:9px 12px;border-left:3px solid var(--sos-border);background:var(--sos-raised);color:var(--sos-muted);font-size:12px;line-height:1.55}
+.empty>button{margin-top:16px}
+.empty .example-gallery{margin-top:24px}
 .discovery-panel{display:grid;gap:12px;padding:16px;margin-bottom:22px;border:1px solid var(--sos-border);border-radius:10px;background:var(--sos-panel)}
 .discovery-panel h4{margin:5px 0}
 .discovery-panel .stat small{display:block;color:var(--sos-muted);font-size:10px}

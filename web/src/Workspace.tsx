@@ -14,7 +14,7 @@ import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
-import { DatasetQueryPanel } from "./DatasetQueryPanel";
+import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQueryPanel";
 import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
@@ -76,6 +76,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [queryPreview, setQueryPreview] = useState<{
     datasetId: string; revision: number; data: Preview; explicitProjection: boolean
   } | null>(null);
+  const [queryDraftState, setQueryDraftState] = useState<{ datasetId: string; draft: QueryDraft } | null>(null);
+  const [pendingQuery, setPendingQuery] = useState<{ datasetId: string; revision: number } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const datasetRequestVersion = useRef(0);
   const feedbackRequests = useRef(0);
@@ -132,6 +134,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [showAllPreviewColumns, setShowAllPreviewColumns] = useState(false);
   const currentQuery = queryPreview?.datasetId === selected &&
     queryPreview.revision === reloadRevision ? queryPreview : null;
+  const queryDraft = queryDraftState?.datasetId === selected ? queryDraftState.draft : emptyQueryDraft();
+  const queryPending = pendingQuery?.datasetId === selected && pendingQuery.revision === reloadRevision;
   const displayedPreview = currentQuery?.data ?? preview;
   const availableColumns = displayedPreview ? Object.keys(displayedPreview.schema) : [];
   // 사용자가 명시적으로 선택한 투영 컬럼은 임의로 감추지 않는다.
@@ -220,7 +224,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   useEffect(() => {
     // Dataset 전환과 네트워크 재시도를 구분해 작성 중인 변환을 보존한다.
     setVisualColumn(""); setTimeColumn(""); setShowAllPreviewColumns(false);
-    setQueryPreview(null); setExplorationDraft(null);
+    setQueryPreview(null); setQueryDraftState(null); setPendingQuery(null); setExplorationDraft(null);
   }, [selected]);
   useEffect(() => {
     if (!preview) return;
@@ -384,7 +388,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       <button className="job-navigation secondary"
         aria-current={["understanding", "preview", "profile"].includes(tab) ? "page" : undefined}
         onClick={() => setTab("understanding")}>데이터 탐색</button>
-      <button className="job-navigation secondary" disabled={!dataset}
+      <button className="job-navigation secondary"
         aria-current={tab === "preparation" ? "page" : undefined}
         onClick={() => setTab("preparation")}>데이터 준비</button>
       <div className="section-title">PLATFORM</div>
@@ -442,14 +446,15 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       </div>}
       <button className="job-navigation secondary" onClick={() => {
         showExamples.current = true;
-        setSelected(""); setTab("preview");
+        setSelected(""); setTab(current => current === "preparation" ? current : "preview");
       }}>예제 데이터 살펴보기</button>
             <div className="section-title dataset-section-title">DATASETS</div>
       <nav className="dataset-nav" aria-label="데이터셋 목록">
         {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
         {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
           onClick={() => { showExamples.current = false; setSelected(d.id);
-            setTab(current => current === "preparation" ? current : "understanding"); }}>
+            setTab(current => ["preparation", "preview", "profile"].includes(current)
+              ? current : "understanding"); }}>
           <span className="dataset-name">{d.name}</span>
           <span className="dataset-kind">{d.kind === "iceberg" ? "◆ Iceberg" : "◫ File"}</span>
         </button>)}
@@ -489,10 +494,15 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             aria-label="파일 전송 진행률" />}
       </div>}
       {!dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <div className="empty">
-        <h2>첫 데이터를 탐색해 보세요</h2>
-        <p>파일을 준비하지 않아도 합성 데이터로 EDA와 피처 실행을 경험할 수 있습니다.</p>
+        <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
+        <p>{tab === "preparation"
+          ? "Data Preparation은 Explorer 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
+          : "CSV·Parquet 파일, Iceberg 테이블 또는 합성 예제로 데이터 탐색을 시작하세요."}</p>
+        {canWrite && <button className="secondary" onClick={() => uploadRef.current?.click()}>
+          CSV / Parquet 파일 선택
+        </button>}
         <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
-          onUse={id => void selectExample(id)} />
+          canUse={canWrite} onUse={id => void selectExample(id)} />
       </div>}
       {dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <>
         <div className="dataset-hero">
@@ -515,6 +525,12 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           id="sos-panel-understanding" aria-labelledby="sos-tab-understanding" tabIndex={0}>
           <UnderstandingPanel key={selected + ":" + reloadRevision} datasetId={selected}
             canCreate={canRun} onChooseCandidate={selectExplorationCandidate}
+            onJobCreated={() => {
+              // Job 등록은 이미 성공했다. 목록 갱신 실패를 제출 실패로 표현하지 않는다.
+              void refreshJobs().catch(() => setNotice(
+                "분석 Job은 접수됐습니다. 전체 Jobs에서 목록을 다시 조회할 수 있습니다."
+              ));
+            }}
             overview={overview} overviewStatus={overviewStatus}
             overviewError={overviewError} onRetryOverview={retryOverview} />
         </section>}
@@ -523,11 +539,19 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           <div className="panel-head"><div><h3>데이터 조회</h3><p>최대 100행 · 전체 데이터가 아닌 일부입니다.</p></div>
             <span className="chip">반환 {displayedPreview?.returned_rows ?? "…"}행 · 전체 일치 건수 미계산</span></div>
           {preview && <DatasetQueryPanel key={selected + ":" + reloadRevision} datasetId={selected}
-            columns={columnNames} busy={busy}
-            onResult={(data, explicitProjection) => setQueryPreview({
-              datasetId: selected, revision: reloadRevision, data, explicitProjection,
-            })}
-            onInvalidate={() => setQueryPreview(null)} />}
+            columns={columnNames} busy={busy} draft={queryDraft}
+            onDraftChange={draft => setQueryDraftState({ datasetId: selected, draft })}
+            onResult={(data, explicitProjection) => {
+              setQueryPreview({ datasetId: selected, revision: reloadRevision, data, explicitProjection });
+              setPendingQuery(null);
+            }}
+            onInvalidate={() => setPendingQuery({ datasetId: selected, revision: reloadRevision })} />}
+          {displayedPreview && <p className="query-result-context" role="status">
+            {queryPending
+              ? "변경 사항 미적용 · 아래 표는 이전에 적용한 조회 결과입니다. 조회 적용을 누르면 새 조건으로 갱신됩니다."
+              : currentQuery ? "적용된 조회 결과 · 현재 Dataset 판본 기준"
+                : "기본 미리보기 · 필터·정렬 조건을 적용하지 않은 결과입니다."}
+          </p>
           {displayedPreview && <>
             {availableColumns.length > 12 && <div className="query-column-summary">
               <span className="hint">전체 {availableColumns.length}개 컬럼 중 {displayedColumns.length}개 표시 · {
