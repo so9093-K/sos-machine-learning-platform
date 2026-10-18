@@ -153,9 +153,21 @@ class TabDelimitedReader(FileReader):
         conn.execute(f"CREATE TEMP VIEW source AS SELECT {projection} FROM {source}")
 
 
+def _build_registry(readers: tuple[FileReader, ...]) -> dict[str, FileReader]:
+    """형식 확장 시 확장자 충돌이나 비정상 설정을 조용히 덮어쓰지 않는다."""
+    registry: dict[str, FileReader] = {}
+    for reader in readers:
+        for suffix in reader.extensions:
+            normalized = suffix.lower()
+            if not suffix.startswith(".") or suffix != normalized or normalized in registry:
+                raise ValueError("Invalid or duplicated file format extension")
+            registry[normalized] = reader
+    return registry
+
+
 # 고정된 내부 레지스트리. 임의의 사용자 파일을 실행 코드로 로드하지 않는다.
 _READERS: tuple[FileReader, ...] = (CsvReader(), ParquetReader(), TabDelimitedReader())
-_BY_SUFFIX = {suffix: reader for reader in _READERS for suffix in reader.extensions}
+_BY_SUFFIX = _build_registry(_READERS)
 SUPPORTED_EXTENSIONS: tuple[str, ...] = tuple(_BY_SUFFIX)
 
 
