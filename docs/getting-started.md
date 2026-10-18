@@ -26,6 +26,28 @@ make down      # 관리 대상만 종료하고 데이터 보존
 
 `python3 scripts/dev.py status --format json`으로 JSON 진단을 받을 수 있다. `python3 scripts/dev.py doctor --deep`은 API 및 의존성 준비 상태도 확인한다. `make check`는 실행 중인 서비스가 Ready인 상태에서 사용한다. 브라우저 쓰기 테스트는 개발 서비스가 아닌 UUID 식별자를 가진 별도 PostgreSQL/S3 Compose 프로젝트·API·Worker·Web에서 실행하며, 검사로 만든 테스트 프로젝트의 볼륨만 종료 시 정리한다. 일반 개발 프로젝트의 데이터·볼륨·Snapshot Tag는 수정하거나 삭제하지 않는다.
 
+## 전체 컨테이너 실행 경로 (Token 인증 필수)
+
+기본 `make up`은 기존의 호스트 API·Worker·Vite와 Compose DB·S3를 유지한다. 별도 `compose.app.yaml`은 **API·Worker·Web까지 컨테이너에서 실행하는 로컬 검증 경로**이다. TLS·OIDC·공개 운영 배포를 제공하지 않는다.
+
+```bash
+# SOS_AUTH_TOKEN_HASHES에는 기존 Token 모드와 동일한 SHA-256 지문→Actor JSON을 설정한다.
+# 원본 Token 또는 설정값을 저장소에 커밋하지 않는다.
+export SOS_AUTH_TOKEN_HASHES='<fingerprint-to-Actor JSON>'
+docker compose -f compose.yaml -f compose.app.yaml config --quiet
+docker compose -f compose.yaml -f compose.app.yaml up --build -d
+docker compose -f compose.yaml -f compose.app.yaml ps
+docker compose -f compose.yaml -f compose.app.yaml logs --tail 80 api worker web
+docker compose -f compose.yaml -f compose.app.yaml down
+```
+
+- 컨테이너 API는 `SOS_AUTH_MODE=token`만 사용하며 브라우저에서 원본 Bearer Token을 입력한다. Docker 브리지·Vite 프록시 접근을 로컬 관리자 신원으로 허용하지 않는다. 호스트 포트는 루프백으로만 공개한다.
+- 내부 네트워크에서는 `postgres:5432`, `storage:8333`, `api:9602`에 연결한다. 호스트 `127.0.0.1` 설정을 내부 서비스 주소로 재사용하지 않는다.
+- 기존 DB·S3 명명된 볼륨은 `compose.yaml`이 소유한다. API·Worker는 별도 `SOS_HOME` 볼륨을 사용한다. `down`은 데이터를 보존하지만 `down --volumes`는 삭제할 수 있으므로 일반 개발 환경에서 사용하지 않는다.
+- 초기화 서비스가 **로컬 관리형** DB 마이그레이션과 S3 버킷 준비를 수행한다. 외부 DB 연결을 위한 Compose 배포는 지원하지 않는다. 호스트 `make up`과 같은 포트를 동시에 사용하지 않는다.
+- 코드 수정 중 빠른 피드백은 현재 호스트 `make up`이 우선이며, 컨테이너의 기본 개발 명령 전환은 성능·디버깅·데이터·보안 회귀 검증 이후 결정한다. Worker의 컨테이너 실행은 비신뢰 코드의 강한 샌드박스나 cgroup 위임을 자동 제공하지 않는다.
+- `scripts/verify_container_runtime.py`는 무작위 소유 프로젝트에서 데이터 등록·Iceberg Job·재시작을 검증하고 **그 테스트 프로젝트의 볼륨만** 정리한다.
+
 ## 구성과 안전
 
 기본 개발 환경에서는 Compose가 PostgreSQL과 S3 호환 저장소를 관리한다. 현재 기본 객체 저장소는 공식 SeaweedFS 이미지를 사용하되, 애플리케이션은 S3 API를 사용하므로 다른 호환 서비스와 관리형 스토리지로 교체할 수 있다. Iceberg SQL Catalog 메타데이터는 PostgreSQL에, 데이터 파일은 객체 저장소에 보관한다.

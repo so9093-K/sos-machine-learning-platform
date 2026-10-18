@@ -38,6 +38,8 @@ Discovery는 요청·Worker 실행별 DuckDB 연결을 사용한다. DuckDB Pyth
 
 현재 저장소의 Python **3.12**와 `uv.lock`은 **플랫폼 개발 환경의 기준**이다. 향후 모든 모델 Runtime의 버전이나 전체 OS·GPU 환경까지 고정한 것과 같지 않다. 프로젝트 버전 `0.0.1`도 개별 Runtime·모델·계약 버전의 대체물이 아니다.
 
+현재 전체 컨테이너 실행은 `compose.app.yaml`에 구현한 로컬 검증 경로이다. 컨테이너 네트워크를 개발 신원으로 간주하지 않고 Token 인증과 루프백 포트 공개를 사용한다. 플랫폼 패키징과 향후 모델별 Training·Serving Runtime 명세는 서로 다른 계약이다.
+
 가상환경, 컨테이너, 원격 Worker, GPU 관리 도구, 스케줄러는 위 요구를 만족시키는 구현 선택이다. 이 정본은 특정 제품, 배치 구조, 이미지 빌드 방법을 미리 강제하지 않는다. 관련 계약은 [Contracts](contracts.md), 실행 동작은 [Workflows](workflows.md)를 따른다.
 
 Linux Worker 자식은 `PR_SET_PDEATHSIG(SIGKILL)`를 설치하고 원래 부모 PID가 살아 있는지 확인한 뒤에만 Dataset 읽기·Iceberg 커밋을 시작한다. 부모가 비정상 종료되어 DB 잠금이 풀릴 때 살아남은 자식이 새로운 Worker와 같은 작업을 동시에 수행하는 위험을 줄인다. 이는 부모 프로세스가 `SIGKILL`로 종료되는 경우의 **Linux 한정 보호**이고 다른 OS에서 같은 보장을 주장하지 않는다. 외부 Catalog 커밋의 불확실성과 분산 실행 Fencing Token 필요성은 그대로 유지한다.

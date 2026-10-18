@@ -18,7 +18,7 @@ x-sos-python-build: &sos-python-build
 
 services:
   init:
-    image: sos-platform-python:local
+    image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
     build: *sos-python-build
     environment: *sos-storage-env
     command: ["sh", "-c", "alembic upgrade head && python -m sos_platform.bootstrap"]
@@ -31,7 +31,7 @@ services:
     restart: "no"
 
   api:
-    image: sos-platform-python:local
+    image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
     build: *sos-python-build
     environment:
       <<: *sos-storage-env
@@ -62,7 +62,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: sos-platform-python:local
+    image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
     build: *sos-python-build
     environment: *sos-storage-env
     command: ["python", "-m", "sos_platform.worker"]
@@ -79,7 +79,7 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
-    image: sos-platform-web-dev:local
+    image: ${SOS_WEB_IMAGE:-sos-platform-web-dev:local}
     environment:
       SOS_WEB_PORT: "9601"
       SOS_API_INTERNAL_URL: http://api:9602

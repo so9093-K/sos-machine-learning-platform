@@ -117,3 +117,16 @@ def test_openapi_export_has_no_authentication_environment_side_effects(
     assert "/api/v2/auth/me" in schema["paths"]
     assert "SOS_AUTH_MODE" not in os.environ
     assert not (tmp_path / ".sos").exists()
+
+
+def test_container_compose_keeps_token_auth_and_host_ports_private():
+    """Docker 네트워크를 개발 관리자 신원으로 간주하지 않는다."""
+    source = (ROOT / "compose.app.yaml").read_text(encoding="utf-8")
+    assert "SOS_AUTH_MODE: token" in source
+    assert "SOS_AUTH_TOKEN_HASHES: ${SOS_AUTH_TOKEN_HASHES:?" in source
+    assert "SOS_AUTH_MODE: development" not in source
+    assert '"127.0.0.1:${SOS_API_PORT:-9602}:9602"' in source
+    assert '"127.0.0.1:${SOS_WEB_PORT:-9601}:9601"' in source
+    assert "service_completed_successfully" in source
+    assert "worker_state:/var/lib/sos" in source
+    assert "api_state:/var/lib/sos" in source
