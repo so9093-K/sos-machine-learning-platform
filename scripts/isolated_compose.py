@@ -55,7 +55,8 @@ def isolated_environment(source: dict[str, str], instance: str, ports: list[int]
         key: value
         for key, value in source.items()
         if not key.startswith("SOS_")
-        and key not in {
+        and key
+        not in {
             "COMPOSE_PROJECT_NAME",
             "COMPOSE_PROFILES",
             "COMPOSE_FILE",
