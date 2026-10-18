@@ -22,6 +22,8 @@ from sos_platform.store import Store
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch):
     """독립 DB·버킷을 생성하고 준비 단계의 예외에도 본인이 만든 리소스를 회수한다."""
+    # 각 테스트 워크스페이스의 로컬 신원을 명시하며, 테스트 내부의 Token 전환은 허용한다.
+    monkeypatch.setenv("SOS_AUTH_MODE", "development")
     settings = Settings.from_env()
     base = make_url(settings.database_url)
     s3_endpoint = urlsplit(settings.s3_endpoint)
