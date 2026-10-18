@@ -248,10 +248,15 @@ def test_required_audit_failure_rolls_back_job_creation(workspace, monkeypatch):
     assert store.jobs() == []
 
 
-def test_development_identity_rejects_forwarded_requests(workspace):
-    """로컬 프록시로 전달된 외부 요청에 개발용 관리자 권한을 주지 않는다."""
+@pytest.mark.parametrize(
+    "header",
+    ("Forwarded", "X-Forwarded-For", "X-Real-IP", "X-Forwarded-Host", "Via"),
+)
+def test_development_identity_rejects_forwarded_requests(workspace, header):
+    """로컬 프록시 전달 흔적이 있으면 개발용 관리자 신원을 거부한다."""
     client, _ = workspace
-    response = client.get("/api/datasets", headers={"X-Forwarded-For": "198.51.100.9"})
+    assert client.get("/api/v2/auth/me").json()["actor_id"] == "local-developer"
+    response = client.get("/api/datasets", headers={header: "external-client"})
     assert response.status_code == 403
 
 

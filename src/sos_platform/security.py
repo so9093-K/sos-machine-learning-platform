@@ -62,9 +62,9 @@ class IdentitySettings:
 
     @classmethod
     def from_env(cls) -> "IdentitySettings":
-        mode = os.getenv("SOS_AUTH_MODE", "development")
+        mode = os.getenv("SOS_AUTH_MODE")
         if mode not in ("development", "token"):
-            raise ValueError("SOS_AUTH_MODE must be development or token")
+            raise ValueError("SOS_AUTH_MODE must be explicitly set to development or token")
         if mode == "development":
             if os.getenv("SOS_AUTH_TOKEN_HASHES"):
                 raise ValueError("Token map is not supported in development mode")

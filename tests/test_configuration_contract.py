@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+import pytest
+
 from sos_platform.config import Settings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,3 +69,27 @@ def test_managed_defaults_match_compose_example_and_application(monkeypatch, tmp
     assert settings.s3_secret_key == defaults["SOS_S3_SECRET_KEY"]
     assert settings.s3_bucket == defaults["SOS_S3_BUCKET"]
     assert settings.s3_region == example["SOS_S3_REGION"]
+
+
+def test_api_requires_explicit_authentication_mode_but_dev_cli_keeps_local_default(
+    monkeypatch, tmp_path
+):
+    """직접 API 기동은 명시적 인증을 요구하고 로컬 개발 CLI 기본값은 유지한다."""
+    from sos_platform.api import create_app
+    from sos_platform.security import IdentitySettings
+
+    cli = _dev_module()
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    monkeypatch.delenv("SOS_AUTH_MODE", raising=False)
+    with pytest.raises(ValueError, match="SOS_AUTH_MODE"):
+        IdentitySettings.from_env()
+    with pytest.raises(ValueError, match="SOS_AUTH_MODE"):
+        create_app(tmp_path)
+
+    assert cli.configuration()["SOS_AUTH_MODE"] == "development"
+
+    monkeypatch.setenv("SOS_AUTH_MODE", "token")
+    assert cli.configuration()["SOS_AUTH_MODE"] == "token"
+    monkeypatch.setenv("SOS_AUTH_MODE", "")
+    with pytest.raises(ValueError, match="SOS_AUTH_MODE"):
+        IdentitySettings.from_env()

@@ -75,6 +75,7 @@ def configuration() -> dict[str, str]:
                 values[key.strip()] = value.strip().strip('"').strip("'")
     values.update(os.environ)
     for key, val in (
+        ("SOS_AUTH_MODE", "development"),  # 로컬 개발 명령만 안전한 개발 모드를 선택한다.
         ("SOS_WEB_PORT", "9601"),
         ("SOS_API_PORT", "9602"),
         ("SOS_DB_PORT", "9603"),
