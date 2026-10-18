@@ -102,6 +102,14 @@ Human은 개발·운영과 모델 탐색·체험을 포함하는 접근 방식�
 
 기능 개발은 **사용자 목표와 성공 기준**에서 출발한다. UX·상호작용·실행 상태를 설계하고, 이를 지원하는 계약·아키텍처·Runtime을 정의한 뒤 실제 기능과 사용자 경험을 함께 검증한다. 이 과정은 단방향 절차가 아니라, 구현과 검증에서 얻은 근거를 사용자 경험과 설계에 다시 반영하는 반복 과정이다.
 
+## 공통 설계 철학
+
+![Research·ML Execution·ML Service 제품 정체성과 공통 설계 철학의 관계](references/12-platform-identity-design-philosophy.png)
+
+![Simple Core, Strong Contracts, Flexible Extensions — 사용성·유지보수성·확장성·안정성의 균형](references/13-design-philosophy-principles.png)
+
+**Simple Core, Strong Contracts, Flexible Extensions — 단순한 핵심 · 견고한 계약 · 유연한 확장.** 이 철학은 세 가지 제품 정체성을 실현할 때 사용성·유지보수성·확장성·안정성의 균형을 판단하는 기준이다. 필수적인 정확성과 안전성은 지키되, 미래의 불확실한 요구만을 위한 추상화나 기술적 복잡성은 미리 도입하지 않는다. 특정 실행 명령이나 배포 기술을 플랫폼 계약으로 고정하지 않는다.
+
 ## 설계 기준
 
 1. **사용자 가치:** 기술이나 라이브러리의 기능 자체보다 연구·실행·연동 경험을 우선한다.
