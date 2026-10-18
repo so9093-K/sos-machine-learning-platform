@@ -142,3 +142,13 @@ def test_tabular_reader_preserves_late_mixed_type_values(tmp_path: Path):
     assert len(polars_rows) == len(duckdb_rows) == 151
     assert polars_rows[-1]["unnamed_1"] == "unknown"
     assert duckdb_rows[-1][0] == "unknown"
+
+
+def test_long_tabular_text_field_without_implicit_csv_limit(tmp_path: Path):
+    """파일 정책 밖의 숨은 CSV 필드 길이 한도 때문에 유효한 TSV를 거부하지 않는다."""
+    path = tmp_path / "long-text.tsv"
+    path.write_text("code\treview\r\n1\t" + "가" * 150_000 + "\r\n", encoding="utf-8")
+    reader = reader_for_suffix(".tsv")
+    options = reader.upload_options({"has_header": True})
+    reader.validate(path, options)
+    assert reader.scan_polars(path, options).collect().height == 1
