@@ -11,6 +11,9 @@ from sos_platform.delimited import parse_options
 from sos_platform.errors import PlatformError
 from sos_platform.file_formats import (
     SUPPORTED_EXTENSIONS,
+    CsvReader,
+    FileReader,
+    _build_registry,
     reader_for_suffix,
     scan_file,
     upload_options_from_mime,
@@ -36,6 +39,21 @@ def test_supported_extensions_share_registry_with_cache():
     assert not _CACHE_FILE.fullmatch("../" + "a" * 64 + ".csv")
     with pytest.raises(ValueError, match="Unsupported"):
         reader_for_suffix(".jsonl")
+
+
+def test_reader_registry_rejects_duplicate_or_noncanonical_extensions():
+    """새 형식을 등록할 때 확장자 충돌을 숨기지 않는다."""
+
+    class DuplicateReader(FileReader):
+        extensions = (".csv",)
+
+    class UppercaseReader(FileReader):
+        extensions = (".NEW",)
+
+    with pytest.raises(ValueError, match="extension"):
+        _build_registry((CsvReader(), DuplicateReader()))
+    with pytest.raises(ValueError, match="extension"):
+        _build_registry((UppercaseReader(),))
 
 
 @pytest.mark.parametrize("suffix", [".txt", ".tsv"])
