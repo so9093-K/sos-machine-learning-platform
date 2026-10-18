@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_isolated_e2e.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "isolated_compose.py"
 spec = importlib.util.spec_from_file_location("sos_isolated_e2e", SCRIPT)
 assert spec is not None and spec.loader is not None
 isolated = importlib.util.module_from_spec(spec)
@@ -33,8 +33,9 @@ def test_isolated_e2e_never_reuses_parent_data_or_auth():
     assert "SOS_DATABASE_URL" not in isolated_env
     assert isolated_env["SOS_DB_NAME"] == "sos_e2e_012345abcdef"
     assert isolated_env["SOS_S3_BUCKET"] == "sos-e2e-012345abcdef"
-    assert isolated_env["SOS_AUTH_MODE"] == "development"
-    assert "SOS_AUTH_TOKEN_HASHES" not in isolated_env
-    assert isolated_env["SOS_S3_ENDPOINT"] == "http://127.0.0.1:19005"
-    assert isolated_env["SOS_DEV_INSTANCE"] == "sos-e2e-012345abcdef"
-    assert isolated_env["SOS_INFRA_MODE"] == "managed"
+    assert "SOS_AUTH_MODE" not in isolated_env
+    assert isolated_env["SOS_AUTH_TOKEN_HASHES"] != "production-credentials"
+    assert "SOS_E2E_ADMIN_TOKEN" in isolated_env
+    assert "administrator" in {r["roles"][0] for r in __import__("json").loads(isolated_env["SOS_AUTH_TOKEN_HASHES"]).values()}
+    assert isolated_env["COMPOSE_PROJECT_NAME"] == "sos-e2e-012345abcdef"
+    assert "SOS_S3_ENDPOINT" not in isolated_env

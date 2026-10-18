@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-source = Path(__file__).resolve().parents[2] / "scripts" / "run_isolated_e2e.py"
+source = Path(__file__).resolve().parents[2] / "scripts" / "isolated_compose.py"
 spec = importlib.util.spec_from_file_location("sos_docker_recovery_isolation", source)
 assert spec is not None and spec.loader is not None
 isolated = importlib.util.module_from_spec(spec)
@@ -47,7 +47,7 @@ import os
 import signal
 import subprocess
 import sys
-from run_isolated_e2e import ROOT, create_owner
+from isolated_compose import ROOT, create_owner
 
 instance = sys.argv[1]
 ports = json.loads(sys.argv[2])
@@ -108,7 +108,7 @@ signal.pause()
         )
 
         recovery = subprocess.run(
-            [sys.executable, "scripts/run_isolated_e2e.py", "--recover-owned", instance],
+            [sys.executable, "scripts/isolated_compose.py", "--recover-owned", instance],
             cwd=ROOT,
             env=env,
             check=False,
@@ -131,7 +131,7 @@ signal.pause()
         if runtime.exists() and isolated.owned_record(runtime, instance) is not None:
             # 실패해도 복구를 한 번 시도하되, 성공하지 않으면 소유 기록을 보존한다.
             subprocess.run(
-                [sys.executable, "scripts/run_isolated_e2e.py", "--recover-owned", instance],
+                [sys.executable, "scripts/isolated_compose.py", "--recover-owned", instance],
                 cwd=ROOT,
                 env=env,
                 check=False,

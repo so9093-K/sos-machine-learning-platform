@@ -16,7 +16,7 @@ web/dist/
 web/test-results/
 web/playwright-report/
 
-.sos-dev/
+.sos-test/
 
 # CI 테스트 리포트
 web/reports/

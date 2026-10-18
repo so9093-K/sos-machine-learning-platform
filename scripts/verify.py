@@ -108,9 +108,9 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
     if name == "alembic":
         return [(uv + ["alembic", "check"], ROOT)]
     if name == "workspace-e2e":
-        return [(uv + ["python", "scripts/run_isolated_e2e.py"], ROOT)]
+        return [(uv + ["python", "scripts/isolated_compose.py", "--spec", "workspace.spec.ts"], ROOT)]
     if name == "token-rbac":
-        return [(uv + ["python", "scripts/verify_token_rbac.py"], ROOT)]
+        return [(uv + ["python", "scripts/isolated_compose.py", "--spec", "auth.spec.ts"], ROOT)]
     if name == "container-runtime":
         return [(["python3", "scripts/verify_container_runtime.py"], ROOT)]
     raise ValueError(f"알 수 없는 Suite: {name}")

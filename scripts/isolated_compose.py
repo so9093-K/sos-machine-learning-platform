@@ -1,6 +1,6 @@
-"""고유 DB·S3·Compose와 테스트 프로세스로 브라우저 검증을 격리한다.
+"""격리 Docker Compose 환경에서 브라우저 검증과 소유 자원 복구를 수행한다.
 
-일반 개발 인스턴스와 외부 저장소는 생성·정리 대상으로 취급하지 않는다.
+Playwright는 Native Runner로 호스트에서 실행하며 SOS 서비스만 컨테이너로 기동한다.
 """
 
 import argparse
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNS = ROOT / ".sos-dev" / "runs"
+RUNS = ROOT / ".sos-test" / "runs"
 INSTANCE_PATTERN = re.compile(r"sos-e2e-[0-9a-f]{12}\Z")
 OWNER_FILE = "validation-owner.json"
 
@@ -50,22 +50,11 @@ def isolated_environment(source: dict[str, str], instance: str, ports: list[int]
     """부모의 외부 스토리지·사용자 권한 설정을 격리 환경에 전달하지 않는다."""
     if not INSTANCE_PATTERN.fullmatch(instance) or not valid_ports(ports):
         raise ValueError("Invalid isolated E2E project or ports")
-    env = dict(source)
-    for key in (
-        "SOS_DATABASE_URL",
-        "SOS_DB_HOST",
-        "SOS_S3_ENDPOINT",
-        "SOS_AUTH_TOKEN_HASHES",
-        "SOS_E2E_VIEWER_TOKEN",
-        "SOS_E2E_RESEARCHER_TOKEN",
-        "SOS_E2E_OPERATOR_TOKEN",
-    ):
-        env.pop(key, None)
+    # 부모의 외부 DB·S3·권한·Compose 프로젝트 설정을 전혀 상속하지 않는다.
+    env = {key: value for key, value in source.items() if not key.startswith("SOS_") and key not in {"COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES"}}
     db_port, s3_port, api_port, web_port = ports
     env.update(
-        SOS_DEV_INSTANCE=instance,
-        SOS_INFRA_MODE="managed",
-        SOS_AUTH_MODE="development",
+        COMPOSE_PROJECT_NAME=instance,
         SOS_DB_NAME=instance.replace("-", "_"),
         SOS_DB_PASSWORD=secrets.token_urlsafe(24),
         SOS_S3_ACCESS_KEY="sos-test",
@@ -75,26 +64,26 @@ def isolated_environment(source: dict[str, str], instance: str, ports: list[int]
         SOS_S3_PORT=str(s3_port),
         SOS_API_PORT=str(api_port),
         SOS_WEB_PORT=str(web_port),
-        SOS_S3_ENDPOINT=f"http://127.0.0.1:{s3_port}",
-        SOS_HOME=str(RUNS / instance / "home"),
+        SOS_PYTHON_IMAGE=f"sos-python-e2e:{instance}",
+        SOS_WEB_IMAGE=f"sos-web-e2e:{instance}",
     )
+    configure_tokens(env)
     return env
 
 
 def configure_tokens(env: dict[str, str]) -> None:
     """테스트 전용 임시 신원을 생성한다. 원문은 출력·영속화하지 않는다."""
-    roles = ("viewer", "researcher", "operator")
+    roles = ("viewer", "researcher", "operator", "administrator")
     identities = {}
     for role in roles:
         token = secrets.token_hex(32)
-        env[f"SOS_E2E_{role.upper()}_TOKEN"] = token
+        env[f"SOS_E2E_{'ADMIN' if role == 'administrator' else role.upper()}_TOKEN"] = token
         identities[hashlib.sha256(token.encode()).hexdigest()] = {
             "actor_id": f"ci-{role}",
             "kind": "human",
             "roles": [role],
         }
-    env["SOS_AUTH_MODE"] = "token"
-    env["SOS_AUTH_TOKEN_HASHES"] = json.dumps(identities)
+     env["SOS_AUTH_TOKEN_HASHES"] = json.dumps(identities)
 
 
 def create_owner(instance: str, ports: list[int]) -> Path:
@@ -140,23 +129,13 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
     서비스 종료가 실패하면 살아 있는 프로세스의 저장소를 삭제하지 않으며
     소유 기록을 남겨 명시적인 복구를 허용한다.
     """
-    if owned_record(runtime, instance) is None or env.get("SOS_DEV_INSTANCE") != instance:
+    if owned_record(runtime, instance) is None or env.get("COMPOSE_PROJECT_NAME") != instance:
         print("소유 증거가 없어 E2E 리소스를 정리하지 않습니다.", file=sys.stderr)
         return 1
     try:
-        down = subprocess.run(
-            ["python3", "scripts/dev.py", "down"],
-            cwd=ROOT,
-            env=env,
-            check=False,
-            timeout=240,
-        )
-        if down.returncode:
-            print(f"E2E 서비스 종료 실패: {instance}", file=sys.stderr)
-            return 1
-        # 실행 중인 소유 프로세스를 종료한 경우에만 이 프로젝트의 볼륨을 제거한다.
+        # 소유 기록과 정확히 일치하는 프로젝트의 볼륨만 제거한다.
         containers = subprocess.run(
-            ["docker", "compose", "-f", "compose.yaml", "-p", instance, "down", "--volumes"],
+            ["docker", "compose", "--profile", "app", "-f", "compose.yaml", "-p", instance, "down", "--volumes", "--remove-orphans"],
             cwd=ROOT,
             env=env,
             check=False,
@@ -172,17 +151,19 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
     return 0
 
 
-def execute(spec: str, *, token_mode: bool = False) -> int:
+def execute(spec: str) -> int:
     """한 번의 테스트 실행과 정리를 수행한다. 테스트 재시도는 하지 않는다."""
     instance = "sos-e2e-" + secrets.token_hex(6)
     ports = free_ports()
     env = isolated_environment(os.environ, instance, ports)
-    if token_mode:
-        configure_tokens(env)
     runtime = create_owner(instance, ports)
     result = 1
     try:
-        subprocess.run(["python3", "scripts/dev.py", "up"], cwd=ROOT, env=env, check=True)
+        subprocess.run(
+            ["docker", "compose", "--profile", "app", "-f", "compose.yaml", "-p", instance,
+             "up", "--build", "-d", "--wait"],
+            cwd=ROOT, env=env, check=True, timeout=900,
+        )
         subprocess.run(
             ["npx", "playwright", "test", spec],
             cwd=ROOT / "web",
@@ -206,7 +187,6 @@ def _interrupted(_signum: int, _frame: object) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--spec", choices=("workspace.spec.ts", "auth.spec.ts"))
-    parser.add_argument("--token-mode", action="store_true")
     parser.add_argument("--recover-owned")
     args = parser.parse_args(argv)
     if args.recover_owned:
@@ -220,9 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         return clean_owned(instance, runtime, env)
     signal.signal(signal.SIGTERM, _interrupted)
     spec = args.spec or "workspace.spec.ts"
-    if spec == "auth.spec.ts" and not args.token_mode:
-        parser.error("auth.spec.ts에는 --token-mode가 필요합니다.")
-    return execute(spec, token_mode=args.token_mode)
+    return execute(spec)
 
 
 if __name__ == "__main__":

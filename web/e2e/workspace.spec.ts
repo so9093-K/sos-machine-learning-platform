@@ -1,4 +1,15 @@
-import { expect, test, type Page } from "@playwright/test";
+import { test as base } from "@playwright/test";
+
+// 브라우저의 모든 요청에 테스트 전용 Token을 지정한다. 제품 코드에 인증 우회를 추가하지 않는다.
+const test = base.extend({
+  context: async ({ context }, use) => {
+    const token = process.env.SOS_E2E_ADMIN_TOKEN;
+    if (!token) throw new Error("격리 Workspace E2E 관리자 Token이 필요합니다.");
+    await context.setExtraHTTPHeaders({ Authorization: `Bearer ${token}` });
+    await use(context);
+  },
+});
+import { expect, type Page } from "@playwright/test";
 
 async function submittedJob(page: Page, route: string, click: () => Promise<void>): Promise<string> {
   const [response] = await Promise.all([
