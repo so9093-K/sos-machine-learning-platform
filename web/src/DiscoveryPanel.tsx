@@ -129,8 +129,9 @@ export function DiscoveryPanel({
     {status === "error" && <button className="secondary"
       onClick={() => setReload(previous => previous + 1)}>메타데이터 다시 시도</button>}
     {overview && <p className="hint">분석 대상 · {overview.column_count.toLocaleString()}컬럼
-      {" · "}{overview.row_count?.toLocaleString() ?? "미계산"}행
-      {" · "}{analysisLabel(overview.row_count_basis)}</p>}
+      {" · "}{overview.row_count === null
+        ? "원본 행 수 미계산"
+        : overview.row_count.toLocaleString() + "행 · " + analysisLabel(overview.row_count_basis)}</p>}
     {columns && <>
       <h4>탐색 조건</h4>
       {draft?.source && <div className="exploration-origin" role="status">
@@ -167,7 +168,7 @@ export function DiscoveryPanel({
         </select></label>
         <label>그룹 <select aria-label="집계 그룹" value={groupBy} disabled={running}
           onChange={e => updateRequest({ group_by: e.target.value || null })}>
-          <option value="">전체</option>
+          <option value="">그룹 없음</option>
           {columns.columns.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select></label>
         <button disabled={running || !selectedMeasure || invalidDraft} onClick={() => void run()}>
