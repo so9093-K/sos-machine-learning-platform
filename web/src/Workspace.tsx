@@ -582,9 +582,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               details={[
                 { label: "데이터 선택 방식", value: dataSelectionLabel(profile.sampled
                   ? "limited_rows" : "full_scan") },
-                { label: "조회 행 수 상한", value: profile.sample_limit === null
-                  ? "미확인" : profile.sample_limit.toLocaleString() + "행" },
-                { label: "실제 분석한 행", value: profile.row_count.toLocaleString() + "행" },
+                { label: "조회 행 수 상한", value: !profile.sampled ? "해당 없음 (전체 대상)"
+                  : profile.sample_limit === null ? "미확인" : profile.sample_limit.toLocaleString() + "행" },
+                { label: "계산 대상 행 수", value: profile.row_count.toLocaleString() + "행" },
                 { label: "고유값 수", value: "분석한 행 내 정확 (NULL 포함)" },
               ]}
             />

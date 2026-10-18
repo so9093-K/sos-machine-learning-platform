@@ -146,12 +146,14 @@ export function UnderstandingPanel({
       </div>
       <AnalysisEvidence
         summary={analysisScopeLabel(profile.scope) + " · " + profile.row_count.toLocaleString() + "행 분석"}
-        note={profile.scope === "sample" && profile.sampling_method === "reservoir"
-          ? "무작위로 선택된 데이터의 결과입니다. 전체 분포를 대표한다고 보장하지 않습니다."
+        note={profile.scope === "sample"
+          ? profile.sampling_method === "reservoir"
+            ? "무작위로 선택된 데이터의 결과입니다. 전체 분포를 대표한다고 보장하지 않습니다."
+            : "부분 데이터 분석 결과입니다. 전체 데이터의 특성으로 단정하지 마세요."
           : "전체 데이터를 대상으로 분석했습니다. 고유값 수 등 지표별 계산 정확도는 별도로 확인하세요."}
         details={[
           { label: "데이터 선택 방식", value: dataSelectionLabel(profile.sampling_method) },
-          { label: "분석한 행", value: profile.row_count.toLocaleString() + "행" },
+          { label: "계산 대상 행 수", value: profile.row_count.toLocaleString() + "행" },
           ...(profile.sample_limit === null ? [] : [{
             label: "표본 크기 상한", value: profile.sample_limit.toLocaleString() + "행",
           }]),
