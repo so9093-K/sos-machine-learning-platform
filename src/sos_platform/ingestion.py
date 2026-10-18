@@ -10,9 +10,9 @@ from tempfile import NamedTemporaryFile
 from typing import BinaryIO
 
 from .errors import PlatformError, RuntimeConfigurationError
+from .file_formats import SUPPORTED_EXTENSIONS
 
 CHUNK_SIZE = 1024 * 1024
-SUPPORTED_EXTENSIONS = (".csv", ".parquet", ".tsv", ".txt")
 MULTIPART_OVERHEAD_BYTES = 64 * 1024
 
 
