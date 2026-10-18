@@ -239,9 +239,7 @@ def preflight(config: dict, *, need_docker: bool = True):
     if len(set(numbers)) != len(numbers) or any(p < 1 or p > 65535 for p in numbers):
         raise StartupError("SOS-CONFIG-002", "포트 번호가 중복되거나 유효하지 않습니다.")
     state = processes()
-    if owned(state.get("api")) and state["api"].get("auth_fingerprint") != auth_fingerprint(
-        config
-    ):
+    if owned(state.get("api")) and state["api"].get("auth_fingerprint") != auth_fingerprint(config):
         raise StartupError(
             "SOS-CONFIG-005",
             "실행 중인 API의 인증 설정이 요청한 설정과 다릅니다.",

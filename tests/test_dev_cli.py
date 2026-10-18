@@ -113,12 +113,32 @@ def test_existing_api_rejects_auth_changes_without_restarting(
     assert "make restart" in exc.value.detail
 
 
+def test_api_start_saves_only_authentication_fingerprint(monkeypatch, tmp_path, config):
+    """API PID 기록은 인증 모드 전환을 감지하되 토큰 지문 목록 원문을 저장하지 않는다."""
+    config["SOS_AUTH_MODE"] = "token"
+    config["SOS_AUTH_TOKEN_HASHES"] = '{"fingerprint":"sensitive-token-map"}'
+    saved = []
+
+    class FakeProcess:
+        pid = 12345
+
+    monkeypatch.setattr(dev, "LOGDIR", tmp_path / "logs")
+    monkeypatch.setattr(dev, "processes", lambda: {})
+    monkeypatch.setattr(dev, "process_birth", lambda _pid: "fixed-birth")
+    monkeypatch.setattr(dev, "persist", lambda state: saved.append(dict(state)))
+    monkeypatch.setattr(dev.subprocess, "Popen", lambda _command, **_kwargs: FakeProcess())
+
+    dev.start_process("api", ["uvicorn", "sos_platform.api:create_app"], config)
+    record = saved[0]["api"]
+    assert record["auth_fingerprint"] == dev.auth_fingerprint(config)
+    assert "SOS_AUTH_TOKEN_HASHES" not in record
+    assert config["SOS_AUTH_TOKEN_HASHES"] not in str(record)
+
+
 def test_api_status_is_not_ready_if_requested_auth_changed(monkeypatch, config):
     """유효한 준비 응답이 있어도 실행 중 인증 설정이 다르면 Ready로 보고하지 않는다."""
     config["SOS_AUTH_MODE"] = "token"
-    state = {
-        name: {"pid": 7, "birth": "same"} for name in dev.PROCESS_NAMES
-    }
+    state = {name: {"pid": 7, "birth": "same"} for name in dev.PROCESS_NAMES}
     state["api"]["auth_fingerprint"] = dev.auth_fingerprint({"SOS_AUTH_MODE": "development"})
     monkeypatch.setattr(dev, "processes", lambda: state)
     monkeypatch.setattr(dev, "owned", lambda record: bool(record))
