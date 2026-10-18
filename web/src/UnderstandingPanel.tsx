@@ -226,12 +226,12 @@ export function UnderstandingPanel({
       </article>)}</div>
     </>}
     {canCreate && <div className="actions">
-      <button className="secondary" disabled={busy ||
-        state?.job_status === "Queued" || state?.job_status === "Running"}
+      <button className="secondary" disabled={busy || !state || !!error ||
+        state.job_status === "Queued" || state.job_status === "Running"}
         onClick={() => void start("sample")}>{profile ? "기본 분석 다시 실행" :
           state?.job_status === "Failed" ? "기본 분석 재시도" : "기본 분석 실행"}</button>
-      <button disabled={busy ||
-        state?.job_status === "Queued" || state?.job_status === "Running"}
+      <button disabled={busy || !state || !!error ||
+        state.job_status === "Queued" || state.job_status === "Running"}
         onClick={() => void start("full")}>전체 데이터 분석 실행</button>
     </div>}
     {jobError && <p role="alert">{jobError}</p>}

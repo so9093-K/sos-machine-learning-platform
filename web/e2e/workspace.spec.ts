@@ -730,6 +730,9 @@ test("general Dataset query projects, filters and sorts columns", async ({ page 
   await page.getByRole("button", { name: "조회 적용" }).click();
   await expect(page.locator("#sos-panel-preview tbody tr")).toHaveCount(1);
   await expect(page.locator("#sos-panel-preview tbody tr")).toContainText("2");
+  await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
+  await expect(page.getByText(/변경 사항 미적용.*기본 미리보기/)).toBeVisible();
+  await expect(page.getByLabel("비교 값")).toHaveValue("b");
 });
 
 test("Feature Builder can select columns and multiple grouping keys", async ({ page }) => {

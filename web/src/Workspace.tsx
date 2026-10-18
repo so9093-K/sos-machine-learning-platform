@@ -135,7 +135,12 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const currentQuery = queryPreview?.datasetId === selected &&
     queryPreview.revision === reloadRevision ? queryPreview : null;
   const queryDraft = queryDraftState?.datasetId === selected ? queryDraftState.draft : emptyQueryDraft();
-  const queryPending = pendingQuery?.datasetId === selected && pendingQuery.revision === reloadRevision;
+  const editedQueryDraft = queryDraft.chosen.length > 0 || !!queryDraft.filterColumn ||
+    !!queryDraft.filterValue || !!queryDraft.sortColumn || queryDraft.descending || queryDraft.limit !== 30;
+  // Dataset 재조회는 이전 적용 결과를 폐기하지만 편집 중인 조건은 보존한다.
+  // 따라서 새 기본 미리보기가 나타나도 해당 조건이 적용되었다고 표시하지 않는다.
+  const queryPending = (pendingQuery?.datasetId === selected &&
+    pendingQuery.revision === reloadRevision) || (!currentQuery && editedQueryDraft);
   const displayedPreview = currentQuery?.data ?? preview;
   const availableColumns = displayedPreview ? Object.keys(displayedPreview.schema) : [];
   // 사용자가 명시적으로 선택한 투영 컬럼은 임의로 감추지 않는다.
@@ -551,7 +556,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             onInvalidate={() => setPendingQuery({ datasetId: selected, revision: reloadRevision })} />}
           {displayedPreview && <p className="query-result-context" role="status">
             {queryPending
-              ? "변경 사항 미적용 · 아래 표는 이전에 적용한 조회 결과입니다. 조회 적용을 누르면 새 조건으로 갱신됩니다."
+              ? currentQuery
+                ? "변경 사항 미적용 · 아래 표는 이전에 적용한 조회 결과입니다. 조회 적용을 누르면 새 조건으로 갱신됩니다."
+                : "변경 사항 미적용 · 아래 표는 기본 미리보기입니다. 편집 중인 조건은 조회 적용 후 반영됩니다."
               : currentQuery ? "적용된 조회 결과 · 현재 Dataset 판본 기준"
                 : "기본 미리보기 · 필터·정렬 조건을 적용하지 않은 결과입니다."}
           </p>}
