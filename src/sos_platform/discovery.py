@@ -17,12 +17,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import duckdb
-import pyarrow.parquet as pq
 from sqlalchemy import text
 
 from .cache import cached_dataset_file
 from .datasets import iceberg_catalog
-from .delimited import TABULAR_SUFFIXES, parse_options
+from .file_formats import create_duckdb_file_view, dataset_reader
 from .errors import InvalidRequestError, PlatformError, RuntimeConfigurationError
 from .resource_admission import reserve_execution_memory
 from .store import Store
@@ -267,41 +266,7 @@ def source_connection(
                     connection.execute(f"SET allowed_paths = [{_literal(str(path))}]")
                     connection.execute(f"SET allowed_directories = [{_literal(str(scratch))}]")
                     connection.execute("SET enable_external_access = false")
-                    if path.suffix.lower() in TABULAR_SUFFIXES:
-                        options = parse_options(dataset)
-                        if (
-                            not isinstance(options, dict)
-                            or options.get("format") != "tsv"
-                            or not isinstance(options.get("has_header"), bool)
-                        ):
-                            raise ValueError("Missing tabular Dataset parse settings")
-                        source_sql = (
-                            f"read_csv({_literal(str(path))}, delim={_literal(chr(9))}, quote='', "
-                            f"header={str(options['has_header']).lower()})"
-                        )
-                        if options["has_header"]:
-                            connection.execute(
-                                f"CREATE TEMP VIEW source AS SELECT * FROM {source_sql}"
-                            )
-                        else:
-                            raw_names = [
-                                row[0]
-                                for row in connection.execute(
-                                    f"DESCRIBE SELECT * FROM {source_sql}"
-                                ).fetchall()
-                            ]
-                            projection = ", ".join(
-                                f"{quoted(name)} AS {quoted('unnamed_' + str(i))}"
-                                for i, name in enumerate(raw_names, 1)
-                            )
-                            connection.execute(
-                                f"CREATE TEMP VIEW source AS SELECT {projection} FROM {source_sql}"
-                            )
-                    else:
-                        function = "read_csv" if path.suffix.lower() == ".csv" else "read_parquet"
-                        connection.execute(
-                            f"CREATE TEMP VIEW source AS SELECT * FROM {function}({_literal(str(path))})"
-                        )
+                    create_duckdb_file_view(connection, path, dataset, _literal, quoted)
                 elif dataset["kind"] == "iceberg":
                     table = iceberg_catalog(store).load_table(dataset["location"])
                     snapshot = int(dataset["version"])
@@ -353,8 +318,9 @@ def overview(store: Store, dataset: dict) -> dict:
     if dataset["kind"] == "file":
         with cached_dataset_file(store, dataset) as path:
             size = path.stat().st_size
-            if path.suffix.lower() == ".parquet":
-                row_count = pq.read_metadata(path).num_rows
+            reader, _ = dataset_reader(dataset, path)
+            row_count = reader.metadata_row_count(path)
+            if row_count is not None:
                 basis = "parquet_metadata"
     with source_connection(store, dataset) as conn:
         found = _columns(conn)
