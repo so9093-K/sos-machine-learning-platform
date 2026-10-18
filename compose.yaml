@@ -34,7 +34,7 @@ services:
       postgres:
         condition: service_healthy
       storage:
-        condition: service_started
+        condition: service_healthy
     security_opt: ["no-new-privileges:true"]
     restart: "no"
 
@@ -137,6 +137,13 @@ services:
       - "127.0.0.1:${SOS_S3_PORT:-9605}:8333"
     volumes:
       - object_data:/data
+    # 초기화 명령은 S3 리스너가 실제로 연결을 받을 때까지 기다린다.
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8333"]
+      interval: 2s
+      timeout: 3s
+      start_period: 10s
+      retries: 30
 
 
 volumes:

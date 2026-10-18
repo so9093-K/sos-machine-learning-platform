@@ -8,7 +8,7 @@
 
 브라우저 테스트는 실행마다 별도 Compose 프로젝트·DB·S3·임시 Token을 생성하며 부모의 Compose .env 및 설정 파일을 사용하지 않는다. 소유 기록과 강제 종료 후 복구는 `scripts/isolated_compose.py`에서 담당하고, 소유 증거가 있는 프로젝트 외 볼륨은 정리하지 않는다. 테스트 고유 태그가 붙은 Python·Web 이미지도 컨테이너 종료 후 정리하되 공유 이미지는 보존한다. 기존 Native Test Inventory·Protected Contracts·JUnit·Manifest 증거는 유지한다.
 
-`make restart`는 변경된 인증 환경변수와 이미지를 반영하도록 컨테이너를 재생성한다. 새 Token 유효성과 이전 Token 거부를 실제 통합 검증에서 확인하며 로그는 Compose의 유한 크기 회전 정책을 따른다. `make check-fast`는 인프라를 요구하지 않는다.
+`make restart`는 변경된 인증 환경변수와 이미지를 반영하도록 컨테이너를 재생성한다. 새 Token 유효성과 이전 Token 거부를 실제 통합 검증에서 확인하며 SeaweedFS의 S3 리스너가 실제 연결을 받을 때까지 초기화를 지연한다. 로그는 Compose의 유한 크기 회전 정책을 따른다. `make check-fast`는 인프라를 요구하지 않는다.
 
 ## 근거와 영향
 

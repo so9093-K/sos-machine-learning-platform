@@ -107,6 +107,8 @@ def test_container_compose_keeps_token_auth_and_host_ports_private():
     assert '"127.0.0.1:${SOS_API_PORT:-9602}:9602"' in source
     assert '"127.0.0.1:${SOS_WEB_PORT:-9601}:9601"' in source
     assert "service_completed_successfully" in source
+    assert "nc -z 127.0.0.1 8333" in source
+    assert source.count("condition: service_healthy") >= 2
     assert "worker_state:/var/lib/sos" in source
     assert "api_state:/var/lib/sos" in source
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
