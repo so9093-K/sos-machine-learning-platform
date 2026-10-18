@@ -1227,6 +1227,8 @@ test("Data Preparation reports Preview failures and can retry", async ({ page })
     name: "preparation-retry.csv", mimeType: "text/csv",
     buffer: Buffer.from("metric\n1\n2\n"),
   });
+  // 비동기 파일 등록으로 이전 Dataset을 대상으로 실패·재시도를 검증하지 않는다.
+  await expect(page.getByRole("heading", { name: "preparation-retry.csv" })).toBeVisible();
   await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await expect(page.getByRole("alert").getByText(/preview temporarily unavailable/)).toBeVisible();
   await expect(page.getByLabel("변환 연산", { exact: true })).toHaveCount(0);
