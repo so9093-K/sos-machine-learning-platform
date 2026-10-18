@@ -23,6 +23,7 @@ datasets = Table(
     Column("kind", String(32), nullable=False),
     Column("location", Text, nullable=False),
     Column("version", Text, nullable=False),
+    Column("parse_options", Text),
     Column("created_at", Text, nullable=False),
     Column("owner_actor", Text),
     Index("ix_datasets_created_at_id", "created_at", "id"),

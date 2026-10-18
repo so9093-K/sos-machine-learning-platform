@@ -15,6 +15,55 @@ function jobById(page: Page, id: string) {
   return page.locator(".job").filter({ has: page.locator(".job-title small", { hasText: id }) });
 }
 
+
+test("헤더 없는 한국어 TXT는 등록 전 확인하고 첫 행을 보존한다", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "reviews.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from('5\t배공빠르고 굿\n2\t표현에 "따옴표"가 있어요\n'),
+  });
+  await expect(page.getByRole("heading", { name: "파일 구조 확인 · 등록 전" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "unnamed_1" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "unnamed_2" })).toBeVisible();
+  await page.getByRole("button", { name: "이 설정으로 Dataset 등록" }).click();
+  await expect(page.getByRole("heading", { name: "reviews.txt" })).toBeVisible();
+  await page.getByRole("tab", { name: "데이터 조회" }).click();
+  const table = page.locator("#sos-panel-preview table").first();
+  await expect(table.getByRole("columnheader", { name: "unnamed_1" })).toBeVisible();
+  await expect(table.getByText("배공빠르고 굿")).toBeVisible();
+});
+
+test("TSV 업로드 실패 후 파일을 재선택하지 않고 설정을 수정해 재시도한다", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "retry-import.tsv",
+    mimeType: "text/tab-separated-values",
+    buffer: Buffer.from("score\treview\n5\tgood\n2\tbad\n"),
+  });
+  const heading = page.getByRole("heading", { name: "파일 구조 확인 · 등록 전" });
+  await expect(heading).toBeVisible();
+  const header = page.getByRole("combobox", { name: "첫 행의 의미" });
+  await header.selectOption("header");
+  let rejected = false;
+  await page.route("**/api/datasets/files", async route => {
+    if (rejected) return route.continue();
+    rejected = true;
+    await route.fulfill({
+      status: 422, contentType: "application/json",
+      body: JSON.stringify({ code: "SOS-UPLOAD-INVALID", message: "invalid input" }),
+    });
+  });
+  await page.getByRole("button", { name: "이 설정으로 Dataset 등록" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(heading).toBeVisible();
+  await expect(header).toHaveValue("header");
+  await page.unroute("**/api/datasets/files");
+  await page.getByRole("button", { name: "이 설정으로 Dataset 등록" }).click();
+  await expect(page.getByRole("heading", { name: "retry-import.tsv" })).toBeVisible();
+  await expect(heading).toHaveCount(0);
+});
+
 test("CSV upload → EDA → feature preview → worker → reusable dataset", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
@@ -194,7 +243,7 @@ test("feature preview is invalidated when group or ordering changes", async ({ p
 
 test("file upload is operable through keyboard", async ({ page }) => {
   await page.goto("/");
-  const upload = page.getByRole("button", { name: "CSV 또는 Parquet 파일 업로드" });
+  const upload = page.getByRole("button", { name: "CSV·Parquet·TSV·TXT 파일 업로드" });
   await upload.focus();
   const chooser = page.waitForEvent("filechooser");
   await upload.press("Enter");
@@ -918,7 +967,7 @@ test("unknown CSV opens Understanding and transfers a candidate to editable Expl
   await expect(panel.getByRole("cell", { name: "score" })).toBeVisible();
   await expect(panel.getByRole("cell", { name: "department" })).toHaveCount(0);
   await panel.getByRole("searchbox", { name: "프로파일 컬럼 검색" }).fill("");
-  await expect(panel.getByRole("heading", { name: "탐색 후보" })).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "실행 가능한 분석 예시" })).toBeVisible();
   let explorationRequests = 0;
   page.on("request", req => {
     if (/\/api\/datasets\/[^/]+\/explorations$/.test(req.url()) &&
@@ -1078,7 +1127,7 @@ test("Dataset switch clears a previously chosen exploration candidate", async ({
   await expect(page.getByRole("heading", { name: "candidate-a.csv" })).toBeVisible();
   const overview = page.getByRole("tabpanel", { name: "데이터 이해" });
   await overview.getByRole("button", { name: "기본 분석 실행" }).click();
-  await expect(overview.getByRole("heading", { name: "탐색 후보" })).toBeVisible({ timeout: 30000 });
+  await expect(overview.getByRole("heading", { name: "실행 가능한 분석 예시" })).toBeVisible({ timeout: 30000 });
   await overview.getByRole("button", { name: "탐색 조건 보기" }).first().click();
   await expect(page.getByRole("tabpanel", { name: "탐색" })
     .getByText(/탐색 후보에서 가져온 조건/)).toBeVisible();
@@ -1208,6 +1257,8 @@ test("Data Preparation reports Preview failures and can retry", async ({ page })
     name: "preparation-retry.csv", mimeType: "text/csv",
     buffer: Buffer.from("metric\n1\n2\n"),
   });
+  // 비동기 파일 등록으로 이전 Dataset을 대상으로 실패·재시도를 검증하지 않는다.
+  await expect(page.getByRole("heading", { name: "preparation-retry.csv" })).toBeVisible();
   await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
   await expect(page.getByRole("alert").getByText(/preview temporarily unavailable/)).toBeVisible();
   await expect(page.getByLabel("변환 연산", { exact: true })).toHaveCount(0);

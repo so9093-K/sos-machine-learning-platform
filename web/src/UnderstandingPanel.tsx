@@ -209,9 +209,9 @@ export function UnderstandingPanel({
         ≈ 표시는 고유값 수가 근사 계산되었음을 뜻합니다. 다른 컬럼 통계까지 근사라는 의미는 아닙니다.
       </p>}
       {filteredColumns.length === 0 && <p className="muted" role="status">선택한 조건에 해당하는 컬럼이 없습니다.</p>}
-      <h4>탐색 후보</h4>
+      <h4>실행 가능한 분석 예시</h4>
       <p className="hint">데이터 특성과 지원 연산을 기준으로 구성된 항목입니다. 분석 적합성이나 업무적 의미를 확정하지 않습니다.</p>
-      {profile.insights.length === 0 && <p className="muted">현재 프로파일로 구성할 수 있는 탐색 후보가 없습니다. 탐색 탭에서 분석 조건을 직접 선택할 수 있습니다.</p>}
+      {profile.insights.length === 0 && <p className="muted">현재 확인된 컬럼으로 구성할 기본 분석 예시가 없습니다. 탐색 탭에서 직접 조건을 정할 수 있습니다.</p>}
       <div className="example-grid">{profile.insights.map((item, i) => <article
         className="example-card" key={item.kind + i}>
         <h4>{item.title}</h4><p>{item.reason}</p>

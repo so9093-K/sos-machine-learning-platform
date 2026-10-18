@@ -19,6 +19,7 @@ import pyarrow.parquet as pq
 from .cache import cached_dataset_file
 from .config import Settings
 from .errors import InvalidRequestError, PlatformError
+from .file_formats import reader_for_suffix, scan_file
 from .ingestion import UploadPolicy, staged_upload
 from .object_store import ObjectStore
 from .store import Store
@@ -36,16 +37,16 @@ def save_upload_file(
     *,
     owner_actor: str | None = None,
     max_bytes: int | None = None,
+    read_options: dict | None = None,
 ) -> dict:
-    """파일 입력을 검증하고 SHA-256 불변 원본과 Dataset 참조를 게시한다."""
+    """원본 바이트의 SHA-256과 해석 설정을 별개로 보존해 Dataset을 등록한다."""
     limit = max_bytes if max_bytes is not None else UploadPolicy.from_env().max_bytes
     with staged_upload(source, name, store.home / "cache", max_bytes=limit) as staged:
+        reader = reader_for_suffix(staged.suffix)
+        options = reader.upload_options(read_options)
         try:
-            lf = (
-                pl.scan_csv(staged.path, try_parse_dates=True)
-                if staged.suffix == ".csv"
-                else pl.scan_parquet(staged.path)
-            )
+            reader.validate(staged.path, options)
+            lf = reader.scan_polars(staged.path, options)
             if not lf.collect_schema().names():
                 raise PlatformError("SOS-UPLOAD-INVALID")
         except (pl.exceptions.PolarsError, OSError, UnicodeError, ValueError) as exc:
@@ -64,6 +65,7 @@ def save_upload_file(
                 kind="file",
                 location=location,
                 version=staged.sha256,
+                parse_options=options,
                 write_id=write_id,
                 owner_actor=owner_actor,
             )
@@ -361,10 +363,6 @@ def pinned_scan_dataset(store: Store, dataset: dict) -> Iterator[pl.LazyFrame]:
     """LazyFrame가 실제로 계산되는 동안 원본 캐시를 축출로부터 보호한다."""
     if dataset["kind"] == "file":
         with cached_dataset_file(store, dataset) as path:
-            yield (
-                pl.scan_csv(path, try_parse_dates=True)
-                if path.suffix.lower() == ".csv"
-                else pl.scan_parquet(path)
-            )
+            yield scan_file(path, dataset)
     else:
         yield scan_dataset(store, dataset)

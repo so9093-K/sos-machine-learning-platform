@@ -51,6 +51,19 @@ def test_suggestions_only_emit_supported_operations():
     )
     assert proposals[0]["request"]["group_by"] == "group"
     assert suggest_analyses([], 0) == []
+    # 하나의 숫자형 범주를 자기 자신으로 묶어 평균을 계산하는 후보를 피한다.
+    score = {
+        "name": "unnamed_1",
+        "roles": [{"role": "numeric_measure"}, {"role": "categorical"}],
+        "is_constant": False,
+        "distinct_count": 4,
+        "null_count": 0,
+    }
+    self_grouped = suggest_analyses([score], 10)
+    assert all(
+        item["request"].get("group_by") != "unnamed_1" or item["request"]["metric"] == "count"
+        for item in self_grouped
+    )
 
     # 식별자나 비밀값으로 추론한 범주 컬럼은 자동 그룹 집계로 권장하지 않는다.
     secret_group = {

@@ -27,13 +27,13 @@ DEFINITIONS = (
     spec(
         "SOS-UPLOAD-FORMAT",
         "지원되지 않는 파일 형식",
-        "CSV 또는 Parquet 파일을 선택하세요.",
+        "CSV·Parquet 또는 구조화된 TSV·TXT 파일을 선택하세요.",
         "validation",
     ),
     spec(
         "SOS-UPLOAD-INVALID",
         "파일 형식 검사 실패",
-        "파일이 비어 있거나 올바른 CSV·Parquet 데이터가 아닙니다.",
+        "파일이 비어 있거나 지원되는 형식의 데이터 구조·인코딩이 올바르지 않습니다.",
         "validation",
     ),
     spec("SOS-API-NOT-FOUND", "리소스 부재", "요청한 리소스를 찾을 수 없습니다.", "not_found"),
