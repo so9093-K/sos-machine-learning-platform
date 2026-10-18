@@ -28,11 +28,18 @@ def free_ports() -> list[int]:
 
 
 def request(
-    url: str, token: str | None = None, *, data: bytes | None = None, content_type: str = ""
+    url: str,
+    token: str | None = None,
+    *,
+    data: bytes | None = None,
+    content_type: str = "",
+    idempotency_key: str | None = None
 ) -> tuple[int, dict]:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     if content_type:
         headers["Content-Type"] = content_type
+    if idempotency_key is not None:
+        headers["Idempotency-Key"] = idempotency_key
     try:
         response = urlopen(Request(url, data=data, headers=headers), timeout=15)
     except HTTPError as error:
@@ -134,11 +141,21 @@ def main() -> int:
 
         step = "Iceberg job submission"
         table = "container_" + secrets.token_hex(5)
+        payload = json.dumps({"dataset_id": dataset_id, "table_name": table}).encode()
+        # Token 모드의 Job 제출은 멱등성 키가 없으면 실패해야 한다.
+        denied, _ = request(
+            url + "/api/iceberg/import",
+            researcher,
+            data=payload,
+            content_type="application/json",
+        )
+        assert denied == 428, f"missing idempotency key: {denied}"
         status, job = request(
             url + "/api/iceberg/import",
             researcher,
-            data=json.dumps({"dataset_id": dataset_id, "table_name": table}).encode(),
+            data=payload,
             content_type="application/json",
+            idempotency_key=secrets.token_hex(16),
         )
         assert status in (200, 201, 202), (status, job)
         step = "Iceberg job execution"
@@ -172,7 +189,10 @@ def main() -> int:
         OSError,
         subprocess.CalledProcessError,
     ) as exc:
-        print(f"Container verification failed at {step}: {type(exc).__name__} {exc}", file=sys.stderr)
+        print(
+            f"Container verification failed at {step}: {type(exc).__name__} {exc}",
+            file=sys.stderr,
+        )
         subprocess.run([*COMPOSE, "-p", project, "ps"], cwd=ROOT, env=env, check=False)
         return 1
     finally:
