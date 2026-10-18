@@ -39,7 +39,7 @@ test("TSV 업로드 실패 후 파일을 재선택하지 않고 설정을 수정
   await page.locator('input[type="file"]').setInputFiles({
     name: "retry-import.tsv",
     mimeType: "text/tab-separated-values",
-    buffer: Buffer.from("score\\treview\\n5\\tgood\\n2\\tbad\\n"),
+    buffer: Buffer.from("score\treview\n5\tgood\n2\tbad\n"),
   });
   const heading = page.getByRole("heading", { name: "파일 구조 확인 · 등록 전" });
   await expect(heading).toBeVisible();
