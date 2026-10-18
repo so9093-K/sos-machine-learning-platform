@@ -33,6 +33,7 @@ make check는 기존 전체 검증 명령으로 실제 Ready 상태가 필요하
 | 검증 내용 | 테스트 |
 | --- | --- |
 | 원본 파일의 판본·등록·마이그레이션 보존 | test_datasets.py |
+| 파일 포맷 Reader 등록·안전한 캐시 허용 목록·CSV/Parquet 호환·DuckDB/Polars 해석 정합성 | test_file_formats.py |
 | DuckDB 탐색·집계·권한과 파일 접근, NaN·무한대·DECIMAL·큰 정수·바이너리 Preview·전체 Job 직렬화와 그룹 상위 제한·구조화 Query | test_discovery.py |
 | Job 상태·취소·게시 원자성·Attempt·커서 | test_jobs.py |
 | Job 제출 키 중복·동시성·감사 롤백 | test_idempotency.py |
