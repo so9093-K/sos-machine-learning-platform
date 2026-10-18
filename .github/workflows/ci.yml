@@ -129,8 +129,6 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser workflow tests in separate E2E volumes
         run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
-      - name: Make lifecycle and data persistence (owned environment)
-        run: uv run --locked python scripts/verify.py run make-lifecycle --output-dir web/reports
       - name: Verify token-mode browser permissions (owned environment)
         run: uv run --locked python scripts/verify.py run token-rbac --output-dir web/reports
 

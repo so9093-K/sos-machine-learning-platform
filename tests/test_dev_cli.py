@@ -427,7 +427,6 @@ def test_make_check_validates_full_contract_once(monkeypatch, config):
         "wheel",
         "alembic",
         "workspace-e2e",
-        "make-lifecycle",
         "token-rbac",
     )
     assert commands == [

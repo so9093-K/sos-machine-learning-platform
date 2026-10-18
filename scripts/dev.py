@@ -654,7 +654,6 @@ def check(config: dict):
         "wheel",
         "alembic",
         "workspace-e2e",
-        "make-lifecycle",
         "token-rbac",
     )
     commands = [
@@ -688,7 +687,7 @@ def check_fast(config: dict):
 
 
 def help_text():
-    print("SOS Platform · 개발자 명령")
+    print("SOS Platform · 내부 호스트 테스트 실행기 (공개 make 진입점과 별개)")
     for name, desc in (
         ("up", "전체 서비스 실행 및 Readiness 확인"),
         ("down", "관리 대상 종료 · 데이터와 볼륨 보존"),

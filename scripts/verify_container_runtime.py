@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPOSE = ("docker", "compose", "-f", "compose.yaml", "-f", "compose.app.yaml")
+COMPOSE = ("docker", "compose", "--profile", "app", "-f", "compose.yaml")
 
 
 def free_ports() -> list[int]:
