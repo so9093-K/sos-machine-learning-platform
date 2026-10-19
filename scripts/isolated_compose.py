@@ -200,7 +200,7 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
     return 0
 
 
-def execute(spec: str) -> int:
+def execute(spec: str, grep: str | None = None) -> int:
     """한 번의 테스트 실행과 정리를 수행한다. 테스트 재시도는 하지 않는다."""
     instance = "sos-e2e-" + secrets.token_hex(6)
     ports = free_ports()
@@ -228,8 +228,11 @@ def execute(spec: str) -> int:
             check=True,
             timeout=900,
         )
+        command = ["npx", "playwright", "test", *([] if spec == "all" else [spec])]
+        if grep:
+            command.extend(["--grep", grep])
         subprocess.run(
-            ["npx", "playwright", "test", *([] if spec == "all" else [spec])],
+            command,
             cwd=ROOT / "web",
             env=env,
             check=True,
@@ -252,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--spec", choices=("all", "workspace.spec.ts", "auth.spec.ts"))
     parser.add_argument("--recover-owned")
+    parser.add_argument("--grep")
     args = parser.parse_args(argv)
     if args.recover_owned:
         instance = args.recover_owned
@@ -264,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         return clean_owned(instance, runtime, env)
     signal.signal(signal.SIGTERM, _interrupted)
     spec = args.spec or "all"
-    return execute(spec)
+    return execute(spec, args.grep)
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ test.describe("token identity and resource permissions", () => {
     await expect(page.getByRole("heading", { name: "SOS Platform 접근 인증" })).toBeVisible();
   });
 
-  test("viewer can read datasets but cannot upload or inspect storage", async ({ page }) => {
+  test("viewer can read datasets but cannot upload or inspect storage @pr", async ({ page }) => {
     await signIn(page, viewer!);
     await expect(page.locator(".auth-status")).toContainText("ci-viewer");
     await expect(page.getByRole("button", { name: "저장소 상태 보기" })).toHaveCount(0);
@@ -46,7 +46,7 @@ test.describe("token identity and resource permissions", () => {
     await expect(page.getByRole("heading", { name: "SOS Platform 접근 인증" })).toBeVisible();
   });
 
-  test("researcher can create datasets but cannot use operator tools", async ({ page }) => {
+  test("researcher can create datasets but cannot use operator tools @pr", async ({ page }) => {
     await signIn(page, researcher!);
     await expect(page.getByRole("button", { name: "CSV·Parquet·TSV·TXT 파일 업로드" }))
       .toBeVisible();

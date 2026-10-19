@@ -64,7 +64,7 @@ jobs:
         run: python3 scripts/verify.py run frontend
 
   python-integration:
-    if: github.event_name != 'pull_request'
+    needs: [python-fast]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -83,13 +83,18 @@ jobs:
           uv run --locked python -m sos_platform.bootstrap
       - name: Verify distributable wheel
         run: uv run --locked python scripts/verify.py run wheel
-      - name: Python integration tests
+      - name: PR critical integration cases
+        if: github.event_name == 'pull_request'
+        run: uv run --locked python scripts/verify.py run python-pr
+      - name: Complete integration suite
+        if: github.event_name != 'pull_request'
         run: uv run --locked python scripts/verify.py run python-integration
       - name: Verify metadata schema matches migration
         run: uv run --locked python scripts/verify.py run alembic
 
   ui-e2e:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'push'
+    needs: [python-fast, frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,7 +112,11 @@ jobs:
       - name: Install browser
         working-directory: web
         run: npx playwright install --with-deps chromium
-      - name: Browser UI and token permissions in one isolated Compose project
+      - name: PR core browser user and permission scenarios
+        if: github.event_name == 'pull_request'
+        run: uv run --locked python scripts/verify.py run workspace-pr --output-dir web/reports
+      - name: Full browser user flows
+        if: github.event_name != 'pull_request'
         run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
       - name: Save failure trace
         if: failure()
@@ -135,9 +144,7 @@ jobs:
         run: |
           test "$FAST" = "success"
           test "$FRONTEND" = "success"
-          if [ "$EVENT" != "pull_request" ]; then
-            test "$INTEGRATION" = "success"
-          fi
-          if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "workflow_dispatch" ]; then
+          test "$INTEGRATION" = "success"
+          if [ "$EVENT" != "push" ]; then
             test "$E2E" = "success"
           fi

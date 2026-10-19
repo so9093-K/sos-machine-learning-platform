@@ -37,13 +37,15 @@ SUITES = {
     for suite in (
         Suite("ruff", "command", False, "Python lint와 format"),
         Suite("python-unit", "junit", False, "인프라 없는 Python 테스트"),
-        Suite("python-integration", "junit", True, "DB·S3·Iceberg 통합 테스트"),
+        Suite("python-integration", "junit", True, "전체 DB·S3·Iceberg 통합 테스트"),
+        Suite("python-pr", "junit", True, "핵심 DB·Storage·ML·Worker 통합 회귀"),
         Suite("frontend", "junit", False, "Vitest 및 TypeScript/Vite"),
         Suite("openapi-types", "command", False, "생성된 OpenAPI 타입 정합성"),
         Suite("openapi-compat", "command", False, "PR 기준 API 후방 호환성"),
         Suite("wheel", "command", False, "설치된 Wheel에 포함된 Alembic 검증"),
         Suite("alembic", "command", True, "Alembic 스키마 정합성"),
         Suite("workspace-e2e", "junit", True, "격리된 브라우저 사용자 흐름"),
+        Suite("workspace-pr", "junit", True, "선별된 핵심 브라우저 사용자 흐름"),
     )
 }
 
@@ -65,6 +67,8 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
         return [(uv + ["pytest", "-q", *unit_test_paths(), f"--junitxml={report}"], ROOT)]
     if name == "python-integration":
         return [(uv + ["pytest", "-q", "tests/integration", f"--junitxml={report}"], ROOT)]
+    if name == "python-pr":
+        return [(uv + ["pytest", "-q", "-m", "pr", "tests/integration", f"--junitxml={report}"], ROOT)]
     if name == "frontend":
         return [
             (["npm", "run", "build"], ROOT / "web"),
@@ -107,6 +111,8 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
         return [(uv + ["alembic", "check"], ROOT)]
     if name == "workspace-e2e":
         return [(uv + ["python", "scripts/isolated_compose.py", "--spec", "all"], ROOT)]
+    if name == "workspace-pr":
+        return [(uv + ["python", "scripts/isolated_compose.py", "--spec", "all", "--grep", "@pr"], ROOT)]
     raise ValueError(f"알 수 없는 Suite: {name}")
 
 
@@ -190,7 +196,7 @@ def execute(
     status = 0
     error = None
     run_env = dict(os.environ if env is None else env)
-    if name == "workspace-e2e":
+    if name in {"workspace-e2e", "workspace-pr"}:
         run_env["SOS_JUNIT_FILE"] = str(report)
     try:
         planned = commands(name, report, base_ref)
