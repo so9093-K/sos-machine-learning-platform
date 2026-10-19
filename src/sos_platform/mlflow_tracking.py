@@ -151,7 +151,7 @@ def send_to_mlflow(
 
 def _destination_fingerprint(settings: MLflowSettings) -> str:
     """인증정보를 제외한 Tracking 서버와 Experiment의 연결 지문."""
-    identity = f"{settings.endpoint}\0{settings.experiment_id}".encode("utf-8")
+    identity = f"{settings.endpoint}\0{settings.experiment_id}".encode()
     return hashlib.sha256(identity).hexdigest()
 
 
