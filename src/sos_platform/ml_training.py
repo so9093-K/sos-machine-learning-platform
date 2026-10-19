@@ -68,6 +68,9 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
     features = spec["features"]
     config = IsolationForestConfig(**spec["params"])
     matrix = training_matrix(store, dataset, features)
+    with pinned_scan_dataset(store, dataset) as source:
+        schema = source.collect_schema()
+        feature_dtypes = [str(schema[name]) for name in features]
     model = train_isolation_forest(matrix, config)
     scores = model.score_anomalies(matrix)
     threshold = quantile_threshold(scores, 0.05)
@@ -86,6 +89,7 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
         "runtime": {
             "model_format": "joblib",
             "loading": "trusted_worker_only",
+            "feature_dtypes": feature_dtypes,
             "python": platform.python_version(),
             "numpy": np.__version__,
             "scikit_learn": sklearn.__version__,
