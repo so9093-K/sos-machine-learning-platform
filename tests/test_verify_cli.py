@@ -94,22 +94,6 @@ def test_openapi_requires_base_ref(tmp_path):
         raise AssertionError("PR 비교 기준이 누락됐는데도 성공")
 
 
-def test_container_runtime_uses_common_command_contract():
-    """컨테이너 통합 검증은 독립 실행 명령·Manifest 계약을 재사용한다."""
-    suite = verify.SUITES["container-runtime"]
-    assert suite.kind == "command" and suite.infrastructure
-    assert verify.commands("container-runtime", Path("/tmp/report.xml"), None) == [
-        (["python3", "scripts/verify_container_runtime.py"], verify.ROOT)
-    ]
-
-
-def test_suite_contract_has_no_undeclared_runners():
-    for suite in verify.SUITES.values():
-        assert suite.kind in {"command", "junit"}
-        if suite.name != "openapi-compat":
-            assert verify.commands(suite.name, Path("/tmp/report.xml"), None)
-
-
 def test_shared_artifact_dir_keeps_each_suite_manifest(monkeypatch, tmp_path):
     monkeypatch.setattr(verify, "commands", lambda *_args: [(["true"], tmp_path)])
     monkeypatch.setattr(

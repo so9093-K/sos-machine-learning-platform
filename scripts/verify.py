@@ -66,7 +66,13 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
     if name == "python-unit":
         return [(uv + ["pytest", "-q", *unit_test_paths(), f"--junitxml={report}"], ROOT)]
     if name == "python-integration":
-        return [(uv + ["pytest", "-q", "tests/integration", "--durations=15", f"--junitxml={report}"], ROOT)]
+        return [
+            (
+                uv
+                + ["pytest", "-q", "tests/integration", "--durations=15", f"--junitxml={report}"],
+                ROOT,
+            )
+        ]
     if name == "frontend":
         return [
             (["npm", "run", "build"], ROOT / "web"),
