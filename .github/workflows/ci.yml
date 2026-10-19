@@ -66,6 +66,7 @@ jobs:
   python-integration:
     needs: [python-fast]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -85,7 +86,7 @@ jobs:
         run: uv run --locked python scripts/verify.py run wheel
       - name: PR critical integration cases
         if: github.event_name == 'pull_request'
-        run: uv run --locked python scripts/verify.py run python-integration
+        run: uv run --locked python scripts/verify.py run python-pr
       - name: Complete integration suite
         if: github.event_name != 'pull_request'
         run: uv run --locked python scripts/verify.py run python-integration
@@ -96,6 +97,7 @@ jobs:
     if: github.event_name != 'push'
     needs: [python-fast, frontend]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -114,7 +116,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: PR core browser user and permission scenarios
         if: github.event_name == 'pull_request'
-        run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
+        run: uv run --locked python scripts/verify.py run workspace-pr --output-dir web/reports
       - name: Full browser user flows
         if: github.event_name != 'pull_request'
         run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
