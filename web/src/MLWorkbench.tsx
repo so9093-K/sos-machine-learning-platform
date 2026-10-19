@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
+import { MLScoringPanel } from "./MLScoringPanel";
 import type {
   Dataset, DatasetColumns, MLTrainingJob, MLTrainingJobSummary, ModelRevision,
 } from "./types";
@@ -285,6 +286,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           <div className="stat"><span>학습 점수 평균</span><strong>{statistic(model.training_score_summary.score_mean)}</strong></div>
         </div>
         <p className="hint">이 수치는 학습 데이터에서 계산한 설명적 요약으로, 검증 Precision·Recall·최적 임계값을 의미하지 않습니다. 설명·독립 평가·MLflow 추적은 별도 구현 대상입니다.</p>
+        <MLScoringPanel key={model.id} model={model} datasets={datasets}
+          canRun={canTrain} canCancel={canCancel} />
         <div className="steps">
           <h4>학습 설정 비교</h4>
           <p className="hint">이미 완료한 모델의 입력 조건과 설정만 비교합니다. 재학습하거나 새로운 임계값을 적용하지 않습니다.</p>
