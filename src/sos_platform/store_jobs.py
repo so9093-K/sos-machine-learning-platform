@@ -513,6 +513,17 @@ class JobStoreMixin:
                     reason=f"job={job_id};{reason}",
                     request_id=row["request_id"],
                 )
+            if status == "Succeeded" and model_publish is not None:
+                self._audit(
+                    db,
+                    actor_id="sos-worker",
+                    actor_type="service",
+                    action="model.publish",
+                    resource_type="model",
+                    resource_id=result["model_revision_id"],
+                    reason=f"job={job_id};{reason}",
+                    request_id=row["request_id"],
+                )
             self._audit(
                 db,
                 actor_id="sos-worker",

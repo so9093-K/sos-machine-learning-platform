@@ -1,10 +1,13 @@
 """숫자 테이블 입력을 사용하는 첫 Isolation Forest 학습 실행."""
 
+import platform
 from dataclasses import asdict
 from pathlib import Path
 
 import joblib
+import numpy as np
 import polars as pl
+import sklearn
 
 from .datasets import pinned_scan_dataset
 from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold
@@ -78,5 +81,12 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
         "params": asdict(config),
         "training_rows": len(scores),
         "training_score_summary": summary,
-        "runtime": {"model_format": "joblib", "loading": "trusted_worker_only"},
+        "runtime": {
+            "model_format": "joblib",
+            "loading": "trusted_worker_only",
+            "python": platform.python_version(),
+            "numpy": np.__version__,
+            "scikit_learn": sklearn.__version__,
+            "polars": pl.__version__,
+        },
     }

@@ -61,6 +61,8 @@ def test_training_writes_model_and_reports_training_only_statistics(tmp_path, mo
     assert pending.exists()
     assert joblib.load(pending).n_features_in_ == 1
     assert result["training_score_summary"]["scope"] == "training_data_only"
+    assert result["runtime"]["python"]
+    assert result["runtime"]["scikit_learn"]
     assert "precision" not in result["training_score_summary"]
     with pytest.raises(ValueError, match="version"):
         train_dataset(

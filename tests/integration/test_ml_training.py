@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -53,6 +55,9 @@ def test_model_revision_publication_with_job_and_object_intent(workspace):
     assert model["features"] == ["temperature"]
     assert model["training_score_summary"]["scope"] == "training_data_only"
     assert model["training_score_summary"]["score_count"] == 3
+    assert model["runtime"]["python"]
+    assert model["runtime"]["scikit_learn"]
+    assert model["runtime"]["numpy"]
     assert "precision" not in model["training_score_summary"]
     # Object Health가 불변 모델을 미참조 또는 정리 후보로 오판하지 않는다.
     metadata = store.observe_objects(
@@ -72,6 +77,13 @@ def test_model_revision_publication_with_job_and_object_intent(workspace):
     # 게시 의도와 Model Revision 및 Job 성공은 같은 정본에 있어야 한다.
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 1
+        assert db.execute(
+            text(
+                "SELECT COUNT(*) FROM audit_events "
+                "WHERE action='model.publish' AND resource_id=:revision"
+            ),
+            {"revision": revision_id},
+        ).scalar_one() == 1
         assert (
             db.execute(
                 text("SELECT COUNT(*) FROM object_writes WHERE state='Published'")
@@ -213,3 +225,71 @@ def test_ml_model_revision_token_ownership_and_readonly_role(workspace, monkeypa
         assert secure.get(f"/api/ml/models/{revision_id}", headers=auth("alice")).status_code == 200
         assert secure.get(f"/api/ml/models/{revision_id}", headers=auth("bob")).status_code == 404
         assert secure.get(f"/api/ml/models/{revision_id}", headers=auth("ops")).status_code == 403
+
+
+def test_training_cancellation_after_s3_write_does_not_publish_model(workspace, monkeypatch):
+    """S3 바이트 업로드와 완료 트랜잭션 사이 취소가 들어오면 판본을 확정하지 않는다."""
+    client, store = workspace
+    dataset = upload(client)
+    queued = _submit(client, dataset)
+    assert queued.status_code == 202
+    uploaded = Event()
+    release = Event()
+    original_put = ObjectStore.put
+
+    def pause_after_model_upload(self, key, source):
+        version = original_put(self, key, source)
+        if key.endswith(".model.joblib"):
+            uploaded.set()
+            assert release.wait(timeout=30)
+        return version
+
+    monkeypatch.setattr(ObjectStore, "put", pause_after_model_upload)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        finished = pool.submit(run_once, store)
+        try:
+            assert uploaded.wait(timeout=30), "Model was not uploaded in time"
+            requested = client.post(f"/api/ml/train/jobs/{queued.json()['id']}/cancel")
+            assert requested.status_code == 200, requested.text
+            assert requested.json()["cancel_requested"] is True
+        finally:
+            release.set()
+        assert finished.result(timeout=30) is True
+    final = client.get(f"/api/ml/train/jobs/{queued.json()['id']}").json()
+    assert final["status"] == "Cancelled"
+    assert final["result"] is None
+    with store.connection() as db:
+        assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 0
+        assert db.execute(
+            text("SELECT COUNT(*) FROM object_writes WHERE state='Failed'")
+        ).scalar_one() == 1
+
+
+def test_training_model_db_failure_keeps_unpublished_object(workspace, monkeypatch):
+    """모델 바이트가 존재해도 DB 완료가 실패하면 Model Revision은 보이지 않는다."""
+    client, store = workspace
+    dataset = upload(client)
+    queued = _submit(client, dataset)
+    assert queued.status_code == 202
+    finish = store.finish
+
+    def reject_model_completion(job_id, status, **kwargs):
+        if status == "Succeeded" and kwargs.get("model_publish"):
+            raise RuntimeError("simulated model transaction failure")
+        return finish(job_id, status, **kwargs)
+
+    monkeypatch.setattr(store, "finish", reject_model_completion)
+    assert run_once(store)
+    job = store.get_job(queued.json()["id"])
+    assert job["status"] == "Failed"
+    assert job["result"] is None
+    with store.connection() as db:
+        assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 0
+    location = ObjectStore().location(
+        f"results/{job['id']}/{job['attempts'][-1]['id']}.model.joblib"
+    )
+    assert store.object_writes(location)[0]["state"] == "Failed"
+    storage = ObjectStore()
+    assert storage.client.head_object(
+        Bucket=storage.config.s3_bucket, Key=storage.key(location)
+    )["ContentLength"] > 0
