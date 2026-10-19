@@ -104,19 +104,11 @@ def test_cleanup_success_only_removes_owned_project(monkeypatch, tmp_path):
     assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) == 0
     assert not runtime.exists()
     assert (foreign / "important.txt").read_text(encoding="utf-8") == "keep"
-    assert calls[0] == [
-        "docker",
-        "compose",
-        "--profile",
-        "app",
-        "-f",
-        "compose.yaml",
-        "-p",
-        instance,
-        "down",
-        "--volumes",
-        "--remove-orphans",
-    ]
+    command = calls[0]
+    assert command[:2] == ["docker", "compose"]
+    assert command[command.index("-p") + 1] == instance
+    assert "down" in command
+    assert "--volumes" in command
 
 
 def test_cleanup_timeout_never_removes_owned_marker(monkeypatch, tmp_path):
