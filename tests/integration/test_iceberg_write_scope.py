@@ -106,6 +106,7 @@ def test_iceberg_append_requires_actual_table_owner(workspace, monkeypatch):
         assert len(iceberg_catalog(store).load_table("default.alice_table").snapshots()) == 2
 
 
+@pytest.mark.pr
 def test_unowned_existing_catalog_table_is_not_silently_claimed(workspace):
     client, store = workspace
     from sos_platform.datasets import iceberg_catalog
@@ -124,6 +125,35 @@ def test_unowned_existing_catalog_table_is_not_silently_claimed(workspace):
     )
     assert denied.status_code == 404
     assert store.iceberg_write_claim("external_table") is None
+    assert len(catalog.load_table("default.external_table").snapshots()) == 0
+
+    # 오래된 미완료 채택이 DB 업그레이드에서 Blocked가 되어도,
+    # Catalog 토큰과 Actor·UUID가 일치한다는 이유로 다시 쓰기를 허용하지 않는다.
+    table = catalog.load_table("default.external_table")
+    token = "blocked-prior-adoption"
+    table.transaction().set_properties({"sos.write-token": token}).commit_transaction()
+    with store.connection() as db:
+        from sqlalchemy import text
+
+        db.execute(
+            text(
+                "INSERT INTO iceberg_table_owners"
+                "(table_name,owner_actor,token,table_uuid,state,created_at) "
+                "VALUES(:name,:actor,:token,:uuid,'Blocked',:at)"
+            ),
+            {
+                "name": "default.external_table",
+                "actor": "local-developer",
+                "token": token,
+                "uuid": str(table.metadata.table_uuid),
+                "at": "2026-01-01T00:00:00+00:00",
+            },
+        )
+    assert client.post(
+        "/api/iceberg/import",
+        json={"dataset_id": source.json()["id"], "table_name": "external_table"},
+    ).status_code == 404
+    assert store.iceberg_write_claim("external_table")["state"] == "Blocked"
     assert len(catalog.load_table("default.external_table").snapshots()) == 0
 
 
