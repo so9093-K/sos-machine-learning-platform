@@ -68,7 +68,8 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
     if name == "python-integration":
         return [(uv + ["pytest", "-q", "tests/integration", f"--junitxml={report}"], ROOT)]
     if name == "python-pr":
-        return [(uv + ["pytest", "-q", "-m", "pr", "tests/integration", f"--junitxml={report}"], ROOT)]
+        command = uv + ["pytest", "-q", "-m", "pr", "tests/integration", f"--junitxml={report}"]
+        return [(command, ROOT)]
     if name == "frontend":
         return [
             (["npm", "run", "build"], ROOT / "web"),
@@ -112,7 +113,8 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
     if name == "workspace-e2e":
         return [(uv + ["python", "scripts/isolated_compose.py", "--spec", "all"], ROOT)]
     if name == "workspace-pr":
-        return [(uv + ["python", "scripts/isolated_compose.py", "--spec", "all", "--grep", "@pr"], ROOT)]
+        command = uv + ["python", "scripts/isolated_compose.py", "--spec", "all", "--grep", "@pr"]
+        return [(command, ROOT)]
     raise ValueError(f"알 수 없는 Suite: {name}")
 
 
