@@ -3,8 +3,8 @@
 from sqlalchemy import (
     Boolean,
     Column,
-    ForeignKey,
     Float,
+    ForeignKey,
     Index,
     Integer,
     MetaData,

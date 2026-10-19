@@ -30,10 +30,10 @@ from .discovery import explore as discovery_explore
 from .discovery import profile as discovery_profile
 from .errors import ERRORS, PlatformError
 from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
-from .ml_training import train_dataset
-from .ml_scoring import run_dataset_scoring
 from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
 from .ml_explanation import explain_scored_row
+from .ml_scoring import run_dataset_scoring
+from .ml_training import train_dataset
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import transform

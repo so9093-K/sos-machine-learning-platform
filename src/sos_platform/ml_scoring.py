@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 from sklearn.metrics import average_precision_score, roc_auc_score
 
