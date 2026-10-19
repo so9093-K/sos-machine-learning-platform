@@ -74,3 +74,18 @@ def test_training_writes_model_and_reports_training_only_statistics(tmp_path, mo
             },
             tmp_path / "should-not-exist.joblib",
         )
+
+
+def test_training_refuses_integer_precision_loss(monkeypatch):
+    monkeypatch.setattr("sos_platform.ml_training.pinned_scan_dataset", _scan)
+    safe = 2**53
+    assert training_matrix(
+        None, {"frame": pl.DataFrame({"x": [safe - 1, safe]})}, ["x"]
+    ).tolist() == [[float(safe - 1)], [float(safe)]]
+    for frame in (
+        pl.DataFrame({"x": [0, safe + 1]}),
+        pl.DataFrame({"x": [0, -safe - 1]}),
+        pl.DataFrame({"x": pl.Series([0, 2**64 - 1], dtype=pl.UInt64)}),
+    ):
+        with pytest.raises(ValueError, match="exact float64"):
+            training_matrix(None, {"frame": frame}, ["x"])

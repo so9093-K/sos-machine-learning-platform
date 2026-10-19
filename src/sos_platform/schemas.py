@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Step(BaseModel):
@@ -178,8 +178,18 @@ class IsolationForestParameters(BaseModel):
     n_estimators: int = Field(default=100, strict=True, ge=1, le=2000)
     max_samples: int | float | Literal["auto"] = "auto"
     max_features: int | float = 1.0
-    bootstrap: bool = False
+    bootstrap: bool = Field(default=False, strict=True)
     random_state: int = Field(default=42, strict=True, ge=0, le=2**32 - 1)
+
+    @field_validator("max_samples", "max_features", mode="before")
+    @classmethod
+    def ensure_numeric_parameter(cls, value: object, info) -> object:
+        """문자열·bool을 숫자로 묵시 변환하지 않고 요청자에게 수정하게 한다."""
+        if info.field_name == "max_samples" and value == "auto":
+            return value
+        if type(value) not in (int, float):
+            raise ValueError("Parameter must be a number or supported keyword")
+        return value
 
 
 class MLTrainRequest(BaseModel):

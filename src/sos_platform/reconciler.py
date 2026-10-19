@@ -46,7 +46,7 @@ def _encode_position(prefix: str, token: str | None) -> str:
 def classify_object(item: dict, metadata: dict, policy: StoragePolicy) -> tuple[str, str]:
     """S3 데이터의 삭제 가능성이 아니라 관측 시점의 보호·검토 상태를 반환한다."""
     if metadata["referenced"]:
-        return "protected", "Dataset이 이 객체를 참조하고 있습니다."
+        return "protected", "Dataset 또는 Model Revision이 이 객체를 참조하고 있습니다."
     writes = metadata["writes"]
     if not writes:
         return "unknown", "소유권 기록이 없어 수동 확인 전까지 보호합니다."

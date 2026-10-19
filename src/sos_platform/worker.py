@@ -119,7 +119,9 @@ def _perform(
         outcome = {"result": result}
     except Exception as exc:
         code = (
-            "SOS-ICEBERG-UNCERTAIN"
+            "SOS-ML-INPUT-INVALID"
+            if job["kind"] == "ml_train" and isinstance(exc, ValueError)
+            else "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
             else exc.code
             if isinstance(exc, PlatformError)

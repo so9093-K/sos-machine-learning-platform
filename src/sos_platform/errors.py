@@ -103,6 +103,12 @@ DEFINITIONS = (
     ),
     spec("SOS-JOB-FAILED", "실행 실패", "작업 실행 중 오류가 발생했습니다.", "execution"),
     spec(
+        "SOS-ML-INPUT-INVALID",
+        "학습 입력 검증 실패",
+        "숫자형 Feature·결측값·값의 범위·학습 파라미터를 확인한 뒤 다시 제출하세요.",
+        "validation",
+    ),
+    spec(
         "SOS-CACHE-CAPACITY",
         "로컬 캐시 용량 초과",
         "원본 파일을 읽기 위한 안전한 캐시 공간이 부족합니다.",

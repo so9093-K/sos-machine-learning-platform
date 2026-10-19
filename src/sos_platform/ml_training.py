@@ -12,20 +12,10 @@ from .ml_isolation_forest import IsolationForestConfig, train_isolation_forest
 
 MAX_ROWS = 50_000
 MAX_FEATURES = 32
-NUMERIC = frozenset(
-    (
-        pl.Int8,
-        pl.Int16,
-        pl.Int32,
-        pl.Int64,
-        pl.UInt8,
-        pl.UInt16,
-        pl.UInt32,
-        pl.UInt64,
-        pl.Float32,
-        pl.Float64,
-    )
+INTEGER_DTYPES = frozenset(
+    (pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64)
 )
+NUMERIC = INTEGER_DTYPES | frozenset((pl.Float32, pl.Float64))
 
 
 def training_matrix(store, dataset: dict, features: list[str]):
@@ -41,6 +31,14 @@ def training_matrix(store, dataset: dict, features: list[str]):
         frame = source.select(features).head(MAX_ROWS + 1).collect()
     if frame.height > MAX_ROWS or frame.height < 2:
         raise ValueError("Training requires between 2 and 50000 rows")
+    # float64는 2^53을 초과하는 정수를 인접한 값과 구별하지 못한다.
+    # 원본 식별 값의 침묵하는 반올림이 학습 피처에 섞이지 않도록 거부한다.
+    safe_integer = 2**53
+    for field in features:
+        if schema[field] in INTEGER_DTYPES:
+            values = frame[field]
+            if values.max() > safe_integer or values.min() < -safe_integer:
+                raise ValueError("Integer feature exceeds the exact float64 range")
     return frame.to_numpy()
 
 

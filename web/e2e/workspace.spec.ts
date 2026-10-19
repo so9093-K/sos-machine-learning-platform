@@ -1331,7 +1331,7 @@ test("ML Workbench creates a persistent Isolation Forest Model Revision", async 
     timeout: 45000,
   });
   await expect(page.getByText("학습 기준 이상 후보")).toBeVisible();
-  await expect(page.getByText(/독립 검증 성능을 의미하지 않습니다/)).toBeVisible();
+  await expect(page.getByText(/검증 Precision·Recall·최적 임계값을 의미하지 않습니다/)).toBeVisible();
   // 학습 이력은 브라우저 상태가 아닌 실제 API의 영속 Job 목록에서 다시 복원한다.
   await page.reload();
   await page.getByRole("button", { name: "ML Workbench" }).click();
