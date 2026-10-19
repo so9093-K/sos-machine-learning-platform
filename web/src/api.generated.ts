@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * List Dataset Page
-         * @description Dataset 목록은 키셋 페이지 응답으로 제공한다.
+         * @description Dataset ëª©ë¡ì í¤ì íì´ì§ ìëµì¼ë¡ ì ê³µíë¤.
          */
         get: operations["list_dataset_page_api_datasets_get"];
         put?: never;
@@ -203,7 +203,7 @@ export interface paths {
         };
         /**
          * Dataset Understanding
-         * @description 원본 등록과 독립적으로 계산된 최신 이해 결과 및 실행 상태를 제공한다.
+         * @description ìë³¸ ë±ë¡ê³¼ ëë¦½ì ì¼ë¡ ê³ì°ë ìµì  ì´í´ ê²°ê³¼ ë° ì¤í ìíë¥¼ ì ê³µíë¤.
          */
         get: operations["dataset_understanding_api_datasets__dataset_id__understanding_get"];
         put?: never;
@@ -240,7 +240,7 @@ export interface paths {
         };
         /**
          * Available Examples
-         * @description 미리 보기 가능한 합성 데이터 예제의 정의를 조회한다.
+         * @description ë¯¸ë¦¬ ë³´ê¸° ê°ë¥í í©ì± ë°ì´í° ìì ì ì ìë¥¼ ì¡°ííë¤.
          */
         get: operations["available_examples_api_examples_get"];
         put?: never;
@@ -262,7 +262,7 @@ export interface paths {
         put?: never;
         /**
          * Start Example
-         * @description 예제를 명시적으로 선택했을 때만 일반 Dataset으로 등록한다.
+         * @description ìì ë¥¼ ëªìì ì¼ë¡ ì ííì ëë§ ì¼ë° Datasetì¼ë¡ ë±ë¡íë¤.
          */
         post: operations["start_example_api_examples__example_id__use_post"];
         delete?: never;
@@ -349,7 +349,7 @@ export interface paths {
         };
         /**
          * Health
-         * @description 프로세스 자체가 HTTP 응답을 제공하는지 확인한다.
+         * @description íë¡ì¸ì¤ ìì²´ê° HTTP ìëµì ì ê³µíëì§ íì¸íë¤.
          */
         get: operations["health_api_health_get"];
         put?: never;
@@ -403,7 +403,7 @@ export interface paths {
         };
         /**
          * Instance Settings
-         * @description 인증된 클라이언트가 동일한 인스턴스 정보를 받는다.
+         * @description ì¸ì¦ë í´ë¼ì´ì¸í¸ê° ëì¼í ì¸ì¤í´ì¤ ì ë³´ë¥¼ ë°ëë¤.
          */
         get: operations["instance_settings_api_instance_get"];
         /** Change Instance Settings */
@@ -467,6 +467,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/models/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Model Revision */
+        get: operations["get_model_revision_api_ml_models__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/train/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Training Job */
+        post: operations["create_training_job_api_ml_train_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/train/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ml Training Job */
+        get: operations["get_ml_training_job_api_ml_train_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/train/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Ml Training Job */
+        post: operations["cancel_ml_training_job_api_ml_train_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ready": {
         parameters: {
             query?: never;
@@ -476,7 +544,7 @@ export interface paths {
         };
         /**
          * Ready
-         * @description 실제 필수 저장소와 실행기가 준비됐을 때만 200을 반환한다.
+         * @description ì¤ì  íì ì ì¥ìì ì¤íê¸°ê° ì¤ë¹ëì ëë§ 200ì ë°ííë¤.
          */
         get: operations["ready_api_ready_get"];
         put?: never;
@@ -496,7 +564,7 @@ export interface paths {
         };
         /**
          * Storage Iceberg References
-         * @description 등록된 Dataset이 참조하는 Iceberg Snapshot 존재 여부를 확인한다.
+         * @description ë±ë¡ë Datasetì´ ì°¸ì¡°íë Iceberg Snapshot ì¡´ì¬ ì¬ë¶ë¥¼ íì¸íë¤.
          */
         get: operations["storage_iceberg_references_api_storage_iceberg_references_get"];
         put?: never;
@@ -518,7 +586,7 @@ export interface paths {
         put?: never;
         /**
          * Retain Iceberg Reference
-         * @description 기존 Dataset을 재확인하고 SOS 영구 보존 Tag를 생성한다.
+         * @description ê¸°ì¡´ Datasetì ì¬íì¸íê³  SOS ìêµ¬ ë³´ì¡´ Tagë¥¼ ìì±íë¤.
          */
         post: operations["retain_iceberg_reference_api_storage_iceberg_references__dataset_id__retain_post"];
         delete?: never;
@@ -536,7 +604,7 @@ export interface paths {
         };
         /**
          * Storage Inspection
-         * @description S3 객체를 읽기 전용으로 대조한다. 실제 삭제는 제공하지 않는다.
+         * @description S3 ê°ì²´ë¥¼ ì½ê¸° ì ì©ì¼ë¡ ëì¡°íë¤. ì¤ì  ì­ì ë ì ê³µíì§ ìëë¤.
          */
         get: operations["storage_inspection_api_storage_inspection_get"];
         put?: never;
@@ -556,7 +624,7 @@ export interface paths {
         };
         /**
          * Storage Policy
-         * @description 연결 비밀을 제외한 유효 정책과 출처를 확인한다.
+         * @description ì°ê²° ë¹ë°ì ì ì¸í ì í¨ ì ì±ê³¼ ì¶ì²ë¥¼ íì¸íë¤.
          */
         get: operations["storage_policy_api_storage_policy_get"];
         put?: never;
@@ -576,7 +644,7 @@ export interface paths {
         };
         /**
          * Audit Events
-         * @description 운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다.
+         * @description ì´ììë§ ìì²­ ID ëë Job IDì ê³¼ê±° ë³ê²½Â·ê±°ë¶ ì´ë ¥ì ì¡°ííë¤.
          */
         get: operations["audit_events_api_v2_audit_get"];
         put?: never;
@@ -613,7 +681,7 @@ export interface paths {
         };
         /**
          * Job Diagnostics
-         * @description 권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다.
+         * @description ê¶íì íì¸í ì´ìììê²ë§ ì ì ë ìì¸ ì íÂ·ì¤í ë¨ê³ë¥¼ ì ê³µíë¤.
          */
         get: operations["job_diagnostics_api_v2_diagnostics_jobs__job_id__get"];
         put?: never;
@@ -651,7 +719,7 @@ export interface components {
         };
         /**
          * AuditEventOut
-         * @description 감사 저장소의 노출 가능한 정제 기록.
+         * @description ê°ì¬ ì ì¥ìì ë¸ì¶ ê°ë¥í ì ì  ê¸°ë¡.
          */
         AuditEventOut: {
             /** Action */
@@ -679,7 +747,7 @@ export interface components {
         };
         /**
          * AuthMeOut
-         * @description 인증 신원의 공개 계약. 토큰 내용은 반환하지 않는다.
+         * @description ì¸ì¦ ì ìì ê³µê° ê³ì½. í í° ë´ì©ì ë°ííì§ ìëë¤.
          */
         AuthMeOut: {
             /** Actor Id */
@@ -736,7 +804,7 @@ export interface components {
         };
         /**
          * DatasetFilter
-         * @description 필드 존재 여부를 검증한 뒤 안전한 SQL 바인딩으로 평가하는 조건.
+         * @description íë ì¡´ì¬ ì¬ë¶ë¥¼ ê²ì¦í ë¤ ìì í SQL ë°ì¸ë©ì¼ë¡ íê°íë ì¡°ê±´.
          */
         DatasetFilter: {
             /** Column */
@@ -751,7 +819,7 @@ export interface components {
         };
         /**
          * DatasetOut
-         * @description 불변 Dataset 참조의 API 응답 계약.
+         * @description ë¶ë³ Dataset ì°¸ì¡°ì API ìëµ ê³ì½.
          */
         DatasetOut: {
             /** Created At */
@@ -792,7 +860,7 @@ export interface components {
         };
         /**
          * DatasetPageOut
-         * @description 상한 있는 최신순 Dataset 목록 페이지.
+         * @description ìí ìë ìµì ì Dataset ëª©ë¡ íì´ì§.
          */
         DatasetPageOut: {
             /** Items */
@@ -802,7 +870,7 @@ export interface components {
         };
         /**
          * DatasetQuery
-         * @description 임의 SQL이나 파일 경로를 받지 않는 범용 Dataset 조회.
+         * @description ìì SQLì´ë íì¼ ê²½ë¡ë¥¼ ë°ì§ ìë ë²ì© Dataset ì¡°í.
          */
         DatasetQuery: {
             /** Columns */
@@ -846,7 +914,7 @@ export interface components {
         };
         /**
          * ExampleOut
-         * @description 예제는 별도 가짜 결과가 아니라 Dataset 등록 안내를 제공한다.
+         * @description ìì ë ë³ë ê°ì§ ê²°ê³¼ê° ìëë¼ Dataset ë±ë¡ ìë´ë¥¼ ì ê³µíë¤.
          */
         ExampleOut: {
             /** Columns */
@@ -866,7 +934,7 @@ export interface components {
         };
         /**
          * ExplorationJobOut
-         * @description Discovery Job만 반환하는 신규 API 응답 계약.
+         * @description Discovery Jobë§ ë°ííë ì ê· API ìëµ ê³ì½.
          */
         ExplorationJobOut: {
             /** Attempts */
@@ -987,7 +1055,7 @@ export interface components {
         };
         /**
          * ExplorationRequest
-         * @description 대화형 탐색은 제한된 선두 샘플만 분석한다.
+         * @description ëíí íìì ì íë ì ë ìíë§ ë¶ìíë¤.
          */
         ExplorationRequest: {
             /** Column */
@@ -1072,7 +1140,7 @@ export interface components {
         };
         /**
          * InstanceSettingsOut
-         * @description 공통 플랫폼의 표시 전용 설정. 인증·배포 환경과 별개의 계약.
+         * @description ê³µíµ íë«í¼ì íì ì ì© ì¤ì . ì¸ì¦Â·ë°°í¬ íê²½ê³¼ ë³ê°ì ê³ì½.
          */
         InstanceSettingsOut: {
             /** Display Name */
@@ -1080,11 +1148,42 @@ export interface components {
         };
         /**
          * InstanceSettingsUpdate
-         * @description 관리자만 변경하는 표시명. 내부 플랫폼·리소스 식별자가 아니다.
+         * @description ê´ë¦¬ìë§ ë³ê²½íë íìëª. ë´ë¶ íë«í¼Â·ë¦¬ìì¤ ìë³ìê° ìëë¤.
          */
         InstanceSettingsUpdate: {
             /** Display Name */
             display_name: string;
+        };
+        /**
+         * IsolationForestParameters
+         * @description ì²« ëª¨ë¸ì íì© íì´í¼íë¼ë¯¸í°ë¥¼ ìë ¥ ê³ì½ì¼ë¡ ê³ ì íë¤.
+         */
+        IsolationForestParameters: {
+            /**
+             * Bootstrap
+             * @default false
+             */
+            bootstrap: boolean;
+            /**
+             * Max Features
+             * @default 1
+             */
+            max_features: number;
+            /**
+             * Max Samples
+             * @default auto
+             */
+            max_samples: number | "auto";
+            /**
+             * N Estimators
+             * @default 100
+             */
+            n_estimators: number;
+            /**
+             * Random State
+             * @default 42
+             */
+            random_state: number;
         };
         /** JobDiagnosticsOut */
         JobDiagnosticsOut: {
@@ -1150,7 +1249,7 @@ export interface components {
         };
         /**
          * JobPageOut
-         * @description 키셋 커서로 이어지는 경량 Job 목록과 다음 조회 위치.
+         * @description í¤ì ì»¤ìë¡ ì´ì´ì§ë ê²½ë Job ëª©ë¡ê³¼ ë¤ì ì¡°í ìì¹.
          */
         JobPageOut: {
             /** Items */
@@ -1160,7 +1259,7 @@ export interface components {
         };
         /**
          * JobSummaryOut
-         * @description 목록에 필요한 값과 마지막 실행 시도만 노출한다.
+         * @description ëª©ë¡ì íìí ê°ê³¼ ë§ì§ë§ ì¤í ìëë§ ë¸ì¶íë¤.
          */
         JobSummaryOut: {
             /** Attempt Count */
@@ -1205,9 +1304,98 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** MLTrainRequest */
+        MLTrainRequest: {
+            /** Dataset Id */
+            dataset_id: string;
+            /** Features */
+            features: string[];
+            params?: components["schemas"]["IsolationForestParameters"];
+        };
+        /**
+         * MLTrainingJobOut
+         * @description ê¸°ì¡´ Job ìëµì enum íì¥ ìì´ ML ì¤í ìíë¥¼ ì ê³µíë¤.
+         */
+        MLTrainingJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_train";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** ModelRevisionOut */
+        ModelRevisionOut: {
+            /** Algorithm */
+            algorithm: string;
+            /** Attempt Id */
+            attempt_id: string;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Dataset Version */
+            dataset_version: string;
+            /** Features */
+            features: string[];
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Location */
+            location: string;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Runtime */
+            runtime: {
+                [key: string]: unknown;
+            };
+            /** Sha256 */
+            sha256: string;
+            /** Training Score Summary */
+            training_score_summary: {
+                [key: string]: unknown;
+            };
+        };
         /**
          * PreviewOut
-         * @description 제한된 행 미리보기와 컬럼 타입.
+         * @description ì íë í ë¯¸ë¦¬ë³´ê¸°ì ì»¬ë¼ íì.
          */
         PreviewOut: {
             /** Returned Rows */
@@ -1223,7 +1411,7 @@ export interface components {
         };
         /**
          * ProblemOut
-         * @description 오류 응답 공통 계약. detail은 안전한 메시지 또는 입력 검증 위치를 담는다.
+         * @description ì¤ë¥ ìëµ ê³µíµ ê³ì½. detailì ìì í ë©ìì§ ëë ìë ¥ ê²ì¦ ìì¹ë¥¼ ë´ëë¤.
          */
         ProblemOut: {
             /** Category */
@@ -1265,7 +1453,7 @@ export interface components {
         };
         /**
          * Step
-         * @description 검증 및 직렬화가 가능한 피처 변환 단계.
+         * @description ê²ì¦ ë° ì§ë ¬íê° ê°ë¥í í¼ì² ë³í ë¨ê³.
          */
         Step: {
             /** Alias */
@@ -1333,7 +1521,7 @@ export interface components {
         };
         /**
          * StoragePolicyOut
-         * @description 서버의 유효 보존 정책과 값의 출처.
+         * @description ìë²ì ì í¨ ë³´ì¡´ ì ì±ê³¼ ê°ì ì¶ì².
          */
         StoragePolicyOut: {
             /** Automatic Deletion */
@@ -1354,7 +1542,7 @@ export interface components {
         };
         /**
          * Transform
-         * @description 순서가 보존되는 재현 가능한 변환 정의.
+         * @description ììê° ë³´ì¡´ëë ì¬í ê°ë¥í ë³í ì ì.
          */
         Transform: {
             /** Group By */
@@ -2410,6 +2598,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_model_revision_api_ml_models__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_training_job_api_ml_train_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLTrainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLTrainingJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_ml_training_job_api_ml_train_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLTrainingJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_ml_training_job_api_ml_train_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLTrainingJobOut"];
                 };
             };
             /** @description Structured API error */
