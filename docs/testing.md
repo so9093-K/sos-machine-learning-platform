@@ -1,44 +1,36 @@
 # 테스트·검증·CI 기준
 
-테스트는 SOS의 실제 사용자 목표와 데이터·실행 계약을 보호하기 위한 수단이다. 테스트 개수, 커버리지 유지, 기존 검증 체계 보존 자체를 목표로 삼지 않는다. 현재 지원 범위는 실제 구현·실행 결과를 기준으로 판단한다.
+검증의 목적은 사용자 경험과 데이터·모델·실행 계약을 보호하는 것이다. 테스트의 존재, 개수, 커버리지나 과거 CI 의무 자체를 유지 목표로 삼지 않는다.
 
-## 테스트 유지·삭제 판단
+## 검증의 유지·삭제
 
-- 테스트를 새로 만들거나 유지할 때 **검출하는 고유한 제품 실패**, 다른 검사와의 중복, 실제 실행·유지 비용을 확인한다.
-- 기존에 있었다는 이유, 실패 가능성이 있다는 이유 또는 테스트가 삭제되었다는 이유만으로 대체 테스트를 만들지 않는다.
-- 실제 보호 가치가 없거나 구현 내부 형태만 고정하는 테스트는 **삭제**한다. 적은 비용으로 충분히 검증되면 **축소·통합**한다. 현재 가치가 있으면 **유지**한다.
-- ML 알고리즘·Job 상태·판본·객체 게시의 정합성은 Python 단위·실제 DB/Worker/S3 통합 계층에서 검증한다. 브라우저는 사용자 조작·안내·핵심 화면 연결을 검증하며 계산 전체를 되풀이하지 않는다.
-- 새로운 CI 분기·Registry·테스트 관리 도구·복잡한 Mock은 반복 비용보다 분명한 검출 가치가 있을 때만 도입한다.
+- 유지 여부는 **그 테스트만 발견하는 중요한 실패**, 중복, 운영·유지 비용으로 판단한다. 이유를 설명할 수 없으면 삭제한다. 삭제했다고 대체 테스트를 자동으로 추가하지 않는다.
+- 모델 계산·불변 판본·Job 게시와 복구는 Python 단위 또는 PostgreSQL/S3 통합에서 검증한다. 브라우저에서는 사용자 조작과 API 연결 등 UI에서만 확인할 수 있는 결과를 검사하고 동일한 ML 계산을 반복하지 않는다.
+- 테스트 등록부·공통 실행 Manifest·실행기 자체를 위한 회귀 테스트는 운영하지 않는다. pytest·Vitest·Playwright·Ruff의 **기본 종료 코드와 실행 로그**가 검증 결과다. 전체 테스트의 병합 전 실행이 필요하면 직접 선택한다.
 
 ## 로컬 실행
 
-- `make check-fast`: Ruff, 인프라 없는 Python 단위 검증, 프런트엔드 빌드·Vitest. 개발 중 첫 확인 경로다.
-- `make check`: 실행 중인 Compose 서비스를 전제로 DB/S3 통합, OpenAPI 타입·Wheel·Alembic, 격리된 브라우저 흐름까지 확인하는 수동 전체 검사다.
-- 단일 검사는 `uv run --locked python scripts/verify.py run <suite>` 로 수행한다. 포맷 문제는 CI를 기다리지 않고 `uv run --locked ruff check --fix .`, `uv run --locked ruff format .`으로 로컬에서 수정한다.
-- 테스트 Fixture는 자체 UUID DB·버킷만 생성·정리하며 기존 사용자 데이터와 Iceberg Snapshot·Tag를 임의 삭제하지 않는다.
+- `make check-fast`: Ruff, 인프라 없는 Python 단위, 프런트엔드 빌드·Vitest.
+- `make check`: 위 검사에 더해 현재 구동 중인 로컬 PostgreSQL·S3 통합, OpenAPI 생성 타입, 배포 Wheel, Alembic, 격리 브라우저 전체 흐름 확인.
+- 개별 실행: `uv run --locked pytest -q tests/test_*.py`, `uv run --locked pytest -q -m pr tests/integration`, `uv run --locked pytest -q tests/integration`, `cd web && npm test`, `uv run --locked python scripts/isolated_compose.py --spec all --grep '@pr'`.
+- 포맷은 CI 실패를 기다리지 않고 `uv run --locked ruff check --fix .`와 `uv run --locked ruff format .`으로 로컬에서 수정한다.
+- Python 테스트의 `pr` 표식과 Playwright 제목의 `@pr`은 별도 보호 등록부가 아니라 **일반 PR에서 자동 실행할 개별 검증**을 고르는 방법이다.
 
-## CI 실행 정책
+## CI 정책
 
-| 이벤트 | 자동 실행 | 의도 |
-| --- | --- | --- |
-| Pull Request | Ruff·Python 단위·프런트엔드·OpenAPI·개별 핵심 DB/Worker/S3/ML 통합(`-m pr`)·핵심 브라우저(`@pr`) | 사용자의 실제 데이터·실행 위험과 사용자 진입을 검증 |
-| main push | 빠른 검사 + 전체 Python 인프라 통합 | 병합 결과의 광범위한 회귀 확인 |
-| schedule / workflow_dispatch | 전체 Python 통합 + 격리된 Playwright 브라우저 | 광범위한 회귀 확인 |
+| 이벤트 | 실제 실행 |
+| --- | --- |
+| Pull Request | Ruff·Python 단위·Frontend 빌드/Vitest·OpenAPI 생성 타입/호환성 + PostgreSQL/S3 기반 핵심 통합 `-m pr` + 격리 브라우저 `@pr` |
+| main push | 빠른 검사 + 전체 Python 통합 |
+| 수동 workflow_dispatch | 빠른 검사 + 전체 Python 통합 + 전체 브라우저 |
 
-- 보호용 상태 체크 `python-quality`를 유지한다. 이벤트별로 실행해야 하는 작업이 성공한 경우에만 통과한다.
-- PR의 통합 검증은 일괄 생략하지 않는다. 실제 객체·Snapshot 게시, 사용자 권한, Job 상태와 모델 판본을 보호하는 **개별 테스트 함수**에 `@pytest.mark.pr`을 붙여 실제 PostgreSQL/S3/Worker에서 실행한다. 선별되지 않은 검증은 각자의 고유 실패 탐지 가치가 있는 동안 전체 검사에서 실행한다.
-- Playwright는 **개별 `@pr` 시나리오**로 등록→Worker, 실패 후 사용자 안내, 권한별 동작, ML Feature 선택→비동기 학습 Job 접수→Job 표시를 확인한다. 모델 학습 완료 및 Scoring·평가·설명 연속 실행은 브라우저에서 반복하지 않는다. 전체 E2E는 남겨둘 의미가 있는 경우만 수동·정기 실행한다.
-- 선별된 검사로 드러나지 않는 고유한 데이터·권한 위험에 영향을 주는 변경은 관련 테스트를 병합 전에 추가로 실행하고 그 이유와 결과를 PR에 남긴다. 모든 테스트를 자동으로 늘리거나 삭제된 테스트를 무조건 대체하지 않는다.
-- 브라우저 E2E는 PR과 수동·정기 실행 모두 하나의 고유 Compose 프로젝트에서 Workspace와 토큰 권한 시나리오를 실행한다. 화면 검증을 위해 모델 전체 연산·Iceberg 쓰기를 반복하지 않는다.
-- 필수 검사는 성공 여부와 실제 테스트 결과로 판단한다. 실패·Skip·실행 0건을 성공으로 변환하지 않고, GitHub Actions의 취소된 실행을 성공으로 간주하지 않는다.
+정기 자동 전체 회귀는 제거한다. 변경이 없는데도 모든 Docker·ML·브라우저 테스트를 매일 되풀이할 필요가 없기 때문이다. `python-quality`라는 브랜치 보호 상태 체크는 유지하되 선택한 Job의 실제 성공만 요구한다. 이 이름은 별도 테스트 실행기나 Python 전용 품질 체계를 뜻하지 않는다.
 
-## 실패·안전 경계
+CI는 Native Runner를 직접 실행한다. 별도의 `python-fast` 실행 체계나 `scripts/verify.py` Suite/Manifest 레이어를 두지 않는다. 고유 Compose 환경과 소유 리소스 정리가 필요한 브라우저 검증은 `scripts/isolated_compose.py`가 담당한다. `scripts/verify_openapi.py`는 PR의 API 후방 호환성 비교, `scripts/verify_wheel.py`은 설치한 배포본 검증만 담당한다.
 
-- 먼저 SHA·실패 명령·실패 사례·단계 시간을 확인하고 제품 결함, 테스트 결함, 인프라 장애를 구분한다. 실패를 감추는 자동 재시도는 기본값으로 사용하지 않는다.
-- 격리 브라우저 실행은 자신이 만든 Compose 프로젝트·DB·버킷·이미지에만 정리 권한을 가진다. SIGKILL 등으로 중단된 경우 `.sos-test/runs/<instance>/validation-owner.json`을 확인하고 `python scripts/isolated_compose.py --recover-owned <instance>`를 사용한다.
-- 실제 검증 비용과 반복 실패가 문제라면 해당 테스트를 먼저 재평가한다. 의미가 없는 테스트를 Nightly로 옮겨 영구 보존하지 않는다.
-- Native Runner는 실패 코드와 필요한 JUnit 결과를 반환한다. 별도의 Test Inventory, Protected Registry, 전체 Test ID 일대일 대조는 운영하지 않는다.
+## 안전 경계와 실패
 
-## 완료 기준
-
-실제 사용자 목표·고유 위험에 대한 필요한 증거가 있고, 제거한 테스트의 자리에 의미 없는 대체 검증을 만들지 않았으며, 변경과 관계없는 중량 검사를 일상 PR에 강제하지 않아야 한다. 실행하지 않은 검사는 보고에서 명시한다.
+- 실패·취소·0개 테스트를 성공으로 간주하지 않는다. 먼저 실제 실패 명령과 로그를 확인하고 제품 결함·테스트 결함·환경 문제를 구별한다.
+- DB Fixture는 테스트마다 고유 DB·버킷을 만들고, 격리 브라우저는 고유 Compose 프로젝트·임시 인증 토큰을 사용한다. 기존 사용자 DB·버킷·Iceberg Snapshot/Tag는 자동 삭제하지 않는다.
+- 강제 종료 후 소유 자원 정리는 `.sos-test/runs/<instance>/validation-owner.json`을 확인한 뒤 `python scripts/isolated_compose.py --recover-owned <instance>`로만 수행한다.
+- 변경된 기능이 자동 선택 검증에 포함되지 않았다면 실제 위험에 해당하는 개별 테스트를 추가로 실행하고 결과를 리뷰에 기록한다. 불필요한 테스트를 야간 실행으로 옮겨 보존하지 않는다.

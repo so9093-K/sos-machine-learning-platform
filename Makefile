@@ -1,4 +1,4 @@
-# 공개 서비스 실행과 격리 E2E 대상은 동일한 Docker Compose 구성을 사용한다.
+# 공개 서비스와 격리 브라우저 검증은 compose.yaml을 공유한다.
 .DEFAULT_GOAL := help
 .PHONY: up down restart status logs doctor check check-fast help
 
@@ -25,15 +25,19 @@ doctor:
 	@$(COMPOSE) exec -T api python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:9602/api/ready', timeout=5).close()"
 
 check-fast:
-	@set -eu; for suite in ruff python-unit frontend; do \
-		uv run --locked python scripts/verify.py run "$$suite"; \
-	done
+	uv run --locked ruff check .
+	uv run --locked ruff format --check .
+	uv run --locked pytest -q tests/test_*.py
+	cd web && npm run build && npm test
 
-check:
-	@$(COMPOSE) ps --status running
-	@set -eu; for suite in ruff python-unit python-integration frontend openapi-types wheel alembic workspace-e2e; do \
-		uv run --locked python scripts/verify.py run "$$suite"; \
-	done
+check: check-fast
+	@docker compose -f compose.yaml -p sos-platform ps --status running
+	uv run --locked pytest -q tests/integration
+	cd web && npm run generate:types
+	git diff --exit-code -- web/src/api.generated.ts
+	uv run --locked python scripts/verify_wheel.py
+	uv run --locked alembic check
+	uv run --locked python scripts/isolated_compose.py --spec all
 
 help:
 	@printf '%s\n' \

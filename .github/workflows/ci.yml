@@ -4,8 +4,6 @@ on:
   pull_request:
   push:
     branches: [main]
-  schedule:
-    - cron: '17 17 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -16,7 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  python-fast:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,46 +23,44 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
-      - name: Install Python
-        run: uv python install
-      - name: Validate Python lockfile
-        run: uv lock --check
-      - name: Install development dependencies
-        run: uv sync --locked --group dev
-      - name: Ruff lint and format
-        run: uv run --locked python scripts/verify.py run ruff
+      - name: Install Python and dependencies
+        run: |
+          uv python install
+          uv lock --check
+          uv sync --locked --group dev
+      - name: Ruff
+        run: |
+          uv run --locked ruff check .
+          uv run --locked ruff format --check .
       - name: Python unit tests
-        run: uv run --locked python scripts/verify.py run python-unit
-      - name: Verify Markdown links
+        run: uv run --locked pytest -q tests/test_*.py
+      - name: Documentation links
         run: python3 scripts/check_doc_links.py
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
-      - name: Install frontend dependencies for API types
-        run: cd web && npm ci --no-audit
-      - name: Verify generated OpenAPI types
-        run: uv run --locked python scripts/verify.py run openapi-types
-      - name: Verify API backward compatibility
+      - name: Install frontend
+        working-directory: web
+        run: npm ci --no-audit
+      - name: Build and frontend tests
+        working-directory: web
+        run: |
+          npm run build
+          npm test
+      - name: Generated OpenAPI types
+        run: |
+          cd web
+          npm run generate:types
+          cd ..
+          git diff --exit-code -- web/src/api.generated.ts
+      - name: OpenAPI compatibility with PR base
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: uv run --locked python scripts/verify.py run openapi-compat --base-ref "$BASE_SHA"
+        run: uv run --locked python scripts/verify_openapi.py --base-ref "$BASE_SHA"
 
-  frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-      - name: Install frontend dependencies
-        working-directory: web
-        run: npm ci --no-audit
-      - name: Build and Vitest
-        run: python3 scripts/verify.py run frontend
-
-  python-integration:
-    needs: [python-fast]
+  integration:
+    needs: [checks]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -76,26 +72,27 @@ jobs:
         run: |
           uv python install
           uv sync --locked --group dev
-      - name: Start integration infrastructure
+      - name: Start integration services
         run: docker compose -f compose.yaml -p sos-platform up -d --wait
-      - name: Prepare database and storage
+      - name: Prepare database and object storage
         run: |
           uv run --locked alembic upgrade head
           uv run --locked python -m sos_platform.bootstrap
-      - name: Verify distributable wheel
-        run: uv run --locked python scripts/verify.py run wheel
-      - name: PR critical integration cases
-        if: github.event_name == 'pull_request'
-        run: uv run --locked python scripts/verify.py run python-pr
-      - name: Complete integration suite
-        if: github.event_name != 'pull_request'
-        run: uv run --locked python scripts/verify.py run python-integration
-      - name: Verify metadata schema matches migration
-        run: uv run --locked python scripts/verify.py run alembic
+      - name: Distribution wheel
+        run: uv run --locked python scripts/verify_wheel.py
+      - name: Python integration tests
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            uv run --locked pytest -q -m pr tests/integration
+          else
+            uv run --locked pytest -q tests/integration
+          fi
+      - name: Alembic schema
+        run: uv run --locked alembic check
 
-  ui-e2e:
+  browser:
     if: github.event_name != 'push'
-    needs: [python-fast, frontend]
+    needs: [checks]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -106,20 +103,21 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
-      - name: Install Python and JavaScript
+      - name: Install Python and frontend
         run: |
           uv python install
           uv sync --locked --group dev
           cd web && npm ci --no-audit
-      - name: Install browser
+      - name: Install Chromium
         working-directory: web
         run: npx playwright install --with-deps chromium
-      - name: PR core browser user and permission scenarios
-        if: github.event_name == 'pull_request'
-        run: uv run --locked python scripts/verify.py run workspace-pr --output-dir web/reports
-      - name: Full browser user flows
-        if: github.event_name != 'pull_request'
-        run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
+      - name: Isolated browser flows
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            uv run --locked python scripts/isolated_compose.py --spec all --grep '@pr'
+          else
+            uv run --locked python scripts/isolated_compose.py --spec all
+          fi
       - name: Save failure trace
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -133,20 +131,18 @@ jobs:
 
   python-quality:
     if: always()
-    needs: [python-fast, frontend, python-integration, ui-e2e]
+    needs: [checks, integration, browser]
     runs-on: ubuntu-latest
     steps:
-      - name: Require checks selected for this event
+      - name: Require real tests for this event
         env:
           EVENT: ${{ github.event_name }}
-          FAST: ${{ needs.python-fast.result }}
-          FRONTEND: ${{ needs.frontend.result }}
-          INTEGRATION: ${{ needs.python-integration.result }}
-          E2E: ${{ needs.ui-e2e.result }}
+          CHECKS: ${{ needs.checks.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          BROWSER: ${{ needs.browser.result }}
         run: |
-          test "$FAST" = "success"
-          test "$FRONTEND" = "success"
+          test "$CHECKS" = "success"
           test "$INTEGRATION" = "success"
           if [ "$EVENT" != "push" ]; then
-            test "$E2E" = "success"
+            test "$BROWSER" = "success"
           fi
