@@ -1340,6 +1340,9 @@ test("ML Workbench creates a persistent Isolation Forest Model Revision", async 
   await page.getByRole("button", { name: new RegExp(jobId.slice(0, 8)) }).click();
   await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible();
   await page.getByRole("spinbutton", { name: "Isolation Forest 트리 개수" }).fill("25");
+  // 새로고침 이후 Feature는 임의로 복원하지 않는다. 새 실행의 입력을 다시 명시한다.
+  await page.getByRole("checkbox", { name: /temperature/ }).check();
+  await expect(page.getByRole("button", { name: "학습 Job 제출" })).toBeEnabled();
   const secondJobId = await submittedJob(page, "/api/ml/train/jobs", () =>
     page.getByRole("button", { name: "학습 Job 제출" }).click());
   const currentResult = page.getByRole("region", { name: "ML 실행 결과" });
