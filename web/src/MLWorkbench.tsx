@@ -316,7 +316,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           <div className="stat"><span>학습 기준 이상 후보</span><strong>{statistic(model.training_score_summary.predicted_anomalies)}건</strong></div>
           <div className="stat"><span>학습 점수 평균</span><strong>{statistic(model.training_score_summary.score_mean)}</strong></div>
         </div>
-        <p className="hint">이 수치는 학습 데이터에서 계산한 설명적 요약으로, 검증 Precision·Recall·최적 임계값을 의미하지 않습니다. 설명·독립 평가·MLflow 추적은 별도 구현 대상입니다.</p>
+        <p className="hint">이 수치는 학습 데이터의 설명적 요약이며 검증 Precision·Recall·최적 임계값이 아닙니다. Scoring·정책·평가·설명은 아래에서 별도 결과로 생성하며, MLflow 추적 상태는 운영자 설정 시 표시합니다.</p>
         <MLScoringPanel key={model.id} model={model} datasets={datasets}
           canRun={canTrain} canCancel={canCancel} />
         <div className="steps">

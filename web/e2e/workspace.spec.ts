@@ -1414,7 +1414,7 @@ test("ML Workbench scores and evaluates independently with explanation evidence"
   await expect(decision.getByRole("table", {
     name: /Feature를 학습 참조 중앙값으로 바꾸었을 때의 점수 변화/,
   })).toBeVisible();
-  await expect(decision.getByText(/인과적 기여도가 아닙니다/)).toBeVisible();
+  await expect(decision.getByText(/실제 이상 발생 원인의 증명이 아닙니다/)).toBeVisible();
   // 브라우저 메모리를 모두 초기화해도 이력 API로 불변 결과를 복원한다.
   await page.reload();
   await page.getByRole("button", { name: "ML Workbench" }).click();
