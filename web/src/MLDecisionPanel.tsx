@@ -251,7 +251,7 @@ export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
     </p>}
     {canCancel && policyJob && !DONE.has(policyJob.status) && !policyJob.cancel_requested &&
       <button className="secondary" onClick={() => void cancelPolicy()}>정책 취소 요청</button>}
-    {policyJob?.status === "Failed" && <p role="alert">정책 실패 · {policyJob.error_code}</p>
+    {policyJob?.status === "Failed" && <p role="alert">정책 실패 · {policyJob.error_code}</p>}
     <div className="job-list">
       <strong>이 점수의 정책 이력</strong>
       {policyHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
@@ -277,7 +277,7 @@ export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
     </p>}
     {canCancel && evaluationJob && !DONE.has(evaluationJob.status) && !evaluationJob.cancel_requested &&
       <button className="secondary" onClick={() => void cancelEvaluation()}>평가 취소 요청</button>}
-    {evaluationJob?.status === "Failed" && <p role="alert">평가 실패 · {evaluationJob.error_code}</p>
+    {evaluationJob?.status === "Failed" && <p role="alert">평가 실패 · {evaluationJob.error_code}</p>}
     <div className="job-list">
       <strong>이 점수의 평가 이력</strong>
       {evaluationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
@@ -317,7 +317,7 @@ export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
     </p>}
     {canCancel && explanationJob && !DONE.has(explanationJob.status) && !explanationJob.cancel_requested &&
       <button className="secondary" onClick={() => void cancelExplanation()}>설명 취소 요청</button>}
-    {explanationJob?.status === "Failed" && <p role="alert">설명 실패 · {explanationJob.error_code}</p>
+    {explanationJob?.status === "Failed" && <p role="alert">설명 실패 · {explanationJob.error_code}</p>}
     <div className="job-list">
       <strong>이 점수의 설명 이력</strong>
       {explanationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
