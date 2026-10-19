@@ -492,6 +492,15 @@ class JobSummaryOut(BaseModel):
     latest_attempt: AttemptOut | None
 
 
+class MLTrainingJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_train"]
+
+
+class MLTrainingJobPageOut(BaseModel):
+    items: list[MLTrainingJobSummaryOut]
+    next_cursor: str | None = None
+
+
 class ExplorationJobSummaryOut(JobSummaryOut):
     kind: Literal["exploration"]
     result: ExplorationOut | None

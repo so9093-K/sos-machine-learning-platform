@@ -61,6 +61,7 @@ from .schemas import (
     JobPageOut,
     MLTrainRequest,
     MLTrainingJobOut,
+    MLTrainingJobPageOut,
     ModelRevisionOut,
     PreviewOut,
     ProblemOut,
@@ -558,6 +559,20 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         if item["kind"] != "ml_train":
             raise HTTPException(status_code=404, detail="Training Job not found")
         return item
+
+    @app.get("/api/ml/train/jobs", response_model=MLTrainingJobPageOut)
+    def list_ml_training_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Job"),
+            actor_id=None if actor.privileged else actor.id,
+            kind="ml_train",
+        )
+        return page_from_rows(rows, limit)
 
     @app.get("/api/ml/train/jobs/{job_id}", response_model=MLTrainingJobOut)
     def get_ml_training_job(job_id: str, actor: Actor = READ_JOB_DEP):
