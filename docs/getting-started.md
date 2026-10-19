@@ -114,7 +114,7 @@ SOS_MLFLOW_EXPERIMENT_ID=17
 SOS_MLFLOW_TOKEN=<외부 서버에서 발급한 토큰>
 ```
 
-Worker는 환경 설정에 따라 전송 대기 기록을 Job 완료 트랜잭션 안에 생성하고, 별도로 MLflow REST API에 Run·설정·유한한 지표를 전송한다. 모델 바이너리와 원본 데이터는 전송하지 않는다. 외부 서버 연결에 실패하면 상태는 `Retry`가 되며 SOS Job·Model Revision은 성공으로 유지된다. 재시작 시 미완료 전송은 재조회한다. `GET /api/ml/tracking/jobs/{job_id}`에서 권한이 있는 사용자만 외부 전송 상태를 확인한다. 전송 중 네트워크 응답이 소실되면 Job ID로 외부 Run을 검색하지만, 외부 Search/Create가 원자적이지 않으므로 절대적인 exactly-once를 보장하지 않는다.
+Worker는 환경 설정에 따라 전송 대기 기록을 Job 완료 트랜잭션 안에 생성하고, 별도로 MLflow REST API에 Run·설정·유한한 지표를 전송한다. 모델 바이너리와 원본 데이터는 전송하지 않는다. 외부 서버 연결에 실패하면 상태는 `Retry`가 되며 SOS Job·Model Revision은 성공으로 유지된다. 재시작 시 미완료 전송은 재조회한다. 최초 전송 대상의 서버·Experiment 연결 지문을 보존하며, 운영 설정이 바뀌면 이전 Run ID의 재사용을 차단하고 `SOS-MLFLOW-TARGET-CHANGED`를 기록한다. 이전 대상 복구 또는 명시적 전송 이관 판단이 필요하다. `GET /api/ml/tracking/jobs/{job_id}`에서 권한이 있는 사용자만 외부 전송 상태를 확인한다. 전송 중 네트워크 응답이 소실되면 Job ID로 외부 Run을 검색하지만, 외부 Search/Create가 원자적이지 않으므로 절대적인 exactly-once를 보장하지 않는다.
 
 HTTP를 통한 전송은 기본적으로 루프백 서버에서만 허용한다. 별도로 격리된 관리형 네트워크에서만 `SOS_MLFLOW_ALLOW_INSECURE_HTTP=true`를 명시적으로 사용할 수 있으며 공개망에서는 HTTPS를 사용한다. 외부 MLflow 주소·토큰은 사용자 API로 입력받지 않고 API 서버에 토큰을 전달하지 않는다.
 

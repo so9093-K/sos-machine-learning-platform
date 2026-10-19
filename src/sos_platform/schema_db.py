@@ -261,6 +261,7 @@ mlflow_exports = Table(
     Column("job_id", String(36), ForeignKey("jobs.id"), primary_key=True),
     Column("state", String(16), nullable=False),
     Column("run_id", String(128)),
+    Column("destination_fingerprint", String(64)),
     Column("attempts", Integer, nullable=False),
     Column("last_error_code", String(64)),
     Column("retry_after", Text, nullable=False),

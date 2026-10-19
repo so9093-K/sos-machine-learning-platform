@@ -50,6 +50,40 @@ class TrackingStoreMixin:
             )
             return {**dict(row), "attempts": row["attempts"] + 1}
 
+    def bind_tracking_destination(self, job_id: str, fingerprint: str) -> bool:
+        """외부 호출 전에 최초 서버·Experiment 지문을 고정하고 변경을 거부한다.
+
+        이전 코드에서 만든 Run ID에 지문이 없으면 소속을 검증할 수 없으므로
+        새 전송 대상에 암묵적으로 재사용하지 않는다.
+        """
+        with self.worker_ownership_connection() as db:
+            row = (
+                db.execute(
+                    text(
+                        "SELECT run_id,destination_fingerprint FROM mlflow_exports "
+                        "WHERE job_id=:job AND state='Sending' FOR UPDATE"
+                    ),
+                    {"job": job_id},
+                )
+                .mappings()
+                .first()
+            )
+            if row is None:
+                raise RuntimeError("Tracking export ownership changed")
+            saved = row["destination_fingerprint"]
+            if saved is not None:
+                return saved == fingerprint
+            if row["run_id"] is not None:
+                return False
+            db.execute(
+                text(
+                    "UPDATE mlflow_exports SET destination_fingerprint=:fingerprint,"
+                    "updated_at=:at WHERE job_id=:job"
+                ),
+                {"job": job_id, "fingerprint": fingerprint, "at": now()},
+            )
+            return True
+
     def save_tracking_run_id(self, job_id: str, run_id: str) -> None:
         """외부 생성 Run ID를 Metrics 전송 전에 복구 가능하게 기록한다."""
         with self.worker_ownership_connection() as db:

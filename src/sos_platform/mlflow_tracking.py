@@ -4,6 +4,7 @@ MLflow 서버를 SOS의 모델/Job 정본으로 사용하지 않는다. 모델 �
 원시 Feature, 개인 데이터, 토큰은 외부로 전송하지 않는다.
 """
 
+import hashlib
 import json
 import math
 import time
@@ -148,6 +149,12 @@ def send_to_mlflow(
     return run_id
 
 
+def _destination_fingerprint(settings: MLflowSettings) -> str:
+    """인증정보를 제외한 Tracking 서버와 Experiment의 연결 지문."""
+    identity = f"{settings.endpoint}\0{settings.experiment_id}".encode("utf-8")
+    return hashlib.sha256(identity).hexdigest()
+
+
 def run_tracking_once(store, client: MLflowClient) -> bool:
     """SOS 정본과 독립적으로 전송 한 건만 처리한다."""
     export = store.claim_tracking_export()
@@ -155,6 +162,8 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
         return False
     job_id = export["job_id"]
     try:
+        if not store.bind_tracking_destination(job_id, _destination_fingerprint(client.settings)):
+            raise MLflowDeliveryError("SOS-MLFLOW-TARGET-CHANGED")
         job = store.get_job(job_id)
         if job is None:
             raise MLflowDeliveryError("SOS-MLFLOW-SOURCE-MISSING")

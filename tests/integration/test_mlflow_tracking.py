@@ -103,3 +103,67 @@ def test_tracking_inflight_recovery_keeps_external_run_id(workspace, monkeypatch
     recovered = store.claim_tracking_export()
     assert recovered["run_id"] == "recovered-run"
     assert recovered["attempts"] == 2
+
+
+
+def test_retry_does_not_reuse_external_run_after_server_or_experiment_change(workspace, monkeypatch):
+    client, store = workspace
+    monkeypatch.setenv("SOS_MLFLOW_TRACKING_URI", "https://tracking.example.org")
+    monkeypatch.setenv("SOS_MLFLOW_EXPERIMENT_ID", "7")
+    dataset = upload(client)
+    submitted = client.post(
+        "/api/ml/train/jobs",
+        json={"dataset_id": dataset["id"], "features": ["temperature"]},
+        headers={"Idempotency-Key": str(uuid4())},
+    )
+    assert submitted.status_code == 202
+    assert run_once(store)
+    job_id = submitted.json()["id"]
+    original = StubMLflow()
+    assert run_tracking_once(store, original)
+    assert store.tracking_status(job_id)["run_id"] == "run-1"
+
+    alternate = StubMLflow()
+    alternate.settings = MLflowSettings("https://other.example.org", "9", None)
+    with store.connection() as db:
+        db.execute(
+            text("UPDATE mlflow_exports SET retry_after=:when WHERE job_id=:job"),
+            {"when": "2000-01-01T00:00:00+00:00", "job": job_id},
+        )
+    assert run_tracking_once(store, alternate)
+    assert alternate.calls == []
+    blocked = store.tracking_status(job_id)
+    assert blocked["state"] == "Retry"
+    assert blocked["last_error_code"] == "SOS-MLFLOW-TARGET-CHANGED"
+    assert blocked["run_id"] == "run-1"
+    assert client.get(f"/api/ml/train/jobs/{job_id}").json()["status"] == "Succeeded"
+
+    with store.connection() as db:
+        db.execute(
+            text("UPDATE mlflow_exports SET retry_after=:when WHERE job_id=:job"),
+            {"when": "2000-01-01T00:00:00+00:00", "job": job_id},
+        )
+    original.fail_log = False
+    assert run_tracking_once(store, original)
+    assert store.tracking_status(job_id)["state"] == "Succeeded"
+    assert [endpoint for endpoint, _ in original.calls].count("runs/create") == 1
+
+
+def test_unbound_legacy_run_is_not_sent_to_unknown_destination(workspace, monkeypatch):
+    client, store = workspace
+    monkeypatch.setenv("SOS_MLFLOW_TRACKING_URI", "https://tracking.example.org")
+    dataset = upload(client)
+    job = client.post(
+        "/api/ml/train/jobs",
+        json={"dataset_id": dataset["id"], "features": ["temperature"]},
+        headers={"Idempotency-Key": str(uuid4())},
+    )
+    assert run_once(store)
+    job_id = job.json()["id"]
+    assert store.claim_tracking_export()["job_id"] == job_id
+    store.save_tracking_run_id(job_id, "unknown-origin-run")
+    assert store.recover_tracking_exports() == 1
+    transport = StubMLflow()
+    assert run_tracking_once(store, transport)
+    assert transport.calls == []
+    assert store.tracking_status(job_id)["last_error_code"] == "SOS-MLFLOW-TARGET-CHANGED"
