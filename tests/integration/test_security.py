@@ -204,19 +204,6 @@ def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
         assert tokens["alice"] not in json.dumps(events)
 
 
-def test_protected_mode_rejects_invalid_credentials(monkeypatch):
-    """토큰 모드는 누락·잘못된 식별자·무효 역할 설정을 기동 전에 거부한다."""
-    from sos_platform.security import IdentitySettings
-
-    monkeypatch.setenv("SOS_AUTH_MODE", "token")
-    monkeypatch.delenv("SOS_AUTH_TOKEN_HASHES", raising=False)
-    with pytest.raises(ValueError):
-        IdentitySettings.from_env()
-    monkeypatch.setenv("SOS_AUTH_TOKEN_HASHES", '{"bad": {"actor_id": "admin"}}')
-    with pytest.raises(ValueError):
-        IdentitySettings.from_env()
-
-
 def test_required_audit_failure_rolls_back_job_creation(workspace, monkeypatch):
     """중요 변경의 감사 기록을 확정하지 못하면 Job 생성도 커밋되지 않는다."""
     client, store = workspace

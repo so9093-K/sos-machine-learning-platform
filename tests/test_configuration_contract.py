@@ -77,6 +77,19 @@ def test_api_requires_explicit_authentication_mode(monkeypatch, tmp_path):
         IdentitySettings.from_env()
 
 
+def test_protected_mode_rejects_invalid_credentials(monkeypatch):
+    """토큰 모드는 누락·잘못된 식별자·무효 역할 설정을 기동 전에 거부한다."""
+    from sos_platform.security import IdentitySettings
+
+    monkeypatch.setenv("SOS_AUTH_MODE", "token")
+    monkeypatch.delenv("SOS_AUTH_TOKEN_HASHES", raising=False)
+    with pytest.raises(ValueError):
+        IdentitySettings.from_env()
+    monkeypatch.setenv("SOS_AUTH_TOKEN_HASHES", '{"bad": {"actor_id": "admin"}}')
+    with pytest.raises(ValueError):
+        IdentitySettings.from_env()
+
+
 def test_openapi_export_has_no_authentication_environment_side_effects(
     monkeypatch, tmp_path, capsys
 ):

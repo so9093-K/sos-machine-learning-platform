@@ -119,21 +119,6 @@ def test_tabular_header_option_is_part_of_dataset_interpretation(workspace):
     assert parse_options(store.get_dataset(with_header["id"]))["has_header"] is True
 
 
-def test_tabular_txt_rejects_ambiguous_or_malformed_input(workspace):
-    client, _ = workspace
-    cases = [
-        (b"5\tgood\n", "text/plain"),
-        (b"just free text\n", "text/tab-separated-values; header=absent"),
-        (b"5\tgood\n2\n", "text/tab-separated-values; header=absent"),
-        (b"5\tgood\n2\t\xff\n", "text/tab-separated-values; header=absent"),
-        (b"a\ta\n1\t2\n", "text/tab-separated-values; header=present"),
-    ]
-    for content, mime in cases:
-        response = client.post("/api/datasets/files", files={"file": ("text.txt", content, mime)})
-        assert response.status_code == 422, response.text
-        assert response.json()["code"] == "SOS-UPLOAD-INVALID"
-
-
 def test_upload_storage_wait_does_not_block_other_api_requests(workspace, monkeypatch):
     """객체 저장소가 느려도 API 이벤트 루프의 별도 조회는 진행되어야 한다."""
     client, _ = workspace
@@ -291,14 +276,19 @@ def test_upload_policy_and_raw_request_body_limit(workspace, monkeypatch):
 
 def test_invalid_format_and_empty_upload_are_user_errors(workspace):
     client, store = workspace
-    for name, data, code in (
-        ("unsupported.json", b"{}", "SOS-UPLOAD-FORMAT"),
-        ("empty.csv", b"", "SOS-UPLOAD-INVALID"),
-        ("broken.parquet", b"not a parquet file", "SOS-UPLOAD-INVALID"),
+    for name, data, mime, code in (
+        ("unsupported.json", b"{}", "application/octet-stream", "SOS-UPLOAD-FORMAT"),
+        ("empty.csv", b"", "application/octet-stream", "SOS-UPLOAD-INVALID"),
+        ("broken.parquet", b"not a parquet file", "application/octet-stream", "SOS-UPLOAD-INVALID"),
+        ("text.txt", b"5\tgood\n", "text/plain", "SOS-UPLOAD-INVALID"),
+        ("text.txt", b"just free text\n", "text/tab-separated-values; header=absent", "SOS-UPLOAD-INVALID"),
+        ("text.txt", b"5\tgood\n2\n", "text/tab-separated-values; header=absent", "SOS-UPLOAD-INVALID"),
+        ("text.txt", b"5\tgood\n2\t\xff\n", "text/tab-separated-values; header=absent", "SOS-UPLOAD-INVALID"),
+        ("text.txt", b"a\ta\n1\t2\n", "text/tab-separated-values; header=present", "SOS-UPLOAD-INVALID"),
     ):
         response = client.post(
             "/api/datasets/files",
-            files={"file": (name, data, "application/octet-stream")},
+            files={"file": (name, data, mime)},
         )
         assert response.status_code == 422, response.text
         assert response.json()["code"] == code

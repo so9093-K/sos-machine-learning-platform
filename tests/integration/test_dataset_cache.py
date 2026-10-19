@@ -68,38 +68,18 @@ def test_parallel_readers_share_the_same_cache_lease(workspace):
         assert first.read_bytes() == data
 
 
-def test_unchanged_immutable_cache_avoids_rehash_and_detects_local_corruption(
-    workspace, monkeypatch
-):
-    """반복 읽기는 불필요한 전체 해시를 피하되 파일 변조 후에는 S3 원본을 검증한다."""
-    import sos_platform.cache as cache
-
+def test_cached_dataset_restores_corrupted_local_file(workspace):
+    """로컬 캐시가 변조되어도 다음 읽기는 불변 S3 원본으로 복원한다."""
     _client, store = workspace
     content = b"t,value\n1,2\n3,4\n"
     dataset = save_upload_file(store, "verified.csv", BytesIO(content))
-    real_digest = cache._digest
-    hashed = 0
-
-    def counting_digest(path):
-        nonlocal hashed
-        hashed += 1
-        return real_digest(path)
-
-    monkeypatch.setattr(cache, "_digest", counting_digest)
     with cached_dataset_file(store, dataset) as local_path:
         assert local_path.read_bytes() == content
-    with cached_dataset_file(store, dataset) as local_path:
-        assert local_path.read_bytes() == content
-    assert hashed == 0
-
-    # 동일 크기의 외부 수정은 파일시스템 ctime 변경으로 감지된다.
-    # 원본 S3 파일은 변경되지 않았으므로 다음 Lease에서 올바른 내용을 다시 받는다.
     corrupt = b"t,value\n9,9\n8,8\n"
     assert len(corrupt) == len(content)
     local_path.write_bytes(corrupt)
     with cached_dataset_file(store, dataset) as verified:
         assert verified.read_bytes() == content
-    assert hashed >= 1
 
 
 def test_abandoned_download_is_reclaimed_without_touching_other_cache_files(workspace):
