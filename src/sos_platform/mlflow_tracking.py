@@ -129,8 +129,11 @@ def send_to_mlflow(
         remember_run(run_id)
     params = []
     if job["kind"] == "ml_train":
+        # 모델 설정은 공개 가능한 필드만 전송한다. 향후 Adapter 확장으로
+        # 비밀값·경로·사용자 입력이 추가돼도 자동으로 외부에 유출되지 않는다.
+        supported = {"n_estimators", "max_samples", "max_features", "bootstrap", "random_state"}
         for key, value in sorted(job["spec"].get("params", {}).items()):
-            if type(value) in (str, int, float, bool):
+            if key in supported and type(value) in (str, int, float, bool):
                 params.append({"key": f"sos.{key}", "value": str(value)})
     client.post(
         "runs/log-batch",

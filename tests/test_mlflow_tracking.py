@@ -61,6 +61,12 @@ def test_export_only_explicit_training_params_and_finite_metrics():
     wire = json.dumps(client.calls)
     assert "training_score_summary" not in wire
     assert "Bearer " not in wire
+    # 미래 모델 설정에 임의 문자열이 들어와도 전송 허용 목록 밖은 제외한다.
+    future = _job()
+    future["spec"]["params"]["storage_token"] = "secret-must-stay-in-sos"
+    another = FakeClient()
+    send_to_mlflow(another, future, known_run_id=None, remember_run=lambda _: None)
+    assert "secret-must-stay-in-sos" not in json.dumps(another.calls)
 
 
 def test_create_timeout_retry_search_recovers_same_run():
