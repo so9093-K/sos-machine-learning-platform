@@ -61,7 +61,7 @@ CSV·Parquet·구조화된 TSV/TXT 업로드는 기본 256 MiB 이하이고 `SOS
 
 데이터 미리보기는 최대 100행을 반환하고, 기본 EDA 프로파일은 정렬 없는 제한 조회 최대 1,000행을 계산한다. Dataset Understanding의 무작위 표본 분석은 고정 Seed Reservoir 방식을 사용하며 전체 분포의 대표성을 보장하지 않는다. 변환 결과 미리보기(Feature Preview)는 입력을 먼저 표본 추출하지 않고 실제 Job과 같은 변환 순서를 적용한 결과를 최대 30행 보여준다. Row-local Feature Preview는 원본 전체 행 수 때문에 거부하지 않으며 Lazy 출력 제한을 적용한다. 전역 정렬·Lag·Rolling은 동기 입력 예산을 확인하고 초과하면 전체 Transform Job을 사용하도록 안내한다. 전체 프로파일·피처 처리·Iceberg 적재는 Job으로 실행한다. Snapshot ID를 기록했더라도 만료 정책으로 사라질 수 있으므로 유효성 확인과 보존 정책이 필요하다.
 
-코드·환경·UX의 기준은 [Architecture](architecture.md), [Experience](experience.md), [Contracts](contracts.md), [Workflows](workflows.md), [Runtimes](runtimes.md)를 따른다. ML 모델 학습·평가·추론은 아직 이번 기능에 포함되지 않는다.
+코드·환경·UX의 기준은 [Architecture](architecture.md), [Experience](experience.md), [Contracts](contracts.md), [Workflows](workflows.md), [Runtimes](runtimes.md)를 따른다. 첫 Isolation Forest 학습 Job·모델 판본 조회를 제공하며 독립 평가·정책 판본·설명 생성·추론·MLflow 추적은 아직 구현하지 않았다.
 
 
 ## 첫 데이터 탐색
@@ -89,6 +89,19 @@ Dataset 목록은 `GET /api/datasets?limit=20`의 `items`와 `next_cursor`를 �
 Job 목록은 `GET /api/jobs?limit=20`에서 최근 순으로 조회하며, 응답의 `items`와 `next_cursor`를 사용해 이전 페이지를 가져온다. `limit`는 1~100으로 제한된다. 목록은 `attempt_count`·`latest_attempt`만 제공하므로 전체 실행 시도는 개별 `GET /api/jobs/{job_id}`에서 조회한다.
 
 비파티션 Iceberg 테이블은 Polars 스테이징·PyArrow 배치 Reader를 이용해 단일 Snapshot으로 적재한다. 기존 파티션 테이블만 현재 최대 50,000행·64 MiB 추정 메모리 제한의 호환 경로를 사용한다. 실행 시간·메모리·스테이징 디스크 예산은 별도로 적용하며, 제한 초과와 커밋 결과 불확실성을 구별한다.
+
+## ML Workbench — 첫 Isolation Forest 학습
+
+전역 메뉴의 **ML Workbench**는 Data Explorer 실행 여부와 무관하게 등록된 Dataset에서 시작한다. 다음 기능은 현재 구현된 범위이며, 전문적인 모델 평가나 운영 배포를 완료했다는 뜻은 아니다.
+
+1. Dataset을 선택하고 숫자형 Feature를 1~32개 지정한다. 학습 입력은 2~50,000행이며, NULL·NaN·Infinity가 있거나 Float64로 정확히 변환할 수 없는 큰 정수값이 있으면 거부한다. 원본 데이터는 변경되지 않는다.
+2. 트리 개수와 트리별 표본 수를 설정하고 **학습 Job 제출**을 선택한다. 제출 후에는 ML 학습 이력에서 실제 Queued·Running·Succeeded·Failed·Cancelled 상태와 Attempt 기록을 확인할 수 있다. 시간제한·메모리 제한·잘못된 Feature는 오류 코드로 식별한다.
+3. 완료한 Job에서 불변 **Model Revision** ID, 입력 Dataset ID·판본, Feature 순서, 학습 설정, 런타임 버전 및 학습 점수 요약을 확인한다. 모델은 내부 Worker가 생성하고 S3에 보존한다. 사용자가 제공한 pickle/joblib를 서버에서 복원하는 기능은 없다.
+4. 다른 성공한 학습 Job을 선택하면 두 모델의 설정·입력 판본을 비교할 수 있다. 서로 다른 Dataset 판본·Feature를 직접 비교할 수 없고, 입력이 같아도 학습 점수 평균이나 이상 후보 수는 정확도·모델 순위를 의미하지 않는다.
+
+API 클라이언트는 `POST /api/ml/train/jobs`로 학습을 제출하고 `GET /api/ml/train/jobs`, `GET /api/ml/train/jobs/{job_id}`, `POST /api/ml/train/jobs/{job_id}/cancel`, `GET /api/ml/models/{revision_id}`로 상태·판본을 조회한다. Token 인증에서는 학습 제출에 `Idempotency-Key`가 필요하며, 각 요청에는 Job/모델 권한 및 소유권 검사가 적용된다. 지원 파라미터와 응답 필드는 `/docs`의 OpenAPI를 따른다.
+
+**판단 근거의 한계:** 현재 표시하는 임계값은 학습 데이터 점수의 참고 분위수이며 최적화한 운영 경보 정책이 아니다. 학습 점수·경보량은 독립 검증 데이터에 대한 Precision·Recall·F1이 아니다. 학습 완료 이후 별도 데이터의 점수화, 정답 기반 평가, 정책 재적용, SHAP/LIME 설명과 MLflow Tracking은 후속 구현 대상이다.
 
 ## 기존 Iceberg 테이블의 안전한 쓰기 복구
 
