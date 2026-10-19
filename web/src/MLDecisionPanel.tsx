@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
+import { usePagedJobs } from "./usePagedJobs";
 import type {
   DecisionPolicyRevision, EvaluationRevision, ExplanationResult,
-  MLEvaluationJob, MLExplanationJob, MLPolicyJob, ScoringResult,
+  MLEvaluationJob, MLEvaluationJobSummary, MLExplanationJob,
+  MLExplanationJobSummary, MLPolicyJob, MLPolicyJobSummary, ScoringResult,
 } from "./types";
 
 type Props = { scoring: ScoringResult; canRun: boolean };
@@ -22,6 +24,17 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
   const [explanationJob, setExplanationJob] = useState<MLExplanationJob | null>(null);
   const [explanation, setExplanation] = useState<ExplanationResult | null>(null);
   const [error, setError] = useState("");
+  const policyHistory = usePagedJobs<MLPolicyJobSummary>("/api/ml/policies/jobs");
+  const evaluationHistory = usePagedJobs<MLEvaluationJobSummary>("/api/ml/evaluations/jobs");
+  const explanationHistory = usePagedJobs<MLExplanationJobSummary>("/api/ml/explanations/jobs");
+
+  useEffect(() => {
+    let alive = true;
+    void Promise.all([
+      policyHistory.refresh(), evaluationHistory.refresh(), explanationHistory.refresh(),
+    ]).catch(e => { if (alive) setError(formatError(e)); });
+    return () => { alive = false; };
+  }, [scoring.id]);
 
   // 사용자가 별도 작업을 시작하는 동안에도 각 Job의 상태를 독립적으로 갱신한다.
   useEffect(() => {
@@ -90,6 +103,51 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
     return () => { alive = false; };
   }, [explanationJob?.status, explanationJob?.result?.explanation_result_id]);
 
+  useEffect(() => {
+    if (policyJob && DONE.has(policyJob.status)) {
+      void policyHistory.refresh().catch(e => setError(formatError(e)));
+    }
+  }, [policyJob?.id, policyJob?.status]);
+
+  useEffect(() => {
+    if (evaluationJob && DONE.has(evaluationJob.status)) {
+      void evaluationHistory.refresh().catch(e => setError(formatError(e)));
+    }
+  }, [evaluationJob?.id, evaluationJob?.status]);
+
+  useEffect(() => {
+    if (explanationJob && DONE.has(explanationJob.status)) {
+      void explanationHistory.refresh().catch(e => setError(formatError(e)));
+    }
+  }, [explanationJob?.id, explanationJob?.status]);
+
+  async function restorePolicy(id: string) {
+    try {
+      setPolicy(null);
+      setEvaluation(null);
+      setEvaluationJob(null);
+      setPolicyJob(await request<MLPolicyJob>(`/api/ml/policies/jobs/${encodeURIComponent(id)}`));
+    } catch (e) { setError(formatError(e)); }
+  }
+
+  async function restoreEvaluation(id: string) {
+    try {
+      setEvaluation(null);
+      setEvaluationJob(await request<MLEvaluationJob>(
+        `/api/ml/evaluations/jobs/${encodeURIComponent(id)}`,
+      ));
+    } catch (e) { setError(formatError(e)); }
+  }
+
+  async function restoreExplanation(id: string) {
+    try {
+      setExplanation(null);
+      setExplanationJob(await request<MLExplanationJob>(
+        `/api/ml/explanations/jobs/${encodeURIComponent(id)}`,
+      ));
+    } catch (e) { setError(formatError(e)); }
+  }
+
   async function createPolicy() {
     setError("");
     setPolicy(null);
@@ -156,6 +214,18 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
       (mode === "fixed" ? !Number.isFinite(fixed) : !(fraction > 0 && fraction < 1))}
       onClick={() => void createPolicy()}>새 정책 판본 생성</button>
     {policyJob && <p role="status">정책 Job · {policyJob.status}</p>}
+    <div className="job-list">
+      <strong>이 점수의 정책 이력</strong>
+      {policyHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
+        .map(job => <button key={job.id} className="secondary"
+          onClick={() => void restorePolicy(job.id)}>
+          정책 {job.id.slice(0, 8)} · {job.status}
+        </button>)}
+      {policyHistory.nextCursor && <button className="secondary"
+        onClick={() => void policyHistory.loadMore().catch(e => setError(formatError(e)))}>
+        이전 정책 더 보기
+      </button>}
+    </div>
     {policy && <div className="result">
       <p>Decision Policy Revision · {policy.id}</p>
       <p>적용 임계값: {metric(policy.threshold)} · 이상 판정 수:
@@ -165,6 +235,18 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
     <button disabled={!canRun || (evaluationJob !== null && !DONE.has(evaluationJob.status))}
       onClick={() => void createEvaluation()}>독립 Evaluation 판본 생성</button>
     {evaluationJob && <p role="status">Evaluation Job · {evaluationJob.status}</p>}
+    <div className="job-list">
+      <strong>이 점수의 평가 이력</strong>
+      {evaluationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
+        .map(job => <button key={job.id} className="secondary"
+          onClick={() => void restoreEvaluation(job.id)}>
+          평가 {job.id.slice(0, 8)} · {job.status}
+        </button>)}
+      {evaluationHistory.nextCursor && <button className="secondary"
+        onClick={() => void evaluationHistory.loadMore().catch(e => setError(formatError(e)))}>
+        이전 평가 더 보기
+      </button>}
+    </div>
     {evaluation && <div className="result">
       <p>Evaluation Revision · {evaluation.id} · 레이블 수준: {evaluation.label_coverage}</p>
       <div className="cards">
@@ -184,6 +266,18 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
       rowIndex >= scoring.row_count || (explanationJob !== null && !DONE.has(explanationJob.status))}
       onClick={() => void createExplanation()}>점수 민감도 설명 실행</button>
     {explanationJob && <p role="status">설명 Job · {explanationJob.status}</p>}
+    <div className="job-list">
+      <strong>이 점수의 설명 이력</strong>
+      {explanationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
+        .map(job => <button key={job.id} className="secondary"
+          onClick={() => void restoreExplanation(job.id)}>
+          설명 {job.id.slice(0, 8)} · {job.status}
+        </button>)}
+      {explanationHistory.nextCursor && <button className="secondary"
+        onClick={() => void explanationHistory.loadMore().catch(e => setError(formatError(e)))}>
+        이전 설명 더 보기
+      </button>}
+    </div>
     {explanation && <div className="result">
       <p>Explanation · {explanation.id} · 기준 이상 점수 {metric(details?.score)}</p>
       <table>
