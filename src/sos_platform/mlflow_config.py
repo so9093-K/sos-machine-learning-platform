@@ -19,7 +19,10 @@ class MLflowSettings:
         url = os.getenv("SOS_MLFLOW_TRACKING_URI", "").strip()
         if not url:
             return None
-        split = urlsplit(url)
+        try:
+            split = urlsplit(url)
+        except ValueError as exc:
+            raise RuntimeConfigurationError("Invalid MLflow Tracking endpoint") from exc
         allow_http = os.getenv("SOS_MLFLOW_ALLOW_INSECURE_HTTP") == "true"
         local = split.hostname in ("localhost", "127.0.0.1", "::1")
         if (

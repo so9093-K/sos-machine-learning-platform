@@ -118,3 +118,10 @@ def test_metrics_do_not_export_labels_or_unbounded_payload():
     job["kind"] = "ml_explain"
     job["result"] = {"feature_sensitivities": [{"actual_value": 1000}]}
     assert _numeric_metrics(job) == []
+
+
+def test_configuration_rejects_malformed_url_without_leaking_it(monkeypatch):
+    monkeypatch.setenv("SOS_MLFLOW_TRACKING_URI", "https://[invalid")
+    monkeypatch.setenv("SOS_MLFLOW_EXPERIMENT_ID", "5")
+    with pytest.raises(RuntimeConfigurationError, match="Invalid MLflow Tracking endpoint"):
+        MLflowSettings.from_env()

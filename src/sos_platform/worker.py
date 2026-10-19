@@ -28,7 +28,7 @@ from .diagnostics import classify_failure
 from .discovery import DiscoveryPolicy
 from .discovery import explore as discovery_explore
 from .discovery import profile as discovery_profile
-from .errors import ERRORS, PlatformError
+from .errors import ERRORS, PlatformError, RuntimeConfigurationError
 from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
 from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
 from .ml_explanation import explain_scored_row
@@ -503,7 +503,17 @@ def main():
     args = parser.parse_args()
     store = Store(args.home)
     store.initialize()
-    mlflow_settings = MLflowSettings.from_env()
+    try:
+        mlflow_settings = MLflowSettings.from_env()
+    except RuntimeConfigurationError:
+        # 잘못된 선택적 Tracking 설정이 SOS의 핵심 학습 Worker를 막지 않는다.
+        # 전송 대기 기록은 설정 수정·재시작 후에도 PostgreSQL에 남는다.
+        emit(
+            "worker.mlflow.config_invalid",
+            service="sos-worker",
+            level=logging.WARNING,
+        )
+        mlflow_settings = None
     mlflow_client = MLflowClient(mlflow_settings) if mlflow_settings else None
     if not store.acquire_worker():
         raise SystemExit("Another worker already owns the execution lock")
