@@ -28,6 +28,14 @@ SOS의 중심 책임은 **모델의 실행·평가·불변 판본·배포·추�
 
 그림은 Research Platform·ML Execution Platform·ML Service Platform이라는 제품 정체성을 대체하지 않는다. 공통 계약 위에서 Data Explorer·Data Preparation, 연구·실험, 모델 운영, 작업·이력 관리가 맡는 **기능적 책임**을 설명한다. 고정된 화면 메뉴, 독립 서비스의 수, 필수 실행 순서 또는 현재 기능 구현 완료를 의미하지 않는다.
 
+### 공통 접근·독립 기능·선택적 조합
+
+![사람·API·SDK·외부 시스템·에이전트가 독립 ML 기능과 선택적 조합을 공통 플랫폼 계약으로 이용하는 개념도](references/14-unified-platform-access.png)
+
+접근 경험이 달라도 Web UI·API·SDK·외부 시스템·에이전트는 같은 식별·권한·실행·결과 계약을 활용한다. 데이터·모델·점수 산출·평가·판정·설명·서빙은 필요한 능력을 독립적으로 제공하고, **Workflow·실험 묶음·자동화는 선택적으로 연결한다**. Experiment는 연구 목적의 논리적 묶음이며 모든 Job의 필수 실행 단계가 아니다.
+
+이 그림은 **개념적 책임 구조**로, 고정된 서비스 배치·호출 순서·필수 Workflow나 현재 모든 기능의 구현 완료를 의미하지 않는다. 계약의 안정성은 의미와 호환성에 관한 원칙이며 기술·API 필드를 영구적으로 고정하지 않는다. 기능별 공통화 범위는 [Contracts](../contracts.md#ml-기능별-책임과-공통화-경계)를 따른다.
+
 ## 2. Data Explorer — 데이터 이해와 탐색
 
 ![알 수 없는 Dataset → System Discovery → Dataset Understanding → Explore · Prepare · Experiment](references/07-dataset-understanding.png)

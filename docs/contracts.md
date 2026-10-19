@@ -27,6 +27,12 @@
 - **단계 재사용:** 이미 계산된 모델 점수를 다른 Threshold Policy에 적용하거나 설명을 별도로 생성할 때 불필요하게 다시 학습하지 않는다. 실제 재사용 가능 범위는 입력·모델·방법·Runtime 계약으로 판단한다.
 - **외부 Tracking:** MLflow 등 외부 추적 결과는 Job/Attempt 및 필수 Evaluation의 SOS 정본을 대체하지 않는다. 연결 상태와 외부 식별자는 별도로 관리한다.
 
+## ML 기능별 책임과 공통화 경계
+
+![Data & Feature, Training/Execution, Scoring/Prediction, Evaluation, Decision Policy, Explanation의 역할과 공통화 범위를 비교한 표](references/ml-capability-responsibility-boundaries.png)
+
+표의 공통화 정도는 모든 모델·방법에 같은 연산, 출력 형태, 지표 또는 설명 기법을 강제한다는 의미가 아니다. 영역마다 식별·출처·판본·권한·실행·결과·감사와 같은 플랫폼 계약을 공유하되, 실제 지원 능력과 입력·출력 의미는 모델과 방법에 따라 명시한다. Scoring/Prediction의 점수 의미, Evaluation의 지표, Decision Policy의 적용 여부, Explanation의 방법과 해석은 서로 독립적으로 검증하며 **특정 기능을 모든 모델의 필수 단계로 가정하지 않는다**.
+
 ## 모든 경계에서 지킬 규칙
 
 - **식별과 연결:** 요청, 실행 시도, 입력 데이터, 모델 판본, 평가, 아티팩트와 Runtime을 안정적 식별자·참조로 연결한다.
