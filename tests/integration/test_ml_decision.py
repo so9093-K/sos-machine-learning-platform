@@ -134,7 +134,8 @@ def test_ml_result_job_cancellation_keeps_results_unpublished(workspace):
     client, store = workspace
     data = _upload(client, "cancel-ml.csv", b"temperature\n1.0\n2.0\n3.0\n4.0\n")
     trained = _submit(
-        client, "/api/ml/train/jobs",
+        client,
+        "/api/ml/train/jobs",
         {"dataset_id": data["id"], "features": ["temperature"]},
     )
     assert trained.status_code == 202
@@ -143,7 +144,8 @@ def test_ml_result_job_cancellation_keeps_results_unpublished(workspace):
         "model_revision_id"
     ]
     scored = _submit(
-        client, "/api/ml/scoring/jobs",
+        client,
+        "/api/ml/scoring/jobs",
         {"dataset_id": data["id"], "model_revision_id": model_id},
     )
     assert scored.status_code == 202
@@ -187,8 +189,7 @@ def test_ml_result_cancel_checks_actor_permission_and_ownership(workspace):
         actor_type="human",
     )
     tokens = {
-        name: ("ml-result-auth-" + name).ljust(45, "-")
-        for name in ("alice", "bob", "viewer")
+        name: ("ml-result-auth-" + name).ljust(45, "-") for name in ("alice", "bob", "viewer")
     }
     actors = {
         "alice": Actor("alice", "human", frozenset({"researcher"})),
@@ -196,8 +197,7 @@ def test_ml_result_cancel_checks_actor_permission_and_ownership(workspace):
         "viewer": Actor("viewer", "human", frozenset({"viewer"})),
     }
     subjects = {
-        hashlib.sha256(value.encode()).hexdigest(): actors[name]
-        for name, value in tokens.items()
+        hashlib.sha256(value.encode()).hexdigest(): actors[name] for name, value in tokens.items()
     }
     with TestClient(create_app(store.home, identity=IdentitySettings("token", subjects))) as secure:
         path = f"/api/ml/policies/jobs/{queued['id']}/cancel"
