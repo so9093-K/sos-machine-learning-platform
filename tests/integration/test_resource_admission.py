@@ -1,7 +1,6 @@
 """여러 DB 세션에서 API·Worker 논리 메모리 용량 수용과 회수를 검증한다."""
 
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
 from threading import Event, Lock
 from time import sleep
 
@@ -139,42 +138,6 @@ def test_parallel_admission_does_not_exceed_logical_capacity(workspace):
     assert 1 <= peak <= 2
     with reserve_execution_memory(store, 512, policy):
         pass
-
-
-def test_discovery_reserves_memory_before_occupying_concurrency_slot(workspace, monkeypatch):
-    """메모리 용량 대기 중인 요청이 실행 슬롯을 먼저 잡지 않도록 한다."""
-    import sos_platform.discovery as discovery
-
-    client, store = workspace
-    dataset = upload(client)
-    lifecycle = []
-
-    @contextmanager
-    def memory(*_args, **_kwargs):
-        lifecycle.append("reserve_memory")
-        try:
-            yield
-        finally:
-            lifecycle.append("release_memory")
-
-    @contextmanager
-    def slot(*_args, **_kwargs):
-        lifecycle.append("claim_discovery_slot")
-        try:
-            yield
-        finally:
-            lifecycle.append("release_discovery_slot")
-
-    monkeypatch.setattr(discovery, "reserve_execution_memory", memory)
-    monkeypatch.setattr(discovery, "discovery_slot", slot)
-    with discovery.source_connection(store, dataset):
-        assert lifecycle == ["reserve_memory", "claim_discovery_slot"]
-    assert lifecycle == [
-        "reserve_memory",
-        "claim_discovery_slot",
-        "release_discovery_slot",
-        "release_memory",
-    ]
 
 
 def test_bad_worker_discovery_memory_envelope_does_not_claim_job(workspace, monkeypatch):

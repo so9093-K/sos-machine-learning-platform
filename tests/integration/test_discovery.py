@@ -9,7 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from sos_platform.discovery import DiscoveryPolicy, quoted, source_connection
+from sos_platform.discovery import quoted, source_connection
 from sos_platform.worker import run_once
 
 
@@ -118,14 +118,6 @@ def test_discovery_does_not_read_other_local_files(workspace, tmp_path):
         with pytest.raises(Exception, match="(?i)permission|access|external"):
             conn.execute(f"SELECT * FROM read_csv('{other}')").fetchall()
         assert conn.execute("SELECT count(*) FROM source").fetchone()[0] == 1
-
-
-def test_discovery_policy_validation(monkeypatch):
-    monkeypatch.setenv("SOS_DISCOVERY_MEMORY_MIB", "512")
-    assert DiscoveryPolicy.from_env().memory_mib == 512
-    monkeypatch.setenv("SOS_DISCOVERY_THREADS", "99")
-    with pytest.raises(ValueError, match="SOS_DISCOVERY_THREADS"):
-        DiscoveryPolicy.from_env()
 
 
 def test_profile_null_and_nan_statistics(workspace):

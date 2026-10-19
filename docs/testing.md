@@ -21,10 +21,10 @@
 | 이벤트 | 실제 실행 |
 | --- | --- |
 | Pull Request | Ruff·Python 단위·Frontend 빌드/Vitest·OpenAPI 생성 타입/호환성 + PostgreSQL/S3 기반 핵심 통합 `-m pr` + 격리 브라우저 `@pr` |
-| main push | 빠른 검사 + 전체 Python 통합 |
+| main push | 빠른 검사 + 전체 Python 통합 + 전체 브라우저 |
 | 수동 workflow_dispatch | 빠른 검사 + 전체 Python 통합 + 전체 브라우저 |
 
-정기 자동 전체 회귀는 제거한다. 변경이 없는데도 모든 Docker·ML·브라우저 테스트를 매일 되풀이할 필요가 없기 때문이다. `python-quality`라는 브랜치 보호 상태 체크는 유지하되 선택한 Job의 실제 성공만 요구한다. 이 이름은 별도 테스트 실행기나 Python 전용 품질 체계를 뜻하지 않는다.
+정기 자동 전체 회귀는 제거한다. 변경이 없는 날에는 Docker·ML·브라우저를 되풀이하지 않되, main push에서는 전체 통합과 전체 브라우저 검증을 자동 실행한다. `python-quality`라는 브랜치 보호 상태 체크는 유지하되 선택한 Job의 실제 성공만 요구한다. 이 이름은 별도 테스트 실행기나 Python 전용 품질 체계를 뜻하지 않는다.
 
 CI는 Native Runner를 직접 실행한다. 별도의 `python-fast` 실행 체계나 `scripts/verify.py` Suite/Manifest 레이어를 두지 않는다. 고유 Compose 환경과 소유 리소스 정리가 필요한 브라우저 검증은 `scripts/isolated_compose.py`가 담당한다. `scripts/verify_openapi.py`는 PR의 API 후방 호환성 비교, `scripts/verify_wheel.py`은 설치한 배포본 검증만 담당한다.
 

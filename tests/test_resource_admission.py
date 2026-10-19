@@ -60,3 +60,12 @@ def test_feature_preview_admission_defaults_and_configuration(monkeypatch):
     monkeypatch.setenv("SOS_FEATURE_PREVIEW_MEMORY_MIB", "513")
     with pytest.raises(RuntimeConfigurationError, match="SOS_FEATURE_PREVIEW_MEMORY_MIB"):
         FeaturePreviewBudget.from_env()
+
+
+def test_discovery_policy_validation(monkeypatch):
+    from sos_platform.discovery import DiscoveryPolicy
+    monkeypatch.setenv("SOS_DISCOVERY_MEMORY_MIB", "512")
+    assert DiscoveryPolicy.from_env().memory_mib == 512
+    monkeypatch.setenv("SOS_DISCOVERY_THREADS", "99")
+    with pytest.raises(ValueError, match="SOS_DISCOVERY_THREADS"):
+        DiscoveryPolicy.from_env()

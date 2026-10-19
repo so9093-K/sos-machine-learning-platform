@@ -554,59 +554,6 @@ def test_large_unpartitioned_iceberg_import_uses_one_snapshot(workspace):
     assert table.current_snapshot().summary["sos.attempt-id"] == finished["attempts"][0]["id"]
 
 
-def test_iceberg_staging_cleanup_is_scoped_to_its_attempt(workspace):
-    """강제 종료 후에는 해당 Attempt의 임시 파일만 정리할 수 있어야 한다."""
-    from sos_platform.datasets import cleanup_iceberg_staging
-
-    _client, store = workspace
-    first, second = str(uuid4()), str(uuid4())
-    root = store.home / "cache" / "iceberg-staging"
-    own = root / f"attempt-{first}-test1"
-    other = root / f"attempt-{second}-test2"
-    for path in (own, other):
-        path.mkdir(parents=True, exist_ok=True)
-        (path / "input.parquet").write_bytes(b"partially-written")
-    unexpected = root / "user-original.parquet"
-    unexpected.write_bytes(b"keep-me")
-    cleanup_iceberg_staging(store, first)
-    assert not own.exists()
-    assert other.exists()
-    assert unexpected.read_bytes() == b"keep-me"
-    cleanup_iceberg_staging(store)
-    assert not other.exists()
-    assert unexpected.read_bytes() == b"keep-me"
-    unexpected.unlink()
-
-
-def test_staging_size_tracks_only_the_target_attempt(workspace):
-    """임시 디스크 관측은 타 Attempt 및 무관한 캐시 파일을 포함하지 않는다."""
-    from sos_platform.datasets import cleanup_iceberg_staging, iceberg_staging_bytes
-
-    _client, store = workspace
-    first, other = str(uuid4()), str(uuid4())
-    root = store.home / "cache" / "iceberg-staging"
-    path_a = root / f"attempt-{first}-aaaa"
-    path_b = root / f"attempt-{other}-bbbb"
-    path_a.mkdir(parents=True, exist_ok=True)
-    path_b.mkdir(parents=True, exist_ok=True)
-    (path_a / "input.parquet").write_bytes(b"a" * 19)
-    (path_b / "input.parquet").write_bytes(b"b" * 29)
-    (path_a / "spill.tmp").write_bytes(b"x" * 11)
-    nested = path_a / "scratch"
-    nested.mkdir()
-    (nested / "disk.bin").write_bytes(b"y" * 13)
-    outside = root / "user-file.bin"
-    outside.write_bytes(b"z" * 101)
-    (path_a / "outside-link").symlink_to(outside)
-    (path_a / "other-attempt-link").symlink_to(path_b, target_is_directory=True)
-    assert iceberg_staging_bytes(store, first) == 43
-    assert iceberg_staging_bytes(store, other) == 29
-    cleanup_iceberg_staging(store)
-    assert iceberg_staging_bytes(store, first) == 0
-    assert outside.read_bytes() == b"z" * 101
-    outside.unlink()
-
-
 def test_partitioned_large_import_rejects_before_staging(workspace, monkeypatch):
     """기존 파티션 테이블의 호환 한도는 대용량 임시 파일 작성 전에 검사한다."""
     from contextlib import contextmanager

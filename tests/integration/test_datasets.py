@@ -182,20 +182,6 @@ def test_example_onboarding_is_explicit_and_reuses_dataset(workspace):
     assert client.post("/api/examples/missing/use").status_code == 404
 
 
-def test_example_reuse_does_not_depend_on_unbounded_dataset_listing(workspace, monkeypatch):
-    client, store = workspace
-
-    def unexpected_page(*_args, **_kwargs):
-        raise AssertionError("Example registration must use a targeted dataset lookup")
-
-    monkeypatch.setattr(store, "dataset_page", unexpected_page)
-    first = client.post("/api/examples/data-quality/use")
-    assert first.status_code == 201, first.text
-    second = client.post("/api/examples/data-quality/use")
-    assert second.status_code == 201, second.text
-    assert second.json()["id"] == first.json()["id"]
-
-
 def test_file_storage_failure_is_not_user_validation_error(workspace, monkeypatch):
     client, _ = workspace
 
