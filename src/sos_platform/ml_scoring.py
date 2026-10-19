@@ -53,7 +53,11 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
     model_adapter = load_trusted_isolation_forest(model, store.home / "cache")
     scores = model_adapter.score_anomalies(matrix)
     score_summary = evaluate_anomaly_scores(scores)
-    score_summary["scope"] = "independent_scoring_dataset"
+    score_summary["scope"] = "scoring_dataset"
+    score_summary["training_data_reused"] = (
+        model.get("dataset_id") == dataset.get("id")
+        and model.get("dataset_version") == dataset["version"]
+    )
     score_summary["score_scale"] = "negative_sklearn_score_samples"
     ranked_metrics = None
     labels = None

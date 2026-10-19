@@ -831,9 +831,25 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def get_policy_job(job_id: str, actor: Actor = READ_JOB_DEP):
         return ml_special_job(job_id, actor, "ml_policy")
 
+    @app.post("/api/ml/policies/jobs/{job_id}/cancel", response_model=MLPolicyJobOut)
+    def cancel_policy_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        ml_special_job(job_id, actor, "ml_policy")
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        return item
+
     @app.get("/api/ml/evaluations/jobs/{job_id}", response_model=MLEvaluationJobOut)
     def get_evaluation_job(job_id: str, actor: Actor = READ_JOB_DEP):
         return ml_special_job(job_id, actor, "ml_evaluate")
+
+    @app.post("/api/ml/evaluations/jobs/{job_id}/cancel", response_model=MLEvaluationJobOut)
+    def cancel_evaluation_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        ml_special_job(job_id, actor, "ml_evaluate")
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        return item
 
     @app.get("/api/ml/policies/{revision_id}", response_model=DecisionPolicyRevisionOut)
     def get_policy_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
@@ -877,6 +893,14 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     @app.get("/api/ml/explanations/jobs/{job_id}", response_model=MLExplanationJobOut)
     def get_explanation_job(job_id: str, actor: Actor = READ_JOB_DEP):
         return ml_special_job(job_id, actor, "ml_explain")
+
+    @app.post("/api/ml/explanations/jobs/{job_id}/cancel", response_model=MLExplanationJobOut)
+    def cancel_explanation_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        ml_special_job(job_id, actor, "ml_explain")
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        return item
 
     @app.get("/api/ml/explanations/{revision_id}", response_model=ExplanationResultOut)
     def get_explanation_result(revision_id: str, actor: Actor = READ_JOB_DEP):

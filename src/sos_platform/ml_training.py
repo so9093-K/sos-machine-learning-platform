@@ -77,7 +77,7 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
     summary = evaluate_anomaly_scores(scores, threshold=threshold)
     summary["scope"] = "training_data_only"
     summary["threshold_source"] = "training_score_quantile_0.95"
-    # 안전한 모델 로딩은 현재 제공하지 않는다. 사용자 업로드 파일을 절대 역직렬화하지 않는다.
+    # 모델 파일은 내부 Worker가 생성하고, 복원 시 신뢰된 Attempt·해시·Runtime을 확인한다.
     joblib.dump(model.estimator, pending)
     return {
         "algorithm": "isolation_forest",

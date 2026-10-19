@@ -502,6 +502,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/evaluations/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Evaluation Job */
+        post: operations["cancel_evaluation_job_api_ml_evaluations_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/evaluations/{revision_id}": {
         parameters: {
             query?: never;
@@ -548,6 +565,23 @@ export interface paths {
         get: operations["get_explanation_job_api_ml_explanations_jobs__job_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/explanations/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Explanation Job */
+        post: operations["cancel_explanation_job_api_ml_explanations_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -617,6 +651,23 @@ export interface paths {
         get: operations["get_policy_job_api_ml_policies_jobs__job_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/policies/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Policy Job */
+        post: operations["cancel_policy_job_api_ml_policies_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3569,6 +3620,37 @@ export interface operations {
             };
         };
     };
+    cancel_evaluation_job_api_ml_evaluations_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLEvaluationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_evaluation_revision_api_ml_evaluations__revision_id__get: {
         parameters: {
             query?: never;
@@ -3668,6 +3750,37 @@ export interface operations {
         };
     };
     get_explanation_job_api_ml_explanations_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLExplanationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_explanation_job_api_ml_explanations_jobs__job_id__cancel_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3828,6 +3941,37 @@ export interface operations {
         };
     };
     get_policy_job_api_ml_policies_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPolicyJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_policy_job_api_ml_policies_jobs__job_id__cancel_post: {
         parameters: {
             query?: never;
             header?: never;
