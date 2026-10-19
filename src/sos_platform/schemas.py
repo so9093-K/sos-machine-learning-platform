@@ -195,8 +195,8 @@ class IsolationForestParameters(BaseModel):
 class MLPolicyRequest(BaseModel):
     scoring_result_id: str
     mode: Literal["fixed", "quantile"]
-    threshold: float | None = None
-    alert_fraction: float | None = None
+    threshold: float | None = Field(default=None, strict=True)
+    alert_fraction: float | None = Field(default=None, strict=True)
 
     @model_validator(mode="after")
     def validate_policy(self):

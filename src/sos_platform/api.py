@@ -676,7 +676,13 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         body: MLPolicyRequest,
         request: Request,
         actor: Actor = CREATE_JOB_DEP,
-        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
     ):
         score = required_scoring_result(body.scoring_result_id, actor)
         require_job_submission_key(idempotency_key)
@@ -698,7 +704,13 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         body: MLEvaluationRequest,
         request: Request,
         actor: Actor = CREATE_JOB_DEP,
-        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
     ):
         score = required_scoring_result(body.scoring_result_id, actor)
         if body.policy_revision_id:
