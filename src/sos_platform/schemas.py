@@ -172,6 +172,46 @@ class ExplorationJobRequest(BaseModel):
     exploration: ExplorationSpec
 
 
+class IsolationForestParameters(BaseModel):
+    """첫 모델의 허용 하이퍼파라미터를 입력 계약으로 고정한다."""
+
+    n_estimators: int = Field(default=100, strict=True, ge=1, le=2000)
+    max_samples: int | float | Literal["auto"] = "auto"
+    max_features: int | float = 1.0
+    bootstrap: bool = False
+    random_state: int = Field(default=42, strict=True, ge=0, le=2**32 - 1)
+
+
+class MLTrainRequest(BaseModel):
+    dataset_id: str
+    features: list[str] = Field(min_length=1, max_length=32)
+    params: IsolationForestParameters = Field(default_factory=IsolationForestParameters)
+
+    @model_validator(mode="after")
+    def validate_features(self):
+        if len(set(self.features)) != len(self.features):
+            raise ValueError("Features must be distinct")
+        if any(not name or len(name) > 256 for name in self.features):
+            raise ValueError("Invalid feature name")
+        return self
+
+
+class ModelRevisionOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    dataset_id: str
+    dataset_version: str
+    algorithm: str
+    location: str
+    sha256: str
+    features: list[str]
+    params: dict[str, object]
+    training_score_summary: dict[str, object]
+    runtime: dict[str, object]
+    created_at: str
+
+
 class WorkRequest(BaseModel):
     dataset_id: str
     kind: Literal["profile", "transform"]
@@ -402,7 +442,7 @@ class AttemptOut(BaseModel):
 
 class JobOut(BaseModel):
     id: str
-    kind: Literal["profile", "transform", "iceberg_import"]
+    kind: Literal["profile", "transform", "iceberg_import", "ml_train"]
     dataset_id: str
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -429,7 +469,7 @@ class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: Literal["profile", "transform", "iceberg_import"]
+    kind: Literal["profile", "transform", "iceberg_import", "ml_train"]
     dataset_id: str
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]

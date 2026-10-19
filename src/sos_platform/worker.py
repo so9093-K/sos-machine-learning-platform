@@ -30,6 +30,7 @@ from .discovery import explore as discovery_explore
 from .discovery import profile as discovery_profile
 from .errors import ERRORS, PlatformError
 from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
+from .ml_training import train_dataset
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import transform
@@ -98,6 +99,11 @@ def _perform(
                 lf = transform(source, spec)
                 lf.sink_parquet(pending)
             result = {"input_dataset_id": dataset["id"]}
+        elif job["kind"] == "ml_train":
+            stage = "processing"
+            result = train_dataset(
+                store, dataset, job["spec"], pending.with_suffix(".joblib")
+            )
         elif job["kind"] == "iceberg_import":
             stage = "iceberg_prepare"
             result = {
@@ -155,7 +161,8 @@ def attempt_result_paths(store: Store, job_id: str, attempt_id: str) -> tuple[Pa
 def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) -> None:
     """복구가 확정된 Attempt의 로컬 파일만 회수하고 S3·공유 객체는 건드리지 않는다."""
     for job_id, attempt_id in interrupted:
-        for path in attempt_result_paths(store, job_id, attempt_id):
+        output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
+        for path in (output, pending, completed, pending.with_suffix(".joblib")):
             path.unlink(missing_ok=True)
 
 
@@ -288,6 +295,24 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             return True
 
         publish = outcome["result"].get("iceberg_publish")
+        model_publish = None
+        model_pending = pending.with_suffix(".joblib")
+        if job["kind"] == "ml_train":
+            if not model_pending.exists():
+                raise RuntimeError("Training completed without a model artifact")
+            model_key = f"results/{job_id}/{attempt_id}.model.joblib"
+            storage = ObjectStore()
+            write_id = store.begin_object_write(
+                location=storage.location(model_key),
+                owner_kind="attempt",
+                owner_id=attempt_id,
+            )
+            digest = storage.put(model_key, model_pending)
+            model_publish = {
+                **outcome["result"],
+                "location": storage.location(model_key),
+                "sha256": digest,
+            }
         if pending.exists():
             pending.replace(output)
             key = f"results/{job_id}/{attempt_id}.parquet"
@@ -311,6 +336,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             result=result,
             publish=publish,
             write_id=write_id,
+            model_publish=model_publish,
         )
         if final_status != "Succeeded" and write_id:
             store.fail_object_write(write_id, "Job cancelled during publication")
@@ -390,6 +416,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
         # 게시 도중 실패해도 로컬 실행 중간 파일은 남기지 않는다.
         output.unlink(missing_ok=True)
         pending.unlink(missing_ok=True)
+        pending.with_suffix(".joblib").unlink(missing_ok=True)
         completed.unlink(missing_ok=True)
         try:
             cgroup.cleanup(attempt_id)

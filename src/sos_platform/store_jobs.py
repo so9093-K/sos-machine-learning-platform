@@ -339,6 +339,7 @@ class JobStoreMixin:
         error: str | None = None,
         publish: dict | None = None,
         write_id: str | None = None,
+        model_publish: dict | None = None,
         error_code: str | None = None,
         failure_stage: str | None = None,
         failure_category: str | None = None,
@@ -401,6 +402,41 @@ class JobStoreMixin:
                         db, publish["retention_id"], publish["location"], publish["version"]
                     )
                 result = {**(result or {}), "dataset_id": item["id"]}
+            if status == "Succeeded" and model_publish is not None:
+                if row["kind"] != "ml_train" or not write_id or publish is not None:
+                    raise ValueError("Invalid model publication request")
+                item = {
+                    "id": str(uuid4()),
+                    "job_id": job_id,
+                    "attempt_id": attempt_id,
+                    "dataset_id": row["dataset_id"],
+                    "dataset_version": model_publish["dataset_version"],
+                    "algorithm": model_publish["algorithm"],
+                    "location": model_publish["location"],
+                    "sha256": model_publish["sha256"],
+                    "features": json.dumps(model_publish["features"], allow_nan=False),
+                    "params": json.dumps(model_publish["params"], allow_nan=False),
+                    "training_score_summary": json.dumps(
+                        model_publish["training_score_summary"], allow_nan=False
+                    ),
+                    "runtime": json.dumps(model_publish["runtime"], allow_nan=False),
+                    "owner_actor": row["owner_actor"],
+                    "created_at": now(),
+                }
+                db.execute(
+                    text(
+                        "INSERT INTO model_revisions "
+                        "(id,job_id,attempt_id,dataset_id,dataset_version,algorithm,"
+                        "location,sha256,features,params,training_score_summary,runtime,"
+                        "owner_actor,created_at) "
+                        "VALUES (:id,:job_id,:attempt_id,:dataset_id,:dataset_version,"
+                        ":algorithm,:location,:sha256,:features,:params,"
+                        ":training_score_summary,:runtime,:owner_actor,:created_at)"
+                    ),
+                    item,
+                )
+                self._publish_object(db, write_id, model_publish["location"], model_publish["sha256"])
+                result = {**(result or {}), "model_revision_id": item["id"]}
             if (
                 status == "Succeeded"
                 and row["kind"] == "profile"

@@ -59,6 +59,8 @@ from .schemas import (
     IcebergReferenceOut,
     JobOut,
     JobPageOut,
+    MLTrainRequest,
+    ModelRevisionOut,
     PreviewOut,
     ProblemOut,
     ProfileOut,
@@ -512,6 +514,50 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         actor: Actor = READ_JOB_DEP,
     ):
         return job_page(limit, cursor, actor, discovery_only=True)
+
+    @app.post("/api/ml/train/jobs", status_code=202, response_model=JobOut)
+    def create_training_job(
+        body: MLTrainRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        dataset = existing(body.dataset_id, actor)
+        require_job_submission_key(idempotency_key)
+        from .ml_isolation_forest import IsolationForestConfig
+
+        try:
+            IsolationForestConfig(**body.params.model_dump())
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid training parameters") from exc
+        return store.create_job(
+            kind="ml_train",
+            dataset_id=dataset["id"],
+            spec={
+                "algorithm": "isolation_forest",
+                "dataset_version": dataset["version"],
+                "features": body.features,
+                "params": body.params.model_dump(),
+            },
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            request_id=request.state.request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    @app.get("/api/ml/models/{revision_id}", response_model=ModelRevisionOut)
+    def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_model_revision(revision_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Model revision not found")
+        check_ownership(actor, item["owner_actor"], "model", revision_id)
+        return item
 
     @app.post("/api/jobs", status_code=202, response_model=JobOut)
     def create_job(
