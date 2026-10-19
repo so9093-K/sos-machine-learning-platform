@@ -49,8 +49,6 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: uv run --locked python scripts/verify.py run openapi-compat --base-ref "$BASE_SHA"
-      - name: Verify distributable wheel
-        run: uv run --locked python scripts/verify.py run wheel
 
   frontend:
     runs-on: ubuntu-latest
@@ -83,6 +81,8 @@ jobs:
         run: |
           uv run --locked alembic upgrade head
           uv run --locked python -m sos_platform.bootstrap
+      - name: Verify distributable wheel
+        run: uv run --locked python scripts/verify.py run wheel
       - name: Python integration tests
         run: uv run --locked python scripts/verify.py run python-integration
       - name: Verify metadata schema matches migration
