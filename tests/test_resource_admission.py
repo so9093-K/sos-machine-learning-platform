@@ -64,6 +64,7 @@ def test_feature_preview_admission_defaults_and_configuration(monkeypatch):
 
 def test_discovery_policy_validation(monkeypatch):
     from sos_platform.discovery import DiscoveryPolicy
+
     monkeypatch.setenv("SOS_DISCOVERY_MEMORY_MIB", "512")
     assert DiscoveryPolicy.from_env().memory_mib == 512
     monkeypatch.setenv("SOS_DISCOVERY_THREADS", "99")

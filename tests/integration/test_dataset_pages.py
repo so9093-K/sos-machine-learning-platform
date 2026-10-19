@@ -36,5 +36,3 @@ def test_dataset_list_preserves_order_and_page_contract(workspace):
     assert result.status_code == 422
     assert result.json()["code"] == "SOS-API-VALIDATION"
     assert result.json()["detail"] == "Invalid Dataset cursor"
-
-
