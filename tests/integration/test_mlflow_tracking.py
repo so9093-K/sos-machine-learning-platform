@@ -78,9 +78,12 @@ def test_tracking_export_failure_retries_without_mutating_successful_job(workspa
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 1
         assert db.execute(text("SELECT COUNT(*) FROM mlflow_exports")).scalar_one() == 1
-        assert db.execute(
-            text("SELECT COUNT(*) FROM audit_events WHERE action='mlflow.export'")
-        ).scalar_one() == 2
+        assert (
+            db.execute(
+                text("SELECT COUNT(*) FROM audit_events WHERE action='mlflow.export'")
+            ).scalar_one()
+            == 2
+        )
 
 
 def test_tracking_inflight_recovery_keeps_external_run_id(workspace, monkeypatch):
