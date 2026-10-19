@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
+import { usePagedJobs } from "./usePagedJobs";
 import type {
-  Dataset, DatasetColumns, MLTrainingJob, MLTrainingJobPage, MLTrainingJobSummary, ModelRevision,
+  Dataset, DatasetColumns, MLTrainingJob, MLTrainingJobSummary, ModelRevision,
 } from "./types";
 
 const NUMERIC = /^(?:U?Int(?:8|16|32|64)|Float(?:32|64))$/;
@@ -26,31 +27,30 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   const [nEstimators, setNEstimators] = useState(100);
   const [maxSamples, setMaxSamples] = useState("auto");
   const [loadingColumns, setLoadingColumns] = useState(false);
-  const [history, setHistory] = useState<MLTrainingJobSummary[]>([]);
+  const {
+    items: history, nextCursor: historyCursor, refresh: reloadHistory, loadMore: loadOlderHistory,
+  } = usePagedJobs<MLTrainingJobSummary>("/api/ml/train/jobs");
   const [selectedJob, setSelectedJob] = useState<MLTrainingJob | null>(null);
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const currentDataset = useRef(selectedId);
+  currentDataset.current = selectedId;
+  const selectionRequest = useRef(0);
 
   const numericColumns = useMemo(
     () => columns.filter(column => NUMERIC.test(column.dtype)), [columns],
   );
 
-  async function reloadHistory() {
-    const page = await request<MLTrainingJobPage>("/api/ml/train/jobs?limit=100");
-    setHistory(page.items);
-  }
-
   useEffect(() => {
     let alive = true;
-    void request<MLTrainingJobPage>("/api/ml/train/jobs?limit=100").then(page => {
-      if (alive) setHistory(page.items);
-    }).catch(error => { if (alive) setError(formatError(error)); });
+    void reloadHistory().catch(error => { if (alive) setError(formatError(error)); });
     return () => { alive = false; };
   }, []);
 
   useEffect(() => {
     let alive = true;
+    selectionRequest.current += 1;
     setSelectedJob(null);
     setModel(null);
     setColumns([]);
@@ -76,7 +76,9 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         );
         if (alive) {
           setSelectedJob(next);
-          if (TERMINAL.has(next.status)) void reloadHistory().catch(() => {});
+          if (TERMINAL.has(next.status)) {
+            void reloadHistory().catch(error => { if (alive) setError(formatError(error)); });
+          }
         }
       } catch (error) {
         if (alive) setError(formatError(error));
@@ -103,6 +105,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
 
   async function startTraining() {
     if (!canTrain || !selectedId || features.length < 1 || submitting) return;
+    const requestedDataset = selectedId;
+    const requestedSelection = ++selectionRequest.current;
     setSubmitting(true);
     setError("");
     try {
@@ -112,9 +116,13 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         params: { n_estimators: nEstimators, max_samples: maxSamples === "auto"
           ? "auto" : Number(maxSamples), max_features: 1.0, bootstrap: false, random_state: 42 },
       });
-      setSelectedJob(result);
-      setModel(null);
-      void reloadHistory().catch(() => {});
+      // 다른 Dataset/Job으로 이동한 사이 도착한 응답은 현재 화면을 바꾸지 않는다.
+      if (currentDataset.current === requestedDataset &&
+          selectionRequest.current === requestedSelection) {
+        setSelectedJob(result);
+        setModel(null);
+      }
+      void reloadHistory().catch(error => setError(formatError(error)));
     } catch (error) {
       setError(formatError(error));
     } finally {
@@ -123,10 +131,18 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   }
 
   async function selectJob(id: string) {
+    const requestedDataset = selectedId;
+    const requestedSelection = ++selectionRequest.current;
     setError("");
     try {
-      setSelectedJob(await request<MLTrainingJob>(`/api/ml/train/jobs/${encodeURIComponent(id)}`));
-    } catch (error) { setError(formatError(error)); }
+      const result = await request<MLTrainingJob>(`/api/ml/train/jobs/${encodeURIComponent(id)}`);
+      if (currentDataset.current === requestedDataset &&
+          selectionRequest.current === requestedSelection) {
+        setSelectedJob(result);
+      }
+    } catch (error) {
+      if (selectionRequest.current === requestedSelection) setError(formatError(error));
+    }
   }
 
   async function cancelJob() {
@@ -137,9 +153,11 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         `/api/ml/train/jobs/${encodeURIComponent(selectedJob.id)}/cancel`,
         { method: "POST" },
       );
-      setSelectedJob(item);
+      setSelectedJob(current => current?.id === item.id ? item : current);
     } catch (error) { setError(formatError(error)); }
   }
+
+  const visibleHistory = history.filter(item => !selectedId || item.dataset_id === selectedId);
 
   return <div className="job-list">
     {error && <section className="panel" role="alert">
@@ -203,12 +221,16 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       </div><button className="secondary" onClick={() => void reloadHistory().catch(e => setError(formatError(e)))}>
         목록 새로고침</button></div>
       <div className="job-list">
-        {history.filter(item => !selectedId || item.dataset_id === selectedId).map(item =>
+        {visibleHistory.map(item =>
           <button className="secondary" key={item.id} onClick={() => void selectJob(item.id)}
             aria-pressed={selectedJob?.id === item.id}>
             {item.id.slice(0, 8)} · {item.status} · {new Date(item.created_at).toLocaleString("ko-KR")}
           </button>)}
-        {history.length === 0 && <p className="muted">현재 조회된 학습 Job이 없습니다.</p>}
+        {visibleHistory.length === 0 && <p className="muted">현재 조회된 학습 Job이 없습니다.</p>}
+        {historyCursor && <button className="secondary"
+          onClick={() => void loadOlderHistory().catch(error => setError(formatError(error)))}>
+          이전 학습 더 보기
+        </button>}
       </div>
     </section>
     {selectedJob && <section className="panel" aria-label="ML 실행 결과">

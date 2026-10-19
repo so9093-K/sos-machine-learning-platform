@@ -89,3 +89,13 @@ def test_training_refuses_integer_precision_loss(monkeypatch):
     ):
         with pytest.raises(ValueError, match="exact float64"):
             training_matrix(None, {"frame": frame}, ["x"])
+
+
+def test_training_rejects_null_numeric_inputs(monkeypatch):
+    monkeypatch.setattr("sos_platform.ml_training.pinned_scan_dataset", _scan)
+    for series in (
+        pl.Series("x", [None, None], dtype=pl.Int64),
+        pl.Series("x", [0, None], dtype=pl.Int64),
+    ):
+        with pytest.raises(ValueError, match="null"):
+            training_matrix(None, {"frame": pl.DataFrame({"x": series})}, ["x"])

@@ -31,6 +31,8 @@ def training_matrix(store, dataset: dict, features: list[str]):
         frame = source.select(features).head(MAX_ROWS + 1).collect()
     if frame.height > MAX_ROWS or frame.height < 2:
         raise ValueError("Training requires between 2 and 50000 rows")
+    if any(frame.null_count().row(0)):
+        raise ValueError("Training features contain null values")
     # float64는 2^53을 초과하는 정수를 인접한 값과 구별하지 못한다.
     # 원본 식별 값의 침묵하는 반올림이 학습 피처에 섞이지 않도록 거부한다.
     safe_integer = 2**53

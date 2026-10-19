@@ -1,6 +1,12 @@
 """실제 PostgreSQL·S3·Worker 기반 ML 학습·모델 게시 계약."""
 
+import hashlib
+import json
 from uuid import uuid4
+
+from fastapi.testclient import TestClient
+
+from sos_platform.api import create_app
 
 from sqlalchemy import text
 
@@ -149,3 +155,52 @@ def test_training_parameters_reject_implicit_types_before_enqueuing(workspace):
         assert result.status_code == 422, (params, result.text)
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM jobs")).scalar_one() == 0
+
+
+def test_ml_model_revision_token_ownership_and_readonly_role(workspace, monkeypatch):
+    """모델 ID 추측·이력 조회·학습 제출에 기존 RBAC와 소유권을 적용한다."""
+    _, store = workspace
+    users = {
+        "alice": {"actor_id": "alice", "kind": "human", "roles": ["researcher"]},
+        "bob": {"actor_id": "bob", "kind": "human", "roles": ["viewer"]},
+        "ops": {"actor_id": "ops", "kind": "human", "roles": ["operator"]},
+    }
+    tokens = {name: "sos-ml-" + name + "-" * 45 for name in users}
+    monkeypatch.setenv("SOS_AUTH_MODE", "token")
+    monkeypatch.setenv(
+        "SOS_AUTH_TOKEN_HASHES",
+        json.dumps({hashlib.sha256(tokens[k].encode()).hexdigest(): v for k, v in users.items()}),
+    )
+    with TestClient(create_app(store.home)) as secure:
+        def auth(name):
+            return {"Authorization": "Bearer " + tokens[name]}
+
+        uploaded = secure.post(
+            "/api/datasets/files",
+            files={"file": ("ml.csv", b"temperature\\n1\\n2\\n3\\n4\\n", "text/csv")},
+            headers=auth("alice"),
+        )
+        assert uploaded.status_code == 201, uploaded.text
+        body = {"dataset_id": uploaded.json()["id"], "features": ["temperature"]}
+        assert secure.post("/api/ml/train/jobs", json=body, headers=auth("alice")).status_code == 428
+        assert secure.post(
+            "/api/ml/train/jobs", json=body,
+            headers={**auth("bob"), "Idempotency-Key": "viewer-training-01"},
+        ).status_code == 403
+        submitted = secure.post(
+            "/api/ml/train/jobs", json=body,
+            headers={**auth("alice"), "Idempotency-Key": "alice-training-01"},
+        )
+        assert submitted.status_code == 202, submitted.text
+        job_id = submitted.json()["id"]
+        assert secure.get("/api/ml/train/jobs", headers=auth("bob")).json()["items"] == []
+        assert secure.get(f"/api/ml/train/jobs/{job_id}", headers=auth("bob")).status_code == 404
+        assert secure.post(f"/api/ml/train/jobs/{job_id}/cancel", headers=auth("bob")).status_code == 403
+        assert secure.get(f"/api/ml/train/jobs/{job_id}", headers=auth("ops")).status_code == 403
+        assert run_once(store) is True
+        completed = secure.get(f"/api/ml/train/jobs/{job_id}", headers=auth("alice")).json()
+        assert completed["status"] == "Succeeded"
+        revision_id = completed["result"]["model_revision_id"]
+        assert secure.get(f"/api/ml/models/{revision_id}", headers=auth("alice")).status_code == 200
+        assert secure.get(f"/api/ml/models/{revision_id}", headers=auth("bob")).status_code == 404
+        assert secure.get(f"/api/ml/models/{revision_id}", headers=auth("ops")).status_code == 403
