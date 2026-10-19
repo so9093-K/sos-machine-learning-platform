@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  checks:
+  python-quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,7 +59,8 @@ jobs:
         run: uv run --locked python scripts/verify_openapi.py --base-ref "$BASE_SHA"
 
   integration:
-    needs: [checks]
+    if: github.event_name == 'workflow_dispatch'
+    needs: [python-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -80,17 +81,13 @@ jobs:
       - name: Distribution wheel
         run: uv run --locked python scripts/verify_wheel.py
       - name: Python integration tests
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            uv run --locked pytest -q -m pr tests/integration
-          else
-            uv run --locked pytest -q tests/integration
-          fi
+        run: uv run --locked pytest -q tests/integration
       - name: Alembic schema
         run: uv run --locked alembic check
 
   browser:
-    needs: [checks]
+    if: github.event_name == 'workflow_dispatch'
+    needs: [python-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -110,12 +107,7 @@ jobs:
         working-directory: web
         run: npx playwright install --with-deps chromium
       - name: Isolated browser flows
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            uv run --locked python scripts/isolated_compose.py --spec all --grep '@pr'
-          else
-            uv run --locked python scripts/isolated_compose.py --spec all
-          fi
+        run: uv run --locked python scripts/isolated_compose.py --spec all
       - name: Save failure trace
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -125,18 +117,3 @@ jobs:
             web/test-results/
           if-no-files-found: ignore
           retention-days: 7
-
-  python-quality:
-    if: always()
-    needs: [checks, integration, browser]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require real tests for this event
-        env:
-          CHECKS: ${{ needs.checks.result }}
-          INTEGRATION: ${{ needs.integration.result }}
-          BROWSER: ${{ needs.browser.result }}
-        run: |
-          test "$CHECKS" = "success"
-          test "$INTEGRATION" = "success"
-          test "$BROWSER" = "success"

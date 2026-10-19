@@ -23,3 +23,4 @@
 - [0012 — ML 실험·이상 점수·외부 추적의 책임 경계](0012-ml-experiment-boundaries.md) · Proposed
 - [0013 — 테스트 실행 비용과 필수 검증 정책 간소화](0013-lean-validation-policy.md) · Accepted
 - [0014 — Iceberg 구형 테이블 쓰기 소유권 채택 경로 종료](0014-remove-iceberg-adoption.md) · Accepted
+- [0015 — 초기 단계 CI의 빠른 기본 경로](0015-early-stage-ci-policy.md) · Accepted
