@@ -24,7 +24,8 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel }: Props) {
   const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [error, setError] = useState("");
-  const { items: history, refresh } = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
+  const { items: history, nextCursor, refresh, loadMore } =
+    usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
 
   useEffect(() => {
     let alive = true;
@@ -163,7 +164,11 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel }: Props) {
         onClick={() => void selectHistory(item.id)}>
         {item.id.slice(0, 8)} · {item.status}
       </button>)}
-      {available.length === 0 && <p className="hint">아직 기록된 Scoring Job이 없습니다.</p>}
+      {available.length === 0 && <p className="hint">현재 조회한 이력에 이 모델의 Scoring Job이 없습니다.</p>}
+      {nextCursor && <button className="secondary"
+        onClick={() => void loadMore().catch(e => setError(formatError(e)))}>
+        이전 Scoring 더 보기
+      </button>}
     </div>
     {selectedJob && <div className="result">
       <h4>Scoring Job · {selectedJob.status}</h4>
@@ -182,7 +187,9 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel }: Props) {
             <strong>{value(result.ranking_metrics?.roc_auc)}</strong></div>
         </div>
         <p className="hint">모델과 Scoring Dataset의 판본 및 점수 아티팩트가 보존됩니다. 위 지표는 완전한 이진 레이블과 양성·음성 사례가 모두 있을 때만 계산합니다. 임계값 정책과 판정 정확도는 별도 평가 대상입니다.</p>
-        <MLDecisionPanel key={result.id} scoring={result} canRun={canRun} />
+        {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&
+          <p className="hint">학습에 사용한 동일 Dataset 판본을 점수화했습니다. 이 결과의 순위·판정 지표는 독립 검증 데이터의 성능이 아닙니다.</p>}
+        <MLDecisionPanel key={result.id} scoring={result} canRun={canRun} canCancel={canCancel} />
       </div>}
     </div>}
   </section>;

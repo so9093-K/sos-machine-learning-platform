@@ -7,12 +7,12 @@ import type {
   MLExplanationJobSummary, MLPolicyJob, MLPolicyJobSummary, ScoringResult,
 } from "./types";
 
-type Props = { scoring: ScoringResult; canRun: boolean };
+type Props = { scoring: ScoringResult; canRun: boolean; canCancel: boolean };
 
 const DONE = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 /** Scoring Result를 변경하지 않고 정책·평가·개별 점수 설명을 재실행한다. */
-export function MLDecisionPanel({ scoring, canRun }: Props) {
+export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
   const [mode, setMode] = useState<"fixed" | "quantile">("quantile");
   const [fixed, setFixed] = useState(0.5);
   const [fraction, setFraction] = useState(0.05);
@@ -148,6 +148,39 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
     } catch (e) { setError(formatError(e)); }
   }
 
+  async function cancelPolicy() {
+    if (!canCancel || !policyJob || DONE.has(policyJob.status)) return;
+    try {
+      const updated = await request<MLPolicyJob>(
+        `/api/ml/policies/jobs/${encodeURIComponent(policyJob.id)}/cancel`,
+        { method: "POST" },
+      );
+      setPolicyJob(current => current?.id === updated.id ? updated : current);
+    } catch (e) { setError(formatError(e)); }
+  }
+
+  async function cancelEvaluation() {
+    if (!canCancel || !evaluationJob || DONE.has(evaluationJob.status)) return;
+    try {
+      const updated = await request<MLEvaluationJob>(
+        `/api/ml/evaluations/jobs/${encodeURIComponent(evaluationJob.id)}/cancel`,
+        { method: "POST" },
+      );
+      setEvaluationJob(current => current?.id === updated.id ? updated : current);
+    } catch (e) { setError(formatError(e)); }
+  }
+
+  async function cancelExplanation() {
+    if (!canCancel || !explanationJob || DONE.has(explanationJob.status)) return;
+    try {
+      const updated = await request<MLExplanationJob>(
+        `/api/ml/explanations/jobs/${encodeURIComponent(explanationJob.id)}/cancel`,
+        { method: "POST" },
+      );
+      setExplanationJob(current => current?.id === updated.id ? updated : current);
+    } catch (e) { setError(formatError(e)); }
+  }
+
   async function createPolicy() {
     setError("");
     setPolicy(null);
@@ -213,7 +246,12 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
     <button disabled={!canRun || (policyJob !== null && !DONE.has(policyJob.status)) ||
       (mode === "fixed" ? !Number.isFinite(fixed) : !(fraction > 0 && fraction < 1))}
       onClick={() => void createPolicy()}>새 정책 판본 생성</button>
-    {policyJob && <p role="status">정책 Job · {policyJob.status}</p>}
+    {policyJob && <p role="status">정책 Job · {policyJob.status}
+      {policyJob.cancel_requested && policyJob.status === "Running" && " · 취소 요청됨"}
+    </p>}
+    {canCancel && policyJob && !DONE.has(policyJob.status) && !policyJob.cancel_requested &&
+      <button className="secondary" onClick={() => void cancelPolicy()}>정책 취소 요청</button>}
+    {policyJob?.status === "Failed" && <p role="alert">정책 실패 · {policyJob.error_code}</p>
     <div className="job-list">
       <strong>이 점수의 정책 이력</strong>
       {policyHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
@@ -234,7 +272,12 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
     </div>}
     <button disabled={!canRun || (evaluationJob !== null && !DONE.has(evaluationJob.status))}
       onClick={() => void createEvaluation()}>Evaluation 판본 생성</button>
-    {evaluationJob && <p role="status">Evaluation Job · {evaluationJob.status}</p>}
+    {evaluationJob && <p role="status">Evaluation Job · {evaluationJob.status}
+      {evaluationJob.cancel_requested && evaluationJob.status === "Running" && " · 취소 요청됨"}
+    </p>}
+    {canCancel && evaluationJob && !DONE.has(evaluationJob.status) && !evaluationJob.cancel_requested &&
+      <button className="secondary" onClick={() => void cancelEvaluation()}>평가 취소 요청</button>}
+    {evaluationJob?.status === "Failed" && <p role="alert">평가 실패 · {evaluationJob.error_code}</p>
     <div className="job-list">
       <strong>이 점수의 평가 이력</strong>
       {evaluationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
@@ -249,6 +292,10 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
     </div>
     {evaluation && <div className="result">
       <p>Evaluation Revision · {evaluation.id} · 레이블 수준: {evaluation.label_coverage}</p>
+      <p className="hint">평가 기준 정책: {evaluation.policy_revision_id ?? "없음 (순위 점수만)"}
+        {evaluation.policy_revision_id && evaluation.policy_revision_id !== policy?.id &&
+          " · 현재 선택된 정책과 다를 수 있습니다."}
+      </p>
       <div className="cards">
         <div className="stat"><span>Precision</span><strong>{metric(evaluation.decision_metrics.precision)}</strong></div>
         <div className="stat"><span>Recall</span><strong>{metric(evaluation.decision_metrics.recall)}</strong></div>
@@ -265,7 +312,12 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
     <button disabled={!canRun || !Number.isInteger(rowIndex) || rowIndex < 0 ||
       rowIndex >= scoring.row_count || (explanationJob !== null && !DONE.has(explanationJob.status))}
       onClick={() => void createExplanation()}>점수 민감도 설명 실행</button>
-    {explanationJob && <p role="status">설명 Job · {explanationJob.status}</p>}
+    {explanationJob && <p role="status">설명 Job · {explanationJob.status}
+      {explanationJob.cancel_requested && explanationJob.status === "Running" && " · 취소 요청됨"}
+    </p>}
+    {canCancel && explanationJob && !DONE.has(explanationJob.status) && !explanationJob.cancel_requested &&
+      <button className="secondary" onClick={() => void cancelExplanation()}>설명 취소 요청</button>}
+    {explanationJob?.status === "Failed" && <p role="alert">설명 실패 · {explanationJob.error_code}</p>
     <div className="job-list">
       <strong>이 점수의 설명 이력</strong>
       {explanationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
