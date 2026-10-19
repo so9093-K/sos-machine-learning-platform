@@ -31,6 +31,7 @@ from .discovery import profile as discovery_profile
 from .errors import ERRORS, PlatformError
 from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
 from .ml_training import train_dataset
+from .ml_scoring import run_dataset_scoring
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import transform
@@ -102,6 +103,11 @@ def _perform(
         elif job["kind"] == "ml_train":
             stage = "processing"
             result = train_dataset(store, dataset, job["spec"], pending.with_suffix(".joblib"))
+        elif job["kind"] == "ml_score":
+            stage = "processing"
+            result = run_dataset_scoring(
+                store, dataset, job["spec"], pending.with_suffix(".scores.parquet")
+            )
         elif job["kind"] == "iceberg_import":
             stage = "iceberg_prepare"
             result = {
@@ -120,7 +126,7 @@ def _perform(
     except Exception as exc:
         code = (
             "SOS-ML-INPUT-INVALID"
-            if job["kind"] == "ml_train" and isinstance(exc, ValueError)
+            if job["kind"] in ("ml_train", "ml_score") and isinstance(exc, ValueError)
             else "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
             else exc.code
@@ -162,7 +168,7 @@ def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) 
     """복구가 확정된 Attempt의 로컬 파일만 회수하고 S3·공유 객체는 건드리지 않는다."""
     for job_id, attempt_id in interrupted:
         output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
-        for path in (output, pending, completed, pending.with_suffix(".joblib")):
+        for path in (output, pending, completed, pending.with_suffix(".joblib"), pending.with_suffix(".scores.parquet")):
             path.unlink(missing_ok=True)
 
 
@@ -313,6 +319,24 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                 "location": storage.location(model_key),
                 "sha256": digest,
             }
+        scoring_publish = None
+        score_pending = pending.with_suffix(".scores.parquet")
+        if job["kind"] == "ml_score":
+            if not score_pending.exists():
+                raise RuntimeError("Scoring completed without a score artifact")
+            score_key = f"results/{job_id}/{attempt_id}.scores.parquet"
+            storage = ObjectStore()
+            write_id = store.begin_object_write(
+                location=storage.location(score_key),
+                owner_kind="attempt",
+                owner_id=attempt_id,
+            )
+            digest = storage.put(score_key, score_pending)
+            scoring_publish = {
+                **outcome["result"],
+                "location": storage.location(score_key),
+                "sha256": digest,
+            }
         if pending.exists():
             pending.replace(output)
             key = f"results/{job_id}/{attempt_id}.parquet"
@@ -337,6 +361,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             publish=publish,
             write_id=write_id,
             model_publish=model_publish,
+            scoring_publish=scoring_publish,
         )
         if final_status != "Succeeded" and write_id:
             store.fail_object_write(write_id, "Job cancelled during publication")
@@ -417,6 +442,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
         output.unlink(missing_ok=True)
         pending.unlink(missing_ok=True)
         pending.with_suffix(".joblib").unlink(missing_ok=True)
+        pending.with_suffix(".scores.parquet").unlink(missing_ok=True)
         completed.unlink(missing_ok=True)
         try:
             cgroup.cleanup(attempt_id)

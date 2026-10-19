@@ -100,7 +100,8 @@ class ObjectStoreMixin:
         # Dataset뿐 아니라 확정된 Model Revision도 보존 참조의 정본이다.
         statement = text(
             "SELECT location FROM datasets WHERE location IN :ids "
-            "UNION SELECT location FROM model_revisions WHERE location IN :ids"
+            "UNION SELECT location FROM model_revisions WHERE location IN :ids "
+            "UNION SELECT location FROM scoring_results WHERE location IN :ids"
         ).bindparams(bindparam("ids", expanding=True))
         writes_query = text("SELECT * FROM object_writes WHERE location IN :ids").bindparams(
             bindparam("ids", expanding=True)

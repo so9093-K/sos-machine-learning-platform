@@ -9,7 +9,6 @@ import pytest
 
 from sos_platform.ml_isolation_forest import IsolationForestConfig, train_isolation_forest
 from sos_platform.ml_runtime import assert_model_runtime_compatible, load_trusted_isolation_forest
-from sos_platform.object_store import ObjectStore
 
 
 def _revision() -> dict:

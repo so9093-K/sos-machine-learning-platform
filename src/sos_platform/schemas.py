@@ -192,6 +192,30 @@ class IsolationForestParameters(BaseModel):
         return value
 
 
+class MLScoringRequest(BaseModel):
+    model_revision_id: str
+    dataset_id: str
+    label_column: str | None = Field(default=None, min_length=1, max_length=256)
+
+
+class ScoringResultOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    model_revision_id: str
+    dataset_id: str
+    dataset_version: str
+    location: str
+    sha256: str
+    row_count: int
+    score_direction: str
+    feature_names: list[str]
+    score_summary: dict[str, object]
+    ranking_metrics: dict[str, object] | None
+    label_column: str | None
+    created_at: str
+
+
 class MLTrainRequest(BaseModel):
     dataset_id: str
     features: list[str] = Field(min_length=1, max_length=32)
@@ -468,6 +492,10 @@ class JobOut(BaseModel):
     attempts: list[AttemptOut]
 
 
+class MLScoringJobOut(JobOut):
+    kind: Literal["ml_score"]
+
+
 class MLTrainingJobOut(JobOut):
     """기존 Job 응답의 enum 확장 없이 ML 실행 상태를 제공한다."""
 
@@ -500,6 +528,15 @@ class JobSummaryOut(BaseModel):
     updated_at: str
     attempt_count: int
     latest_attempt: AttemptOut | None
+
+
+class MLScoringJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_score"]
+
+
+class MLScoringJobPageOut(BaseModel):
+    items: list[MLScoringJobSummaryOut]
+    next_cursor: str | None = None
 
 
 class MLTrainingJobSummaryOut(JobSummaryOut):

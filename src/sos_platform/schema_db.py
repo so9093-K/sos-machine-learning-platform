@@ -184,6 +184,28 @@ model_revisions = Table(
     Index("ix_model_revisions_owner_created", "owner_actor", "created_at"),
 )
 
+scoring_results = Table(
+    "scoring_results",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("model_revision_id", String(36), ForeignKey("model_revisions.id"), nullable=False),
+    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
+    Column("dataset_version", Text, nullable=False),
+    Column("location", Text, nullable=False),
+    Column("sha256", String(64), nullable=False),
+    Column("row_count", Integer, nullable=False),
+    Column("score_direction", String(40), nullable=False),
+    Column("feature_names", Text, nullable=False),
+    Column("score_summary", Text, nullable=False),
+    Column("ranking_metrics", Text),
+    Column("label_column", Text),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_scoring_results_model_created", "model_revision_id", "created_at"),
+)
+
 audit_events = Table(
     "audit_events",
     metadata,

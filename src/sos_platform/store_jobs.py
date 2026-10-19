@@ -211,7 +211,7 @@ class JobStoreMixin:
         if exclude_kind is not None:
             filters.append("kind!=:exclude_kind")
         if exclude_ml_train:
-            filters.append("kind!='ml_train'")
+            filters.append("kind NOT IN ('ml_train','ml_score')")
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(
             f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
@@ -343,6 +343,7 @@ class JobStoreMixin:
         publish: dict | None = None,
         write_id: str | None = None,
         model_publish: dict | None = None,
+        scoring_publish: dict | None = None,
         error_code: str | None = None,
         failure_stage: str | None = None,
         failure_category: str | None = None,
@@ -442,6 +443,46 @@ class JobStoreMixin:
                     db, write_id, model_publish["location"], model_publish["sha256"]
                 )
                 result = {**(result or {}), "model_revision_id": item["id"]}
+            if status == "Succeeded" and scoring_publish is not None:
+                if row["kind"] != "ml_score" or not write_id or publish is not None:
+                    raise ValueError("Invalid scoring publication request")
+                item = {
+                    "id": str(uuid4()),
+                    "job_id": job_id,
+                    "attempt_id": attempt_id,
+                    "model_revision_id": scoring_publish["model_revision_id"],
+                    "dataset_id": row["dataset_id"],
+                    "dataset_version": scoring_publish["dataset_version"],
+                    "location": scoring_publish["location"],
+                    "sha256": scoring_publish["sha256"],
+                    "row_count": scoring_publish["row_count"],
+                    "score_direction": scoring_publish["score_direction"],
+                    "feature_names": json.dumps(scoring_publish["feature_names"]),
+                    "score_summary": json.dumps(scoring_publish["score_summary"], allow_nan=False),
+                    "ranking_metrics": json.dumps(
+                        scoring_publish["ranking_metrics"], allow_nan=False
+                    ) if scoring_publish["ranking_metrics"] is not None else None,
+                    "label_column": scoring_publish["label_column"],
+                    "owner_actor": row["owner_actor"],
+                    "created_at": now(),
+                }
+                db.execute(
+                    text(
+                        "INSERT INTO scoring_results "
+                        "(id,job_id,attempt_id,model_revision_id,dataset_id,dataset_version,"
+                        "location,sha256,row_count,score_direction,feature_names,score_summary,"
+                        "ranking_metrics,label_column,owner_actor,created_at) "
+                        "VALUES (:id,:job_id,:attempt_id,:model_revision_id,:dataset_id,"
+                        ":dataset_version,:location,:sha256,:row_count,:score_direction,"
+                        ":feature_names,:score_summary,:ranking_metrics,:label_column,"
+                        ":owner_actor,:created_at)"
+                    ),
+                    item,
+                )
+                self._publish_object(
+                    db, write_id, scoring_publish["location"], scoring_publish["sha256"]
+                )
+                result = {**(result or {}), "scoring_result_id": item["id"]}
             if (
                 status == "Succeeded"
                 and row["kind"] == "profile"
@@ -510,6 +551,17 @@ class JobStoreMixin:
                     action="dataset.publish",
                     resource_type="dataset",
                     resource_id=item["id"],
+                    reason=f"job={job_id};{reason}",
+                    request_id=row["request_id"],
+                )
+            if status == "Succeeded" and scoring_publish is not None:
+                self._audit(
+                    db,
+                    actor_id="sos-worker",
+                    actor_type="service",
+                    action="scoring.publish",
+                    resource_type="scoring_result",
+                    resource_id=result["scoring_result_id"],
                     reason=f"job={job_id};{reason}",
                     request_id=row["request_id"],
                 )
