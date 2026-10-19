@@ -706,6 +706,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/tracking/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mlflow Tracking Status */
+        get: operations["get_mlflow_tracking_status_api_ml_tracking_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/train/jobs": {
         parameters: {
             query?: never;
@@ -1986,6 +2003,27 @@ export interface components {
             status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
             /** Updated At */
             updated_at: string;
+        };
+        /** MLflowExportStatusOut */
+        MLflowExportStatusOut: {
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
+            /** Job Id */
+            job_id: string;
+            /** Last Error Code */
+            last_error_code?: string | null;
+            /** Retry After */
+            retry_after?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "Disabled" | "Pending" | "Sending" | "Retry" | "Succeeded";
         };
         /** ModelRevisionOut */
         ModelRevisionOut: {
@@ -3746,6 +3784,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScoringResultOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_mlflow_tracking_status_api_ml_tracking_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLflowExportStatusOut"];
                 };
             };
             /** @description Structured API error */
