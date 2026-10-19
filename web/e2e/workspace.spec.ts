@@ -1316,7 +1316,7 @@ test("ML Workbench creates a persistent Isolation Forest Model Revision", async 
   await page.locator('input[type="file"]').setInputFiles({
     name: "ml-training.csv",
     mimeType: "text/csv",
-    buffer: Buffer.from("temperature,vibration\\n21,1\\n22,2\\n23,2\\n22,1\\n24,3\\n25,2\\n100,30\\n"),
+    buffer: Buffer.from("temperature,vibration\n21,1\n22,2\n23,2\n22,1\n24,3\n25,2\n100,30\n"),
   });
   await expect(page.getByRole("heading", { name: "ml-training.csv" })).toBeVisible();
   await page.getByRole("button", { name: "ML Workbench" }).click();
