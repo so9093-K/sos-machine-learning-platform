@@ -26,7 +26,9 @@ def migrated_template_database():
     base = make_url(settings.database_url)
     endpoint = urlsplit(settings.s3_endpoint)
     if base.host not in ("localhost", "127.0.0.1", "::1") or endpoint.hostname not in (
-        "localhost", "127.0.0.1", "::1"
+        "localhost",
+        "127.0.0.1",
+        "::1",
     ):
         pytest.fail("Integration tests require loopback PostgreSQL and S3 endpoints")
     name = "sos_test_template_" + uuid4().hex[:14]
