@@ -19,47 +19,7 @@ permissions:
   contents: read
 
 jobs:
-  change-scope:
-    runs-on: ubuntu-latest
-    outputs:
-      docs_only: ${{ steps.classify.outputs.docs_only }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - name: Verify Markdown links
-        run: python3 scripts/check_doc_links.py
-      - name: Detect documentation-only PRs
-        id: classify
-        env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          python3 - <<'PY'
-          import os
-          import re
-          import subprocess
-          from pathlib import Path
-
-          base = os.getenv("PR_BASE_SHA", "")
-          docs_only = False
-          if re.fullmatch(r"[0-9a-f]{40}", base):
-              raw = subprocess.check_output(["git", "diff", "--name-only", "-z", base, "HEAD"])
-              changed = [path.decode("utf-8") for path in raw.split(b"\0") if path]
-              docs_only = bool(changed) and all(
-                  path in {"README.md", "CHANGELOG.md"}
-                  or (
-                      path.startswith("docs/")
-                      and path.lower().endswith((".md", ".png", ".jpg", ".jpeg", ".webp", ".svg"))
-                  )
-                  for path in changed
-              )
-          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-              output.write(f"docs_only={str(docs_only).lower()}\n")
-          PY
-
   python-tests:
-    needs: change-scope
-    if: needs.change-scope.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,6 +32,8 @@ jobs:
         run: uv python install
       - name: Validate Python lockfile
         run: uv lock --check
+      - name: Verify Markdown links
+        run: python3 scripts/check_doc_links.py
       - name: Install development dependencies
         run: uv sync --locked --group dev
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -127,8 +89,6 @@ jobs:
           uv run --locked pytest -q tests/integration/test_jobs.py tests/integration/test_iceberg.py
 
   frontend:
-    needs: change-scope
-    if: needs.change-scope.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -150,12 +110,7 @@ jobs:
           retention-days: 7
 
   ui-e2e:
-    needs: change-scope
-    if: needs.change-scope.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
-    env:
-      # CI 실행 하나에서만 이미지 공유. 각 Spec의 DB·버킷·볼륨·토큰은 독립적이다.
-      SOS_E2E_IMAGE_PREFIX: ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -172,11 +127,6 @@ jobs:
       - name: Install browser
         working-directory: web
         run: npx playwright install --with-deps chromium
-      - name: Build shared E2E images once
-        env:
-          SOS_PYTHON_IMAGE: sos-python-e2e:${{ env.SOS_E2E_IMAGE_PREFIX }}
-          SOS_WEB_IMAGE: sos-web-e2e:${{ env.SOS_E2E_IMAGE_PREFIX }}
-        run: docker compose --profile app -f compose.yaml build api web
       - name: Browser workflow tests in separate E2E volumes
         run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
       - name: Verify token-mode browser permissions (owned environment)
@@ -197,8 +147,6 @@ jobs:
 
 
   container-runtime:
-    needs: change-scope
-    if: needs.change-scope.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -217,41 +165,29 @@ jobs:
   # 보호 규칙의 python-quality 상태가 컨테이너 실행을 포함한 필수 검증을 대표한다.
   python-quality:
     if: always()
-    needs: [change-scope, python-tests, frontend, ui-e2e, container-runtime]
+    needs: [python-tests, frontend, ui-e2e, container-runtime]
     runs-on: ubuntu-latest
     steps:
       - name: Require every critical CI job
         env:
-          SCOPE_RESULT: ${{ needs.change-scope.result }}
-          DOCS_ONLY: ${{ needs.change-scope.outputs.docs_only }}
           PYTHON_RESULT: ${{ needs.python-tests.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           E2E_RESULT: ${{ needs.ui-e2e.result }}
           CONTAINER_RESULT: ${{ needs.container-runtime.result }}
         run: |
-          test "$SCOPE_RESULT" = "success"
-          if [ "$DOCS_ONLY" = "true" ]; then
-            test "$PYTHON_RESULT" = "skipped"
-            test "$FRONTEND_RESULT" = "skipped"
-            test "$E2E_RESULT" = "skipped"
-            test "$CONTAINER_RESULT" = "skipped"
-          else
-            test "$PYTHON_RESULT" = "success"
-            test "$FRONTEND_RESULT" = "success"
-            test "$E2E_RESULT" = "success"
-            test "$CONTAINER_RESULT" = "success"
-          fi
+          test "$PYTHON_RESULT" = "success"
+          test "$FRONTEND_RESULT" = "success"
+          test "$E2E_RESULT" = "success"
+          test "$CONTAINER_RESULT" = "success"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Download native JUnit and inventory reports
-        if: needs.change-scope.outputs.docs_only != 'true'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: '*-test-report'
           path: validation-artifacts
           merge-multiple: false
       - name: Reconcile native inventory with every required JUnit report
-        if: needs.change-scope.outputs.docs_only != 'true'
         run: |
           python3 scripts/verify.py reconcile \
             --inventory validation-artifacts/python-test-report/sos-test-inventory.json \

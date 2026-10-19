@@ -11,7 +11,6 @@
 - 검증 강도는 실행 시간의 길이가 아니라 자원 한계, 동시 경합, 실패 주입 지점, 상태 불변조건과 정리·복구 결과로 판단한다. TTL·Timeout 등 시간 자체가 계약인 경우에만 필요한 시간 범위를 명시해 검증한다.
 - `make check`의 브라우저 쓰기 테스트는 UUID 별도 Compose 프로젝트와 DB·버킷·서비스에만 연결한다. 일반 개발 프로젝트/외부 저장소에 쓰기 E2E를 실행하지 않는다. 생성한 E2E 프로젝트만 명시적으로 종료·볼륨 정리한다.
 - SIGKILL·호스트 종료 등으로 정리가 중단된 경우, `.sos-test/runs/<sos-e2e-인스턴스>/validation-owner.json`의 소유 기록을 먼저 확인하고 `python scripts/isolated_compose.py --recover-owned <sos-e2e-인스턴스>`를 실행한다. 복구는 기록된 프로젝트에 한정되며, 서비스 종료·Compose·테스트 고유 이미지 정리에 실패하면 소유 기록을 보존하고 다른 데이터·볼륨·공유 이미지를 임의 삭제하지 않는다.
-- CI의 브라우저 Spec별 DB·버킷·볼륨·신원은 독립적이다. 동일 CI 실행에서 사전 빌드한 애플리케이션 이미지만 재사용하며 로컬 단독 E2E는 자체 이미지를 빌드한다.
 - Fixture는 자신이 만든 DB·UUID 버킷만 생성·정리한다. 사용자 데이터를 삭제하거나 Iceberg Tag를 임의 정리하지 않는다.
 - 필수 테스트의 실패를 Retry·Skip으로 숨기지 않는다. 최초 실패와 재현 정보를 보존한다.
 - 검증 수준마다 책임을 정하고 불필요한 Mock과 복잡한 테스트 DSL을 피한다.
@@ -25,8 +24,6 @@
 | 브라우저 사용자 흐름·RBAC | web/e2e/ | PR 필수 UI 작업 |
 | 전체 컨테이너 재시작·보존 | CI container-runtime | PR 필수; 자체 데이터를 생성해야 함 |
 | 자원 한계·경합·복합 장애 | 해당 불변조건의 단위·통합·장애 주입 테스트 | 소유권·실패 시점·복구 결과와 자원 예산을 기준으로 필요한 범위에서 실행 |
-
-문서·기준 이미지·README/CHANGELOG만 변경된 PR은 CI가 문서 링크를 검사하고, 다른 무관한 검증은 명시적으로 미선택한다. 필수 상태 게이트는 선택 결과를 확인하며, 코드·테스트·설정·분류할 수 없는 변경 및 main/schedule/manual 검증은 기존 전체 검사를 수행한다. 빠른 문서 검증을 코드 변경의 통합 검증 성공으로 해석하지 않는다.
 
 make check-fast는 Ruff, 순수 Python 테스트(개발 설정 기본값·문서 ADR 인덱스 검사 포함), Vitest 및 웹 타입·빌드를 확인하며 서비스 기동을 요구하지 않는다.
 make check는 실제 컨테이너 Ready 상태가 필요하다. 공통 Suite를 통해 Ruff·단위·통합·Frontend·생성 OpenAPI 타입·Wheel·Alembic·격리 Workspace/권한 E2E·컨테이너 영속성을 포함하며, PR base 비교는 별도로 --base-ref를 전달해야 한다. Fast 통과를 전체 검증 성공으로 해석하지 않는다.
@@ -86,12 +83,11 @@ make check는 실제 컨테이너 Ready 상태가 필요하다. 공통 Suite를 
 
 ## CI의 품질 게이트
 
-- change-scope: 문서 링크와 PR 변경 범위를 검사한다. 허용된 문서만 수정된 PR은 비싼 Job을 건너뛰고 미선택 이유를 품질 게이트에서 판정한다.
-- python-tests: 잠금·Ruff·API 타입·PR base API 호환성·전체 Python 테스트(로컬 check-fast 명령 계약 포함)·실제 인프라 통합 테스트·Alembic·Wheel. 로컬 check-fast 전체 명령은 다른 필수 CI 단계와 중복 실행하지 않는다.
+- python-tests: 잠금·Markdown/ADR 인덱스·Ruff·API 타입·PR base API 호환성·전체 Python 테스트(로컬 check-fast 명령 계약 포함)·실제 인프라 통합 테스트·Alembic·Wheel. 로컬 check-fast 전체 명령은 다른 필수 CI 단계와 중복 실행하지 않는다.
 - frontend: TypeScript/Vite 빌드 및 Vitest.
 - ui-e2e: 고유 Docker Compose 프로젝트에서 실행되는 Data Workspace 브라우저 시나리오, 토큰 역할 3개 및 독립 테스트 자원 정리 검사. 정확한 시나리오 개수와 성패는 각 CI 실행 기록을 기준으로 한다.
 - container-runtime: 고유 Compose 프로젝트에서 공개 Make up/status/doctor/restart/down, Token 역할/소유권, Web 프록시, Job·Iceberg, 재기동 후 데이터·Snapshot 보존 검증. 공통 Suite의 Manifest/Summary를 CI 증거로 보존한다.
-- python-quality: 코드 변경에서는 Python·Frontend·UI E2E·container-runtime 전체 성공 및 JUnit 대조를 요구한다. 문서 전용 PR에서는 change-scope 성공과 나머지 Job의 명시적 skipped 상태를 확인한다. 보호된 Status Check 이름은 변경하지 않는다.
+- python-quality: Python·Frontend·UI E2E 및 container-runtime이 모두 success일 때만 통과하는 보호된 Status Check; 이름은 변경하지 않는다.
 - 오래된 PR HEAD만 취소하고 main 검증 결과는 각 실행 ID별로 보존한다.
 - 정기(매일 새벽)·수동 실행에서는 핵심 Iceberg/Job 모듈을 순서를 바꿔 두 번 반복해 격리·재현성을 점검한다. 실패는 일반 CI 실패로 남으며 Retry에 의해 무시되지 않는다.
 - PR의 OpenAPI 후방 호환성 검사는 기준 브랜치와 변경 브랜치를 직접 비교하며, 과거 PR 전용 Breaking 승인 예외를 적용하지 않는다.
@@ -133,7 +129,7 @@ JUnit 리포트 손상·누락, 실행 0건, 필수 Skip과 실패는 성공 처
 **Standard by Default, Protected by Exception:** 보호 계약에 연결되지 않은 모든 테스트는 별도 등록 없이 `standard`다. 데이터 보존·권한·소유권·상태 확정·복구 등 특별한 변경 통제가 필요한 계약에 한해 `tests/contracts.json`에 `id`, `reason`, `selectors`를 등록한다. 위험도 점수·전수 품질 분류·테스트 관리 DB는 운영하지 않는다.
 
 - `python scripts/verify.py inventory --output <경로>`는 pytest·Vitest·Playwright의 실제 테스트 ID를 수집하고, `schema_version: 1` JSON에 `policy`(`standard` 또는 `protected`)와 `contract_ids`를 기록한다. 수집 명령 및 테스트 경로는 `scripts/inventory_scope.json`이 정의한다.
-- 코드·설정 변경 PR과 main에서 선택된 전체 Suite의 Native 목록과 JUnit Test ID를 일대일로 대조한다. 문서 전용 PR의 미선택은 테스트 실행 성공으로 취급하지 않는다. 실행된 Suite의 누락·추가·중복은 실패한다.
+- 모든 테스트는 정책과 무관하게 CI에서 실행하고 Native 목록과 JUnit Test ID를 일대일로 대조한다. 누락·추가·중복은 실패한다.
 - Protected 선택자는 파일 전체가 아닌 **구체적인 테스트 이름**을 지정한다. 동일 파일의 다른 테스트는 기본 Standard이며, 선택자가 실제 Native 테스트를 가리키지 못하면 CI가 실패한다.
 - Protected 테스트를 수정하는 것 자체에 별도 승인 절차는 없다. 삭제·통합·보호 Assertion 제거 시 보호 계약과 실패 경로의 대체 검증 근거를 일반 PR 리뷰에서 확인한다. Git 이력과 코드 리뷰가 변경 근거의 정본이므로 테스트 ID 이력 추론이나 별도 승인 워크플로를 운영하지 않는다.
 

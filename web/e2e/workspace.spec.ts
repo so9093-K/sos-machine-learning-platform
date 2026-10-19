@@ -188,7 +188,7 @@ test("Iceberg import captures a pinned snapshot", async ({ page }) => {
 });
 
 
-test("example onboarding uses the same EDA, Feature and Job contracts", async ({ page }) => {
+test("example onboarding opens the selected Dataset without automatic processing", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
   await expect(page.getByText("예제 데이터로 먼저 살펴보기")).toBeVisible();
@@ -197,20 +197,8 @@ test("example onboarding uses the same EDA, Feature and Job contracts", async ({
   await expect(page.getByRole("heading", { name: "example-machine-sensors.csv" })).toBeVisible();
   await page.getByRole("tab", { name: "탐색" }).click();
   await expect(page.getByText("분석한 행", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
-  await page.getByLabel("변환 연산", { exact: true }).selectOption("lag");
-  await page.getByLabel("컬럼", { exact: true }).selectOption("temperature");
-  await page.getByLabel("시간·정렬 컬럼").selectOption("time");
-  await page.getByLabel("그룹 컬럼").selectOption("machine_id");
-  await page.getByRole("button", { name: "+ 단계 추가" }).click();
-  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
-  const jobId = await submittedJob(page, "/api/jobs", () =>
-    page.getByRole("button", { name: /전체 변환 Job 실행/ }).click());
-  const job = jobById(page, jobId);
-  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
-  await job.getByRole("button", { name: /결과 데이터 열기/ }).click();
-  await expect(page.getByRole("heading", { name: /features-/ })).toBeVisible();
+  // 변환/Job 실행의 정확성은 별도 실제 브라우저 흐름과 DB 통합 테스트가 담당한다.
+  await expect(page.getByRole("button", { name: "데이터 준비", exact: true })).toBeVisible();
 });
 
 test("workspace tabs support keyboard navigation", async ({ page }) => {
@@ -580,7 +568,7 @@ test("audit navigation does not show unrelated dataset tabs", async ({ page }) =
 });
 
 
-test("sample and full Discovery distinguish NULL groups from whole-dataset aggregation", async ({ page }) => {
+test("Discovery sample renders a NULL group distinctly", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
     name: "nullable-group.csv", mimeType: "text/csv",
@@ -592,11 +580,8 @@ test("sample and full Discovery distinguish NULL groups from whole-dataset aggre
   await discovery.getByRole("combobox", { name: "집계 그룹" }).selectOption("group");
   await discovery.getByRole("button", { name: "부분 데이터 집계" }).click();
   await expect(discovery.getByRole("table").getByText("(NULL 그룹)")).toBeVisible();
-  const jobId = await submittedJob(page, "/api/explorations/jobs", () =>
-    discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
-  const job = jobById(page, jobId);
-  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
-  await expect(job.getByRole("region", { name: "전체 집계 결과" }).getByText("(NULL 그룹)")).toBeVisible();
+  // 전체 집계의 NULL 의미는 test_discovery.py의 실제 Worker/DB 검증이 담당한다.
+  await expect(discovery.getByRole("button", { name: "전체 집계 Job 실행" })).toBeEnabled();
 });
 
 
@@ -1362,13 +1347,8 @@ test("ML Workbench creates a persistent Isolation Forest Model Revision", async 
     .getByRole("status", { name: "" }).filter({ hasText: "비활성:" })).toBeVisible({
       timeout: 10000,
     });
-  // 원본 실험의 설정·데이터 판본을 복제해 새로운 학습/모델 판본을 만든다.
-  const forked = await submittedJob(page, `/api/ml/train/jobs/${secondJobId}/fork`, () =>
-    page.getByRole("button", { name: "동일 조건으로 Fork·Reproduce" }).click());
-  await expect(currentResult).toContainText(forked);
-  await expect(currentResult.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
-    timeout: 45000,
-  });
+  // Fork의 새 Model Revision 게시·출처 보존은 DB 통합 테스트에서 검증한다.
+  await expect(page.getByRole("button", { name: "동일 조건으로 Fork·Reproduce" })).toBeEnabled();
 });
 
 

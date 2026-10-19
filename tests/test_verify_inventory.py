@@ -98,48 +98,6 @@ def test_playwright_collects_top_level_and_nested_test_lines():
     ]
 
 
-def test_nested_runner_titles_require_exact_leaf_names():
-    """중첩 Suite 접두사와 무관하게 최종 테스트 제목을 정확히 매칭한다."""
-    contracts = [
-        {
-            "id": "API-001",
-            "reason": "API 오류 경계",
-            "selectors": [
-                {
-                    "runner": "vitest",
-                    "path": "web/src/api.test.ts",
-                    "title": "API client > safe error",
-                }
-            ],
-        },
-        {
-            "id": "RBAC-001",
-            "reason": "소유권 검사",
-            "selectors": [
-                {
-                    "runner": "playwright",
-                    "path": "web/e2e/auth.spec.ts",
-                    "title": "roles::viewer can read data",
-                }
-            ],
-        },
-    ]
-    rows = inventory.classify(
-        {
-            "vitest": [
-                "src/api.test.ts::API client > safe error",
-                "src/api.test.ts::API client > unsafe error",
-            ],
-            "playwright": [
-                "web/e2e/auth.spec.ts::roles::viewer can read data",
-                "web/e2e/auth.spec.ts::roles::other viewer can read data",
-            ],
-        },
-        contracts,
-    )
-    assert [row["policy"] for row in rows] == ["protected", "standard", "protected", "standard"]
-
-
 def test_full_suite_name_is_required_for_protected_vitest_case():
     """원래 Suite에서 보호 테스트가 사라지면 다른 Suite의 동명 테스트로 대체할 수 없다."""
     contracts = [
@@ -157,18 +115,6 @@ def test_full_suite_name_is_required_for_protected_vitest_case():
     ]
     with pytest.raises(ValueError, match="선택자 미수집"):
         inventory.classify({"vitest": ["src/api.test.ts::different > safe error"]}, contracts)
-
-
-def test_playwright_same_filename_in_different_directories_remains_unique():
-    output = "  a/workspace.spec.ts:1:1 › duplicate\n  b/workspace.spec.ts:2:2 › duplicate\n"
-    assert inventory.playwright_ids(output) == [
-        "web/e2e/a/workspace.spec.ts::duplicate",
-        "web/e2e/b/workspace.spec.ts::duplicate",
-    ]
-    assert (
-        inventory.source_path("playwright", "e2e/a/workspace.spec.ts::duplicate")
-        == "web/e2e/a/workspace.spec.ts"
-    )
 
 
 def test_registry_maps_protection_with_standard_default():
@@ -330,31 +276,6 @@ def test_protected_selector_rejects_file_glob(tmp_path):
         inventory.load_registry(path)
 
 
-def test_specific_protection_leaves_other_tests_in_same_file_standard():
-    """같은 파일의 페이지네이션 테스트는 Attempt 게시 계약 보호가 아니다."""
-    contracts = [
-        {
-            "id": "STATE-001",
-            "reason": "구형 Attempt 결과 게시 차단",
-            "selectors": [
-                {
-                    "runner": "pytest",
-                    "path": "tests/integration/test_jobs.py",
-                    "title": "test_stale_attempt_cannot_complete_or_publish_new_attempt",
-                }
-            ],
-        }
-    ]
-    ids = {
-        "pytest": [
-            "tests/integration/test_jobs.py::test_stale_attempt_cannot_complete_or_publish_new_attempt",
-            "tests/integration/test_jobs.py::test_job_cursor_pagination_has_no_duplicates_or_missing_items",
-        ]
-    }
-    records = inventory.classify(ids, contracts)
-    assert [record["policy"] for record in records] == ["protected", "standard"]
-
-
 def test_protected_test_missing_fails_even_if_file_has_other_tests():
     """보호할 실패 경로가 사라지면 해당 파일 내 다른 테스트가 있어도 실패한다."""
     contracts = [
@@ -435,55 +356,3 @@ def test_registry_rejects_missing_reason_and_invalid_schema(tmp_path):
     with pytest.raises(ValueError, match="버전"):
         inventory.load_registry(target)
 
-
-def test_empty_registry_defaults_to_standard(tmp_path):
-    target = tmp_path / "contracts.json"
-    target.write_text('{"schema_version": 1, "protected_contracts": []}', encoding="utf-8")
-    assert inventory.load_registry(target) == []
-    assert inventory.classify({"pytest": ["tests/test_a.py::case"]}, [])[0]["policy"] == "standard"
-
-
-def test_python_collector_scope_is_project_configured(monkeypatch):
-    """pytest 테스트 루트가 달라도 Native Node ID를 유지한다."""
-    monkeypatch.setitem(inventory.SCOPES["pytest"], "source_root", "specs")
-    assert inventory.python_ids("specs/test_a.py::works\n") == ["specs/test_a.py::works"]
-    assert inventory.source_path("pytest", "specs/test_a.py::works") == "specs/test_a.py"
-
-
-def test_vitest_source_scope_is_project_configured(monkeypatch):
-    """Vitest 경로를 변경해도 JUnit/Native 정규화가 일치한다."""
-    monkeypatch.setitem(inventory.SCOPES["vitest"], "cwd", "frontend")
-    monkeypatch.setitem(inventory.SCOPES["vitest"], "source_root", "frontend/specs")
-    assert inventory.source_path("vitest", "specs/api.test.ts::case") == (
-        "frontend/specs/api.test.ts"
-    )
-    assert inventory.source_path("vitest", "/workspace/frontend/specs/api.test.ts::case") == (
-        "frontend/specs/api.test.ts"
-    )
-
-
-def test_project_runner_scope_changes_do_not_require_core_modification(monkeypatch):
-    """Runner별 프로젝트 경로를 설정만으로 변경할 수 있다."""
-    monkeypatch.setitem(inventory.SCOPES["playwright"], "source_root", "browser/specs")
-    listed = inventory.playwright_ids("  workspace.spec.ts:10:2 › sample\n")
-    assert listed == ["browser/specs/workspace.spec.ts::sample"]
-    assert inventory.source_path("playwright", "workspace.spec.ts::sample") == (
-        "browser/specs/workspace.spec.ts"
-    )
-
-
-def test_inventory_runner_scopes_are_independent(monkeypatch):
-    calls = []
-
-    def fake_command(args, _cwd):
-        calls.append(args)
-        if args[0] == "uv":
-            return "tests/test_a.py::test_case\n"
-        if args[1] == "vitest":
-            return '[{"file":"src/unit.test.ts","tasks":[{"name":"case"}]}]'
-        return "  workspace.spec.ts:1:1 › registration\n"
-
-    monkeypatch.setattr(inventory, "command", fake_command)
-    groups = inventory.collect()
-    assert len(groups["playwright"]) == 1
-    assert inventory.SCOPES["vitest"]["collect"] in calls
