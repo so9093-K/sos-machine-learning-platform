@@ -1356,4 +1356,16 @@ test("ML Workbench creates a persistent Isolation Forest Model Revision", async 
   });
   await expect(page.getByRole("table", { name: /두 모델의 학습 설정 비교/ })).toBeVisible();
   await expect(page.getByText(/성능 순위로 해석하지 않습니다/)).toBeVisible();
+  // MLflow가 비활성이어도 ML 학습 성공과 전송 상태는 별도로 확인한다.
+  await expect(page.getByRole("region", { name: "ML 실행 결과" })
+    .getByRole("status", { name: "" }).filter({ hasText: "비활성:" })).toBeVisible({
+      timeout: 10000,
+    });
+  // 원본 실험의 설정·데이터 판본을 복제해 새로운 학습/모델 판본을 만든다.
+  const forked = await submittedJob(page, `/api/ml/train/jobs/${secondJobId}/fork`, () =>
+    page.getByRole("button", { name: "동일 조건으로 Fork·Reproduce" }).click());
+  await expect(currentResult).toContainText(forked);
+  await expect(currentResult.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
+    timeout: 45000,
+  });
 });
