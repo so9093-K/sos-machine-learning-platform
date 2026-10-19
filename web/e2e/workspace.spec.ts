@@ -486,9 +486,10 @@ test("DuckDB Discovery searches columns and runs a full job through global Jobs"
     discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
   const job = jobById(page, jobId);
   await expect(job.getByText("Full Discovery Analysis")).toBeVisible();
+  // 결과는 Job이 실제로 성공한 뒤에만 존재한다. 실행 전 임의의 5초 상한을 강요하지 않는다.
+  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   await expect(job.getByRole("region", { name: "전체 집계 결과" })).toBeVisible();
   await expect(job.getByRole("button", { name: "결과 데이터 열기" })).toHaveCount(0);
-  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   await job.getByText(/작업 설정 및 실행 시도/).click();
   await expect(job.getByText(/Succeeded ·/)).toBeVisible();
 });
