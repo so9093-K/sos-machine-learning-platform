@@ -183,7 +183,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   const sameInput = Boolean(model && comparisonModel &&
     model.dataset_id === comparisonModel.dataset_id &&
     model.dataset_version === comparisonModel.dataset_version &&
-    model.features.join("\\u0000") === comparisonModel.features.join("\\u0000"));
+    JSON.stringify(model.features) === JSON.stringify(comparisonModel.features));
   const parameterKeys = ["n_estimators", "max_samples", "max_features",
     "bootstrap", "random_state"];
   const parameterText = (revision: ModelRevision, key: string): string =>
