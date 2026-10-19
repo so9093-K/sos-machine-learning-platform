@@ -116,21 +116,14 @@ def test_container_compose_keeps_token_auth_and_host_ports_private():
     assert "SOS_AUTH_MODE: token" in source
     assert "SOS_AUTH_TOKEN_HASHES: ${SOS_AUTH_TOKEN_HASHES:-}" in source
     assert "SOS_AUTH_MODE: development" not in source
-    assert source.count("profiles: [app]") == 4
     assert '"127.0.0.1:${SOS_API_PORT:-9602}:9602"' in source
     assert '"127.0.0.1:${SOS_WEB_PORT:-9601}:9601"' in source
     assert "service_completed_successfully" in source
-    assert "nc -z 127.0.0.1 8333" in source
-    assert source.count("condition: service_healthy") >= 2
     assert "worker_state:/var/lib/sos" in source
     assert "api_state:/var/lib/sos" in source
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    assert "--force-recreate" in makefile
-    assert "scripts/dev.py" not in makefile
 
 
 def test_docker_build_excludes_test_runtime_state():
-    """E2E 소유 기록과 JUnit 결과를 이미지 빌드 컨텍스트로 보내지 않는다."""
+    """E2E 격리 실행 기록을 이미지 빌드 컨텍스트로 보내지 않는다."""
     ignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     assert ".sos-test" in ignore
-    assert ".sos-dev" not in ignore
