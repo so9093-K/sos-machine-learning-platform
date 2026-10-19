@@ -164,6 +164,26 @@ instance_settings = Table(
     Column("updated_by", Text, nullable=False),
 )
 
+model_revisions = Table(
+    "model_revisions",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
+    Column("dataset_version", Text, nullable=False),
+    Column("algorithm", String(64), nullable=False),
+    Column("location", Text, nullable=False),
+    Column("sha256", String(64), nullable=False),
+    Column("features", Text, nullable=False),
+    Column("params", Text, nullable=False),
+    Column("training_score_summary", Text, nullable=False),
+    Column("runtime", Text, nullable=False),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_model_revisions_owner_created", "owner_actor", "created_at"),
+)
+
 audit_events = Table(
     "audit_events",
     metadata,
