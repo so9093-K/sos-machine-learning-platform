@@ -1,5 +1,6 @@
 """Job·Feature·Attempt 실행 통합 계약을 검증한다."""
 
+import time
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
