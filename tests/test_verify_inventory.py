@@ -355,4 +355,3 @@ def test_registry_rejects_missing_reason_and_invalid_schema(tmp_path):
     target.write_text(__import__("json").dumps(bad), encoding="utf-8")
     with pytest.raises(ValueError, match="버전"):
         inventory.load_registry(target)
-
