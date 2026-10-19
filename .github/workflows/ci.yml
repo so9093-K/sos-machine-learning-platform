@@ -134,7 +134,6 @@ jobs:
     steps:
       - name: Require real tests for this event
         env:
-          EVENT: ${{ github.event_name }}
           CHECKS: ${{ needs.checks.result }}
           INTEGRATION: ${{ needs.integration.result }}
           BROWSER: ${{ needs.browser.result }}
