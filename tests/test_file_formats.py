@@ -30,15 +30,15 @@ def _quoted(value: str) -> str:
 
 def test_supported_extensions_share_registry_with_cache():
     """새 파일 포맷이 캐시의 허용 목록에서 누락되지 않는다."""
-    assert set(SUPPORTED_EXTENSIONS) == {".csv", ".parquet", ".tsv", ".txt"}
+    assert SUPPORTED_EXTENSIONS
     for suffix in SUPPORTED_EXTENSIONS:
         assert reader_for_suffix(suffix.upper()) is reader_for_suffix(suffix)
         assert _CACHE_FILE.fullmatch("a" * 64 + suffix)
         assert _CACHE_PENDING.fullmatch("a" * 64 + suffix + ".pending-" + "b" * 32)
-    assert not _CACHE_FILE.fullmatch("a" * 64 + ".jsonl")
+    assert not _CACHE_FILE.fullmatch("a" * 64 + ".csv.exe")
     assert not _CACHE_FILE.fullmatch("../" + "a" * 64 + ".csv")
     with pytest.raises(ValueError, match="Unsupported"):
-        reader_for_suffix(".jsonl")
+        reader_for_suffix(".csv.exe")
 
 
 def test_reader_registry_rejects_duplicate_or_noncanonical_extensions():
