@@ -3,7 +3,6 @@
 import pytest
 
 
-
 def test_storage_policy_rejects_unsafe_values(monkeypatch):
     """환경변수로 보호 조건을 완화할 수 없다."""
     from sos_platform.config import StoragePolicy
@@ -18,7 +17,6 @@ def test_storage_policy_rejects_unsafe_values(monkeypatch):
         with pytest.raises(ValueError, match="Invalid storage policy"):
             StoragePolicy.from_env()
         monkeypatch.delenv(name)
-
 
 
 def test_storage_candidate_needs_grace_and_repeated_observation():
@@ -56,7 +54,6 @@ def test_storage_candidate_needs_grace_and_repeated_observation():
         }
     ]
     assert classify_object(item, metadata, StoragePolicy())[0] == "protected"
-
 
 
 def test_inventory_unknown_object_is_not_candidate():

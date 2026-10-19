@@ -3,7 +3,6 @@
 from sos_platform.understanding import role_candidates, suggest_analyses
 
 
-
 def test_role_inference_never_confirms_meaning():
     roles = role_candidates("ts", "String", 10, 10)
     assert any(role["role"] == "temporal" for role in roles)
@@ -17,7 +16,6 @@ def test_role_inference_never_confirms_meaning():
             role["role"] == "potentially_sensitive"
             for role in role_candidates(name, "String", 2, 10)
         )
-
 
 
 def test_suggestions_only_emit_supported_operations():
