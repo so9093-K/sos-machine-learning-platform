@@ -1369,3 +1369,49 @@ test("ML Workbench creates a persistent Isolation Forest Model Revision", async 
     timeout: 45000,
   });
 });
+
+
+test("ML Workbench scores and evaluates independently with explanation evidence", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "ml-score-e2e.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("temperature,pressure\n1.0,10.0\n2.0,11.0\n3.0,12.0\n4.0,13.0\n100.0,1000.0\n"),
+  });
+  await expect(page.getByRole("heading", { name: "ml-score-e2e.csv" })).toBeVisible();
+  await page.getByRole("button", { name: "ML Workbench" }).click();
+  await page.getByRole("checkbox", { name: /temperature/ }).check();
+  await submittedJob(page, "/api/ml/train/jobs", () =>
+    page.getByRole("button", { name: "학습 Job 제출" }).click());
+  await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
+    timeout: 45000,
+  });
+
+  await page.getByRole("combobox", { name: "Scoring Dataset" })
+    .selectOption({ label: "ml-score-e2e.csv" });
+  await submittedJob(page, "/api/ml/scoring/jobs", () =>
+    page.getByRole("button", { name: "Scoring Job 제출" }).click());
+  await expect(page.getByText(/Scoring Result ·/)).toBeVisible({ timeout: 45000 });
+  const decision = page.getByRole("region", { name: "임계값 정책과 평가" });
+  await submittedJob(page, "/api/ml/policies/jobs", () =>
+    decision.getByRole("button", { name: "새 정책 판본 생성" }).click());
+  await expect(decision.getByText(/Decision Policy Revision ·/)).toBeVisible({
+    timeout: 45000,
+  });
+  await submittedJob(page, "/api/ml/evaluations/jobs", () =>
+    decision.getByRole("button", { name: "독립 Evaluation 판본 생성" }).click());
+  await expect(decision.getByText(/Evaluation Revision ·/)).toBeVisible({
+    timeout: 45000,
+  });
+  await expect(decision.getByText(/레이블 수준: none/)).toBeVisible();
+  await submittedJob(page, "/api/ml/explanations/jobs", () =>
+    decision.getByRole("button", { name: "점수 민감도 설명 실행" }).click());
+  await expect(decision.getByText(/Explanation ·/)).toBeVisible({
+    timeout: 45000,
+  });
+  await expect(decision.getByRole("table", {
+    name: /Feature를 학습 참조 중앙값으로 바꾸었을 때의 점수 변화/,
+  })).toBeVisible();
+  await expect(decision.getByText(/인과적 기여도가 아닙니다/)).toBeVisible();
+});
