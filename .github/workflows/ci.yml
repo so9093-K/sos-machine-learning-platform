@@ -82,7 +82,7 @@ jobs:
       - name: Python integration tests
         run: |
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            uv run --locked pytest -q tests/integration --durations=20
+            uv run --locked pytest -q -m pr tests/integration
           else
             uv run --locked pytest -q tests/integration
           fi
@@ -112,7 +112,7 @@ jobs:
       - name: Isolated browser flows
         run: |
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            uv run --locked python scripts/isolated_compose.py --spec all
+            uv run --locked python scripts/isolated_compose.py --spec all --grep '@pr'
           else
             uv run --locked python scripts/isolated_compose.py --spec all
           fi
