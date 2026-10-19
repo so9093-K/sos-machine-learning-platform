@@ -1336,4 +1336,19 @@ test("ML Workbench creates a persistent Isolation Forest Model Revision", async 
   await page.reload();
   await page.getByRole("button", { name: "ML Workbench" }).click();
   await expect(page.getByRole("button", { name: new RegExp(jobId.slice(0, 8)) })).toBeVisible();
+  // 기존 모델 판본을 다시 조회한 뒤 다른 설정으로 학습하고 비교한다.
+  await page.getByRole("button", { name: new RegExp(jobId.slice(0, 8)) }).click();
+  await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible();
+  await page.getByRole("spinbutton", { name: "Isolation Forest 트리 개수" }).fill("25");
+  await submittedJob(page, "/api/ml/train/jobs", () =>
+    page.getByRole("button", { name: "학습 Job 제출" }).click());
+  await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
+    timeout: 45000,
+  });
+  await page.getByRole("combobox", { name: "비교할 학습 Job" }).selectOption(jobId);
+  await expect(page.getByText("데이터 판본과 Feature 순서가 같습니다.")).toBeVisible({
+    timeout: 10000,
+  });
+  await expect(page.getByRole("table", { name: /두 모델의 학습 설정 비교/ })).toBeVisible();
+  await expect(page.getByText(/성능 순위로 해석하지 않습니다/)).toBeVisible();
 });

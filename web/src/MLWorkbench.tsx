@@ -32,6 +32,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   } = usePagedJobs<MLTrainingJobSummary>("/api/ml/train/jobs");
   const [selectedJob, setSelectedJob] = useState<MLTrainingJob | null>(null);
   const [model, setModel] = useState<ModelRevision | null>(null);
+  const [compareJobId, setCompareJobId] = useState("");
+  const [comparisonModel, setComparisonModel] = useState<ModelRevision | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const currentDataset = useRef(selectedId);
@@ -53,6 +55,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     selectionRequest.current += 1;
     setSelectedJob(null);
     setModel(null);
+    setCompareJobId("");
+    setComparisonModel(null);
     setColumns([]);
     setFeatures([]);
     setError("");
@@ -102,6 +106,20 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       .catch(error => { if (alive) setError(formatError(error)); });
     return () => { alive = false; };
   }, [selectedJob?.status, selectedJob?.result?.model_revision_id]);
+
+  useEffect(() => {
+    let alive = true;
+    setComparisonModel(null);
+    const baseline = history.find(item => item.id === compareJobId);
+    const revisionId = baseline?.result?.model_revision_id;
+    if (compareJobId === selectedJob?.id || !model || typeof revisionId !== "string") {
+      return () => { alive = false; };
+    }
+    void request<ModelRevision>(`/api/ml/models/${encodeURIComponent(revisionId)}`)
+      .then(result => { if (alive) setComparisonModel(result); })
+      .catch(error => { if (alive) setError(formatError(error)); });
+    return () => { alive = false; };
+  }, [compareJobId, history, model?.id, selectedJob?.id]);
 
   async function startTraining() {
     if (!canTrain || !selectedId || features.length < 1 || submitting) return;
@@ -158,6 +176,18 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   }
 
   const visibleHistory = history.filter(item => !selectedId || item.dataset_id === selectedId);
+  const comparisonCandidates = visibleHistory.filter(item =>
+    item.id !== selectedJob?.id &&
+    item.status === "Succeeded" &&
+    typeof item.result?.model_revision_id === "string");
+  const sameInput = Boolean(model && comparisonModel &&
+    model.dataset_id === comparisonModel.dataset_id &&
+    model.dataset_version === comparisonModel.dataset_version &&
+    model.features.join("\\u0000") === comparisonModel.features.join("\\u0000"));
+  const parameterKeys = ["n_estimators", "max_samples", "max_features",
+    "bootstrap", "random_state"];
+  const parameterText = (revision: ModelRevision, key: string): string =>
+    String(revision.params[key] ?? "—");
 
   return <div className="job-list">
     {error && <section className="panel" role="alert">
@@ -255,6 +285,43 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           <div className="stat"><span>학습 점수 평균</span><strong>{statistic(model.training_score_summary.score_mean)}</strong></div>
         </div>
         <p className="hint">이 수치는 학습 데이터에서 계산한 설명적 요약으로, 검증 Precision·Recall·최적 임계값을 의미하지 않습니다. 설명·독립 평가·MLflow 추적은 별도 구현 대상입니다.</p>
+        <div className="steps">
+          <h4>학습 설정 비교</h4>
+          <p className="hint">이미 완료한 모델의 입력 조건과 설정만 비교합니다. 재학습하거나 새로운 임계값을 적용하지 않습니다.</p>
+          <label>비교할 학습 Job
+            <select aria-label="비교할 학습 Job" value={compareJobId}
+              onChange={event => setCompareJobId(event.target.value)}>
+              <option value="">비교 대상 선택</option>
+              {comparisonCandidates.map(item => <option key={item.id} value={item.id}>
+                {item.id.slice(0, 8)} · {new Date(item.created_at).toLocaleString("ko-KR")}
+              </option>)}
+            </select>
+          </label>
+          {comparisonModel && <>
+            <p className="hint" role="status">
+              {sameInput
+                ? "데이터 판본과 Feature 순서가 같습니다. 설정 차이를 확인할 수 있습니다."
+                : "입력 Dataset 판본 또는 Feature 순서가 다릅니다. 점수·경보량을 직접 비교할 수 없습니다."}
+            </p>
+            <table>
+              <caption>두 모델의 학습 설정 비교 (성능 순위 아님)</caption>
+              <thead><tr><th scope="col">항목</th><th scope="col">현재 모델</th>
+                <th scope="col">비교 모델</th></tr></thead>
+              <tbody>
+                {parameterKeys.map(key => <tr key={key}><th scope="row">{key}</th>
+                  <td>{parameterText(model, key)}</td>
+                  <td>{parameterText(comparisonModel, key)}</td></tr>)}
+                <tr><th scope="row">학습 행 수</th>
+                  <td>{statistic(model.training_score_summary.score_count)}</td>
+                  <td>{statistic(comparisonModel.training_score_summary.score_count)}</td></tr>
+                <tr><th scope="row">scikit-learn</th>
+                  <td>{String(model.runtime.scikit_learn ?? "—")}</td>
+                  <td>{String(comparisonModel.runtime.scikit_learn ?? "—")}</td></tr>
+              </tbody>
+            </table>
+            <p className="hint">학습 점수 평균·이상 후보 수는 독립 검증 성능이 아니며, 같은 데이터를 사용해도 서로 다른 모델의 점수를 성능 순위로 해석하지 않습니다.</p>
+          </>}
+        </div>
       </div>}
     </section>}
   </div>;
