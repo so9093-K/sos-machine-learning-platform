@@ -105,8 +105,9 @@ def test_tracking_inflight_recovery_keeps_external_run_id(workspace, monkeypatch
     assert recovered["attempts"] == 2
 
 
-
-def test_retry_does_not_reuse_external_run_after_server_or_experiment_change(workspace, monkeypatch):
+def test_retry_does_not_reuse_external_run_after_server_or_experiment_change(
+    workspace, monkeypatch
+):
     client, store = workspace
     monkeypatch.setenv("SOS_MLFLOW_TRACKING_URI", "https://tracking.example.org")
     monkeypatch.setenv("SOS_MLFLOW_EXPERIMENT_ID", "7")
