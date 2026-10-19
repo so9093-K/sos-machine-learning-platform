@@ -106,9 +106,7 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
     if name == "alembic":
         return [(uv + ["alembic", "check"], ROOT)]
     if name == "workspace-e2e":
-        return [
-            (uv + ["python", "scripts/isolated_compose.py", "--spec", "all"], ROOT)
-        ]
+        return [(uv + ["python", "scripts/isolated_compose.py", "--spec", "all"], ROOT)]
     raise ValueError(f"알 수 없는 Suite: {name}")
 
 
