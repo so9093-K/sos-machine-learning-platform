@@ -177,7 +177,7 @@ def test_ml_model_revision_token_ownership_and_readonly_role(workspace, monkeypa
 
         uploaded = secure.post(
             "/api/datasets/files",
-            files={"file": ("ml.csv", b"temperature\\n1\\n2\\n3\\n4\\n", "text/csv")},
+            files={"file": ("ml.csv", b"temperature\n1\n2\n3\n4\n", "text/csv")},
             headers=auth("alice"),
         )
         assert uploaded.status_code == 201, uploaded.text
