@@ -300,3 +300,37 @@ def test_training_model_db_failure_keeps_unpublished_object(workspace, monkeypat
         ]
         > 0
     )
+
+
+def test_training_fork_preserves_input_revision_and_provenance(workspace):
+    client, store = workspace
+    dataset = upload(client)
+    first = _submit(client, dataset)
+    assert first.status_code == 202
+    blocked = client.post(
+        f"/api/ml/train/jobs/{first.json()['id']}/fork",
+        json={}, headers={"Idempotency-Key": str(uuid4())},
+    )
+    assert blocked.status_code == 409
+    assert run_once(store)
+    original = client.get(f"/api/ml/train/jobs/{first.json()['id']}").json()
+    assert original["status"] == "Succeeded"
+
+    fork = client.post(
+        f"/api/ml/train/jobs/{original['id']}/fork",
+        json={"params": {"n_estimators": 25, "random_state": 17}},
+        headers={"Idempotency-Key": str(uuid4())},
+    )
+    assert fork.status_code == 202, fork.text
+    copied = fork.json()
+    assert copied["id"] != original["id"]
+    assert copied["spec"]["forked_from_job_id"] == original["id"]
+    assert copied["spec"]["features"] == original["spec"]["features"]
+    assert copied["spec"]["dataset_version"] == original["spec"]["dataset_version"]
+    assert copied["spec"]["params"]["n_estimators"] == 25
+    assert run_once(store)
+    finished = client.get(f"/api/ml/train/jobs/{copied['id']}").json()
+    assert finished["status"] == "Succeeded", finished
+    assert finished["result"]["model_revision_id"] != original["result"]["model_revision_id"]
+    with store.connection() as db:
+        assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 2
