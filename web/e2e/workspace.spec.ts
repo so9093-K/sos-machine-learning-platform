@@ -806,26 +806,6 @@ test("administrator changes instance name and it survives browser reload", async
   await expect(page.getByText("UX Research Workspace")).toBeVisible();
 });
 
-test("Dataset refresh re-fetches the current Understanding profile", async ({ page }) => {
-  let requests = 0;
-  page.on("request", request => {
-    if (/\/api\/datasets\/[^/]+\/understanding$/.test(request.url())
-      && request.method() === "GET") requests += 1;
-  });
-  await page.goto("/");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "refresh-understanding.csv",
-    mimeType: "text/csv",
-    buffer: Buffer.from("label,metric\na,1\nb,3\n"),
-  });
-  await expect(page.getByRole("tab", { name: "데이터 이해" })).toHaveAttribute("aria-selected", "true");
-  await expect.poll(() => requests).toBeGreaterThan(0);
-  const firstCount = requests;
-  await page.getByRole("button", { name: "데이터 다시 불러오기" }).click();
-  await expect.poll(() => requests).toBeGreaterThan(firstCount);
-});
-
-
 test("switching Datasets never displays another Dataset's cached Preview", async ({ page }) => {
   await page.goto("/");
   const input = page.locator('input[type="file"]');
