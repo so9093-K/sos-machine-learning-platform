@@ -90,6 +90,7 @@ def test_full_grouped_exploration_and_profile_job(workspace):
     assert completed["result"]["row_count"] == 4
 
 
+@pytest.mark.pr
 def test_no_untrusted_identifiers_or_sql_are_executed(workspace):
     client, _store = workspace
     dataset = _upload(client, "quotes.csv", b'"group""quote",value\na,10\n')

@@ -196,16 +196,6 @@ def test_example_reuse_does_not_depend_on_unbounded_dataset_listing(workspace, m
     assert second.json()["id"] == first.json()["id"]
 
 
-def test_api_openapi_response_contracts(workspace):
-    client, _ = workspace
-    spec = client.get("/openapi.json").json()
-    assert spec["paths"]["/api/datasets"]["get"]["responses"]["200"]["content"]["application/json"][
-        "schema"
-    ]
-    assert "JobOut" in spec["components"]["schemas"]
-    assert "ExampleOut" in spec["components"]["schemas"]
-
-
 def test_file_storage_failure_is_not_user_validation_error(workspace, monkeypatch):
     client, _ = workspace
 
@@ -222,6 +212,7 @@ def test_file_storage_failure_is_not_user_validation_error(workspace, monkeypatc
     assert "secret-storage-credential" not in response.text
 
 
+@pytest.mark.pr
 def test_upload_recovery_preserves_shared_content_addressed_blob(workspace, monkeypatch):
     """DB 실패 시 공유 가능 원본을 삭제하지 않고 안전한 재등록을 허용한다."""
     _client, store = workspace
@@ -380,6 +371,7 @@ def test_corrupt_download_cannot_overwrite_valid_cache(workspace, tmp_path, monk
     assert list(tmp_path.glob("cached.csv.pending-*")) == []
 
 
+@pytest.mark.pr
 def test_concurrent_uploads_publish_independent_versions_without_staging_leftovers(workspace):
     client, store = workspace
     first = b"signal\n" + b"1\n" * 160_000

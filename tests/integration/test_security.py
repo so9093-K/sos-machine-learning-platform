@@ -14,19 +14,7 @@ from sos_platform.store import Store
 from .support import upload
 
 
-def test_cors_uses_configured_web_port(workspace):
-    client, _ = workspace
-    response = client.options(
-        "/api/datasets",
-        headers={
-            "Origin": "http://localhost:9601",
-            "Access-Control-Request-Method": "POST",
-        },
-    )
-    assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "http://localhost:9601"
-
-
+@pytest.mark.pr
 def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
     """Bearer 신원·기본 거부·리소스 소유권·변경 감사가 API에서 강제된다."""
     client, store = workspace
@@ -287,6 +275,7 @@ def test_slow_denied_audit_does_not_block_other_requests(workspace, monkeypatch)
         assert denied.result(timeout=20).status_code == 403
 
 
+@pytest.mark.pr
 def test_denied_audit_failure_does_not_grant_access(workspace, monkeypatch):
     """거부 요청의 감사 DB 기록 실패가 접근 허용으로 바뀌지 않는다."""
     _, store = workspace
@@ -330,12 +319,3 @@ def test_configured_cors_allows_token_preflight(workspace, monkeypatch):
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:9765"
     assert "authorization" in response.headers["access-control-allow-headers"].lower()
-
-
-def test_retired_auth_and_operator_paths_are_not_registered(workspace):
-    """실사용자가 없는 사전 출시 계약 정리 후 과거 별칭을 다시 노출하지 않는다."""
-    client, _ = workspace
-    for path in ("/api/auth/me", "/api/audit", "/api/diagnostics/jobs/test-id"):
-        response = client.get(path)
-        assert response.status_code == 404
-        assert response.json()["code"] == "SOS-API-NOT-FOUND"

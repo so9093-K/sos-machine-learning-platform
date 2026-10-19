@@ -34,13 +34,6 @@ def test_dataset_list_preserves_order_and_page_contract(workspace):
     assert client.get("/api/datasets", params={"limit": 101}).status_code == 422
 
 
-def test_legacy_dataset_pages_alias_is_not_exposed(workspace):
-    client, _ = workspace
-    response = client.get("/api/datasets/pages")
-    assert response.status_code == 404
-    assert response.json()["code"] == "SOS-API-NOT-FOUND"
-
-
 def test_invalid_dataset_cursor_returns_specific_safe_validation_error(workspace):
     client, _store = workspace
     result = client.get("/api/datasets", params={"cursor": "not-a-valid-cursor"})

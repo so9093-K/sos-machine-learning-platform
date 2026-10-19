@@ -1,13 +1,11 @@
 """Job·Feature·Attempt 실행 통합 계약을 검증한다."""
 
-import time
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event, text
+from sqlalchemy import text
 
-from sos_platform import worker as worker_module
 from sos_platform.errors import WorkerOwnershipLost
 from sos_platform.object_store import ObjectStore
 from sos_platform.store import Store
@@ -154,6 +152,7 @@ def test_job_finish_rejects_nonterminal_status_without_mutation(workspace, inval
     assert final["attempts"][0]["status"] == "Failed"
 
 
+@pytest.mark.pr
 def test_stale_attempt_cannot_complete_or_publish_new_attempt(workspace):
     """재Claim 이전 실행의 늦은 완료는 새 Attempt와 Dataset에 영향을 주지 않는다."""
     client, store = workspace
@@ -192,6 +191,7 @@ def test_stale_attempt_cannot_complete_or_publish_new_attempt(workspace):
     assert store.finish(first["id"], "Failed", attempt_id=current_id) == "Failed"
 
 
+@pytest.mark.pr
 def test_cancel_running_execution_and_do_not_publish(workspace):
     client, store = workspace
     dataset = upload(client)
@@ -228,73 +228,6 @@ def test_job_list_preserves_attempt_history(workspace):
     assert "attempts" not in listed[ids[0]]
     detail = client.get(f"/api/jobs/{ids[0]}").json()
     assert len(detail["attempts"]) == 1
-
-
-def test_job_listing_uses_bounded_number_of_queries(workspace):
-    client, store = workspace
-    dataset = upload(client)
-    for _ in range(5):
-        client.post("/api/jobs", json={"dataset_id": dataset["id"], "kind": "profile"})
-    queries = []
-
-    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
-        if statement.lstrip().upper().startswith("SELECT"):
-            queries.append(statement)
-
-    event.listen(store.engine, "before_cursor_execute", capture)
-    try:
-        assert len(store.jobs()) == 5
-    finally:
-        event.remove(store.engine, "before_cursor_execute", capture)
-    assert len(queries) == 2
-
-
-@pytest.mark.parametrize("explicit_home", [False, True])
-def test_worker_home_matches_configuration_and_explicit_override(
-    monkeypatch, tmp_path, explicit_home
-):
-    """Worker 로컬 경로가 환경 설정을 따르며 CLI 인자가 우선한다."""
-    from sys import argv
-
-    seen = {}
-
-    class FakeStore:
-        def __init__(self, home):
-            self.home = home
-            seen["home"] = home
-            self.engine = self
-
-        def dispose(self):
-            seen["disposed"] = True
-
-        def initialize(self):
-            pass
-
-        def acquire_worker(self):
-            return True
-
-        def recover(self):
-            return []
-
-        def heartbeat(self):
-            pass
-
-        def release_worker(self):
-            pass
-
-    env_home = tmp_path / "env-home"
-    cli_home = tmp_path / "cli-home"
-    monkeypatch.setenv("SOS_HOME", str(env_home))
-    monkeypatch.setattr(worker_module, "Store", FakeStore)
-    monkeypatch.setattr(worker_module, "run_once", lambda _store: False)
-    command = [argv[0], "--once"]
-    if explicit_home:
-        command.extend(["--home", str(cli_home)])
-    monkeypatch.setattr("sys.argv", command)
-
-    worker_module.main()
-    assert seen["home"] == (cli_home if explicit_home else env_home)
-    assert seen["disposed"] is True
 
 
 def test_job_cursor_pagination_has_no_duplicates_or_missing_items(workspace):

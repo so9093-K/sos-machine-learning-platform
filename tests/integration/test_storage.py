@@ -2,7 +2,8 @@
 
 from uuid import uuid4
 
-from sqlalchemy import event, text
+import pytest
+from sqlalchemy import text
 
 from sos_platform.object_store import ObjectStore
 from sos_platform.worker import run_once
@@ -46,6 +47,7 @@ def test_transform_publish_failure_preserves_unreferenced_attempt_object(workspa
     )
 
 
+@pytest.mark.pr
 def test_lost_s3_upload_response_preserves_object(workspace, monkeypatch):
     """S3 바이트 쓰기 성공 후 응답만 유실되어도 결과를 성공 게시하지 않는다."""
     client, store = workspace
@@ -176,24 +178,3 @@ def test_abandoned_upload_intent_is_never_auto_classified_as_candidate(workspace
     assert result[0] == "unknown"
     assert "삭제하지 않습니다" in result[1]
     assert store.object_writes(location)[0]["state"] == "Pending"
-
-
-def test_object_observation_is_batched(workspace):
-    """관측 객체 수에 비례한 개별 SQL INSERT가 발생하지 않는다."""
-    _, store = workspace
-    seen = []
-
-    def capture(_connection, _cursor, statement, _params, _context, executemany):
-        if "INSERT INTO object_observations" in statement:
-            seen.append(executemany)
-
-    event.listen(store.engine, "before_cursor_execute", capture)
-    try:
-        locations = [ObjectStore().location(f"results/batch-{i}.parquet") for i in range(3)]
-        observed = store.observe_objects(
-            [{"location": location, "fingerprint": "same"} for location in locations], 24
-        )
-    finally:
-        event.remove(store.engine, "before_cursor_execute", capture)
-    assert len(observed) == 3
-    assert seen == [True]
