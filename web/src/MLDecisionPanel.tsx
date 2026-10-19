@@ -132,7 +132,7 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
   const details = explanation?.output;
   const sensitivities = Array.isArray(details?.feature_sensitivities)
     ? details.feature_sensitivities as Array<Record<string, unknown>> : [];
-  return <div className="steps" aria-label="임계값 정책과 평가">
+  return <div className="steps" role="region" aria-label="임계값 정책과 평가">
     <h4>Decision Policy · Evaluation</h4>
     {error && <p role="alert">{error}</p>}
     <p className="hint">이 Scoring Result를 재사용하므로 모델을 다시 학습하거나 점수를 재계산하지 않습니다.</p>
