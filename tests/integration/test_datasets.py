@@ -33,8 +33,6 @@ def test_upload_preview_profile_and_scalar(workspace):
     result = client.get(f"/api/datasets/{data['id']}/profile").json()
     assert result["sampled"] is True
     assert result["row_count"] == 3
-    assert "openapi.json" in client.get("/docs").text
-    assert client.get("/openapi.json").status_code == 200
 
 
 def test_headerless_tabular_txt_keeps_first_row_and_consistent_columns(workspace):

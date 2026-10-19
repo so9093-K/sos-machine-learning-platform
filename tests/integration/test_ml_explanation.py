@@ -58,6 +58,15 @@ def test_explanation_is_independent_and_matches_original_anomaly_score(workspace
     assert completed["status"] == "Succeeded", completed
     scoring_id = completed["result"]["scoring_result_id"]
 
+    rejected = _submit(
+        client,
+        "/api/ml/explanations/jobs",
+        {"scoring_result_id": scoring_id, "row_index": 9},
+    )
+    assert rejected.status_code == 422, rejected.text
+    with store.connection() as db:
+        assert db.execute(text("SELECT COUNT(*) FROM explanation_results")).scalar_one() == 0
+
     explain = _submit(
         client,
         "/api/ml/explanations/jobs",
@@ -86,43 +95,3 @@ def test_explanation_is_independent_and_matches_original_anomaly_score(workspace
     )
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM explanation_results")).scalar_one() == 1
-
-
-def test_explanation_rejects_nonexistent_row_without_job(workspace):
-    client, store = workspace
-    training = _upload(client, "no-row.csv", b"temperature\n1.0\n2.0\n3.0\n")
-    job = _submit(
-        client,
-        "/api/ml/train/jobs",
-        {
-            "dataset_id": training["id"],
-            "features": ["temperature"],
-        },
-    )
-    assert run_once(store)
-    training_id = client.get(f"/api/ml/train/jobs/{job.json()['id']}").json()["result"][
-        "model_revision_id"
-    ]
-    scored = _submit(
-        client,
-        "/api/ml/scoring/jobs",
-        {
-            "dataset_id": training["id"],
-            "model_revision_id": training_id,
-        },
-    )
-    assert run_once(store)
-    scoring_id = client.get(f"/api/ml/scoring/jobs/{scored.json()['id']}").json()["result"][
-        "scoring_result_id"
-    ]
-    response = _submit(
-        client,
-        "/api/ml/explanations/jobs",
-        {
-            "scoring_result_id": scoring_id,
-            "row_index": 9,
-        },
-    )
-    assert response.status_code == 422, response.text
-    with store.connection() as db:
-        assert db.execute(text("SELECT COUNT(*) FROM explanation_results")).scalar_one() == 0
