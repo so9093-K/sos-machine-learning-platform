@@ -13,8 +13,11 @@ from .support import upload
 def _submit(client, dataset: dict, *, key: str | None = None):
     return client.post(
         "/api/ml/train/jobs",
-        json={"dataset_id": dataset["id"], "features": ["temperature"],
-              "params": {"n_estimators": 10, "random_state": 17}},
+        json={
+            "dataset_id": dataset["id"],
+            "features": ["temperature"],
+            "params": {"n_estimators": 10, "random_state": 17},
+        },
         headers={"Idempotency-Key": key or str(uuid4())},
     )
 
@@ -50,9 +53,12 @@ def test_model_revision_publication_with_job_and_object_intent(workspace):
     # 게시 의도와 Model Revision 및 Job 성공은 같은 정본에 있어야 한다.
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 1
-        assert db.execute(
-            text("SELECT COUNT(*) FROM object_writes WHERE state='Published'")
-        ).scalar_one() == 2  # 원본 파일과 학습 모델
+        assert (
+            db.execute(
+                text("SELECT COUNT(*) FROM object_writes WHERE state='Published'")
+            ).scalar_one()
+            == 2
+        )  # 원본 파일과 학습 모델
     location = model["location"]
     s3 = ObjectStore()
     key_name = s3.key(location)
@@ -62,9 +68,13 @@ def test_model_revision_publication_with_job_and_object_intent(workspace):
 def test_training_cancel_before_claim_and_invalid_feature(workspace):
     client, store = workspace
     dataset = upload(client)
-    bad = client.post("/api/ml/train/jobs", json={
-        "dataset_id": dataset["id"], "features": ["missing"],
-    })
+    bad = client.post(
+        "/api/ml/train/jobs",
+        json={
+            "dataset_id": dataset["id"],
+            "features": ["missing"],
+        },
+    )
     assert bad.status_code == 202
     assert run_once(store) is True
     job = client.get(f"/api/ml/train/jobs/{bad.json()['id']}").json()
@@ -98,6 +108,7 @@ def test_model_publish_failure_does_not_commit_revision(workspace, monkeypatch):
     assert result["status"] == "Failed"
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 0
-        assert db.execute(
-            text("SELECT COUNT(*) FROM object_writes WHERE state='Failed'")
-        ).scalar_one() == 1
+        assert (
+            db.execute(text("SELECT COUNT(*) FROM object_writes WHERE state='Failed'")).scalar_one()
+            == 1
+        )

@@ -1,4 +1,5 @@
 """숫자 테이블 입력을 사용하는 첫 Isolation Forest 학습 실행."""
+
 from dataclasses import asdict
 from pathlib import Path
 
@@ -11,10 +12,20 @@ from .ml_isolation_forest import IsolationForestConfig, train_isolation_forest
 
 MAX_ROWS = 50_000
 MAX_FEATURES = 32
-NUMERIC = frozenset((
-    pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16,
-    pl.UInt32, pl.UInt64, pl.Float32, pl.Float64,
-))
+NUMERIC = frozenset(
+    (
+        pl.Int8,
+        pl.Int16,
+        pl.Int32,
+        pl.Int64,
+        pl.UInt8,
+        pl.UInt16,
+        pl.UInt32,
+        pl.UInt64,
+        pl.Float32,
+        pl.Float64,
+    )
+)
 
 
 def training_matrix(store, dataset: dict, features: list[str]):

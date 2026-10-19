@@ -101,9 +101,7 @@ def _perform(
             result = {"input_dataset_id": dataset["id"]}
         elif job["kind"] == "ml_train":
             stage = "processing"
-            result = train_dataset(
-                store, dataset, job["spec"], pending.with_suffix(".joblib")
-            )
+            result = train_dataset(store, dataset, job["spec"], pending.with_suffix(".joblib"))
         elif job["kind"] == "iceberg_import":
             stage = "iceberg_prepare"
             result = {

@@ -48,9 +48,14 @@ def test_training_writes_model_and_reports_training_only_statistics(tmp_path, mo
     }
     pending = tmp_path / "generated.joblib"
     result = train_dataset(
-        None, dataset,
-        {"algorithm": "isolation_forest", "dataset_version": "source-1",
-         "features": ["x"], "params": params},
+        None,
+        dataset,
+        {
+            "algorithm": "isolation_forest",
+            "dataset_version": "source-1",
+            "features": ["x"],
+            "params": params,
+        },
         pending,
     )
     assert pending.exists()
@@ -59,8 +64,13 @@ def test_training_writes_model_and_reports_training_only_statistics(tmp_path, mo
     assert "precision" not in result["training_score_summary"]
     with pytest.raises(ValueError, match="version"):
         train_dataset(
-            None, dataset,
-            {"algorithm": "isolation_forest", "dataset_version": "old",
-             "features": ["x"], "params": params},
+            None,
+            dataset,
+            {
+                "algorithm": "isolation_forest",
+                "dataset_version": "old",
+                "features": ["x"],
+                "params": params,
+            },
             tmp_path / "should-not-exist.joblib",
         )

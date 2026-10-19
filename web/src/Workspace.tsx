@@ -514,7 +514,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           <progress max={uploadProgress.total} value={uploadProgress.loaded}
             aria-label="파일 전송 진행률" />}
       </div>}
-      {!dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && tab !== "ml" && tab !== "ml" && <div className="empty">
+      {!dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && tab !== "ml" && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
         <p>{tab === "preparation"
           ? "Data Preparation은 Explorer 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."

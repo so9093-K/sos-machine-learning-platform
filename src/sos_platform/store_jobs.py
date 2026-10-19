@@ -438,7 +438,9 @@ class JobStoreMixin:
                     ),
                     item,
                 )
-                self._publish_object(db, write_id, model_publish["location"], model_publish["sha256"])
+                self._publish_object(
+                    db, write_id, model_publish["location"], model_publish["sha256"]
+                )
                 result = {**(result or {}), "model_revision_id": item["id"]}
             if (
                 status == "Succeeded"
