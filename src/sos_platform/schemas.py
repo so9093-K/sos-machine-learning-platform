@@ -192,6 +192,60 @@ class IsolationForestParameters(BaseModel):
         return value
 
 
+class MLPolicyRequest(BaseModel):
+    scoring_result_id: str
+    mode: Literal["fixed", "quantile"]
+    threshold: float | None = None
+    alert_fraction: float | None = None
+
+    @model_validator(mode="after")
+    def validate_policy(self):
+        import math
+
+        if self.mode == "fixed":
+            if self.threshold is None or not math.isfinite(self.threshold):
+                raise ValueError("Fixed policy requires a finite threshold")
+            if self.alert_fraction is not None:
+                raise ValueError("Fixed policy cannot set alert_fraction")
+        else:
+            if self.threshold is not None:
+                raise ValueError("Quantile policy cannot set a fixed threshold")
+            if self.alert_fraction is None or not math.isfinite(self.alert_fraction):
+                raise ValueError("Quantile policy requires alert_fraction")
+            if not 0 < self.alert_fraction < 1:
+                raise ValueError("Quantile alert_fraction must be between 0 and 1")
+        return self
+
+
+class MLEvaluationRequest(BaseModel):
+    scoring_result_id: str
+    policy_revision_id: str | None = None
+
+
+class DecisionPolicyRevisionOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    scoring_result_id: str
+    mode: str
+    threshold: float
+    alert_fraction: float | None
+    decision_summary: dict[str, object]
+    created_at: str
+
+
+class EvaluationRevisionOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    scoring_result_id: str
+    policy_revision_id: str | None
+    label_coverage: str
+    decision_metrics: dict[str, object]
+    ranking_metrics: dict[str, object] | None
+    created_at: str
+
+
 class MLScoringRequest(BaseModel):
     model_revision_id: str
     dataset_id: str
@@ -492,6 +546,14 @@ class JobOut(BaseModel):
     attempts: list[AttemptOut]
 
 
+class MLPolicyJobOut(JobOut):
+    kind: Literal["ml_policy"]
+
+
+class MLEvaluationJobOut(JobOut):
+    kind: Literal["ml_evaluate"]
+
+
 class MLScoringJobOut(JobOut):
     kind: Literal["ml_score"]
 
@@ -528,6 +590,24 @@ class JobSummaryOut(BaseModel):
     updated_at: str
     attempt_count: int
     latest_attempt: AttemptOut | None
+
+
+class MLPolicyJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_policy"]
+
+
+class MLPolicyJobPageOut(BaseModel):
+    items: list[MLPolicyJobSummaryOut]
+    next_cursor: str | None = None
+
+
+class MLEvaluationJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_evaluate"]
+
+
+class MLEvaluationJobPageOut(BaseModel):
+    items: list[MLEvaluationJobSummaryOut]
+    next_cursor: str | None = None
 
 
 class MLScoringJobSummaryOut(JobSummaryOut):

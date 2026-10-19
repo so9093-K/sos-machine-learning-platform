@@ -211,7 +211,7 @@ class JobStoreMixin:
         if exclude_kind is not None:
             filters.append("kind!=:exclude_kind")
         if exclude_ml_train:
-            filters.append("kind NOT IN ('ml_train','ml_score')")
+            filters.append("kind NOT IN ('ml_train','ml_score','ml_policy','ml_evaluate')")
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(
             f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
@@ -344,6 +344,8 @@ class JobStoreMixin:
         write_id: str | None = None,
         model_publish: dict | None = None,
         scoring_publish: dict | None = None,
+        policy_publish: dict | None = None,
+        evaluation_publish: dict | None = None,
         error_code: str | None = None,
         failure_stage: str | None = None,
         failure_category: str | None = None,
@@ -485,6 +487,64 @@ class JobStoreMixin:
                     db, write_id, scoring_publish["location"], scoring_publish["sha256"]
                 )
                 result = {**(result or {}), "scoring_result_id": item["id"]}
+            if status == "Succeeded" and policy_publish is not None:
+                if row["kind"] != "ml_policy":
+                    raise ValueError("Invalid policy publication request")
+                item = {
+                    "id": str(uuid4()),
+                    "job_id": job_id,
+                    "attempt_id": attempt_id,
+                    "scoring_result_id": policy_publish["scoring_result_id"],
+                    "mode": policy_publish["mode"],
+                    "threshold": policy_publish["threshold"],
+                    "alert_fraction": policy_publish["alert_fraction"],
+                    "decision_summary": json.dumps(
+                        policy_publish["decision_summary"], allow_nan=False
+                    ),
+                    "owner_actor": row["owner_actor"],
+                    "created_at": now(),
+                }
+                db.execute(
+                    text(
+                        "INSERT INTO decision_policy_revisions "
+                        "(id,job_id,attempt_id,scoring_result_id,mode,threshold,alert_fraction,"
+                        "decision_summary,owner_actor,created_at) VALUES "
+                        "(:id,:job_id,:attempt_id,:scoring_result_id,:mode,:threshold,"
+                        ":alert_fraction,:decision_summary,:owner_actor,:created_at)"
+                    ),
+                    item,
+                )
+                result = {**(result or {}), "policy_revision_id": item["id"]}
+            if status == "Succeeded" and evaluation_publish is not None:
+                if row["kind"] != "ml_evaluate":
+                    raise ValueError("Invalid evaluation publication request")
+                item = {
+                    "id": str(uuid4()),
+                    "job_id": job_id,
+                    "attempt_id": attempt_id,
+                    "scoring_result_id": evaluation_publish["scoring_result_id"],
+                    "policy_revision_id": evaluation_publish["policy_revision_id"],
+                    "label_coverage": evaluation_publish["label_coverage"],
+                    "decision_metrics": json.dumps(
+                        evaluation_publish["decision_metrics"], allow_nan=False
+                    ),
+                    "ranking_metrics": json.dumps(
+                        evaluation_publish["ranking_metrics"], allow_nan=False
+                    ) if evaluation_publish["ranking_metrics"] is not None else None,
+                    "owner_actor": row["owner_actor"],
+                    "created_at": now(),
+                }
+                db.execute(
+                    text(
+                        "INSERT INTO evaluation_revisions "
+                        "(id,job_id,attempt_id,scoring_result_id,policy_revision_id,"
+                        "label_coverage,decision_metrics,ranking_metrics,owner_actor,created_at) "
+                        "VALUES (:id,:job_id,:attempt_id,:scoring_result_id,:policy_revision_id,"
+                        ":label_coverage,:decision_metrics,:ranking_metrics,:owner_actor,:created_at)"
+                    ),
+                    item,
+                )
+                result = {**(result or {}), "evaluation_revision_id": item["id"]}
             if (
                 status == "Succeeded"
                 and row["kind"] == "profile"
@@ -553,6 +613,28 @@ class JobStoreMixin:
                     action="dataset.publish",
                     resource_type="dataset",
                     resource_id=item["id"],
+                    reason=f"job={job_id};{reason}",
+                    request_id=row["request_id"],
+                )
+            if status == "Succeeded" and policy_publish is not None:
+                self._audit(
+                    db,
+                    actor_id="sos-worker",
+                    actor_type="service",
+                    action="policy.publish",
+                    resource_type="decision_policy",
+                    resource_id=result["policy_revision_id"],
+                    reason=f"job={job_id};{reason}",
+                    request_id=row["request_id"],
+                )
+            if status == "Succeeded" and evaluation_publish is not None:
+                self._audit(
+                    db,
+                    actor_id="sos-worker",
+                    actor_type="service",
+                    action="evaluation.publish",
+                    resource_type="evaluation",
+                    resource_id=result["evaluation_revision_id"],
                     reason=f"job={job_id};{reason}",
                     request_id=row["request_id"],
                 )

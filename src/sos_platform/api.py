@@ -59,6 +59,14 @@ from .schemas import (
     IcebergReferenceOut,
     JobOut,
     JobPageOut,
+    DecisionPolicyRevisionOut,
+    EvaluationRevisionOut,
+    MLEvaluationJobOut,
+    MLEvaluationJobPageOut,
+    MLEvaluationRequest,
+    MLPolicyJobOut,
+    MLPolicyJobPageOut,
+    MLPolicyRequest,
     MLScoringJobOut,
     MLScoringJobPageOut,
     MLScoringRequest,
@@ -656,6 +664,94 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             raise HTTPException(status_code=404, detail="Scoring Job not found")
         return item
 
+    def required_scoring_result(result_id: str, actor: Actor) -> dict:
+        scoring = store.get_scoring_result(result_id)
+        if scoring is None:
+            raise HTTPException(status_code=404, detail="Scoring Result not found")
+        check_ownership(actor, scoring["owner_actor"], "scoring_result", result_id)
+        return scoring
+
+    @app.post("/api/ml/policies/jobs", status_code=202, response_model=MLPolicyJobOut)
+    def create_policy_job(
+        body: MLPolicyRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ):
+        score = required_scoring_result(body.scoring_result_id, actor)
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_policy",
+            dataset_id=score["dataset_id"],
+            spec={
+                **body.model_dump(),
+                "source_owner_actor": score["owner_actor"],
+            },
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            request_id=request.state.request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    @app.post("/api/ml/evaluations/jobs", status_code=202, response_model=MLEvaluationJobOut)
+    def create_evaluation_job(
+        body: MLEvaluationRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    ):
+        score = required_scoring_result(body.scoring_result_id, actor)
+        if body.policy_revision_id:
+            policy = store.get_decision_policy_revision(body.policy_revision_id)
+            if policy is None:
+                raise HTTPException(status_code=404, detail="Decision Policy not found")
+            check_ownership(actor, policy["owner_actor"], "decision_policy", policy["id"])
+            if policy["scoring_result_id"] != score["id"]:
+                raise HTTPException(status_code=422, detail="Policy does not belong to Scoring")
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_evaluate",
+            dataset_id=score["dataset_id"],
+            spec={
+                **body.model_dump(),
+                "source_owner_actor": score["owner_actor"],
+            },
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            request_id=request.state.request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    def ml_special_job(job_id: str, actor: Actor, kind: str) -> dict:
+        item = existing_job(job_id, actor)
+        if item["kind"] != kind:
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        return item
+
+    @app.get("/api/ml/policies/jobs/{job_id}", response_model=MLPolicyJobOut)
+    def get_policy_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return ml_special_job(job_id, actor, "ml_policy")
+
+    @app.get("/api/ml/evaluations/jobs/{job_id}", response_model=MLEvaluationJobOut)
+    def get_evaluation_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return ml_special_job(job_id, actor, "ml_evaluate")
+
+    @app.get("/api/ml/policies/{revision_id}", response_model=DecisionPolicyRevisionOut)
+    def get_policy_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_decision_policy_revision(revision_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Decision Policy not found")
+        check_ownership(actor, item["owner_actor"], "decision_policy", revision_id)
+        return item
+
+    @app.get("/api/ml/evaluations/{revision_id}", response_model=EvaluationRevisionOut)
+    def get_evaluation_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_evaluation_revision(revision_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Evaluation not found")
+        check_ownership(actor, item["owner_actor"], "evaluation", revision_id)
+        return item
+
     @app.get("/api/ml/scoring/results/{result_id}", response_model=ScoringResultOut)
     def get_scoring_result(result_id: str, actor: Actor = READ_JOB_DEP):
         item = store.get_scoring_result(result_id)
@@ -743,7 +839,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     @app.get("/api/jobs/{job_id}", response_model=JobOut)
     def get_job(job_id: str, actor: Actor = READ_JOB_DEP):
         item = existing_job(job_id, actor)
-        if item["kind"] in ("exploration", "ml_train", "ml_score"):
+        if item["kind"] in ("exploration", "ml_train", "ml_score", "ml_policy", "ml_evaluate"):
             raise HTTPException(status_code=404, detail="Job not found")
         return item
 
