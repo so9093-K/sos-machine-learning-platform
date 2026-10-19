@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from uuid import uuid4
 
 from sqlalchemy import bindparam, text
@@ -701,6 +702,23 @@ class JobStoreMixin:
                     resource_id=result["model_revision_id"],
                     reason=f"job={job_id};{reason}",
                     request_id=row["request_id"],
+                )
+            # 외부 기록은 Job 트랜잭션과 함께 '전송 대기'만 남긴다.
+            # MLflow 네트워크 호출을 여기서 실행하면 데이터 정본을 오염시킨다.
+            if (
+                status == "Succeeded"
+                and row["kind"] in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain")
+                and os.getenv("SOS_MLFLOW_TRACKING_URI")
+            ):
+                db.execute(
+                    text(
+                        "INSERT INTO mlflow_exports"
+                        "(job_id,state,run_id,attempts,last_error_code,retry_after,"
+                        "created_at,updated_at) "
+                        "VALUES (:job,'Pending',NULL,0,NULL,:at,:at,:at) "
+                        "ON CONFLICT (job_id) DO NOTHING"
+                    ),
+                    {"job": job_id, "at": now()},
                 )
             self._audit(
                 db,

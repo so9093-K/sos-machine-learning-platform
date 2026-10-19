@@ -17,6 +17,7 @@ from .store_jobs import JobStoreMixin
 from .store_models import ModelStoreMixin
 from .store_objects import ObjectStoreMixin
 from .store_snapshots import SnapshotStoreMixin
+from .store_tracking import TrackingStoreMixin
 
 
 class Store(
@@ -26,6 +27,7 @@ class Store(
     DatasetStoreMixin,
     JobStoreMixin,
     ModelStoreMixin,
+    TrackingStoreMixin,
 ):
     """데이터·작업 이력을 담당하며 실제 연산과 파일 저장은 처리하지 않는다."""
 

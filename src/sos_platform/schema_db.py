@@ -255,6 +255,20 @@ explanation_results = Table(
     Index("ix_explanations_scoring_row", "scoring_result_id", "row_index"),
 )
 
+mlflow_exports = Table(
+    "mlflow_exports",
+    metadata,
+    Column("job_id", String(36), ForeignKey("jobs.id"), primary_key=True),
+    Column("state", String(16), nullable=False),
+    Column("run_id", String(128)),
+    Column("attempts", Integer, nullable=False),
+    Column("last_error_code", String(64)),
+    Column("retry_after", Text, nullable=False),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Index("ix_mlflow_exports_due", "state", "retry_after"),
+)
+
 audit_events = Table(
     "audit_events",
     metadata,
