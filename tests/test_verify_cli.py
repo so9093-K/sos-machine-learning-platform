@@ -117,30 +117,3 @@ def test_empty_required_command_plan_cannot_succeed(monkeypatch, tmp_path):
     code, manifest = verify.execute("ruff", tmp_path)
     assert code == verify.EXIT_USAGE
     assert "필수 실행 명령" in manifest["error"]
-
-
-def test_reconcile_public_cli_forwards_reports_without_reimplementation(monkeypatch, tmp_path):
-    """공통 CLI가 증거 대조의 유일한 외부 진입점이고 실패 코드를 보존한다."""
-    seen = []
-
-    def fake_run(command, **_kwargs):
-        seen.append(command)
-        return SimpleNamespace(returncode=1)
-
-    monkeypatch.setattr(verify.subprocess, "run", fake_run)
-    options = [
-        "reconcile",
-        "--inventory",
-        str(tmp_path / "inventory.json"),
-        "--pytest-report",
-        str(tmp_path / "unit.xml"),
-        "--pytest-report",
-        str(tmp_path / "integration.xml"),
-        "--vitest-report",
-        str(tmp_path / "vitest.xml"),
-        "--playwright-report",
-        str(tmp_path / "e2e.xml"),
-    ]
-    assert verify.main(options) == 1
-    assert seen[0][:3] == ["python3", "scripts/verify_inventory.py", "reconcile"]
-    assert seen[0].count("--pytest-report") == 2

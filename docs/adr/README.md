@@ -16,8 +16,9 @@
 - [0006 — 범용 Dataset 조회와 Lazy Preview·Iceberg 배치 쓰기](0006-generic-data-execution.md) · Accepted
 - [0007 — 공통 실행 자원 수용 및 물리 격리 경계](0007-execution-admission.md) · Accepted
 - [0008 — Iceberg 테이블 쓰기 소유권과 Catalog 정체성](0008-iceberg-table-write-ownership.md) · Accepted
-- [0009 — 검증 실행의 CI 독립성과 테스트 자산 수명주기](0009-test-engineering-portability.md) · Accepted
+- [0009 — 검증 실행의 CI 독립성과 테스트 자산 수명주기](0009-test-engineering-portability.md) · Superseded (0013)
 - [0010 — 컨테이너 실행 기반과 플랫폼 계약 분리](0010-container-execution-boundary.md) · Superseded
 - [0011 — 서비스와 검증의 Compose 실행 경계 통합](0011-compose-native-validation.md) · Accepted
 
 - [0012 — ML 실험·이상 점수·외부 추적의 책임 경계](0012-ml-experiment-boundaries.md) · Proposed
+- [0013 — 테스트 실행 비용과 필수 검증 정책 간소화](0013-lean-validation-policy.md) · Accepted

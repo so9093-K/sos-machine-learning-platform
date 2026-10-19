@@ -44,8 +44,6 @@ SUITES = {
         Suite("wheel", "command", False, "설치된 Wheel에 포함된 Alembic 검증"),
         Suite("alembic", "command", True, "Alembic 스키마 정합성"),
         Suite("workspace-e2e", "junit", True, "격리된 브라우저 사용자 흐름"),
-        Suite("token-rbac", "junit", True, "토큰 역할별 브라우저 흐름"),
-        Suite("container-runtime", "command", True, "전체 Compose 컨테이너·권한·데이터 보존"),
     )
 }
 
@@ -109,12 +107,8 @@ def commands(name: str, report: Path, base_ref: str | None) -> list[tuple[list[s
         return [(uv + ["alembic", "check"], ROOT)]
     if name == "workspace-e2e":
         return [
-            (uv + ["python", "scripts/isolated_compose.py", "--spec", "workspace.spec.ts"], ROOT)
+            (uv + ["python", "scripts/isolated_compose.py", "--spec", "all"], ROOT)
         ]
-    if name == "token-rbac":
-        return [(uv + ["python", "scripts/isolated_compose.py", "--spec", "auth.spec.ts"], ROOT)]
-    if name == "container-runtime":
-        return [(["python3", "scripts/verify_container_runtime.py"], ROOT)]
     raise ValueError(f"알 수 없는 Suite: {name}")
 
 
@@ -198,7 +192,7 @@ def execute(
     status = 0
     error = None
     run_env = dict(os.environ if env is None else env)
-    if name in {"workspace-e2e", "token-rbac"}:
+    if name == "workspace-e2e":
         run_env["SOS_JUNIT_FILE"] = str(report)
     try:
         planned = commands(name, report, base_ref)
@@ -248,13 +242,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="SOS 공통 검증 실행 계약")
     commands_parser = parser.add_subparsers(dest="action", required=True)
     commands_parser.add_parser("list")
-    inventory = commands_parser.add_parser("inventory")
-    inventory.add_argument("--output", type=Path, required=True)
-    inventory.add_argument("--registry", type=Path)
-    reconcile = commands_parser.add_parser("reconcile")
-    reconcile.add_argument("--inventory", type=Path, required=True)
-    for runner in ("pytest", "vitest", "playwright"):
-        reconcile.add_argument(f"--{runner}-report", type=Path, action="append", required=True)
     run = commands_parser.add_parser("run")
     run.add_argument("suite", choices=sorted(SUITES))
     run.add_argument("--output-dir", type=Path)
@@ -266,32 +253,6 @@ def main(argv: list[str] | None = None) -> int:
                 f"{suite.name:<20} {'infra' if suite.infrastructure else 'fast':<6} {suite.description}"
             )
         return 0
-    if args.action == "inventory":
-        command = [
-            "uv",
-            "run",
-            "--locked",
-            "python",
-            "scripts/verify_inventory.py",
-            "generate",
-            "--output",
-            str(args.output),
-        ]
-        if args.registry is not None:
-            command += ["--registry", str(args.registry)]
-        return subprocess.run(command, cwd=ROOT, check=False).returncode
-    if args.action == "reconcile":
-        command = [
-            "python3",
-            "scripts/verify_inventory.py",
-            "reconcile",
-            "--inventory",
-            str(args.inventory),
-        ]
-        for runner in ("pytest", "vitest", "playwright"):
-            for report in getattr(args, f"{runner}_report"):
-                command += [f"--{runner}-report", str(report)]
-        return subprocess.run(command, cwd=ROOT, check=False).returncode
     output = args.output_dir or default_output()
     status, outcome = execute(args.suite, output, base_ref=args.base_ref)
     print(json.dumps(outcome, ensure_ascii=False, indent=2))

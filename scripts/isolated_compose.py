@@ -229,7 +229,7 @@ def execute(spec: str) -> int:
             timeout=900,
         )
         subprocess.run(
-            ["npx", "playwright", "test", spec],
+            ["npx", "playwright", "test", *([] if spec == "all" else [spec])],
             cwd=ROOT / "web",
             env=env,
             check=True,
@@ -250,7 +250,7 @@ def _interrupted(_signum: int, _frame: object) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--spec", choices=("workspace.spec.ts", "auth.spec.ts"))
+    parser.add_argument("--spec", choices=("all", "workspace.spec.ts", "auth.spec.ts"))
     parser.add_argument("--recover-owned")
     args = parser.parse_args(argv)
     if args.recover_owned:
@@ -263,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
         env = isolated_environment(os.environ, instance, data["ports"])
         return clean_owned(instance, runtime, env)
     signal.signal(signal.SIGTERM, _interrupted)
-    spec = args.spec or "workspace.spec.ts"
+    spec = args.spec or "all"
     return execute(spec)
 
 

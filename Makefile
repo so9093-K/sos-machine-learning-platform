@@ -31,7 +31,7 @@ check-fast:
 
 check:
 	@$(COMPOSE) ps --status running
-	@set -eu; for suite in ruff python-unit python-integration frontend openapi-types wheel alembic workspace-e2e token-rbac container-runtime; do \
+	@set -eu; for suite in ruff python-unit python-integration frontend openapi-types wheel alembic workspace-e2e; do \
 		uv run --locked python scripts/verify.py run "$$suite"; \
 	done
 
