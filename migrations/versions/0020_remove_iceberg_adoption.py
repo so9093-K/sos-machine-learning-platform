@@ -22,5 +22,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # 삭제된 과도기 채택 근거는 재구성하지 않는다. Blocked 기록도 쓰기를 허용하지 않는다.
+    # 이전 버전은 Adopting만 명시적으로 차단하므로 Blocked를 그대로 두면 위험하다.
     op.add_column("iceberg_table_owners", sa.Column("adoption_dataset_id", sa.String(36)))
+    op.execute("UPDATE iceberg_table_owners SET state='Adopting' WHERE state='Blocked'")
