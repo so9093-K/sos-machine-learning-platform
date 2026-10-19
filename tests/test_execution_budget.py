@@ -40,7 +40,6 @@ def test_budget_checks_timeout_before_commit_uncertainty(budget):
     assert raised.value.code == "SOS-JOB-TIMEOUT"
 
 
-
 def test_staging_budget_configuration(monkeypatch):
     monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "512")
     assert ExecutionBudget.from_env().max_stage_mib == 512
