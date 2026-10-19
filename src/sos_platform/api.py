@@ -72,6 +72,7 @@ from .schemas import (
     MLScoringRequest,
     MLTrainingJobOut,
     MLTrainingJobPageOut,
+    MLForkRequest,
     MLTrainRequest,
     ModelRevisionOut,
     ScoringResultOut,
@@ -571,6 +572,54 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         if item["kind"] != "ml_train":
             raise HTTPException(status_code=404, detail="Training Job not found")
         return item
+
+    @app.post(
+        "/api/ml/train/jobs/{source_job_id}/fork",
+        status_code=202,
+        response_model=MLTrainingJobOut,
+    )
+    def fork_training_job(
+        source_job_id: str,
+        body: MLForkRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        source = existing_ml_training_job(source_job_id, actor)
+        if source["status"] != "Succeeded":
+            raise HTTPException(status_code=409, detail="Only completed training can be forked")
+        dataset = existing(source["dataset_id"], actor)
+        if dataset["version"] != source["spec"]["dataset_version"]:
+            raise HTTPException(status_code=409, detail="Training Dataset revision unavailable")
+        require_job_submission_key(idempotency_key)
+        params = body.params.model_dump() if body.params is not None else source["spec"]["params"]
+        from .ml_isolation_forest import IsolationForestConfig
+
+        try:
+            IsolationForestConfig(**params)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid model parameters") from exc
+        return store.create_job(
+            kind="ml_train",
+            dataset_id=dataset["id"],
+            spec={
+                "algorithm": source["spec"]["algorithm"],
+                "dataset_version": source["spec"]["dataset_version"],
+                "features": source["spec"]["features"],
+                "params": params,
+                "forked_from_job_id": source_job_id,
+            },
+            request_id=request.state.request_id,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            idempotency_key=idempotency_key,
+        )
 
     @app.get("/api/ml/train/jobs", response_model=MLTrainingJobPageOut)
     def list_ml_training_jobs(

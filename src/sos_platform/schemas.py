@@ -270,6 +270,12 @@ class ScoringResultOut(BaseModel):
     created_at: str
 
 
+class MLForkRequest(BaseModel):
+    """원본 학습 실행의 Feature/판본을 그대로 유지하고 모델 설정만 바꿀 수 있다."""
+
+    params: IsolationForestParameters | None = None
+
+
 class MLTrainRequest(BaseModel):
     dataset_id: str
     features: list[str] = Field(min_length=1, max_length=32)
