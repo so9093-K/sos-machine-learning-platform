@@ -808,9 +808,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         check_ownership(actor, item["owner_actor"], "decision_policy", revision_id)
         return item
 
-    @app.post(
-        "/api/ml/explanations/jobs", status_code=202, response_model=MLExplanationJobOut
-    )
+    @app.post("/api/ml/explanations/jobs", status_code=202, response_model=MLExplanationJobOut)
     def create_explanation_job(
         body: MLExplanationRequest,
         request: Request,
@@ -948,7 +946,14 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     @app.get("/api/jobs/{job_id}", response_model=JobOut)
     def get_job(job_id: str, actor: Actor = READ_JOB_DEP):
         item = existing_job(job_id, actor)
-        if item["kind"] in ("exploration", "ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain"):
+        if item["kind"] in (
+            "exploration",
+            "ml_train",
+            "ml_score",
+            "ml_policy",
+            "ml_evaluate",
+            "ml_explain",
+        ):
             raise HTTPException(status_code=404, detail="Job not found")
         return item
 

@@ -211,7 +211,9 @@ class JobStoreMixin:
         if exclude_kind is not None:
             filters.append("kind!=:exclude_kind")
         if exclude_ml_train:
-            filters.append("kind NOT IN ('ml_train','ml_score','ml_policy','ml_evaluate','ml_explain')")
+            filters.append(
+                "kind NOT IN ('ml_train','ml_score','ml_policy','ml_evaluate','ml_explain')"
+            )
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(
             f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
@@ -531,7 +533,9 @@ class JobStoreMixin:
                     ),
                     "ranking_metrics": json.dumps(
                         evaluation_publish["ranking_metrics"], allow_nan=False
-                    ) if evaluation_publish["ranking_metrics"] is not None else None,
+                    )
+                    if evaluation_publish["ranking_metrics"] is not None
+                    else None,
                     "owner_actor": row["owner_actor"],
                     "created_at": now(),
                 }

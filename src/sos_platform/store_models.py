@@ -42,10 +42,14 @@ class ModelStoreMixin:
     def get_decision_policy_revision(self, revision_id: str) -> dict | None:
         """정책 경계를 모델·원본 점수 결과와 독립적으로 조회한다."""
         with self.connection() as db:
-            row = db.execute(
-                text("SELECT * FROM decision_policy_revisions WHERE id=:id"),
-                {"id": revision_id},
-            ).mappings().first()
+            row = (
+                db.execute(
+                    text("SELECT * FROM decision_policy_revisions WHERE id=:id"),
+                    {"id": revision_id},
+                )
+                .mappings()
+                .first()
+            )
         if row is None:
             return None
         item = dict(row)
@@ -55,10 +59,14 @@ class ModelStoreMixin:
     def get_evaluation_revision(self, revision_id: str) -> dict | None:
         """평가 조건·레이블 커버리지·지표의 불변 근거."""
         with self.connection() as db:
-            row = db.execute(
-                text("SELECT * FROM evaluation_revisions WHERE id=:id"),
-                {"id": revision_id},
-            ).mappings().first()
+            row = (
+                db.execute(
+                    text("SELECT * FROM evaluation_revisions WHERE id=:id"),
+                    {"id": revision_id},
+                )
+                .mappings()
+                .first()
+            )
         if row is None:
             return None
         item = dict(row)
@@ -70,10 +78,14 @@ class ModelStoreMixin:
     def get_explanation_result(self, result_id: str) -> dict | None:
         """개별 점수 설명의 근거·민감도 결과를 조회한다."""
         with self.connection() as db:
-            row = db.execute(
-                text("SELECT * FROM explanation_results WHERE id=:id"),
-                {"id": result_id},
-            ).mappings().first()
+            row = (
+                db.execute(
+                    text("SELECT * FROM explanation_results WHERE id=:id"),
+                    {"id": result_id},
+                )
+                .mappings()
+                .first()
+            )
         if row is None:
             return None
         item = dict(row)

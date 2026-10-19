@@ -17,35 +17,44 @@ def _upload(client, name, content):
 
 
 def _submit(client, endpoint, body):
-    return client.post(
-        endpoint, json=body, headers={"Idempotency-Key": str(uuid4())}
-    )
+    return client.post(endpoint, json=body, headers={"Idempotency-Key": str(uuid4())})
 
 
 def test_decision_policy_revisions_and_evaluation_reuse_same_scoring_artifact(workspace):
     client, store = workspace
     data = _upload(client, "ml_train.csv", b"temperature\n1.0\n2.0\n3.0\n4.0\n")
-    trained = _submit(client, "/api/ml/train/jobs", {
-        "dataset_id": data["id"], "features": ["temperature"],
-    })
+    trained = _submit(
+        client,
+        "/api/ml/train/jobs",
+        {
+            "dataset_id": data["id"],
+            "features": ["temperature"],
+        },
+    )
     assert trained.status_code == 202
     assert run_once(store)
-    model_id = client.get(
-        f"/api/ml/train/jobs/{trained.json()['id']}"
-    ).json()["result"]["model_revision_id"]
+    model_id = client.get(f"/api/ml/train/jobs/{trained.json()['id']}").json()["result"][
+        "model_revision_id"
+    ]
     val = _upload(
-        client, "ml_eval.csv",
+        client,
+        "ml_eval.csv",
         b"temperature,abnormal\n1.0,0\n2.0,0\n3.0,1\n200.0,1\n",
     )
-    score_job = _submit(client, "/api/ml/scoring/jobs", {
-        "dataset_id": val["id"], "model_revision_id": model_id,
-        "label_column": "abnormal",
-    })
+    score_job = _submit(
+        client,
+        "/api/ml/scoring/jobs",
+        {
+            "dataset_id": val["id"],
+            "model_revision_id": model_id,
+            "label_column": "abnormal",
+        },
+    )
     assert score_job.status_code == 202, score_job.text
     assert run_once(store)
-    result_id = client.get(
-        f"/api/ml/scoring/jobs/{score_job.json()['id']}"
-    ).json()["result"]["scoring_result_id"]
+    result_id = client.get(f"/api/ml/scoring/jobs/{score_job.json()['id']}").json()["result"][
+        "scoring_result_id"
+    ]
     before_training = client.get(f"/api/ml/models/{model_id}").json()
     thresholds = []
     policy_ids = []
@@ -53,9 +62,14 @@ def test_decision_policy_revisions_and_evaluation_reuse_same_scoring_artifact(wo
         {"mode": "fixed", "threshold": 0.5},
         {"mode": "quantile", "alert_fraction": 0.25},
     ]:
-        sent = _submit(client, "/api/ml/policies/jobs", {
-            "scoring_result_id": result_id, **body,
-        })
+        sent = _submit(
+            client,
+            "/api/ml/policies/jobs",
+            {
+                "scoring_result_id": result_id,
+                **body,
+            },
+        )
         assert sent.status_code == 202, sent.text
         assert run_once(store)
         job = client.get(f"/api/ml/policies/jobs/{sent.json()['id']}").json()
@@ -68,10 +82,14 @@ def test_decision_policy_revisions_and_evaluation_reuse_same_scoring_artifact(wo
     assert thresholds[0] != thresholds[1]
     assert before_training == client.get(f"/api/ml/models/{model_id}").json()
 
-    result = _submit(client, "/api/ml/evaluations/jobs", {
-        "scoring_result_id": result_id,
-        "policy_revision_id": policy_ids[0],
-    })
+    result = _submit(
+        client,
+        "/api/ml/evaluations/jobs",
+        {
+            "scoring_result_id": result_id,
+            "policy_revision_id": policy_ids[0],
+        },
+    )
     assert result.status_code == 202, result.text
     assert run_once(store)
     job = client.get(f"/api/ml/evaluations/jobs/{result.json()['id']}").json()

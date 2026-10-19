@@ -18,9 +18,13 @@ def upgrade() -> None:
         "decision_policy_revisions",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("job_id", sa.String(36), sa.ForeignKey("jobs.id"), nullable=False, unique=True),
-        sa.Column("attempt_id", sa.String(36), sa.ForeignKey("attempts.id"), nullable=False, unique=True),
         sa.Column(
-            "scoring_result_id", sa.String(36), sa.ForeignKey("scoring_results.id"),
+            "attempt_id", sa.String(36), sa.ForeignKey("attempts.id"), nullable=False, unique=True
+        ),
+        sa.Column(
+            "scoring_result_id",
+            sa.String(36),
+            sa.ForeignKey("scoring_results.id"),
             nullable=False,
         ),
         sa.Column("mode", sa.String(20), nullable=False),
@@ -34,13 +38,18 @@ def upgrade() -> None:
         "evaluation_revisions",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("job_id", sa.String(36), sa.ForeignKey("jobs.id"), nullable=False, unique=True),
-        sa.Column("attempt_id", sa.String(36), sa.ForeignKey("attempts.id"), nullable=False, unique=True),
         sa.Column(
-            "scoring_result_id", sa.String(36), sa.ForeignKey("scoring_results.id"),
+            "attempt_id", sa.String(36), sa.ForeignKey("attempts.id"), nullable=False, unique=True
+        ),
+        sa.Column(
+            "scoring_result_id",
+            sa.String(36),
+            sa.ForeignKey("scoring_results.id"),
             nullable=False,
         ),
         sa.Column(
-            "policy_revision_id", sa.String(36),
+            "policy_revision_id",
+            sa.String(36),
             sa.ForeignKey("decision_policy_revisions.id"),
         ),
         sa.Column("label_coverage", sa.String(16), nullable=False),
@@ -49,12 +58,8 @@ def upgrade() -> None:
         sa.Column("owner_actor", sa.Text()),
         sa.Column("created_at", sa.Text(), nullable=False),
     )
-    op.create_index(
-        "ix_ml_policy_scoring", "decision_policy_revisions", ["scoring_result_id"]
-    )
-    op.create_index(
-        "ix_ml_evaluation_scoring", "evaluation_revisions", ["scoring_result_id"]
-    )
+    op.create_index("ix_ml_policy_scoring", "decision_policy_revisions", ["scoring_result_id"])
+    op.create_index("ix_ml_evaluation_scoring", "evaluation_revisions", ["scoring_result_id"])
 
 
 def downgrade() -> None:

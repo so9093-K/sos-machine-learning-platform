@@ -18,7 +18,9 @@ def upgrade() -> None:
         "explanation_results",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("job_id", sa.String(36), sa.ForeignKey("jobs.id"), nullable=False, unique=True),
-        sa.Column("attempt_id", sa.String(36), sa.ForeignKey("attempts.id"), nullable=False, unique=True),
+        sa.Column(
+            "attempt_id", sa.String(36), sa.ForeignKey("attempts.id"), nullable=False, unique=True
+        ),
         sa.Column(
             "scoring_result_id", sa.String(36), sa.ForeignKey("scoring_results.id"), nullable=False
         ),

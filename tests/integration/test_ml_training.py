@@ -309,7 +309,8 @@ def test_training_fork_preserves_input_revision_and_provenance(workspace):
     assert first.status_code == 202
     blocked = client.post(
         f"/api/ml/train/jobs/{first.json()['id']}/fork",
-        json={}, headers={"Idempotency-Key": str(uuid4())},
+        json={},
+        headers={"Idempotency-Key": str(uuid4())},
     )
     assert blocked.status_code == 409
     assert run_once(store)
