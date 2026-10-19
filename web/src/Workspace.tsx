@@ -19,6 +19,7 @@ import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQu
 import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
+import { MLWorkbench } from "./MLWorkbench";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
 import { useDatasetOverview } from "./useDatasetOverview";
 import { useDatasetInspection } from "./useDatasetInspection";
@@ -26,12 +27,13 @@ import { usePagedJobs } from "./usePagedJobs";
 import type { ExplorationRequest } from "./types";
 
 
-type Tab = DatasetTab | "preparation" | "jobs" | "storage" | "audit";
+type Tab = DatasetTab | "preparation" | "ml" | "jobs" | "storage" | "audit";
 const pageLabels: Record<Tab, { eyebrow: string; title: string; description: string }> = {
   understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "Dataset · Recipe · Transform" },
+  ml: { eyebrow: "RESEARCH & ML", title: "ML Workbench", description: "Experiment · Training · Model Revision" },
   jobs: { eyebrow: "ACTIVITY & JOBS", title: "전체 Jobs", description: "Job · Attempt · Result" },
   storage: { eyebrow: "PLATFORM OPERATIONS", title: "저장소 상태", description: "Storage · Health" },
   audit: { eyebrow: "PLATFORM OPERATIONS", title: "보안 감사", description: "Identity · Audit" },
@@ -400,6 +402,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       <button className="job-navigation secondary"
         aria-current={tab === "preparation" ? "page" : undefined}
         onClick={() => setTab("preparation")}>데이터 준비</button>
+      <div className="section-title">RESEARCH & ML</div>
+      <button className="job-navigation secondary"
+        aria-current={tab === "ml" ? "page" : undefined}
+        onClick={() => setTab("ml")}>ML Workbench</button>
       <div className="section-title">PLATFORM</div>
       <button className="job-navigation secondary" aria-current={tab === "jobs" ? "page" : undefined}
         onClick={() => setTab("jobs")}>
@@ -508,7 +514,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           <progress max={uploadProgress.total} value={uploadProgress.loaded}
             aria-label="파일 전송 진행률" />}
       </div>}
-      {!dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <div className="empty">
+      {!dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && tab !== "ml" && tab !== "ml" && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
         <p>{tab === "preparation"
           ? "Data Preparation은 Explorer 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
@@ -673,6 +679,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </>}
 
       </>}
+      {tab === "ml" && <MLWorkbench datasets={datasets} selectedId={selected}
+        onSelect={setSelected} canTrain={canRun} canCancel={canCancel} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
       {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>

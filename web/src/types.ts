@@ -25,3 +25,8 @@ export type ExplorationRequest = components["schemas"]["ExplorationRequest"];
 export type ExplorationJob = components["schemas"]["ExplorationJobOut"];
 export type ExplorationJobSummary = components["schemas"]["ExplorationJobSummaryOut"];
 export type ExplorationJobPage = components["schemas"]["ExplorationJobPageOut"];
+
+export type MLTrainingJob = components["schemas"]["MLTrainingJobOut"];
+export type MLTrainingJobSummary = components["schemas"]["MLTrainingJobSummaryOut"];
+export type MLTrainingJobPage = components["schemas"]["MLTrainingJobPageOut"];
+export type ModelRevision = components["schemas"]["ModelRevisionOut"];
