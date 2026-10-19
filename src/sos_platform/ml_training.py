@@ -90,6 +90,7 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
             "model_format": "joblib",
             "loading": "trusted_worker_only",
             "feature_dtypes": feature_dtypes,
+            "feature_reference_medians": np.median(matrix, axis=0).tolist(),
             "python": platform.python_version(),
             "numpy": np.__version__,
             "scikit_learn": sklearn.__version__,

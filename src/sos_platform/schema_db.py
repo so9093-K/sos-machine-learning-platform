@@ -239,6 +239,22 @@ evaluation_revisions = Table(
     Index("ix_ml_evaluation_scoring", "scoring_result_id"),
 )
 
+explanation_results = Table(
+    "explanation_results",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("scoring_result_id", String(36), ForeignKey("scoring_results.id"), nullable=False),
+    Column("model_revision_id", String(36), ForeignKey("model_revisions.id"), nullable=False),
+    Column("row_index", Integer, nullable=False),
+    Column("method", String(96), nullable=False),
+    Column("output", Text, nullable=False),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_explanations_scoring_row", "scoring_result_id", "row_index"),
+)
+
 audit_events = Table(
     "audit_events",
     metadata,

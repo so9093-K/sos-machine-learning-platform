@@ -66,3 +66,16 @@ class ModelStoreMixin:
             if item[field] is not None:
                 item[field] = json.loads(item[field])
         return item
+
+    def get_explanation_result(self, result_id: str) -> dict | None:
+        """개별 점수 설명의 근거·민감도 결과를 조회한다."""
+        with self.connection() as db:
+            row = db.execute(
+                text("SELECT * FROM explanation_results WHERE id=:id"),
+                {"id": result_id},
+            ).mappings().first()
+        if row is None:
+            return None
+        item = dict(row)
+        item["output"] = json.loads(item["output"])
+        return item
