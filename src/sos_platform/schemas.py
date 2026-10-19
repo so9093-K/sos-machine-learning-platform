@@ -442,7 +442,7 @@ class AttemptOut(BaseModel):
 
 class JobOut(BaseModel):
     id: str
-    kind: Literal["profile", "transform", "iceberg_import", "ml_train"]
+    kind: Literal["profile", "transform", "iceberg_import"]
     dataset_id: str
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -458,6 +458,12 @@ class JobOut(BaseModel):
     attempts: list[AttemptOut]
 
 
+class MLTrainingJobOut(JobOut):
+    """기존 Job 응답의 enum 확장 없이 ML 실행 상태를 제공한다."""
+
+    kind: Literal["ml_train"]
+
+
 class ExplorationJobOut(JobOut):
     """Discovery Job만 반환하는 신규 API 응답 계약."""
 
@@ -469,7 +475,7 @@ class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: Literal["profile", "transform", "iceberg_import", "ml_train"]
+    kind: Literal["profile", "transform", "iceberg_import"]
     dataset_id: str
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]

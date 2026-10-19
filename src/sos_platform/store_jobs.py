@@ -196,6 +196,7 @@ class JobStoreMixin:
         actor_id: str | None = None,
         kind: str | None = None,
         exclude_kind: str | None = None,
+        exclude_ml_train: bool = False,
     ) -> list[dict]:
         """목록은 종류별 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
         if not 1 <= limit <= 101:
@@ -209,6 +210,8 @@ class JobStoreMixin:
             filters.append("kind=:kind")
         if exclude_kind is not None:
             filters.append("kind!=:exclude_kind")
+        if exclude_ml_train:
+            filters.append("kind!='ml_train'")
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(
             f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"

@@ -60,6 +60,7 @@ from .schemas import (
     JobOut,
     JobPageOut,
     MLTrainRequest,
+    MLTrainingJobOut,
     ModelRevisionOut,
     PreviewOut,
     ProblemOut,
@@ -496,6 +497,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             actor_id=None if actor.privileged else actor.id,
             kind="exploration" if discovery_only else None,
             exclude_kind=None if discovery_only else "exploration",
+            exclude_ml_train=not discovery_only,
         )
         return page_from_rows(rows, limit)
 
@@ -515,7 +517,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     ):
         return job_page(limit, cursor, actor, discovery_only=True)
 
-    @app.post("/api/ml/train/jobs", status_code=202, response_model=JobOut)
+    @app.post("/api/ml/train/jobs", status_code=202, response_model=MLTrainingJobOut)
     def create_training_job(
         body: MLTrainRequest,
         request: Request,
@@ -550,6 +552,24 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             request_id=request.state.request_id,
             idempotency_key=idempotency_key,
         )
+
+    def existing_ml_training_job(job_id: str, actor: Actor) -> dict:
+        item = existing_job(job_id, actor)
+        if item["kind"] != "ml_train":
+            raise HTTPException(status_code=404, detail="Training Job not found")
+        return item
+
+    @app.get("/api/ml/train/jobs/{job_id}", response_model=MLTrainingJobOut)
+    def get_ml_training_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return existing_ml_training_job(job_id, actor)
+
+    @app.post("/api/ml/train/jobs/{job_id}/cancel", response_model=MLTrainingJobOut)
+    def cancel_ml_training_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        existing_ml_training_job(job_id, actor)
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Training Job not found")
+        return item
 
     @app.get("/api/ml/models/{revision_id}", response_model=ModelRevisionOut)
     def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
@@ -630,14 +650,14 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     @app.get("/api/jobs/{job_id}", response_model=JobOut)
     def get_job(job_id: str, actor: Actor = READ_JOB_DEP):
         item = existing_job(job_id, actor)
-        if item["kind"] == "exploration":
+        if item["kind"] in ("exploration", "ml_train"):
             raise HTTPException(status_code=404, detail="Job not found")
         return item
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobOut)
     def cancel(job_id: str, actor: Actor = CANCEL_JOB_DEP):
         item = existing_job(job_id, actor)
-        if item["kind"] == "exploration":
+        if item["kind"] in ("exploration", "ml_train"):
             raise HTTPException(status_code=404, detail="Job not found")
         try:
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
