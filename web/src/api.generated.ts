@@ -467,6 +467,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/evaluations/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Evaluation Job */
+        post: operations["create_evaluation_job_api_ml_evaluations_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/evaluations/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Evaluation Job */
+        get: operations["get_evaluation_job_api_ml_evaluations_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/evaluations/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Evaluation Revision */
+        get: operations["get_evaluation_revision_api_ml_evaluations__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/models/{revision_id}": {
         parameters: {
             query?: never;
@@ -476,6 +527,57 @@ export interface paths {
         };
         /** Get Model Revision */
         get: operations["get_model_revision_api_ml_models__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/policies/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Policy Job */
+        post: operations["create_policy_job_api_ml_policies_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/policies/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Policy Job */
+        get: operations["get_policy_job_api_ml_policies_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/policies/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Policy Revision */
+        get: operations["get_policy_revision_api_ml_policies__revision_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -960,6 +1062,29 @@ export interface components {
             /** Order By */
             order_by?: string | null;
         };
+        /** DecisionPolicyRevisionOut */
+        DecisionPolicyRevisionOut: {
+            /** Alert Fraction */
+            alert_fraction: number | null;
+            /** Attempt Id */
+            attempt_id: string;
+            /** Created At */
+            created_at: string;
+            /** Decision Summary */
+            decision_summary: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Mode */
+            mode: string;
+            /** Scoring Result Id */
+            scoring_result_id: string;
+            /** Threshold */
+            threshold: number;
+        };
         /** DiagnosticAttemptOut */
         DiagnosticAttemptOut: {
             /** Error Code */
@@ -981,6 +1106,31 @@ export interface components {
             dtype: string;
             /** Name */
             name: string;
+        };
+        /** EvaluationRevisionOut */
+        EvaluationRevisionOut: {
+            /** Attempt Id */
+            attempt_id: string;
+            /** Created At */
+            created_at: string;
+            /** Decision Metrics */
+            decision_metrics: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Label Coverage */
+            label_coverage: string;
+            /** Policy Revision Id */
+            policy_revision_id: string | null;
+            /** Ranking Metrics */
+            ranking_metrics: {
+                [key: string]: unknown;
+            } | null;
+            /** Scoring Result Id */
+            scoring_result_id: string;
         };
         /**
          * ExampleOut
@@ -1373,6 +1523,113 @@ export interface components {
             status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
             /** Updated At */
             updated_at: string;
+        };
+        /** MLEvaluationJobOut */
+        MLEvaluationJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_evaluate";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLEvaluationRequest */
+        MLEvaluationRequest: {
+            /** Policy Revision Id */
+            policy_revision_id?: string | null;
+            /** Scoring Result Id */
+            scoring_result_id: string;
+        };
+        /** MLPolicyJobOut */
+        MLPolicyJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_policy";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLPolicyRequest */
+        MLPolicyRequest: {
+            /** Alert Fraction */
+            alert_fraction?: number | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "fixed" | "quantile";
+            /** Scoring Result Id */
+            scoring_result_id: string;
+            /** Threshold */
+            threshold?: number | null;
         };
         /** MLScoringJobOut */
         MLScoringJobOut: {
@@ -2872,6 +3129,103 @@ export interface operations {
             };
         };
     };
+    create_evaluation_job_api_ml_evaluations_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLEvaluationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLEvaluationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_evaluation_job_api_ml_evaluations_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLEvaluationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_evaluation_revision_api_ml_evaluations__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_model_revision_api_ml_models__revision_id__get: {
         parameters: {
             query?: never;
@@ -2890,6 +3244,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_policy_job_api_ml_policies_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPolicyJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_policy_job_api_ml_policies_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPolicyJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_policy_revision_api_ml_policies__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionPolicyRevisionOut"];
                 };
             };
             /** @description Structured API error */
