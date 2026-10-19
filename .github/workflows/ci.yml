@@ -83,7 +83,7 @@ jobs:
       - name: Python integration tests
         run: |
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            uv run --locked pytest -q -m pr tests/integration
+            uv run --locked pytest -q tests/integration --durations=50
           else
             uv run --locked pytest -q tests/integration
           fi
