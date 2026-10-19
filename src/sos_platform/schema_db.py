@@ -206,6 +206,38 @@ scoring_results = Table(
     Index("ix_scoring_results_model_created", "model_revision_id", "created_at"),
 )
 
+decision_policy_revisions = Table(
+    "decision_policy_revisions",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("scoring_result_id", String(36), ForeignKey("scoring_results.id"), nullable=False),
+    Column("mode", String(20), nullable=False),
+    Column("threshold", Float, nullable=False),
+    Column("alert_fraction", Float),
+    Column("decision_summary", Text, nullable=False),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_ml_policy_scoring", "scoring_result_id"),
+)
+
+evaluation_revisions = Table(
+    "evaluation_revisions",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("scoring_result_id", String(36), ForeignKey("scoring_results.id"), nullable=False),
+    Column("policy_revision_id", String(36), ForeignKey("decision_policy_revisions.id")),
+    Column("label_coverage", String(16), nullable=False),
+    Column("decision_metrics", Text, nullable=False),
+    Column("ranking_metrics", Text),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_ml_evaluation_scoring", "scoring_result_id"),
+)
+
 audit_events = Table(
     "audit_events",
     metadata,
