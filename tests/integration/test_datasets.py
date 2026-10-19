@@ -281,10 +281,30 @@ def test_invalid_format_and_empty_upload_are_user_errors(workspace):
         ("empty.csv", b"", "application/octet-stream", "SOS-UPLOAD-INVALID"),
         ("broken.parquet", b"not a parquet file", "application/octet-stream", "SOS-UPLOAD-INVALID"),
         ("text.txt", b"5\tgood\n", "text/plain", "SOS-UPLOAD-INVALID"),
-        ("text.txt", b"just free text\n", "text/tab-separated-values; header=absent", "SOS-UPLOAD-INVALID"),
-        ("text.txt", b"5\tgood\n2\n", "text/tab-separated-values; header=absent", "SOS-UPLOAD-INVALID"),
-        ("text.txt", b"5\tgood\n2\t\xff\n", "text/tab-separated-values; header=absent", "SOS-UPLOAD-INVALID"),
-        ("text.txt", b"a\ta\n1\t2\n", "text/tab-separated-values; header=present", "SOS-UPLOAD-INVALID"),
+        (
+            "text.txt",
+            b"just free text\n",
+            "text/tab-separated-values; header=absent",
+            "SOS-UPLOAD-INVALID",
+        ),
+        (
+            "text.txt",
+            b"5\tgood\n2\n",
+            "text/tab-separated-values; header=absent",
+            "SOS-UPLOAD-INVALID",
+        ),
+        (
+            "text.txt",
+            b"5\tgood\n2\t\xff\n",
+            "text/tab-separated-values; header=absent",
+            "SOS-UPLOAD-INVALID",
+        ),
+        (
+            "text.txt",
+            b"a\ta\n1\t2\n",
+            "text/tab-separated-values; header=present",
+            "SOS-UPLOAD-INVALID",
+        ),
     ):
         response = client.post(
             "/api/datasets/files",
