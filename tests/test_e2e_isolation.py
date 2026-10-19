@@ -109,6 +109,10 @@ def test_cleanup_success_only_removes_owned_project(monkeypatch, tmp_path):
     assert command[command.index("-p") + 1] == instance
     assert "down" in command
     assert "--volumes" in command
+    assert [call for call in calls if call[:3] == ["docker", "image", "rm"]] == [
+        ["docker", "image", "rm", f"sos-python-e2e:{instance}"],
+        ["docker", "image", "rm", f"sos-web-e2e:{instance}"],
+    ]
 
 
 def test_cleanup_timeout_never_removes_owned_marker(monkeypatch, tmp_path):
@@ -164,26 +168,6 @@ def test_token_mode_generates_only_ephemeral_roles():
     }
     assert "ci-viewer" in {record["actor_id"] for record in identities.values()}
     assert all(len(key) == 64 for key in identities)
-
-
-def test_cleanup_removes_only_its_two_ephemeral_image_tags(monkeypatch, tmp_path):
-    """소유 프로젝트 정리 시 다른 실행의 이미지 태그를 삭제하지 않는다."""
-    instance = "sos-e2e-123456abcdef"
-    monkeypatch.setattr(isolated, "RUNS", tmp_path)
-    runtime = isolated.create_owner(instance, [10001, 10002, 10003, 10004])
-    commands = []
-
-    def succeed(command, **_kwargs):
-        commands.append(command)
-        return SimpleNamespace(returncode=0)
-
-    monkeypatch.setattr(isolated.subprocess, "run", succeed)
-    assert isolated.clean_owned(instance, runtime, {"COMPOSE_PROJECT_NAME": instance}) == 0
-    assert [command for command in commands if command[:3] == ["docker", "image", "rm"]] == [
-        ["docker", "image", "rm", f"sos-python-e2e:{instance}"],
-        ["docker", "image", "rm", f"sos-web-e2e:{instance}"],
-    ]
-    assert not runtime.exists()
 
 
 def test_cleanup_image_removal_failure_keeps_owner_record(monkeypatch, tmp_path):
