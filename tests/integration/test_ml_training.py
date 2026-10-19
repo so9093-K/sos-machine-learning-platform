@@ -77,13 +77,16 @@ def test_model_revision_publication_with_job_and_object_intent(workspace):
     # 게시 의도와 Model Revision 및 Job 성공은 같은 정본에 있어야 한다.
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 1
-        assert db.execute(
-            text(
-                "SELECT COUNT(*) FROM audit_events "
-                "WHERE action='model.publish' AND resource_id=:revision"
-            ),
-            {"revision": revision_id},
-        ).scalar_one() == 1
+        assert (
+            db.execute(
+                text(
+                    "SELECT COUNT(*) FROM audit_events "
+                    "WHERE action='model.publish' AND resource_id=:revision"
+                ),
+                {"revision": revision_id},
+            ).scalar_one()
+            == 1
+        )
         assert (
             db.execute(
                 text("SELECT COUNT(*) FROM object_writes WHERE state='Published'")
@@ -260,9 +263,10 @@ def test_training_cancellation_after_s3_write_does_not_publish_model(workspace, 
     assert final["result"] is None
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 0
-        assert db.execute(
-            text("SELECT COUNT(*) FROM object_writes WHERE state='Failed'")
-        ).scalar_one() == 1
+        assert (
+            db.execute(text("SELECT COUNT(*) FROM object_writes WHERE state='Failed'")).scalar_one()
+            == 1
+        )
 
 
 def test_training_model_db_failure_keeps_unpublished_object(workspace, monkeypatch):
@@ -290,6 +294,9 @@ def test_training_model_db_failure_keeps_unpublished_object(workspace, monkeypat
     )
     assert store.object_writes(location)[0]["state"] == "Failed"
     storage = ObjectStore()
-    assert storage.client.head_object(
-        Bucket=storage.config.s3_bucket, Key=storage.key(location)
-    )["ContentLength"] > 0
+    assert (
+        storage.client.head_object(Bucket=storage.config.s3_bucket, Key=storage.key(location))[
+            "ContentLength"
+        ]
+        > 0
+    )
