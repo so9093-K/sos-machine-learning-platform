@@ -486,9 +486,10 @@ test("DuckDB Discovery searches columns and runs a full job through global Jobs"
     discovery.getByRole("button", { name: "전체 집계 Job 실행" }).click());
   const job = jobById(page, jobId);
   await expect(job.getByText("Full Discovery Analysis")).toBeVisible();
+  // 결과는 Job이 실제로 성공한 뒤에만 존재한다. 실행 전 임의의 5초 상한을 강요하지 않는다.
+  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   await expect(job.getByRole("region", { name: "전체 집계 결과" })).toBeVisible();
   await expect(job.getByRole("button", { name: "결과 데이터 열기" })).toHaveCount(0);
-  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
   await job.getByText(/작업 설정 및 실행 시도/).click();
   await expect(job.getByText(/Succeeded ·/)).toBeVisible();
 });
@@ -1308,4 +1309,133 @@ test("Registering another Dataset inside Preparation does not force Explorer nav
   await expect(page.getByRole("heading", { name: "데이터 준비", exact: true })).toBeVisible();
   await expect(page.getByLabel("변환 연산", { exact: true })).toBeVisible();
   await expect(page.getByRole("tablist", { name: "데이터 작업 영역" })).toHaveCount(0);
+});
+
+test("ML Workbench creates a persistent Isolation Forest Model Revision", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "ml-training.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("temperature,vibration\n21,1\n22,2\n23,2\n22,1\n24,3\n25,2\n100,30\n"),
+  });
+  await expect(page.getByRole("heading", { name: "ml-training.csv" })).toBeVisible();
+  await page.getByRole("button", { name: "ML Workbench" }).click();
+  await expect(page.getByRole("heading", { name: "ML Workbench" })).toBeVisible();
+  const selector = page.getByRole("combobox", { name: "ML 학습 Dataset" });
+  await expect(selector).toHaveValue(/.+/);
+  await page.getByRole("checkbox", { name: /temperature/ }).check();
+  const jobId = await submittedJob(page, "/api/ml/train/jobs", () =>
+    page.getByRole("button", { name: "학습 Job 제출" }).click());
+  await expect(page.getByRole("heading", { name: "학습 Job 상세" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
+    timeout: 45000,
+  });
+  await expect(page.getByText("학습 기준 이상 후보")).toBeVisible();
+  await expect(page.getByText(/검증 Precision·Recall·최적 임계값을 의미하지 않습니다/)).toBeVisible();
+  // 학습 이력은 브라우저 상태가 아닌 실제 API의 영속 Job 목록에서 다시 복원한다.
+  await page.reload();
+  await page.getByRole("button", { name: "ML Workbench" }).click();
+  await expect(page.getByRole("button", { name: new RegExp(jobId.slice(0, 8)) })).toBeVisible();
+  // 기존 모델 판본을 다시 조회한 뒤 다른 설정으로 학습하고 비교한다.
+  await page.getByRole("button", { name: new RegExp(jobId.slice(0, 8)) }).click();
+  await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible();
+  await page.getByRole("spinbutton", { name: "Isolation Forest 트리 개수" }).fill("25");
+  // 새로고침 이후 Feature는 임의로 복원하지 않는다. 새 실행의 입력을 다시 명시한다.
+  await page.getByRole("checkbox", { name: /temperature/ }).check();
+  await expect(page.getByRole("button", { name: "학습 Job 제출" })).toBeEnabled();
+  const secondJobId = await submittedJob(page, "/api/ml/train/jobs", () =>
+    page.getByRole("button", { name: "학습 Job 제출" }).click());
+  const currentResult = page.getByRole("region", { name: "ML 실행 결과" });
+  await expect(currentResult).toContainText(secondJobId);
+  await expect(currentResult.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
+    timeout: 45000,
+  });
+  await page.getByRole("combobox", { name: "비교할 학습 Job" }).selectOption(jobId);
+  await expect(page.getByText("데이터 판본과 Feature 순서가 같습니다.")).toBeVisible({
+    timeout: 10000,
+  });
+  await expect(page.getByRole("table", { name: /두 모델의 학습 설정 비교/ })).toBeVisible();
+  await expect(page.getByText(/성능 순위로 해석하지 않습니다/)).toBeVisible();
+  // MLflow가 비활성이어도 ML 학습 성공과 전송 상태는 별도로 확인한다.
+  await expect(page.getByRole("region", { name: "ML 실행 결과" })
+    .getByRole("status", { name: "" }).filter({ hasText: "비활성:" })).toBeVisible({
+      timeout: 10000,
+    });
+  // 원본 실험의 설정·데이터 판본을 복제해 새로운 학습/모델 판본을 만든다.
+  const forked = await submittedJob(page, `/api/ml/train/jobs/${secondJobId}/fork`, () =>
+    page.getByRole("button", { name: "동일 조건으로 Fork·Reproduce" }).click());
+  await expect(currentResult).toContainText(forked);
+  await expect(currentResult.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
+    timeout: 45000,
+  });
+});
+
+
+test("ML Workbench scores and evaluates independently with explanation evidence", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "ml-score-e2e.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("temperature,pressure\n1.0,10.0\n2.0,11.0\n3.0,12.0\n4.0,13.0\n100.0,1000.0\n"),
+  });
+  await expect(page.getByRole("heading", { name: "ml-score-e2e.csv" })).toBeVisible();
+  await page.getByRole("button", { name: "ML Workbench" }).click();
+  await page.getByRole("checkbox", { name: /temperature/ }).check();
+  const trainedId = await submittedJob(page, "/api/ml/train/jobs", () =>
+    page.getByRole("button", { name: "학습 Job 제출" }).click());
+  await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
+    timeout: 45000,
+  });
+
+  await page.getByRole("combobox", { name: "Scoring Dataset" })
+    .selectOption({ label: "ml-score-e2e.csv" });
+  const scoredId = await submittedJob(page, "/api/ml/scoring/jobs", () =>
+    page.getByRole("button", { name: "Scoring Job 제출" }).click());
+  await expect(page.getByText(/Scoring Result ·/)).toBeVisible({ timeout: 45000 });
+  await expect(page.getByText(/학습에 사용한 동일 Dataset 판본을 점수화했습니다/)).toBeVisible();
+  const decision = page.getByRole("region", { name: "임계값 정책과 평가" });
+  const policyId = await submittedJob(page, "/api/ml/policies/jobs", () =>
+    decision.getByRole("button", { name: "새 정책 판본 생성" }).click());
+  await expect(decision.getByText(/Decision Policy Revision ·/)).toBeVisible({
+    timeout: 45000,
+  });
+  const evaluationId = await submittedJob(page, "/api/ml/evaluations/jobs", () =>
+    decision.getByRole("button", { name: "Evaluation 판본 생성" }).click());
+  await expect(decision.getByText(/Evaluation Revision ·/)).toBeVisible({
+    timeout: 45000,
+  });
+  await expect(decision.getByText(/레이블 수준: none/)).toBeVisible();
+  const explanationId = await submittedJob(page, "/api/ml/explanations/jobs", () =>
+    decision.getByRole("button", { name: "점수 민감도 설명 실행" }).click());
+  await expect(decision.getByText(/Explanation ·/)).toBeVisible({
+    timeout: 45000,
+  });
+  await expect(decision.getByRole("table", {
+    name: /Feature를 학습 참조 중앙값으로 바꾸었을 때의 점수 변화/,
+  })).toBeVisible();
+  await expect(decision.getByText(/실제 이상 발생 원인의 증명이 아닙니다/)).toBeVisible();
+  // 브라우저 메모리를 모두 초기화해도 이력 API로 불변 결과를 복원한다.
+  await page.reload();
+  await page.getByRole("button", { name: "ML Workbench" }).click();
+  await page.getByRole("button", { name: new RegExp(trainedId.slice(0, 8)) }).click();
+  await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible();
+  const scoredArea = page.getByRole("region", { name: "독립 이상 점수 계산" });
+  await scoredArea.getByRole("button", { name: new RegExp(scoredId.slice(0, 8)) }).click();
+  await expect(scoredArea.getByText(/Scoring Result ·/)).toBeVisible();
+  const restored = page.getByRole("region", { name: "임계값 정책과 평가" });
+  await expect(restored.getByRole("button", {
+    name: new RegExp(`정책 ${policyId.slice(0, 8)}`),
+  })).toBeVisible({ timeout: 15000 });
+  await restored.getByRole("button", { name: new RegExp(`정책 ${policyId.slice(0, 8)}`) }).click();
+  await expect(restored.getByText(/Decision Policy Revision ·/)).toBeVisible();
+  await restored.getByRole("button", {
+    name: new RegExp(`평가 ${evaluationId.slice(0, 8)}`),
+  }).click();
+  await expect(restored.getByText(/Evaluation Revision ·/)).toBeVisible();
+  await restored.getByRole("button", {
+    name: new RegExp(`설명 ${explanationId.slice(0, 8)}`),
+  }).click();
+  await expect(restored.getByText(/Explanation ·/)).toBeVisible();
 });

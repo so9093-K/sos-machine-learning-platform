@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Policy·Evaluation·Explanation Job의 취소와 실패 상태 안내, Scoring 이전 이력 탐색을 연결하고, 학습 데이터 재점수화 결과를 독립 검증 성능으로 표시하지 않도록 보완했습니다.
+
+- 선택적 MLflow REST Tracking을 Worker 전용 Outbox와 별도 상태로 추가하고, 실패 재시도·재시작 복구·외부 Run 연결 상태를 표시한다. 같은 모델 설정으로 Fork·Reproduce 하는 사용자 동작을 제공한다.
+
+- Dataset 기반 Isolation Forest 비동기 학습과 불변 모델 판본, 독립 Scoring·Decision Policy·Evaluation·Explanation 결과 및 이력 조회, 학습 설정 비교를 추가했습니다. 학습 점수와 독립 평가 결과는 구별하며, 평가 지표의 데이터 선택 한계를 표시합니다.
+
 - API·Worker 공통 Python 이미지, Web 개발 이미지와 Docker Compose 단일 구성(`app` 프로필)을 추가했습니다. 공개 `make up`은 컨테이너 실행으로 통합하고, 호스트 실행기와 로그 릴레이를 제거하고 브라우저 E2E도 고유 Compose 프로젝트에서 실행합니다. Token 인증을 요구하고 데이터 볼륨은 보존합니다.
 
 - `make up`은 개발 기본값을 유지하고 API를 직접 실행할 때는 인증 모드를 명시해야 합니다. 실행 서버는 `sos_platform.api:create_app --factory`를 사용해 앱 import와 기동을 구별하며, OpenAPI 생성과 테스트 수집이 전역 인증 모드를 설정하지 않도록 분리했습니다. 기존 API가 실행 중인 상태에서 인증 모드·토큰 목록이 바뀌면 `make up`은 불일치를 알리고 `make restart`를 안내합니다. 기존 Token RBAC·Dataset/Job 소유권과 API 계약은 유지합니다.

@@ -76,7 +76,13 @@ services:
     profiles: [app]
     image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
     build: *sos-python-build
-    environment: *sos-storage-env
+    environment:
+      <<: *sos-storage-env
+      # MLflow는 설정되지 않으면 연결하지 않는다. 자격 증명은 Worker에만 전달한다.
+      SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-}
+      SOS_MLFLOW_EXPERIMENT_ID: ${SOS_MLFLOW_EXPERIMENT_ID:-}
+      SOS_MLFLOW_TOKEN: ${SOS_MLFLOW_TOKEN:-}
+      SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-false}
     command: ["python", "-m", "sos_platform.worker"]
     volumes:
       - worker_state:/var/lib/sos

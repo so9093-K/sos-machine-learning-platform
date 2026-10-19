@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Step(BaseModel):
@@ -170,6 +170,166 @@ class ExplorationSpec(BaseModel):
 class ExplorationJobRequest(BaseModel):
     dataset_id: str
     exploration: ExplorationSpec
+
+
+class IsolationForestParameters(BaseModel):
+    """첫 모델의 허용 하이퍼파라미터를 입력 계약으로 고정한다."""
+
+    n_estimators: int = Field(default=100, strict=True, ge=1, le=2000)
+    max_samples: int | float | Literal["auto"] = "auto"
+    max_features: int | float = 1.0
+    bootstrap: bool = Field(default=False, strict=True)
+    random_state: int = Field(default=42, strict=True, ge=0, le=2**32 - 1)
+
+    @field_validator("max_samples", "max_features", mode="before")
+    @classmethod
+    def ensure_numeric_parameter(cls, value: object, info) -> object:
+        """문자열·bool을 숫자로 묵시 변환하지 않고 요청자에게 수정하게 한다."""
+        if info.field_name == "max_samples" and value == "auto":
+            return value
+        if type(value) not in (int, float):
+            raise ValueError("Parameter must be a number or supported keyword")
+        return value
+
+
+class MLPolicyRequest(BaseModel):
+    scoring_result_id: str
+    mode: Literal["fixed", "quantile"]
+    threshold: float | None = Field(default=None, strict=True)
+    alert_fraction: float | None = Field(default=None, strict=True)
+
+    @model_validator(mode="after")
+    def validate_policy(self):
+        import math
+
+        if self.mode == "fixed":
+            if self.threshold is None or not math.isfinite(self.threshold):
+                raise ValueError("Fixed policy requires a finite threshold")
+            if self.alert_fraction is not None:
+                raise ValueError("Fixed policy cannot set alert_fraction")
+        else:
+            if self.threshold is not None:
+                raise ValueError("Quantile policy cannot set a fixed threshold")
+            if self.alert_fraction is None or not math.isfinite(self.alert_fraction):
+                raise ValueError("Quantile policy requires alert_fraction")
+            if not 0 < self.alert_fraction < 1:
+                raise ValueError("Quantile alert_fraction must be between 0 and 1")
+        return self
+
+
+class MLflowExportStatusOut(BaseModel):
+    job_id: str
+    state: Literal["Disabled", "Pending", "Sending", "Retry", "Succeeded"]
+    run_id: str | None = None
+    attempts: int = 0
+    last_error_code: str | None = None
+    retry_after: str | None = None
+
+
+class MLExplanationRequest(BaseModel):
+    scoring_result_id: str
+    row_index: int = Field(strict=True, ge=0, le=49_999)
+
+
+class ExplanationResultOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    scoring_result_id: str
+    model_revision_id: str
+    row_index: int
+    method: str
+    output: dict[str, object]
+    created_at: str
+
+
+class MLEvaluationRequest(BaseModel):
+    scoring_result_id: str
+    policy_revision_id: str | None = None
+
+
+class DecisionPolicyRevisionOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    scoring_result_id: str
+    mode: str
+    threshold: float
+    alert_fraction: float | None
+    decision_summary: dict[str, object]
+    created_at: str
+
+
+class EvaluationRevisionOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    scoring_result_id: str
+    policy_revision_id: str | None
+    label_coverage: str
+    decision_metrics: dict[str, object]
+    ranking_metrics: dict[str, object] | None
+    created_at: str
+
+
+class MLScoringRequest(BaseModel):
+    model_revision_id: str
+    dataset_id: str
+    label_column: str | None = Field(default=None, min_length=1, max_length=256)
+
+
+class ScoringResultOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    model_revision_id: str
+    dataset_id: str
+    dataset_version: str
+    location: str
+    sha256: str
+    row_count: int
+    score_direction: str
+    feature_names: list[str]
+    score_summary: dict[str, object]
+    ranking_metrics: dict[str, object] | None
+    label_column: str | None
+    created_at: str
+
+
+class MLForkRequest(BaseModel):
+    """원본 학습 실행의 Feature/판본을 그대로 유지하고 모델 설정만 바꿀 수 있다."""
+
+    params: IsolationForestParameters | None = None
+
+
+class MLTrainRequest(BaseModel):
+    dataset_id: str
+    features: list[str] = Field(min_length=1, max_length=32)
+    params: IsolationForestParameters = Field(default_factory=IsolationForestParameters)
+
+    @model_validator(mode="after")
+    def validate_features(self):
+        if len(set(self.features)) != len(self.features):
+            raise ValueError("Features must be distinct")
+        if any(not name or len(name) > 256 for name in self.features):
+            raise ValueError("Invalid feature name")
+        return self
+
+
+class ModelRevisionOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    dataset_id: str
+    dataset_version: str
+    algorithm: str
+    location: str
+    sha256: str
+    features: list[str]
+    params: dict[str, object]
+    training_score_summary: dict[str, object]
+    runtime: dict[str, object]
+    created_at: str
 
 
 class WorkRequest(BaseModel):
@@ -418,6 +578,28 @@ class JobOut(BaseModel):
     attempts: list[AttemptOut]
 
 
+class MLPolicyJobOut(JobOut):
+    kind: Literal["ml_policy"]
+
+
+class MLExplanationJobOut(JobOut):
+    kind: Literal["ml_explain"]
+
+
+class MLEvaluationJobOut(JobOut):
+    kind: Literal["ml_evaluate"]
+
+
+class MLScoringJobOut(JobOut):
+    kind: Literal["ml_score"]
+
+
+class MLTrainingJobOut(JobOut):
+    """기존 Job 응답의 enum 확장 없이 ML 실행 상태를 제공한다."""
+
+    kind: Literal["ml_train"]
+
+
 class ExplorationJobOut(JobOut):
     """Discovery Job만 반환하는 신규 API 응답 계약."""
 
@@ -444,6 +626,51 @@ class JobSummaryOut(BaseModel):
     updated_at: str
     attempt_count: int
     latest_attempt: AttemptOut | None
+
+
+class MLExplanationJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_explain"]
+
+
+class MLExplanationJobPageOut(BaseModel):
+    items: list[MLExplanationJobSummaryOut]
+    next_cursor: str | None = None
+
+
+class MLPolicyJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_policy"]
+
+
+class MLPolicyJobPageOut(BaseModel):
+    items: list[MLPolicyJobSummaryOut]
+    next_cursor: str | None = None
+
+
+class MLEvaluationJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_evaluate"]
+
+
+class MLEvaluationJobPageOut(BaseModel):
+    items: list[MLEvaluationJobSummaryOut]
+    next_cursor: str | None = None
+
+
+class MLScoringJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_score"]
+
+
+class MLScoringJobPageOut(BaseModel):
+    items: list[MLScoringJobSummaryOut]
+    next_cursor: str | None = None
+
+
+class MLTrainingJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_train"]
+
+
+class MLTrainingJobPageOut(BaseModel):
+    items: list[MLTrainingJobSummaryOut]
+    next_cursor: str | None = None
 
 
 class ExplorationJobSummaryOut(JobSummaryOut):

@@ -25,3 +25,26 @@ export type ExplorationRequest = components["schemas"]["ExplorationRequest"];
 export type ExplorationJob = components["schemas"]["ExplorationJobOut"];
 export type ExplorationJobSummary = components["schemas"]["ExplorationJobSummaryOut"];
 export type ExplorationJobPage = components["schemas"]["ExplorationJobPageOut"];
+
+export type MLTrainingJob = components["schemas"]["MLTrainingJobOut"];
+export type MLTrainingJobSummary = components["schemas"]["MLTrainingJobSummaryOut"];
+export type MLTrainingJobPage = components["schemas"]["MLTrainingJobPageOut"];
+export type ModelRevision = components["schemas"]["ModelRevisionOut"];
+
+export type MLScoringJob = components["schemas"]["MLScoringJobOut"];
+export type MLScoringJobSummary = components["schemas"]["MLScoringJobSummaryOut"];
+export type MLScoringJobPage = components["schemas"]["MLScoringJobPageOut"];
+export type ScoringResult = components["schemas"]["ScoringResultOut"];
+
+export type MLPolicyJob = components["schemas"]["MLPolicyJobOut"];
+export type MLEvaluationJob = components["schemas"]["MLEvaluationJobOut"];
+export type MLExplanationJob = components["schemas"]["MLExplanationJobOut"];
+export type DecisionPolicyRevision = components["schemas"]["DecisionPolicyRevisionOut"];
+export type EvaluationRevision = components["schemas"]["EvaluationRevisionOut"];
+export type ExplanationResult = components["schemas"]["ExplanationResultOut"];
+
+export type MLflowExportStatus = components["schemas"]["MLflowExportStatusOut"];
+
+export type MLPolicyJobSummary = components["schemas"]["MLPolicyJobSummaryOut"];
+export type MLEvaluationJobSummary = components["schemas"]["MLEvaluationJobSummaryOut"];
+export type MLExplanationJobSummary = components["schemas"]["MLExplanationJobSummaryOut"];

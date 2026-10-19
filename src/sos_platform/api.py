@@ -46,7 +46,10 @@ from .schemas import (
     DatasetOverviewOut,
     DatasetPageOut,
     DatasetQuery,
+    DecisionPolicyRevisionOut,
+    EvaluationRevisionOut,
     ExampleOut,
+    ExplanationResultOut,
     ExplorationJobOut,
     ExplorationJobPageOut,
     ExplorationJobRequest,
@@ -59,9 +62,28 @@ from .schemas import (
     IcebergReferenceOut,
     JobOut,
     JobPageOut,
+    MLEvaluationJobOut,
+    MLEvaluationJobPageOut,
+    MLEvaluationRequest,
+    MLExplanationJobOut,
+    MLExplanationJobPageOut,
+    MLExplanationRequest,
+    MLflowExportStatusOut,
+    MLForkRequest,
+    MLPolicyJobOut,
+    MLPolicyJobPageOut,
+    MLPolicyRequest,
+    MLScoringJobOut,
+    MLScoringJobPageOut,
+    MLScoringRequest,
+    MLTrainingJobOut,
+    MLTrainingJobPageOut,
+    MLTrainRequest,
+    ModelRevisionOut,
     PreviewOut,
     ProblemOut,
     ProfileOut,
+    ScoringResultOut,
     SnapshotOut,
     StorageInspectionOut,
     StoragePolicyOut,
@@ -494,6 +516,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             actor_id=None if actor.privileged else actor.id,
             kind="exploration" if discovery_only else None,
             exclude_kind=None if discovery_only else "exploration",
+            exclude_ml_train=not discovery_only,
         )
         return page_from_rows(rows, limit)
 
@@ -512,6 +535,412 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         actor: Actor = READ_JOB_DEP,
     ):
         return job_page(limit, cursor, actor, discovery_only=True)
+
+    @app.post("/api/ml/train/jobs", status_code=202, response_model=MLTrainingJobOut)
+    def create_training_job(
+        body: MLTrainRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        dataset = existing(body.dataset_id, actor)
+        require_job_submission_key(idempotency_key)
+        from .ml_isolation_forest import IsolationForestConfig
+
+        try:
+            IsolationForestConfig(**body.params.model_dump())
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid training parameters") from exc
+        return store.create_job(
+            kind="ml_train",
+            dataset_id=dataset["id"],
+            spec={
+                "algorithm": "isolation_forest",
+                "dataset_version": dataset["version"],
+                "features": body.features,
+                "params": body.params.model_dump(),
+            },
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            request_id=request.state.request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    def existing_ml_training_job(job_id: str, actor: Actor) -> dict:
+        item = existing_job(job_id, actor)
+        if item["kind"] != "ml_train":
+            raise HTTPException(status_code=404, detail="Training Job not found")
+        return item
+
+    @app.post(
+        "/api/ml/train/jobs/{source_job_id}/fork",
+        status_code=202,
+        response_model=MLTrainingJobOut,
+    )
+    def fork_training_job(
+        source_job_id: str,
+        body: MLForkRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        source = existing_ml_training_job(source_job_id, actor)
+        if source["status"] != "Succeeded":
+            raise HTTPException(status_code=409, detail="Only completed training can be forked")
+        dataset = existing(source["dataset_id"], actor)
+        if dataset["version"] != source["spec"]["dataset_version"]:
+            raise HTTPException(status_code=409, detail="Training Dataset revision unavailable")
+        require_job_submission_key(idempotency_key)
+        params = body.params.model_dump() if body.params is not None else source["spec"]["params"]
+        from .ml_isolation_forest import IsolationForestConfig
+
+        try:
+            IsolationForestConfig(**params)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Invalid model parameters") from exc
+        return store.create_job(
+            kind="ml_train",
+            dataset_id=dataset["id"],
+            spec={
+                "algorithm": source["spec"]["algorithm"],
+                "dataset_version": source["spec"]["dataset_version"],
+                "features": source["spec"]["features"],
+                "params": params,
+                "forked_from_job_id": source_job_id,
+            },
+            request_id=request.state.request_id,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            idempotency_key=idempotency_key,
+        )
+
+    @app.get("/api/ml/train/jobs", response_model=MLTrainingJobPageOut)
+    def list_ml_training_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Job"),
+            actor_id=None if actor.privileged else actor.id,
+            kind="ml_train",
+        )
+        return page_from_rows(rows, limit)
+
+    @app.get("/api/ml/train/jobs/{job_id}", response_model=MLTrainingJobOut)
+    def get_ml_training_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return existing_ml_training_job(job_id, actor)
+
+    @app.post("/api/ml/train/jobs/{job_id}/cancel", response_model=MLTrainingJobOut)
+    def cancel_ml_training_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        existing_ml_training_job(job_id, actor)
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Training Job not found")
+        return item
+
+    @app.post("/api/ml/scoring/jobs", status_code=202, response_model=MLScoringJobOut)
+    def create_scoring_job(
+        body: MLScoringRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        dataset = existing(body.dataset_id, actor)
+        model = store.get_model_revision(body.model_revision_id)
+        if model is None:
+            raise HTTPException(status_code=404, detail="Model Revision not found")
+        check_ownership(actor, model["owner_actor"], "model", model["id"])
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_score",
+            dataset_id=dataset["id"],
+            spec={
+                "model_revision_id": model["id"],
+                "model_owner_actor": model["owner_actor"],
+                "dataset_version": dataset["version"],
+                "label_column": body.label_column,
+            },
+            request_id=request.state.request_id,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            idempotency_key=idempotency_key,
+        )
+
+    def existing_scoring_job(job_id: str, actor: Actor) -> dict:
+        item = existing_job(job_id, actor)
+        if item["kind"] != "ml_score":
+            raise HTTPException(status_code=404, detail="Scoring Job not found")
+        return item
+
+    @app.get("/api/ml/scoring/jobs", response_model=MLScoringJobPageOut)
+    def list_scoring_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Job"),
+            actor_id=None if actor.privileged else actor.id,
+            kind="ml_score",
+        )
+        return page_from_rows(rows, limit)
+
+    @app.get("/api/ml/scoring/jobs/{job_id}", response_model=MLScoringJobOut)
+    def get_scoring_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return existing_scoring_job(job_id, actor)
+
+    @app.post("/api/ml/scoring/jobs/{job_id}/cancel", response_model=MLScoringJobOut)
+    def cancel_scoring_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        existing_scoring_job(job_id, actor)
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Scoring Job not found")
+        return item
+
+    def required_scoring_result(result_id: str, actor: Actor) -> dict:
+        scoring = store.get_scoring_result(result_id)
+        if scoring is None:
+            raise HTTPException(status_code=404, detail="Scoring Result not found")
+        check_ownership(actor, scoring["owner_actor"], "scoring_result", result_id)
+        return scoring
+
+    @app.post("/api/ml/policies/jobs", status_code=202, response_model=MLPolicyJobOut)
+    def create_policy_job(
+        body: MLPolicyRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        score = required_scoring_result(body.scoring_result_id, actor)
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_policy",
+            dataset_id=score["dataset_id"],
+            spec={
+                **body.model_dump(),
+                "source_owner_actor": score["owner_actor"],
+            },
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            request_id=request.state.request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    @app.post("/api/ml/evaluations/jobs", status_code=202, response_model=MLEvaluationJobOut)
+    def create_evaluation_job(
+        body: MLEvaluationRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        score = required_scoring_result(body.scoring_result_id, actor)
+        if body.policy_revision_id:
+            policy = store.get_decision_policy_revision(body.policy_revision_id)
+            if policy is None:
+                raise HTTPException(status_code=404, detail="Decision Policy not found")
+            check_ownership(actor, policy["owner_actor"], "decision_policy", policy["id"])
+            if policy["scoring_result_id"] != score["id"]:
+                raise HTTPException(status_code=422, detail="Policy does not belong to Scoring")
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_evaluate",
+            dataset_id=score["dataset_id"],
+            spec={
+                **body.model_dump(),
+                "source_owner_actor": score["owner_actor"],
+            },
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            request_id=request.state.request_id,
+            idempotency_key=idempotency_key,
+        )
+
+    def ml_special_job(job_id: str, actor: Actor, kind: str) -> dict:
+        item = existing_job(job_id, actor)
+        if item["kind"] != kind:
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        return item
+
+    def list_ml_result_jobs(kind: str, limit: int, cursor: str | None, actor: Actor):
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Job"),
+            actor_id=None if actor.privileged else actor.id,
+            kind=kind,
+        )
+        return page_from_rows(rows, limit)
+
+    @app.get("/api/ml/policies/jobs", response_model=MLPolicyJobPageOut)
+    def list_ml_policy_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        return list_ml_result_jobs("ml_policy", limit, cursor, actor)
+
+    @app.get("/api/ml/evaluations/jobs", response_model=MLEvaluationJobPageOut)
+    def list_ml_evaluation_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        return list_ml_result_jobs("ml_evaluate", limit, cursor, actor)
+
+    @app.get("/api/ml/explanations/jobs", response_model=MLExplanationJobPageOut)
+    def list_ml_explanation_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        return list_ml_result_jobs("ml_explain", limit, cursor, actor)
+
+    @app.get("/api/ml/policies/jobs/{job_id}", response_model=MLPolicyJobOut)
+    def get_policy_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return ml_special_job(job_id, actor, "ml_policy")
+
+    @app.post("/api/ml/policies/jobs/{job_id}/cancel", response_model=MLPolicyJobOut)
+    def cancel_policy_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        ml_special_job(job_id, actor, "ml_policy")
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        return item
+
+    @app.get("/api/ml/evaluations/jobs/{job_id}", response_model=MLEvaluationJobOut)
+    def get_evaluation_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return ml_special_job(job_id, actor, "ml_evaluate")
+
+    @app.post("/api/ml/evaluations/jobs/{job_id}/cancel", response_model=MLEvaluationJobOut)
+    def cancel_evaluation_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        ml_special_job(job_id, actor, "ml_evaluate")
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        return item
+
+    @app.get("/api/ml/policies/{revision_id}", response_model=DecisionPolicyRevisionOut)
+    def get_policy_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_decision_policy_revision(revision_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Decision Policy not found")
+        check_ownership(actor, item["owner_actor"], "decision_policy", revision_id)
+        return item
+
+    @app.post("/api/ml/explanations/jobs", status_code=202, response_model=MLExplanationJobOut)
+    def create_explanation_job(
+        body: MLExplanationRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        score = required_scoring_result(body.scoring_result_id, actor)
+        if body.row_index >= score["row_count"]:
+            raise HTTPException(status_code=422, detail="Explanation row_index out of bounds")
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_explain",
+            dataset_id=score["dataset_id"],
+            spec={
+                "scoring_result_id": score["id"],
+                "source_owner_actor": score["owner_actor"],
+                "row_index": body.row_index,
+            },
+            request_id=request.state.request_id,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            idempotency_key=idempotency_key,
+        )
+
+    @app.get("/api/ml/explanations/jobs/{job_id}", response_model=MLExplanationJobOut)
+    def get_explanation_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return ml_special_job(job_id, actor, "ml_explain")
+
+    @app.post("/api/ml/explanations/jobs/{job_id}/cancel", response_model=MLExplanationJobOut)
+    def cancel_explanation_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        ml_special_job(job_id, actor, "ml_explain")
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        return item
+
+    @app.get("/api/ml/explanations/{revision_id}", response_model=ExplanationResultOut)
+    def get_explanation_result(revision_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_explanation_result(revision_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Explanation not found")
+        check_ownership(actor, item["owner_actor"], "explanation", revision_id)
+        return item
+
+    @app.get("/api/ml/evaluations/{revision_id}", response_model=EvaluationRevisionOut)
+    def get_evaluation_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_evaluation_revision(revision_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Evaluation not found")
+        check_ownership(actor, item["owner_actor"], "evaluation", revision_id)
+        return item
+
+    @app.get("/api/ml/scoring/results/{result_id}", response_model=ScoringResultOut)
+    def get_scoring_result(result_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_scoring_result(result_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Scoring Result not found")
+        check_ownership(actor, item["owner_actor"], "scoring_result", result_id)
+        return item
+
+    @app.get("/api/ml/tracking/jobs/{job_id}", response_model=MLflowExportStatusOut)
+    def get_mlflow_tracking_status(job_id: str, actor: Actor = READ_JOB_DEP):
+        item = existing_job(job_id, actor)
+        if item["kind"] not in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain"):
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        status = store.tracking_status(job_id)
+        return status or {"job_id": job_id, "state": "Disabled"}
+
+    @app.get("/api/ml/models/{revision_id}", response_model=ModelRevisionOut)
+    def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_model_revision(revision_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Model revision not found")
+        check_ownership(actor, item["owner_actor"], "model", revision_id)
+        return item
 
     @app.post("/api/jobs", status_code=202, response_model=JobOut)
     def create_job(
@@ -584,14 +1013,28 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     @app.get("/api/jobs/{job_id}", response_model=JobOut)
     def get_job(job_id: str, actor: Actor = READ_JOB_DEP):
         item = existing_job(job_id, actor)
-        if item["kind"] == "exploration":
+        if item["kind"] in (
+            "exploration",
+            "ml_train",
+            "ml_score",
+            "ml_policy",
+            "ml_evaluate",
+            "ml_explain",
+        ):
             raise HTTPException(status_code=404, detail="Job not found")
         return item
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobOut)
     def cancel(job_id: str, actor: Actor = CANCEL_JOB_DEP):
         item = existing_job(job_id, actor)
-        if item["kind"] == "exploration":
+        if item["kind"] in (
+            "exploration",
+            "ml_train",
+            "ml_score",
+            "ml_policy",
+            "ml_evaluate",
+            "ml_explain",
+        ):
             raise HTTPException(status_code=404, detail="Job not found")
         try:
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)

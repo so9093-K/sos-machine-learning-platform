@@ -3,6 +3,7 @@
 from sqlalchemy import (
     Boolean,
     Column,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -162,6 +163,111 @@ instance_settings = Table(
     Column("value", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
     Column("updated_by", Text, nullable=False),
+)
+
+model_revisions = Table(
+    "model_revisions",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
+    Column("dataset_version", Text, nullable=False),
+    Column("algorithm", String(64), nullable=False),
+    Column("location", Text, nullable=False),
+    Column("sha256", String(64), nullable=False),
+    Column("features", Text, nullable=False),
+    Column("params", Text, nullable=False),
+    Column("training_score_summary", Text, nullable=False),
+    Column("runtime", Text, nullable=False),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_model_revisions_owner_created", "owner_actor", "created_at"),
+)
+
+scoring_results = Table(
+    "scoring_results",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("model_revision_id", String(36), ForeignKey("model_revisions.id"), nullable=False),
+    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
+    Column("dataset_version", Text, nullable=False),
+    Column("location", Text, nullable=False),
+    Column("sha256", String(64), nullable=False),
+    Column("row_count", Integer, nullable=False),
+    Column("score_direction", String(40), nullable=False),
+    Column("feature_names", Text, nullable=False),
+    Column("score_summary", Text, nullable=False),
+    Column("ranking_metrics", Text),
+    Column("label_column", Text),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_scoring_results_model_created", "model_revision_id", "created_at"),
+)
+
+decision_policy_revisions = Table(
+    "decision_policy_revisions",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("scoring_result_id", String(36), ForeignKey("scoring_results.id"), nullable=False),
+    Column("mode", String(20), nullable=False),
+    Column("threshold", Float, nullable=False),
+    Column("alert_fraction", Float),
+    Column("decision_summary", Text, nullable=False),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_ml_policy_scoring", "scoring_result_id"),
+)
+
+evaluation_revisions = Table(
+    "evaluation_revisions",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("scoring_result_id", String(36), ForeignKey("scoring_results.id"), nullable=False),
+    Column("policy_revision_id", String(36), ForeignKey("decision_policy_revisions.id")),
+    Column("label_coverage", String(16), nullable=False),
+    Column("decision_metrics", Text, nullable=False),
+    Column("ranking_metrics", Text),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_ml_evaluation_scoring", "scoring_result_id"),
+)
+
+explanation_results = Table(
+    "explanation_results",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
+    Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
+    Column("scoring_result_id", String(36), ForeignKey("scoring_results.id"), nullable=False),
+    Column("model_revision_id", String(36), ForeignKey("model_revisions.id"), nullable=False),
+    Column("row_index", Integer, nullable=False),
+    Column("method", String(96), nullable=False),
+    Column("output", Text, nullable=False),
+    Column("owner_actor", Text),
+    Column("created_at", Text, nullable=False),
+    Index("ix_explanations_scoring_row", "scoring_result_id", "row_index"),
+)
+
+mlflow_exports = Table(
+    "mlflow_exports",
+    metadata,
+    Column("job_id", String(36), ForeignKey("jobs.id"), primary_key=True),
+    Column("state", String(16), nullable=False),
+    Column("run_id", String(128)),
+    Column("destination_fingerprint", String(64)),
+    Column("attempts", Integer, nullable=False),
+    Column("last_error_code", String(64)),
+    Column("retry_after", Text, nullable=False),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    Index("ix_mlflow_exports_due", "state", "retry_after"),
 )
 
 audit_events = Table(

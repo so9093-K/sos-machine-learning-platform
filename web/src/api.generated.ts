@@ -467,6 +467,385 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/evaluations/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ml Evaluation Jobs */
+        get: operations["list_ml_evaluation_jobs_api_ml_evaluations_jobs_get"];
+        put?: never;
+        /** Create Evaluation Job */
+        post: operations["create_evaluation_job_api_ml_evaluations_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/evaluations/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Evaluation Job */
+        get: operations["get_evaluation_job_api_ml_evaluations_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/evaluations/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Evaluation Job */
+        post: operations["cancel_evaluation_job_api_ml_evaluations_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/evaluations/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Evaluation Revision */
+        get: operations["get_evaluation_revision_api_ml_evaluations__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/explanations/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ml Explanation Jobs */
+        get: operations["list_ml_explanation_jobs_api_ml_explanations_jobs_get"];
+        put?: never;
+        /** Create Explanation Job */
+        post: operations["create_explanation_job_api_ml_explanations_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/explanations/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Explanation Job */
+        get: operations["get_explanation_job_api_ml_explanations_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/explanations/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Explanation Job */
+        post: operations["cancel_explanation_job_api_ml_explanations_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/explanations/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Explanation Result */
+        get: operations["get_explanation_result_api_ml_explanations__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/models/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Model Revision */
+        get: operations["get_model_revision_api_ml_models__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/policies/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ml Policy Jobs */
+        get: operations["list_ml_policy_jobs_api_ml_policies_jobs_get"];
+        put?: never;
+        /** Create Policy Job */
+        post: operations["create_policy_job_api_ml_policies_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/policies/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Policy Job */
+        get: operations["get_policy_job_api_ml_policies_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/policies/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Policy Job */
+        post: operations["cancel_policy_job_api_ml_policies_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/policies/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Policy Revision */
+        get: operations["get_policy_revision_api_ml_policies__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/scoring/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Scoring Jobs */
+        get: operations["list_scoring_jobs_api_ml_scoring_jobs_get"];
+        put?: never;
+        /** Create Scoring Job */
+        post: operations["create_scoring_job_api_ml_scoring_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/scoring/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Scoring Job */
+        get: operations["get_scoring_job_api_ml_scoring_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/scoring/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Scoring Job */
+        post: operations["cancel_scoring_job_api_ml_scoring_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/scoring/results/{result_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Scoring Result */
+        get: operations["get_scoring_result_api_ml_scoring_results__result_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/tracking/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mlflow Tracking Status */
+        get: operations["get_mlflow_tracking_status_api_ml_tracking_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/train/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ml Training Jobs */
+        get: operations["list_ml_training_jobs_api_ml_train_jobs_get"];
+        put?: never;
+        /** Create Training Job */
+        post: operations["create_training_job_api_ml_train_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/train/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ml Training Job */
+        get: operations["get_ml_training_job_api_ml_train_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/train/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Ml Training Job */
+        post: operations["cancel_ml_training_job_api_ml_train_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/train/jobs/{source_job_id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fork Training Job */
+        post: operations["fork_training_job_api_ml_train_jobs__source_job_id__fork_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ready": {
         parameters: {
             query?: never;
@@ -822,6 +1201,29 @@ export interface components {
             /** Order By */
             order_by?: string | null;
         };
+        /** DecisionPolicyRevisionOut */
+        DecisionPolicyRevisionOut: {
+            /** Alert Fraction */
+            alert_fraction: number | null;
+            /** Attempt Id */
+            attempt_id: string;
+            /** Created At */
+            created_at: string;
+            /** Decision Summary */
+            decision_summary: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Mode */
+            mode: string;
+            /** Scoring Result Id */
+            scoring_result_id: string;
+            /** Threshold */
+            threshold: number;
+        };
         /** DiagnosticAttemptOut */
         DiagnosticAttemptOut: {
             /** Error Code */
@@ -844,6 +1246,31 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** EvaluationRevisionOut */
+        EvaluationRevisionOut: {
+            /** Attempt Id */
+            attempt_id: string;
+            /** Created At */
+            created_at: string;
+            /** Decision Metrics */
+            decision_metrics: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Label Coverage */
+            label_coverage: string;
+            /** Policy Revision Id */
+            policy_revision_id: string | null;
+            /** Ranking Metrics */
+            ranking_metrics: {
+                [key: string]: unknown;
+            } | null;
+            /** Scoring Result Id */
+            scoring_result_id: string;
+        };
         /**
          * ExampleOut
          * @description 예제는 별도 가짜 결과가 아니라 Dataset 등록 안내를 제공한다.
@@ -863,6 +1290,29 @@ export interface components {
             title: string;
             /** Version */
             version: string;
+        };
+        /** ExplanationResultOut */
+        ExplanationResultOut: {
+            /** Attempt Id */
+            attempt_id: string;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Method */
+            method: string;
+            /** Model Revision Id */
+            model_revision_id: string;
+            /** Output */
+            output: {
+                [key: string]: unknown;
+            };
+            /** Row Index */
+            row_index: number;
+            /** Scoring Result Id */
+            scoring_result_id: string;
         };
         /**
          * ExplorationJobOut
@@ -1086,6 +1536,37 @@ export interface components {
             /** Display Name */
             display_name: string;
         };
+        /**
+         * IsolationForestParameters
+         * @description 첫 모델의 허용 하이퍼파라미터를 입력 계약으로 고정한다.
+         */
+        IsolationForestParameters: {
+            /**
+             * Bootstrap
+             * @default false
+             */
+            bootstrap: boolean;
+            /**
+             * Max Features
+             * @default 1
+             */
+            max_features: number;
+            /**
+             * Max Samples
+             * @default auto
+             */
+            max_samples: number | "auto";
+            /**
+             * N Estimators
+             * @default 100
+             */
+            n_estimators: number;
+            /**
+             * Random State
+             * @default 42
+             */
+            random_state: number;
+        };
         /** JobDiagnosticsOut */
         JobDiagnosticsOut: {
             /** Attempts */
@@ -1205,6 +1686,587 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** MLEvaluationJobOut */
+        MLEvaluationJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_evaluate";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLEvaluationJobPageOut */
+        MLEvaluationJobPageOut: {
+            /** Items */
+            items: components["schemas"]["MLEvaluationJobSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** MLEvaluationJobSummaryOut */
+        MLEvaluationJobSummaryOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_evaluate";
+            latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLEvaluationRequest */
+        MLEvaluationRequest: {
+            /** Policy Revision Id */
+            policy_revision_id?: string | null;
+            /** Scoring Result Id */
+            scoring_result_id: string;
+        };
+        /** MLExplanationJobOut */
+        MLExplanationJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_explain";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLExplanationJobPageOut */
+        MLExplanationJobPageOut: {
+            /** Items */
+            items: components["schemas"]["MLExplanationJobSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** MLExplanationJobSummaryOut */
+        MLExplanationJobSummaryOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_explain";
+            latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLExplanationRequest */
+        MLExplanationRequest: {
+            /** Row Index */
+            row_index: number;
+            /** Scoring Result Id */
+            scoring_result_id: string;
+        };
+        /**
+         * MLForkRequest
+         * @description 원본 학습 실행의 Feature/판본을 그대로 유지하고 모델 설정만 바꿀 수 있다.
+         */
+        MLForkRequest: {
+            params?: components["schemas"]["IsolationForestParameters"] | null;
+        };
+        /** MLPolicyJobOut */
+        MLPolicyJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_policy";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLPolicyJobPageOut */
+        MLPolicyJobPageOut: {
+            /** Items */
+            items: components["schemas"]["MLPolicyJobSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** MLPolicyJobSummaryOut */
+        MLPolicyJobSummaryOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_policy";
+            latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLPolicyRequest */
+        MLPolicyRequest: {
+            /** Alert Fraction */
+            alert_fraction?: number | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "fixed" | "quantile";
+            /** Scoring Result Id */
+            scoring_result_id: string;
+            /** Threshold */
+            threshold?: number | null;
+        };
+        /** MLScoringJobOut */
+        MLScoringJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_score";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLScoringJobPageOut */
+        MLScoringJobPageOut: {
+            /** Items */
+            items: components["schemas"]["MLScoringJobSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** MLScoringJobSummaryOut */
+        MLScoringJobSummaryOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_score";
+            latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLScoringRequest */
+        MLScoringRequest: {
+            /** Dataset Id */
+            dataset_id: string;
+            /** Label Column */
+            label_column?: string | null;
+            /** Model Revision Id */
+            model_revision_id: string;
+        };
+        /** MLTrainRequest */
+        MLTrainRequest: {
+            /** Dataset Id */
+            dataset_id: string;
+            /** Features */
+            features: string[];
+            params?: components["schemas"]["IsolationForestParameters"];
+        };
+        /**
+         * MLTrainingJobOut
+         * @description 기존 Job 응답의 enum 확장 없이 ML 실행 상태를 제공한다.
+         */
+        MLTrainingJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_train";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLTrainingJobPageOut */
+        MLTrainingJobPageOut: {
+            /** Items */
+            items: components["schemas"]["MLTrainingJobSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** MLTrainingJobSummaryOut */
+        MLTrainingJobSummaryOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_train";
+            latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLflowExportStatusOut */
+        MLflowExportStatusOut: {
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
+            /** Job Id */
+            job_id: string;
+            /** Last Error Code */
+            last_error_code?: string | null;
+            /** Retry After */
+            retry_after?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "Disabled" | "Pending" | "Sending" | "Retry" | "Succeeded";
+        };
+        /** ModelRevisionOut */
+        ModelRevisionOut: {
+            /** Algorithm */
+            algorithm: string;
+            /** Attempt Id */
+            attempt_id: string;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Dataset Version */
+            dataset_version: string;
+            /** Features */
+            features: string[];
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Location */
+            location: string;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Runtime */
+            runtime: {
+                [key: string]: unknown;
+            };
+            /** Sha256 */
+            sha256: string;
+            /** Training Score Summary */
+            training_score_summary: {
+                [key: string]: unknown;
+            };
+        };
         /**
          * PreviewOut
          * @description 제한된 행 미리보기와 컬럼 타입.
@@ -1255,6 +2317,43 @@ export interface components {
             sample_limit: number | null;
             /** Sampled */
             sampled: boolean;
+        };
+        /** ScoringResultOut */
+        ScoringResultOut: {
+            /** Attempt Id */
+            attempt_id: string;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Dataset Version */
+            dataset_version: string;
+            /** Feature Names */
+            feature_names: string[];
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Label Column */
+            label_column: string | null;
+            /** Location */
+            location: string;
+            /** Model Revision Id */
+            model_revision_id: string;
+            /** Ranking Metrics */
+            ranking_metrics: {
+                [key: string]: unknown;
+            } | null;
+            /** Row Count */
+            row_count: number;
+            /** Score Direction */
+            score_direction: string;
+            /** Score Summary */
+            score_summary: {
+                [key: string]: unknown;
+            };
+            /** Sha256 */
+            sha256: string;
         };
         /** SnapshotOut */
         SnapshotOut: {
@@ -2410,6 +3509,874 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_ml_evaluation_jobs_api_ml_evaluations_jobs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLEvaluationJobPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_evaluation_job_api_ml_evaluations_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLEvaluationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLEvaluationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_evaluation_job_api_ml_evaluations_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLEvaluationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_evaluation_job_api_ml_evaluations_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLEvaluationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_evaluation_revision_api_ml_evaluations__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_ml_explanation_jobs_api_ml_explanations_jobs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLExplanationJobPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_explanation_job_api_ml_explanations_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLExplanationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLExplanationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_explanation_job_api_ml_explanations_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLExplanationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_explanation_job_api_ml_explanations_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLExplanationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_explanation_result_api_ml_explanations__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplanationResultOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_model_revision_api_ml_models__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_ml_policy_jobs_api_ml_policies_jobs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPolicyJobPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_policy_job_api_ml_policies_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPolicyJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_policy_job_api_ml_policies_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPolicyJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_policy_job_api_ml_policies_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPolicyJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_policy_revision_api_ml_policies__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionPolicyRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_scoring_jobs_api_ml_scoring_jobs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLScoringJobPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_scoring_job_api_ml_scoring_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLScoringRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLScoringJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_scoring_job_api_ml_scoring_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLScoringJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_scoring_job_api_ml_scoring_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLScoringJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_scoring_result_api_ml_scoring_results__result_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                result_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoringResultOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_mlflow_tracking_status_api_ml_tracking_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLflowExportStatusOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_ml_training_jobs_api_ml_train_jobs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLTrainingJobPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_training_job_api_ml_train_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLTrainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLTrainingJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_ml_training_job_api_ml_train_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLTrainingJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_ml_training_job_api_ml_train_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLTrainingJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    fork_training_job_api_ml_train_jobs__source_job_id__fork_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                source_job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLForkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLTrainingJobOut"];
                 };
             };
             /** @description Structured API error */
