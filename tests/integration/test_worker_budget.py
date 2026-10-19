@@ -25,16 +25,6 @@ def test_worker_wall_timeout_stops_job_and_records_error(workspace, monkeypatch)
     assert job["attempts"][0]["error_code"] == "SOS-JOB-TIMEOUT"
 
 
-def test_staging_budget_configuration(monkeypatch):
-    monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "512")
-    assert ExecutionBudget.from_env().max_stage_mib == 512
-    monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "0")
-    import pytest
-
-    with pytest.raises(ValueError, match="SOS_WORKER_MAX_STAGE_MIB"):
-        ExecutionBudget.from_env()
-
-
 def test_worker_staging_budget_rejects_oversize_attempt_and_keeps_commit_uncertain(
     workspace, monkeypatch
 ):

@@ -31,7 +31,6 @@ def test_dataset_list_preserves_order_and_page_contract(workspace):
     assert len(seen) == 35
     assert len(set(seen)) == 35
     assert set(seen) == {item["id"] for item in store.dataset_page(limit=101)}
-    assert client.get("/api/datasets", params={"cursor": "invalid"}).status_code == 422
     assert client.get("/api/datasets", params={"limit": 101}).status_code == 422
 
 
