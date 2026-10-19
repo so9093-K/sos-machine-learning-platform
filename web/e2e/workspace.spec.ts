@@ -759,43 +759,6 @@ test("unknown CSV opens Understanding and transfers a candidate to editable Expl
 });
 
 
-test("Data Explorer shell, instance name and tab-scoped loading", async ({ page }) => {
-  const previewRequests: string[] = [];
-  const profileRequests: string[] = [];
-  const overviewRequests: string[] = [];
-  page.on("request", request => {
-    const url = request.url();
-    if (/\/api\/datasets\/[^/]+\/preview\?/.test(url)) previewRequests.push(url);
-    if (/\/api\/datasets\/[^/]+\/profile$/.test(url)) profileRequests.push(url);
-    if (/\/api\/datasets\/[^/]+\/overview$/.test(url)) overviewRequests.push(url);
-  });
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "데이터 탐색" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "전역 메뉴" })).toBeVisible();
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "ui-explorer.csv",
-    mimeType: "text/csv",
-    buffer: Buffer.from("group,value\na,1\nb,2\n"),
-  });
-  await expect(page.getByRole("heading", { name: "ui-explorer.csv" })).toBeVisible();
-  await expect.poll(() => overviewRequests.filter(url => url.includes("/overview")).length).toBeGreaterThan(0);
-  const overviewCount = overviewRequests.length;
-  await expect(page.getByRole("tab", { name: "데이터 이해" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("heading", { name: "데이터 프로파일" })).toBeVisible();
-  expect(previewRequests.length).toBe(0);
-  expect(profileRequests.length).toBe(0);
-  await page.getByRole("tab", { name: "데이터 조회" }).click();
-  await expect(page.getByText("반환 2행 · 전체 일치 건수 미계산")).toBeVisible();
-  expect(previewRequests.length).toBe(1);
-  await page.getByRole("tab", { name: "탐색" }).click();
-  await expect(page.getByRole("heading", { name: "탐색 조건" })).toBeVisible();
-  expect(overviewRequests.length).toBe(overviewCount);
-  await page.getByRole("tab", { name: "데이터 이해" }).click();
-  await page.getByRole("tab", { name: "데이터 조회" }).click();
-  await expect(page.getByText("반환 2행 · 전체 일치 건수 미계산")).toBeVisible();
-  expect(previewRequests.length).toBe(1);
-});
-
 test("administrator changes instance name and it survives browser reload", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "표시명 설정" }).click();

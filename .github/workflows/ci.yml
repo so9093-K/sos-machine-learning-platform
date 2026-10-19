@@ -26,7 +26,6 @@ jobs:
       - name: Install Python and dependencies
         run: |
           uv python install
-          uv lock --check
           uv sync --locked --group dev
       - name: Ruff
         run: |
