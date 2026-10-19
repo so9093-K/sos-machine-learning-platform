@@ -45,6 +45,9 @@ def apply_scoring_policy(store, spec: dict) -> dict:
     # 임계값 탐색은 정확도가 아니다. 정책 선택과 독립 평가셋 검증을 구별한다.
     result = evaluate_anomaly_scores(scores, threshold=threshold)
     result["evaluation_scope"] = "scoring_dataset_without_ground_truth"
+    result["threshold_reference"] = (
+        "current_scoring_result" if mode == "quantile" else "explicit_fixed"
+    )
     return {
         "scoring_result_id": source["id"],
         "mode": mode,
@@ -69,6 +72,7 @@ def evaluate_scoring_policy(store, spec: dict) -> dict:
     if label_values is not None and threshold is None:
         # 랭킹 지표는 정책 없이 측정할 수 있지만 이진 판정 지표는 정의하지 않는다.
         summary = evaluate_anomaly_scores(frame["anomaly_score"].to_list())
+        summary["evaluation_kind"] = "ranking_only"
     else:
         summary = evaluate_anomaly_scores(
             frame["anomaly_score"].to_list(),

@@ -1401,7 +1401,7 @@ test("ML Workbench scores and evaluates independently with explanation evidence"
     timeout: 45000,
   });
   const evaluationId = await submittedJob(page, "/api/ml/evaluations/jobs", () =>
-    decision.getByRole("button", { name: "독립 Evaluation 판본 생성" }).click());
+    decision.getByRole("button", { name: "Evaluation 판본 생성" }).click());
   await expect(decision.getByText(/Evaluation Revision ·/)).toBeVisible({
     timeout: 45000,
   });

@@ -63,6 +63,8 @@ def test_policies_use_existing_scores_not_model_fit(monkeypatch):
     assert fixed["decision_summary"]["predicted_anomalies"] == 2
     assert quantile["threshold"] == pytest.approx(0.825)
     assert quantile["decision_summary"]["predicted_anomalies"] == 1
+    assert quantile["decision_summary"]["threshold_reference"] == "current_scoring_result"
+    assert fixed["decision_summary"]["threshold_reference"] == "explicit_fixed"
     assert "precision" not in fixed["decision_summary"]
 
 
@@ -90,6 +92,8 @@ def test_independent_evaluation_has_real_labeled_metrics(monkeypatch):
         },
     )
     assert "precision" not in rank_only["decision_metrics"]
+    assert rank_only["decision_metrics"]["evaluation_kind"] == "ranking_only"
+    assert rank_only["label_coverage"] == "full"
 
 
 def test_unlabeled_evaluation_does_not_invent_precision(monkeypatch):

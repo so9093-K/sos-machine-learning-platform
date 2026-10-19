@@ -193,13 +193,13 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
   return <div className="steps" role="region" aria-label="임계값 정책과 평가">
     <h4>Decision Policy · Evaluation</h4>
     {error && <p role="alert">{error}</p>}
-    <p className="hint">이 Scoring Result를 재사용하므로 모델을 다시 학습하거나 점수를 재계산하지 않습니다.</p>
+    <p className="hint">이 Scoring Result를 재사용하므로 모델을 다시 학습하거나 점수를 재계산하지 않습니다. 분위수 정책은 이 Scoring 점수 자체에서 임계값을 선택하며 별도의 보정·검증 Dataset을 사용하지 않습니다.</p>
     <div className="form-row">
       <label>임계값 정책
         <select aria-label="임계값 정책" value={mode}
           onChange={e => setMode(e.target.value as "fixed" | "quantile")}>
           <option value="fixed">고정 임계값</option>
-          <option value="quantile">참조 점수의 상위 분위수</option>
+          <option value="quantile">현재 Scoring 점수의 상위 분위수</option>
         </select>
       </label>
       {mode === "fixed" ? <label>고정 점수 경계
@@ -233,7 +233,7 @@ export function MLDecisionPanel({ scoring, canRun }: Props) {
       <p className="hint">동점이 있으면 분위수로 설정한 경보 비율과 실제 판정 비율은 다를 수 있습니다.</p>
     </div>}
     <button disabled={!canRun || (evaluationJob !== null && !DONE.has(evaluationJob.status))}
-      onClick={() => void createEvaluation()}>독립 Evaluation 판본 생성</button>
+      onClick={() => void createEvaluation()}>Evaluation 판본 생성</button>
     {evaluationJob && <p role="status">Evaluation Job · {evaluationJob.status}</p>}
     <div className="job-list">
       <strong>이 점수의 평가 이력</strong>
