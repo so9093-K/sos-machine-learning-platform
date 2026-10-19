@@ -518,6 +518,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/explanations/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Explanation Job */
+        post: operations["create_explanation_job_api_ml_explanations_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/explanations/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Explanation Job */
+        get: operations["get_explanation_job_api_ml_explanations_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/explanations/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Explanation Result */
+        get: operations["get_explanation_result_api_ml_explanations__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/models/{revision_id}": {
         parameters: {
             query?: never;
@@ -701,6 +752,23 @@ export interface paths {
         put?: never;
         /** Cancel Ml Training Job */
         post: operations["cancel_ml_training_job_api_ml_train_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/train/jobs/{source_job_id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fork Training Job */
+        post: operations["fork_training_job_api_ml_train_jobs__source_job_id__fork_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1152,6 +1220,29 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** ExplanationResultOut */
+        ExplanationResultOut: {
+            /** Attempt Id */
+            attempt_id: string;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Method */
+            method: string;
+            /** Model Revision Id */
+            model_revision_id: string;
+            /** Output */
+            output: {
+                [key: string]: unknown;
+            };
+            /** Row Index */
+            row_index: number;
+            /** Scoring Result Id */
+            scoring_result_id: string;
+        };
         /**
          * ExplorationJobOut
          * @description Discovery Job만 반환하는 신규 API 응답 계약.
@@ -1573,6 +1664,63 @@ export interface components {
             policy_revision_id?: string | null;
             /** Scoring Result Id */
             scoring_result_id: string;
+        };
+        /** MLExplanationJobOut */
+        MLExplanationJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_explain";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** MLExplanationRequest */
+        MLExplanationRequest: {
+            /** Row Index */
+            row_index: number;
+            /** Scoring Result Id */
+            scoring_result_id: string;
+        };
+        /**
+         * MLForkRequest
+         * @description 원본 학습 실행의 Feature/판본을 그대로 유지하고 모델 설정만 바꿀 수 있다.
+         */
+        MLForkRequest: {
+            params?: components["schemas"]["IsolationForestParameters"] | null;
         };
         /** MLPolicyJobOut */
         MLPolicyJobOut: {
@@ -3226,6 +3374,103 @@ export interface operations {
             };
         };
     };
+    create_explanation_job_api_ml_explanations_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLExplanationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLExplanationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_explanation_job_api_ml_explanations_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLExplanationJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_explanation_result_api_ml_explanations__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplanationResultOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_model_revision_api_ml_models__revision_id__get: {
         parameters: {
             query?: never;
@@ -3625,6 +3870,43 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLTrainingJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    fork_training_job_api_ml_train_jobs__source_job_id__fork_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                source_job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLForkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
