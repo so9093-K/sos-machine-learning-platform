@@ -73,16 +73,21 @@ def test_prebuilt_images_share_only_images_not_project_state():
     assert left["COMPOSE_PROJECT_NAME"] != right["COMPOSE_PROJECT_NAME"]
     assert "SOS_DATABASE_URL" not in left
     assert isolated.compose_up_command(left["COMPOSE_PROJECT_NAME"], prebuilt=True)[-3:] == [
-        "--no-build", "-d", "--wait"
+        "--no-build",
+        "-d",
+        "--wait",
     ]
     assert isolated.compose_up_command(left["COMPOSE_PROJECT_NAME"], prebuilt=False)[-3:] == [
-        "--build", "-d", "--wait"
+        "--build",
+        "-d",
+        "--wait",
     ]
 
 
 def test_prebuilt_image_prefix_rejects_untrusted_names():
     with pytest.raises(ValueError, match="Invalid prebuilt E2E"):
         isolated.isolated_environment(
-            {"SOS_E2E_IMAGE_PREFIX": "../shared"}, "sos-e2e-000000000003",
-            [19300, 19301, 19302, 19303]
+            {"SOS_E2E_IMAGE_PREFIX": "../shared"},
+            "sos-e2e-000000000003",
+            [19300, 19301, 19302, 19303],
         )

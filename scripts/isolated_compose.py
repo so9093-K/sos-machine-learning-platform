@@ -212,8 +212,18 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
 def compose_up_command(instance: str, *, prebuilt: bool) -> list[str]:
     """명시적으로 미리 준비한 이미지가 있으면 빌드를 반복하지 않는다."""
     return [
-        "docker", "compose", "--profile", "app", "-f", "compose.yaml",
-        "-p", instance, "up", "--no-build" if prebuilt else "--build", "-d", "--wait",
+        "docker",
+        "compose",
+        "--profile",
+        "app",
+        "-f",
+        "compose.yaml",
+        "-p",
+        instance,
+        "up",
+        "--no-build" if prebuilt else "--build",
+        "-d",
+        "--wait",
     ]
 
 
