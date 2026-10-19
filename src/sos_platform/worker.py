@@ -34,6 +34,8 @@ from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
 from .ml_explanation import explain_scored_row
 from .ml_scoring import run_dataset_scoring
 from .ml_training import train_dataset
+from .mlflow_config import MLflowSettings
+from .mlflow_tracking import MLflowClient, run_tracking_once
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import transform
@@ -501,6 +503,8 @@ def main():
     args = parser.parse_args()
     store = Store(args.home)
     store.initialize()
+    mlflow_settings = MLflowSettings.from_env()
+    mlflow_client = MLflowClient(mlflow_settings) if mlflow_settings else None
     if not store.acquire_worker():
         raise SystemExit("Another worker already owns the execution lock")
 
@@ -514,16 +518,22 @@ def main():
         isolation.validate_before_claim()
         cleanup_orphaned_cgroups_before_recovery(store, isolation)
         interrupted = store.recover()
+        if mlflow_client:
+            store.recover_tracking_exports()
         # 단일 Worker 잠금 아래에서는 이전 실행의 자식이 남아 있지 않다.
         cleanup_recovered_results(store, interrupted)
         cleanup_iceberg_staging(store)
         store.heartbeat()
         if args.once:
             run_once(store)
+            if mlflow_client:
+                run_tracking_once(store, mlflow_client)
             return
         while True:
             store.heartbeat()
-            if not run_once(store):
+            executed = run_once(store)
+            exported = run_tracking_once(store, mlflow_client) if mlflow_client else False
+            if not executed and not exported:
                 time.sleep(args.poll)
     except KeyboardInterrupt:
         pass
