@@ -11,6 +11,7 @@ from collections.abc import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
 
 
@@ -162,6 +163,9 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
         )
     except MLflowDeliveryError as exc:
         store.finish_tracking_export(job_id, error_code=str(exc))
+    except WorkerOwnershipLost:
+        # DB 세션 잠금을 잃으면 새 Worker의 복구 판단에 맡긴다.
+        raise
     except Exception:
         # 외부 전송 장애로 ML Job 상태를 변경하거나 자격 증명을 기록하지 않는다.
         store.finish_tracking_export(job_id, error_code="SOS-MLFLOW-UNAVAILABLE")

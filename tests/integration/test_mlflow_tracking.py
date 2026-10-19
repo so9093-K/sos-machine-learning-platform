@@ -47,6 +47,7 @@ def test_tracking_export_failure_retries_without_mutating_successful_job(workspa
     job_id = job.json()["id"]
     assert client.get(f"/api/ml/train/jobs/{job_id}").json()["status"] == "Succeeded"
     assert store.tracking_status(job_id)["state"] == "Pending"
+    assert client.get(f"/api/ml/tracking/jobs/{job_id}").json()["state"] == "Pending"
     transport = StubMLflow()
     assert run_tracking_once(store, transport) is True
     failed = store.tracking_status(job_id)
@@ -54,6 +55,7 @@ def test_tracking_export_failure_retries_without_mutating_successful_job(workspa
     assert failed["attempts"] == 1
     assert failed["run_id"] == "run-1"
     assert failed["last_error_code"] == "SOS-MLFLOW-UNAVAILABLE"
+    assert client.get(f"/api/ml/tracking/jobs/{job_id}").json()["state"] == "Retry"
     assert client.get(f"/api/ml/train/jobs/{job_id}").json()["status"] == "Succeeded"
 
     with store.connection() as db:
@@ -67,11 +69,18 @@ def test_tracking_export_failure_retries_without_mutating_successful_job(workspa
     assert done["state"] == "Succeeded"
     assert done["attempts"] == 2
     assert done["run_id"] == "run-1"
+    status_response = client.get(f"/api/ml/tracking/jobs/{job_id}")
+    assert status_response.status_code == 200
+    assert status_response.json()["run_id"] == "run-1"
+    assert status_response.json()["state"] == "Succeeded"
     assert [name for name, _ in transport.calls].count("runs/create") == 1
     assert run_tracking_once(store, transport) is False
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM model_revisions")).scalar_one() == 1
         assert db.execute(text("SELECT COUNT(*) FROM mlflow_exports")).scalar_one() == 1
+        assert db.execute(
+            text("SELECT COUNT(*) FROM audit_events WHERE action='mlflow.export'")
+        ).scalar_one() == 2
 
 
 def test_tracking_inflight_recovery_keeps_external_run_id(workspace, monkeypatch):

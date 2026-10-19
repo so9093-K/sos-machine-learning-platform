@@ -95,6 +95,16 @@ class TrackingStoreMixin:
                     "job": job_id,
                 },
             )
+            self._audit(
+                db,
+                actor_id="sos-worker",
+                actor_type="service",
+                action="mlflow.export",
+                resource_type="job",
+                resource_id=job_id,
+                outcome="failed" if error_code else "succeeded",
+                reason=error_code or "external_tracking_recorded",
+            )
 
     def recover_tracking_exports(self) -> int:
         """Worker 비정상 종료 당시 Sending이던 전송을 조회·재시도 상태로 복구한다."""
