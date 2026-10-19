@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / ".sos-test" / "runs"
 INSTANCE_PATTERN = re.compile(r"sos-e2e-[0-9a-f]{12}\Z")
+IMAGE_PREFIX_PATTERN = re.compile(r"ci-[0-9]+-[0-9]+\Z")
 OWNER_FILE = "validation-owner.json"
 
 
@@ -85,6 +86,14 @@ def isolated_environment(source: dict[str, str], instance: str, ports: list[int]
     # 공통 검증 CLI가 소유한 출력 위치만 Playwright에 전달한다.
     if source.get("SOS_JUNIT_FILE"):
         env["SOS_JUNIT_FILE"] = source["SOS_JUNIT_FILE"]
+    # CI에서 미리 빌드한 이미지의 코드만 공유한다. 각 실행의 DB·버킷·볼륨은
+    # 계속 분리하며 공유 이미지는 개별 프로젝트의 정리 대상에 포함하지 않는다.
+    image_prefix = source.get("SOS_E2E_IMAGE_PREFIX")
+    if image_prefix is not None:
+        if not IMAGE_PREFIX_PATTERN.fullmatch(image_prefix):
+            raise ValueError("Invalid prebuilt E2E image prefix")
+        env["SOS_PYTHON_IMAGE"] = f"sos-python-e2e:{image_prefix}"
+        env["SOS_WEB_IMAGE"] = f"sos-web-e2e:{image_prefix}"
     configure_tokens(env)
     return env
 
@@ -200,6 +209,14 @@ def clean_owned(instance: str, runtime: Path, env: dict[str, str]) -> int:
     return 0
 
 
+def compose_up_command(instance: str, *, prebuilt: bool) -> list[str]:
+    """명시적으로 미리 준비한 이미지가 있으면 빌드를 반복하지 않는다."""
+    return [
+        "docker", "compose", "--profile", "app", "-f", "compose.yaml",
+        "-p", instance, "up", "--no-build" if prebuilt else "--build", "-d", "--wait",
+    ]
+
+
 def execute(spec: str) -> int:
     """한 번의 테스트 실행과 정리를 수행한다. 테스트 재시도는 하지 않는다."""
     instance = "sos-e2e-" + secrets.token_hex(6)
@@ -209,20 +226,7 @@ def execute(spec: str) -> int:
     result = 1
     try:
         subprocess.run(
-            [
-                "docker",
-                "compose",
-                "--profile",
-                "app",
-                "-f",
-                "compose.yaml",
-                "-p",
-                instance,
-                "up",
-                "--build",
-                "-d",
-                "--wait",
-            ],
+            compose_up_command(instance, prebuilt="SOS_E2E_IMAGE_PREFIX" in os.environ),
             cwd=ROOT,
             env=env,
             check=True,

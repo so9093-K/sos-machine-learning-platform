@@ -111,6 +111,9 @@ jobs:
 
   ui-e2e:
     runs-on: ubuntu-latest
+    env:
+      # CI 실행 하나에서만 이미지 공유. 각 Spec의 DB·버킷·볼륨·토큰은 독립적이다.
+      SOS_E2E_IMAGE_PREFIX: ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -127,6 +130,11 @@ jobs:
       - name: Install browser
         working-directory: web
         run: npx playwright install --with-deps chromium
+      - name: Build shared E2E images once
+        env:
+          SOS_PYTHON_IMAGE: sos-python-e2e:${{ env.SOS_E2E_IMAGE_PREFIX }}
+          SOS_WEB_IMAGE: sos-web-e2e:${{ env.SOS_E2E_IMAGE_PREFIX }}
+        run: docker compose --profile app -f compose.yaml build api web
       - name: Browser workflow tests in separate E2E volumes
         run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
       - name: Verify token-mode browser permissions (owned environment)
