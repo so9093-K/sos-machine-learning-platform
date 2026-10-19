@@ -59,10 +59,14 @@ from .schemas import (
     IcebergReferenceOut,
     JobOut,
     JobPageOut,
+    MLScoringJobOut,
+    MLScoringJobPageOut,
+    MLScoringRequest,
     MLTrainingJobOut,
     MLTrainingJobPageOut,
     MLTrainRequest,
     ModelRevisionOut,
+    ScoringResultOut,
     PreviewOut,
     ProblemOut,
     ProfileOut,
@@ -586,6 +590,80 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             raise HTTPException(status_code=404, detail="Training Job not found")
         return item
 
+    @app.post("/api/ml/scoring/jobs", status_code=202, response_model=MLScoringJobOut)
+    def create_scoring_job(
+        body: MLScoringRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        dataset = existing(body.dataset_id, actor)
+        model = store.get_model_revision(body.model_revision_id)
+        if model is None:
+            raise HTTPException(status_code=404, detail="Model Revision not found")
+        check_ownership(actor, model["owner_actor"], "model", model["id"])
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_score",
+            dataset_id=dataset["id"],
+            spec={
+                "model_revision_id": model["id"],
+                "model_owner_actor": model["owner_actor"],
+                "dataset_version": dataset["version"],
+                "label_column": body.label_column,
+            },
+            request_id=request.state.request_id,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            idempotency_key=idempotency_key,
+        )
+
+    def existing_scoring_job(job_id: str, actor: Actor) -> dict:
+        item = existing_job(job_id, actor)
+        if item["kind"] != "ml_score":
+            raise HTTPException(status_code=404, detail="Scoring Job not found")
+        return item
+
+    @app.get("/api/ml/scoring/jobs", response_model=MLScoringJobPageOut)
+    def list_scoring_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Job"),
+            actor_id=None if actor.privileged else actor.id,
+            kind="ml_score",
+        )
+        return page_from_rows(rows, limit)
+
+    @app.get("/api/ml/scoring/jobs/{job_id}", response_model=MLScoringJobOut)
+    def get_scoring_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return existing_scoring_job(job_id, actor)
+
+    @app.post("/api/ml/scoring/jobs/{job_id}/cancel", response_model=MLScoringJobOut)
+    def cancel_scoring_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        existing_scoring_job(job_id, actor)
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Scoring Job not found")
+        return item
+
+    @app.get("/api/ml/scoring/results/{result_id}", response_model=ScoringResultOut)
+    def get_scoring_result(result_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_scoring_result(result_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Scoring Result not found")
+        check_ownership(actor, item["owner_actor"], "scoring_result", result_id)
+        return item
+
     @app.get("/api/ml/models/{revision_id}", response_model=ModelRevisionOut)
     def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
         item = store.get_model_revision(revision_id)
@@ -665,7 +743,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     @app.get("/api/jobs/{job_id}", response_model=JobOut)
     def get_job(job_id: str, actor: Actor = READ_JOB_DEP):
         item = existing_job(job_id, actor)
-        if item["kind"] in ("exploration", "ml_train"):
+        if item["kind"] in ("exploration", "ml_train", "ml_score"):
             raise HTTPException(status_code=404, detail="Job not found")
         return item
 
