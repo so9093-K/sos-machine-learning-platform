@@ -101,3 +101,14 @@ def test_training_rejects_null_numeric_inputs(monkeypatch):
     ):
         with pytest.raises(ValueError, match="null"):
             training_matrix(None, {"frame": pl.DataFrame({"x": series})}, ["x"])
+
+
+def test_training_matrix_is_independent_of_scan_row_order(monkeypatch):
+    """고정 Dataset 판본의 순서 없는 행 스캔이 학습 샘플을 바꾸지 않는다."""
+    monkeypatch.setattr("sos_platform.ml_training.pinned_scan_dataset", _scan)
+    source = pl.DataFrame({"x": [3.0, 1.0, 2.0, 1.0], "y": [5, 2, 3, 1]})
+    first = training_matrix(None, {"frame": source}, ["x", "y"])
+    reversed_source = source.reverse()
+    second = training_matrix(None, {"frame": reversed_source}, ["x", "y"])
+    assert first.tolist() == second.tolist()
+    assert first.tolist() == [[1.0, 1.0], [1.0, 2.0], [2.0, 3.0], [3.0, 5.0]]

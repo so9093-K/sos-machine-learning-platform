@@ -44,7 +44,9 @@ def training_matrix(store, dataset: dict, features: list[str]):
             values = frame[field]
             if values.max() > safe_integer or values.min() < -safe_integer:
                 raise ValueError("Integer feature exceeds the exact float64 range")
-    return frame.to_numpy()
+    # IF의 서브샘플 난수는 행 위치를 사용한다. 같은 Dataset 판본이 다른
+    # 스캔 순서로 반환되어도 동일한 입력 행렬을 사용하도록 상한 검사 후 정렬한다.
+    return frame.sort(features).to_numpy()
 
 
 def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
