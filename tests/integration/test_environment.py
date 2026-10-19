@@ -9,11 +9,11 @@ from sqlalchemy.engine import Engine, make_url
 from sos_platform.api import create_app
 from sos_platform.config import Settings
 
-from .conftest import workspace
+from .conftest import migrated_template_database
 
 
-def test_test_fixture_releases_created_database_on_migration_failure(tmp_path, monkeypatch):
-    """Fixture 준비 중 Alembic이 실패해도 생성된 DB는 남기지 않는다."""
+def test_template_fixture_releases_created_database_on_migration_failure(monkeypatch):
+    """임시 공통 스키마 준비 실패 시 생성된 DB는 남기지 않는다."""
     base = make_url(Settings.from_env().database_url)
     admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
 
@@ -32,7 +32,7 @@ def test_test_fixture_releases_created_database_on_migration_failure(tmp_path, m
             raise RuntimeError("Simulated migration setup failure")
 
         monkeypatch.setattr(command, "upgrade", fail_upgrade)
-        fixture = workspace.__wrapped__(tmp_path, monkeypatch)
+        fixture = migrated_template_database.__wrapped__()
         with pytest.raises(RuntimeError, match="Simulated migration setup failure"):
             next(fixture)
         assert databases() == before

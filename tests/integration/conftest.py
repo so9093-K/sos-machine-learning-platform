@@ -19,8 +19,37 @@ from sos_platform.object_store import ObjectStore
 from sos_platform.store import Store
 
 
+@pytest.fixture(scope="session")
+def migrated_template_database():
+    """세션당 한 번 마이그레이션하고 각 테스트의 실제 DB 격리는 유지한다."""
+    settings = Settings.from_env()
+    base = make_url(settings.database_url)
+    endpoint = urlsplit(settings.s3_endpoint)
+    if base.host not in ("localhost", "127.0.0.1", "::1") or endpoint.hostname not in (
+        "localhost", "127.0.0.1", "::1"
+    ):
+        pytest.fail("Integration tests require loopback PostgreSQL and S3 endpoints")
+    name = "sos_test_template_" + uuid4().hex[:14]
+    with ExitStack() as resources:
+        admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+        resources.callback(admin.dispose)
+        with admin.connect() as conn:
+            conn.execute(text(f'CREATE DATABASE "{name}"'))
+
+        def drop_template():
+            with admin.connect() as conn:
+                conn.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
+
+        resources.callback(drop_template)
+        template_url = base.set(database=name).render_as_string(hide_password=False)
+        config = Config("alembic.ini")
+        config.set_main_option("sqlalchemy.url", template_url)
+        command.upgrade(config, "head")
+        yield name
+
+
 @pytest.fixture
-def workspace(tmp_path: Path, monkeypatch):
+def workspace(tmp_path: Path, monkeypatch, migrated_template_database):
     """독립 DB·버킷을 생성하고 준비 단계의 예외에도 본인이 만든 리소스를 회수한다."""
     # 각 테스트 워크스페이스의 로컬 신원을 명시하며, 테스트 내부의 Token 전환은 허용한다.
     monkeypatch.setenv("SOS_AUTH_MODE", "development")
@@ -43,7 +72,7 @@ def workspace(tmp_path: Path, monkeypatch):
         admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
         resources.callback(admin.dispose)
         with admin.connect() as conn:
-            conn.execute(text(f'CREATE DATABASE "{name}"'))
+            conn.execute(text(f'CREATE DATABASE "{name}" TEMPLATE "{migrated_template_database}"'))
 
         def drop_database():
             with admin.connect() as conn:
@@ -52,9 +81,6 @@ def workspace(tmp_path: Path, monkeypatch):
         resources.callback(drop_database)
         test_url = base.set(database=name).render_as_string(hide_password=False)
         monkeypatch.setenv("SOS_DATABASE_URL", test_url)
-        config = Config("alembic.ini")
-        config.set_main_option("sqlalchemy.url", test_url)
-        command.upgrade(config, "head")
         storage = ObjectStore()
         try:
             storage.client.head_bucket(Bucket=bucket)
