@@ -292,7 +292,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       </div>
         {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
           !selectedJob.cancel_requested &&
-          <button className="secondary" onClick={() => void cancelJob()}>취소 요청</button>
+          <button className="secondary" onClick={() => void cancelJob()}>취소 요청</button>}
       </div>
       {selectedJob.status === "Running" && <p role="status">실행 중입니다. 정확한 진행률은 제공되지 않습니다.</p>}
       {selectedJob.status === "Failed" && <p role="alert">
