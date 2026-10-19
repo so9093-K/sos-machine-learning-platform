@@ -1310,3 +1310,30 @@ test("Registering another Dataset inside Preparation does not force Explorer nav
   await expect(page.getByLabel("변환 연산", { exact: true })).toBeVisible();
   await expect(page.getByRole("tablist", { name: "데이터 작업 영역" })).toHaveCount(0);
 });
+
+test("ML Workbench creates a persistent Isolation Forest Model Revision", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "ml-training.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("temperature,vibration\\n21,1\\n22,2\\n23,2\\n22,1\\n24,3\\n25,2\\n100,30\\n"),
+  });
+  await expect(page.getByRole("heading", { name: "ml-training.csv" })).toBeVisible();
+  await page.getByRole("button", { name: "ML Workbench" }).click();
+  await expect(page.getByRole("heading", { name: "ML Workbench" })).toBeVisible();
+  const selector = page.getByRole("combobox", { name: "ML 학습 Dataset" });
+  await expect(selector).toHaveValue(/.+/);
+  await page.getByRole("checkbox", { name: /temperature/ }).check();
+  const jobId = await submittedJob(page, "/api/ml/train/jobs", () =>
+    page.getByRole("button", { name: "학습 Job 제출" }).click());
+  await expect(page.getByRole("heading", { name: "학습 Job 상세" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
+    timeout: 45000,
+  });
+  await expect(page.getByText("학습 기준 이상 후보")).toBeVisible();
+  await expect(page.getByText(/독립 검증 성능을 의미하지 않습니다/)).toBeVisible();
+  // 학습 이력은 브라우저 상태가 아닌 실제 API의 영속 Job 목록에서 다시 복원한다.
+  await page.reload();
+  await page.getByRole("button", { name: "ML Workbench" }).click();
+  await expect(page.getByRole("button", { name: new RegExp(jobId.slice(0, 8)) })).toBeVisible();
+});
