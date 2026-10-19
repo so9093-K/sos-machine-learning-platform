@@ -34,12 +34,10 @@ def test_isolated_e2e_never_reuses_parent_data_or_auth():
         "COMPOSE_ENV_FILES": "/tmp/foreign.env",
         "COMPOSE_FILE": "/tmp/foreign-compose.yaml",
         "COMPOSE_DISABLE_ENV_FILE": "0",
-        "SOS_JUNIT_FILE": "/tmp/workspace-e2e.xml",
     }
     isolated_env = isolated.isolated_environment(
         source, "sos-e2e-012345abcdef", [19003, 19005, 19002, 19001]
     )
-    assert isolated_env["SOS_JUNIT_FILE"] == "/tmp/workspace-e2e.xml"
     assert "SOS_DATABASE_URL" not in isolated_env
     assert isolated_env["SOS_DB_NAME"] == "sos_e2e_012345abcdef"
     assert isolated_env["SOS_S3_BUCKET"] == "sos-e2e-012345abcdef"

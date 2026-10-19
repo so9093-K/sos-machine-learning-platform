@@ -122,7 +122,6 @@ jobs:
         with:
           name: browser-failure-trace
           path: |
-            web/reports/
             web/test-results/
           if-no-files-found: ignore
           retention-days: 7
