@@ -24,3 +24,8 @@ jobs:
           name: resolved-ml-uv-lock
           path: uv.lock
           if-no-files-found: error
+      - name: Export resolved lock as public base64 log chunks
+        run: |
+          echo "__SOS_LOCK_BEGIN__"
+          base64 -w0 uv.lock | fold -w 1024 | sed 's/^/SOS_LOCK_CHUNK=/'
+          echo "__SOS_LOCK_END__"
