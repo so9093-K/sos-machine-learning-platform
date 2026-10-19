@@ -76,10 +76,12 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
         if 0 < sum(labels) < len(labels):
             ranked_metrics["average_precision"] = float(average_precision_score(labels, scores))
             ranked_metrics["roc_auc"] = float(roc_auc_score(labels, scores))
-    result = pl.DataFrame({
-        "row_index": list(range(frame.height)),
-        "anomaly_score": scores,
-    }).with_columns(frame.select(features).to_struct("features"))
+    result = pl.DataFrame(
+        {
+            "row_index": list(range(frame.height)),
+            "anomaly_score": scores,
+        }
+    ).with_columns(frame.select(features).to_struct("features"))
     if labels is not None:
         result = result.with_columns(pl.Series(name="label", values=labels, dtype=pl.Int8))
     result.write_parquet(pending)

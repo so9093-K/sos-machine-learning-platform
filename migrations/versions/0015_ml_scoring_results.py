@@ -18,7 +18,9 @@ def upgrade() -> None:
         "scoring_results",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("job_id", sa.String(36), sa.ForeignKey("jobs.id"), nullable=False, unique=True),
-        sa.Column("attempt_id", sa.String(36), sa.ForeignKey("attempts.id"), nullable=False, unique=True),
+        sa.Column(
+            "attempt_id", sa.String(36), sa.ForeignKey("attempts.id"), nullable=False, unique=True
+        ),
         sa.Column(
             "model_revision_id", sa.String(36), sa.ForeignKey("model_revisions.id"), nullable=False
         ),
@@ -36,8 +38,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.Text(), nullable=False),
     )
     op.create_index(
-        "ix_scoring_results_model_created",
-        "scoring_results", ["model_revision_id", "created_at"]
+        "ix_scoring_results_model_created", "scoring_results", ["model_revision_id", "created_at"]
     )
 
 
