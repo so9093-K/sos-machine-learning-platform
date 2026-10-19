@@ -168,7 +168,13 @@ def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) 
     """복구가 확정된 Attempt의 로컬 파일만 회수하고 S3·공유 객체는 건드리지 않는다."""
     for job_id, attempt_id in interrupted:
         output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
-        for path in (output, pending, completed, pending.with_suffix(".joblib"), pending.with_suffix(".scores.parquet")):
+        for path in (
+            output,
+            pending,
+            completed,
+            pending.with_suffix(".joblib"),
+            pending.with_suffix(".scores.parquet"),
+        ):
             path.unlink(missing_ok=True)
 
 

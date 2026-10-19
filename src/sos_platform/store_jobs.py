@@ -461,7 +461,9 @@ class JobStoreMixin:
                     "score_summary": json.dumps(scoring_publish["score_summary"], allow_nan=False),
                     "ranking_metrics": json.dumps(
                         scoring_publish["ranking_metrics"], allow_nan=False
-                    ) if scoring_publish["ranking_metrics"] is not None else None,
+                    )
+                    if scoring_publish["ranking_metrics"] is not None
+                    else None,
                     "label_column": scoring_publish["label_column"],
                     "owner_actor": row["owner_actor"],
                     "created_at": now(),

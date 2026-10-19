@@ -54,10 +54,12 @@ def test_scoring_creates_rowwise_immutable_artifact_and_rank_metrics(tmp_path, m
         "sos_platform.ml_scoring.load_trusted_isolation_forest",
         lambda revision, scratch: trained,
     )
-    frame = pl.DataFrame({
-        "temperature": [1.0, 2.0, 100.0, 3.0],
-        "flag": [0, 0, 1, 0],
-    })
+    frame = pl.DataFrame(
+        {
+            "temperature": [1.0, 2.0, 100.0, 3.0],
+            "flag": [0, 0, 1, 0],
+        }
+    )
     destination = tmp_path / "scores.parquet"
     metadata = run_dataset_scoring(
         StubStore(_revision()),
@@ -67,7 +69,9 @@ def test_scoring_creates_rowwise_immutable_artifact_and_rank_metrics(tmp_path, m
     )
     result = pl.read_parquet(destination)
     assert result["row_index"].to_list() == [0, 1, 2, 3]
-    assert result["features"].struct.field("temperature").to_list() == frame["temperature"].to_list()
+    assert (
+        result["features"].struct.field("temperature").to_list() == frame["temperature"].to_list()
+    )
     assert result["label"].to_list() == [0, 0, 1, 0]
     assert result["anomaly_score"].to_list() == list(
         trained.score_anomalies(frame.select("temperature").to_numpy())
@@ -86,15 +90,19 @@ def test_scoring_rejects_wrong_schema_and_incomplete_labels(tmp_path, monkeypatc
     rows = [
         (pl.DataFrame({"temperature": [1, 2]}), _spec("v1"), "dtypes"),
         (pl.DataFrame({"temperature": [1.0, None]}), _spec("v1"), "null"),
-        (pl.DataFrame({"temperature": [1.0, 2.0], "flag": [0, None]}),
-         _spec("v1", "flag"), "labels"),
-        (pl.DataFrame({"temperature": [1.0, 2.0], "flag": [0, 3]}),
-         _spec("v1", "flag"), "binary"),
+        (
+            pl.DataFrame({"temperature": [1.0, 2.0], "flag": [0, None]}),
+            _spec("v1", "flag"),
+            "labels",
+        ),
+        (pl.DataFrame({"temperature": [1.0, 2.0], "flag": [0, 3]}), _spec("v1", "flag"), "binary"),
     ]
     for frame, spec, reason in rows:
         with pytest.raises(ValueError, match=reason):
             run_dataset_scoring(
-                StubStore(_revision()), {"version": "v1", "frame": frame}, spec,
+                StubStore(_revision()),
+                {"version": "v1", "frame": frame},
+                spec,
                 tmp_path / "invalid.parquet",
             )
     with pytest.raises(ValueError, match="revision"):

@@ -26,8 +26,11 @@ def test_scoring_result_is_independent_from_training_and_source_dataset(workspac
     )
     trained = client.post(
         "/api/ml/train/jobs",
-        json={"dataset_id": training["id"], "features": ["temperature"],
-              "params": {"n_estimators": 20}},
+        json={
+            "dataset_id": training["id"],
+            "features": ["temperature"],
+            "params": {"n_estimators": 20},
+        },
         headers={"Idempotency-Key": str(uuid4())},
     )
     assert trained.status_code == 202, trained.text
@@ -43,15 +46,14 @@ def test_scoring_result_is_independent_from_training_and_source_dataset(workspac
         b"temperature,is_anomaly\n1.0,0\n2.0,0\n3.0,0\n100.0,1\n",
     )
     key = str(uuid4())
-    request = {"model_revision_id": model_id, "dataset_id": scoring["id"],
-               "label_column": "is_anomaly"}
-    first = client.post(
-        "/api/ml/scoring/jobs", json=request, headers={"Idempotency-Key": key}
-    )
+    request = {
+        "model_revision_id": model_id,
+        "dataset_id": scoring["id"],
+        "label_column": "is_anomaly",
+    }
+    first = client.post("/api/ml/scoring/jobs", json=request, headers={"Idempotency-Key": key})
     assert first.status_code == 202, first.text
-    again = client.post(
-        "/api/ml/scoring/jobs", json=request, headers={"Idempotency-Key": key}
-    )
+    again = client.post("/api/ml/scoring/jobs", json=request, headers={"Idempotency-Key": key})
     assert again.json()["id"] == first.json()["id"]
     job_id = first.json()["id"]
     assert client.get(f"/api/jobs/{job_id}").status_code == 404
@@ -82,10 +84,13 @@ def test_scoring_result_is_independent_from_training_and_source_dataset(workspac
     assert observed[result["location"]]["referenced"] is True
     with store.connection() as db:
         assert db.execute(text("SELECT COUNT(*) FROM scoring_results")).scalar_one() == 1
-        assert db.execute(
-            text("SELECT COUNT(*) FROM datasets WHERE id=:id"),
-            {"id": scoring["id"]},
-        ).scalar_one() == 1
+        assert (
+            db.execute(
+                text("SELECT COUNT(*) FROM datasets WHERE id=:id"),
+                {"id": scoring["id"]},
+            ).scalar_one()
+            == 1
+        )
 
 
 def test_scoring_invalid_feature_schema_does_not_publish(workspace):
