@@ -66,6 +66,15 @@ def test_denied_request_keeps_auth_header_and_request_id(workspace, monkeypatch)
     assert denied.headers["WWW-Authenticate"] == "Bearer"
     assert denied.json()["request_id"] == denied.headers["X-Request-ID"]
     assert denied.json()["code"] == "SOS-AUTH-REQUIRED"
+    with TestClient(create_app(store.home)) as secured:
+        short = secured.get("/api/v2/audit", headers={"Authorization": "Bearer short"})
+        assert short.status_code == 401
+        assert short.headers["WWW-Authenticate"] == "Bearer"
+        blocked = secured.get(
+            "/api/v2/diagnostics/jobs/" + "a" * 36,
+            headers={"Authorization": "Bearer short"},
+        )
+        assert blocked.status_code == 401
 
 
 def test_unknown_http_routes_and_methods_use_same_problem_contract(workspace):
@@ -265,25 +274,3 @@ def test_operator_diagnostics_retains_category_without_raw_exception(workspace, 
     assert public.status_code == 200
     assert secret not in public.text
     assert "exception_type" not in public.json()
-
-
-def test_invalid_bearer_token_length_preserves_challenge(workspace, monkeypatch):
-    import hashlib
-    import json
-
-    client, store = workspace
-    key = "real-valid-token-" + ("x" * 40)
-    token_hash = hashlib.sha256(key.encode()).hexdigest()
-    monkeypatch.setenv("SOS_AUTH_MODE", "token")
-    monkeypatch.setenv(
-        "SOS_AUTH_TOKEN_HASHES",
-        json.dumps({token_hash: {"actor_id": "operator", "kind": "human", "roles": ["operator"]}}),
-    )
-    with TestClient(create_app(store.home)) as secure:
-        response = secure.get("/api/v2/audit", headers={"Authorization": "Bearer short"})
-        assert response.status_code == 401
-        assert response.headers["WWW-Authenticate"] == "Bearer"
-        blocked = secure.get(
-            "/api/v2/diagnostics/jobs/" + "a" * 36, headers={"Authorization": "Bearer short"}
-        )
-        assert blocked.status_code == 401
