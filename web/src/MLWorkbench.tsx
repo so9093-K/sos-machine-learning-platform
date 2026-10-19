@@ -306,7 +306,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         </button>
         <p className="hint">원본 Dataset 판본·Feature·Seed·모델 설정을 그대로 복사하고 새 Job·Model Revision을 만듭니다. 이 실행은 학습을 다시 수행합니다.</p>
       </div>}
-      <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id} />
+      {selectedJob.status === "Succeeded" &&
+        <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id} />}
       {model && <div className="result">
         <h4>Model Revision · {model.id}</h4>
         <p className="hint">입력 판본: {model.dataset_version} · Feature: {model.features.join(", ")}</p>

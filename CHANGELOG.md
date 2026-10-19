@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 선택적 MLflow REST Tracking을 Worker 전용 Outbox와 별도 상태로 추가하고, 실패 재시도·재시작 복구·외부 Run 연결 상태를 표시한다. 같은 모델 설정으로 Fork·Reproduce 하는 사용자 동작을 제공한다.
+
 - Dataset 기반 Isolation Forest 비동기 학습, 감사·객체 보존과 연결된 모델 판본, 학습 설정 비교·점수 근거 조회를 추가했습니다. 독립 평가·설명·MLflow 추적은 후속 범위입니다.
 
 - API·Worker 공통 Python 이미지, Web 개발 이미지와 Docker Compose 단일 구성(`app` 프로필)을 추가했습니다. 공개 `make up`은 컨테이너 실행으로 통합하고, 호스트 실행기와 로그 릴레이를 제거하고 브라우저 E2E도 고유 Compose 프로젝트에서 실행합니다. Token 인증을 요구하고 데이터 볼륨은 보존합니다.

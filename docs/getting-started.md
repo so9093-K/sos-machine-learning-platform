@@ -61,7 +61,7 @@ CSV·Parquet·구조화된 TSV/TXT 업로드는 기본 256 MiB 이하이고 `SOS
 
 데이터 미리보기는 최대 100행을 반환하고, 기본 EDA 프로파일은 정렬 없는 제한 조회 최대 1,000행을 계산한다. Dataset Understanding의 무작위 표본 분석은 고정 Seed Reservoir 방식을 사용하며 전체 분포의 대표성을 보장하지 않는다. 변환 결과 미리보기(Feature Preview)는 입력을 먼저 표본 추출하지 않고 실제 Job과 같은 변환 순서를 적용한 결과를 최대 30행 보여준다. Row-local Feature Preview는 원본 전체 행 수 때문에 거부하지 않으며 Lazy 출력 제한을 적용한다. 전역 정렬·Lag·Rolling은 동기 입력 예산을 확인하고 초과하면 전체 Transform Job을 사용하도록 안내한다. 전체 프로파일·피처 처리·Iceberg 적재는 Job으로 실행한다. Snapshot ID를 기록했더라도 만료 정책으로 사라질 수 있으므로 유효성 확인과 보존 정책이 필요하다.
 
-코드·환경·UX의 기준은 [Architecture](architecture.md), [Experience](experience.md), [Contracts](contracts.md), [Workflows](workflows.md), [Runtimes](runtimes.md)를 따른다. 첫 Isolation Forest 학습 Job·모델 판본 조회를 제공하며 독립 평가·정책 판본·설명 생성·추론·MLflow 추적은 아직 구현하지 않았다.
+코드·환경·UX의 기준은 [Architecture](architecture.md), [Experience](experience.md), [Contracts](contracts.md), [Workflows](workflows.md), [Runtimes](runtimes.md)를 따른다. Isolation Forest 학습·Batch Scoring·정책·평가·설명·Fork를 지원한다. MLflow Tracking은 운영자가 명시적으로 연결하는 선택적 외부 기능이다. 온라인 Serving·프로덕션 배포는 제공하지 않는다.
 
 
 ## 첫 데이터 탐색
@@ -101,7 +101,22 @@ Job 목록은 `GET /api/jobs?limit=20`에서 최근 순으로 조회하며, 응�
 
 API 클라이언트는 `POST /api/ml/train/jobs`로 학습을 제출하고 `GET /api/ml/train/jobs`, `GET /api/ml/train/jobs/{job_id}`, `POST /api/ml/train/jobs/{job_id}/cancel`, `GET /api/ml/models/{revision_id}`로 상태·판본을 조회한다. Token 인증에서는 학습 제출에 `Idempotency-Key`가 필요하며, 각 요청에는 Job/모델 권한 및 소유권 검사가 적용된다. 지원 파라미터와 응답 필드는 `/docs`의 OpenAPI를 따른다.
 
-**판단 근거의 한계:** 현재 표시하는 임계값은 학습 데이터 점수의 참고 분위수이며 최적화한 운영 경보 정책이 아니다. 학습 점수·경보량은 독립 검증 데이터에 대한 Precision·Recall·F1이 아니다. 학습 완료 이후 별도 데이터의 점수화, 정답 기반 평가, 정책 재적용, SHAP/LIME 설명과 MLflow Tracking은 후속 구현 대상이다.
+**판단 근거의 한계:** 학습 데이터의 참고 분위수는 최적 운영 임계값이 아니다. 다른 Dataset으로 실행한 Scoring에서는 모델을 재학습하지 않고 점수를 재사용하며 고정·분위수 정책, 이진 레이블 기반 평가, 개별 Feature 치환 민감도를 독립 결과로 저장한다. 같은 Scoring Dataset으로 고른 임계값에서 계산한 지표를 별도 검증셋의 성능이라고 주장하지 않는다. 설명은 SHAP/LIME이나 인과적 기여도가 아니다.
+
+### 선택적 MLflow Tracking
+
+MLflow 추적을 사용하지 않으면 별도 구성이 필요 없다. 사용할 경우 MLflow Tracking 서버를 별도로 운영하고 **기존 Experiment ID**를 확인한 뒤, 커밋하지 않는 `.env`에 다음을 설정한다.
+
+```bash
+SOS_MLFLOW_TRACKING_URI=https://tracking.example.org
+SOS_MLFLOW_EXPERIMENT_ID=17
+# 인증이 필요한 경우에만 지정한다. 값은 버전 관리하지 않는다.
+SOS_MLFLOW_TOKEN=<외부 서버에서 발급한 토큰>
+```
+
+Worker는 환경 설정에 따라 전송 대기 기록을 Job 완료 트랜잭션 안에 생성하고, 별도로 MLflow REST API에 Run·설정·유한한 지표를 전송한다. 모델 바이너리와 원본 데이터는 전송하지 않는다. 외부 서버 연결에 실패하면 상태는 `Retry`가 되며 SOS Job·Model Revision은 성공으로 유지된다. 재시작 시 미완료 전송은 재조회한다. `GET /api/ml/tracking/jobs/{job_id}`에서 권한이 있는 사용자만 외부 전송 상태를 확인한다. 전송 중 네트워크 응답이 소실되면 Job ID로 외부 Run을 검색하지만, 외부 Search/Create가 원자적이지 않으므로 절대적인 exactly-once를 보장하지 않는다.
+
+HTTP를 통한 전송은 기본적으로 루프백 서버에서만 허용한다. 별도로 격리된 관리형 네트워크에서만 `SOS_MLFLOW_ALLOW_INSECURE_HTTP=true`를 명시적으로 사용할 수 있으며 공개망에서는 HTTPS를 사용한다. 외부 MLflow 주소·토큰은 사용자 API로 입력받지 않고 API 서버에 토큰을 전달하지 않는다.
 
 ## 기존 Iceberg 테이블의 안전한 쓰기 복구
 

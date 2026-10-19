@@ -38,6 +38,10 @@ SOS는 데이터 처리, 학습, 평가, 모델 재사용, 추론, 관측·피�
 수 있다. 외부 실험 추적 서비스에 결과를 전송하더라도 Job/Attempt 종료 상태의
 판정을 외부 Run 상태에 위임하지 않는다.
 
+## 외부 실험 추적의 독립 상태
+
+선택적 MLflow 연결이 설정된 경우 ML Job의 **Succeeded**는 SOS의 모델·점수·정책·평가 결과가 정본에 확정된 뜻이다. 외부 전송은 별도 `Pending → Sending → Succeeded / Retry` 상태를 가지며, 전송 실패가 ML Job 성공을 되돌리지 않는다. Worker 재시작은 중단된 전송을 재시도하고, 외부 Run ID가 확인된 경우 이를 다시 사용한다. 외부 Run 신규 생성과 검색 사이에는 완전한 exactly-once 보장이 없음을 구분한다.
+
 ## 연구에서 서비스로의 연결
 
 ![원본 데이터에서 모델 배포까지 이어질 수 있는 대표적인 ML 자산 관계](references/dataset-to-deployment-lifecycle.png)
