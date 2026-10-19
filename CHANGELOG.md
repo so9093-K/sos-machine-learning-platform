@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Policy·Evaluation·Explanation Job의 취소와 실패 상태 안내, Scoring 이전 이력 탐색을 연결하고, 학습 데이터 재점수화 결과를 독립 검증 성능으로 표시하지 않도록 보완했습니다.
+
 - 선택적 MLflow REST Tracking을 Worker 전용 Outbox와 별도 상태로 추가하고, 실패 재시도·재시작 복구·외부 Run 연결 상태를 표시한다. 같은 모델 설정으로 Fork·Reproduce 하는 사용자 동작을 제공한다.
 
 - Dataset 기반 Isolation Forest 비동기 학습과 불변 모델 판본, 독립 Scoring·Decision Policy·Evaluation·Explanation 결과 및 이력 조회, 학습 설정 비교를 추가했습니다. 학습 점수와 독립 평가 결과는 구별하며, 평가 지표의 데이터 선택 한계를 표시합니다.

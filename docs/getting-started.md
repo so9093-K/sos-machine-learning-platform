@@ -101,6 +101,8 @@ Job 목록은 `GET /api/jobs?limit=20`에서 최근 순으로 조회하며, 응�
 
 API 클라이언트는 `POST /api/ml/train/jobs`로 학습을 제출하고 `GET /api/ml/train/jobs`, `GET /api/ml/train/jobs/{job_id}`, `POST /api/ml/train/jobs/{job_id}/cancel`, `GET /api/ml/models/{revision_id}`로 상태·판본을 조회한다. Token 인증에서는 학습 제출에 `Idempotency-Key`가 필요하며, 각 요청에는 Job/모델 권한 및 소유권 검사가 적용된다. 지원 파라미터와 응답 필드는 `/docs`의 OpenAPI를 따른다.
 
+Policy·Evaluation·Explanation은 독립 Job 이력을 보존하고 취소 권한이 있는 사용자는 진행 중인 작업의 취소를 요청할 수 있다. 취소 요청은 즉시 완료를 뜻하지 않으며 Job에서 최종 상태를 확인한다. Scoring 이력은 이전 페이지를 이어서 조회할 수 있다.
+
 **판단 근거의 한계:** 학습 데이터의 참고 분위수는 최적 운영 임계값이 아니다. 다른 Dataset으로 실행한 Scoring에서는 모델을 재학습하지 않고 점수를 재사용하며 고정·분위수 정책, 이진 레이블 기반 평가, 개별 Feature 치환 민감도를 독립 결과로 저장한다. 같은 Scoring Dataset으로 고른 임계값에서 계산한 지표를 별도 검증셋의 성능이라고 주장하지 않는다. 설명은 SHAP/LIME이나 인과적 기여도가 아니다.
 
 ### 선택적 MLflow Tracking

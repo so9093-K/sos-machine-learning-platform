@@ -186,8 +186,10 @@ def test_ml_result_cancel_checks_actor_permission_and_ownership(workspace):
         owner_actor="alice",
         actor_type="human",
     )
-    tokens = {name: ("ml-result-auth-" + name).ljust(45, "-")
-              for name in ("alice", "bob", "viewer")}
+    tokens = {
+        name: ("ml-result-auth-" + name).ljust(45, "-")
+        for name in ("alice", "bob", "viewer")
+    }
     actors = {
         "alice": Actor("alice", "human", frozenset({"researcher"})),
         "bob": Actor("bob", "human", frozenset({"researcher"})),

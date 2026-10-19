@@ -1394,6 +1394,7 @@ test("ML Workbench scores and evaluates independently with explanation evidence"
   const scoredId = await submittedJob(page, "/api/ml/scoring/jobs", () =>
     page.getByRole("button", { name: "Scoring Job 제출" }).click());
   await expect(page.getByText(/Scoring Result ·/)).toBeVisible({ timeout: 45000 });
+  await expect(page.getByText(/학습에 사용한 동일 Dataset 판본을 점수화했습니다/)).toBeVisible();
   const decision = page.getByRole("region", { name: "임계값 정책과 평가" });
   const policyId = await submittedJob(page, "/api/ml/policies/jobs", () =>
     decision.getByRole("button", { name: "새 정책 판본 생성" }).click());
