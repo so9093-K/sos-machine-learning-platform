@@ -3,7 +3,6 @@
 import hashlib
 import json
 
-import pytest
 from fastapi.testclient import TestClient
 
 from sos_platform.api import create_app
@@ -12,7 +11,6 @@ from sos_platform.worker import run_once
 from .support import upload
 
 
-@pytest.mark.pr
 def test_scoped_snapshot_listing_and_connection(workspace, monkeypatch):
     client, store = workspace
     source = upload(client)

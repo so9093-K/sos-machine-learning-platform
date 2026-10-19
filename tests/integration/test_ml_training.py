@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from uuid import uuid4
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -29,7 +28,6 @@ def _submit(client, dataset: dict, *, key: str | None = None):
     )
 
 
-@pytest.mark.pr
 def test_model_revision_publication_with_job_and_object_intent(workspace):
     client, store = workspace
     dataset = upload(client)
@@ -126,7 +124,6 @@ def test_training_cancel_before_claim_and_invalid_feature(workspace):
     assert cancelled.json()["status"] == "Cancelled"
 
 
-@pytest.mark.pr
 def test_model_publish_failure_does_not_commit_revision(workspace, monkeypatch):
     client, store = workspace
     dataset = upload(client)
@@ -311,7 +308,6 @@ def test_training_model_db_failure_keeps_unpublished_object(workspace, monkeypat
     )
 
 
-@pytest.mark.pr
 def test_training_fork_preserves_input_revision_and_provenance(workspace):
     client, store = workspace
     dataset = upload(client)

@@ -14,7 +14,6 @@ from sos_platform.store import Store
 from .support import upload
 
 
-@pytest.mark.pr
 def test_identity_roles_ownership_and_audit(workspace, monkeypatch):
     """Bearer 신원·기본 거부·리소스 소유권·변경 감사가 API에서 강제된다."""
     client, store = workspace
@@ -262,7 +261,6 @@ def test_slow_denied_audit_does_not_block_other_requests(workspace, monkeypatch)
         assert denied.result(timeout=20).status_code == 403
 
 
-@pytest.mark.pr
 def test_denied_audit_failure_does_not_grant_access(workspace, monkeypatch):
     """거부 요청의 감사 DB 기록 실패가 접근 허용으로 바뀌지 않는다."""
     _, store = workspace

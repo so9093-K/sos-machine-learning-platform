@@ -54,7 +54,6 @@ def test_worker_staging_budget_rejects_oversize_attempt_and_keeps_commit_uncerta
     assert not list((store.home / "cache" / "iceberg-staging").glob("attempt-*"))
 
 
-@pytest.mark.pr
 def test_required_cgroup_rejects_job_before_claim_when_not_delegated(workspace, monkeypatch):
     """물리 격리가 필수인데 cgroup 위임이 없으면 실행을 받아서는 안 된다."""
     import pytest

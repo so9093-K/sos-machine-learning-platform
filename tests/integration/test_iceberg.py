@@ -332,7 +332,6 @@ def test_two_independent_writers_race_on_existing_iceberg_table(workspace, monke
     assert not [row for row in store.dataset_page(limit=101) if row["kind"] == "iceberg"]
 
 
-@pytest.mark.pr
 def test_iceberg_commit_response_loss_preserves_snapshot_without_automatic_retry(
     workspace, monkeypatch, tmp_path
 ):

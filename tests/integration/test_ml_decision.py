@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from uuid import uuid4
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -132,7 +131,6 @@ def test_validation_rejects_wrong_policy_combination(workspace):
         assert response.status_code == 422, (spec, response.text)
 
 
-@pytest.mark.pr
 def test_ml_result_job_cancellation_keeps_results_unpublished(workspace):
     """정책·평가·설명 작업별로 일반 Job 경계를 유지하며 취소 상태를 확정한다."""
     client, store = workspace
@@ -181,7 +179,6 @@ def test_ml_result_job_cancellation_keeps_results_unpublished(workspace):
             assert db.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one() == 0
 
 
-@pytest.mark.pr
 def test_ml_result_cancel_checks_actor_permission_and_ownership(workspace):
     """소유자가 아닌 연구자에게는 작업 존재를 숨기고 Viewer는 기능 자체를 거부한다."""
     client, store = workspace

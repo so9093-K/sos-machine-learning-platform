@@ -493,7 +493,6 @@ def test_worker_claim_checks_lock_inside_mutation_transaction(workspace, monkeyp
         store.release_worker()
 
 
-@pytest.mark.pr
 def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
     """실제 DB 백엔드를 종료해도 기존 Worker가 Job 완료를 확정하지 않는다."""
     from sqlalchemy import text

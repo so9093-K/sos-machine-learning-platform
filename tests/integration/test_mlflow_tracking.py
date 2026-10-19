@@ -2,7 +2,6 @@
 
 from uuid import uuid4
 
-import pytest
 from sqlalchemy import text
 
 from sos_platform.mlflow_config import MLflowSettings
@@ -33,7 +32,6 @@ class StubMLflow(MLflowClient):
         raise AssertionError(endpoint)
 
 
-@pytest.mark.pr
 def test_tracking_export_failure_retries_without_mutating_successful_job(workspace, monkeypatch):
     client, store = workspace
     monkeypatch.setenv("SOS_MLFLOW_TRACKING_URI", "https://tracking.example.org")

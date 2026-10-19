@@ -71,7 +71,7 @@ test("TSV 업로드 실패 후 파일을 재선택하지 않고 설정을 수정
   await expect(heading).toHaveCount(0);
 });
 
-test("CSV upload → EDA → feature preview → worker → reusable dataset @pr", async ({ page }) => {
+test("CSV upload → EDA → feature preview → worker → reusable dataset", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
     name: "sensors.csv",
@@ -265,7 +265,7 @@ test("file size is explained and rejected before upload", async ({ page }) => {
 });
 
 
-test("201 registration remains successful when the subsequent list refresh fails @pr", async ({ page }) => {
+test("201 registration remains successful when the subsequent list refresh fails", async ({ page }) => {
   let failRefresh = false;
   let failedRefreshes = 0;
   await page.route("**/api/datasets?*", async route => {
@@ -937,7 +937,7 @@ test("Registering another Dataset inside Preparation does not force Explorer nav
   await expect(page.getByRole("tablist", { name: "데이터 작업 영역" })).toHaveCount(0);
 });
 
-test("ML Workbench submits a training Job from selected features @pr", async ({ page }) => {
+test("ML Workbench submits a training Job from selected features", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
     name: "ml-ui-smoke.csv", mimeType: "text/csv",

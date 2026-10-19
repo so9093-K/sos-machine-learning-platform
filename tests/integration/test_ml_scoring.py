@@ -3,7 +3,6 @@
 from uuid import uuid4
 
 import polars as pl
-import pytest
 from sqlalchemy import text
 
 from sos_platform.object_store import ObjectStore
@@ -96,7 +95,6 @@ def test_scoring_result_is_independent_from_training_and_source_dataset(workspac
         )
 
 
-@pytest.mark.pr
 def test_scoring_invalid_feature_schema_does_not_publish(workspace):
     client, store = workspace
     training = upload_sensor_dataset(client, b"temperature\n1.0\n2.0\n3.0\n")

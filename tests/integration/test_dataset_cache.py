@@ -12,7 +12,6 @@ from sos_platform.errors import PlatformError
 from sos_platform.object_store import ObjectStore
 
 
-@pytest.mark.pr
 def test_cache_quota_preserves_active_reader_and_source(workspace):
     _client, store = workspace
     first_data = b"t,value\n1,2\n3,4\n"

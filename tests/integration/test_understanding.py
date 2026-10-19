@@ -1,6 +1,5 @@
 """처음 보는 Dataset의 Profile·추천·보존·재사용을 검증한다."""
 
-import pytest
 
 from sos_platform.understanding import build_understanding
 from sos_platform.worker import run_once
@@ -80,7 +79,6 @@ def test_dataset_understanding_job_version_and_executable_suggestions(workspace)
     assert recent["job_id"] == rerun.json()["id"]
 
 
-@pytest.mark.pr
 def test_understanding_response_never_mixes_success_with_precommit_profile(workspace, monkeypatch):
     """Worker 완료가 Job 조회 직전에 발생해도 Profile 누락 응답을 만들지 않는다."""
     client, store = workspace

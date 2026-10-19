@@ -85,7 +85,6 @@ def test_generic_and_exploration_jobs_share_idempotency_namespace(workspace):
         assert db.execute(text("SELECT COUNT(*) FROM job_submissions")).scalar_one() == 2
 
 
-@pytest.mark.pr
 def test_postgres_serializes_concurrent_submissions(workspace):
     client, store = workspace
     dataset = upload(client)

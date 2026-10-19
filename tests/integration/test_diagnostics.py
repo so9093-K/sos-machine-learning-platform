@@ -36,7 +36,6 @@ def test_created_job_correlates_to_request_and_audit(workspace):
     )
 
 
-@pytest.mark.pr
 def test_unexpected_failure_does_not_expose_exception_message(workspace, monkeypatch):
     client, store = workspace
     sentinel = "secret-password-exception-do-not-leak"

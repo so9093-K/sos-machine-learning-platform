@@ -2,7 +2,6 @@
 
 from uuid import uuid4
 
-import pytest
 from sqlalchemy import text
 
 from sos_platform.object_store import ObjectStore
@@ -47,7 +46,6 @@ def test_transform_publish_failure_preserves_unreferenced_attempt_object(workspa
     )
 
 
-@pytest.mark.pr
 def test_lost_s3_upload_response_preserves_object(workspace, monkeypatch):
     """S3 바이트 쓰기 성공 후 응답만 유실되어도 결과를 성공 게시하지 않는다."""
     client, store = workspace

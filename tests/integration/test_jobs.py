@@ -153,7 +153,6 @@ def test_job_finish_rejects_nonterminal_status_without_mutation(workspace, inval
     assert final["attempts"][0]["status"] == "Failed"
 
 
-@pytest.mark.pr
 def test_stale_attempt_cannot_complete_or_publish_new_attempt(workspace):
     """재Claim 이전 실행의 늦은 완료는 새 Attempt와 Dataset에 영향을 주지 않는다."""
     client, store = workspace
@@ -192,7 +191,6 @@ def test_stale_attempt_cannot_complete_or_publish_new_attempt(workspace):
     assert store.finish(first["id"], "Failed", attempt_id=current_id) == "Failed"
 
 
-@pytest.mark.pr
 def test_cancel_running_execution_and_do_not_publish(workspace):
     client, store = workspace
     dataset = upload(client)
