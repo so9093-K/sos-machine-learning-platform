@@ -57,6 +57,7 @@ def test_scoring_result_is_independent_from_training_and_source_dataset(workspac
     assert again.json()["id"] == first.json()["id"]
     job_id = first.json()["id"]
     assert client.get(f"/api/jobs/{job_id}").status_code == 404
+    assert client.post(f"/api/jobs/{job_id}/cancel").status_code == 404
     assert run_once(store)
     job = client.get(f"/api/ml/scoring/jobs/{job_id}").json()
     assert job["status"] == "Succeeded", job

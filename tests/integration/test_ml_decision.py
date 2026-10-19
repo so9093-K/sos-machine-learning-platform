@@ -71,6 +71,7 @@ def test_decision_policy_revisions_and_evaluation_reuse_same_scoring_artifact(wo
             },
         )
         assert sent.status_code == 202, sent.text
+        assert client.post(f"/api/jobs/{sent.json()['id']}/cancel").status_code == 404
         assert run_once(store)
         job = client.get(f"/api/ml/policies/jobs/{sent.json()['id']}").json()
         assert job["status"] == "Succeeded", job
@@ -91,6 +92,7 @@ def test_decision_policy_revisions_and_evaluation_reuse_same_scoring_artifact(wo
         },
     )
     assert result.status_code == 202, result.text
+    assert client.post(f"/api/jobs/{result.json()['id']}/cancel").status_code == 404
     assert run_once(store)
     job = client.get(f"/api/ml/evaluations/jobs/{result.json()['id']}").json()
     assert job["status"] == "Succeeded", job

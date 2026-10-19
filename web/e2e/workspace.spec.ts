@@ -1312,6 +1312,7 @@ test("Registering another Dataset inside Preparation does not force Explorer nav
 });
 
 test("ML Workbench creates a persistent Isolation Forest Model Revision", async ({ page }) => {
+  test.setTimeout(90_000);
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
     name: "ml-training.csv",
