@@ -1,9 +1,13 @@
 """실제 S3 Scoring Result에 대한 독립 정책·평가 Job 및 판본."""
 
+import hashlib
 from uuid import uuid4
 
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from sos_platform.api import create_app
+from sos_platform.security import Actor, IdentitySettings
 from sos_platform.worker import run_once
 
 
@@ -123,3 +127,84 @@ def test_validation_rejects_wrong_policy_combination(workspace):
             headers={"Idempotency-Key": str(uuid4())},
         )
         assert response.status_code == 422, (spec, response.text)
+
+
+def test_ml_result_job_cancellation_keeps_results_unpublished(workspace):
+    """정책·평가·설명 작업별로 일반 Job 경계를 유지하며 취소 상태를 확정한다."""
+    client, store = workspace
+    data = _upload(client, "cancel-ml.csv", b"temperature\n1.0\n2.0\n3.0\n4.0\n")
+    trained = _submit(
+        client, "/api/ml/train/jobs",
+        {"dataset_id": data["id"], "features": ["temperature"]},
+    )
+    assert trained.status_code == 202
+    assert run_once(store)
+    model_id = client.get(f"/api/ml/train/jobs/{trained.json()['id']}").json()["result"][
+        "model_revision_id"
+    ]
+    scored = _submit(
+        client, "/api/ml/scoring/jobs",
+        {"dataset_id": data["id"], "model_revision_id": model_id},
+    )
+    assert scored.status_code == 202
+    assert run_once(store)
+    scoring_id = client.get(f"/api/ml/scoring/jobs/{scored.json()['id']}").json()["result"][
+        "scoring_result_id"
+    ]
+    cases = [
+        ("policies", {"scoring_result_id": scoring_id, "mode": "fixed", "threshold": 0.5}),
+        ("evaluations", {"scoring_result_id": scoring_id}),
+        ("explanations", {"scoring_result_id": scoring_id, "row_index": 0}),
+    ]
+    for kind, body in cases:
+        queued = _submit(client, f"/api/ml/{kind}/jobs", body)
+        assert queued.status_code == 202, queued.text
+        job_id = queued.json()["id"]
+        assert client.post(f"/api/jobs/{job_id}/cancel").status_code == 404
+        other = next(name for name, _ in cases if name != kind)
+        assert client.post(f"/api/ml/{other}/jobs/{job_id}/cancel").status_code == 404
+        canceled = client.post(f"/api/ml/{kind}/jobs/{job_id}/cancel")
+        assert canceled.status_code == 200, canceled.text
+        assert canceled.json()["status"] == "Cancelled"
+        assert canceled.json()["result"] is None
+        assert client.get(f"/api/ml/{kind}/jobs/{job_id}").json()["status"] == "Cancelled"
+        assert client.post(f"/api/ml/{kind}/jobs/{job_id}/cancel").status_code == 200
+    assert run_once(store) is False
+    with store.connection() as db:
+        for table in ("decision_policy_revisions", "evaluation_revisions", "explanation_results"):
+            assert db.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one() == 0
+
+
+def test_ml_result_cancel_checks_actor_permission_and_ownership(workspace):
+    """소유자가 아닌 연구자에게는 작업 존재를 숨기고 Viewer는 기능 자체를 거부한다."""
+    client, store = workspace
+    dataset = _upload(client, "owner.csv", b"temperature\n1.0\n2.0\n")
+    queued = store.create_job(
+        kind="ml_policy",
+        dataset_id=dataset["id"],
+        spec={"scoring_result_id": "not-executed", "mode": "fixed", "threshold": 0.5},
+        owner_actor="alice",
+        actor_type="human",
+    )
+    tokens = {name: ("ml-result-auth-" + name).ljust(45, "-")
+              for name in ("alice", "bob", "viewer")}
+    actors = {
+        "alice": Actor("alice", "human", frozenset({"researcher"})),
+        "bob": Actor("bob", "human", frozenset({"researcher"})),
+        "viewer": Actor("viewer", "human", frozenset({"viewer"})),
+    }
+    subjects = {
+        hashlib.sha256(value.encode()).hexdigest(): actors[name]
+        for name, value in tokens.items()
+    }
+    with TestClient(create_app(store.home, identity=IdentitySettings("token", subjects))) as secure:
+        path = f"/api/ml/policies/jobs/{queued['id']}/cancel"
+
+        def auth(name: str) -> dict[str, str]:
+            return {"Authorization": "Bearer " + tokens[name]}
+
+        assert secure.post(path, headers=auth("viewer")).status_code == 403
+        assert secure.post(path, headers=auth("bob")).status_code == 404
+        canceled = secure.post(path, headers=auth("alice"))
+        assert canceled.status_code == 200, canceled.text
+        assert canceled.json()["status"] == "Cancelled"

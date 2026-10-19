@@ -35,6 +35,8 @@ def _revision():
         "features": ["temperature"],
         "runtime": {"feature_dtypes": ["Float64"]},
         "owner_actor": "alice",
+        "dataset_id": "training-v1",
+        "dataset_version": "v1",
     }
 
 
@@ -63,7 +65,7 @@ def test_scoring_creates_rowwise_immutable_artifact_and_rank_metrics(tmp_path, m
     destination = tmp_path / "scores.parquet"
     metadata = run_dataset_scoring(
         StubStore(_revision()),
-        {"version": "v1", "frame": frame},
+        {"id": "training-v1", "version": "v1", "frame": frame},
         _spec("v1", "flag"),
         destination,
     )
@@ -77,6 +79,7 @@ def test_scoring_creates_rowwise_immutable_artifact_and_rank_metrics(tmp_path, m
         trained.score_anomalies(frame.select("temperature").to_numpy())
     )
     assert metadata["score_summary"]["evaluation_kind"] == "unlabeled"
+    assert metadata["score_summary"]["training_data_reused"] is True
     assert metadata["ranking_metrics"]["positive_count"] == 1
     assert metadata["ranking_metrics"]["average_precision"] is not None
 

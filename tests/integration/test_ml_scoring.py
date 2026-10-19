@@ -68,7 +68,8 @@ def test_scoring_result_is_independent_from_training_and_source_dataset(workspac
     assert result["model_revision_id"] == model_id
     assert result["dataset_id"] == scoring["id"]
     assert result["dataset_version"] == scoring["version"]
-    assert result["score_summary"]["scope"] == "independent_scoring_dataset"
+    assert result["score_summary"]["scope"] == "scoring_dataset"
+    assert result["score_summary"]["training_data_reused"] is False
     assert result["ranking_metrics"]["positive_count"] == 1
     assert result["ranking_metrics"]["average_precision"] is not None
     storage = ObjectStore()
