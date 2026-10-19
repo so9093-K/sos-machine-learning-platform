@@ -6,10 +6,11 @@ const operator = process.env.SOS_E2E_OPERATOR_TOKEN;
 const administrator = process.env.SOS_E2E_ADMIN_TOKEN;
 
 test.describe("token identity and resource permissions", () => {
-  test.skip(
-    !viewer || !researcher || !operator || !administrator,
-    "Requires isolated CI token-mode service",
-  );
+  test.beforeAll(() => {
+    if (!viewer || !researcher || !operator || !administrator) {
+      throw new Error("격리 E2E 권한 검증에 필요한 테스트 전용 역할 토큰이 없습니다.");
+    }
+  });
 
   async function signIn(page: import("@playwright/test").Page, token: string) {
     await page.goto("/");
