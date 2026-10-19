@@ -214,7 +214,6 @@ def test_ml_result_cancel_checks_actor_permission_and_ownership(workspace):
         assert canceled.json()["status"] == "Cancelled"
 
 
-
 def test_running_ml_result_cancel_wins_before_revision_publication(workspace, monkeypatch):
     """계산 완료 뒤 취소 경합에서도 결과 판본을 확정하지 않는다."""
     client, store = workspace
@@ -252,10 +251,12 @@ def test_running_ml_result_cancel_wins_before_revision_publication(workspace, mo
         reached = Event()
         release = Event()
 
-        def pause_finalization(identifier, status, **kwargs):
-            if identifier == job_id and status == "Succeeded":
-                reached.set()
-                assert release.wait(timeout=30), "Timed out waiting for cancellation"
+        def pause_finalization(
+            identifier, status, *, _job_id=job_id, _reached=reached, _release=release, **kwargs
+        ):
+            if identifier == _job_id and status == "Succeeded":
+                _reached.set()
+                assert _release.wait(timeout=30), "Timed out waiting for cancellation"
             return original_finish(identifier, status, **kwargs)
 
         with monkeypatch.context() as patch:
