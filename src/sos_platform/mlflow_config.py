@@ -12,7 +12,7 @@ class MLflowSettings:
     endpoint: str
     experiment_id: str
     token: str | None
-    timeout_seconds: int = 5
+    timeout_seconds: int = 2
 
     @classmethod
     def from_env(cls) -> "MLflowSettings | None":
@@ -28,7 +28,8 @@ class MLflowSettings:
             or split.username is not None
             or split.password is not None
             or split.path not in ("", "/")
-            or split.query or split.fragment
+            or split.query
+            or split.fragment
             or (split.scheme == "http" and not (local or allow_http))
         ):
             raise RuntimeConfigurationError("Invalid MLflow Tracking endpoint")

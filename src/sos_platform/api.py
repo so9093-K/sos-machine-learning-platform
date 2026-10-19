@@ -967,7 +967,14 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobOut)
     def cancel(job_id: str, actor: Actor = CANCEL_JOB_DEP):
         item = existing_job(job_id, actor)
-        if item["kind"] in ("exploration", "ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain"):
+        if item["kind"] in (
+            "exploration",
+            "ml_train",
+            "ml_score",
+            "ml_policy",
+            "ml_evaluate",
+            "ml_explain",
+        ):
             raise HTTPException(status_code=404, detail="Job not found")
         try:
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)

@@ -18,7 +18,9 @@ def _job():
         "spec": {"params": {"n_estimators": 20, "bootstrap": False}},
         "result": {
             "training_score_summary": {
-                "score_mean": 0.35, "precision": None, "invalid": float("nan"),
+                "score_mean": 0.35,
+                "precision": None,
+                "invalid": float("nan"),
                 "score_count": 5,
             },
         },
@@ -69,9 +71,10 @@ def test_create_timeout_retry_search_recovers_same_run():
         send_to_mlflow(client, _job(), known_run_id=None, remember_run=saved.append)
     assert saved == ["known-mlflow-run"]
     client.fail_log = False
-    assert send_to_mlflow(
-        client, _job(), known_run_id=saved[0], remember_run=saved.append
-    ) == "known-mlflow-run"
+    assert (
+        send_to_mlflow(client, _job(), known_run_id=saved[0], remember_run=saved.append)
+        == "known-mlflow-run"
+    )
     assert [name for name, _ in client.calls].count("runs/create") == 1
 
 
@@ -79,9 +82,10 @@ def test_unknown_run_recovered_by_job_tag_without_creating_duplicate():
     client = FakeClient()
     client.found = [{"info": {"run_id": "from-search"}}]
     remembered = []
-    assert send_to_mlflow(
-        client, _job(), known_run_id=None, remember_run=remembered.append
-    ) == "from-search"
+    assert (
+        send_to_mlflow(client, _job(), known_run_id=None, remember_run=remembered.append)
+        == "from-search"
+    )
     assert remembered == ["from-search"]
     assert "runs/create" not in [name for name, _ in client.calls]
     client.found.append({"info": {"run_id": "duplicate"}})

@@ -38,7 +38,9 @@ class MLflowClient:
             headers["Authorization"] = f"Bearer {self.settings.token}"
         req = Request(
             self.settings.endpoint + "/api/2.0/mlflow/" + endpoint,
-            data=data, headers=headers, method="POST",
+            data=data,
+            headers=headers,
+            method="POST",
         )
         try:
             with self._opener.open(req, timeout=self.settings.timeout_seconds) as response:
@@ -93,11 +95,14 @@ def send_to_mlflow(
     run_id = known_run_id
     if run_id is None:
         # 입력 Job ID는 SOS가 발급한 UUID이며 SQL/검색 필터의 사용자 문자열이 아니다.
-        found = client.post("runs/search", {
-            "experiment_ids": [experiment],
-            "filter": f"tags.`sos.job_id` = '{job['id']}'",
-            "max_results": 2,
-        }).get("runs", [])
+        found = client.post(
+            "runs/search",
+            {
+                "experiment_ids": [experiment],
+                "filter": f"tags.`sos.job_id` = '{job['id']}'",
+                "max_results": 2,
+            },
+        ).get("runs", [])
         if not isinstance(found, list):
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
         if len(found) > 1:
@@ -105,15 +110,18 @@ def send_to_mlflow(
         if found:
             run_id = found[0].get("info", {}).get("run_id")
         else:
-            created = client.post("runs/create", {
-                "experiment_id": experiment,
-                "run_name": f"sos-{job['kind']}-{job['id'][:8]}",
-                "tags": [
-                    {"key": "sos.job_id", "value": job["id"]},
-                    {"key": "sos.job_kind", "value": job["kind"]},
-                    {"key": "sos.dataset_id", "value": job["dataset_id"]},
-                ],
-            })
+            created = client.post(
+                "runs/create",
+                {
+                    "experiment_id": experiment,
+                    "run_name": f"sos-{job['kind']}-{job['id'][:8]}",
+                    "tags": [
+                        {"key": "sos.job_id", "value": job["id"]},
+                        {"key": "sos.job_kind", "value": job["kind"]},
+                        {"key": "sos.dataset_id", "value": job["dataset_id"]},
+                    ],
+                },
+            )
             run_id = created.get("run", {}).get("info", {}).get("run_id")
         if not isinstance(run_id, str) or not run_id or len(run_id) > 128:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
@@ -123,12 +131,15 @@ def send_to_mlflow(
         for key, value in sorted(job["spec"].get("params", {}).items()):
             if type(value) in (str, int, float, bool):
                 params.append({"key": f"sos.{key}", "value": str(value)})
-    client.post("runs/log-batch", {
-        "run_id": run_id,
-        "metrics": _numeric_metrics(job),
-        "params": params,
-        "tags": [{"key": "sos.source", "value": "sos-platform"}],
-    })
+    client.post(
+        "runs/log-batch",
+        {
+            "run_id": run_id,
+            "metrics": _numeric_metrics(job),
+            "params": params,
+            "tags": [{"key": "sos.source", "value": "sos-platform"}],
+        },
+    )
     client.post("runs/update", {"run_id": run_id, "status": "FINISHED"})
     return run_id
 
@@ -144,7 +155,8 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
         if job is None:
             raise MLflowDeliveryError("SOS-MLFLOW-SOURCE-MISSING")
         send_to_mlflow(
-            client, job,
+            client,
+            job,
             known_run_id=export["run_id"],
             remember_run=lambda value: store.save_tracking_run_id(job_id, value),
         )
