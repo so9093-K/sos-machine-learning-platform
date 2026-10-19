@@ -211,7 +211,7 @@ class JobStoreMixin:
         if exclude_kind is not None:
             filters.append("kind!=:exclude_kind")
         if exclude_ml_train:
-            filters.append("kind NOT IN ('ml_train','ml_score','ml_policy','ml_evaluate')")
+            filters.append("kind NOT IN ('ml_train','ml_score','ml_policy','ml_evaluate','ml_explain')")
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(
             f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
@@ -346,6 +346,7 @@ class JobStoreMixin:
         scoring_publish: dict | None = None,
         policy_publish: dict | None = None,
         evaluation_publish: dict | None = None,
+        explanation_publish: dict | None = None,
         error_code: str | None = None,
         failure_stage: str | None = None,
         failure_category: str | None = None,
@@ -545,6 +546,32 @@ class JobStoreMixin:
                     item,
                 )
                 result = {**(result or {}), "evaluation_revision_id": item["id"]}
+            if status == "Succeeded" and explanation_publish is not None:
+                if row["kind"] != "ml_explain":
+                    raise ValueError("Invalid explanation publication request")
+                item = {
+                    "id": str(uuid4()),
+                    "job_id": job_id,
+                    "attempt_id": attempt_id,
+                    "scoring_result_id": explanation_publish["scoring_result_id"],
+                    "model_revision_id": explanation_publish["model_revision_id"],
+                    "row_index": explanation_publish["row_index"],
+                    "method": explanation_publish["method"],
+                    "output": json.dumps(explanation_publish, allow_nan=False),
+                    "owner_actor": row["owner_actor"],
+                    "created_at": now(),
+                }
+                db.execute(
+                    text(
+                        "INSERT INTO explanation_results "
+                        "(id,job_id,attempt_id,scoring_result_id,model_revision_id,"
+                        "row_index,method,output,owner_actor,created_at) "
+                        "VALUES (:id,:job_id,:attempt_id,:scoring_result_id,"
+                        ":model_revision_id,:row_index,:method,:output,:owner_actor,:created_at)"
+                    ),
+                    item,
+                )
+                result = {**(result or {}), "explanation_result_id": item["id"]}
             if (
                 status == "Succeeded"
                 and row["kind"] == "profile"
@@ -624,6 +651,17 @@ class JobStoreMixin:
                     action="policy.publish",
                     resource_type="decision_policy",
                     resource_id=result["policy_revision_id"],
+                    reason=f"job={job_id};{reason}",
+                    request_id=row["request_id"],
+                )
+            if status == "Succeeded" and explanation_publish is not None:
+                self._audit(
+                    db,
+                    actor_id="sos-worker",
+                    actor_type="service",
+                    action="explanation.publish",
+                    resource_type="explanation",
+                    resource_id=result["explanation_result_id"],
                     reason=f"job={job_id};{reason}",
                     request_id=row["request_id"],
                 )

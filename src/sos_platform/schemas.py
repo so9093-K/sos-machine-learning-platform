@@ -217,6 +217,23 @@ class MLPolicyRequest(BaseModel):
         return self
 
 
+class MLExplanationRequest(BaseModel):
+    scoring_result_id: str
+    row_index: int = Field(strict=True, ge=0, le=49_999)
+
+
+class ExplanationResultOut(BaseModel):
+    id: str
+    job_id: str
+    attempt_id: str
+    scoring_result_id: str
+    model_revision_id: str
+    row_index: int
+    method: str
+    output: dict[str, object]
+    created_at: str
+
+
 class MLEvaluationRequest(BaseModel):
     scoring_result_id: str
     policy_revision_id: str | None = None
@@ -554,6 +571,10 @@ class JobOut(BaseModel):
 
 class MLPolicyJobOut(JobOut):
     kind: Literal["ml_policy"]
+
+
+class MLExplanationJobOut(JobOut):
+    kind: Literal["ml_explain"]
 
 
 class MLEvaluationJobOut(JobOut):

@@ -61,6 +61,9 @@ from .schemas import (
     JobPageOut,
     DecisionPolicyRevisionOut,
     EvaluationRevisionOut,
+    ExplanationResultOut,
+    MLExplanationJobOut,
+    MLExplanationRequest,
     MLEvaluationJobOut,
     MLEvaluationJobPageOut,
     MLEvaluationRequest,
@@ -805,6 +808,51 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         check_ownership(actor, item["owner_actor"], "decision_policy", revision_id)
         return item
 
+    @app.post(
+        "/api/ml/explanations/jobs", status_code=202, response_model=MLExplanationJobOut
+    )
+    def create_explanation_job(
+        body: MLExplanationRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None,
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        score = required_scoring_result(body.scoring_result_id, actor)
+        if body.row_index >= score["row_count"]:
+            raise HTTPException(status_code=422, detail="Explanation row_index out of bounds")
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_explain",
+            dataset_id=score["dataset_id"],
+            spec={
+                "scoring_result_id": score["id"],
+                "source_owner_actor": score["owner_actor"],
+                "row_index": body.row_index,
+            },
+            request_id=request.state.request_id,
+            owner_actor=actor.id,
+            actor_type=actor.kind,
+            idempotency_key=idempotency_key,
+        )
+
+    @app.get("/api/ml/explanations/jobs/{job_id}", response_model=MLExplanationJobOut)
+    def get_explanation_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        return ml_special_job(job_id, actor, "ml_explain")
+
+    @app.get("/api/ml/explanations/{revision_id}", response_model=ExplanationResultOut)
+    def get_explanation_result(revision_id: str, actor: Actor = READ_JOB_DEP):
+        item = store.get_explanation_result(revision_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Explanation not found")
+        check_ownership(actor, item["owner_actor"], "explanation", revision_id)
+        return item
+
     @app.get("/api/ml/evaluations/{revision_id}", response_model=EvaluationRevisionOut)
     def get_evaluation_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
         item = store.get_evaluation_revision(revision_id)
@@ -900,7 +948,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     @app.get("/api/jobs/{job_id}", response_model=JobOut)
     def get_job(job_id: str, actor: Actor = READ_JOB_DEP):
         item = existing_job(job_id, actor)
-        if item["kind"] in ("exploration", "ml_train", "ml_score", "ml_policy", "ml_evaluate"):
+        if item["kind"] in ("exploration", "ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain"):
             raise HTTPException(status_code=404, detail="Job not found")
         return item
 

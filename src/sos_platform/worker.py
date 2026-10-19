@@ -33,6 +33,7 @@ from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_r
 from .ml_training import train_dataset
 from .ml_scoring import run_dataset_scoring
 from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
+from .ml_explanation import explain_scored_row
 from .object_store import ObjectStore
 from .observability import emit
 from .processing import transform
@@ -115,6 +116,9 @@ def _perform(
         elif job["kind"] == "ml_evaluate":
             stage = "processing"
             result = evaluate_scoring_policy(store, job["spec"])
+        elif job["kind"] == "ml_explain":
+            stage = "processing"
+            result = explain_scored_row(store, job["spec"])
         elif job["kind"] == "iceberg_import":
             stage = "iceberg_prepare"
             result = {
@@ -133,7 +137,7 @@ def _perform(
     except Exception as exc:
         code = (
             "SOS-ML-INPUT-INVALID"
-            if job["kind"] in ("ml_train", "ml_score", "ml_policy", "ml_evaluate") and isinstance(exc, ValueError)
+            if job["kind"] in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain") and isinstance(exc, ValueError)
             else "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
             else exc.code
@@ -377,6 +381,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             scoring_publish=scoring_publish,
             policy_publish=outcome["result"] if job["kind"] == "ml_policy" else None,
             evaluation_publish=outcome["result"] if job["kind"] == "ml_evaluate" else None,
+            explanation_publish=outcome["result"] if job["kind"] == "ml_explain" else None,
         )
         if final_status != "Succeeded" and write_id:
             store.fail_object_write(write_id, "Job cancelled during publication")
