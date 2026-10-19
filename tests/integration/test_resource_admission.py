@@ -15,6 +15,7 @@ from sos_platform.worker import run_once
 from .support import upload
 
 
+@pytest.mark.pr
 def test_execution_leases_block_oversubscription_and_release(workspace):
     _client, store = workspace
     policy = ExecutionCapacity(pool_mib=512, wait_seconds=0.1)

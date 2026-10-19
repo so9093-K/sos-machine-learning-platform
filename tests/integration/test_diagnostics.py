@@ -1,5 +1,6 @@
 """오류 응답의 기존 detail 호환, 상관관계, 비밀 보호를 검증한다."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from sos_platform.api import create_app
@@ -35,6 +36,7 @@ def test_created_job_correlates_to_request_and_audit(workspace):
     )
 
 
+@pytest.mark.pr
 def test_unexpected_failure_does_not_expose_exception_message(workspace, monkeypatch):
     client, store = workspace
     sentinel = "secret-password-exception-do-not-leak"

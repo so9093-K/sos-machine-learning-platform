@@ -4,6 +4,7 @@ import hashlib
 import json
 
 import pyarrow as pa
+import pytest
 from fastapi.testclient import TestClient
 
 from sos_platform.api import create_app
@@ -11,6 +12,7 @@ from sos_platform.datasets import iceberg_catalog
 from sos_platform.worker import run_once
 
 
+@pytest.mark.pr
 def test_iceberg_append_requires_actual_table_owner(workspace, monkeypatch):
     _client, store = workspace
     tokens = {"alice": "secure-alice-" * 8, "bob": "secure-bob-" * 8}
@@ -125,6 +127,7 @@ def test_unowned_existing_catalog_table_is_not_silently_claimed(workspace):
     assert len(catalog.load_table("default.external_table").snapshots()) == 0
 
 
+@pytest.mark.pr
 def test_recreated_table_with_same_token_cannot_reuse_write_authorization(workspace):
     """동일 이름·토큰으로 새로 만들어진 물리 테이블에는 기존 쓰기 권한이 없다."""
     client, store = workspace
