@@ -628,6 +628,15 @@ class JobSummaryOut(BaseModel):
     latest_attempt: AttemptOut | None
 
 
+class MLExplanationJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_explain"]
+
+
+class MLExplanationJobPageOut(BaseModel):
+    items: list[MLExplanationJobSummaryOut]
+    next_cursor: str | None = None
+
+
 class MLPolicyJobSummaryOut(JobSummaryOut):
     kind: Literal["ml_policy"]
 

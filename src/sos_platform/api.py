@@ -65,6 +65,7 @@ from .schemas import (
     MLEvaluationJobOut,
     MLEvaluationRequest,
     MLExplanationJobOut,
+    MLExplanationJobPageOut,
     MLExplanationRequest,
     MLflowExportStatusOut,
     MLForkRequest,
@@ -790,6 +791,39 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         if item["kind"] != kind:
             raise HTTPException(status_code=404, detail="ML Job not found")
         return item
+
+    def list_ml_result_jobs(kind: str, limit: int, cursor: str | None, actor: Actor):
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Job"),
+            actor_id=None if actor.privileged else actor.id,
+            kind=kind,
+        )
+        return page_from_rows(rows, limit)
+
+    @app.get("/api/ml/policies/jobs", response_model=MLPolicyJobPageOut)
+    def list_ml_policy_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        return list_ml_result_jobs("ml_policy", limit, cursor, actor)
+
+    @app.get("/api/ml/evaluations/jobs", response_model=MLEvaluationJobPageOut)
+    def list_ml_evaluation_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        return list_ml_result_jobs("ml_evaluate", limit, cursor, actor)
+
+    @app.get("/api/ml/explanations/jobs", response_model=MLExplanationJobPageOut)
+    def list_ml_explanation_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        return list_ml_result_jobs("ml_explain", limit, cursor, actor)
 
     @app.get("/api/ml/policies/jobs/{job_id}", response_model=MLPolicyJobOut)
     def get_policy_job(job_id: str, actor: Actor = READ_JOB_DEP):
