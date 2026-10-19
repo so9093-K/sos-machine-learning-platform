@@ -232,12 +232,8 @@ def test_ml_model_revision_token_ownership_and_readonly_role(workspace, monkeypa
         owner = secure.get(f"/api/ml/tracking/jobs/{job_id}", headers=auth("alice"))
         assert owner.status_code == 200
         assert owner.json()["state"] == "Disabled"
-        assert secure.get(
-            f"/api/ml/tracking/jobs/{job_id}", headers=auth("bob")
-        ).status_code == 404
-        assert secure.get(
-            f"/api/ml/tracking/jobs/{job_id}", headers=auth("ops")
-        ).status_code == 403
+        assert secure.get(f"/api/ml/tracking/jobs/{job_id}", headers=auth("bob")).status_code == 404
+        assert secure.get(f"/api/ml/tracking/jobs/{job_id}", headers=auth("ops")).status_code == 403
 
 
 def test_training_cancellation_after_s3_write_does_not_publish_model(workspace, monkeypatch):
