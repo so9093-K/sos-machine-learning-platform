@@ -42,7 +42,7 @@ SUITES = {
         Suite("frontend", "junit", False, "Vitest 및 TypeScript/Vite"),
         Suite("openapi-types", "command", False, "생성된 OpenAPI 타입 정합성"),
         Suite("openapi-compat", "command", False, "PR 기준 API 후방 호환성"),
-        Suite("wheel", "command", False, "설치된 Wheel에 포함된 Alembic 검증"),
+        Suite("wheel", "command", True, "설치된 Wheel의 Alembic·DB 초기화 검증"),
         Suite("alembic", "command", True, "Alembic 스키마 정합성"),
         Suite("workspace-e2e", "junit", True, "격리된 브라우저 사용자 흐름"),
         Suite("workspace-pr", "junit", True, "선별된 핵심 브라우저 사용자 흐름"),

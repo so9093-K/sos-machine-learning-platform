@@ -85,7 +85,7 @@ jobs:
         run: uv run --locked python scripts/verify.py run wheel
       - name: PR critical integration cases
         if: github.event_name == 'pull_request'
-        run: uv run --locked python scripts/verify.py run python-pr
+        run: uv run --locked python scripts/verify.py run python-integration
       - name: Complete integration suite
         if: github.event_name != 'pull_request'
         run: uv run --locked python scripts/verify.py run python-integration
@@ -114,7 +114,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: PR core browser user and permission scenarios
         if: github.event_name == 'pull_request'
-        run: uv run --locked python scripts/verify.py run workspace-pr --output-dir web/reports
+        run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports
       - name: Full browser user flows
         if: github.event_name != 'pull_request'
         run: uv run --locked python scripts/verify.py run workspace-e2e --output-dir web/reports

@@ -994,14 +994,18 @@ test("Registering another Dataset inside Preparation does not force Explorer nav
   await expect(page.getByRole("tablist", { name: "데이터 작업 영역" })).toHaveCount(0);
 });
 
-test("ML Workbench exposes training controls without starting a model @pr", async ({ page }) => {
+test("ML Workbench submits a training Job from selected features @pr", async ({ page }) => {
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
     name: "ml-ui-smoke.csv", mimeType: "text/csv",
-    buffer: Buffer.from("temperature,pressure\n1,10\n2,11\n3,12\n"),
+    buffer: Buffer.from("temperature,pressure\n1,10\n2,11\n3,12\n4,13\n5,14\n"),
   });
   await expect(page.getByRole("heading", { name: "ml-ui-smoke.csv" })).toBeVisible();
   await page.getByRole("button", { name: "ML Workbench" }).click();
-  await expect(page.getByRole("checkbox", { name: /temperature/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "학습 Job 제출" })).toBeVisible();
+  const submit = page.getByRole("button", { name: "학습 Job 제출" });
+  await expect(submit).toBeDisabled();
+  await page.getByRole("checkbox", { name: /temperature/ }).check();
+  await expect(submit).toBeEnabled();
+  const id = await submittedJob(page, "/api/ml/train/jobs", () => submit.click());
+  await expect(page.getByRole("region", { name: "ML 실행 결과" })).toContainText(id);
 });
