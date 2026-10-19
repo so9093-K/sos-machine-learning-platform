@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
+import { MLDecisionPanel } from "./MLDecisionPanel";
 import type {
   Dataset, DatasetColumns, MLScoringJob, MLScoringJobSummary, ModelRevision, ScoringResult,
 } from "./types";
@@ -181,6 +182,7 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel }: Props) {
             <strong>{value(result.ranking_metrics?.roc_auc)}</strong></div>
         </div>
         <p className="hint">모델과 Scoring Dataset의 판본 및 점수 아티팩트가 보존됩니다. 위 지표는 완전한 이진 레이블과 양성·음성 사례가 모두 있을 때만 계산합니다. 임계값 정책과 판정 정확도는 별도 평가 대상입니다.</p>
+        <MLDecisionPanel key={result.id} scoring={result} canRun={canRun} />
       </div>}
     </div>}
   </section>;

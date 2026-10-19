@@ -35,3 +35,10 @@ export type MLScoringJob = components["schemas"]["MLScoringJobOut"];
 export type MLScoringJobSummary = components["schemas"]["MLScoringJobSummaryOut"];
 export type MLScoringJobPage = components["schemas"]["MLScoringJobPageOut"];
 export type ScoringResult = components["schemas"]["ScoringResultOut"];
+
+export type MLPolicyJob = components["schemas"]["MLPolicyJobOut"];
+export type MLEvaluationJob = components["schemas"]["MLEvaluationJobOut"];
+export type MLExplanationJob = components["schemas"]["MLExplanationJobOut"];
+export type DecisionPolicyRevision = components["schemas"]["DecisionPolicyRevisionOut"];
+export type EvaluationRevision = components["schemas"]["EvaluationRevisionOut"];
+export type ExplanationResult = components["schemas"]["ExplanationResultOut"];
