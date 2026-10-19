@@ -87,17 +87,16 @@ def evaluate_anomaly_scores(
         raise ValueError("Labeled decision evaluation requires a threshold")
     if len(labels) != len(checked) or any(label not in (0, 1) for label in labels):
         raise ValueError("Labels must be binary and match the score count")
-    tp = sum(score >= threshold and label == 1 for score, label in zip(checked, labels))
-    fp = sum(score >= threshold and label == 0 for score, label in zip(checked, labels))
-    fn = sum(score < threshold and label == 1 for score, label in zip(checked, labels))
+    tp = sum(score >= threshold and label == 1 for score, label in zip(checked, labels, strict=True))
+    fp = sum(score >= threshold and label == 0 for score, label in zip(checked, labels, strict=True))
+    fn = sum(score < threshold and label == 1 for score, label in zip(checked, labels, strict=True))
     tn = len(checked) - tp - fp - fn
     precision = tp / (tp + fp) if tp + fp else None
     recall = tp / (tp + fn) if tp + fn else None
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision is not None and recall is not None and precision + recall
-        else 0.0 if precision is not None and recall is not None else None
-    )
+    if precision is None or recall is None:
+        f1 = None
+    else:
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     result.update(
         evaluation_kind="labeled",
         true_positives=tp,
