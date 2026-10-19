@@ -66,6 +66,7 @@ from .schemas import (
     MLEvaluationRequest,
     MLExplanationJobOut,
     MLExplanationRequest,
+    MLflowExportStatusOut,
     MLForkRequest,
     MLPolicyJobOut,
     MLPolicyRequest,
@@ -864,6 +865,14 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             raise HTTPException(status_code=404, detail="Scoring Result not found")
         check_ownership(actor, item["owner_actor"], "scoring_result", result_id)
         return item
+
+    @app.get("/api/ml/tracking/jobs/{job_id}", response_model=MLflowExportStatusOut)
+    def get_mlflow_tracking_status(job_id: str, actor: Actor = READ_JOB_DEP):
+        item = existing_job(job_id, actor)
+        if item["kind"] not in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain"):
+            raise HTTPException(status_code=404, detail="ML Job not found")
+        status = store.tracking_status(job_id)
+        return status or {"job_id": job_id, "state": "Disabled"}
 
     @app.get("/api/ml/models/{revision_id}", response_model=ModelRevisionOut)
     def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):

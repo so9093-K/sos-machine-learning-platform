@@ -217,6 +217,15 @@ class MLPolicyRequest(BaseModel):
         return self
 
 
+class MLflowExportStatusOut(BaseModel):
+    job_id: str
+    state: Literal["Disabled", "Pending", "Sending", "Retry", "Succeeded"]
+    run_id: str | None = None
+    attempts: int = 0
+    last_error_code: str | None = None
+    retry_after: str | None = None
+
+
 class MLExplanationRequest(BaseModel):
     scoring_result_id: str
     row_index: int = Field(strict=True, ge=0, le=49_999)

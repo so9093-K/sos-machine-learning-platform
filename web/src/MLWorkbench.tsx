@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { MLScoringPanel } from "./MLScoringPanel";
+import { MLTrackingStatus } from "./MLTrackingStatus";
 import type {
   Dataset, DatasetColumns, MLTrainingJob, MLTrainingJobSummary, ModelRevision,
 } from "./types";
@@ -164,6 +165,27 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     }
   }
 
+  async function forkTraining() {
+    if (!canTrain || submitting || !selectedJob || selectedJob.status !== "Succeeded") return;
+    const requestedDataset = selectedId;
+    const requestedSelection = ++selectionRequest.current;
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await submitJob<MLTrainingJob>(
+        `/api/ml/train/jobs/${encodeURIComponent(selectedJob.id)}/fork`, { params: null },
+      );
+      if (currentDataset.current === requestedDataset &&
+          selectionRequest.current === requestedSelection) {
+        setSelectedJob(result);
+        setModel(null);
+        setCompareJobId("");
+      }
+      await reloadHistory();
+    } catch (error) { setError(formatError(error)); }
+    finally { setSubmitting(false); }
+  }
+
   async function cancelJob() {
     if (!selectedJob || !canCancel) return;
     setError("");
@@ -277,6 +299,14 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       </p>}
       {selectedJob.cancel_requested && selectedJob.status === "Running" &&
         <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
+      {selectedJob.status === "Succeeded" && <div className="actions">
+        <button className="secondary" disabled={!canTrain || submitting}
+          onClick={() => void forkTraining()}>
+          {submitting ? "Fork 제출 중…" : "동일 조건으로 Fork·Reproduce"}
+        </button>
+        <p className="hint">원본 Dataset 판본·Feature·Seed·모델 설정을 그대로 복사하고 새 Job·Model Revision을 만듭니다. 이 실행은 학습을 다시 수행합니다.</p>
+      </div>}
+      <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id} />
       {model && <div className="result">
         <h4>Model Revision · {model.id}</h4>
         <p className="hint">입력 판본: {model.dataset_version} · Feature: {model.features.join(", ")}</p>
