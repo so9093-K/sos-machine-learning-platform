@@ -1373,7 +1373,7 @@ test("ML Workbench creates a persistent Isolation Forest Model Revision", async 
 
 
 test("ML Workbench scores and evaluates independently with explanation evidence", async ({ page }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
   await page.goto("/");
   await page.locator('input[type="file"]').setInputFiles({
     name: "ml-score-e2e.csv",
@@ -1383,7 +1383,7 @@ test("ML Workbench scores and evaluates independently with explanation evidence"
   await expect(page.getByRole("heading", { name: "ml-score-e2e.csv" })).toBeVisible();
   await page.getByRole("button", { name: "ML Workbench" }).click();
   await page.getByRole("checkbox", { name: /temperature/ }).check();
-  await submittedJob(page, "/api/ml/train/jobs", () =>
+  const trainedId = await submittedJob(page, "/api/ml/train/jobs", () =>
     page.getByRole("button", { name: "학습 Job 제출" }).click());
   await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible({
     timeout: 45000,
@@ -1391,22 +1391,22 @@ test("ML Workbench scores and evaluates independently with explanation evidence"
 
   await page.getByRole("combobox", { name: "Scoring Dataset" })
     .selectOption({ label: "ml-score-e2e.csv" });
-  await submittedJob(page, "/api/ml/scoring/jobs", () =>
+  const scoredId = await submittedJob(page, "/api/ml/scoring/jobs", () =>
     page.getByRole("button", { name: "Scoring Job 제출" }).click());
   await expect(page.getByText(/Scoring Result ·/)).toBeVisible({ timeout: 45000 });
   const decision = page.getByRole("region", { name: "임계값 정책과 평가" });
-  await submittedJob(page, "/api/ml/policies/jobs", () =>
+  const policyId = await submittedJob(page, "/api/ml/policies/jobs", () =>
     decision.getByRole("button", { name: "새 정책 판본 생성" }).click());
   await expect(decision.getByText(/Decision Policy Revision ·/)).toBeVisible({
     timeout: 45000,
   });
-  await submittedJob(page, "/api/ml/evaluations/jobs", () =>
+  const evaluationId = await submittedJob(page, "/api/ml/evaluations/jobs", () =>
     decision.getByRole("button", { name: "독립 Evaluation 판본 생성" }).click());
   await expect(decision.getByText(/Evaluation Revision ·/)).toBeVisible({
     timeout: 45000,
   });
   await expect(decision.getByText(/레이블 수준: none/)).toBeVisible();
-  await submittedJob(page, "/api/ml/explanations/jobs", () =>
+  const explanationId = await submittedJob(page, "/api/ml/explanations/jobs", () =>
     decision.getByRole("button", { name: "점수 민감도 설명 실행" }).click());
   await expect(decision.getByText(/Explanation ·/)).toBeVisible({
     timeout: 45000,
@@ -1415,4 +1415,26 @@ test("ML Workbench scores and evaluates independently with explanation evidence"
     name: /Feature를 학습 참조 중앙값으로 바꾸었을 때의 점수 변화/,
   })).toBeVisible();
   await expect(decision.getByText(/인과적 기여도가 아닙니다/)).toBeVisible();
+  // 브라우저 메모리를 모두 초기화해도 이력 API로 불변 결과를 복원한다.
+  await page.reload();
+  await page.getByRole("button", { name: "ML Workbench" }).click();
+  await page.getByRole("button", { name: new RegExp(trainedId.slice(0, 8)) }).click();
+  await expect(page.getByRole("heading", { name: /Model Revision/ })).toBeVisible();
+  const scoredArea = page.getByRole("region", { name: "독립 이상 점수 계산" });
+  await scoredArea.getByRole("button", { name: new RegExp(scoredId.slice(0, 8)) }).click();
+  await expect(scoredArea.getByText(/Scoring Result ·/)).toBeVisible();
+  const restored = page.getByRole("region", { name: "임계값 정책과 평가" });
+  await expect(restored.getByRole("button", {
+    name: new RegExp(`정책 ${policyId.slice(0, 8)}`),
+  })).toBeVisible({ timeout: 15000 });
+  await restored.getByRole("button", { name: new RegExp(`정책 ${policyId.slice(0, 8)}`) }).click();
+  await expect(restored.getByText(/Decision Policy Revision ·/)).toBeVisible();
+  await restored.getByRole("button", {
+    name: new RegExp(`평가 ${evaluationId.slice(0, 8)}`),
+  }).click();
+  await expect(restored.getByText(/Evaluation Revision ·/)).toBeVisible();
+  await restored.getByRole("button", {
+    name: new RegExp(`설명 ${explanationId.slice(0, 8)}`),
+  }).click();
+  await expect(restored.getByText(/Explanation ·/)).toBeVisible();
 });
