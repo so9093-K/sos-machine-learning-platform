@@ -242,3 +242,86 @@ def test_api_defaults_and_scoring_contract():
         dataset_id="d1", features=["x"], training_input={"mode": "sample", "rows": 100, "seed": 7}
     ).training_input == sample(100, 7)
     assert MAX_SCORING_ROWS == 50_000
+
+
+def test_http_training_submission_and_fork_preserve_input_policy():
+    """API 접수·Fork는 Worker 환경에 따라 입력 정책을 암묵적으로 변경하지 않는다."""
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI, Request
+    from fastapi.testclient import TestClient
+
+    from sos_platform.api_ml_training import CREATE_JOB_DEP, training_router
+    from sos_platform.security import Actor
+
+    store = Mock()
+    actor = Actor("alice", "human", frozenset({"researcher"}))
+    source_job = {
+        "id": "original",
+        "kind": "ml_train",
+        "status": "Succeeded",
+        "dataset_id": "d1",
+        "spec": {
+            "dataset_version": "v1",
+            "algorithm": "isolation_forest",
+            "features": ["x"],
+            "params": {"random_state": 5},
+            "training_input": sample(600, 99).model_dump(),
+        },
+    }
+    def created_job(**kwargs):
+        return {
+            "id": "job-new",
+            "kind": kwargs["kind"],
+            "dataset_id": kwargs["dataset_id"],
+            "spec": kwargs["spec"],
+            "status": "Queued",
+            "cancel_requested": False,
+            "result": None,
+            "error": None,
+            "created_at": "2026-10-20T00:00:00Z",
+            "updated_at": "2026-10-20T00:00:00Z",
+            "attempts": [],
+        }
+
+    store.create_job.side_effect = created_job
+    app = FastAPI()
+    app.include_router(training_router(
+        store,
+        existing_dataset=lambda dataset_id, _actor: {"id": dataset_id, "version": "v1"},
+        existing_job=lambda _job_id, _actor: source_job,
+        require_submission_key=lambda key: None,
+    ))
+    app.dependency_overrides[CREATE_JOB_DEP.dependency] = lambda: actor
+
+    @app.middleware("http")
+    async def assign_request_id(request: Request, call_next):
+        request.state.request_id = "test-request"
+        return await call_next(request)
+
+    with TestClient(app) as client:
+        reply = client.post("/api/ml/train/jobs", json={
+            "dataset_id": "d1",
+            "features": ["x"],
+            "params": {"random_state": 42},
+            "training_input": sample(600, 99).model_dump(),
+        })
+        assert reply.status_code == 202, reply.text
+        assert store.create_job.call_args.kwargs["spec"]["training_input"] == sample(600, 99).model_dump()
+
+        invalid = client.post("/api/ml/train/jobs", json={
+            "dataset_id": "d1", "features": ["x"],
+            "training_input": {"mode": "sample", "rows": 600},
+        })
+        assert invalid.status_code == 422
+
+        fork = client.post("/api/ml/train/jobs/original/fork", json={})
+        assert fork.status_code == 202, fork.text
+        assert store.create_job.call_args.kwargs["spec"]["training_input"] == sample(600, 99).model_dump()
+        assert store.create_job.call_args.kwargs["spec"]["params"]["random_state"] == 5
+
+        # 과거 Job은 정책 필드가 없지만 원본을 전체 사용했다는 의미는 유지한다.
+        source_job["spec"].pop("training_input")
+        old_fork = client.post("/api/ml/train/jobs/original/fork", json={})
+        assert old_fork.status_code == 202, old_fork.text
+        assert store.create_job.call_args.kwargs["spec"]["training_input"] == all_rows().model_dump()
