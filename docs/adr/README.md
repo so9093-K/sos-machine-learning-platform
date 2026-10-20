@@ -21,5 +21,5 @@
 - [0011 — 서비스와 검증의 Compose 실행 경계 통합](0011-compose-native-validation.md) · Accepted (Inventory·Protected·JUnit·Manifest 유지 조항은 0013에서 대체)
 
 - [0012 — ML 실험·이상 점수·외부 추적의 책임 경계](0012-ml-experiment-boundaries.md) · Proposed
-- [0013 — 검증 실행·관리 결정 통합](0013-lean-validation-policy.md) · Accepted (0009 대체·0011의 Inventory 조항만 대체)
+- [0013 — 레거시 검증 자동화 초기화](0013-validation-reset.md) · Accepted (0009 대체·0011 검증 관리 조항 종료)
 - [0014 — Iceberg 과도기 쓰기 소유권 채택 종료](0014-remove-iceberg-adoption.md) · Accepted

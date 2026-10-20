@@ -17,7 +17,6 @@
 ```bash
 make up
 make status
-make check
 make down
 ```
 

@@ -4,7 +4,7 @@ SOS는 기본적으로 전체 플랫폼을 Docker Compose로 실행한다. 이 �
 
 ## 실행
 
-Docker Compose와 GNU Make가 필요하다. `SOS_AUTH_TOKEN_HASHES`에 원본 토큰의 SHA-256 지문을 키로 사용하는 Actor JSON을 명시해야 한다. 실제 원본 Bearer Token은 별도로 안전하게 보관하며, `.env`는 커밋하지 않는다. Python 3.12·uv·Node.js 24·npm은 호스트 테스트에 사용한다.
+Docker Compose와 GNU Make가 필요하다. `SOS_AUTH_TOKEN_HASHES`에 원본 토큰의 SHA-256 지문을 키로 사용하는 Actor JSON을 명시해야 한다. 실제 원본 Bearer Token은 별도로 안전하게 보관하며, `.env`는 커밋하지 않는다. Python 3.12·uv·Node.js 24·npm은 호스트 개발 도구로 사용한다.
 
 개발용 관리자 Token과 지문 매핑은 다음처럼 한 번 생성할 수 있다. 출력된 **Bearer Token은 별도 보관**하고 매핑 JSON 한 줄만 커밋하지 않는 `.env`에 넣는다.
 
@@ -28,8 +28,6 @@ PY
 make up          # Docker의 API·Worker·Web·PostgreSQL·S3 실행 및 Ready 확인
 make status
 make doctor
-make check-fast  # 서비스 없이 Ruff·단위·Web 검사
-make check       # 전체 검증
 make restart
 make logs
 make down        # 컨테이너만 종료, 데이터 볼륨 보존
@@ -46,7 +44,6 @@ make down        # 컨테이너만 종료, 데이터 볼륨 보존
 - 개발 컨테이너는 Token 인증을 요구하며 Docker 네트워크를 관리자 신원으로 취급하지 않는다. 외부 공개용 TLS·OIDC·격리는 구현하지 않았다.
 - 내부 연결은 `postgres:5432`, `storage:8333`, `api:9602`를 사용한다. 호스트 포트는 루프백으로만 공개한다.
 - `make down`은 볼륨을 보존한다. `down --volumes`는 데이터 삭제를 포함하므로 일반 환경에서 사용하지 않는다.
-- E2E 테스트는 고유 Compose 프로젝트를 생성하고, 소유권을 확인한 해당 프로젝트만 정리한다.
 - Worker의 강한 물리 메모리 격리나 비신뢰 코드 샌드박스는 Docker 기동만으로 보장되지 않는다.
 
 ## 구성과 안전
@@ -55,7 +52,7 @@ Compose가 PostgreSQL과 S3 호환 저장소를 관리한다. 기본 객체 저�
 
 현재 Compose 기본 경로는 관리형 로컬 DB·객체 저장소를 초기화한다. 외부 관리형 연결과 호스트 실행은 공개 Make 경로의 옵션이 아니며, 별도 배포 어댑터의 책임이다. Token 인증이 설정되지 않으면 API는 기동을 거부하며 Docker 네트워크를 신뢰된 개발 관리자 연결로 간주하지 않는다.
 
-`make down`과 `make restart`는 DB 볼륨·Iceberg 데이터·아티팩트를 삭제하지 않는다. API·Worker 캐시는 각자의 Compose 볼륨에서 관리되며 DB·객체 저장소 볼륨과 다른 수명주기를 갖는다. 테스트 소유 기록·검증 증거는 `.sos-test/`에 저장한다. `SOS_HOME`은 API·Worker·초기화/검증 도구가 사용하는 로컬 캐시 및 임시 실행 파일 경로를 함께 변경하며, `--home`을 명시한 Worker에서는 CLI 인자가 우선한다.
+`make down`과 `make restart`는 DB 볼륨·Iceberg 데이터·아티팩트를 삭제하지 않는다. API·Worker 캐시는 각자의 Compose 볼륨에서 관리되며 DB·객체 저장소 볼륨과 다른 수명주기를 갖는다. `SOS_HOME`은 API·Worker·초기화/검증 도구가 사용하는 로컬 캐시 및 임시 실행 파일 경로를 함께 변경하며, `--home`을 명시한 Worker에서는 CLI 인자가 우선한다.
 
 CSV·Parquet·구조화된 TSV/TXT 업로드는 기본 256 MiB 이하이고 `SOS_MAX_UPLOAD_MIB`로 1~2048 MiB 범위를 설정할 수 있다. Multipart 본문은 파일 한도에 최대 64 KiB의 전송 헤더·필드 여유를 더해 제한하며 이 범위를 넘으면 파일 크기와 무관하게 거부될 수 있다. 여러 업로드를 동시에 진행하면 임시 디스크에 파서 스풀과 검증용 임시 파일이 함께 존재할 수 있으므로 운영 환경에서 여유 용량을 확보한다. HTTP `201`은 원본을 저장하고 Dataset 참조를 확정한 상태를 뜻하며, 목록 새로고침 실패는 등록 실패가 아니다. 파일 등록 시에는 기본 형식과 스키마를 검사하지만 전체 행의 품질·타입 일관성까지 보장하지 않으며, 이후 Preview·Profile·Job에서 추가 데이터 오류가 발견될 수 있다.
 
@@ -82,7 +79,7 @@ Preview는 수치형 NaN·양/음의 무한대를 각각 문자열 `NaN`·`Infin
 
 시계열 데이터의 Lag·Rolling에는 정렬 컬럼이 필요하다. 동일 그룹에서 정렬값이 중복되거나 NULL이면 결과 순서가 모호하므로 시계열 연산을 거부한다. 필요한 경우 입력에서 시간값을 정리한 뒤 작업을 제출한다. 다수의 설비가 섞여 있으면 그룹 컬럼도 선택해 각 설비의 과거 값만 참조하도록 한다. Rolling Mean에는 현재 행이 포함되므로 학습 목표 누수를 피하도록 시점을 확인한다.
 
-API 응답 타입을 변경한 경우 Pydantic 모델을 변경하고 `cd web && npm run generate:types`를 실행한다. 이 명령은 FastAPI의 OpenAPI를 임시 파일로 추출해 `web/src/api.generated.ts`를 갱신한다. CI에서 생성 파일의 차이를 검사하며 OpenAPI 자체를 별도 정본 파일로 보관하지 않는다. Scalar API 문서는 기존 `/docs`를 따른다.
+API 응답 타입을 변경한 경우 Pydantic 모델을 변경하고 `cd web && npm run generate:types`를 실행한다. 이 명령은 FastAPI의 OpenAPI를 임시 파일로 추출해 `web/src/api.generated.ts`를 갱신한다. 생성 파일 변경은 코드 리뷰에서 확인하며 OpenAPI 자체를 별도 정본 파일로 보관하지 않는다. Scalar API 문서는 기존 `/docs`를 따른다.
 
 Dataset 목록은 `GET /api/datasets?limit=20`의 `items`와 `next_cursor`를 사용하는 키셋 페이지 조회다. 무제한 목록 API나 별도 `/api/datasets/pages` 경로는 제공하지 않는다.
 
