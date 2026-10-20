@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
-    "test": "vitest run src",
     "generate:types": "bash ../scripts/generate_api_types.sh"
   },
   "dependencies": {

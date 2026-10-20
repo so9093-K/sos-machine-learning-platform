@@ -14,7 +14,6 @@ __pycache__
 web/dist
 web/test-results
 web/playwright-report
-web/reports
 dist
 build
 tests
