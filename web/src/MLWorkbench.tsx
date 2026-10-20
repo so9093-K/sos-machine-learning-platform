@@ -22,6 +22,17 @@ function statistic(value: unknown): string {
   return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("ko-KR") : "—";
 }
 
+function trainingSelectionLabel(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "학습 입력 근거 미확인";
+  if ("method" in value && value.method === "all_rows") return "전체 입력";
+  if ("method" in value && value.method === "row_priority_bottom_k_v1") {
+    const rows = "requested_rows" in value ? value.requested_rows : null;
+    const seed = "seed" in value ? value.seed : null;
+    return `명시적 부분집합 ${statistic(rows)}행 · 선택 Seed ${statistic(seed)} · 대표성 보장 없음`;
+  }
+  return "학습 입력 선택 방식 미확인";
+}
+
 /** 데이터 선택부터 비동기 학습·불변 결과 조회까지 같은 공개 API를 사용한다. */
 export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCancel }: Props) {
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
@@ -363,10 +374,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         {selectedJob?.result && selectedJob.result.training_selection != null && <p className="hint">
           원본 {statistic(selectedJob.result.source_rows)}행 · 학습에 사용한 입력
           {" "}{statistic(selectedJob.result.training_rows)}행 ·
-          {" "}{typeof selectedJob.result.training_selection === "object" &&
-            "method" in selectedJob.result.training_selection &&
-            selectedJob.result.training_selection.method === "all_rows"
-              ? "전체 입력" : "지정한 행 수·Seed의 무작위 표본 (대표성 보장 안 됨)"}
+          {" "}{trainingSelectionLabel(selectedJob.result.training_selection)}
         </p>}
         <div className="cards">
           <div className="stat"><span>학습 점수 대상</span><strong>{statistic(model.training_score_summary.score_count)}행</strong></div>
