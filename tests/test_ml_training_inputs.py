@@ -511,3 +511,32 @@ def test_training_stage_cleanup_does_not_follow_unowned_symlinks(tmp_path):
     (root / f"attempt-{uuid4()}").symlink_to(outside, target_is_directory=True)
     cleanup_training_stage(tmp_path)
     assert marker.read_text() == "keep"
+
+
+def test_pending_legacy_sample_job_keeps_old_selection(monkeypatch, tmp_path):
+    # 배포 전에 접수된 Job의 spec에는 새 알고리즘 필드가 없다.
+    data = pl.DataFrame({"x": np.arange(400, dtype=float)[::-1].copy()})
+    bind_frame(monkeypatch, data)
+    _, expected = ml_training.training_matrix(
+        None, {}, ["x"], input_policy=sample(90, 22),
+        selection_algorithm_version=TRAINING_SELECTION_LEGACY,
+        worker_memory_mib=4,
+    )
+    result = ml_training.train_dataset(
+        None, {"version": "v1"},
+        {
+            "algorithm": "isolation_forest", "dataset_version": "v1",
+            "features": ["x"], "params": {"n_estimators": 8, "random_state": 3},
+            "training_input": sample(90, 22).model_dump(),
+        },
+        tmp_path / "legacy.joblib",
+    )
+    assert result["training_selection"] == expected
+    assert result["runtime"]["training_selection"]["method"] == TRAINING_SELECTION_LEGACY
+
+
+def test_training_sort_stage_limit_has_distinct_failure_contract():
+    from sos_platform.errors import ERRORS
+
+    assert ERRORS["SOS-ML-TRAIN-STAGE-LIMIT"].category == "storage_capacity"
+    assert ERRORS["SOS-ML-TRAIN-CAPACITY"].category == "capacity"
