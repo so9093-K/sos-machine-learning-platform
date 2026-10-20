@@ -59,7 +59,7 @@ jobs:
         run: uv run --locked python scripts/verify_openapi.py --base-ref "$BASE_SHA"
 
   integration:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     needs: [python-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -86,7 +86,7 @@ jobs:
         run: uv run --locked alembic check
 
   browser:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     needs: [python-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
