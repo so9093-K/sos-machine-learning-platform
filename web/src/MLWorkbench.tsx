@@ -203,10 +203,18 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     item.id !== selectedJob?.id &&
     item.status === "Succeeded" &&
     typeof item.result?.model_revision_id === "string");
+  const trainingFingerprint = (revision: ModelRevision): string | null => {
+    const selection = revision.runtime.training_selection;
+    if (!selection || typeof selection !== "object" || Array.isArray(selection) ||
+        !("selection_sha256" in selection)) return null;
+    return typeof selection.selection_sha256 === "string" ? selection.selection_sha256 : null;
+  };
   const sameInput = Boolean(model && comparisonModel &&
     model.dataset_id === comparisonModel.dataset_id &&
     model.dataset_version === comparisonModel.dataset_version &&
-    JSON.stringify(model.features) === JSON.stringify(comparisonModel.features));
+    JSON.stringify(model.features) === JSON.stringify(comparisonModel.features) &&
+    (trainingFingerprint(model) === trainingFingerprint(comparisonModel)));
+
   const parameterKeys = ["n_estimators", "max_samples", "max_features",
     "bootstrap", "random_state"];
   const parameterText = (revision: ModelRevision, key: string): string =>
@@ -305,21 +313,20 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           onClick={() => void forkTraining()}>
           {submitting ? "Fork 제출 중…" : "동일 조건으로 Fork·Reproduce"}
         </button>
-        <p className="hint">원본 Dataset 판본·Feature·Seed·모델 설정을 그대로 복사하고 새 Job·Model Revision을 만듭니다. 이 실행은 학습을 다시 수행합니다.</p>
+        <p className="hint">Dataset 판본·Feature·Seed·모델 설정을 복사합니다. 실행 예산이나 Runtime이 바뀌면 실제 학습 입력은 달라질 수 있습니다.</p>
       </div>}
       {selectedJob.status === "Succeeded" &&
         <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id} />}
       {model && <div className="result">
         <h4>Model Revision · {model.id}</h4>
         <p className="hint">입력 판본: {model.dataset_version} · Feature: {model.features.join(", ")}</p>
-        {selectedJob?.result && <p className="hint">
+        {selectedJob?.result && selectedJob.result.training_selection && <p className="hint">
           원본 {statistic(selectedJob.result.source_rows)}행 · 학습에 사용한 입력
           {" "}{statistic(selectedJob.result.training_rows)}행 ·
-          {" "}{selectedJob.result.training_selection &&
-            typeof selectedJob.result.training_selection === "object" &&
+          {" "}{typeof selectedJob.result.training_selection === "object" &&
             "method" in selectedJob.result.training_selection &&
             selectedJob.result.training_selection.method === "all_rows"
-              ? "전체 입력" : "재현 가능한 Feature 해시 선택"}
+              ? "전체 입력" : "Feature 값 기반 결정적 부분집합 (대표성 보장 안 됨)"}
         </p>}
         <div className="cards">
           <div className="stat"><span>학습 점수 대상</span><strong>{statistic(model.training_score_summary.score_count)}행</strong></div>
@@ -344,8 +351,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           {comparisonModel && <>
             <p className="hint" role="status">
               {sameInput
-                ? "데이터 판본과 Feature 순서가 같습니다. 설정 차이를 확인할 수 있습니다."
-                : "입력 Dataset 판본 또는 Feature 순서가 다릅니다. 점수·경보량을 직접 비교할 수 없습니다."}
+                ? "데이터 판본·Feature 순서·실제 학습 입력 지문이 같습니다. 설정 차이를 확인할 수 있습니다."
+                : "입력 판본·Feature 또는 실제 학습 입력이 다릅니다. 점수·경보량을 직접 비교할 수 없습니다."}
             </p>
             <table>
               <caption>두 모델의 학습 설정 비교 (성능 순위 아님)</caption>

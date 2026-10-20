@@ -102,3 +102,15 @@ def test_training_job_retains_selection_evidence_with_model(monkeypatch, tmp_pat
     assert result["source_rows"] == result["training_rows"] == 120
     assert result["runtime"]["training_selection"] == result["training_selection"]
     assert result["training_score_summary"]["scope"] == "training_data_only"
+
+def test_training_request_accepts_more_than_32_features():
+    from sos_platform.schemas import MLTrainRequest
+
+    request = MLTrainRequest(dataset_id="d1", features=[f"f_{n}" for n in range(40)])
+    assert len(request.features) == 40
+
+
+def test_scoring_limit_is_not_inherited_from_training():
+    from sos_platform.ml_scoring import MAX_SCORING_ROWS
+
+    assert MAX_SCORING_ROWS == 50_000
