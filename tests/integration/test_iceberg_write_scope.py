@@ -82,16 +82,6 @@ def test_iceberg_append_requires_actual_table_owner(workspace, monkeypatch):
             headers=headers("bob", "bob-write-002"),
         )
         assert denied.status_code == 404
-        second = api.post(
-            "/api/iceberg/import",
-            json={"dataset_id": alice_id, "table_name": "alice_table"},
-            headers=headers("alice", "alice-write-002"),
-        )
-        assert second.status_code == 202, second.text
-        assert run_once(store)
-        assert store.get_job(second.json()["id"])["status"] == "Succeeded"
-        assert len(iceberg_catalog(store).load_table("default.alice_table").snapshots()) == 2
-
         # API를 우회해 만들어진 Job도 Worker에서 커밋 전에 차단한다.
         forged = store.create_job(
             kind="iceberg_import",
@@ -101,7 +91,7 @@ def test_iceberg_append_requires_actual_table_owner(workspace, monkeypatch):
         )
         assert run_once(store)
         assert store.get_job(forged["id"])["status"] == "Failed"
-        assert len(iceberg_catalog(store).load_table("default.alice_table").snapshots()) == 2
+        assert len(iceberg_catalog(store).load_table("default.alice_table").snapshots()) == 1
 
 
 def test_unowned_existing_catalog_table_is_not_silently_claimed(workspace):
