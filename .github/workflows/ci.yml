@@ -20,3 +20,60 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
+
+      # One-time PR31 review; revert before final PR review.
+      - name: PR31 full Python Ruff and API contract validation
+        run: uv run --locked ruff check src/sos_platform/ml_training.py src/sos_platform/diagnostics.py src/sos_platform/api_ml_training.py src/sos_platform/errors.py src/sos_platform/schemas.py tests/test_ml_training_inputs.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: PR31 regenerate typed API and build Web
+        run: |
+          cd web && npm ci --no-audit --no-fund
+          cd ..
+          bash scripts/generate_api_types.sh
+          git diff --exit-code -- web/src/api.generated.ts
+          cd web && npm run build
+      - name: PR31 full 1.37M Parquet training lifecycle benchmark
+        run: |
+          timeout 150s uv run --locked python - <<'PY'
+          from contextlib import contextmanager
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+          from time import monotonic
+          import resource
+          import numpy as np
+          import polars as pl
+          from sos_platform import ml_training
+          from sos_platform.schemas import MLTrainingInputPolicy
+          
+          n = 1_370_000
+          with TemporaryDirectory() as directory:
+              path = Path(directory) / "large.parquet"
+              arr = np.arange(n, dtype=np.float64)
+              pl.DataFrame({f"x{i}": np.sin(arr / (i + 20)) + i for i in range(8)}).write_parquet(path)
+              del arr
+              @contextmanager
+              def source(store, dataset):
+                  yield pl.scan_parquet(path)
+              ml_training.pinned_scan_dataset = source
+              began = monotonic()
+              output = ml_training.train_dataset(
+                  None,
+                  {"version": "v1"},
+                  {
+                      "algorithm": "isolation_forest", "dataset_version": "v1",
+                      "features": [f"x{i}" for i in range(8)],
+                      "params": {"n_estimators": 8, "random_state": 31},
+                      "training_input": MLTrainingInputPolicy(mode="all").model_dump(),
+                  },
+                  Path(directory) / "trained.joblib",
+              )
+              duration = monotonic() - began
+              assert output["source_rows"] == n
+              assert output["training_rows"] == n
+              assert output["training_selection"]["method"] == "all_rows"
+              assert output["training_score_summary"]["score_count"] == n
+              assert (Path(directory) / "trained.joblib").exists()
+              print(f"TRAINING_PIPELINE_RESULT rows={n} sec={duration:.2f} peak_rss_mib={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024:.0f}")
+          PY
