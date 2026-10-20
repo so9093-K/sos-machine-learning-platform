@@ -55,8 +55,7 @@ def test_ml_result_publication_chain(workspace, tmp_path):
     scoring = _upload(
         client,
         "ml-score.csv",
-        b"temperature,pressure,abnormal\n"
-        b"1.0,10.0,0\n2.0,11.0,0\n3.0,12.0,0\n200.0,1000.0,1\n",
+        b"temperature,pressure,abnormal\n1.0,10.0,0\n2.0,11.0,0\n3.0,12.0,0\n200.0,1000.0,1\n",
     )
     spec = {
         "dataset_id": scoring["id"],
@@ -64,13 +63,9 @@ def test_ml_result_publication_chain(workspace, tmp_path):
         "label_column": "abnormal",
     }
     key = str(uuid4())
-    first = client.post(
-        "/api/ml/scoring/jobs", json=spec, headers={"Idempotency-Key": key}
-    )
+    first = client.post("/api/ml/scoring/jobs", json=spec, headers={"Idempotency-Key": key})
     assert first.status_code == 202, first.text
-    again = client.post(
-        "/api/ml/scoring/jobs", json=spec, headers={"Idempotency-Key": key}
-    )
+    again = client.post("/api/ml/scoring/jobs", json=spec, headers={"Idempotency-Key": key})
     assert again.status_code == 202
     assert again.json()["id"] == first.json()["id"]
     score_job_id = first.json()["id"]
@@ -93,9 +88,7 @@ def test_ml_result_publication_chain(workspace, tmp_path):
 
     storage = ObjectStore()
     local = tmp_path / "scored.parquet"
-    storage.get(
-        storage.key(result["location"]), local, expected_sha256=result["sha256"]
-    )
+    storage.get(storage.key(result["location"]), local, expected_sha256=result["sha256"])
     frame = pl.read_parquet(local)
     assert frame.height == 4
     assert frame["label"].to_list() == [0, 0, 0, 1]
@@ -113,10 +106,7 @@ def test_ml_result_publication_chain(workspace, tmp_path):
     )
     assert rejected.status_code == 422, rejected.text
     with store.connection() as db:
-        assert (
-            db.execute(text("SELECT COUNT(*) FROM explanation_results")).scalar_one()
-            == 0
-        )
+        assert db.execute(text("SELECT COUNT(*) FROM explanation_results")).scalar_one() == 0
     explain = _submit(
         client,
         "/api/ml/explanations/jobs",
@@ -124,9 +114,7 @@ def test_ml_result_publication_chain(workspace, tmp_path):
     )
     assert explain.status_code == 202, explain.text
     assert run_once(store)
-    explanation_job = client.get(
-        f"/api/ml/explanations/jobs/{explain.json()['id']}"
-    ).json()
+    explanation_job = client.get(f"/api/ml/explanations/jobs/{explain.json()['id']}").json()
     assert explanation_job["status"] == "Succeeded", explanation_job
     explanation_id = explanation_job["result"]["explanation_result_id"]
     explanation = client.get(f"/api/ml/explanations/{explanation_id}")
@@ -140,8 +128,7 @@ def test_ml_result_publication_chain(workspace, tmp_path):
         "pressure",
     ]
     assert all(
-        isinstance(item["anomaly_score_delta"], float)
-        for item in output["feature_sensitivities"]
+        isinstance(item["anomaly_score_delta"], float) for item in output["feature_sensitivities"]
     )
 
     policy_job = _submit(
@@ -152,13 +139,9 @@ def test_ml_result_publication_chain(workspace, tmp_path):
     assert policy_job.status_code == 202, policy_job.text
     assert client.post(f"/api/jobs/{policy_job.json()['id']}/cancel").status_code == 404
     assert run_once(store)
-    policy_finished = client.get(
-        f"/api/ml/policies/jobs/{policy_job.json()['id']}"
-    ).json()
+    policy_finished = client.get(f"/api/ml/policies/jobs/{policy_job.json()['id']}").json()
     assert policy_finished["status"] == "Succeeded", policy_finished
-    policy = client.get(
-        f"/api/ml/policies/{policy_finished['result']['policy_revision_id']}"
-    )
+    policy = client.get(f"/api/ml/policies/{policy_finished['result']['policy_revision_id']}")
     assert policy.status_code == 200, policy.text
     assert policy.json()["threshold"] == 0.5
     policy_id = policy.json()["id"]
@@ -170,18 +153,11 @@ def test_ml_result_publication_chain(workspace, tmp_path):
         {"scoring_result_id": scoring_id, "policy_revision_id": policy_id},
     )
     assert evaluation_job.status_code == 202, evaluation_job.text
-    assert (
-        client.post(f"/api/jobs/{evaluation_job.json()['id']}/cancel").status_code
-        == 404
-    )
+    assert client.post(f"/api/jobs/{evaluation_job.json()['id']}/cancel").status_code == 404
     assert run_once(store)
-    evaluated = client.get(
-        f"/api/ml/evaluations/jobs/{evaluation_job.json()['id']}"
-    ).json()
+    evaluated = client.get(f"/api/ml/evaluations/jobs/{evaluation_job.json()['id']}").json()
     assert evaluated["status"] == "Succeeded", evaluated
-    evaluation = client.get(
-        f"/api/ml/evaluations/{evaluated['result']['evaluation_revision_id']}"
-    )
+    evaluation = client.get(f"/api/ml/evaluations/{evaluated['result']['evaluation_revision_id']}")
     assert evaluation.status_code == 200, evaluation.text
     assert evaluation.json()["label_coverage"] == "full"
     assert evaluation.json()["decision_metrics"]["precision"] is not None
