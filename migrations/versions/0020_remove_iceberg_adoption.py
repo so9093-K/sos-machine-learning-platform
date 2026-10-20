@@ -22,4 +22,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     # 채택 근거와 원본 상태가 남아 있으므로 이전 상태로 안전하게 복구한다.
     # 기존 서비스도 Adopting 상태의 쓰기를 거부한다.
-    op.execute("UPDATE iceberg_table_owners SET state='Adopting' WHERE state='Blocked'")
+    op.execute(
+        "UPDATE iceberg_table_owners SET state='Adopting' "
+        "WHERE state='Blocked' AND adoption_dataset_id IS NOT NULL"
+    )

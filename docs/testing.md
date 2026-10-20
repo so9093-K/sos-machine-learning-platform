@@ -41,7 +41,7 @@ make check는 실제 컨테이너 Ready 상태가 필요하다. 공통 Suite를 
 | Worker·Discovery 공통 메모리 수용과 예약 회수, 설정의 포함 관계·서버 오류 분리 | test_resource_admission.py (unit·integration) |
 | Worker 시간·메모리 제한, 필수 cgroup 위임 실패 시 Claim 거부·자식 격리 계약 | test_worker_budget.py, test_cgroup.py |
 | Dataset 키셋 페이지와 Snapshot 읽기 소유권 | test_dataset_pages.py, test_snapshot_scope.py |
-| Iceberg 쓰기 Owner Token·Table UUID 재생성 차단·예약 중단 복구·멱등성 이름 선점 차단·API/Worker 재검증·기존 테이블 명시적 채택/보류 복구 | test_iceberg_write_scope.py, test_iceberg_ownership.py |
+| Iceberg 쓰기 Owner Token·Table UUID 재생성 차단·예약 중단 복구·멱등성 이름 선점 차단·API/Worker 재검증·기존 소유권 불명 테이블 쓰기 거부 | test_iceberg_write_scope.py |
 | Iceberg Snapshot 고정·Tag 보존·외부 커밋/Tag ACK 유실, 독립 Writer 동시 Commit 경합·중단 후 자동 재시도 금지·대용량 비파티션 단일 Snapshot | test_iceberg.py |
 | 객체 쓰기 의도·S3 관측·삭제 없는 Storage Health | test_storage.py |
 | 토큰·역할·리소스 소유권·거부 감사 | test_security.py, auth.spec.ts |

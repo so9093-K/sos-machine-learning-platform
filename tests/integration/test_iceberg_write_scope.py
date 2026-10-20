@@ -285,7 +285,23 @@ def test_migration_blocks_pending_adoption_without_losing_evidence(workspace):
     assert claim["adoption_dataset_id"] == dataset_id
     with pytest.raises(PermissionError, match="denied"):
         store.reserve_iceberg_table("pending_legacy", "local-developer")
+    # 채택에 속하지 않는 원래 Blocked 레코드는 Downgrade해도 풀리지 않는다.
+    with store.connection() as db:
+        db.execute(
+            text(
+                "INSERT INTO iceberg_table_owners"
+                "(table_name,owner_actor,token,state,created_at)"
+                " VALUES(:table,:owner,:token,'Blocked',:at)"
+            ),
+            {
+                "table": "default.already_blocked",
+                "owner": "local-developer",
+                "token": str(uuid4()),
+                "at": "2026-01-01T00:00:00Z",
+            },
+        )
     command.downgrade(config, "0019")
+    assert store.iceberg_write_claim("already_blocked")["state"] == "Blocked"
     original = store.iceberg_write_claim("pending_legacy")
     assert original["state"] == "Adopting"
     assert original["adoption_dataset_id"] == dataset_id

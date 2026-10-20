@@ -1,6 +1,6 @@
 # 0014 — Iceberg 과도기 쓰기 소유권 채택 종료
 
-상태: **Proposed**
+상태: **Accepted**
 
 ## 배경
 
