@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
       - name: Prepare Python
         run: uv python install 3.12
@@ -20,3 +22,16 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
+      # 이 PR에서만 baseline과 신규 OpenAPI 완전 동등성을 비교한다. 검증 뒤 복원.
+      - name: Compare OpenAPI with main
+        env:
+          BASE_COMMIT: "fe421c08112424fc8f6a4c4ee6404be4823bae45"
+        run: |
+          uv run --locked python scripts/export_openapi.py > "$RUNNER_TEMP/current-openapi.json"
+          git worktree add --detach "$RUNNER_TEMP/sos-baseline" "$BASE_COMMIT"
+          (
+            cd "$RUNNER_TEMP/sos-baseline"
+            uv run --locked python scripts/export_openapi.py > "$RUNNER_TEMP/baseline-openapi.json"
+          )
+          diff -u "$RUNNER_TEMP/baseline-openapi.json" "$RUNNER_TEMP/current-openapi.json"
+
