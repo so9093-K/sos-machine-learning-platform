@@ -51,7 +51,7 @@ jobs:
           from sos_platform import ml_training
           from sos_platform.schemas import MLTrainingInputPolicy
 
-          for count, cols, rows in [(1_370_000, 8, 100_000), (200_000, 40, 40_000)]:
+          for count, cols, rows in [(1_370_000, 8, 100_000), (200_000, 40, 40_000), (1_370_000, 63, 100_000)]:
               with TemporaryDirectory() as folder:
                   path = Path(folder) / "large.parquet"
                   values = np.arange(count, dtype=np.float64)
