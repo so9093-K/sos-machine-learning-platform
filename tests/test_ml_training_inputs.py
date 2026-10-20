@@ -31,7 +31,7 @@ def test_large_wide_training_input_can_use_full_dataset(monkeypatch):
     assert selection["selection_sha256"]
 
 
-def test_budgeted_selection_covers_all_rows_and_is_scan_order_independent(monkeypatch):
+def test_budgeted_selection_covers_all_rows_and_is_reproducible_with_same_input(monkeypatch):
     count = 50_017
     names = [f"f_{i}" for i in range(40)]
     numbers = np.arange(count, dtype=np.float64)
@@ -41,15 +41,15 @@ def test_budgeted_selection_covers_all_rows_and_is_scan_order_independent(monkey
         None, {}, names, seed=42, worker_memory_mib=4
     )
     assert 2 < first.shape[0] < count
-    assert original["method"] == "feature_hash_bottom_k_v1"
+    assert original["method"] == "row_priority_bottom_k_v1"
     assert original["source_rows"] == count
 
-    bind_frame(monkeypatch, data.reverse())
-    second, reversed_input = ml_training.training_matrix(
+    bind_frame(monkeypatch, data)
+    second, repeated_input = ml_training.training_matrix(
         None, {}, names, seed=42, worker_memory_mib=4
     )
     np.testing.assert_array_equal(first, second)
-    assert original == reversed_input
+    assert original == repeated_input
 
 
 @pytest.mark.parametrize("invalid", ["null", "nan", "infinity", "large_integer"])
@@ -129,4 +129,32 @@ def test_training_scans_actual_parquet_lazily(monkeypatch, tmp_path):
     )
     assert 2 < matrix.shape[0] < count
     assert selection["source_rows"] == count
-    assert selection["method"] == "feature_hash_bottom_k_v1"
+    assert selection["method"] == "row_priority_bottom_k_v1"
+
+
+def test_repeated_feature_values_preserve_observation_frequency(monkeypatch):
+    # 동일한 값의 9,000개 관측과 희귀한 값의 1,000개 관측은
+    # 값마다 하나의 해시만 주면 표본 구성 비율이 왜곡된다.
+    signal = np.concatenate((np.zeros(9000), np.ones(1000)))
+    bind_frame(monkeypatch, pl.DataFrame({"signal": signal}))
+    matrix, selection = ml_training.training_matrix(
+        None, {}, ["signal"], seed=29, worker_memory_mib=1
+    )
+    assert selection["selected_rows"] < 10_000
+    assert 0.84 < np.mean(matrix[:, 0] == 0.0) < 0.96
+
+
+def test_budgeted_selection_changes_when_scan_order_changes(monkeypatch):
+    # Dataset 판본이 같아도 소스 스캔 순서가 바뀌면 지문이 달라질 수 있다.
+    values = np.arange(20_000, dtype=np.float64)
+    data = pl.DataFrame({"signal": values})
+    bind_frame(monkeypatch, data)
+    _, first = ml_training.training_matrix(
+        None, {}, ["signal"], seed=42, worker_memory_mib=1
+    )
+    bind_frame(monkeypatch, data.reverse())
+    _, second = ml_training.training_matrix(
+        None, {}, ["signal"], seed=42, worker_memory_mib=1
+    )
+    assert first["selected_rows"] == second["selected_rows"]
+    assert first["selection_sha256"] != second["selection_sha256"]

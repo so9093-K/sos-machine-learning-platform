@@ -27,9 +27,11 @@ def training_matrix(
 ) -> tuple[np.ndarray, dict]:
     """Dataset 전체를 확인하며 실행 RSS 예산에서 유도한 행렬 크기만 유지한다.
 
-    선택 기준은 Feature 값의 고정 Seed 해시이다. 전체 행을 검사한 뒤 우선순위가
-    가장 낮은 행만 유지하므로 소스 스캔의 배치 크기·순서에 영향을 받지 않는다.
-    이 선택은 층화/시간 기반 표본이나 통계적 대표성을 보장하지 않는다.
+    입력 스캔 순서의 각 행에 Seed 고정 무작위 우선순위를 부여하고 전역 bottom-k를
+    선택한다. Feature 값이 같은 별개 관측도 독립적으로 선택된다. 동일한 판본을
+    동일한 행 순서로 읽으면 같은 입력을 재현하며, 스캔 순서가 달라지면 선택
+    결과가 달라질 수 있으므로 실제 선택 행렬의 SHA-256을 기록한다.
+    표본이 업무 집단·시간 구간을 대표한다는 보장은 없다.
 
     Args:
         store: 원본 Dataset을 고정해서 읽을 저장소.
@@ -61,9 +63,14 @@ def training_matrix(
         raise ValueError("Training feature width exceeds the Worker memory budget")
     chunk_rows = max(1, min(8192, (matrix_byte_budget // 4) // (len(features) * 8)))
 
-    selected = np.empty((0, len(features)), dtype=np.float64)
-    selected_priority = np.empty(0, dtype=np.uint64)
+    # 초기에는 한 배치만 예약하고, 필요할 때만 배가시켜 최대 입력 예산까지 확장.
+    capacity = min(max_rows, chunk_rows)
+    selected = np.empty((capacity, len(features)), dtype=np.float64)
+    selected_priority = np.empty(capacity, dtype=np.uint64)
+    selected_rows = 0
     source_rows = 0
+    # 원본 행 순서에 따라 독립 우선순위를 부여해 값이 중복된 관측의 빈도를 보존.
+    rng = np.random.default_rng(seed)
     with pinned_scan_dataset(store, dataset) as source:
         schema = source.collect_schema()
         if any(name not in schema for name in features):
@@ -85,34 +92,53 @@ def training_matrix(
             matrix = np.asarray(frame.to_numpy(), dtype=np.float64)
             if not np.isfinite(matrix).all():
                 raise ValueError("Training features must be finite numeric values")
-            priority = (
-                frame.select(pl.struct(features).hash(seed=seed)).to_series().to_numpy()
+            priority = rng.integers(
+                0, np.iinfo(np.uint64).max, size=frame.height, dtype=np.uint64
             )
-            # 이미 작은 우선순위만 남아 있다면 불필요한 배열 복사를 피한다.
-            if selected_priority.size == max_rows:
-                keep = priority <= selected_priority.max()
-                matrix, priority = matrix[keep], priority[keep]
-            if not len(priority):
+            incoming = min(frame.height, max_rows - selected_rows)
+            if incoming:
+                needed = selected_rows + incoming
+                if needed > capacity:
+                    capacity = min(max_rows, max(needed, capacity * 2))
+                    grown = np.empty((capacity, len(features)), dtype=np.float64)
+                    grown[:selected_rows] = selected[:selected_rows]
+                    selected = grown
+                    grown_priority = np.empty(capacity, dtype=np.uint64)
+                    grown_priority[:selected_rows] = selected_priority[:selected_rows]
+                    selected_priority = grown_priority
+                selected[selected_rows:needed] = matrix[:incoming]
+                selected_priority[selected_rows:needed] = priority[:incoming]
+                selected_rows = needed
+            if selected_rows < max_rows or incoming == frame.height:
                 continue
-            combined = np.concatenate((selected, matrix))
-            combined_priority = np.concatenate((selected_priority, priority))
-            if len(combined_priority) > max_rows:
-                indices = np.argpartition(combined_priority, max_rows - 1)[:max_rows]
-                selected = combined[indices]
-                selected_priority = combined_priority[indices]
-            else:
-                selected = combined
-                selected_priority = combined_priority
+            matrix = matrix[incoming:]
+            priority = priority[incoming:]
+            # 가장 나쁜 현재 우선순위보다 좋은 새 행만 후보로 삼는다.
+            candidates = np.flatnonzero(priority < selected_priority[:selected_rows].max())
+            if not candidates.size:
+                continue
+            combined_priority = np.concatenate((
+                selected_priority[:selected_rows], priority[candidates]
+            ))
+            # 선택된 전체 Feature 행렬을 매번 복사하지 않는다. 우선순위만
+            # 재계산하고 교체가 필요한 행만 기존 버퍼에 덮어쓴다.
+            chosen = np.argpartition(combined_priority, max_rows - 1)[:max_rows]
+            keep = np.zeros(max_rows, dtype=bool)
+            keep[chosen[chosen < max_rows]] = True
+            dropped = np.flatnonzero(~keep)
+            replacements = candidates[chosen[chosen >= max_rows] - max_rows]
+            selected[dropped] = matrix[replacements]
+            selected_priority[dropped] = priority[replacements]
     if source_rows < 2:
         raise ValueError("Training requires at least two rows")
 
     # Priority 동점은 동일 Feature 값에서 생기며 정렬 전후의 계산 의미가 같다.
-    order = np.argsort(selected_priority, kind="stable")
+    order = np.argsort(selected_priority[:selected_rows], kind="stable")
     selected = np.ascontiguousarray(selected[order])
     selection = {
         "source_rows": source_rows,
         "selected_rows": len(selected),
-        "method": "all_rows" if source_rows == len(selected) else "feature_hash_bottom_k_v1",
+        "method": "all_rows" if source_rows == len(selected) else "row_priority_bottom_k_v1",
         "seed": seed,
         "matrix_byte_budget": matrix_byte_budget,
         "selection_sha256": hashlib.sha256(selected.tobytes()).hexdigest(),
