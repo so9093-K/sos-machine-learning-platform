@@ -465,3 +465,49 @@ def test_canonical_real_parquet_reordered_same_fingerprint(monkeypatch, tmp_path
         )
     np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
     assert outputs[0][1] == outputs[1][1]
+
+
+def test_training_sort_scratch_is_attempt_owned_and_cleaned(monkeypatch, tmp_path):
+    from uuid import uuid4
+
+    from sos_platform.ml_training_staging import (
+        cleanup_training_stage,
+        training_stage_bytes,
+        training_stage_path,
+    )
+
+    original = str(uuid4())
+    second = str(uuid4())
+    own = training_stage_path(tmp_path, original)
+    other = training_stage_path(tmp_path, second)
+    own.mkdir(parents=True)
+    (own / "sort").mkdir()
+    (own / "sort" / "spill").write_bytes(b"x" * 1234)
+    other.mkdir()
+    (other / "spill").write_bytes(b"another-attempt")
+    assert training_stage_bytes(tmp_path, original) == 1234
+    assert training_stage_bytes(tmp_path, second) == len(b"another-attempt")
+
+    cleanup_training_stage(tmp_path, original)
+    assert not own.exists()
+    assert other.exists()
+    cleanup_training_stage(tmp_path)
+    assert not other.exists()
+    with pytest.raises(ValueError):
+        training_stage_path(tmp_path, "../untrusted")
+
+
+def test_training_stage_cleanup_does_not_follow_unowned_symlinks(tmp_path):
+    from uuid import uuid4
+
+    from sos_platform.ml_training_staging import cleanup_training_stage, training_stage_root
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    marker = outside / "important"
+    marker.write_text("keep")
+    root = training_stage_root(tmp_path)
+    root.mkdir(parents=True)
+    (root / f"attempt-{uuid4()}").symlink_to(outside, target_is_directory=True)
+    cleanup_training_stage(tmp_path)
+    assert marker.read_text() == "keep"
