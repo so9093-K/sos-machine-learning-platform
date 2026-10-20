@@ -81,7 +81,7 @@ jobs:
           docker compose -f compose.yaml -p sos-platform up -d --wait
           uv run --locked alembic upgrade head
           uv run --locked python -m sos_platform.bootstrap
-      - name: DB/S3 smoke: representative API and Worker flows
+      - name: "DB/S3 smoke: representative API and Worker flows"
         if: steps.contract_scope.outputs.run == 'true'
         run: |
           uv run --locked pytest -q \
