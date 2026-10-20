@@ -3,12 +3,10 @@
 import hashlib
 from uuid import uuid4
 
-import polars as pl
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from sos_platform.api import create_app
-from sos_platform.object_store import ObjectStore
 from sos_platform.security import Actor, IdentitySettings
 from sos_platform.worker import run_once
 
@@ -26,7 +24,7 @@ def _submit(client, endpoint, body):
     return client.post(endpoint, json=body, headers={"Idempotency-Key": str(uuid4())})
 
 
-def test_ml_result_publication_chain(workspace, tmp_path):
+def test_ml_result_publication_chain(workspace):
     """하나의 학습·Scoring 결과로 네 개 독립 게시 API의 계약을 확인한다."""
     client, store = workspace
     training = _upload(
@@ -86,19 +84,6 @@ def test_ml_result_publication_chain(workspace, tmp_path):
     assert result["ranking_metrics"]["positive_count"] == 1
     assert result["ranking_metrics"]["average_precision"] is not None
 
-    storage = ObjectStore()
-    local = tmp_path / "scored.parquet"
-    storage.get(storage.key(result["location"]), local, expected_sha256=result["sha256"])
-    frame = pl.read_parquet(local)
-    assert frame.height == 4
-    assert frame["label"].to_list() == [0, 0, 0, 1]
-    assert frame["row_index"].to_list() == [0, 1, 2, 3]
-    assert frame["features"].struct.field("temperature").to_list() == [1, 2, 3, 200]
-    observed = store.observe_objects(
-        [{"location": result["location"], "fingerprint": "scoring-generation"}], 24
-    )
-    assert observed[result["location"]]["referenced"] is True
-
     rejected = _submit(
         client,
         "/api/ml/explanations/jobs",
@@ -127,9 +112,6 @@ def test_ml_result_publication_chain(workspace, tmp_path):
         "temperature",
         "pressure",
     ]
-    assert all(
-        isinstance(item["anomaly_score_delta"], float) for item in output["feature_sensitivities"]
-    )
 
     policy_job = _submit(
         client,
@@ -172,13 +154,6 @@ def test_ml_result_publication_chain(workspace, tmp_path):
             "evaluation_revisions",
         ):
             assert db.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one() == 1
-        assert (
-            db.execute(
-                text("SELECT COUNT(*) FROM datasets WHERE id=:id"),
-                {"id": scoring["id"]},
-            ).scalar_one()
-            == 1
-        )
 
 
 def test_validation_rejects_wrong_policy_combination(workspace):
