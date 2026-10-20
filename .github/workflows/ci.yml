@@ -5,6 +5,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      validation:
+        description: "실행할 검사"
+        type: choice
+        options: [integration, browser, both]
+        default: integration
+      integration_target:
+        description: "Integration 대상 (기본 전체, 또는 tests/integration/test_*.py)"
+        type: string
+        required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
@@ -16,6 +26,8 @@ permissions:
 jobs:
   python-quality:
     runs-on: ubuntu-latest
+    outputs:
+      integration_paths: ${{ steps.changed-tests.outputs.paths }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -25,6 +37,23 @@ jobs:
         run: |
           uv python install
           uv sync --locked --group dev
+      - name: Select affected Integration tests
+        id: changed-tests
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD -- tests/integration/conftest.py | grep -q .; then
+            echo "paths=tests/integration" >> "$GITHUB_OUTPUT"
+          else
+            mapfile -d '' paths < <(git diff --name-only -z --diff-filter=ACMR "${{ github.event.pull_request.base.sha }}" HEAD -- 'tests/integration/test_*.py')
+            if (( ${#paths[@]} )); then
+              for path in "${paths[@]}"; do
+                [[ "$path" =~ ^tests/integration/test_[a-zA-Z0-9_]+\.py$ ]] || exit 2
+              done
+              echo "paths=${paths[*]}" >> "$GITHUB_OUTPUT"
+            fi
+          fi
       - name: Ruff
         run: |
           uv run --locked ruff check .
@@ -52,7 +81,9 @@ jobs:
           git diff --exit-code -- web/src/api.generated.ts
 
   integration:
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.validation != 'browser') ||
+      (github.event_name == 'pull_request' && needs.python-quality.outputs.integration_paths != '')
     needs: [python-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -74,12 +105,29 @@ jobs:
       - name: Distribution wheel
         run: uv run --locked python scripts/verify_wheel.py
       - name: Python integration tests
-        run: uv run --locked pytest -q tests/integration
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SELECTED_TESTS: ${{ needs.python-quality.outputs.integration_paths }}
+          MANUAL_TARGET: ${{ inputs.integration_target }}
+        shell: bash
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            read -r -a targets <<< "$SELECTED_TESTS"
+            (( ${#targets[@]} )) || exit 2
+            uv run --locked pytest -q "${targets[@]}"
+          else
+            target="${MANUAL_TARGET:-tests/integration}"
+            if [[ "$target" != "tests/integration" && ! "$target" =~ ^tests/integration/test_[a-zA-Z0-9_]+\.py$ ]]; then
+              echo "Choose tests/integration or one tests/integration/test_*.py" >&2
+              exit 2
+            fi
+            uv run --locked pytest -q "$target"
+          fi
       - name: Alembic schema
         run: uv run --locked alembic check
 
   browser:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.validation == 'browser' || inputs.validation == 'both')
     needs: [python-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
