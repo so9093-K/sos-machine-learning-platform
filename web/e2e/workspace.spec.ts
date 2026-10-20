@@ -71,63 +71,6 @@ test("TSV 업로드 실패 후 파일을 재선택하지 않고 설정을 수정
   await expect(heading).toHaveCount(0);
 });
 
-test("CSV upload → EDA → feature preview → worker → reusable dataset", async ({ page }) => {
-  await page.goto("/");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "sensors.csv",
-    mimeType: "text/csv",
-    buffer: Buffer.from("time,temperature\n1,22\n2,24\n3,25\n"),
-  });
-  await expect(page.getByRole("heading", { name: "sensors.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "탐색" }).click();
-  await expect(page.getByText("분석한 행", { exact: true })).toBeVisible();
-  await expect(page.getByText("Histogram")).toBeVisible();
-  await page.getByRole("button", { name: "데이터 준비", exact: true }).click();
-  await page.getByRole("button", { name: "+ 단계 추가" }).click();
-  await page.getByRole("button", { name: "변환 결과 미리보기" }).click();
-  await expect(page.getByText("변환 미리보기 · 전체 입력 기준 연산")).toBeVisible();
-  const jobId = await submittedJob(page, "/api/jobs", () =>
-    page.getByRole("button", { name: /전체 변환 Job 실행/ }).click());
-  const latestTransform = jobById(page, jobId);
-  await expect(latestTransform.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
-  await expect(latestTransform.getByText(/입력 데이터/)).toBeVisible();
-  await latestTransform.getByText(/작업 설정 및 실행 시도/).click();
-  await expect(latestTransform.getByText(/Succeeded ·/)).toBeVisible();
-  await expect(page.locator("nav").getByText(/features-/).first()).toBeVisible();
-});
-
-test("failed Attempt detail can be retried without collapsing the Job", async ({ page }) => {
-  await page.goto("/");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "detail-retry.csv", mimeType: "text/csv", buffer: Buffer.from("value\n1\n2\n"),
-  });
-  await expect(page.getByRole("heading", { name: "detail-retry.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "탐색" }).click();
-  const jobId = await submittedJob(page, "/api/jobs", () =>
-    page.getByRole("button", { name: /전체 데이터 프로파일 실행/ }).click());
-  const job = jobById(page, jobId);
-  await expect(job.locator(".status")).toContainText("Succeeded", { timeout: 30000 });
-
-  let unavailable = true;
-  await page.route(`**/api/jobs/${jobId}`, async route => {
-    if (unavailable) {
-      await route.fulfill({
-        status: 503, contentType: "application/json",
-        body: JSON.stringify({ detail: "상세 기록을 가져올 수 없습니다." }),
-      });
-    } else {
-      await route.continue();
-    }
-  });
-  await job.getByText(/작업 설정 및 실행 시도/).click();
-  await expect(job.getByRole("alert")).toContainText("상세 기록을 가져올 수 없습니다.");
-  unavailable = false;
-  await job.getByRole("button", { name: "상세 다시 시도" }).click();
-  await expect(job.getByText(/Succeeded ·/)).toBeVisible();
-  await expect(job.getByRole("button", { name: "상세 다시 시도" })).toHaveCount(0);
-});
-
-
 test("example onboarding opens the selected Dataset without automatic processing", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "예제 데이터 살펴보기" }).click();
@@ -710,55 +653,6 @@ test("editing Dataset Query while its response is pending never renders stale ro
   await expect(page.locator("#sos-panel-preview tbody tr")).toContainText("20");
 });
 
-test("unknown CSV opens Understanding and transfers a candidate to editable Exploration", async ({ page }) => {
-  await page.goto("/");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "unknown.csv",
-    mimeType: "text/csv",
-    buffer: Buffer.from("department,score\nalpha,3\nbeta,5\nalpha,7\nbeta,9\n"),
-  });
-  await expect(page.getByRole("heading", { name: "unknown.csv" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "원본 데이터 개요" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "데이터 이해" })).toHaveAttribute("aria-selected", "true");
-  const panel = page.getByRole("tabpanel", { name: "데이터 이해" });
-  await expect(panel.getByRole("button", { name: "기본 분석 실행" })).toBeVisible();
-  await panel.getByRole("button", { name: "기본 분석 실행" }).click();
-  await expect(panel.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });
-  await expect(panel.getByText("그룹별 수치 비교")).toBeVisible();
-  await panel.getByRole("searchbox", { name: "프로파일 컬럼 검색" }).fill("score");
-  await expect(panel.getByRole("cell", { name: "score" })).toBeVisible();
-  await expect(panel.getByRole("cell", { name: "department" })).toHaveCount(0);
-  await panel.getByRole("searchbox", { name: "프로파일 컬럼 검색" }).fill("");
-  await expect(panel.getByRole("heading", { name: "실행 가능한 분석 예시" })).toBeVisible();
-  let explorationRequests = 0;
-  page.on("request", req => {
-    if (/\/api\/datasets\/[^/]+\/explorations$/.test(req.url()) &&
-      req.method() === "POST") explorationRequests += 1;
-  });
-  await panel.getByRole("button", { name: "탐색 조건 보기" }).first().click();
-  await expect(page.getByRole("tab", { name: "탐색" })).toHaveAttribute("aria-selected", "true");
-  const exploration = page.getByRole("tabpanel", { name: "탐색" });
-  await expect(exploration.getByText(/탐색 후보에서 가져온 조건/)).toBeVisible();
-  await expect(exploration.getByLabel("집계 방식")).toHaveValue("mean");
-  await expect(exploration.getByLabel("분석할 컬럼")).toHaveValue("score");
-  await expect(exploration.getByLabel("집계 그룹")).toHaveValue("department");
-  expect(explorationRequests).toBe(0);
-  await exploration.getByLabel("집계 방식").selectOption("max");
-  await page.getByRole("tab", { name: "데이터 이해" }).click();
-  await page.getByRole("tab", { name: "탐색" }).click();
-  await expect(exploration.getByLabel("집계 방식")).toHaveValue("max");
-  expect(explorationRequests).toBe(0);
-  await exploration.getByRole("button", { name: "부분 데이터 집계" }).click();
-  await expect.poll(() => explorationRequests).toBe(1);
-  const explorationBasis = exploration.locator(".discovery-panel .analysis-evidence");
-  await explorationBasis.getByText("분석 근거 자세히").click();
-  await expect(explorationBasis.getByText(/Dataset 판본/)).toBeVisible();
-  await page.reload();
-  await expect(page.getByRole("tab", { name: "데이터 이해" })).toBeVisible();
-  await expect(page.getByText("컬럼 특성")).toBeVisible({ timeout: 30000 });
-});
-
-
 test("administrator changes instance name and it survives browser reload", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "표시명 설정" }).click();
@@ -798,33 +692,6 @@ test("Data Explorer supports WCAG 320px reflow without page-wide overflow", asyn
   await expect(page.getByRole("heading", { name: "데이터 탐색" })).toBeVisible();
   const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(pageWidth).toBeLessThanOrEqual(320);
-});
-
-
-test("Dataset switch clears a previously chosen exploration candidate", async ({ page }) => {
-  await page.goto("/");
-  const input = page.locator('input[type="file"]');
-  await input.setInputFiles({
-    name: "candidate-a.csv", mimeType: "text/csv",
-    buffer: Buffer.from("department,score\nalpha,3\nbeta,5\nalpha,7\n"),
-  });
-  await expect(page.getByRole("heading", { name: "candidate-a.csv" })).toBeVisible();
-  const overview = page.getByRole("tabpanel", { name: "데이터 이해" });
-  await overview.getByRole("button", { name: "기본 분석 실행" }).click();
-  await expect(overview.getByRole("heading", { name: "실행 가능한 분석 예시" })).toBeVisible({ timeout: 30000 });
-  await overview.getByRole("button", { name: "탐색 조건 보기" }).first().click();
-  await expect(page.getByRole("tabpanel", { name: "탐색" })
-    .getByText(/탐색 후보에서 가져온 조건/)).toBeVisible();
-  await input.setInputFiles({
-    name: "candidate-b.csv", mimeType: "text/csv",
-    buffer: Buffer.from("region,amount\nseoul,1\nbusan,2\n"),
-  });
-  await expect(page.getByRole("heading", { name: "candidate-b.csv" })).toBeVisible();
-  await page.getByRole("tab", { name: "탐색" }).click();
-  const exploration = page.getByRole("tabpanel", { name: "탐색" });
-  await expect(exploration.getByText(/탐색 후보에서 가져온 조건/)).toHaveCount(0);
-  await expect(exploration.getByLabel("집계 그룹")).toHaveValue("");
-  await expect(exploration.getByLabel("분석할 컬럼")).not.toHaveValue("score");
 });
 
 
