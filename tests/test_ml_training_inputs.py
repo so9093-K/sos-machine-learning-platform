@@ -158,3 +158,20 @@ def test_budgeted_selection_changes_when_scan_order_changes(monkeypatch):
     )
     assert first["selected_rows"] == second["selected_rows"]
     assert first["selection_sha256"] != second["selection_sha256"]
+
+
+def test_budgeted_selection_matches_global_priority_reference(monkeypatch):
+    count = 5_000
+    seed = 23
+    data = np.arange(count, dtype=np.float64)
+    bind_frame(monkeypatch, pl.DataFrame({"value": data}))
+    matrix, selection = ml_training.training_matrix(
+        None, {}, ["value"], seed=seed, worker_memory_mib=1
+    )
+    count_selected = selection["selected_rows"]
+    priority = np.random.default_rng(seed).integers(
+        0, np.iinfo(np.uint64).max, size=count, dtype=np.uint64
+    )
+    keep = np.argpartition(priority, count_selected - 1)[:count_selected]
+    keep = keep[np.argsort(priority[keep], kind="stable")]
+    np.testing.assert_array_equal(matrix[:, 0], data[keep])

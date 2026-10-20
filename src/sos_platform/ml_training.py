@@ -132,7 +132,7 @@ def training_matrix(
     if source_rows < 2:
         raise ValueError("Training requires at least two rows")
 
-    # Priority 동점은 동일 Feature 값에서 생기며 정렬 전후의 계산 의미가 같다.
+    # 선택 우선순위 순서로 정렬하여 모델의 행 위치 기반 난수를 재현한다.
     order = np.argsort(selected_priority[:selected_rows], kind="stable")
     selected = np.ascontiguousarray(selected[order])
     selection = {
