@@ -88,7 +88,7 @@ def test_sample_larger_than_dataset_fails(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "request",
+    "payload",
     [
         {"mode": "sample"},
         {"mode": "sample", "rows": 100},
@@ -100,9 +100,9 @@ def test_sample_larger_than_dataset_fails(monkeypatch):
         {"mode": "sample", "rows": 50, "seed": -1},
     ],
 )
-def test_invalid_input_selection_rejected_by_api_contract(request):
+def test_invalid_input_selection_rejected_by_api_contract(payload):
     with pytest.raises(ValidationError):
-        MLTrainingInputPolicy.model_validate(request)
+        MLTrainingInputPolicy.model_validate(payload)
 
 
 @pytest.mark.parametrize("invalid", ["null", "nan", "infinity", "large_integer"])
