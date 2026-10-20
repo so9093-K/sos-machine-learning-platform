@@ -20,20 +20,3 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
-
-      # PR 검토용: 최종 Diff에서 제거할 Web/OpenAPI/Ruff 검사.
-      - name: Check changed Python modules
-        run: uv run --locked ruff check src/sos_platform/ml_input.py src/sos_platform/ml_training.py src/sos_platform/ml_scoring.py src/sos_platform/schemas.py tests/test_ml_training_inputs.py
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - name: Validate generated OpenAPI types
-        run: |
-          cd web
-          npm ci --no-audit --no-fund
-          cd ..
-          bash scripts/generate_api_types.sh
-          git diff --exit-code -- web/src/api.generated.ts
-      - name: Build Web
-        run: npm run build
-        working-directory: web
