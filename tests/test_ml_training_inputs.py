@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from sos_platform import ml_training
 from sos_platform.errors import PlatformError
-from sos_platform.schemas import MLTrainRequest, MLTrainingInputPolicy
+from sos_platform.schemas import MLTrainingInputPolicy, MLTrainRequest
 
 
 def all_rows() -> MLTrainingInputPolicy:
