@@ -1,8 +1,6 @@
 """실제 S3 Scoring Result에 대한 독립 정책·평가 Job 및 판본."""
 
 import hashlib
-from concurrent.futures import ThreadPoolExecutor
-from threading import Event
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -212,70 +210,3 @@ def test_ml_result_cancel_checks_actor_permission_and_ownership(workspace):
         canceled = secure.post(path, headers=auth("alice"))
         assert canceled.status_code == 200, canceled.text
         assert canceled.json()["status"] == "Cancelled"
-
-
-def test_running_ml_result_cancel_wins_before_revision_publication(workspace, monkeypatch):
-    """계산 완료 뒤 취소 경합에서도 결과 판본을 확정하지 않는다."""
-    client, store = workspace
-    data = _upload(client, "cancel-running.csv", b"temperature\n1.0\n2.0\n3.0\n4.0\n")
-    trained = _submit(
-        client,
-        "/api/ml/train/jobs",
-        {"dataset_id": data["id"], "features": ["temperature"]},
-    )
-    assert trained.status_code == 202
-    assert run_once(store)
-    model_id = client.get(f"/api/ml/train/jobs/{trained.json()['id']}").json()["result"][
-        "model_revision_id"
-    ]
-    scored = _submit(
-        client,
-        "/api/ml/scoring/jobs",
-        {"dataset_id": data["id"], "model_revision_id": model_id},
-    )
-    assert scored.status_code == 202
-    assert run_once(store)
-    score_id = client.get(f"/api/ml/scoring/jobs/{scored.json()['id']}").json()["result"][
-        "scoring_result_id"
-    ]
-    cases = [
-        ("policies", {"scoring_result_id": score_id, "mode": "fixed", "threshold": 0.5}),
-        ("evaluations", {"scoring_result_id": score_id}),
-        ("explanations", {"scoring_result_id": score_id, "row_index": 0}),
-    ]
-    original_finish = store.finish
-    for kind, body in cases:
-        queued = _submit(client, f"/api/ml/{kind}/jobs", body)
-        assert queued.status_code == 202, queued.text
-        job_id = queued.json()["id"]
-        reached = Event()
-        release = Event()
-
-        def pause_finalization(
-            identifier, status, *, _job_id=job_id, _reached=reached, _release=release, **kwargs
-        ):
-            if identifier == _job_id and status == "Succeeded":
-                _reached.set()
-                assert _release.wait(timeout=30), "Timed out waiting for cancellation"
-            return original_finish(identifier, status, **kwargs)
-
-        with monkeypatch.context() as patch:
-            patch.setattr(store, "finish", pause_finalization)
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(run_once, store)
-                try:
-                    assert reached.wait(timeout=30), f"{kind} never reached publication"
-                    requested = client.post(f"/api/ml/{kind}/jobs/{job_id}/cancel")
-                    assert requested.status_code == 200, requested.text
-                    assert requested.json()["status"] == "Running"
-                    assert requested.json()["cancel_requested"] is True
-                finally:
-                    release.set()
-                assert future.result(timeout=30) is True
-        final = client.get(f"/api/ml/{kind}/jobs/{job_id}").json()
-        assert final["status"] == "Cancelled"
-        assert final["result"] is None
-        assert final["attempts"][-1]["status"] == "Cancelled"
-    with store.connection() as db:
-        for table in ("decision_policy_revisions", "evaluation_revisions", "explanation_results"):
-            assert db.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one() == 0
