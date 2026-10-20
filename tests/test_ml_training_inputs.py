@@ -332,3 +332,31 @@ def test_worker_capacity_error_retains_catalog_category():
 
     error = PlatformError("SOS-ML-TRAIN-CAPACITY")
     assert classify_failure(error) == ("capacity", "PlatformError")
+
+
+def test_full_parquet_training_above_old_limit_creates_model(monkeypatch, tmp_path):
+    """50,000행 초과 실제 Parquet에서 모델과 입력 근거까지 확정한다."""
+    count = 100_013
+    path = tmp_path / "training.parquet"
+    values = np.arange(count, dtype=np.float64)
+    pl.DataFrame({"x": values, "y": np.sin(values * 0.01)}).write_parquet(path)
+    bind_frame(monkeypatch, pl.scan_parquet(path))
+    artifact = tmp_path / "training.joblib"
+    result = ml_training.train_dataset(
+        None,
+        {"version": "v1"},
+        {
+            "algorithm": "isolation_forest",
+            "dataset_version": "v1",
+            "features": ["x", "y"],
+            "params": {"n_estimators": 8, "random_state": 17},
+            "training_input": all_rows().model_dump(),
+        },
+        artifact,
+    )
+    assert artifact.is_file()
+    assert result["source_rows"] == result["training_rows"] == count
+    assert result["training_selection"]["selected_rows"] == count
+    assert result["training_selection"]["method"] == "all_rows"
+    assert result["training_score_summary"]["score_count"] == count
+    assert result["runtime"]["training_selection"] == result["training_selection"]
