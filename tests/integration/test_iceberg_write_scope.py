@@ -247,3 +247,47 @@ def test_failed_job_transaction_rolls_back_table_reservation(workspace):
             reserve_iceberg_table="rolled_back",
         )
     assert store.iceberg_write_claim("rolled_back") is None
+
+
+def test_migration_blocks_pending_adoption_without_losing_evidence(workspace):
+    """기존 0019 소유권 근거를 보존하며 0020 전진·후퇴 시 쓰기를 차단한다."""
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import text
+    from uuid import uuid4
+    import pytest
+
+    _client, store = workspace
+    config = Config("alembic.ini")
+    config.set_main_option(
+        "sqlalchemy.url", store.engine.url.render_as_string(hide_password=False)
+    )
+    command.downgrade(config, "0019")
+    dataset_id = str(uuid4())
+    with store.connection() as db:
+        db.execute(
+            text(
+                "INSERT INTO iceberg_table_owners"
+                "(table_name,owner_actor,token,table_uuid,adoption_dataset_id,state,created_at)"
+                " VALUES(:table,:owner,:token,:uuid,:dataset,'Adopting',:at)"
+            ),
+            {
+                "table": "default.pending_legacy",
+                "owner": "local-developer",
+                "token": str(uuid4()),
+                "uuid": str(uuid4()),
+                "dataset": dataset_id,
+                "at": "2026-01-01T00:00:00Z",
+            },
+        )
+    command.upgrade(config, "0020")
+    claim = store.iceberg_write_claim("pending_legacy")
+    assert claim["state"] == "Blocked"
+    assert claim["adoption_dataset_id"] == dataset_id
+    with pytest.raises(PermissionError, match="denied"):
+        store.reserve_iceberg_table("pending_legacy", "local-developer")
+    command.downgrade(config, "0019")
+    original = store.iceberg_write_claim("pending_legacy")
+    assert original["state"] == "Adopting"
+    assert original["adoption_dataset_id"] == dataset_id
+
