@@ -52,8 +52,7 @@ jobs:
           git diff --exit-code -- web/src/api.generated.ts
 
   integration:
-    # 일회성 동일 검사 비용 계측; 후속 커밋에서 수동 전환 복원
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     needs: [python-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -75,7 +74,7 @@ jobs:
       - name: Distribution wheel
         run: uv run --locked python scripts/verify_wheel.py
       - name: Python integration tests
-        run: uv run --locked pytest -q tests/integration --durations=0 --durations-min=0.01
+        run: uv run --locked pytest -q tests/integration
       - name: Alembic schema
         run: uv run --locked alembic check
 
