@@ -4,7 +4,6 @@ import hashlib
 import json
 
 import pyarrow as pa
-import pytest
 from fastapi.testclient import TestClient
 
 from sos_platform.api import create_app

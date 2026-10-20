@@ -1,6 +1,5 @@
 """오류 응답의 기존 detail 호환, 상관관계, 비밀 보호를 검증한다."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 from sos_platform.api import create_app

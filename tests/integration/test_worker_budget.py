@@ -1,6 +1,5 @@
 """실행 시간 초과는 Job·Attempt에 안정적인 오류를 기록한다."""
 
-import pytest
 
 from sos_platform.execution_budget import ExecutionBudget
 from sos_platform.worker import run_once
