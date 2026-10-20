@@ -48,6 +48,9 @@ jobs:
           import resource
           import subprocess
           import sys
+          import os
+          # 정렬이 전체 입력 폭을 메모리에 쌓지 않도록 디스크 Spill 경로를 검증.
+          os.environ["POLARS_FORCE_OOC"] = "1"
           import numpy as np
           import polars as pl
           from sos_platform import ml_training
