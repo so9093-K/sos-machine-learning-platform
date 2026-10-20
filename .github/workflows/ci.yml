@@ -20,3 +20,21 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
+
+      # 리뷰를 위한 일회성 비교, 최종 PR에는 남기지 않는다.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: original
+      - name: Verify Training HTTP contract against base
+        shell: bash
+        env:
+          BASE_SHA: fe421c08112424fc8f6a4c4ee6404be4823bae45
+        run: |
+          mkdir -p "$RUNNER_TEMP/baseline-code"
+          git -C original archive "$BASE_SHA" | tar -xf - -C "$RUNNER_TEMP/baseline-code"
+          cp original/scripts/review_training_contract.py "$RUNNER_TEMP/review_training_contract.py"
+          (cd "$RUNNER_TEMP/baseline-code" && uv run --locked python "$RUNNER_TEMP/review_training_contract.py") > "$RUNNER_TEMP/base.json"
+          (cd original && uv run --locked python "$RUNNER_TEMP/review_training_contract.py") > "$RUNNER_TEMP/pr.json"
+          diff -u "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/pr.json"
+          cat "$RUNNER_TEMP/pr.json"
