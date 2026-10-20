@@ -25,10 +25,13 @@ function statistic(value: unknown): string {
 function trainingSelectionLabel(value: unknown): string {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "학습 입력 근거 미확인";
   if ("method" in value && value.method === "all_rows") return "전체 입력";
-  if ("method" in value && value.method === "row_priority_bottom_k_v1") {
+  if ("method" in value && (value.method === "canonical_multiset_v1" ||
+      value.method === "row_priority_bottom_k_v1")) {
     const rows = "requested_rows" in value ? value.requested_rows : null;
     const seed = "seed" in value ? value.seed : null;
-    return `명시적 부분집합 ${statistic(rows)}행 · 선택 Seed ${statistic(seed)} · 대표성 보장 없음`;
+    const scope = value.method === "canonical_multiset_v1"
+      ? "순서 독립 부분집합" : "기존 부분집합 (스캔 순서 영향 가능)";
+    return `${scope} ${statistic(rows)}행 · 선택 Seed ${statistic(seed)} · 대표성 보장 없음`;
   }
   return "학습 입력 선택 방식 미확인";
 }
@@ -299,7 +302,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         </div>
         <p className="hint">{inputMode === "all"
           ? "Dataset의 모든 행을 학습에 사용합니다. Worker 예산을 넘으면 자동 축소하지 않고 실패합니다."
-          : "지정한 행 수와 Seed로 전체 Dataset에서 행을 선택합니다. Dataset이 요청 행 수보다 작거나 예산이 부족하면 실패합니다. 스캔 순서가 달라지면 결과가 달라질 수 있습니다."}</p>
+          : "지정한 행 수와 Seed로 전체 Dataset에서 관측을 선택합니다. 같은 입력의 Feature 값과 중복 횟수라면 스캔 순서에 무관하게 같은 표본을 얻습니다. 요청 행 수보다 Dataset이 작거나 예산이 부족하면 실패합니다."}</p>
       </div>
       <div className="steps">
         <strong>학습에 사용할 숫자형 Feature ({features.length}개)</strong>
@@ -364,7 +367,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           onClick={() => void forkTraining()}>
           {submitting ? "Fork 제출 중…" : "동일 조건으로 Fork·Reproduce"}
         </button>
-        <p className="hint">Dataset 판본·Feature·입력 선택 정책·선택 Seed·모델 설정을 복사합니다. 스캔 순서·Runtime이 달라지면 실제 학습 입력은 달라질 수 있습니다.</p>
+        <p className="hint">Dataset 판본·Feature·입력 선택 정책·선택 알고리즘 버전·Seed·모델 설정을 복사합니다. 과거 방식은 스캔 순서에 영향을 받으며, Runtime 변경에 따른 결과 차이는 별도로 확인해야 합니다.</p>
       </div>}
       {selectedJob.status === "Succeeded" &&
         <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id} />}
