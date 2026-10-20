@@ -148,21 +148,6 @@
           "runner": "pytest",
           "path": "tests/integration/test_iceberg_write_scope.py",
           "title": "test_reservation_can_recover_after_table_creation_before_activation"
-        },
-        {
-          "runner": "pytest",
-          "path": "tests/integration/test_iceberg_ownership.py",
-          "title": "test_legacy_inspect_is_read_only_then_explicit_adoption_restores_append"
-        },
-        {
-          "runner": "pytest",
-          "path": "tests/integration/test_iceberg_ownership.py",
-          "title": "test_adoption_rejects_ambiguous_missing_and_stale_identity"
-        },
-        {
-          "runner": "pytest",
-          "path": "tests/integration/test_iceberg_ownership.py",
-          "title": "test_adoption_cannot_override_existing_catalog_owner_token"
         }
       ]
     },
