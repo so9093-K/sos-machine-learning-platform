@@ -14,8 +14,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from .api_control import control_router
-from .api_ml_training import training_router
 from .api_errors import problem_response, register_error_handlers
+from .api_ml_training import training_router
 from .config import StoragePolicy
 from .datasets import (
     connect_iceberg,
