@@ -1,6 +1,6 @@
 # 0014 — Iceberg 구형 테이블 쓰기 소유권 채택 경로 종료
 
-상태: **Accepted** · [ADR 0008](0008-iceberg-table-write-ownership.md)의 관리자 소유권 채택 결정과 그 재개 절차를 대체한다.
+상태: **Proposed** · [ADR 0008](0008-iceberg-table-write-ownership.md)의 관리자 소유권 채택과 재개 절차를 종료하는 변경 제안이다.
 
 ## 배경
 
