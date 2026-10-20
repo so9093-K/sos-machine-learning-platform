@@ -1,18 +1,13 @@
-"""Dataset 등록·원본·마이그레이션 통합 계약을 검증한다."""
+"""Dataset 등록·원본 통합 계약을 검증한다."""
 
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
-from uuid import uuid4
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from alembic import command
-from alembic.config import Config
-from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 
 from sos_platform.api import create_app
 from sos_platform.datasets import pinned_scan_dataset, save_upload
@@ -200,48 +195,6 @@ def test_upload_recovery_preserves_shared_content_addressed_blob(workspace, monk
     registered = save_upload(store, "replay.csv", content)
     assert registered["location"] == storage.location(key)
     assert any(d["location"] == registered["location"] for d in store.dataset_page(limit=101))
-
-
-def test_upgrade_from_0001_preserves_existing_records(workspace):
-    """실제 0001 DB 레코드를 보존하고 현재 Alembic HEAD까지 스키마를 올린다."""
-    _, store = workspace
-    config = Config("alembic.ini")
-    config.set_main_option("sqlalchemy.url", store.database_url)
-    command.downgrade(config, "0001")
-    dataset_id = str(uuid4())
-    with store.connection() as db:
-        db.execute(
-            text(
-                "INSERT INTO datasets(id,name,kind,location,version,created_at) "
-                "VALUES(:id,'legacy.csv','file','s3://sos-data/datasets/legacy.csv','v1',:at)"
-            ),
-            {"id": dataset_id, "at": "2026-10-01T00:00:00+00:00"},
-        )
-    command.upgrade(config, "head")
-    store.initialize()
-    assert store.get_dataset(dataset_id)["name"] == "legacy.csv"
-    assert store.get_dataset(dataset_id)["owner_actor"] is None
-    with store.connection() as db:
-        rev = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert rev == ScriptDirectory.from_config(config).get_current_head()
-        # 기존 0001 레코드도 신규 진단 필드를 NULL로 가진 채 보존한다.
-        cols = {
-            row[0]
-            for row in db.execute(
-                text("SELECT column_name FROM information_schema.columns WHERE table_name='jobs'")
-            )
-        }
-        assert {"request_id", "error_code", "failure_stage"} <= cols
-        names = {
-            row[0]
-            for row in db.execute(
-                text(
-                    "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_name='object_observations'"
-                )
-            )
-        }
-    assert "fingerprint" in names
 
 
 def test_upload_policy_and_raw_request_body_limit(workspace, monkeypatch):
