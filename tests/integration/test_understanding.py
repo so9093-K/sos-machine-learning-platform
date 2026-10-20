@@ -1,6 +1,5 @@
 """처음 보는 Dataset의 Profile·추천·보존·재사용을 검증한다."""
 
-from sos_platform.understanding import build_understanding
 from sos_platform.worker import run_once
 
 
@@ -121,12 +120,3 @@ def test_cancel_understanding_preserves_dataset_and_previous_profile(workspace):
     assert client.get(path).json()["profile"]["scope"] == "full"
 
 
-def test_reservoir_sample_is_reproducible_over_one_thousand_rows(workspace):
-    client, store = workspace
-    csv_content = "group,value\n" + "".join(f"{i % 7},{i}\n" for i in range(1500))
-    dataset = _upload(client, "many.csv", csv_content.encode("utf-8"))
-    first = build_understanding(store, dataset, scope="sample")
-    second = build_understanding(store, dataset, scope="sample")
-    assert first == second
-    assert first["row_count"] == 1000
-    assert first["sampling_method"] == "reservoir"

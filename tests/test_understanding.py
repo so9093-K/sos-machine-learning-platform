@@ -1,6 +1,10 @@
-"""Dataset의 역할·탐색 추천 로직은 인프라 없이 검증한다."""
+"""Dataset의 역할·탐색 추천와 실제 DuckDB 표본을 인프라 없이 검증한다."""
 
-from sos_platform.understanding import role_candidates, suggest_analyses
+from contextlib import contextmanager
+
+import duckdb
+
+from sos_platform.understanding import build_understanding, role_candidates, suggest_analyses
 
 
 def test_role_inference_never_confirms_meaning():
@@ -81,3 +85,24 @@ def test_suggestions_only_emit_supported_operations():
         "null_count": 0,
     }
     assert suggest_analyses([too_long], 10) == []
+
+
+def test_reservoir_sample_is_reproducible_over_one_thousand_rows(monkeypatch):
+    """실제 DuckDB 표본 계산을 DB/S3 서비스 없이 반복 검증한다."""
+
+    @contextmanager
+    def local_source(_store, _dataset, policy):
+        with duckdb.connect(config={"threads": policy.threads}) as connection:
+            connection.execute(
+                "CREATE VIEW source AS "
+                "SELECT i % 7 AS category, i AS value FROM range(1500) AS t(i)"
+            )
+            yield connection
+
+    monkeypatch.setattr("sos_platform.understanding.source_connection", local_source)
+    dataset = {"id": "reproducible-sample", "version": "v1"}
+    first = build_understanding(None, dataset, scope="sample")
+    second = build_understanding(None, dataset, scope="sample")
+    assert first == second
+    assert first["row_count"] == 1000
+    assert first["sampling_method"] == "reservoir"
