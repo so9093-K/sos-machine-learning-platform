@@ -216,13 +216,16 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         !("selection_sha256" in selection)) return null;
     return typeof selection.selection_sha256 === "string" ? selection.selection_sha256 : null;
   };
+  const currentInputFingerprint = model ? trainingFingerprint(model) : null;
+  const comparisonInputFingerprint = comparisonModel ? trainingFingerprint(comparisonModel) : null;
+  const inputEvidenceMissing = Boolean(model && comparisonModel &&
+    (currentInputFingerprint === null || comparisonInputFingerprint === null));
   const sameInput = Boolean(model && comparisonModel &&
     model.dataset_id === comparisonModel.dataset_id &&
     model.dataset_version === comparisonModel.dataset_version &&
     JSON.stringify(model.features) === JSON.stringify(comparisonModel.features) &&
-    trainingFingerprint(model) !== null &&
-    trainingFingerprint(comparisonModel) !== null &&
-    trainingFingerprint(model) === trainingFingerprint(comparisonModel));
+    currentInputFingerprint !== null &&
+    currentInputFingerprint === comparisonInputFingerprint);
 
   const parameterKeys = ["n_estimators", "max_samples", "max_features",
     "bootstrap", "random_state"];
@@ -387,9 +390,11 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           </label>
           {comparisonModel && <>
             <p className="hint" role="status">
-              {sameInput
-                ? "데이터 판본·Feature 순서·실제 학습 입력 지문이 같습니다. 설정 차이를 확인할 수 있습니다."
-                : "입력 판본·Feature 또는 실제 학습 입력이 다릅니다. 점수·경보량을 직접 비교할 수 없습니다."}
+              {inputEvidenceMissing
+                ? "학습 입력 지문이 없는 과거 모델이 포함되어 실제 입력의 동일성을 확인할 수 없습니다."
+                : sameInput
+                  ? "데이터 판본·Feature 순서·실제 학습 입력 지문이 같습니다. 설정 차이를 확인할 수 있습니다."
+                  : "입력 판본·Feature 또는 실제 학습 입력이 다릅니다. 점수·경보량을 직접 비교할 수 없습니다."}
             </p>
             <table>
               <caption>두 모델의 학습 설정 비교 (성능 순위 아님)</caption>
