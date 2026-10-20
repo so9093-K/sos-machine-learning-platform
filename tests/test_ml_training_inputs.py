@@ -325,3 +325,10 @@ def test_http_training_submission_and_fork_preserve_input_policy():
         old_fork = client.post("/api/ml/train/jobs/original/fork", json={})
         assert old_fork.status_code == 202, old_fork.text
         assert store.create_job.call_args.kwargs["spec"]["training_input"] == all_rows().model_dump()
+
+
+def test_worker_capacity_error_retains_catalog_category():
+    from sos_platform.diagnostics import classify_failure
+
+    error = PlatformError("SOS-ML-TRAIN-CAPACITY")
+    assert classify_failure(error) == ("capacity", "PlatformError")
