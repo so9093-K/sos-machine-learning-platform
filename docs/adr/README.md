@@ -20,5 +20,6 @@
 - [0010 — 컨테이너 실행 기반과 플랫폼 계약 분리](0010-container-execution-boundary.md) · Superseded
 - [0011 — 서비스와 검증의 Compose 실행 경계 통합](0011-compose-native-validation.md) · Accepted (Inventory 유지 조항은 0013에서 변경 제안)
 
+- [0012 — ML 실험·이상 점수·외부 추적의 책임 경계](0012-ml-experiment-boundaries.md) · Proposed
 - [0013 — 검증 실행기·결과 판정 계층 간소화](0013-lean-validation-policy.md) · Proposed
 - [0014 — Iceberg 과도기 쓰기 소유권 채택 종료](0014-remove-iceberg-adoption.md) · Proposed
