@@ -59,8 +59,10 @@ with TemporaryDirectory() as home:
         app = api.create_app(Path(home), identity=identity)
     with TestClient(app) as client:
         route_paths = sorted(
-            ("/" + ",".join(sorted(r.methods or [])) + ":" + r.path)
-            for r in app.routes if getattr(r, "path", "").startswith("/api/ml/train/")
+            method.upper() + ":" + path
+            for path, operations in app.openapi()["paths"].items()
+            if path.startswith("/api/ml/train/")
+            for method in operations if method in {"get", "post", "put", "delete", "patch"}
         )
         assert len(route_paths) == 5, route_paths  # Training HTTP 작업 다섯 개
         results["routes"] = route_paths
