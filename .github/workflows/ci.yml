@@ -52,7 +52,7 @@ jobs:
           git diff --exit-code -- web/src/api.generated.ts
 
   integration:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     needs: [python-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -79,7 +79,7 @@ jobs:
         run: uv run --locked alembic check
 
   browser:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     needs: [python-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
