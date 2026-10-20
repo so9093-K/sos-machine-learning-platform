@@ -32,6 +32,7 @@ from .errors import ERRORS, PlatformError, RuntimeConfigurationError
 from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
 from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
 from .ml_explanation import explain_scored_row
+from .ml_input import TRAINING_SELECTION_CURRENT
 from .ml_scoring import run_dataset_scoring
 from .ml_training import train_dataset
 from .ml_training_staging import (
@@ -120,7 +121,7 @@ def _perform(
             scratch.mkdir(mode=0o700)
             os.environ["POLARS_TEMP_DIR"] = str(scratch)
             if (
-                job["spec"].get("selection_algorithm_version") == "canonical_multiset_v1"
+                job["spec"].get("selection_algorithm_version") == TRAINING_SELECTION_CURRENT
                 and job["spec"].get("training_input", {}).get("mode") == "sample"
             ):
                 # Global Feature 정렬은 원본 Dataset 전체를 다룬다. Worker RSS
