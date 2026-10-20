@@ -157,7 +157,6 @@ def test_recovery_reclaims_only_interrupted_attempt_files(workspace):
     unrelated.unlink()
 
 
-
 def test_worker_unlock_without_backend_change_revokes_ownership(workspace):
     """동일한 DB Backend PID라도 실제 advisory lock이 없으면 소유권이 없다."""
     from sqlalchemy import text
