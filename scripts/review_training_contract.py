@@ -60,7 +60,7 @@ with TemporaryDirectory() as home:
     with TestClient(app) as client:
         route_paths = sorted(
             ("/" + ",".join(sorted(r.methods or [])) + ":" + r.path)
-            for r in app.routes if r.path.startswith("/api/ml/train/")
+            for r in app.routes if getattr(r, "path", "").startswith("/api/ml/train/")
         )
         assert len(route_paths) == 5, route_paths  # Training HTTP 작업 다섯 개
         results["routes"] = route_paths
