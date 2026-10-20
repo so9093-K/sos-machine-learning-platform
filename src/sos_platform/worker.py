@@ -119,6 +119,14 @@ def _perform(
             scratch.parent.mkdir(parents=True, exist_ok=True)
             scratch.mkdir(mode=0o700)
             os.environ["POLARS_TEMP_DIR"] = str(scratch)
+            if (
+                job["spec"].get("selection_algorithm_version") == "canonical_multiset_v1"
+                and job["spec"].get("training_input", {}).get("mode") == "sample"
+            ):
+                # Global Feature 정렬은 원본 Dataset 전체를 다룬다. Worker RSS
+                # 예산 대신 Polars가 임의로 선택한 메모리 크기에 종속되지 않도록
+                # OOC 정렬을 요청하고 Spill은 Attempt 단계에서 감시한다.
+                os.environ["POLARS_FORCE_OOC"] = "1"
             result = train_dataset(store, dataset, job["spec"], pending.with_suffix(".joblib"))
         elif job["kind"] == "ml_score":
             stage = "processing"
