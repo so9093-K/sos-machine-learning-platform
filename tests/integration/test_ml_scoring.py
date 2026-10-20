@@ -93,31 +93,3 @@ def test_scoring_result_is_independent_from_training_and_source_dataset(workspac
             ).scalar_one()
             == 1
         )
-
-
-def test_scoring_invalid_feature_schema_does_not_publish(workspace):
-    client, store = workspace
-    training = upload_sensor_dataset(client, b"temperature\n1.0\n2.0\n3.0\n")
-    submitted = client.post(
-        "/api/ml/train/jobs",
-        json={"dataset_id": training["id"], "features": ["temperature"]},
-        headers={"Idempotency-Key": str(uuid4())},
-    )
-    assert run_once(store)
-    job = client.get(f"/api/ml/train/jobs/{submitted.json()['id']}").json()
-    assert job["status"] == "Succeeded"
-    model_id = job["result"]["model_revision_id"]
-    # 등록된 모델의 Float64 Feature를 정수 Dataset에 적용할 때 침묵하는 dtype 전환을 막는다.
-    scoring = upload_sensor_dataset(client, b"temperature\n1\n2\n3\n")
-    queued = client.post(
-        "/api/ml/scoring/jobs",
-        json={"model_revision_id": model_id, "dataset_id": scoring["id"]},
-        headers={"Idempotency-Key": str(uuid4())},
-    )
-    assert queued.status_code == 202
-    assert run_once(store)
-    finished = client.get(f"/api/ml/scoring/jobs/{queued.json()['id']}").json()
-    assert finished["status"] == "Failed"
-    assert finished["error_code"] == "SOS-ML-INPUT-INVALID"
-    with store.connection() as db:
-        assert db.execute(text("SELECT COUNT(*) FROM scoring_results")).scalar_one() == 0

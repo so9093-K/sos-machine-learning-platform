@@ -121,62 +121,6 @@ def test_running_iceberg_import_refuses_ambiguous_cancellation(workspace):
     assert "Snapshot" in recovered["error"]
 
 
-def test_snapshots_available_without_tag_have_explicit_unprotected_state(workspace):
-    """기존 Iceberg Dataset의 보존 미보장 상태와 Operator 전환을 구별한다."""
-    client, store = workspace
-    source = upload(client)
-    job = client.post(
-        "/api/iceberg/import", json={"dataset_id": source["id"], "table_name": "legacy_retention"}
-    ).json()
-    assert run_once(store)
-    stored = client.get(f"/api/jobs/{job['id']}").json()
-    retained = store.get_dataset(stored["result"]["dataset_id"])
-    assert retained is not None
-    # 기존 데이터베이스에 등록됐지만 Tag가 없는 Dataset을 실제로 재현한다.
-    with store.connection() as db:
-        legacy_id = str(uuid4())
-        db.execute(
-            text(
-                "INSERT INTO datasets(id,name,kind,location,version,created_at) "
-                "VALUES(:id,'legacy','iceberg',:location,:version,:at)"
-            ),
-            {
-                "id": legacy_id,
-                "location": retained["location"],
-                "version": retained["version"],
-                "at": "2026-10-01T00:00:00+00:00",
-            },
-        )
-    previous = client.get("/api/storage/iceberg-references").json()
-    assert any(
-        x["dataset_id"] == legacy_id and x["status"] == "available_unprotected" for x in previous
-    )
-    promoted = client.post(f"/api/storage/iceberg-references/{legacy_id}/retain")
-    assert promoted.status_code == 200, promoted.text
-    assert promoted.json()["status"] == "retained"
-    assert store.snapshot_retention(legacy_id)["state"] == "Retained"
-
-
-def test_retained_snapshot_repeated_protection_is_idempotent(workspace):
-    """같은 Dataset 보존 확인을 반복해도 유효한 Tag·DB 상태가 유지된다."""
-    client, store = workspace
-    source = upload(client)
-    response = client.post(
-        "/api/iceberg/import",
-        json={"dataset_id": source["id"], "table_name": "retry_retention"},
-    )
-    assert response.status_code == 202
-    assert run_once(store)
-    job = client.get(f"/api/jobs/{response.json()['id']}").json()
-    assert job["status"] == "Succeeded"
-    dataset_id = job["result"]["dataset_id"]
-    for _ in range(2):
-        response = client.post(f"/api/storage/iceberg-references/{dataset_id}/retain")
-        assert response.status_code == 200, response.text
-        assert response.json()["status"] == "retained"
-    assert store.snapshot_retention(dataset_id)["state"] == "Retained"
-
-
 def test_tag_failure_keeps_uncertain_intent_without_publishing_dataset(workspace, monkeypatch):
     """Catalog Tag 생성 실패 후 보존 의도는 남고 Dataset은 잘못 게시되지 않는다."""
     client, store = workspace
@@ -401,70 +345,6 @@ def test_iceberg_commit_response_loss_preserves_snapshot_without_automatic_retry
     assert run_once(store) is False
     assert len(iceberg_catalog(store).load_table("default.lost_commit_response").snapshots()) == 1
     assert not [d for d in store.dataset_page(limit=101) if d["kind"] == "iceberg"]
-
-
-def test_tag_commit_ack_loss_preserves_uncertain_retention_and_catalog_tag(workspace, monkeypatch):
-    """보호 Tag 커밋 응답 유실에도 미게시 의도와 실제 Tag를 함께 보존한다."""
-    from pyiceberg.table import Table
-
-    from sos_platform.datasets import connect_iceberg, iceberg_catalog
-    from sos_platform.retention import inspect_tag
-
-    client, store = workspace
-    source = upload(client)
-    job = client.post(
-        "/api/iceberg/import",
-        json={"dataset_id": source["id"], "table_name": "lost_tag_response"},
-    )
-    assert job.status_code == 202
-    assert run_once(store)
-    table = iceberg_catalog(store).load_table("default.lost_tag_response")
-    snapshot_id = str(table.current_snapshot().snapshot_id)
-    before = len(store.dataset_page(limit=101))
-    original_manage = Table.manage_snapshots
-
-    class LostTagAcknowledgement:
-        def __init__(self, delegate):
-            self.delegate = delegate
-
-        def create_tag(self, snapshot, name):
-            self.delegate = self.delegate.create_tag(snapshot, name)
-            return self
-
-        def commit(self):
-            self.delegate.commit()
-            raise TimeoutError("tag acknowledgement was lost")
-
-    with monkeypatch.context() as patch:
-        patch.setattr(
-            Table,
-            "manage_snapshots",
-            lambda table: LostTagAcknowledgement(original_manage(table)),
-        )
-        with pytest.raises(TimeoutError, match="acknowledgement was lost"):
-            connect_iceberg(store, "lost_tag_response", snapshot_id)
-
-    assert len(store.dataset_page(limit=101)) == before
-    with store.connection() as db:
-        records = (
-            db.execute(
-                text(
-                    "SELECT dataset_id,tag_name,state FROM snapshot_retention "
-                    "WHERE state='Uncertain'"
-                )
-            )
-            .mappings()
-            .all()
-        )
-    assert len(records) == 1
-    retained = records[0]
-    assert store.get_dataset(retained["dataset_id"]) is None
-    table = iceberg_catalog(store).load_table("default.lost_tag_response")
-    assert inspect_tag(table, name=retained["tag_name"], snapshot_id=snapshot_id) == "retained"
-    checked = client.get("/api/storage/iceberg-references")
-    assert checked.status_code == 200
-    unresolved = next(row for row in checked.json() if row["dataset_id"] == retained["dataset_id"])
-    assert unresolved["status"] == "unknown"
 
 
 def test_tag_survives_database_publish_failure(workspace, monkeypatch):

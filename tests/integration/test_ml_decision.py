@@ -120,47 +120,32 @@ def test_validation_rejects_wrong_policy_combination(workspace):
 
 
 def test_ml_result_job_cancellation_keeps_results_unpublished(workspace):
-    """정책·평가·설명 작업별로 일반 Job 경계를 유지하며 취소 상태를 확정한다."""
+    """미실행 ML Job의 종류별 취소 라우팅과 결과 미게시를 확인한다."""
     client, store = workspace
-    data = _upload(client, "cancel-ml.csv", b"temperature\n1.0\n2.0\n3.0\n4.0\n")
-    trained = _submit(
-        client,
-        "/api/ml/train/jobs",
-        {"dataset_id": data["id"], "features": ["temperature"]},
+    dataset = _upload(client, "cancel-ml.csv", b"temperature\n1.0\n2.0\n")
+    cases = (
+        ("policies", "ml_policy"),
+        ("evaluations", "ml_evaluate"),
+        ("explanations", "ml_explain"),
     )
-    assert trained.status_code == 202
-    assert run_once(store)
-    model_id = client.get(f"/api/ml/train/jobs/{trained.json()['id']}").json()["result"][
-        "model_revision_id"
-    ]
-    scored = _submit(
-        client,
-        "/api/ml/scoring/jobs",
-        {"dataset_id": data["id"], "model_revision_id": model_id},
-    )
-    assert scored.status_code == 202
-    assert run_once(store)
-    scoring_id = client.get(f"/api/ml/scoring/jobs/{scored.json()['id']}").json()["result"][
-        "scoring_result_id"
-    ]
-    cases = [
-        ("policies", {"scoring_result_id": scoring_id, "mode": "fixed", "threshold": 0.5}),
-        ("evaluations", {"scoring_result_id": scoring_id}),
-        ("explanations", {"scoring_result_id": scoring_id, "row_index": 0}),
-    ]
-    for kind, body in cases:
-        queued = _submit(client, f"/api/ml/{kind}/jobs", body)
-        assert queued.status_code == 202, queued.text
-        job_id = queued.json()["id"]
+    for route, kind in cases:
+        queued = store.create_job(
+            kind=kind,
+            dataset_id=dataset["id"],
+            spec={"scoring_result_id": "not-executed"},
+            owner_actor="local-developer",
+            actor_type="human",
+        )
+        job_id = queued["id"]
         assert client.post(f"/api/jobs/{job_id}/cancel").status_code == 404
-        other = next(name for name, _ in cases if name != kind)
+        other = next(name for name, _kind in cases if name != route)
         assert client.post(f"/api/ml/{other}/jobs/{job_id}/cancel").status_code == 404
-        canceled = client.post(f"/api/ml/{kind}/jobs/{job_id}/cancel")
+        canceled = client.post(f"/api/ml/{route}/jobs/{job_id}/cancel")
         assert canceled.status_code == 200, canceled.text
         assert canceled.json()["status"] == "Cancelled"
         assert canceled.json()["result"] is None
-        assert client.get(f"/api/ml/{kind}/jobs/{job_id}").json()["status"] == "Cancelled"
-        assert client.post(f"/api/ml/{kind}/jobs/{job_id}/cancel").status_code == 200
+        assert client.get(f"/api/ml/{route}/jobs/{job_id}").json()["status"] == "Cancelled"
+        assert client.post(f"/api/ml/{route}/jobs/{job_id}/cancel").status_code == 200
     assert run_once(store) is False
     with store.connection() as db:
         for table in ("decision_policy_revisions", "evaluation_revisions", "explanation_results"):

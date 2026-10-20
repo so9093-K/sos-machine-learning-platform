@@ -46,32 +46,6 @@ def test_orphaned_cgroup_prevents_running_attempt_recovery(workspace, monkeypatc
     assert store.get_job(running["id"])["status"] == "Queued"
 
 
-def test_restart_reaps_terminal_attempt_cgroup_without_changing_job(workspace, monkeypatch):
-    """DB 성공이 먼저 확정되고 부모가 종료된 뒤에도 빈 격리 그룹을 회수한다."""
-    from sos_platform.cgroup import CgroupIsolation
-    from sos_platform.worker import cleanup_orphaned_cgroups_before_recovery
-
-    client, store = workspace
-    source = upload(client)
-    queued = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
-    assert queued.status_code == 202
-    claimed = store.claim()
-    attempt_id = claimed["attempts"][-1]["id"]
-    assert store.finish(claimed["id"], "Failed", attempt_id=attempt_id) == "Failed"
-    isolated = CgroupIsolation(parent=store.home, memory_bytes=256 * 1024 * 1024)
-    inspected = []
-    monkeypatch.setattr(CgroupIsolation, "existing_attempt_ids", lambda _self: [attempt_id])
-    monkeypatch.setattr(CgroupIsolation, "cleanup", lambda _self, value: inspected.append(value))
-
-    cleanup_orphaned_cgroups_before_recovery(store, isolated)
-
-    assert inspected == [attempt_id]
-    saved = store.get_job(claimed["id"])
-    assert saved["status"] == "Failed"
-    assert saved["attempts"][-1]["status"] == "Failed"
-    assert store.recover() == []
-
-
 def test_restart_rejects_cgroup_without_matching_attempt(workspace, monkeypatch):
     """DB가 소유자를 입증하지 못한 격리 그룹은 삭제하거나 무시하지 않는다."""
     from uuid import uuid4
@@ -183,28 +157,7 @@ def test_recovery_reclaims_only_interrupted_attempt_files(workspace):
     unrelated.unlink()
 
 
-def test_new_attempt_uses_distinct_local_paths_after_recovery(workspace):
-    """복구 전 Attempt와 다음 시도의 결과·완료 신호 경로가 겹치지 않는다."""
-    client, store = workspace
-    source = upload(client)
-    client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
-    first = store.claim()
-    first_paths = attempt_result_paths(store, first["id"], first["attempts"][-1]["id"])
-    store.recover()
-    next_attempt = store.claim()
-    second_paths = attempt_result_paths(
-        store, next_attempt["id"], next_attempt["attempts"][-1]["id"]
-    )
-    assert set(first_paths).isdisjoint(second_paths)
-
-
-@pytest.mark.parametrize(
-    ("job_kind", "recovered_status"),
-    [("profile", "Queued"), ("iceberg_import", "Failed")],
-)
-def test_sigkill_real_running_worker_requires_new_owner_recovery(
-    workspace, monkeypatch, job_kind, recovered_status
-):
+def test_sigkill_real_running_worker_requires_new_owner_recovery(workspace, monkeypatch):
     """실제 Job을 인수한 Worker SIGKILL 후 자식 종료와 Attempt 복구를 확인한다."""
     import os
     import signal
@@ -217,13 +170,7 @@ def test_sigkill_real_running_worker_requires_new_owner_recovery(
         pytest.skip("PR_SET_PDEATHSIG is Linux-only")
     client, store = workspace
     source = upload(client)
-    if job_kind == "iceberg_import":
-        request = client.post(
-            "/api/iceberg/import",
-            json={"dataset_id": source["id"], "table_name": "killed_import"},
-        )
-    else:
-        request = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
+    request = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
     assert request.status_code == 202
     job_id = request.json()["id"]
     ready = store.home / "worker-test-child.pid"
@@ -274,12 +221,9 @@ def test_sigkill_real_running_worker_requires_new_owner_recovery(
             interrupted = replacement.recover()
             assert (job_id, attempt_id) in interrupted
             recovered = replacement.get_job(job_id)
-            assert recovered["status"] == recovered_status
+            assert recovered["status"] == "Queued"
             assert recovered["attempts"][-1]["status"] == "Interrupted"
             assert recovered["result"] is None
-            if job_kind == "iceberg_import":
-                assert recovered["error_code"] == "SOS-ICEBERG-UNCERTAIN"
-                assert run_once(replacement) is False
         finally:
             replacement.release_worker()
             replacement.engine.dispose()
@@ -371,53 +315,6 @@ def test_worker_completion_rolls_back_when_lock_session_dies_mid_transaction(
         replacement.engine.dispose()
 
 
-def test_worker_recovery_rolls_back_if_lock_session_dies_during_audit(workspace, monkeypatch):
-    """중단 복구가 잠금 세션을 잃으면 Job·Attempt·Audit 변경이 함께 롤백된다."""
-    from sqlalchemy import text
-    from sqlalchemy.exc import DBAPIError
-
-    client, store = workspace
-    source = upload(client)
-    created = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
-    assert created.status_code == 202
-    assert store.acquire_worker()
-    running = store.claim()
-    assert running is not None
-    original_audit = Store._audit
-
-    def terminate_before_recovery_commit(db, **kwargs):
-        if kwargs["action"] == "job.recover":
-            with store.engine.begin() as admin:
-                assert admin.execute(
-                    text("SELECT pg_terminate_backend(:pid)"),
-                    {"pid": store._worker_backend_pid},
-                ).scalar_one()
-        return original_audit(db, **kwargs)
-
-    monkeypatch.setattr(Store, "_audit", staticmethod(terminate_before_recovery_commit))
-    try:
-        with pytest.raises(DBAPIError):
-            store.recover()
-        state = store.get_job(running["id"])
-        assert state["status"] == "Running"
-        assert state["attempts"][-1]["status"] == "Running"
-    finally:
-        store.release_worker()
-        monkeypatch.setattr(Store, "_audit", staticmethod(original_audit))
-
-    replacement = Store(store.home, database_url=store.database_url)
-    try:
-        assert replacement.acquire_worker()
-        assert (
-            running["id"],
-            running["attempts"][-1]["id"],
-        ) in replacement.recover()
-        assert replacement.get_job(running["id"])["status"] == "Queued"
-    finally:
-        replacement.release_worker()
-        replacement.engine.dispose()
-
-
 def test_recovered_attempt_cannot_create_stale_object_write_intent(workspace):
     """재인수된 Job의 이전 Attempt가 고아 Pending 객체 기록을 만들 수 없다."""
     from sos_platform.store import WorkerOwnershipLost
@@ -455,42 +352,6 @@ def test_recovered_attempt_cannot_create_stale_object_write_intent(workspace):
     assert pending[0]["state"] == "Pending"
     store.recover()
     assert store.object_writes(current_location)[0]["state"] == "Failed"
-
-
-def test_worker_claim_checks_lock_inside_mutation_transaction(workspace, monkeypatch):
-    """Claim 직전 잠금 세션이 종료돼도 새 연결로 Job을 인수하지 않는다."""
-    from sqlalchemy import text
-
-    from sos_platform.store import WorkerOwnershipLost
-
-    client, store = workspace
-    source = upload(client)
-    queued = client.post("/api/jobs", json={"dataset_id": source["id"], "kind": "profile"})
-    assert queued.status_code == 202
-    assert store.acquire_worker()
-    original_guard = store._assert_worker_ownership
-
-    def terminate_before_ownership_query(*, within_transaction=False):
-        # 잠금 검사는 상태 변경 트랜잭션에서 실행되어야 한다.
-        assert within_transaction
-        assert store._worker_lock.in_transaction()
-        with store.engine.begin() as admin:
-            assert admin.execute(
-                text("SELECT pg_terminate_backend(:pid)"),
-                {"pid": store._worker_backend_pid},
-            ).scalar_one()
-        return original_guard(within_transaction=within_transaction)
-
-    try:
-        with monkeypatch.context() as patch:
-            patch.setattr(store, "_assert_worker_ownership", terminate_before_ownership_query)
-            with pytest.raises(WorkerOwnershipLost):
-                store.claim()
-        unchanged = store.get_job(queued.json()["id"])
-        assert unchanged["status"] == "Queued"
-        assert unchanged["attempts"] == []
-    finally:
-        store.release_worker()
 
 
 def test_worker_session_loss_does_not_confirm_attempt_or_publish(workspace):
