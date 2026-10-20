@@ -28,6 +28,7 @@ jobs:
       - name: Ruff
         run: |
           uv run --locked ruff check .
+          uv run --locked ruff format --diff tests/integration/test_ml_decision.py
           uv run --locked ruff format --check .
       - name: Python unit tests
         run: uv run --locked pytest -q tests/test_*.py
