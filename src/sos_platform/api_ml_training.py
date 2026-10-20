@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
+from .ml_input import TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
 from .pagination import decode_cursor, page_from_rows
 from .schemas import (
     MLForkRequest,
@@ -60,6 +61,7 @@ def training_router(
                 "features": body.features,
                 "params": body.params.model_dump(),
                 "training_input": body.training_input.model_dump(),
+                "selection_algorithm_version": TRAINING_SELECTION_CURRENT,
             },
             owner_actor=actor.id,
             actor_type=actor.kind,
@@ -116,6 +118,9 @@ def training_router(
                 "training_input": MLTrainingInputPolicy.model_validate(
                     source["spec"].get("training_input", {})
                 ).model_dump(),
+                "selection_algorithm_version": source["spec"].get(
+                    "selection_algorithm_version", TRAINING_SELECTION_LEGACY
+                ),
                 "forked_from_job_id": source_job_id,
             },
             request_id=request.state.request_id,

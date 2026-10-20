@@ -1,4 +1,4 @@
-"""Isolation Forest 학습 입력을 전체 Dataset 판본에서 메모리 예산 내로 선택한다."""
+"""Isolation Forest의 명시된 학습 입력을 실행 예산 안에서 재현 가능하게 선택한다."""
 
 import hashlib
 import platform
@@ -14,7 +14,12 @@ from .datasets import pinned_scan_dataset
 from .errors import PlatformError
 from .execution_budget import ExecutionBudget
 from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold
-from .ml_input import INTEGER_DTYPES, NUMERIC
+from .ml_input import (
+    INTEGER_DTYPES,
+    NUMERIC,
+    TRAINING_SELECTION_CURRENT,
+    TRAINING_SELECTION_LEGACY,
+)
 from .ml_isolation_forest import IsolationForestConfig, train_isolation_forest
 from .schemas import MLTrainingInputPolicy
 
@@ -26,6 +31,7 @@ def training_matrix(
     *,
     input_policy: MLTrainingInputPolicy,
     worker_memory_mib: int | None = None,
+    selection_algorithm_version: str = TRAINING_SELECTION_CURRENT,
 ) -> tuple[np.ndarray, dict]:
     """명시된 입력 정책을 Worker 예산에서 처리한다.
 
@@ -35,6 +41,7 @@ def training_matrix(
         features: 순서가 확정된 숫자형 Feature 목록.
         input_policy: 전체 사용 또는 행 수·Seed가 지정된 부분집합.
         worker_memory_mib: Worker RSS 예산. 없으면 실행 환경에서 읽는다.
+        selection_algorithm_version: Job 제출 시 확정된 표본 선택 알고리즘 판본.
 
     Returns:
         정렬된 float64 학습 행렬과 실제 입력 선택 근거.
@@ -45,6 +52,10 @@ def training_matrix(
     """
     if not features or len(set(features)) != len(features):
         raise ValueError("Training features must be nonempty and distinct")
+    if selection_algorithm_version not in (
+        TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
+    ):
+        raise ValueError("Unsupported training input selection algorithm")
     budget_mib = (
         ExecutionBudget.from_env().max_rss_mib
         if worker_memory_mib is None
@@ -78,7 +89,22 @@ def training_matrix(
             raise ValueError("Unknown training feature")
         if any(schema[name] not in NUMERIC for name in features):
             raise ValueError("Only numeric training features are supported")
-        for frame in source.select(features).collect_batches(
+        scan = source.select(features)
+        if sampled and selection_algorithm_version == TRAINING_SELECTION_CURRENT:
+            # 값이 같은 관측은 정렬 후에도 각각 한 행이다. 행별 Seed 난수는
+            # 원본 스캔 순서가 아니라 정규화된 학습 Feature 순서로 부여한다.
+            # Float의 +0/-0은 모델 입력 의미가 같으므로 표현도 통일한다.
+            floats = [name for name in features if schema[name] in (pl.Float32, pl.Float64)]
+            if floats:
+                scan = scan.with_columns(
+                    pl.when(pl.col(name) == 0)
+                    .then(pl.lit(0.0, dtype=schema[name]))
+                    .otherwise(pl.col(name))
+                    .alias(name)
+                    for name in floats
+                )
+            scan = scan.sort(features)
+        for frame in scan.collect_batches(
             chunk_size=chunk_rows, maintain_order=True
         ):
             source_rows += frame.height
@@ -145,7 +171,8 @@ def training_matrix(
     selection = {
         "source_rows": source_rows,
         "selected_rows": len(selected),
-        "method": "row_priority_bottom_k_v1" if sampled else "all_rows",
+        "method": selection_algorithm_version if sampled else "all_rows",
+        "algorithm_version": selection_algorithm_version if sampled else "all_rows_v1",
         "requested_rows": input_policy.rows,
         "seed": input_policy.seed,
         "selection_sha256": hashlib.sha256(selected.tobytes()).hexdigest(),
@@ -163,7 +190,12 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
     config = IsolationForestConfig(**spec["params"])
     input_policy = MLTrainingInputPolicy.model_validate(spec.get("training_input", {}))
     matrix, selection = training_matrix(
-        store, dataset, features, input_policy=input_policy
+        store, dataset, features, input_policy=input_policy,
+        # 정책/알고리즘 버전은 제출된 Job에 고정한다. 이 필드가 없는 기존
+        # Job은 전환 이전의 읽기 순서 기반 선택으로 실행한다.
+        selection_algorithm_version=spec.get(
+            "selection_algorithm_version", TRAINING_SELECTION_LEGACY
+        ),
     )
     with pinned_scan_dataset(store, dataset) as source:
         schema = source.collect_schema()
