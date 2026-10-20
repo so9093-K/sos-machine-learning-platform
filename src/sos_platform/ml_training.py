@@ -53,7 +53,10 @@ def training_matrix(
     # 모델 검증·학습·점수 계산의 추가 메모리를 위해 RSS의 1/8만 원본 행렬에 할당.
     # 실제 메모리 제한은 부모 Worker의 감시/cgroup 정책이 별도로 집행한다.
     matrix_byte_budget = int(memory_mib * 1024 * 1024) // 8
-    max_rows = matrix_byte_budget // (len(features) * 8)
+    # 선택 행의 모델 점수와 Python 분위수 계산 객체에도 여유를 예약한다.
+    # Feature가 1개인 입력도 행렬 바이트만 계산해 과다 수용하지 않는다.
+    per_row_budget = len(features) * 8 + 64
+    max_rows = matrix_byte_budget // per_row_budget
     if max_rows < 2:
         raise ValueError("Training feature width exceeds the Worker memory budget")
     chunk_rows = max(1, min(8192, (matrix_byte_budget // 4) // (len(features) * 8)))

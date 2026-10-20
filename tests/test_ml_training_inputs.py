@@ -9,10 +9,10 @@ import pytest
 from sos_platform import ml_training
 
 
-def bind_frame(monkeypatch, frame: pl.DataFrame) -> None:
+def bind_frame(monkeypatch, frame: pl.DataFrame | pl.LazyFrame) -> None:
     @contextmanager
     def scan(_store, _dataset):
-        yield frame.lazy()
+        yield frame.lazy() if isinstance(frame, pl.DataFrame) else frame
 
     monkeypatch.setattr(ml_training, "pinned_scan_dataset", scan)
 
@@ -114,3 +114,19 @@ def test_scoring_limit_is_not_inherited_from_training():
     from sos_platform.ml_scoring import MAX_SCORING_ROWS
 
     assert MAX_SCORING_ROWS == 50_000
+
+
+def test_training_scans_actual_parquet_lazily(monkeypatch, tmp_path):
+    count = 100_029
+    source = tmp_path / "large.parquet"
+    pl.DataFrame({
+        "signal_a": np.arange(count, dtype=np.float64),
+        "signal_b": np.arange(count, dtype=np.float64) * 3,
+    }).write_parquet(source)
+    bind_frame(monkeypatch, pl.scan_parquet(source))
+    matrix, selection = ml_training.training_matrix(
+        None, {}, ["signal_a", "signal_b"], seed=7, worker_memory_mib=4
+    )
+    assert 2 < matrix.shape[0] < count
+    assert selection["source_rows"] == count
+    assert selection["method"] == "feature_hash_bottom_k_v1"
