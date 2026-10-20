@@ -173,8 +173,8 @@ def test_budgeted_selection_matches_global_priority_reference(monkeypatch):
         0, np.iinfo(np.uint64).max, size=count, dtype=np.uint64
     )
     keep = np.argpartition(priority, count_selected - 1)[:count_selected]
-    keep = keep[np.argsort(priority[keep], kind="stable")]
-    np.testing.assert_array_equal(matrix[:, 0], data[keep])
+    # 행 선택은 전역 우선순위, 모델 입력 순서는 기존 Feature 정렬을 따른다.
+    np.testing.assert_array_equal(matrix[:, 0], np.sort(data[keep]))
 
 
 def test_all_rows_keeps_legacy_sorted_feature_order(monkeypatch):
