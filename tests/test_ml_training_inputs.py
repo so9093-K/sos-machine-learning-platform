@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from sos_platform import ml_training
 from sos_platform.errors import PlatformError
+from sos_platform.ml_input import TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
 from sos_platform.schemas import MLTrainingInputPolicy, MLTrainRequest
 
 
@@ -58,7 +59,7 @@ def test_sample_is_independent_of_worker_memory_budget(monkeypatch):
     assert earlier == later
     assert earlier["source_rows"] == count
     assert earlier["selected_rows"] == earlier["requested_rows"] == 900
-    assert earlier["method"] == "row_priority_bottom_k_v1"
+    assert earlier["method"] == TRAINING_SELECTION_CURRENT
 
 
 def test_full_input_exceeding_worker_budget_is_not_truncated(monkeypatch):
@@ -144,7 +145,7 @@ def test_duplicate_feature_values_preserve_frequency(monkeypatch):
     assert 0.84 < np.mean(matrix[:, 0] == 0.0) < 0.96
 
 
-def test_sample_input_fingerprint_reflects_scan_order(monkeypatch):
+def test_canonical_sample_input_fingerprint_ignores_scan_order(monkeypatch):
     data = pl.DataFrame({"x": np.arange(20_000, dtype=float)})
     bind_frame(monkeypatch, data)
     _, first = ml_training.training_matrix(
@@ -154,7 +155,7 @@ def test_sample_input_fingerprint_reflects_scan_order(monkeypatch):
     _, second = ml_training.training_matrix(
         None, {}, ["x"], input_policy=sample(1000), worker_memory_mib=4
     )
-    assert first["selection_sha256"] != second["selection_sha256"]
+    assert first["selection_sha256"] == second["selection_sha256"]
 
 
 def test_sample_matches_global_row_priority_reference(monkeypatch):
@@ -195,7 +196,8 @@ def test_model_random_state_does_not_change_input_selection(monkeypatch, tmp_pat
             None, {"version": "v1"},
             {"algorithm": "isolation_forest", "dataset_version": "v1",
              "features": ["x"], "params": {"n_estimators": 8, "random_state": random_state},
-             "training_input": sample(400, 9).model_dump()},
+             "training_input": sample(400, 9).model_dump(),
+             "selection_algorithm_version": TRAINING_SELECTION_CURRENT},
             tmp_path / f"model-{random_state}.joblib",
         )
     first = run(3)
@@ -267,6 +269,7 @@ def test_http_training_submission_and_fork_preserve_input_policy():
             "features": ["x"],
             "params": {"random_state": 5},
             "training_input": sample(600, 99).model_dump(),
+            "selection_algorithm_version": TRAINING_SELECTION_CURRENT,
         },
     }
     def created_job(**kwargs):
@@ -308,6 +311,7 @@ def test_http_training_submission_and_fork_preserve_input_policy():
         })
         assert reply.status_code == 202, reply.text
         assert store.create_job.call_args.kwargs["spec"]["training_input"] == sample(600, 99).model_dump()
+        assert store.create_job.call_args.kwargs["spec"]["selection_algorithm_version"] == TRAINING_SELECTION_CURRENT
 
         invalid = client.post("/api/ml/train/jobs", json={
             "dataset_id": "d1", "features": ["x"],
@@ -319,12 +323,19 @@ def test_http_training_submission_and_fork_preserve_input_policy():
         assert fork.status_code == 202, fork.text
         assert store.create_job.call_args.kwargs["spec"]["training_input"] == sample(600, 99).model_dump()
         assert store.create_job.call_args.kwargs["spec"]["params"]["random_state"] == 5
+        assert store.create_job.call_args.kwargs["spec"]["selection_algorithm_version"] == TRAINING_SELECTION_CURRENT
 
         # 과거 Job은 정책 필드가 없지만 원본을 전체 사용했다는 의미는 유지한다.
         source_job["spec"].pop("training_input")
         old_fork = client.post("/api/ml/train/jobs/original/fork", json={})
         assert old_fork.status_code == 202, old_fork.text
         assert store.create_job.call_args.kwargs["spec"]["training_input"] == all_rows().model_dump()
+        # 구 버전 Job의 선택 알고리즘을 현재 것으로 조용히 변경하지 않는다.
+        source_job["spec"].pop("selection_algorithm_version")
+        source_job["spec"]["training_input"] = sample(600, 99).model_dump()
+        legacy_sample_fork = client.post("/api/ml/train/jobs/original/fork", json={})
+        assert legacy_sample_fork.status_code == 202, legacy_sample_fork.text
+        assert store.create_job.call_args.kwargs["spec"]["selection_algorithm_version"] == TRAINING_SELECTION_LEGACY
 
 
 def test_worker_capacity_error_retains_catalog_category():
@@ -360,3 +371,97 @@ def test_full_parquet_training_above_old_limit_creates_model(monkeypatch, tmp_pa
     assert result["training_selection"]["method"] == "all_rows"
     assert result["training_score_summary"]["score_count"] == count
     assert result["runtime"]["training_selection"] == result["training_selection"]
+
+
+def test_canonical_sample_ignores_input_order_and_chunk_boundaries(monkeypatch):
+    # 고유 Feature 값과 중복 관측이 혼합된 Multiset. 순서 및 Chunk의 변화와 무관.
+    source = pl.DataFrame({
+        "x": np.repeat(np.arange(3300, dtype=np.float64), 3),
+        "y": np.tile(np.array([2, 1, 0], dtype=np.int64), 3300),
+    })
+    policy = sample(900, 27)
+    outputs = []
+    for frame, memory_mib in (
+        (source, 1),
+        (source.reverse(), 64),
+        (pl.concat([source.slice(3000), source.slice(0, 3000)]), 16),
+    ):
+        bind_frame(monkeypatch, frame)
+        outputs.append(
+            ml_training.training_matrix(
+                None, {}, ["x", "y"], input_policy=policy, worker_memory_mib=memory_mib
+            )
+        )
+    for matrix, evidence in outputs[1:]:
+        np.testing.assert_array_equal(matrix, outputs[0][0])
+        assert evidence == outputs[0][1]
+    assert outputs[0][1]["algorithm_version"] == TRAINING_SELECTION_CURRENT
+
+
+def test_canonical_sample_normalizes_signed_zero_and_preserves_duplicates(monkeypatch):
+    pos = pl.DataFrame({
+        "x": np.array([0.0, -0.0, 0.0, 3.0] * 5000, dtype=np.float32),
+        "y": np.array([4, 4, 4, 8] * 5000, dtype=np.int64),
+    })
+    outputs = []
+    for df in (pos, pos.reverse()):
+        bind_frame(monkeypatch, df)
+        outputs.append(
+            ml_training.training_matrix(
+                None, {}, ["x", "y"], input_policy=sample(600, 71),
+                worker_memory_mib=16,
+            )
+        )
+    np.testing.assert_array_equal(*[item[0] for item in outputs])
+    assert outputs[0][1] == outputs[1][1]
+    assert not np.signbit(outputs[0][0][:, 0]).any()
+    assert 0 < (outputs[0][0][:, 0] == 3.0).sum() < 600
+
+
+def test_legacy_sample_preserves_previous_row_order_algorithm(monkeypatch):
+    numbers = np.arange(1000, dtype=np.float64)[::-1].copy()
+    bind_frame(monkeypatch, pl.DataFrame({"x": numbers}))
+    matrix, evidence = ml_training.training_matrix(
+        None, {}, ["x"], input_policy=sample(150, 13),
+        selection_algorithm_version=TRAINING_SELECTION_LEGACY,
+        worker_memory_mib=4,
+    )
+    priorities = np.random.default_rng(13).integers(
+        0, np.iinfo(np.uint64).max, size=len(numbers), dtype=np.uint64
+    )
+    indices = np.argpartition(priorities, 149)[:150]
+    np.testing.assert_array_equal(matrix[:, 0], np.sort(numbers[indices]))
+    assert evidence["method"] == TRAINING_SELECTION_LEGACY
+
+
+def test_unknown_selection_algorithm_rejected(monkeypatch):
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(50.0)}))
+    with pytest.raises(ValueError, match="Unsupported training input selection"):
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(10, 8),
+            selection_algorithm_version="unrecognized_v99",
+        )
+
+
+def test_canonical_real_parquet_reordered_same_fingerprint(monkeypatch, tmp_path):
+    import pyarrow.parquet as pq
+
+    source = pl.DataFrame({
+        "x": np.repeat(np.arange(30_000, dtype=np.float64), 2),
+        "y": np.tile(np.array([1, 2], dtype=np.int64), 30_000),
+    })
+    paths = (tmp_path / "ascending.parquet", tmp_path / "descending.parquet")
+    for path, frame in zip(paths, (source, source.reverse()), strict=True):
+        frame.write_parquet(path)
+    outputs = []
+    for path in paths:
+        assert pq.read_metadata(path).num_rows == source.height
+        bind_frame(monkeypatch, pl.scan_parquet(path))
+        outputs.append(
+            ml_training.training_matrix(
+                None, {}, ["x", "y"], input_policy=sample(2000, 5),
+                worker_memory_mib=8,
+            )
+        )
+    np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
+    assert outputs[0][1] == outputs[1][1]
