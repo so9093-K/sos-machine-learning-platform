@@ -251,17 +251,16 @@ def test_failed_job_transaction_rolls_back_table_reservation(workspace):
 
 def test_migration_blocks_pending_adoption_without_losing_evidence(workspace):
     """기존 0019 소유권 근거를 보존하며 0020 전진·후퇴 시 쓰기를 차단한다."""
+    from uuid import uuid4
+
+    import pytest
     from alembic import command
     from alembic.config import Config
     from sqlalchemy import text
-    from uuid import uuid4
-    import pytest
 
     _client, store = workspace
     config = Config("alembic.ini")
-    config.set_main_option(
-        "sqlalchemy.url", store.engine.url.render_as_string(hide_password=False)
-    )
+    config.set_main_option("sqlalchemy.url", store.engine.url.render_as_string(hide_password=False))
     command.downgrade(config, "0019")
     dataset_id = str(uuid4())
     with store.connection() as db:
@@ -290,4 +289,3 @@ def test_migration_blocks_pending_adoption_without_losing_evidence(workspace):
     original = store.iceberg_write_claim("pending_legacy")
     assert original["state"] == "Adopting"
     assert original["adoption_dataset_id"] == dataset_id
-
