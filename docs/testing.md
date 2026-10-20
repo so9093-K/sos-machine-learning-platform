@@ -15,7 +15,8 @@
 ## 실행과 CI
 
 - 로컬의 빠른 검사는 `make check-fast`, 전체 검사는 `make check`다. 정확한 명령과 선행 조건은 [Makefile](../Makefile)이 정본이다.
-- PR·`main` push는 `python-quality`에서 Ruff·단위·프런트엔드·생성 타입을 검사한다. Backend·인프라·통합 테스트·CI를 변경한 PR에서는 같은 Job에서 실제 PostgreSQL/S3의 **기본 실행 가능성(Smoke)** 을 별도로 확인한다. 이 검사는 데이터 업로드·Job·Iceberg·권한의 대표 경로를 빠르게 통과시키는 용도이지, 변경된 모든 저장·복구 계약을 증명하지 않는다. PR 이후 `main` push에서 같은 DB/S3 Smoke를 반복하지 않는다. 정확한 실행 조건과 대상은 [CI 설정](../.github/workflows/ci.yml)이 정본이다. 전체 통합·브라우저 검증은 변경 판단에 필요할 때 `workflow_dispatch` 또는 로컬에서 수행하며 정기 전수 실행을 의무화하지 않는다.
+- PR·`main` push의 기본 검사는 `python-quality`에서 Ruff·Python 단위·프런트엔드 빌드/단위·생성 OpenAPI 타입을 확인한다. 실제 DB/S3 Smoke와 전체 통합·브라우저는 자동 실행하지 않는다. 실행해야 할 구체적인 판단이 있으면 `workflow_dispatch` 또는 로컬에서 관련 검사를 선택한다. 정기 전수 실행이나 삭제 검사의 대체 실행은 의무화하지 않는다. 기본 CI 통과는 실제 DB/S3·브라우저·운영 복구 성공을 뜻하지 않는다. 정확한 실행 범위는 [CI 설정](../.github/workflows/ci.yml)이 정본이다.
+- 외부 API 소비자가 확인되지 않은 사전 출시 단계에서 PR base와의 자동 OpenAPI 후방 호환성 비교는 운영하지 않는다. API-first 원칙과 생성 TypeScript 타입의 현재 정합성은 유지하되, 호환성 보장이 실제 제품 요구가 되면 해당 시점에 검증 방법을 다시 선택한다.
 - 추가 검증은 변경 자체나 기존 테스트 표식이 아닌 **구체적인 미검출 결함과 비용 대비 효과**가 설명될 때만 선택한다. 선택하지 않은 검증을 다른 일정에 의무적으로 배치하지 않는다. 별도 필수 테스트 선정 표식이나 보호 등록부는 운영하지 않는다.
 - pytest·Vitest·Playwright·Ruff의 종료 코드와 로그를 결과로 사용한다. 실행하지 않은 검사는 성공했다고 주장하지 않는다.
 
