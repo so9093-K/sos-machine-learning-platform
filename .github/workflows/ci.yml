@@ -20,3 +20,65 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
+
+      # PR #31 one-time canonical sampling verification. Restore after testing.
+      - name: Review canonical sample Python checks
+        run: |
+          uv run --locked ruff check src/sos_platform/ml_training.py src/sos_platform/ml_input.py src/sos_platform/api_ml_training.py tests/test_ml_training_inputs.py
+          uv run --locked pytest -q tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Review OpenAPI types and Web build
+        run: |
+          cd web
+          npm ci --no-audit --no-fund
+          cd ..
+          bash scripts/generate_api_types.sh
+          git diff --exit-code -- web/src/api.generated.ts
+          cd web
+          npm run build
+      - name: Benchmark canonical sorted multiset sampling
+        run: |
+          timeout 180s uv run --locked python - <<'PY'
+          from contextlib import contextmanager
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+          from time import monotonic
+          import resource
+          import numpy as np
+          import polars as pl
+          from sos_platform import ml_training
+          from sos_platform.schemas import MLTrainingInputPolicy
+
+          for count, cols, rows in [(1_370_000, 8, 100_000), (200_000, 40, 40_000)]:
+              with TemporaryDirectory() as folder:
+                  path = Path(folder) / "large.parquet"
+                  values = np.arange(count, dtype=np.float64)
+                  pl.DataFrame({
+                      f"x{i}": np.sin(values / (i + 21)) + i
+                      for i in range(cols)
+                  }).write_parquet(path)
+                  del values
+
+                  @contextmanager
+                  def source(store, dataset):
+                      yield pl.scan_parquet(path)
+
+                  ml_training.pinned_scan_dataset = source
+                  begin = monotonic()
+                  matrix, evidence = ml_training.training_matrix(
+                      None, {}, [f"x{i}" for i in range(cols)],
+                      input_policy=MLTrainingInputPolicy(
+                          mode="sample", rows=rows, seed=42
+                      ),
+                      worker_memory_mib=2048,
+                  )
+                  elapsed = monotonic() - begin
+                  rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+                  assert matrix.shape == (rows, cols)
+                  assert evidence["source_rows"] == count
+                  assert evidence["method"] == "canonical_multiset_v1"
+                  assert rss < 2048, rss
+                  print(f"CANONICAL_SAMPLING_BENCH count={count} cols={cols} sample={rows} seconds={elapsed:.2f} peak_rss_mib={rss:.0f}")
+          PY
