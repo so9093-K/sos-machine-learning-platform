@@ -11,10 +11,12 @@ import polars as pl
 import sklearn
 
 from .datasets import pinned_scan_dataset
+from .errors import PlatformError
 from .execution_budget import ExecutionBudget
 from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold
 from .ml_input import INTEGER_DTYPES, NUMERIC
 from .ml_isolation_forest import IsolationForestConfig, train_isolation_forest
+from .schemas import MLTrainingInputPolicy
 
 
 def training_matrix(
@@ -22,55 +24,54 @@ def training_matrix(
     dataset: dict,
     features: list[str],
     *,
-    seed: int,
+    input_policy: MLTrainingInputPolicy,
     worker_memory_mib: int | None = None,
 ) -> tuple[np.ndarray, dict]:
-    """Dataset 전체를 확인하며 실행 RSS 예산에서 유도한 행렬 크기만 유지한다.
-
-    입력 스캔 순서의 각 행에 Seed 고정 무작위 우선순위를 부여하고 전역 bottom-k를
-    선택한다. Feature 값이 같은 별개 관측도 독립적으로 선택된다. 동일한 판본을
-    동일한 행 순서로 읽으면 같은 입력을 재현하며, 스캔 순서가 달라지면 선택
-    결과가 달라질 수 있으므로 실제 선택 행렬의 SHA-256을 기록한다.
-    표본이 업무 집단·시간 구간을 대표한다는 보장은 없다.
+    """명시된 입력 정책을 Worker 예산에서 처리한다.
 
     Args:
-        store: 원본 Dataset을 고정해서 읽을 저장소.
-        dataset: 판본을 포함한 Dataset 참조.
+        store: 원본 Dataset 저장소.
+        dataset: 고정 판본 Dataset 참조.
         features: 순서가 확정된 숫자형 Feature 목록.
-        seed: 실행 설정에 기록될 결정적인 선택 Seed.
-        worker_memory_mib: 실제 Worker의 RSS 예산. 테스트에서는 별도로 지정할 수 있다.
+        input_policy: 전체 사용 또는 행 수·Seed가 지정된 부분집합.
+        worker_memory_mib: Worker RSS 예산. 없으면 실행 환경에서 읽는다.
 
     Returns:
-        학습용 float64 행렬 및 Dataset 입력 선택 근거.
+        정렬된 float64 학습 행렬과 실제 입력 선택 근거.
+
+    Raises:
+        ValueError: Dataset 값·행 수나 입력 선택 조건이 올바르지 않을 때.
+        PlatformError: 요청한 학습 규모를 Worker 자원에서 수용할 수 없을 때.
     """
     if not features or len(set(features)) != len(features):
         raise ValueError("Training features must be nonempty and distinct")
-    memory_mib = (
+    budget_mib = (
         ExecutionBudget.from_env().max_rss_mib
         if worker_memory_mib is None
         else worker_memory_mib
     )
-    if memory_mib <= 0:
+    if budget_mib <= 0:
         raise ValueError("Training memory budget must be positive")
-    # 모델 검증·학습·점수 계산의 추가 메모리를 위해 RSS의 1/8만 원본 행렬에 할당.
-    # 실제 메모리 제한은 부모 Worker의 감시/cgroup 정책이 별도로 집행한다.
-    matrix_byte_budget = int(memory_mib * 1024 * 1024) // 8
-    # 선택 행의 모델 점수와 Python 분위수 계산 객체에도 여유를 예약한다.
-    # Feature가 1개인 입력도 행렬 바이트만 계산해 과다 수용하지 않는다.
+    # 행렬·점수·모델·Reader 객체를 함께 고려하므로 원본 행렬에는 일부만 할당.
+    matrix_byte_budget = int(budget_mib * 1024 * 1024) // 8
     per_row_budget = len(features) * 8 + 64
-    max_rows = matrix_byte_budget // per_row_budget
-    if max_rows < 2:
-        raise ValueError("Training feature width exceeds the Worker memory budget")
-    chunk_rows = max(1, min(8192, (matrix_byte_budget // 4) // (len(features) * 8)))
+    capacity_rows = matrix_byte_budget // per_row_budget
+    if capacity_rows < 2:
+        raise PlatformError("SOS-ML-TRAIN-CAPACITY")
 
-    # 초기에는 한 배치만 예약하고, 필요할 때만 배가시켜 최대 입력 예산까지 확장.
-    capacity = min(max_rows, chunk_rows)
+    sampled = input_policy.mode == "sample"
+    target_rows = input_policy.rows if sampled else capacity_rows
+    assert target_rows is not None
+    if target_rows > capacity_rows:
+        raise PlatformError("SOS-ML-TRAIN-CAPACITY")
+    chunk_rows = max(1, min(8192, (matrix_byte_budget // 4) // (len(features) * 8)))
+    capacity = min(target_rows, chunk_rows)
     selected = np.empty((capacity, len(features)), dtype=np.float64)
-    selected_priority = np.empty(capacity, dtype=np.uint64)
+    selected_priority = np.empty(capacity, dtype=np.uint64) if sampled else None
     selected_rows = 0
     source_rows = 0
-    # 원본 행 순서에 따라 독립 우선순위를 부여해 값이 중복된 관측의 빈도를 보존.
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(input_policy.seed) if sampled else None
+
     with pinned_scan_dataset(store, dataset) as source:
         schema = source.collect_schema()
         if any(name not in schema for name in features):
@@ -81,9 +82,11 @@ def training_matrix(
             chunk_size=chunk_rows, maintain_order=True
         ):
             source_rows += frame.height
+            if not sampled and source_rows > capacity_rows:
+                # 전체 사용 정책을 메모리 사정에 따라 조용히 부분집합으로 변경하지 않는다.
+                raise PlatformError("SOS-ML-TRAIN-CAPACITY")
             if any(frame.null_count().row(0)):
                 raise ValueError("Training features contain null values")
-            # 정수형 Feature를 float64로 변환하기 전에 전체 입력에서 정밀도 검사.
             for name in features:
                 if schema[name] in INTEGER_DTYPES:
                     values = frame[name]
@@ -92,56 +95,59 @@ def training_matrix(
             matrix = np.asarray(frame.to_numpy(), dtype=np.float64)
             if not np.isfinite(matrix).all():
                 raise ValueError("Training features must be finite numeric values")
-            priority = rng.integers(
-                0, np.iinfo(np.uint64).max, size=frame.height, dtype=np.uint64
+            priority = (
+                rng.integers(0, np.iinfo(np.uint64).max, size=frame.height, dtype=np.uint64)
+                if rng is not None
+                else None
             )
-            incoming = min(frame.height, max_rows - selected_rows)
+            incoming = min(frame.height, target_rows - selected_rows)
             if incoming:
                 needed = selected_rows + incoming
                 if needed > capacity:
-                    capacity = min(max_rows, max(needed, capacity * 2))
+                    capacity = min(target_rows, max(needed, capacity * 2))
                     grown = np.empty((capacity, len(features)), dtype=np.float64)
                     grown[:selected_rows] = selected[:selected_rows]
                     selected = grown
-                    grown_priority = np.empty(capacity, dtype=np.uint64)
-                    grown_priority[:selected_rows] = selected_priority[:selected_rows]
-                    selected_priority = grown_priority
+                    if selected_priority is not None:
+                        grown_priority = np.empty(capacity, dtype=np.uint64)
+                        grown_priority[:selected_rows] = selected_priority[:selected_rows]
+                        selected_priority = grown_priority
                 selected[selected_rows:needed] = matrix[:incoming]
-                selected_priority[selected_rows:needed] = priority[:incoming]
+                if selected_priority is not None and priority is not None:
+                    selected_priority[selected_rows:needed] = priority[:incoming]
                 selected_rows = needed
-            if selected_rows < max_rows or incoming == frame.height:
+            if not sampled or selected_rows < target_rows or incoming == frame.height:
                 continue
+            assert selected_priority is not None and priority is not None
             matrix = matrix[incoming:]
             priority = priority[incoming:]
-            # 가장 나쁜 현재 우선순위보다 좋은 새 행만 후보로 삼는다.
             candidates = np.flatnonzero(priority < selected_priority[:selected_rows].max())
             if not candidates.size:
                 continue
             combined_priority = np.concatenate((
                 selected_priority[:selected_rows], priority[candidates]
             ))
-            # 선택된 전체 Feature 행렬을 매번 복사하지 않는다. 우선순위만
-            # 재계산하고 교체가 필요한 행만 기존 버퍼에 덮어쓴다.
-            chosen = np.argpartition(combined_priority, max_rows - 1)[:max_rows]
-            keep = np.zeros(max_rows, dtype=bool)
-            keep[chosen[chosen < max_rows]] = True
+            chosen = np.argpartition(combined_priority, target_rows - 1)[:target_rows]
+            keep = np.zeros(target_rows, dtype=bool)
+            keep[chosen[chosen < target_rows]] = True
             dropped = np.flatnonzero(~keep)
-            replacements = candidates[chosen[chosen >= max_rows] - max_rows]
+            replacements = candidates[chosen[chosen >= target_rows] - target_rows]
             selected[dropped] = matrix[replacements]
             selected_priority[dropped] = priority[replacements]
     if source_rows < 2:
         raise ValueError("Training requires at least two rows")
+    if sampled and source_rows < target_rows:
+        raise ValueError("Sample rows exceed Dataset row count")
 
-    # 기존의 Feature 값 정렬 계약을 유지한다. 전체 입력과 부분집합 모두
-    # 모델의 행 위치 기반 표본 추출이 배치 경계나 선택 우선순위에 종속되지 않는다.
+    # 기존 학습의 Feature 순서 정렬 계약을 유지한다.
     order = np.lexsort(selected[:selected_rows].T[::-1])
     selected = np.ascontiguousarray(selected[order])
     selection = {
         "source_rows": source_rows,
         "selected_rows": len(selected),
-        "method": "all_rows" if source_rows == len(selected) else "row_priority_bottom_k_v1",
-        "seed": seed,
-        "matrix_byte_budget": matrix_byte_budget,
+        "method": "row_priority_bottom_k_v1" if sampled else "all_rows",
+        "requested_rows": input_policy.rows,
+        "seed": input_policy.seed,
         "selection_sha256": hashlib.sha256(selected.tobytes()).hexdigest(),
     }
     return selected, selection
@@ -155,8 +161,9 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
         raise ValueError("Unsupported model algorithm")
     features = spec["features"]
     config = IsolationForestConfig(**spec["params"])
+    input_policy = MLTrainingInputPolicy.model_validate(spec.get("training_input", {}))
     matrix, selection = training_matrix(
-        store, dataset, features, seed=config.random_state
+        store, dataset, features, input_policy=input_policy
     )
     with pinned_scan_dataset(store, dataset) as source:
         schema = source.collect_schema()
