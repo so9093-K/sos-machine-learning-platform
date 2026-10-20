@@ -1,6 +1,6 @@
 # 공개 서비스와 격리 브라우저 검증은 compose.yaml을 공유한다.
 .DEFAULT_GOAL := help
-.PHONY: up down restart status logs doctor help
+.PHONY: up down restart status logs doctor validate help
 
 COMPOSE := docker compose --profile app
 
@@ -24,6 +24,9 @@ doctor:
 	@$(COMPOSE) ps --all
 	@$(COMPOSE) exec -T api python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:9602/api/ready', timeout=5).close()"
 
+validate:
+	@python scripts/validate.py run all
+
 help:
 	@printf '%s\n' \
 		'SOS Platform · Docker Compose 개발 명령' \
@@ -32,4 +35,5 @@ help:
 		'  make restart    애플리케이션 컨테이너 재시작' \
 		'  make status     컨테이너 상태 조회' \
 		'  make logs       API·Worker·Web 로그' \
-		'  make doctor     Compose 설정 및 상태 확인'
+		'  make doctor     Compose 설정 및 상태 확인' \
+		'  make validate   현재 구성된 제품 검증 실행'

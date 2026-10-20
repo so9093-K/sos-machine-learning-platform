@@ -28,6 +28,7 @@ PY
 make up          # Docker의 API·Worker·Web·PostgreSQL·S3 실행 및 Ready 확인
 make status
 make doctor
+make validate     # 신규로 구성된 소규모 Python 검증(전체 제품 보증 아님)
 make restart
 make logs
 make down        # 컨테이너만 종료, 데이터 볼륨 보존
