@@ -27,7 +27,7 @@ Workflow Definition은 작업 사이의 재사용 가능한 관계, Workflow Run
 
 Dataset 등록은 원본 파일 객체의 무결성과 별도로 확정된다. PostgreSQL과 S3·Iceberg Catalog가 하나의 트랜잭션을 공유한다고 가정하지 않는다. Attempt의 결과는 다른 Attempt가 덮어쓰지 않도록 분리해 게시하고, 객체 업로드·DB 확정 사이에 실패가 나면 불확실한 데이터를 즉시 삭제하거나 성공으로 간주하지 않는다.
 
-Worker는 실행 잠금의 소유권과 **현재 Running Attempt**를 확인한 경우에만 완료·결과 게시를 확정한다. 소유 DB 세션이 유실되면 부분 변경을 롤백하고, 이전 Attempt의 늦은 결과는 거부한다. 중단된 일반 변환은 복구 후 다른 Attempt로 다시 실행할 수 있지만, 외부 저장소 커밋 여부가 불확실한 작업은 별도로 판단한다. 객체 보존 계약은 [ADR 0002](adr/0002-object-lifecycle.md)를 따른다.
+Worker는 실행 잠금의 소유권과 **현재 Running Attempt**를 확인한 경우에만 완료·결과 게시를 확정한다. 소유 PostgreSQL 세션이 커밋 전에 유실되면 **그 DB 트랜잭션의 변경만** 롤백되며, 이전 Attempt의 늦은 DB 결과 확정은 거부한다. 이미 수행된 S3 전송·Iceberg 커밋은 롤백된 것으로 간주하지 않는다. 중단된 일반 변환은 복구 후 다른 Attempt로 다시 실행할 수 있지만, 외부 저장소 커밋 여부가 불확실한 작업은 별도로 판단한다. 객체 보존 계약은 [ADR 0002](adr/0002-object-lifecycle.md)를 따른다.
 
 **Iceberg Append는 외부 Snapshot 커밋**이다. 대기 중 취소는 가능하지만 현재 실행 중인 적재의 취소는 커밋 롤백을 보장하지 못하므로 거부한다. 중단된 작업은 자동 재적재하지 않고 Attempt 식별자와 Catalog Snapshot 근거를 대조한 뒤 별도로 처리한다. Snapshot Tag 보호 후 DB 게시가 실패했더라도 Tag를 제거하거나 재시도 성공을 추정하지 않는다. 보존 의도와 실제 Tag 확인은 [ADR 0003](adr/0003-snapshot-identity-audit.md)과 [Diagnostics](diagnostics.md)를 따른다.
 
