@@ -118,5 +118,3 @@ def test_cancel_understanding_preserves_dataset_and_previous_profile(workspace):
     assert new_job.status_code == 202
     assert run_once(store)
     assert client.get(path).json()["profile"]["scope"] == "full"
-
-

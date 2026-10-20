@@ -1,4 +1,4 @@
-"""Dataset의 역할·탐색 추천와 실제 DuckDB 표본을 인프라 없이 검증한다."""
+"""Dataset의 역할·탐색 추천 및 실제 DuckDB 표본을 인프라 없이 검증한다."""
 
 from contextlib import contextmanager
 
