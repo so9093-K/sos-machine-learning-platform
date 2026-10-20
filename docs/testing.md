@@ -14,7 +14,7 @@
 ## 실행과 CI
 
 - 로컬의 빠른 검사는 `make check-fast`, 전체 검사는 `make check`다. 정확한 명령과 선행 조건은 [Makefile](../Makefile)이 정본이다.
-- PR과 `main` push는 `python-quality` 빠른 검사만 자동 실행한다. 실제 PostgreSQL/S3 통합과 브라우저 전체 검증은 필요하다고 판단할 때 `workflow_dispatch` 또는 로컬에서 실행한다. 해당 검증을 정기 또는 병합 필수 작업으로 취급하지 않는다. 실행 조건과 명령은 [CI 설정](../.github/workflows/ci.yml)과 [Makefile](../Makefile)이 정본이다.
+- PR·`main` push는 `python-quality`에서 Ruff·단위·프런트엔드·생성 타입을 검사한다. PR에 Backend 구현·인프라·통합 테스트·CI 변경이 포함되면 같은 Job에서 대표 PostgreSQL/S3 계약 검사 4건을 추가 실행하고, 실패는 동일한 상태 검사를 실패시킨다. 관련 변경이 없는 PR과 `main` push에는 이 검사를 실행하지 않는다. 전체 통합·브라우저 검증은 필요할 때 `workflow_dispatch` 또는 로컬에서 수행하며 정기 전수 실행을 의무화하지 않는다. 실행 범위와 경로 판단은 [CI 설정](../.github/workflows/ci.yml)이 정본이다.
 - 추가 검증은 변경 자체나 기존 테스트 표식이 아닌 **구체적인 미검출 결함과 비용 대비 효과**가 설명될 때만 선택한다. 선택하지 않은 검증을 다른 일정에 의무적으로 배치하지 않는다. 별도 필수 테스트 선정 표식이나 보호 등록부는 운영하지 않는다.
 - pytest·Vitest·Playwright·Ruff의 종료 코드와 로그를 결과로 사용한다. 실행하지 않은 검사는 성공했다고 주장하지 않는다.
 

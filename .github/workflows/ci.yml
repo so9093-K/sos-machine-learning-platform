@@ -58,6 +58,38 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: uv run --locked python scripts/verify_openapi.py --base-ref "$BASE_SHA"
 
+
+      - name: Select DB/S3 contract checks
+        id: contract_scope
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed="$(git diff --name-only "$BASE_SHA" HEAD -- \
+            src/sos_platform/ tests/integration/ migrations/ scripts/ \
+            compose.yaml pyproject.toml uv.lock alembic.ini .github/workflows/ci.yml)"
+          if [[ -n "$changed" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            printf 'Backend contract changes:\n%s\n' "$changed"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No backend contract changes; DB/S3 checks do not apply."
+          fi
+      - name: Start DB/S3 contract services
+        if: steps.contract_scope.outputs.run == 'true'
+        run: |
+          docker compose -f compose.yaml -p sos-platform up -d --wait
+          uv run --locked alembic upgrade head
+          uv run --locked python -m sos_platform.bootstrap
+      - name: Selected DB/S3 contracts
+        if: steps.contract_scope.outputs.run == 'true'
+        run: |
+          uv run --locked pytest -q \
+            tests/integration/test_datasets.py::test_upload_preview_profile_and_scalar \
+            tests/integration/test_jobs.py::test_safe_feature_preview_and_worker_job \
+            tests/integration/test_iceberg.py::test_iceberg_snapshot_reproducibility \
+            tests/integration/test_security.py::test_identity_roles_ownership_and_audit
+
   integration:
     if: github.event_name == 'workflow_dispatch'
     needs: [python-quality]

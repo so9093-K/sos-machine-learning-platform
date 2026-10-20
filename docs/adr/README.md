@@ -23,4 +23,5 @@
 - [0012 — ML 실험·이상 점수·외부 추적의 책임 경계](0012-ml-experiment-boundaries.md) · Proposed
 - [0013 — 테스트 실행 비용과 필수 검증 정책 간소화](0013-lean-validation-policy.md) · Accepted
 - [0014 — Iceberg 구형 테이블 쓰기 소유권 채택 경로 종료](0014-remove-iceberg-adoption.md) · Accepted
-- [0015 — 초기 단계 CI의 빠른 기본 경로](0015-early-stage-ci-policy.md) · Accepted
+- [0015 — 초기 단계 CI의 빠른 기본 경로](0015-early-stage-ci-policy.md) · Accepted (PR의 전체 DB/S3 수동화 결정은 0016이 대체)
+- [0016 — 변경 영향 기반의 최소 실제 계약 검증](0016-targeted-contract-ci.md) · Accepted
