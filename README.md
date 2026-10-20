@@ -18,7 +18,10 @@
 make up
 make status
 make down
+make validate
 ```
+
+현재 `make validate`는 신규로 작성한 소규모 제품 검증만 실행합니다. 전체 플랫폼 검증을 뜻하지 않습니다.
 
 웹의 Data Explorer에서는 Dataset 개요·데이터 조회·탐색·변환을 이용할 수 있습니다. 합성 예제는 선택 시에만 Dataset으로 등록되며, 분석과 Job 실행은 사용자가 선택합니다. 
 
