@@ -1,19 +1,19 @@
 # 문서 안내
 
-각 설계 문서는 담당 영역의 기준(Source of Truth)이자 앞으로 구현할 시스템의 청사진이다. 구현 전에도 기준으로 적용하며, 실제 제공되는 기능과 설계 목표는 구분한다.
+각 문서는 한 가지 책임을 가진 설계 정본이다. **장기 목표, 지켜야 할 의미, 현재 구현**을 구분해 읽고 기록한다.
 
-| 문서 | 책임 |
-| --- | --- |
-| [Platform Identity](vision/PLATFORM_IDENTITY.md) | 제품 정체성·가치·개발 방향과 기준 이미지 |
-| [Experience](experience.md) | 사람·외부 시스템·AI 에이전트의 목표와 경험 |
-| [Architecture](architecture.md) | 플랫폼과 실행 인프라의 논리적 책임·경계 |
-| [Contracts](contracts.md) | 공통 개념·컴포넌트 계약·호환성 원칙 |
-| [Runtimes](runtimes.md) | 실행 환경 격리·식별·재현성·호환성 |
-| [Workflows](workflows.md) | 작업 실행·상태·재시도·결과 연결의 의미 |
-| [ADR](adr/README.md) | 장기적인 기술·아키텍처 결정의 근거 |
-| [Testing & CI](testing.md) | 테스트 격리·계층·CI 신뢰성과 운영 기준 |
-| [Diagnostics](diagnostics.md) | Error Catalog·로그·요청/Job 추적·보안·장애 Runbook |
+| 문서 | 다루는 것 | 다루지 않는 것 |
+| --- | --- | --- |
+| [Platform Identity](vision/PLATFORM_IDENTITY.md) | 제품 정체성·장기 가치·설계 철학·기준 이미지 | 현행 API·라이브러리·화면 설정 |
+| [Experience](experience.md) | 이용자 목표·상호작용·오류 및 복구 경험 | UI 컴포넌트 구성·일시적인 표시 기본값 |
+| [Architecture](architecture.md) | 구성요소의 논리적 책임·의존 방향 | 파일별 구현 설명·배포 명령 |
+| [Contracts](contracts.md) | 공통 개념·경계 간 의미·호환성 | 구현별 계산법·정확한 필드와 타입 |
+| [Runtimes](runtimes.md) | 실행 환경 식별·호환성·격리·자원 책임 | 환경변수 기본값·내부 알고리즘 |
+| [Workflows](workflows.md) | Job·Attempt·취소·재시도·결과 확정의 의미 | SQL·객체 경로·세부 실행 절차 |
+| [Testing & CI](testing.md) | 검증 선택·실패 판정·격리 원칙 | CI 단계와 테스트 목록의 복제 |
+| [Diagnostics](diagnostics.md) | 오류·추적·장애 확인 및 복구 안내 | 새로운 제품·설계 원칙 |
+| [ADR](adr/README.md) | 기존 장기 결정을 변경한 이유와 영향 | 임시 작업 기록·수시로 바뀌는 설정 |
 
-**권위의 경계:** 설계의 목적·제약·상호작용·호환성 원칙은 담당 문서에서 정의한다. 실제 API 필드, 타입, 설정 기본값은 코드·스키마·자동 생성 명세를 원본으로 삼는다. 충돌이 발견되면 해당 책임을 확인하고 함께 수정하며, 문서나 구현 어느 쪽도 조용히 무시하지 않는다.
+**실제 API 필드·타입은 코드와 자동 생성 OpenAPI**, 환경설정·기본값은 구현 코드, 실행 명령은 [Getting Started](getting-started.md)와 [Makefile](../Makefile)이 정본이다. 사용자에게 의미 있는 변경 이력은 [Changelog](../CHANGELOG.md)에 남긴다.
 
-[Getting Started](getting-started.md)는 현재 제공되는 Data Workspace의 실제 실행 절차를 안내한다. 향후 `development.md`와 `operations.md`는 기존 규칙이나 문서로 설명할 수 없는 고유한 절차가 생겼을 때 작성한다. 사용법을 설계 원칙으로 가장하거나 비어 있는 문서를 미리 만들지 않는다. 중요한 설계 변경은 필요할 때 ADR로 근거를 보존한다.
+새 주제라고 문서를 늘리거나 가장 가까운 정본에 세부사항을 밀어 넣지 않는다. 먼저 기존 책임과 겹치는지 확인하고, 같은 의미는 한 곳에서 정의한 뒤 다른 문서에서는 참조한다. 문서와 구현이 충돌하면 어느 책임의 계약이 달라졌는지 확인해 함께 조정한다.
