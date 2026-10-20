@@ -18,3 +18,5 @@ web/playwright-report/
 
 .sos-test/
 
+# CI 테스트 리포트
+web/reports/

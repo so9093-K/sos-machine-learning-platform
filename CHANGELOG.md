@@ -45,7 +45,7 @@
 
 - Worker Job 최종 확정 시 실행 Attempt 식별자를 검증하고, PostgreSQL advisory lock 소유 세션에서 결과·Dataset·감사 트랜잭션을 확정하여 소유권 상실·이전 Attempt의 늦은 결과가 새 실행을 덮어쓰는 위험을 방어합니다.
 
-- 실행 중 펼쳐 둔 Job/Attempt 상세가 최신 목록의 확정 상태보다 오래되면 상세를 재조회하고, 동일 목록 판본에 대한 반복 요청을 제한합니다.
+- 실행 중 펼쳐 둔 Job/Attempt 상세가 최신 목록의 확정 상태보다 오래되면 상세를 재조회하고, 동일 목록 판본에 대한 반복 요청을 제한합니다. 브라우저 회귀에서 오래된 상세 응답 이후 최신 상태로 복원되는지 검증합니다.
 
 - 사전 출시 단계에서 사용되지 않는 API 별칭과 무제한 Dataset 목록을 제거하고 Dataset 목록을 키셋 페이지 계약으로 단일화했습니다. 예제 중복 등록은 전체 목록 탐색 대신 판본·이름 조건 조회로 처리합니다.
 - 감사·객체·Snapshot·Dataset·Job/Attempt 저장 책임을 모듈로 분리하고, Window 검증·Job 목록 관리·API 페이지 커서의 중복을 정리했습니다.
@@ -79,7 +79,7 @@
 - Iceberg Dataset 생성·적재와 기존 Snapshot의 보존 관리 권한을 구분하고 역할별 UI를 일치시켰다.
 - Worker 복구 감사에 Attempt 식별자·복구 결과를 기록하고, 감사 실패 시 DB 상태 변경을 롤백하도록 검증했다.
 - 통합 테스트가 준비 도중 실패해도 독립 DB·버킷이 남지 않도록 정리 수명주기를 보강했다.
-- CI와 `make check`는 pytest·Vitest·Playwright를 직접 실행하고, 불필요한 검증 리포트 관리 계층을 제거했다.
+- CI에서 중복된 pytest·Vitest·Frontend 빌드를 제거하되 로컬 `make check`의 전체 검증 계약을 테스트로 유지한다.
 
 - 통합 테스트는 로컬 전용 독립 PostgreSQL·UUID S3 버킷을 사용해 사용자 데이터와 분리하고 테스트가 생성한 객체만 정리한다.
 - 미게시 Iceberg 보존 의도를 Storage Health에서 우선 진단하고, Worker Job·Dataset 게시 감사를 동일 DB 트랜잭션에 연결한다.
