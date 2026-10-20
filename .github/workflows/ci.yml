@@ -57,15 +57,17 @@ jobs:
               with TemporaryDirectory() as folder:
                   path = Path(folder) / "large.parquet"
                   # 생성 메모리를 학습 Worker RSS에 포함해 잘못 판정하지 않는다.
-                  subprocess.run([sys.executable, "-c", """
-from pathlib import Path
-import sys
-import numpy as np
-import polars as pl
-p, n, cols = Path(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
-values = np.arange(n, dtype=np.float64)
-pl.DataFrame({f"x{i}": np.sin(values / (i + 21)) + i for i in range(cols)}).write_parquet(p)
-""", str(path), str(count), str(cols)], check=True)
+                  subprocess.run([
+                      sys.executable, "-c",
+                      "from pathlib import Path\\n"
+                      "import sys\\n"
+                      "import numpy as np\\n"
+                      "import polars as pl\\n"
+                      "p, n, cols = Path(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])\\n"
+                      "values = np.arange(n, dtype=np.float64)\\n"
+                      "pl.DataFrame({f'x{i}': np.sin(values / (i + 21)) + i for i in range(cols)}).write_parquet(p)\\n",
+                      str(path), str(count), str(cols),
+                  ], check=True)
 
                   @contextmanager
                   def source(store, dataset):
