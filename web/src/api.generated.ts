@@ -2113,6 +2113,23 @@ export interface components {
             /** Features */
             features: string[];
             params?: components["schemas"]["IsolationForestParameters"];
+            training_input?: components["schemas"]["MLTrainingInputPolicy"];
+        };
+        /**
+         * MLTrainingInputPolicy
+         * @description 명시적인 학습 데이터 입력 선택 정책.
+         */
+        MLTrainingInputPolicy: {
+            /**
+             * Mode
+             * @default all
+             * @enum {string}
+             */
+            mode: "all" | "sample";
+            /** Rows */
+            rows?: number | null;
+            /** Seed */
+            seed?: number | null;
         };
         /**
          * MLTrainingJobOut
