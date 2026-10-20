@@ -15,6 +15,7 @@ from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from .api_control import control_router
 from .api_errors import problem_response, register_error_handlers
+from .api_ml_training import training_router
 from .config import StoragePolicy
 from .datasets import (
     connect_iceberg,
@@ -69,16 +70,12 @@ from .schemas import (
     MLExplanationJobPageOut,
     MLExplanationRequest,
     MLflowExportStatusOut,
-    MLForkRequest,
     MLPolicyJobOut,
     MLPolicyJobPageOut,
     MLPolicyRequest,
     MLScoringJobOut,
     MLScoringJobPageOut,
     MLScoringRequest,
-    MLTrainingJobOut,
-    MLTrainingJobPageOut,
-    MLTrainRequest,
     ModelRevisionOut,
     PreviewOut,
     ProblemOut,
@@ -536,121 +533,14 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     ):
         return job_page(limit, cursor, actor, discovery_only=True)
 
-    @app.post("/api/ml/train/jobs", status_code=202, response_model=MLTrainingJobOut)
-    def create_training_job(
-        body: MLTrainRequest,
-        request: Request,
-        actor: Actor = CREATE_JOB_DEP,
-        idempotency_key: str | None = Header(
-            default=None,
-            alias="Idempotency-Key",
-            min_length=8,
-            max_length=128,
-            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-        ),
-    ):
-        dataset = existing(body.dataset_id, actor)
-        require_job_submission_key(idempotency_key)
-        from .ml_isolation_forest import IsolationForestConfig
-
-        try:
-            IsolationForestConfig(**body.params.model_dump())
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail="Invalid training parameters") from exc
-        return store.create_job(
-            kind="ml_train",
-            dataset_id=dataset["id"],
-            spec={
-                "algorithm": "isolation_forest",
-                "dataset_version": dataset["version"],
-                "features": body.features,
-                "params": body.params.model_dump(),
-            },
-            owner_actor=actor.id,
-            actor_type=actor.kind,
-            request_id=request.state.request_id,
-            idempotency_key=idempotency_key,
+    app.include_router(
+        training_router(
+            store,
+            existing_dataset=existing,
+            existing_job=existing_job,
+            require_submission_key=require_job_submission_key,
         )
-
-    def existing_ml_training_job(job_id: str, actor: Actor) -> dict:
-        item = existing_job(job_id, actor)
-        if item["kind"] != "ml_train":
-            raise HTTPException(status_code=404, detail="Training Job not found")
-        return item
-
-    @app.post(
-        "/api/ml/train/jobs/{source_job_id}/fork",
-        status_code=202,
-        response_model=MLTrainingJobOut,
     )
-    def fork_training_job(
-        source_job_id: str,
-        body: MLForkRequest,
-        request: Request,
-        actor: Actor = CREATE_JOB_DEP,
-        idempotency_key: str | None = Header(
-            default=None,
-            alias="Idempotency-Key",
-            min_length=8,
-            max_length=128,
-            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-        ),
-    ):
-        source = existing_ml_training_job(source_job_id, actor)
-        if source["status"] != "Succeeded":
-            raise HTTPException(status_code=409, detail="Only completed training can be forked")
-        dataset = existing(source["dataset_id"], actor)
-        if dataset["version"] != source["spec"]["dataset_version"]:
-            raise HTTPException(status_code=409, detail="Training Dataset revision unavailable")
-        require_job_submission_key(idempotency_key)
-        params = body.params.model_dump() if body.params is not None else source["spec"]["params"]
-        from .ml_isolation_forest import IsolationForestConfig
-
-        try:
-            IsolationForestConfig(**params)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail="Invalid model parameters") from exc
-        return store.create_job(
-            kind="ml_train",
-            dataset_id=dataset["id"],
-            spec={
-                "algorithm": source["spec"]["algorithm"],
-                "dataset_version": source["spec"]["dataset_version"],
-                "features": source["spec"]["features"],
-                "params": params,
-                "forked_from_job_id": source_job_id,
-            },
-            request_id=request.state.request_id,
-            owner_actor=actor.id,
-            actor_type=actor.kind,
-            idempotency_key=idempotency_key,
-        )
-
-    @app.get("/api/ml/train/jobs", response_model=MLTrainingJobPageOut)
-    def list_ml_training_jobs(
-        limit: int = Query(default=20, ge=1, le=100),
-        cursor: str | None = Query(default=None, max_length=512),
-        actor: Actor = READ_JOB_DEP,
-    ):
-        rows = store.jobs(
-            limit=limit + 1,
-            before=decode_cursor(cursor, "Job"),
-            actor_id=None if actor.privileged else actor.id,
-            kind="ml_train",
-        )
-        return page_from_rows(rows, limit)
-
-    @app.get("/api/ml/train/jobs/{job_id}", response_model=MLTrainingJobOut)
-    def get_ml_training_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        return existing_ml_training_job(job_id, actor)
-
-    @app.post("/api/ml/train/jobs/{job_id}/cancel", response_model=MLTrainingJobOut)
-    def cancel_ml_training_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        existing_ml_training_job(job_id, actor)
-        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
-        if item is None:
-            raise HTTPException(status_code=404, detail="Training Job not found")
-        return item
 
     @app.post("/api/ml/scoring/jobs", status_code=202, response_model=MLScoringJobOut)
     def create_scoring_job(
