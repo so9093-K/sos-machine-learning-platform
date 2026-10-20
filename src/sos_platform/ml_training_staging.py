@@ -18,6 +18,9 @@ def training_stage_path(home: Path, attempt_id: str) -> Path:
 
 def training_stage_bytes(home: Path, attempt_id: str) -> int:
     """폴더 밖으로 나가지 않고 정렬 임시 파일의 실제 크기를 관찰한다."""
+    root = training_stage_root(home)
+    if root.is_symlink():
+        raise OSError("Training stage root must not be a symlink")
     folder = training_stage_path(home, attempt_id)
     if folder.is_symlink():
         raise OSError("Training stage directory must not be a symlink")

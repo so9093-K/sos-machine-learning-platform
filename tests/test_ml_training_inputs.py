@@ -540,3 +540,103 @@ def test_training_sort_stage_limit_has_distinct_failure_contract():
 
     assert ERRORS["SOS-ML-TRAIN-STAGE-LIMIT"].category == "storage_capacity"
     assert ERRORS["SOS-ML-TRAIN-CAPACITY"].category == "capacity"
+
+
+def test_worker_child_sets_attempt_scoped_sort_directory(monkeypatch, tmp_path):
+    """실제 Worker 자식 진입 경로에서 Polars 정렬 공간이 Attempt에 연결된다."""
+    import json
+    import os
+    from unittest.mock import Mock
+    from uuid import uuid4
+
+    from sos_platform import worker
+    from sos_platform.ml_training_staging import training_stage_path
+
+    attempt_id = str(uuid4())
+    job = {
+        "id": str(uuid4()),
+        "kind": "ml_train",
+        "dataset_id": "dataset",
+        "attempts": [{"id": attempt_id}],
+        "spec": {"algorithm": "isolation_forest"},
+    }
+    fake_store = Mock()
+    fake_store.home = tmp_path
+    fake_store.get_dataset.return_value = {"version": "v1"}
+    isolation = Mock()
+    monkeypatch.setattr(worker, "_guard_child_parent", lambda _pid: None)
+    monkeypatch.setattr(worker, "Store", lambda _home, database_url: fake_store)
+    monkeypatch.setattr(worker.CgroupIsolation, "from_env", lambda _limit: isolation)
+    expected = training_stage_path(tmp_path, attempt_id)
+
+    def fake_train(store, dataset, spec, path):
+        assert store is fake_store
+        assert os.environ["POLARS_TEMP_DIR"] == str(expected)
+        assert expected.is_dir()
+        assert spec == job["spec"]
+        path.write_bytes(b"model")
+        return {"training_rows": 2}
+
+    monkeypatch.setattr(worker, "train_dataset", fake_train)
+    completed = tmp_path / "finished.json"
+    worker._perform(
+        tmp_path, "postgresql://unused", job, completed, tmp_path / "pending.parquet",
+        os.getpid(),
+    )
+    assert json.loads(completed.read_text()) == {"result": {"training_rows": 2}}
+    isolation.attach_current_child.assert_called_once_with(attempt_id)
+
+
+def test_worker_parent_stops_stage_overflow_and_records_error(monkeypatch, tmp_path):
+    """정렬 Spill이 초과되면 부모 감시자가 정상 성공으로 확정하지 않는다."""
+    from unittest.mock import Mock
+    from uuid import uuid4
+
+    from sos_platform import worker
+    from sos_platform.execution_budget import ExecutionBudget
+
+    attempt_id = str(uuid4())
+    job_id = str(uuid4())
+    store = Mock()
+    store.home = tmp_path
+    store.claim.return_value = {
+        "id": job_id,
+        "kind": "ml_train",
+        "attempts": [{"id": attempt_id}],
+    }
+    process = Mock()
+    process.pid = 1234
+    alive = {"value": True}
+    process.is_alive.side_effect = lambda: alive["value"]
+    process.terminate.side_effect = lambda: alive.update(value=False)
+    process.join.return_value = None
+    context = Mock()
+    context.Process.return_value = process
+    monkeypatch.setattr(worker.multiprocessing, "get_context", lambda _method: context)
+    monkeypatch.setattr(worker, "process_rss_bytes", lambda _pid: None)
+    monkeypatch.setattr(worker, "training_stage_bytes", lambda _home, _attempt: 2 * 1024 * 1024)
+    monkeypatch.setattr(worker, "emit", lambda *_args, **_kwargs: None)
+    cgroup = Mock()
+    budget = ExecutionBudget(max_stage_mib=1)
+    assert worker._run_once_reserved(store, budget, cgroup) is True
+    store.finish.assert_called_once()
+    args, kwargs = store.finish.call_args
+    assert args == (job_id, "Failed")
+    assert kwargs["error_code"] == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert kwargs["failure_stage"] == "execution"
+    assert kwargs["failure_category"] == "storage"
+    process.terminate.assert_called_once()
+    cgroup.cleanup.assert_called_once_with(attempt_id)
+
+
+def test_training_stage_quota_rejects_symlinked_root(tmp_path):
+    from uuid import uuid4
+
+    from sos_platform.ml_training_staging import training_stage_bytes, training_stage_root
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    training_stage_root(tmp_path).parent.mkdir(parents=True)
+    training_stage_root(tmp_path).symlink_to(outside, target_is_directory=True)
+    with pytest.raises(OSError, match="must not be a symlink"):
+        training_stage_bytes(tmp_path, str(uuid4()))
