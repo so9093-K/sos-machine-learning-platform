@@ -175,3 +175,24 @@ def test_budgeted_selection_matches_global_priority_reference(monkeypatch):
     keep = np.argpartition(priority, count_selected - 1)[:count_selected]
     keep = keep[np.argsort(priority[keep], kind="stable")]
     np.testing.assert_array_equal(matrix[:, 0], data[keep])
+
+
+def test_all_rows_keeps_legacy_sorted_feature_order(monkeypatch):
+    frame = pl.DataFrame({
+        "x": [3.0, 1.0, 2.0, 1.0, 3.0, 2.0],
+        "y": [5.0, 2.0, 4.0, 1.0, 3.0, 5.0],
+    })
+    bind_frame(monkeypatch, frame)
+    first, evidence = ml_training.training_matrix(
+        None, {}, ["x", "y"], seed=42, worker_memory_mib=1
+    )
+    expected = frame.sort(["x", "y"]).to_numpy()
+    np.testing.assert_array_equal(first, expected)
+    assert evidence["method"] == "all_rows"
+
+    bind_frame(monkeypatch, frame.reverse())
+    reversed_matrix, reversed_evidence = ml_training.training_matrix(
+        None, {}, ["x", "y"], seed=42, worker_memory_mib=1
+    )
+    np.testing.assert_array_equal(reversed_matrix, expected)
+    assert reversed_evidence["selection_sha256"] == evidence["selection_sha256"]

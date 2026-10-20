@@ -132,8 +132,9 @@ def training_matrix(
     if source_rows < 2:
         raise ValueError("Training requires at least two rows")
 
-    # 선택 우선순위 순서로 정렬하여 모델의 행 위치 기반 난수를 재현한다.
-    order = np.argsort(selected_priority[:selected_rows], kind="stable")
+    # 기존의 Feature 값 정렬 계약을 유지한다. 전체 입력과 부분집합 모두
+    # 모델의 행 위치 기반 표본 추출이 배치 경계나 선택 우선순위에 종속되지 않는다.
+    order = np.lexsort(selected[:selected_rows].T[::-1])
     selected = np.ascontiguousarray(selected[order])
     selection = {
         "source_rows": source_rows,
