@@ -10,7 +10,7 @@ SOS 검증은 제품 계약에서 발견할 가치가 있는 실제 실패를 �
 
 - **검증 계약·정책:** 제품 책임에서 무엇을, 왜, 언제 확인할지 결정한다. 별도 테스트 등록부를 만들지 않는다.
 - **공통 CLI:** `scripts/validate.py`가 Suite를 선택하고 Native Runner를 호출하며 종료 코드를 전달한다.
-- **Native Runner:** pytest가 Python 테스트의 수집·실행·성공 판정을 담당한다. Vitest와 Playwright는 검증 대상이 생길 때 별도로 연결한다.
+- **Native Runner:** 현재 pytest가 Python 테스트의 수집·실행·성공 판정을 담당한다. Web·브라우저 검증은 아직 구성되지 않았으며, 실제 필요가 생기면 해당 Native Runner와 의존성을 함께 추가한다.
 - **결과·증거:** 현재는 종료 코드와 출력 로그를 사용한다. JUnit·Run Manifest·Artifacts는 실제 소비 요구가 생기면 필요한 만큼만 생성한다.
 - **Thin Adapter:** 로컬·GitHub Actions는 동일한 CLI를 호출한다. 다른 CI 제공자는 실제로 필요할 때 연결한다.
 

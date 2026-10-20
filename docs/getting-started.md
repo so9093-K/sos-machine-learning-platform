@@ -40,7 +40,7 @@ make down        # 컨테이너만 종료, 데이터 볼륨 보존
 - PostgreSQL 개발 포트: `9603`
 - S3 개발 포트: `9605`
 
-`compose.yaml`이 실행 구성의 정본이다. 기본 `make up`은 `app` 프로필을 사용하며, CI의 인프라 전용 기동은 프로필 없이 PostgreSQL·SeaweedFS만 실행한다. `docker compose --profile app up --build -d --wait`를 사용하면 Make 없이 동일하게 기동할 수 있다. `SOS_AUTH_TOKEN_HASHES`를 생략하면 API가 시작을 거부한다.
+`compose.yaml`이 실행 구성의 정본이다. 기본 `make up`은 `app` 프로필을 사용한다. `docker compose --profile app up --build -d --wait`를 사용하면 Make 없이 동일하게 기동할 수 있다. `SOS_AUTH_TOKEN_HASHES`를 생략하면 API가 시작을 거부한다.
 
 - 개발 컨테이너는 Token 인증을 요구하며 Docker 네트워크를 관리자 신원으로 취급하지 않는다. 외부 공개용 TLS·OIDC·격리는 구현하지 않았다.
 - 내부 연결은 `postgres:5432`, `storage:8333`, `api:9602`를 사용한다. 호스트 포트는 루프백으로만 공개한다.

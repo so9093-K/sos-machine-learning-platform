@@ -1,4 +1,4 @@
-# 공개 서비스와 격리 브라우저 검증은 compose.yaml을 공유한다.
+# 로컬 개발 서비스는 compose.yaml의 app 프로필로 실행한다.
 .DEFAULT_GOAL := help
 .PHONY: up down restart status logs doctor validate help
 
