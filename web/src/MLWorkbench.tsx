@@ -28,6 +28,9 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   const [features, setFeatures] = useState<string[]>([]);
   const [nEstimators, setNEstimators] = useState(100);
   const [maxSamples, setMaxSamples] = useState("auto");
+  const [inputMode, setInputMode] = useState<"all" | "sample">("all");
+  const [inputRows, setInputRows] = useState(100000);
+  const [inputSeed, setInputSeed] = useState(42);
   const [loadingColumns, setLoadingColumns] = useState(false);
   const {
     items: history, nextCursor: historyCursor, refresh: reloadHistory, loadMore: loadOlderHistory,
@@ -124,7 +127,9 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   }, [compareJobId, history, model?.id, selectedJob?.id]);
 
   async function startTraining() {
-    if (!canTrain || !selectedId || features.length < 1 || submitting) return;
+    if (!canTrain || !selectedId || features.length < 1 || submitting ||
+        (inputMode === "sample" && (!Number.isSafeInteger(inputRows) || inputRows < 2 ||
+          !Number.isInteger(inputSeed) || inputSeed < 0 || inputSeed > 4294967295))) return;
     const requestedDataset = selectedId;
     const requestedSelection = ++selectionRequest.current;
     setSubmitting(true);
@@ -133,6 +138,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       const result = await submitJob<MLTrainingJob>("/api/ml/train/jobs", {
         dataset_id: selectedId,
         features,
+        training_input: inputMode === "all" ? { mode: "all" } :
+          { mode: "sample", rows: inputRows, seed: inputSeed },
         params: { n_estimators: nEstimators, max_samples: maxSamples === "auto"
           ? "auto" : Number(maxSamples), max_features: 1.0, bootstrap: false, random_state: 42 },
       });
@@ -213,7 +220,9 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     model.dataset_id === comparisonModel.dataset_id &&
     model.dataset_version === comparisonModel.dataset_version &&
     JSON.stringify(model.features) === JSON.stringify(comparisonModel.features) &&
-    (trainingFingerprint(model) === trainingFingerprint(comparisonModel)));
+    trainingFingerprint(model) !== null &&
+    trainingFingerprint(comparisonModel) !== null &&
+    trainingFingerprint(model) === trainingFingerprint(comparisonModel));
 
   const parameterKeys = ["n_estimators", "max_samples", "max_features",
     "bootstrap", "random_state"];
@@ -253,6 +262,32 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         </label>
       </div>
       <div className="steps">
+        <strong>학습 입력 범위</strong>
+        <div className="form-row">
+          <label>입력 선택 방식
+            <select aria-label="학습 입력 선택 방식" value={inputMode}
+              onChange={event => setInputMode(event.target.value as "all" | "sample")}>
+              <option value="all">전체 Dataset</option>
+              <option value="sample">명시적 무작위 부분집합</option>
+            </select>
+          </label>
+          {inputMode === "sample" && <>
+            <label>학습 입력 행 수
+              <input aria-label="학습 표본 행 수" type="number" min={2} step={1}
+                value={inputRows} onChange={event => setInputRows(Number(event.target.value))} />
+            </label>
+            <label>입력 선택 Seed
+              <input aria-label="학습 입력 선택 Seed" type="number" min={0} max={4294967295}
+                step={1} value={inputSeed}
+                onChange={event => setInputSeed(Number(event.target.value))} />
+            </label>
+          </>}
+        </div>
+        <p className="hint">{inputMode === "all"
+          ? "Dataset의 모든 행을 학습에 사용합니다. Worker 예산을 넘으면 자동 축소하지 않고 실패합니다."
+          : "지정한 행 수와 Seed로 전체 Dataset에서 행을 선택합니다. Dataset이 요청 행 수보다 작거나 예산이 부족하면 실패합니다. 스캔 순서가 달라지면 결과가 달라질 수 있습니다."}</p>
+      </div>
+      <div className="steps">
         <strong>학습에 사용할 숫자형 Feature ({features.length}개)</strong>
         {!selectedId && <p className="hint">Dataset을 선택하면 입력 스키마를 조회합니다.</p>}
         {loadingColumns && <p role="status" className="hint">스키마를 조회하고 있습니다.</p>}
@@ -266,10 +301,12 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           {column.name} <small>{column.dtype}</small>
         </label>)}</div>
       </div>
-      <p className="hint">숫자형 Feature를 선택하세요. Worker가 전체 Dataset을 검사한 뒤 메모리 예산 안에서 학습 행을 선택합니다. 전체 입력이 학습에 사용되지 않을 수 있으며 결측·비유한값·정밀도 오류는 실패로 처리합니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
+      <p className="hint">숫자형 Feature를 선택하세요. 학습 입력은 위에서 선택한 정책에 따르며, 실행 예산에 맞지 않으면 실패합니다. 결측·비유한값·정밀도 오류는 실패로 처리합니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
       <div className="actions">
         <button disabled={!canTrain || submitting || !selectedId || features.length === 0 ||
-          !Number.isInteger(nEstimators) || nEstimators < 1 || nEstimators > 2000}
+          !Number.isInteger(nEstimators) || nEstimators < 1 || nEstimators > 2000 ||
+          (inputMode === "sample" && (!Number.isSafeInteger(inputRows) || inputRows < 2 ||
+            !Number.isInteger(inputSeed) || inputSeed < 0 || inputSeed > 4294967295))}
           onClick={() => void startTraining()}>
           {submitting ? "Job 접수 중…" : "학습 Job 제출"}
         </button>
@@ -313,7 +350,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           onClick={() => void forkTraining()}>
           {submitting ? "Fork 제출 중…" : "동일 조건으로 Fork·Reproduce"}
         </button>
-        <p className="hint">Dataset 판본·Feature·Seed·모델 설정을 복사합니다. 실행 예산·입력 스캔 순서·Runtime이 바뀌면 실제 학습 입력은 달라질 수 있습니다.</p>
+        <p className="hint">Dataset 판본·Feature·입력 선택 정책·선택 Seed·모델 설정을 복사합니다. 스캔 순서·Runtime이 달라지면 실제 학습 입력은 달라질 수 있습니다.</p>
       </div>}
       {selectedJob.status === "Succeeded" &&
         <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id} />}
@@ -326,7 +363,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           {" "}{typeof selectedJob.result.training_selection === "object" &&
             "method" in selectedJob.result.training_selection &&
             selectedJob.result.training_selection.method === "all_rows"
-              ? "전체 입력" : "행별 무작위 우선순위 표본 (대표성 보장 안 됨)"}
+              ? "전체 입력" : "지정한 행 수·Seed의 무작위 표본 (대표성 보장 안 됨)"}
         </p>}
         <div className="cards">
           <div className="stat"><span>학습 점수 대상</span><strong>{statistic(model.training_score_summary.score_count)}행</strong></div>
