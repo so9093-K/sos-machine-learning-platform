@@ -320,7 +320,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       {model && <div className="result">
         <h4>Model Revision · {model.id}</h4>
         <p className="hint">입력 판본: {model.dataset_version} · Feature: {model.features.join(", ")}</p>
-        {selectedJob?.result && selectedJob.result.training_selection && <p className="hint">
+        {selectedJob?.result && selectedJob.result.training_selection != null && <p className="hint">
           원본 {statistic(selectedJob.result.source_rows)}행 · 학습에 사용한 입력
           {" "}{statistic(selectedJob.result.training_rows)}행 ·
           {" "}{typeof selectedJob.result.training_selection === "object" &&
