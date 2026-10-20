@@ -26,7 +26,7 @@ def _submit(client, endpoint, body):
     return client.post(endpoint, json=body, headers={"Idempotency-Key": str(uuid4())})
 
 
-def test_scoring_explanation_policy_and_evaluation_share_published_artifacts(workspace, tmp_path):
+def test_ml_result_publication_chain(workspace, tmp_path):
     """하나의 학습·Scoring 결과로 네 개 독립 게시 API의 계약을 확인한다."""
     client, store = workspace
     training = _upload(
@@ -64,9 +64,13 @@ def test_scoring_explanation_policy_and_evaluation_share_published_artifacts(wor
         "label_column": "abnormal",
     }
     key = str(uuid4())
-    first = client.post("/api/ml/scoring/jobs", json=spec, headers={"Idempotency-Key": key})
+    first = client.post(
+        "/api/ml/scoring/jobs", json=spec, headers={"Idempotency-Key": key}
+    )
     assert first.status_code == 202, first.text
-    again = client.post("/api/ml/scoring/jobs", json=spec, headers={"Idempotency-Key": key})
+    again = client.post(
+        "/api/ml/scoring/jobs", json=spec, headers={"Idempotency-Key": key}
+    )
     assert again.status_code == 202
     assert again.json()["id"] == first.json()["id"]
     score_job_id = first.json()["id"]
@@ -89,7 +93,9 @@ def test_scoring_explanation_policy_and_evaluation_share_published_artifacts(wor
 
     storage = ObjectStore()
     local = tmp_path / "scored.parquet"
-    storage.get(storage.key(result["location"]), local, expected_sha256=result["sha256"])
+    storage.get(
+        storage.key(result["location"]), local, expected_sha256=result["sha256"]
+    )
     frame = pl.read_parquet(local)
     assert frame.height == 4
     assert frame["label"].to_list() == [0, 0, 0, 1]
@@ -101,17 +107,26 @@ def test_scoring_explanation_policy_and_evaluation_share_published_artifacts(wor
     assert observed[result["location"]]["referenced"] is True
 
     rejected = _submit(
-        client, "/api/ml/explanations/jobs", {"scoring_result_id": scoring_id, "row_index": 9}
+        client,
+        "/api/ml/explanations/jobs",
+        {"scoring_result_id": scoring_id, "row_index": 9},
     )
     assert rejected.status_code == 422, rejected.text
     with store.connection() as db:
-        assert db.execute(text("SELECT COUNT(*) FROM explanation_results")).scalar_one() == 0
+        assert (
+            db.execute(text("SELECT COUNT(*) FROM explanation_results")).scalar_one()
+            == 0
+        )
     explain = _submit(
-        client, "/api/ml/explanations/jobs", {"scoring_result_id": scoring_id, "row_index": 0}
+        client,
+        "/api/ml/explanations/jobs",
+        {"scoring_result_id": scoring_id, "row_index": 0},
     )
     assert explain.status_code == 202, explain.text
     assert run_once(store)
-    explanation_job = client.get(f"/api/ml/explanations/jobs/{explain.json()['id']}").json()
+    explanation_job = client.get(
+        f"/api/ml/explanations/jobs/{explain.json()['id']}"
+    ).json()
     assert explanation_job["status"] == "Succeeded", explanation_job
     explanation_id = explanation_job["result"]["explanation_result_id"]
     explanation = client.get(f"/api/ml/explanations/{explanation_id}")
@@ -137,7 +152,9 @@ def test_scoring_explanation_policy_and_evaluation_share_published_artifacts(wor
     assert policy_job.status_code == 202, policy_job.text
     assert client.post(f"/api/jobs/{policy_job.json()['id']}/cancel").status_code == 404
     assert run_once(store)
-    policy_finished = client.get(f"/api/ml/policies/jobs/{policy_job.json()['id']}").json()
+    policy_finished = client.get(
+        f"/api/ml/policies/jobs/{policy_job.json()['id']}"
+    ).json()
     assert policy_finished["status"] == "Succeeded", policy_finished
     policy = client.get(
         f"/api/ml/policies/{policy_finished['result']['policy_revision_id']}"
@@ -153,7 +170,10 @@ def test_scoring_explanation_policy_and_evaluation_share_published_artifacts(wor
         {"scoring_result_id": scoring_id, "policy_revision_id": policy_id},
     )
     assert evaluation_job.status_code == 202, evaluation_job.text
-    assert client.post(f"/api/jobs/{evaluation_job.json()['id']}/cancel").status_code == 404
+    assert (
+        client.post(f"/api/jobs/{evaluation_job.json()['id']}/cancel").status_code
+        == 404
+    )
     assert run_once(store)
     evaluated = client.get(
         f"/api/ml/evaluations/jobs/{evaluation_job.json()['id']}"
@@ -178,10 +198,12 @@ def test_scoring_explanation_policy_and_evaluation_share_published_artifacts(wor
             assert db.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one() == 1
         assert (
             db.execute(
-                text("SELECT COUNT(*) FROM datasets WHERE id=:id"), {"id": scoring["id"]}
+                text("SELECT COUNT(*) FROM datasets WHERE id=:id"),
+                {"id": scoring["id"]},
             ).scalar_one()
             == 1
         )
+
 
 def test_validation_rejects_wrong_policy_combination(workspace):
     client, _ = workspace
