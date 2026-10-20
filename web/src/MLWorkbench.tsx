@@ -245,20 +245,20 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         </label>
       </div>
       <div className="steps">
-        <strong>학습에 사용할 숫자형 Feature ({features.length} / 32)</strong>
+        <strong>학습에 사용할 숫자형 Feature ({features.length}개)</strong>
         {!selectedId && <p className="hint">Dataset을 선택하면 입력 스키마를 조회합니다.</p>}
         {loadingColumns && <p role="status" className="hint">스키마를 조회하고 있습니다.</p>}
         {selectedId && !loadingColumns && numericColumns.length === 0 &&
           <p className="hint">사용 가능한 숫자형 Feature가 없습니다. 데이터 준비에서 숫자형 Feature를 생성하세요.</p>}
         <div className="form-row">{numericColumns.map(column => <label key={column.name}>
           <input type="checkbox" checked={features.includes(column.name)}
-            disabled={!canTrain || (!features.includes(column.name) && features.length >= 32)}
+            disabled={!canTrain}
             onChange={event => setFeatures(current => event.target.checked
               ? [...current, column.name] : current.filter(name => name !== column.name))} />
           {column.name} <small>{column.dtype}</small>
         </label>)}</div>
       </div>
-      <p className="hint">첫 학습 Runtime은 숫자형·최대 50,000행·32 Feature로 제한하며, 결측·NaN·Infinity는 학습 실패로 처리합니다. 학습 데이터의 점수 분포는 독립 검증 성능이 아닙니다.</p>
+      <p className="hint">숫자형 Feature를 선택하세요. Worker가 전체 Dataset을 검사한 뒤 메모리 예산 안에서 학습 행을 선택합니다. 전체 입력이 학습에 사용되지 않을 수 있으며 결측·비유한값·정밀도 오류는 실패로 처리합니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
       <div className="actions">
         <button disabled={!canTrain || submitting || !selectedId || features.length === 0 ||
           !Number.isInteger(nEstimators) || nEstimators < 1 || nEstimators > 2000}
@@ -312,6 +312,15 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       {model && <div className="result">
         <h4>Model Revision · {model.id}</h4>
         <p className="hint">입력 판본: {model.dataset_version} · Feature: {model.features.join(", ")}</p>
+        {selectedJob?.result && <p className="hint">
+          원본 {statistic(selectedJob.result.source_rows)}행 · 학습에 사용한 입력
+          {" "}{statistic(selectedJob.result.training_rows)}행 ·
+          {" "}{selectedJob.result.training_selection &&
+            typeof selectedJob.result.training_selection === "object" &&
+            "method" in selectedJob.result.training_selection &&
+            selectedJob.result.training_selection.method === "all_rows"
+              ? "전체 입력" : "재현 가능한 Feature 해시 선택"}
+        </p>}
         <div className="cards">
           <div className="stat"><span>학습 점수 대상</span><strong>{statistic(model.training_score_summary.score_count)}행</strong></div>
           <div className="stat"><span>학습 기준 이상 후보</span><strong>{statistic(model.training_score_summary.predicted_anomalies)}건</strong></div>

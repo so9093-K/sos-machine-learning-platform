@@ -304,7 +304,7 @@ class MLForkRequest(BaseModel):
 
 class MLTrainRequest(BaseModel):
     dataset_id: str
-    features: list[str] = Field(min_length=1, max_length=32)
+    features: list[str] = Field(min_length=1)
     params: IsolationForestParameters = Field(default_factory=IsolationForestParameters)
 
     @model_validator(mode="after")

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Isolation Forest Training의 고정 행·Feature 한도를 실행 메모리 예산 기반 입력 선택으로 전환하고, 원본·선택 행 수와 선택 Seed·입력 지문을 기록합니다. Scoring의 현행 처리 범위는 유지합니다.
+
 - Policy·Evaluation·Explanation Job의 취소와 실패 상태 안내, Scoring 이전 이력 탐색을 연결하고, 학습 데이터 재점수화 결과를 독립 검증 성능으로 표시하지 않도록 보완했습니다.
 
 - 선택적 MLflow REST Tracking을 Worker 전용 Outbox와 별도 상태로 추가하고, 실패 재시도·재시작 복구·외부 Run 연결 상태를 표시한다. 같은 모델 설정으로 Fork·Reproduce 하는 사용자 동작을 제공한다.

@@ -7,9 +7,11 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 
 from .datasets import pinned_scan_dataset
 from .ml_anomaly import evaluate_anomaly_scores
+from .ml_input import INTEGER_DTYPES, NUMERIC
 from .ml_isolation_forest import _matrix
 from .ml_runtime import load_trusted_isolation_forest
-from .ml_training import INTEGER_DTYPES, MAX_ROWS, NUMERIC
+
+MAX_SCORING_ROWS = 50_000
 
 
 def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict:
@@ -38,8 +40,8 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
             raise ValueError("Scoring features must be finite numeric values")
         if [str(schema[name]) for name in features] != model["runtime"].get("feature_dtypes"):
             raise ValueError("Scoring feature dtypes differ from Model Revision")
-        frame = source.select(fields).head(MAX_ROWS + 1).collect()
-    if not 1 <= frame.height <= MAX_ROWS:
+        frame = source.select(fields).head(MAX_SCORING_ROWS + 1).collect()
+    if not 1 <= frame.height <= MAX_SCORING_ROWS:
         raise ValueError("Scoring requires between 1 and 50000 rows")
     if any(frame.select(features).null_count().row(0)):
         raise ValueError("Scoring features contain null values")
