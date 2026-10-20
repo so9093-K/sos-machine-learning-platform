@@ -62,7 +62,7 @@ with TemporaryDirectory() as home:
             ("/" + ",".join(sorted(r.methods or [])) + ":" + r.path)
             for r in app.routes if r.path.startswith("/api/ml/train/")
         )
-        assert len(route_paths) == 4, route_paths  # 5 operations; GET/POST share jobs path
+        assert len(route_paths) == 5, route_paths  # Training HTTP 작업 다섯 개
         results["routes"] = route_paths
 
         accepted = probe(client, "train_valid", "POST", "/api/ml/train/jobs",
