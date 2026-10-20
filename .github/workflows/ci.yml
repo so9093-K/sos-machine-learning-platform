@@ -46,6 +46,8 @@ jobs:
           from tempfile import TemporaryDirectory
           from time import monotonic
           import resource
+          import subprocess
+          import sys
           import numpy as np
           import polars as pl
           from sos_platform import ml_training
@@ -54,12 +56,16 @@ jobs:
           for count, cols, rows in [(1_370_000, 8, 100_000), (200_000, 40, 40_000), (1_370_000, 63, 100_000)]:
               with TemporaryDirectory() as folder:
                   path = Path(folder) / "large.parquet"
-                  values = np.arange(count, dtype=np.float64)
-                  pl.DataFrame({
-                      f"x{i}": np.sin(values / (i + 21)) + i
-                      for i in range(cols)
-                  }).write_parquet(path)
-                  del values
+                  # 생성 메모리를 학습 Worker RSS에 포함해 잘못 판정하지 않는다.
+                  subprocess.run([sys.executable, "-c", """
+from pathlib import Path
+import sys
+import numpy as np
+import polars as pl
+p, n, cols = Path(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
+values = np.arange(n, dtype=np.float64)
+pl.DataFrame({f"x{i}": np.sin(values / (i + 21)) + i for i in range(cols)}).write_parquet(p)
+""", str(path), str(count), str(cols)], check=True)
 
                   @contextmanager
                   def source(store, dataset):
