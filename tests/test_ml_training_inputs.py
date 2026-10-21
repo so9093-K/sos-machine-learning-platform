@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from sos_platform import ml_training
 from sos_platform.errors import PlatformError
 from sos_platform.ml_input import (
-    TRAINING_SELECTION_CANONICAL_V1,
     TRAINING_SELECTION_CURRENT,
     TRAINING_SELECTION_LEGACY,
 )
@@ -655,7 +654,7 @@ def test_canonical_v1_remains_exactly_replayable(monkeypatch):
     bind_frame(monkeypatch, source)
     matrix, evidence = ml_training.training_matrix(
         None, {}, ["x"], input_policy=sample(requested, seed),
-        selection_algorithm_version=TRAINING_SELECTION_CANONICAL_V1,
+        selection_algorithm_version=TRAINING_SELECTION_CURRENT,
         worker_memory_mib=4,
     )
     priorities = np.random.default_rng(seed).integers(
@@ -663,7 +662,7 @@ def test_canonical_v1_remains_exactly_replayable(monkeypatch):
     )
     chosen = np.argpartition(priorities, requested - 1)[:requested]
     np.testing.assert_array_equal(matrix[:, 0], np.sort(values[chosen]))
-    assert evidence["algorithm_version"] == TRAINING_SELECTION_CANONICAL_V1
+    assert evidence["algorithm_version"] == TRAINING_SELECTION_CURRENT
 
 def test_duckdb_canonical_sample_keeps_independent_duplicate_observations(monkeypatch):
     # 정렬 구현이 중복 관측의 빈도를 변경하지 않는다.
@@ -753,4 +752,4 @@ def test_duckdb_v1_matches_original_polars_sort_and_seed(monkeypatch, tmp_path):
     selected = np.ascontiguousarray(selected[np.lexsort(selected.T[::-1])])
     np.testing.assert_array_equal(actual, selected)
     assert evidence["selection_sha256"] == hashlib.sha256(selected.tobytes()).hexdigest()
-    assert evidence["algorithm_version"] == TRAINING_SELECTION_CANONICAL_V1
+    assert evidence["algorithm_version"] == TRAINING_SELECTION_CURRENT
