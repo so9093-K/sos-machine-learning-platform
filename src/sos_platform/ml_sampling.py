@@ -128,7 +128,7 @@ def streaming_canonical_sample(
                     matrix[matrix == 0] = 0.0
                     matrix = np.ascontiguousarray(matrix)
                     with db:
-                        db.executemany(statement, (row.tobytes(),) for row in matrix)
+                        db.executemany(statement, ((row.tobytes(),) for row in matrix))
                     if db_path.stat().st_size > stage_limit:
                         raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
 
