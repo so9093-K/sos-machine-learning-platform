@@ -20,3 +20,20 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
+
+      - name: One-time PR33 resource profile benchmark
+        run: |
+          mkdir -p /tmp/pr33-profiles
+          for scenario in "1370000 8" "1370000 63"; do
+            set -- $scenario
+            rows=$1
+            width=$2
+            data=/tmp/pr33-profiles/data.parquet
+            uv run --locked python scripts/_pr33_resource_profiles_temp.py generate "$rows" "$width" "$data"
+            for memory in 512 2048 8192; do
+              uv run --locked python scripts/_pr33_resource_profiles_temp.py measure "$rows" "$width" "$data" --memory "$memory" --variant baseline
+            done
+            uv run --locked python scripts/_pr33_resource_profiles_temp.py measure "$rows" "$width" "$data" --memory 8192 --variant scaled
+            uv run --locked python scripts/_pr33_resource_profiles_temp.py measure "$rows" "$width" "$data" --memory 8192 --variant parallel
+            rm -f "$data"
+          done
