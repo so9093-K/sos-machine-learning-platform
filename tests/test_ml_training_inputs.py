@@ -1092,3 +1092,27 @@ def test_worker_training_child_completes_actual_duckdb_sampling_and_model(
     assert pending.with_suffix(".joblib").stat().st_size > 0
     assert list(training_stage_path(tmp_path, attempt_id).iterdir()) == []
     cgroup.attach_current_child.assert_called_once_with(attempt_id)
+
+
+def test_canonical_sort_polars_wrapped_disk_error_preserves_stage_code(
+    monkeypatch, tmp_path,
+):
+    # Polars의 모든 스토리지 실패가 ComputeError로 전달된다고 가정하지 않는다.
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(256.0)}))
+
+    def fail_sink(_self, output, **_options):
+        from pathlib import Path
+
+        Path(output).write_bytes(b"partial")
+        raise pl.exceptions.InvalidOperationError("No space left on device")
+
+    monkeypatch.setattr(pl.LazyFrame, "sink_parquet", fail_sink)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(32, 9), worker_memory_mib=2048
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert not list(stage.iterdir())
