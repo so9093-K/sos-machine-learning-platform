@@ -33,16 +33,27 @@ def select(path: Path, rows: int, features: int, version: str) -> None:
     algorithm = {
         "v1": TRAINING_SELECTION_CANONICAL_V1,
         "v2": TRAINING_SELECTION_CURRENT,
-    }[version]
+    }.get(version)
     ml_training.pinned_scan_dataset = lambda *_args: contextlib.nullcontext(
         pl.scan_parquet(path)
     )
     policy = MLTrainingInputPolicy.model_validate({"mode": "sample", "rows": 100000, "seed": 11})
     start = time.perf_counter()
-    selected, evidence = ml_training.training_matrix(
-        None, {"version": "benchmark"}, [f"f{i}" for i in range(features)],
-        input_policy=policy, selection_algorithm_version=algorithm, worker_memory_mib=4096
-    )
+    if version == "v2_pos":
+        from sos_platform.ml_sampling import streaming_canonical_sample
+
+        selected, evidence = streaming_canonical_sample(
+            pinned_scan_dataset=ml_training.pinned_scan_dataset,
+            store=None, dataset={"version": "benchmark"},
+            features=[f"f{i}" for i in range(features)],
+            requested_rows=100000, seed=11, budget_mib=4096,
+            selection_strategy="positions",
+        )
+    else:
+        selected, evidence = ml_training.training_matrix(
+            None, {"version": "benchmark"}, [f"f{i}" for i in range(features)],
+            input_policy=policy, selection_algorithm_version=algorithm, worker_memory_mib=4096
+        )
     elapsed = time.perf_counter() - start
     rss_mib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
     print(
@@ -55,7 +66,7 @@ def select(path: Path, rows: int, features: int, version: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["generate", "v1", "v2"])
+    parser.add_argument("action", choices=["generate", "v1", "v2", "v2_pos"])
     parser.add_argument("rows", type=int)
     parser.add_argument("features", type=int)
     parser.add_argument("path", type=Path)
