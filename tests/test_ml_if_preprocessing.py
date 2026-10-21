@@ -70,3 +70,17 @@ def test_large_integer_precision_not_silently_lost():
     fitted = fit_if_median_imputer([[1.0], [3.0]], feature_names=["a"])
     with pytest.raises(ValueError, match="exact float64"):
         fitted.transform(np.array([[2**53 + 1]], dtype=np.uint64), feature_names=["a"])
+
+
+def test_numeric_strings_and_object_values_are_not_silently_coerced():
+    fitted = fit_if_median_imputer([[1.0], [3.0]], feature_names=["a"])
+    for input_rows in ([["2"]], [[None]], [[True]]):
+        with pytest.raises(ValueError, match="numeric"):
+            fitted.transform(input_rows, feature_names=["a"])
+
+
+def test_constant_training_features_are_not_implicitly_dropped():
+    fitted = fit_if_median_imputer([[2.0, 5.0], [2.0, 7.0]],
+                                   feature_names=["constant", "changing"])
+    assert fitted.feature_names == ("constant", "changing")
+    assert fitted.medians == (2.0, 6.0)
