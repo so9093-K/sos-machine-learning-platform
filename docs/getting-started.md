@@ -7,7 +7,7 @@ SOS의 로컬 개발 환경을 실행하고 첫 Dataset 탐색과 ML 학습을 �
 Docker Compose와 GNU Make가 필요하다. 개발용 Compose는 Token 인증이 필수이므로, 저장소 루트에서 `.env.example`을 복사한 후 관리자 토큰을 생성한다. 아래 명령에는 Python 3가 필요하다.
 
 ```bash
-cp .env.example .env
+test -e .env || cp .env.example .env
 python3 - <<'PY'
 import hashlib
 import json
@@ -40,7 +40,7 @@ Web UI의 인증 화면에 앞에서 보관한 Bearer Token을 입력한다. 토
 
 ## 첫 Dataset 탐색
 
-1. 왼쪽의 **예제 데이터 살펴보기**에서 합성 데이터를 선택하거나 **파일 가져오기**로 CSV·Parquet·TSV/TXT를 등록한다. TSV/TXT는 자유 서술 텍스트가 아닌 UTF-8 탭 구분 데이터이며, 등록 시 헤더 유무를 지정한다. 예제 선택만으로는 등록되지 않고, 사용자가 등록을 확정해야 Dataset이 만들어진다.
+1. 왼쪽의 **예제 데이터 살펴보기**에서 합성 데이터를 선택하거나 **파일 가져오기**로 CSV·Parquet·TSV/TXT를 등록한다. TSV/TXT는 자유 서술 텍스트가 아닌 UTF-8 탭 구분 데이터이며, 등록 시 헤더 유무를 지정한다. 예제 목록을 여는 것만으로는 등록되지 않으며, **이 예제로 탐색 시작**을 선택하면 일반 Dataset으로 등록된다.
 2. 등록된 Dataset을 선택하고 **데이터 탐색**에서 구조와 판본을 확인한다. 필요하면 **기본 분석 실행**을 명시적으로 요청하거나 **데이터 조회**·**탐색**에서 일부 데이터를 살펴본다. 업로드만으로 분석 Job이 자동 실행되지는 않는다.
 3. 전체 범위의 집계나 데이터 가공이 필요하면 해당 Job 또는 **데이터 준비**를 별도로 실행한다. Data Explorer에서 탐색만 하고 끝내도 된다.
 
@@ -78,7 +78,7 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 ```bash
 SOS_MLFLOW_TRACKING_URI=https://tracking.example.org
 SOS_MLFLOW_EXPERIMENT_ID=17
-# 인증이 필요한 경우에만 추가하고 Git에 커밋하지 않는다.
+# 인증이 필요한 경우에만 주석을 해제해 설정하고 Git에 커밋하지 않는다.
 # SOS_MLFLOW_TOKEN=<외부 서버에서 발급한 토큰>
 ```
 
