@@ -96,60 +96,66 @@ def training_matrix(
             if sampled and selection_algorithm_version == TRAINING_SELECTION_CURRENT
             else scan.collect_batches(chunk_size=chunk_rows, maintain_order=True)
         )
-        for frame in frames:
-            source_rows += frame.height
-            if not sampled and source_rows > capacity_rows:
-                # 전체 사용 정책을 메모리 사정에 따라 조용히 부분집합으로 변경하지 않는다.
-                raise PlatformError("SOS-ML-TRAIN-CAPACITY")
-            if any(frame.null_count().row(0)):
-                raise ValueError("Training features contain null values")
-            for name in features:
-                if schema[name] in INTEGER_DTYPES:
-                    values = frame[name]
-                    if values.max() > 2**53 or values.min() < -(2**53):
-                        raise ValueError("Integer feature exceeds the exact float64 range")
-            matrix = np.asarray(frame.to_numpy(), dtype=np.float64)
-            if not np.isfinite(matrix).all():
-                raise ValueError("Training features must be finite numeric values")
-            priority = (
-                rng.integers(0, np.iinfo(np.uint64).max, size=frame.height, dtype=np.uint64)
-                if rng is not None
-                else None
-            )
-            incoming = min(frame.height, target_rows - selected_rows)
-            if incoming:
-                needed = selected_rows + incoming
-                if needed > capacity:
-                    capacity = min(target_rows, max(needed, capacity * 2))
-                    grown = np.empty((capacity, len(features)), dtype=np.float64)
-                    grown[:selected_rows] = selected[:selected_rows]
-                    selected = grown
-                    if selected_priority is not None:
-                        grown_priority = np.empty(capacity, dtype=np.uint64)
-                        grown_priority[:selected_rows] = selected_priority[:selected_rows]
-                        selected_priority = grown_priority
-                selected[selected_rows:needed] = matrix[:incoming]
-                if selected_priority is not None and priority is not None:
-                    selected_priority[selected_rows:needed] = priority[:incoming]
-                selected_rows = needed
-            if not sampled or selected_rows < target_rows or incoming == frame.height:
-                continue
-            assert selected_priority is not None and priority is not None
-            matrix = matrix[incoming:]
-            priority = priority[incoming:]
-            candidates = np.flatnonzero(priority < selected_priority[:selected_rows].max())
-            if not candidates.size:
-                continue
-            combined_priority = np.concatenate((
-                selected_priority[:selected_rows], priority[candidates]
-            ))
-            chosen = np.argpartition(combined_priority, target_rows - 1)[:target_rows]
-            keep = np.zeros(target_rows, dtype=bool)
-            keep[chosen[chosen < target_rows]] = True
-            dropped = np.flatnonzero(~keep)
-            replacements = candidates[chosen[chosen >= target_rows] - target_rows]
-            selected[dropped] = matrix[replacements]
-            selected_priority[dropped] = priority[replacements]
+        try:
+            for frame in frames:
+                source_rows += frame.height
+                if not sampled and source_rows > capacity_rows:
+                    # 전체 사용 정책을 메모리 사정에 따라 조용히 부분집합으로 변경하지 않는다.
+                    raise PlatformError("SOS-ML-TRAIN-CAPACITY")
+                if any(frame.null_count().row(0)):
+                    raise ValueError("Training features contain null values")
+                for name in features:
+                    if schema[name] in INTEGER_DTYPES:
+                        values = frame[name]
+                        if values.max() > 2**53 or values.min() < -(2**53):
+                            raise ValueError("Integer feature exceeds the exact float64 range")
+                matrix = np.asarray(frame.to_numpy(), dtype=np.float64)
+                if not np.isfinite(matrix).all():
+                    raise ValueError("Training features must be finite numeric values")
+                priority = (
+                    rng.integers(0, np.iinfo(np.uint64).max, size=frame.height, dtype=np.uint64)
+                    if rng is not None
+                    else None
+                )
+                incoming = min(frame.height, target_rows - selected_rows)
+                if incoming:
+                    needed = selected_rows + incoming
+                    if needed > capacity:
+                        capacity = min(target_rows, max(needed, capacity * 2))
+                        grown = np.empty((capacity, len(features)), dtype=np.float64)
+                        grown[:selected_rows] = selected[:selected_rows]
+                        selected = grown
+                        if selected_priority is not None:
+                            grown_priority = np.empty(capacity, dtype=np.uint64)
+                            grown_priority[:selected_rows] = selected_priority[:selected_rows]
+                            selected_priority = grown_priority
+                    selected[selected_rows:needed] = matrix[:incoming]
+                    if selected_priority is not None and priority is not None:
+                        selected_priority[selected_rows:needed] = priority[:incoming]
+                    selected_rows = needed
+                if not sampled or selected_rows < target_rows or incoming == frame.height:
+                    continue
+                assert selected_priority is not None and priority is not None
+                matrix = matrix[incoming:]
+                priority = priority[incoming:]
+                candidates = np.flatnonzero(priority < selected_priority[:selected_rows].max())
+                if not candidates.size:
+                    continue
+                combined_priority = np.concatenate((
+                    selected_priority[:selected_rows], priority[candidates]
+                ))
+                chosen = np.argpartition(combined_priority, target_rows - 1)[:target_rows]
+                keep = np.zeros(target_rows, dtype=bool)
+                keep[chosen[chosen < target_rows]] = True
+                dropped = np.flatnonzero(~keep)
+                replacements = candidates[chosen[chosen >= target_rows] - target_rows]
+                selected[dropped] = matrix[replacements]
+                selected_priority[dropped] = priority[replacements]
+        finally:
+            # 선택·검증 오류가 발생해도 DuckDB 연결과 Attempt Spill을 즉시 닫는다.
+            close_frames = getattr(frames, "close", None)
+            if close_frames is not None:
+                close_frames()
     if source_rows < 2:
         raise ValueError("Training requires at least two rows")
     if sampled and source_rows < target_rows:
