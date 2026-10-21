@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from sos_platform.ml_if_preprocessing import fit_if_median_imputer
+from sos_platform.ml_if_preprocessing import FittedIFMedianImputer, fit_if_median_imputer
 
 
 def test_training_only_medians_apply_to_unseen_missing_values():
@@ -84,3 +84,45 @@ def test_constant_training_features_are_not_implicitly_dropped():
                                    feature_names=["constant", "changing"])
     assert fitted.feature_names == ("constant", "changing")
     assert fitted.medians == (2.0, 6.0)
+
+
+@pytest.mark.parametrize("names", ["ab", None, 123])
+def test_feature_names_not_implicitly_split_or_unpacked(names):
+    with pytest.raises(ValueError):
+        fit_if_median_imputer([[1.0, 2.0], [3.0, 4.0]], feature_names=names)
+
+
+@pytest.mark.parametrize("names, medians", [
+    (("a", "b"), (1.0,)),
+    (("a",), (np.nan,)),
+    (("a",), (np.inf,)),
+    (("a", "a"), (1.0, 2.0)),
+    (("a",), [1.0]),
+    (["a"], (1.0,)),
+])
+def test_invalid_fitted_state_cannot_be_instantiated(names, medians):
+    with pytest.raises(ValueError):
+        FittedIFMedianImputer(feature_names=names, medians=medians)
+
+
+def test_large_int_in_mixed_python_list_does_not_round_silently():
+    with pytest.raises(ValueError, match="exact float64"):
+        fit_if_median_imputer([[2**53 + 3, 2.0], [1, 3.0]], feature_names=["a", "b"])
+
+
+def test_masked_array_not_silently_treated_as_non_missing():
+    masked = np.ma.array([[1.0], [2.0]], mask=[[True], [False]])
+    with pytest.raises(ValueError, match="Masked"):
+        fit_if_median_imputer(masked, feature_names=["a"])
+
+
+def test_extreme_finite_training_values_yield_finite_medians():
+    huge = np.finfo(np.float64).max
+    fitted = fit_if_median_imputer([[huge], [huge]], feature_names=["a"])
+    assert fitted.medians == (huge,)
+    assert np.isfinite(fitted.transform([[np.nan]], feature_names=["a"])).all()
+
+
+def test_mixed_boolean_and_float_list_is_not_implicitly_cast():
+    with pytest.raises(ValueError, match="Boolean"):
+        fit_if_median_imputer([[True, 1.0], [False, 3.0]], feature_names=["a", "b"])
