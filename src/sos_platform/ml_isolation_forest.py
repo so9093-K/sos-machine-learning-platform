@@ -11,6 +11,7 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 
 from .ml_anomaly import normalize_isolation_forest_scores
+from .ml_if_preprocessing import FittedIFMedianImputer
 
 
 @dataclass(frozen=True)
@@ -71,9 +72,17 @@ class TrainedIsolationForest:
     estimator: IsolationForest
     config: IsolationForestConfig
     n_features: int
+    preprocessing: FittedIFMedianImputer | None = None
 
     def score_anomalies(self, features: object) -> tuple[float, ...]:
-        matrix = _matrix(features, n_features=self.n_features)
+        """신뢰된 모델 판본에 연결된 전처리를 적용한 뒤 이상 점수를 산출한다."""
+        if self.preprocessing is None:
+            # 과거 모델 판본의 숫자형 완전 입력 계약을 그대로 유지한다.
+            matrix = _matrix(features, n_features=self.n_features)
+        else:
+            matrix = self.preprocessing.transform(
+                features, feature_names=self.preprocessing.feature_names
+            )
         return normalize_isolation_forest_scores(self.estimator.score_samples(matrix).tolist())
 
 
