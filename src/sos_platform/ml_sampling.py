@@ -22,11 +22,12 @@ def _quoted(name: str) -> str:
 
 def _stage_exhausted(exc: BaseException) -> bool:
     """디스크 공간·Spill 할당량 초과만 정렬 Stage 용량 오류로 분류한다."""
-    if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
+    if isinstance(exc, OSError) and exc.errno in (errno.ENOSPC, errno.EDQUOT):
         return True
     message = str(exc).lower()
     return any(phrase in message for phrase in (
         "no space left on device",
+        "disk quota exceeded",
         "os error 28",
         "maximum temporary directory size",
         "max_temp_directory_size",
