@@ -32,5 +32,8 @@ jobs:
             uv run --locked python scripts/_pr33_benchmark_temp.py v1 "$rows" "$features" "$path"
             uv run --locked python scripts/_pr33_benchmark_temp.py v2 "$rows" "$features" "$path"
             uv run --locked python scripts/_pr33_benchmark_temp.py v2_pos "$rows" "$features" "$path"
+            if [ "$features" -eq 63 ]; then
+              uv run --locked python scripts/_pr33_benchmark_temp.py v1_duckdb "$rows" "$features" "$path"
+            fi
             rm -f "$path"
           done
