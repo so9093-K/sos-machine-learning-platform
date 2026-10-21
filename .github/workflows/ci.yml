@@ -21,22 +21,15 @@ jobs:
       - name: Run configured product validation
         run: python scripts/validate.py run all
 
-      - name: One-time PR33 tuned resource profile validation
+      - name: One-time PR33 end-to-end model and quality checks
         run: |
           mkdir -p /tmp/pr33-profiles
-          for scenario in "1370000 8" "1370000 63"; do
-            set -- $scenario
-            rows=$1
-            width=$2
-            data=/tmp/pr33-profiles/data.parquet
-            uv run --locked python scripts/_pr33_resource_profiles_temp.py generate "$rows" "$width" "$data"
-            for memory in 2048 4096 8192; do
-              uv run --locked python scripts/_pr33_resource_profiles_temp.py measure "$rows" "$width" "$data" --memory "$memory" --variant product
-            done
-            uv run --locked python scripts/_pr33_resource_profiles_temp.py measure "$rows" "$width" "$data" --memory 8192 --variant baseline
-            if [ "$width" -eq 63 ]; then
-              uv run --locked python scripts/_pr33_resource_profiles_temp.py measure "$rows" "$width" "$data" --memory 4096 --variant baseline
-            fi
-            rm -f "$data"
+          data=/tmp/pr33-profiles/data.parquet
+          uv run --locked python scripts/_pr33_resource_profiles_temp.py generate 1370000 63 "$data"
+          for memory in 2048 4096 8192; do
+            uv run --locked python scripts/_pr33_resource_profiles_temp.py measure 1370000 63 "$data" --memory "$memory" --variant product --train
           done
+          rm -f "$data"
           uv run --locked ruff check src/sos_platform/ml_sampling.py src/sos_platform/ml_training.py tests/test_ml_training_inputs.py
+          npm --prefix web ci
+          npm --prefix web run build
