@@ -23,7 +23,7 @@ python scripts/validate.py run all
 # 또는 make validate
 ```
 
-현재 `python` Suite는 **이상 점수와 레이블 없는 평가 결과의 의미**를 검사하는 신규 pytest 테스트만 포함한다. 검증하지 않은 Dataset·Job·저장소·권한·브라우저 등의 실패가 없다고 주장하지 않는다.
+현재 `python` Suite는 `tests/`의 Python 테스트를 pytest로 자동 수집·실행한다. 구체적인 검증 범위는 실제 테스트 코드와 실행 결과를 따른다.
 
 `all`은 **현재 CLI에 등록된 Suite 전체**라는 뜻이지 SOS 제품 계약 전체를 뜻하지 않는다. pytest가 테스트를 수집하지 못해 비정상 종료하면 CLI도 실패한다. CI의 `validation` 상태도 이 범위에만 해당한다.
 
