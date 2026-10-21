@@ -20,25 +20,3 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
-
-      - name: One-time PR33 static validation
-        run: |
-          uv run --locked ruff check src/sos_platform/ml_sampling.py src/sos_platform/ml_training.py tests/test_ml_training_inputs.py
-          npm --prefix web ci
-          npm --prefix web run build
-      - name: One-time PR33 sampling benchmark
-        run: |
-          mkdir -p /tmp/pr33
-          for scenario in "1370000 8" "1370000 63" "10000000 8"; do
-            set -- $scenario
-            rows=$1
-            features=$2
-            path="/tmp/pr33/input.parquet"
-            uv run --locked python scripts/_pr33_duckdb_temp.py generate "$rows" "$features" "$path"
-            if [ "$features" -eq 63 ]; then
-              uv run --locked python scripts/_pr33_stage_temp.py
-              uv run --locked python scripts/_pr33_duckdb_temp.py train "$rows" "$features" "$path"
-            fi
-            uv run --locked python scripts/_pr33_duckdb_temp.py measure "$rows" "$features" "$path"
-            rm -f "$path"
-          done
