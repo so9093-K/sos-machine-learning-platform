@@ -794,6 +794,7 @@ def test_duckdb_canonical_quotes_feature_names_and_keeps_full_sample(monkeypatch
 
 def test_canonical_stage_disk_full_is_storage_capacity_and_cleans_stage(monkeypatch, tmp_path):
     import errno
+    from pathlib import Path
     from sos_platform import ml_sampling
 
     stage = tmp_path / "attempt-stage"
