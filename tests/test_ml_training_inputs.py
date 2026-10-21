@@ -9,7 +9,11 @@ from pydantic import ValidationError
 
 from sos_platform import ml_training
 from sos_platform.errors import PlatformError
-from sos_platform.ml_input import TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
+from sos_platform.ml_input import (
+    TRAINING_SELECTION_CANONICAL_V1,
+    TRAINING_SELECTION_CURRENT,
+    TRAINING_SELECTION_LEGACY,
+)
 from sos_platform.schemas import MLTrainingInputPolicy, MLTrainRequest
 
 
@@ -163,7 +167,8 @@ def test_sample_matches_global_row_priority_reference(monkeypatch):
     values = np.arange(count, dtype=np.float64)
     bind_frame(monkeypatch, pl.DataFrame({"x": values}))
     matrix, evidence = ml_training.training_matrix(
-        None, {}, ["x"], input_policy=sample(requested, seed), worker_memory_mib=4
+        None, {}, ["x"], input_policy=sample(requested, seed), worker_memory_mib=4,
+        selection_algorithm_version=TRAINING_SELECTION_LEGACY
     )
     priorities = np.random.default_rng(seed).integers(
         0, np.iinfo(np.uint64).max, size=count, dtype=np.uint64
@@ -640,3 +645,94 @@ def test_training_stage_quota_rejects_symlinked_root(tmp_path):
     training_stage_root(tmp_path).symlink_to(outside, target_is_directory=True)
     with pytest.raises(OSError, match="must not be a symlink"):
         training_stage_bytes(tmp_path, str(uuid4()))
+
+
+def test_canonical_v1_remains_exactly_replayable(monkeypatch):
+    # 병합된 버전의 Seed -> 정렬 후 행 순서 난수 선택 계약을 보존.
+    count, requested, seed = 5000, 1000, 23
+    values = np.arange(count, dtype=np.float64)
+    source = pl.DataFrame({"x": values[::-1].copy()})
+    bind_frame(monkeypatch, source)
+    matrix, evidence = ml_training.training_matrix(
+        None, {}, ["x"], input_policy=sample(requested, seed),
+        selection_algorithm_version=TRAINING_SELECTION_CANONICAL_V1,
+        worker_memory_mib=4,
+    )
+    priorities = np.random.default_rng(seed).integers(
+        0, np.iinfo(np.uint64).max, size=count, dtype=np.uint64
+    )
+    chosen = np.argpartition(priorities, requested - 1)[:requested]
+    np.testing.assert_array_equal(matrix[:, 0], np.sort(values[chosen]))
+    assert evidence["algorithm_version"] == TRAINING_SELECTION_CANONICAL_V1
+
+
+def test_streaming_canonical_sample_keeps_independent_duplicate_observations(monkeypatch):
+    # 관측 분포를 정렬/고유값 단위로 재해석하거나 중복을 제거하지 않는다.
+    values = np.array([0.0] * 9000 + [1.0] * 1000)
+    selection = sample(1800, 29)
+    outputs = []
+    for frame in (
+        pl.DataFrame({"signal": values}),
+        pl.DataFrame({"signal": values[::-1].copy()}),
+    ):
+        bind_frame(monkeypatch, frame)
+        outputs.append(
+            ml_training.training_matrix(
+                None, {}, ["signal"], input_policy=selection,
+                worker_memory_mib=8,
+            )
+        )
+    np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
+    assert outputs[0][1] == outputs[1][1]
+    assert 0.84 < np.mean(outputs[0][0][:, 0] == 0.0) < 0.96
+
+
+def test_streaming_canonical_rejects_invalid_values_and_preserves_stage(monkeypatch, tmp_path):
+    from sos_platform.errors import PlatformError
+
+    # 오류가 난 입력 스캔도 직접 생성한 SQLite 임시 파일을 남기지 않는다.
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": [0.0, float("nan"), 2.0]}))
+    with pytest.raises(ValueError, match="finite"):
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(2, 7), worker_memory_mib=4
+        )
+    assert list(stage.iterdir()) == []
+
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(5000.0)}))
+    monkeypatch.setattr(
+        "sos_platform.ml_sampling.ExecutionBudget.from_env",
+        lambda: type("Budget", (), {"max_stage_mib": 0})(),
+    )
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(100, 7), worker_memory_mib=4
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert list(stage.iterdir()) == []
+
+
+def test_streaming_v2_sample_same_in_different_parquet_layouts(monkeypatch, tmp_path):
+    # 고유값이 다수이고 중복도 존재하는 별도 Parquet 두 파일의 표본은 동일.
+    columns = {
+        "f1": np.repeat(np.arange(2000.0), 3),
+        "f2": np.tile([0.0, -0.0, 1.0], 2000),
+    }
+    original = pl.DataFrame(columns)
+    paths = [tmp_path / "a.parquet", tmp_path / "b.parquet"]
+    original.write_parquet(paths[0])
+    original.reverse().write_parquet(paths[1])
+    matrices = []
+    fingerprints = []
+    for path in paths:
+        bind_frame(monkeypatch, pl.scan_parquet(path))
+        matrix, evidence = ml_training.training_matrix(
+            None, {}, ["f1", "f2"], input_policy=sample(500, 11),
+            worker_memory_mib=8,
+        )
+        matrices.append(matrix)
+        fingerprints.append(evidence["selection_sha256"])
+    np.testing.assert_array_equal(matrices[0], matrices[1])
+    assert fingerprints[0] == fingerprints[1]
