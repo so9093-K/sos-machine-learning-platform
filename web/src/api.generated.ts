@@ -2106,13 +2106,38 @@ export interface components {
             /** Model Revision Id */
             model_revision_id: string;
         };
+        /**
+         * MLTemporalSplitSpec
+         * @description 시간순 Train/Calibration/Test 경계. Train 이외 구간은 학습에 사용하지 않는다.
+         */
+        MLTemporalSplitSpec: {
+            /**
+             * Calibration End
+             * Format: date-time
+             */
+            calibration_end: string;
+            /** Timestamp Column */
+            timestamp_column: string;
+            /**
+             * Train End
+             * Format: date-time
+             */
+            train_end: string;
+        };
         /** MLTrainRequest */
         MLTrainRequest: {
             /** Dataset Id */
             dataset_id: string;
             /** Features */
             features: string[];
+            /**
+             * Missing Policy
+             * @default reject
+             * @enum {string}
+             */
+            missing_policy: "reject" | "train_median";
             params?: components["schemas"]["IsolationForestParameters"];
+            temporal_split?: components["schemas"]["MLTemporalSplitSpec"] | null;
             training_input?: components["schemas"]["MLTrainingInputPolicy"];
         };
         /**
