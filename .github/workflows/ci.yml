@@ -37,4 +37,4 @@ jobs:
           git diff --exit-code -- web/src/api.generated.ts
           cd web && npm run build
       - name: PR33 v1 vs v2 benchmark
-        run: timeout 300s uv run --locked python scripts/_sampling_bench_tmp.py bench
+        run: timeout 480s uv run --locked python scripts/_sampling_bench_tmp.py bench

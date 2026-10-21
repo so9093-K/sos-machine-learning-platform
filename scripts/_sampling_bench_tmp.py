@@ -86,7 +86,7 @@ if __name__ == "__main__":
     else:
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            samples = [(1_370_000, 63, 100_000), (1_370_000, 8, 100_000)]
+            samples = [(1_370_000, 63, 100_000), (1_370_000, 8, 100_000), (10_000_000, 8, 100_000)]
             for index, (count, cols, k) in enumerate(samples):
                 data = root / f"input-{index}.parquet"
                 subprocess.run(
