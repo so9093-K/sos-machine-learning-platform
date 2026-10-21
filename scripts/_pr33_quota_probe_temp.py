@@ -34,8 +34,8 @@ def main():
         stage = directory / "stage"
         stage.mkdir()
         os.environ["POLARS_TEMP_DIR"] = str(stage)
-        os.environ["SOS_WORKER_MAX_STAGE_MIB"] = "64"
-        print(f"INPUT source_bytes={source.stat().st_size} stage_limit_mib=64", flush=True)
+        os.environ["SOS_WORKER_MAX_STAGE_MIB"] = "128"
+        print(f"INPUT source_bytes={source.stat().st_size} stage_limit_mib=128", flush=True)
         try:
             matrix, evidence = ml_training.training_matrix(
                 None, {"version":"test"}, names,
