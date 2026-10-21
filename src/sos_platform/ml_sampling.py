@@ -89,7 +89,9 @@ def canonical_sorted_batches(
     # 작은 테스트 예산에서도 동작하되 보통 Worker에서는 전체 RSS의 일부만
     # DuckDB에 배정한다. 이 제한은 실제 RSS의 상한이 아니다.
     duckdb_mib = max(128, min(384, budget_mib // 4))
-    quote = lambda name: '"' + name.replace('"', '""') + '"'
+    def quote(name: str) -> str:
+        return '"' + name.replace('"', '""') + '"'
+
     columns = ", ".join(quote(name) for name in features)
 
     with TemporaryDirectory(prefix="canonical-sort-", dir=root) as directory:
