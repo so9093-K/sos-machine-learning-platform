@@ -31,5 +31,6 @@ jobs:
             uv run --locked python scripts/_pr33_benchmark_temp.py generate "$rows" "$features" "$path"
             uv run --locked python scripts/_pr33_benchmark_temp.py v1 "$rows" "$features" "$path"
             uv run --locked python scripts/_pr33_benchmark_temp.py v2 "$rows" "$features" "$path"
+            uv run --locked python scripts/_pr33_benchmark_temp.py v2_pos "$rows" "$features" "$path"
             rm -f "$path"
           done
