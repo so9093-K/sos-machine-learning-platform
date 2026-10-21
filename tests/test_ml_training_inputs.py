@@ -790,3 +790,52 @@ def test_duckdb_canonical_quotes_feature_names_and_keeps_full_sample(monkeypatch
     ]))
     assert evidence["source_rows"] == 4
     assert evidence["selected_rows"] == 4
+
+
+def test_canonical_stage_disk_full_is_storage_capacity_and_cleans_stage(monkeypatch, tmp_path):
+    import errno
+    from sos_platform import ml_sampling
+
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    unrelated = stage / "another-task.txt"
+    unrelated.write_text("retain")
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(100.0)}))
+
+    def fail_sink(_self, path, **_kwargs):
+        path = Path(path)
+        path.write_bytes(b"partly-written")
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(pl.LazyFrame, "sink_parquet", fail_sink)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(10, 17), worker_memory_mib=256
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert list(stage.iterdir()) == [unrelated]
+    assert unrelated.read_text() == "retain"
+
+
+def test_canonical_duckdb_spill_quota_failure_has_storage_error(monkeypatch, tmp_path):
+    import duckdb
+    from sos_platform import ml_sampling
+
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(100.0)}))
+
+    def no_spill(_args=None, **_kwargs):
+        raise duckdb.OutOfMemoryException(
+            "Out of Memory Error: failed to offload block: maximum temporary directory size"
+        )
+
+    monkeypatch.setattr(ml_sampling.duckdb, "connect", no_spill)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(10, 17), worker_memory_mib=256
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert list(stage.iterdir()) == []
