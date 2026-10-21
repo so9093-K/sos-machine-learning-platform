@@ -20,9 +20,3 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
-
-      - name: One-time PR33 final review quality
-        run: |
-          uv run --locked ruff check src/sos_platform/ml_sampling.py src/sos_platform/ml_training.py tests/test_ml_training_inputs.py
-          npm --prefix web ci
-          npm --prefix web run build
