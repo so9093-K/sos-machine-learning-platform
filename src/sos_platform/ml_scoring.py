@@ -15,6 +15,7 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 
 from .datasets import pinned_scan_dataset
 from .ml_input import INTEGER_DTYPES, NUMERIC
+from .ml_observation_identity import validate_observation_identity
 from .ml_runtime import load_trusted_isolation_forest
 from .ml_temporal_split import select_temporal_partition
 from .schemas import MLScoringTemporalScope
@@ -96,9 +97,21 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
         raise ValueError("Model ownership changed")
     features = model["features"]
     label = spec.get("label_column")
+    identity_column = spec.get("observation_id_column")
     if label is not None and label in features:
         raise ValueError("Label column must not be a training feature")
-    fields = [*features, *([label] if label else [])]
+    if identity_column is not None and (
+        not isinstance(identity_column, str)
+        or not identity_column
+        or identity_column in features
+        or identity_column == label
+    ):
+        raise ValueError("Observation identity column must be separate from ML features and label")
+    fields = [
+        *features,
+        *([label] if label else []),
+        *([identity_column] if identity_column else []),
+    ]
     scope_evidence = None
     pending.parent.mkdir(parents=True, exist_ok=True)
     # 중간 파일의 수명은 Job Attempt에 한정한다. 데이터 전체는 메모리에 올리지 않는다.
@@ -118,6 +131,12 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                 raise ValueError("Scoring feature dtypes differ from Model Revision")
             source.select(fields).sink_parquet(staged)
 
+        identity_evidence = (
+            validate_observation_identity(
+                pl.scan_parquet(staged), column=identity_column,
+            )
+            if identity_column is not None else None
+        )
         model_adapter = load_trusted_isolation_forest(model, store.home / "cache")
         supports_missing = (
             model["runtime"].get("artifact_schema") == "if_model_with_preprocessing_v1"
@@ -158,6 +177,10 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                         "row_index": np.arange(count, count + n, dtype=np.int64),
                         "anomaly_score": scores,
                     }).with_columns(frame.select(features).to_struct("features"))
+                    if identity_column is not None:
+                        result = result.with_columns(
+                            frame[identity_column].alias("observation_id")
+                        )
                     if label is not None:
                         if frame[label].null_count():
                             raise ValueError("Labeled scoring requires complete binary labels")
@@ -201,6 +224,12 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                 "dataset_id": dataset["id"],
                 "dataset_version": dataset["version"],
                 "model_revision_id": model["id"],
+            }
+        if identity_evidence is not None:
+            score_summary["observation_identity"] = {
+                **identity_evidence,
+                "dataset_id": dataset["id"],
+                "dataset_version": dataset["version"],
             }
 
         ranked_metrics = None
