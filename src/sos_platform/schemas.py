@@ -1,5 +1,6 @@
 """API와 실행기가 공유하는 Data Workspace 입력 계약."""
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -312,6 +313,26 @@ class MLTrainingInputPolicy(BaseModel):
         return self
 
 
+class MLTemporalSplitSpec(BaseModel):
+    """시간순 Train/Calibration/Test 경계. Train 이외 구간은 학습에 사용하지 않는다."""
+
+    timestamp_column: str = Field(min_length=1, max_length=256)
+    train_end: datetime
+    calibration_end: datetime
+
+    @model_validator(mode="after")
+    def validate_boundaries(self):
+        if (
+            self.train_end.tzinfo is None
+            or self.calibration_end.tzinfo is None
+            or self.train_end.utcoffset() is None
+            or self.calibration_end.utcoffset() is None
+            or self.train_end >= self.calibration_end
+        ):
+            raise ValueError("Temporal boundaries must be ordered and timezone-aware")
+        return self
+
+
 class MLForkRequest(BaseModel):
     """원본 학습 실행의 Feature/판본을 그대로 유지하고 모델 설정만 바꿀 수 있다."""
 
@@ -323,6 +344,8 @@ class MLTrainRequest(BaseModel):
     features: list[str] = Field(min_length=1)
     params: IsolationForestParameters = Field(default_factory=IsolationForestParameters)
     training_input: MLTrainingInputPolicy = Field(default_factory=MLTrainingInputPolicy)
+    missing_policy: Literal["reject", "train_median"] = "reject"
+    temporal_split: MLTemporalSplitSpec | None = None
 
     @model_validator(mode="after")
     def validate_features(self):
@@ -330,6 +353,8 @@ class MLTrainRequest(BaseModel):
             raise ValueError("Features must be distinct")
         if any(not name or len(name) > 256 for name in self.features):
             raise ValueError("Invalid feature name")
+        if self.temporal_split is not None and self.temporal_split.timestamp_column in self.features:
+            raise ValueError("Temporal split timestamp must not be a training feature")
         return self
 
 
