@@ -104,7 +104,7 @@ def measure(path: Path, rows: int, features: int, train: bool = False) -> None:
             f"selection_sha256={actual} evidence_method={evidence['method']}",
             flush=True,
         )
-        assert peaks["rss"] < 2048 * 1024 * 1024, "RSS exceeds default Worker budget"
+        assert resource.getrusage(resource.RUSAGE_SELF).ru_maxrss < 2048 * 1024, "RSS exceeds default Worker budget"
         assert peaks["disk"] <= 2048 * 1024 * 1024, "Stage exceeds default Worker budget"
         assert list(Path(stage).iterdir()) == [], "Attempt spill was not cleaned"
 
