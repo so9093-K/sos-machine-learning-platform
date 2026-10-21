@@ -53,8 +53,18 @@ def canonical_sorted_batches(
         raise ValueError("Worker training stage directory is unavailable")
 
     arrow_schema = pa.schema([(name, pa.float64()) for name in features])
+    validation_error: ValueError | None = None
 
     def validated_batches() -> Iterator[pa.RecordBatch]:
+        nonlocal validation_error
+        try:
+            yield from checked_batches()
+        except ValueError as exc:
+            # Arrow C++ 경계를 지나면 DuckDB InvalidInputException으로 래핑된다.
+            validation_error = exc
+            raise
+
+    def checked_batches() -> Iterator[pa.RecordBatch]:
         for frame in scan.collect_batches(chunk_size=chunk_rows, maintain_order=True):
             if any(frame.null_count().row(0)):
                 raise ValueError("Training features contain null values")
@@ -78,7 +88,7 @@ def canonical_sorted_batches(
         raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
     # 작은 테스트 예산에서도 동작하되 보통 Worker에서는 전체 RSS의 일부만
     # DuckDB에 배정한다. 이 제한은 실제 RSS의 상한이 아니다.
-    duckdb_mib = max(16, min(512, budget_mib // 4))
+    duckdb_mib = max(128, min(384, budget_mib // 4))
     quote = lambda name: '"' + name.replace('"', '""') + '"'
     columns = ", ".join(quote(name) for name in features)
 
@@ -110,6 +120,10 @@ def canonical_sorted_batches(
                 yield pl.from_arrow(batch)
         except duckdb.OutOfMemoryException as exc:
             raise PlatformError("SOS-ML-TRAIN-CAPACITY") from exc
+        except duckdb.InvalidInputException as exc:
+            if validation_error is not None:
+                raise validation_error from exc
+            raise
         finally:
             if result_reader is not None:
                 result_reader.close()
