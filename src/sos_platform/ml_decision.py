@@ -4,13 +4,20 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import polars as pl
+import pyarrow.parquet as pq
 
 from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold
 from .object_store import ObjectStore
 
 
-def _verified_scoring(store, scoring: dict) -> pl.DataFrame:
-    """Scoring Result의 공개된 위치와 SHA-256을 검증하여 행별 점수를 읽는다."""
+def _verified_scoring(
+    store, scoring: dict, *, include_features: bool = False
+) -> pl.DataFrame:
+    """Scoring 무결성과 행 순서를 검증하며 필요한 컬럼만 메모리에 적재한다.
+
+    Policy/Evaluation은 이상 점수·레이블만 조회한다. 설명은 명시적으로
+    include_features=True를 요청해야 원본 Feature 구조를 가져온다.
+    """
     storage = ObjectStore()
     expected = f"results/{scoring['job_id']}/{scoring['attempt_id']}.scores.parquet"
     if scoring["location"] != storage.location(expected):
@@ -18,7 +25,14 @@ def _verified_scoring(store, scoring: dict) -> pl.DataFrame:
     with TemporaryDirectory(prefix="ml-scoring-", dir=store.home / "cache") as directory:
         path = Path(directory) / "scores.parquet"
         storage.get(expected, path, expected_sha256=scoring["sha256"])
-        frame = pl.read_parquet(path)
+        if include_features:
+            frame = pl.read_parquet(path)
+        else:
+            with pq.ParquetFile(path) as parquet:
+                columns = ["row_index", "anomaly_score"]
+                if "label" in parquet.schema_arrow.names:
+                    columns.append("label")
+            frame = pl.read_parquet(path, columns=columns)
     if frame.height != scoring["row_count"]:
         raise ValueError("Scoring artifact row count does not match the revision")
     if "anomaly_score" not in frame.columns or "row_index" not in frame.columns:
