@@ -926,3 +926,50 @@ def test_duckdb_sort_execution_failure_classification_and_cleanup(
         )
     assert exc.value.code == expected_code
     assert list(stage.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("budget_mib", "sort_memory_mib", "sort_threads"),
+    [(512, 128, 1), (2048, 512, 1), (4096, 1024, 2), (8192, 1024, 2)],
+)
+def test_canonical_sort_budget_scales_without_changing_v1_result(
+    monkeypatch, tmp_path, budget_mib, sort_memory_mib, sort_threads,
+):
+    from sos_platform import ml_sampling
+
+    stage = tmp_path / "attempt"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "128")
+    row_index = np.arange(16384)
+    frame = pl.DataFrame({
+        "x": (row_index % 197).astype(np.float64),
+        "y": (row_index % 13).astype(np.float32),
+    })
+    bind_frame(monkeypatch, frame.reverse() if budget_mib == 8192 else frame)
+    original_connect = ml_sampling.duckdb.connect
+    options = []
+
+    def record_connect(*args, **kwargs):
+        options.append(kwargs["config"])
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(ml_sampling.duckdb, "connect", record_connect)
+    matrix, evidence = ml_training.training_matrix(
+        None, {}, ["x", "y"], input_policy=sample(1000, 17),
+        worker_memory_mib=budget_mib,
+    )
+    assert len(options) == 1
+    assert options[0]["memory_limit"] == f"{sort_memory_mib}MiB"
+    assert options[0]["threads"] == str(sort_threads)
+    assert matrix.shape == (1000, 2)
+    assert evidence["method"] == TRAINING_SELECTION_CURRENT
+    assert not list(stage.iterdir())
+    # 동일 Dataset/Seed/K는 실행 자원과 물리적 입력 순서와 무관하다.
+    bind_frame(monkeypatch, frame)
+    expected, original = ml_training.training_matrix(
+        None, {}, ["x", "y"], input_policy=sample(1000, 17),
+        worker_memory_mib=2048,
+    )
+    np.testing.assert_array_equal(matrix, expected)
+    assert evidence == original
