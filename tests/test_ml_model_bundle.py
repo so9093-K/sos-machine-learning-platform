@@ -35,6 +35,7 @@ class LocalObjects:
 @pytest.fixture
 def trained_bundle(monkeypatch, tmp_path):
     """완전 입력으로 새 모델을 학습하고 객체 게시된 모델 판본을 구성한다."""
+    (tmp_path / "cache").mkdir()
     training = pl.DataFrame({
         "volume": [1.0, 2.0, 3.0, 4.0, 5.0, 9.0],
         "count": [10.0, 12.0, 11.0, 15.0, 20.0, 30.0],
