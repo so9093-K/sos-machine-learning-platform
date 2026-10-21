@@ -143,6 +143,8 @@ def canonical_sorted_batches(
                 raise PlatformError("SOS-ML-TRAIN-CAPACITY") from exc
             raise
         finally:
-            if result_reader is not None:
-                result_reader.close()
-            conn.close()
+            try:
+                if result_reader is not None:
+                    result_reader.close()
+            finally:
+                conn.close()
