@@ -64,15 +64,85 @@ def select(path: Path, rows: int, features: int, version: str) -> None:
     )
 
 
+
+def duckdb_v1(path: Path, rows: int, features: int) -> None:
+    """DuckDB 외부 정렬과 기존 v1 우선순위 선택 결과가 동일한지 비교."""
+    import hashlib
+    import duckdb
+
+    columns = [f"f{i}" for i in range(features)]
+    projection = ", ".join(f'"{col}"' for col in columns)
+    scratch = path.parent / "duckdb-spill"
+    scratch.mkdir(exist_ok=True)
+    start = time.perf_counter()
+    conn = duckdb.connect()
+    conn.execute("SET memory_limit = '512MB'")
+    conn.execute(f"SET temp_directory = '{scratch}'")
+    reader = conn.execute(
+        f"SELECT {projection} FROM read_parquet(?) ORDER BY {projection}", [str(path)]
+    ).fetch_record_batch(rows_per_batch=8192)
+    sample_size = 100000
+    selected = np.empty((sample_size, features), dtype=np.float64)
+    selected_priority = np.empty(sample_size, dtype=np.uint64)
+    selected_rows = 0
+    rng = np.random.default_rng(11)
+    observed = 0
+    for batch in reader:
+        frame = pl.from_arrow(batch)
+        matrix = np.asarray(frame.to_numpy(), dtype=np.float64)
+        observed += frame.height
+        priorities = rng.integers(
+            0, np.iinfo(np.uint64).max, size=frame.height, dtype=np.uint64
+        )
+        incoming = min(frame.height, sample_size - selected_rows)
+        if incoming:
+            stop = selected_rows + incoming
+            selected[selected_rows:stop] = matrix[:incoming]
+            selected_priority[selected_rows:stop] = priorities[:incoming]
+            selected_rows = stop
+        if selected_rows < sample_size or incoming == frame.height:
+            continue
+        matrix = matrix[incoming:]
+        priorities = priorities[incoming:]
+        candidates = np.flatnonzero(priorities < selected_priority[:selected_rows].max())
+        if not candidates.size:
+            continue
+        combined = np.concatenate((
+            selected_priority[:selected_rows], priorities[candidates]
+        ))
+        chosen = np.argpartition(combined, sample_size - 1)[:sample_size]
+        keep = np.zeros(sample_size, dtype=bool)
+        keep[chosen[chosen < sample_size]] = True
+        dropped = np.flatnonzero(~keep)
+        replacement = candidates[chosen[chosen >= sample_size] - sample_size]
+        selected[dropped] = matrix[replacement]
+        selected_priority[dropped] = priorities[replacement]
+    assert observed == rows
+    selected = np.ascontiguousarray(selected[np.lexsort(selected.T[::-1])])
+    digest = hashlib.sha256(selected.tobytes()).hexdigest()
+    staged = sum(p.stat().st_size for p in scratch.rglob("*") if p.is_file())
+    conn.close()
+    elapsed = time.perf_counter() - start
+    rss_mib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    print(
+        f"RESULT rows={rows} features={features} version=v1_duckdb "
+        f"elapsed_s={elapsed:.3f} peak_rss_mib={rss_mib:.1f} "
+        f"stage_bytes_at_end={staged} selected={len(selected)} sha256={digest}",
+        flush=True,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["generate", "v1", "v2", "v2_pos"])
+    parser.add_argument("action", choices=["generate", "v1", "v2", "v2_pos", "v1_duckdb"])
     parser.add_argument("rows", type=int)
     parser.add_argument("features", type=int)
     parser.add_argument("path", type=Path)
     args = parser.parse_args()
     if args.action == "generate":
         generate(args.path, args.rows, args.features)
+    elif args.action == "v1_duckdb":
+        duckdb_v1(args.path, args.rows, args.features)
     else:
         select(args.path, args.rows, args.features, args.action)
 
