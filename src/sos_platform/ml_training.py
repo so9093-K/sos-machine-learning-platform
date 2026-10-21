@@ -22,7 +22,7 @@ from .ml_input import (
     TRAINING_SELECTION_LEGACY,
 )
 from .ml_isolation_forest import IsolationForestConfig, train_isolation_forest
-from .ml_sampling import streaming_canonical_sample
+from .ml_sampling import canonical_sorted_batches
 from .schemas import MLTrainingInputPolicy
 
 
@@ -78,16 +78,6 @@ def training_matrix(
     assert target_rows is not None
     if target_rows > capacity_rows:
         raise PlatformError("SOS-ML-TRAIN-CAPACITY")
-    if sampled and selection_algorithm_version == TRAINING_SELECTION_CURRENT:
-        return streaming_canonical_sample(
-            pinned_scan_dataset=pinned_scan_dataset,
-            store=store,
-            dataset=dataset,
-            features=features,
-            requested_rows=target_rows,
-            seed=input_policy.seed,
-            budget_mib=budget_mib,
-        )
     chunk_rows = max(1, min(8192, (matrix_byte_budget // 4) // (len(features) * 8)))
     capacity = min(target_rows, chunk_rows)
     selected = np.empty((capacity, len(features)), dtype=np.float64)
@@ -103,23 +93,14 @@ def training_matrix(
         if any(schema[name] not in NUMERIC for name in features):
             raise ValueError("Only numeric training features are supported")
         scan = source.select(features)
-        if sampled and selection_algorithm_version == TRAINING_SELECTION_CANONICAL_V1:
-            # 값이 같은 관측은 정렬 후에도 각각 한 행이다. 행별 Seed 난수는
-            # 원본 스캔 순서가 아니라 정규화된 학습 Feature 순서로 부여한다.
-            # Float의 +0/-0은 모델 입력 의미가 같으므로 표현도 통일한다.
-            floats = [name for name in features if schema[name] in (pl.Float32, pl.Float64)]
-            if floats:
-                scan = scan.with_columns(
-                    pl.when(pl.col(name) == 0)
-                    .then(pl.lit(0.0, dtype=schema[name]))
-                    .otherwise(pl.col(name))
-                    .alias(name)
-                    for name in floats
-                )
-            scan = scan.sort(features)
-        for frame in scan.collect_batches(
-            chunk_size=chunk_rows, maintain_order=True
-        ):
+        frames = (
+            canonical_sorted_batches(
+                scan, features, schema, chunk_rows=chunk_rows, budget_mib=budget_mib
+            )
+            if sampled and selection_algorithm_version == TRAINING_SELECTION_CURRENT
+            else scan.collect_batches(chunk_size=chunk_rows, maintain_order=True)
+        )
+        for frame in frames:
             source_rows += frame.height
             if not sampled and source_rows > capacity_rows:
                 # 전체 사용 정책을 메모리 사정에 따라 조용히 부분집합으로 변경하지 않는다.
