@@ -20,6 +20,3 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
-
-      - name: One-time PR33 actual DuckDB spill quota probe
-        run: uv run --locked python scripts/_pr33_quota_probe_temp.py
