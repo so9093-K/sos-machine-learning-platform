@@ -40,7 +40,7 @@ def main() -> None:
         pl.scan_parquet(path).select(features).sink_parquet(staged)
         conn = duckdb.connect(
             database=":memory:", config={
-                "memory_limit":"256MiB", "threads":"1",
+                "memory_limit":"512MiB", "threads":"1",
                 "temp_directory":str(root/"spill"),
                 "max_temp_directory_size":"1024MiB",
             }
