@@ -973,3 +973,27 @@ def test_canonical_sort_budget_scales_without_changing_v1_result(
     )
     np.testing.assert_array_equal(matrix, expected)
     assert evidence == original
+
+
+def test_canonical_selection_is_independent_of_stage_budget_when_execution_fits(
+    monkeypatch, tmp_path,
+):
+    dataset = pl.DataFrame({
+        "feature": np.arange(28000, dtype=np.float64) % 311,
+        "other": np.arange(28000, dtype=np.float64) % 7,
+    })
+    bind_frame(monkeypatch, dataset)
+    stage = tmp_path / "attempt"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    outputs = []
+    for stage_mib in (128, 2048):
+        monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", str(stage_mib))
+        output = ml_training.training_matrix(
+            None, {}, ["feature", "other"], input_policy=sample(2500, 119),
+            worker_memory_mib=4096,
+        )
+        outputs.append(output)
+        assert list(stage.iterdir()) == []
+    np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
+    assert outputs[0][1] == outputs[1][1]
