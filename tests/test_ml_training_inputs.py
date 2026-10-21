@@ -997,3 +997,37 @@ def test_canonical_selection_is_independent_of_stage_budget_when_execution_fits(
         assert list(stage.iterdir()) == []
     np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
     assert outputs[0][1] == outputs[1][1]
+
+
+def test_canonical_sort_handles_escaped_stage_path_and_owns_only_its_files(
+    monkeypatch, tmp_path,
+):
+    # DuckDB 설정 문자열에 들어가는 경로는 SQL 리터럴로 이스케이프해야 한다.
+    stage = tmp_path / "worker's [training] stage"
+    stage.mkdir()
+    preserved = stage / "another-attempt.txt"
+    preserved.write_text("keep", encoding="utf-8")
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    source = pl.DataFrame({"x": [3.0, -0.0, 1.0, 2.0]})
+    bind_frame(monkeypatch, source.reverse())
+    selected, proof = ml_training.training_matrix(
+        None, {}, ["x"], input_policy=sample(4, 19), worker_memory_mib=4096
+    )
+    np.testing.assert_array_equal(selected[:, 0], [0.0, 1.0, 2.0, 3.0])
+    assert proof["source_rows"] == 4
+    assert list(stage.iterdir()) == [preserved]
+    assert preserved.read_text(encoding="utf-8") == "keep"
+
+
+def test_canonical_sort_does_not_silently_override_platform_memory_reservation():
+    from sos_platform.errors import RuntimeConfigurationError
+    from sos_platform.resource_admission import ExecutionCapacity
+
+    # DuckDB 메모리 튜닝과 별개로 부모 Worker의 공유 예약 풀이 더 커야 한다.
+    with pytest.raises(RuntimeConfigurationError, match="POOL"):
+        ExecutionCapacity(pool_mib=3072).validate_worker_budget(
+            worker_rss_mib=4096, discovery_memory_mib=1024
+        )
+    ExecutionCapacity(pool_mib=8192).validate_worker_budget(
+        worker_rss_mib=4096, discovery_memory_mib=1024
+    )
