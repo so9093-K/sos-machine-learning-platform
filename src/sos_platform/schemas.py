@@ -273,10 +273,37 @@ class EvaluationRevisionOut(BaseModel):
     created_at: str
 
 
+class MLTemporalSplitSpec(BaseModel):
+    """시간순 Train/Calibration/Test 경계. Train 이외 구간은 학습에 사용하지 않는다."""
+
+    timestamp_column: str = Field(min_length=1, max_length=256)
+    train_end: datetime
+    calibration_end: datetime
+
+    @model_validator(mode="after")
+    def validate_boundaries(self):
+        if (
+            self.train_end.tzinfo is None
+            or self.calibration_end.tzinfo is None
+            or self.train_end.utcoffset() is None
+            or self.calibration_end.utcoffset() is None
+            or self.train_end >= self.calibration_end
+        ):
+            raise ValueError("Temporal boundaries must be ordered and timezone-aware")
+        return self
+
+
+class MLScoringTemporalScope(MLTemporalSplitSpec):
+    """학습한 UTC 분할 정의의 Calibration 또는 Test 구간만 점수화한다."""
+
+    partition: Literal["calibration", "test"]
+
+
 class MLScoringRequest(BaseModel):
     model_revision_id: str
     dataset_id: str
     label_column: str | None = Field(default=None, min_length=1, max_length=256)
+    temporal_scope: MLScoringTemporalScope | None = None
 
 
 class ScoringResultOut(BaseModel):
@@ -310,26 +337,6 @@ class MLTrainingInputPolicy(BaseModel):
             raise ValueError("Sample training requires rows and seed")
         if self.mode == "all" and (self.rows is not None or self.seed is not None):
             raise ValueError("Full training cannot specify sample rows or seed")
-        return self
-
-
-class MLTemporalSplitSpec(BaseModel):
-    """시간순 Train/Calibration/Test 경계. Train 이외 구간은 학습에 사용하지 않는다."""
-
-    timestamp_column: str = Field(min_length=1, max_length=256)
-    train_end: datetime
-    calibration_end: datetime
-
-    @model_validator(mode="after")
-    def validate_boundaries(self):
-        if (
-            self.train_end.tzinfo is None
-            or self.calibration_end.tzinfo is None
-            or self.train_end.utcoffset() is None
-            or self.calibration_end.utcoffset() is None
-            or self.train_end >= self.calibration_end
-        ):
-            raise ValueError("Temporal boundaries must be ordered and timezone-aware")
         return self
 
 
