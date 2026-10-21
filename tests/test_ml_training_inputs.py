@@ -858,3 +858,42 @@ def test_streaming_partition_writes_once_per_batch(monkeypatch, tmp_path):
     assert matrix.shape == (100, 1)
     assert write_lengths == [8192 * 16, 8192 * 16]
     assert list(stage.iterdir()) == []
+
+
+def test_experimental_canonical_positions_preserve_multiset_and_order(monkeypatch):
+    import random
+    from collections import Counter
+
+    from sos_platform import ml_sampling
+
+    values = np.array([0.0, -0.0, 1.0, 1.0, 1.0, 2.0, 4.0, 4.0, 8.0])
+    rows, seed = 5, 31
+    old_buckets = ml_sampling._BUCKETS
+    monkeypatch.setattr(ml_sampling, "_BUCKETS", 1)
+    monkeypatch.setattr(ml_sampling, "_PARTITION_MEMORY_BYTES", 1)
+
+    def select(values):
+        bind_frame(monkeypatch, pl.DataFrame({"x": values}))
+        return ml_sampling.streaming_canonical_sample(
+            pinned_scan_dataset=ml_training.pinned_scan_dataset,
+            store=None, dataset={}, features=["x"], requested_rows=rows,
+            seed=seed, budget_mib=8, selection_strategy="positions",
+        )
+
+    matrix, evidence = select(values)
+    reversed_matrix, reversed_evidence = select(values[::-1].copy())
+    np.testing.assert_array_equal(matrix, reversed_matrix)
+    assert evidence == reversed_evidence
+    assert evidence["method"] == "experimental_positions"
+
+    canonical = values.copy()
+    canonical[canonical == 0] = 0
+    counts = Counter(np.array([v], dtype="<f8").tobytes() for v in canonical)
+    expanded = [
+        np.frombuffer(key, dtype="<f8")[0]
+        for key, count in sorted(counts.items())
+        for _ in range(count)
+    ]
+    selected_positions = random.Random(seed).sample(range(len(values)), rows)
+    expected = np.sort(np.array([expanded[p] for p in selected_positions]))
+    np.testing.assert_array_equal(matrix[:, 0], expected)
