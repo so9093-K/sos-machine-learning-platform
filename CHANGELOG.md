@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Decision Policy Revision의 보정 Scoring Result 출처를 유지하면서 호환되는 다른 Scoring Result에도 고정된 판정 기준을 적용할 수 있게 했습니다. 정책과 대상의 모델 판본·점수 의미·소유 권한을 검증하고, 서로 다른 결과라는 이유만으로 독립 Test 성능을 주장하지 않습니다.
+
 - Isolation Forest 학습 요청에 선택적인 시간 기준 Train/Calibration/Test 분할과 Train 중앙값 기반 결측 처리 정책을 추가했습니다. Train 외 구간은 학습에 사용하지 않고 구간별 행 수와 UTC 경계를 근거로 기록하며, 기존 결측 불허 및 입력 선택 정책은 기본값으로 유지합니다.
 
 - Isolation Forest Training의 순서 독립 Sample 입력은 기존 Canonical v1 선택 의미와 Seed·입력 지문을 유지하면서, Dataset Reader의 입력을 Attempt 전용 Parquet에 Streaming 저장한 뒤 DuckDB 외부 정렬로 처리해 대용량 입력의 메모리 사용을 제한하도록 개선했습니다. 임시 정렬 공간은 Worker Attempt별로 격리·정리하며, Worker 메모리 예산에 따라 DuckDB 정렬 버퍼·스레드 배분을 조절합니다.
