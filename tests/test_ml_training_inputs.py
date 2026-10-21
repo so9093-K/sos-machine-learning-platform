@@ -786,3 +786,31 @@ def test_streaming_hash_bucket_sample_exact_logical_occurrence_reference(monkeyp
     np.testing.assert_array_equal(matrix[:, 0], np.sort([
         item[1] for item in priorities[:rows]
     ]))
+
+def test_streaming_sqlite_budget_counts_only_additional_disk_usage(tmp_path):
+    from sos_platform import ml_sampling
+    from sos_platform.errors import PlatformError
+
+    # 파티션 파일 크기는 호출자가 이미 예약했으므로 SQLite 추가분만 비교한다.
+    path = tmp_path / "bucket-000.bin"
+    counts = {index.to_bytes(8, "little"): index % 3 + 1 for index in range(400)}
+    path.write_bytes(b"".join(
+        key + count.to_bytes(8, "little") for key, count in counts.items()
+    ))
+    database = path.with_suffix(".sqlite3")
+
+    groups = ml_sampling._groups(path, 8, 1, 1024 * 1024)
+    first = next(groups)
+    database_bytes = database.stat().st_size
+    assert dict([first, *groups]) == counts
+    assert not database.exists()
+    assert database_bytes > 0
+
+    # 기존 구현은 기존 파티션 크기를 여기서 다시 더해 잘못 실패했다.
+    assert dict(ml_sampling._groups(path, 8, 1, database_bytes)) == counts
+    assert not database.exists()
+
+    with pytest.raises(PlatformError) as exc:
+        list(ml_sampling._groups(path, 8, 1, database_bytes - 1))
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert not database.exists()
