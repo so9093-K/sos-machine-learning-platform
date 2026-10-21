@@ -23,7 +23,7 @@ make validate
 
 현재 `make validate`는 구성된 Python pytest 검증을 실행합니다. 전체 플랫폼 기능의 검증 완료를 뜻하지 않습니다.
 
-웹의 Data Explorer에서는 Dataset 개요·데이터 조회·탐색·변환을 이용할 수 있습니다. 합성 예제는 선택 시에만 Dataset으로 등록되며, 분석과 Job 실행은 사용자가 선택합니다. 
+웹의 Data Explorer에서는 Dataset 개요·데이터 조회·탐색을, 별도 Data Preparation에서는 데이터 변환을 이용할 수 있습니다. 합성 예제는 선택 시에만 Dataset으로 등록되며, 분석과 Job 실행은 사용자가 선택합니다.
 
 `make` 또는 `make help`로 공개 명령을 확인할 수 있습니다. 기본 Web UI는
 `http://localhost:9601`, API는 `http://localhost:9602`,
