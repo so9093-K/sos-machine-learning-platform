@@ -888,6 +888,7 @@ def test_canonical_duckdb_v1_equivalence_at_numeric_precision_boundaries(monkeyp
     ("exception_name", "message", "expected_code"),
     [
         ("IOException", "No space left on device", "SOS-ML-TRAIN-STAGE-LIMIT"),
+        ("IOException", "Disk quota exceeded", "SOS-ML-TRAIN-STAGE-LIMIT"),
         ("OutOfMemoryException", "could not allocate block", "SOS-ML-TRAIN-CAPACITY"),
     ],
 )
@@ -1065,6 +1066,8 @@ def test_worker_training_child_completes_actual_duckdb_sampling_and_model(
     monkeypatch.setattr(worker.CgroupIsolation, "from_env", lambda _limit: cgroup)
     monkeypatch.setenv("SOS_WORKER_MAX_RSS_MIB", "2048")
     monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "128")
+    # 자식 진입점은 env를 설정하므로 테스트에서는 원래 값을 복원한다.
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(tmp_path))
     attempt_id = str(uuid4())
     job = {
         "id": str(uuid4()),
