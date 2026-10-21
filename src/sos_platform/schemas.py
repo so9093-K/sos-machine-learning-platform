@@ -229,7 +229,7 @@ class MLflowExportStatusOut(BaseModel):
 
 class MLExplanationRequest(BaseModel):
     scoring_result_id: str
-    row_index: int = Field(strict=True, ge=0, le=49_999)
+    row_index: int = Field(strict=True, ge=0, le=2**63 - 1)
 
 
 class ExplanationResultOut(BaseModel):
