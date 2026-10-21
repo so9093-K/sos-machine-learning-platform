@@ -52,7 +52,7 @@ def explain_scored_row(store, spec: dict) -> dict:
         }
         for index, name in enumerate(names)
     ]
-    return {
+    result = {
         "scoring_result_id": scoring["id"],
         "model_revision_id": model["id"],
         "row_index": selected,
@@ -62,3 +62,19 @@ def explain_scored_row(store, spec: dict) -> dict:
         "baseline_source": "model_training_feature_medians",
         "additive_attribution": False,
     }
+    identity = scoring.get("score_summary", {}).get("observation_identity")
+    if identity is not None:
+        if (
+            identity.get("kind") != "opaque_uuid4"
+            or identity.get("dataset_id") != scoring["dataset_id"]
+            or identity.get("dataset_version") != scoring["dataset_version"]
+            or "observation_id" not in item
+        ):
+            raise ValueError("Scoring observation identity evidence is invalid")
+        result["source_observation"] = {
+            "dataset_id": scoring["dataset_id"],
+            "dataset_version": scoring["dataset_version"],
+            "id_column": identity["source_column"],
+            "observation_id": item["observation_id"],
+        }
+    return result
