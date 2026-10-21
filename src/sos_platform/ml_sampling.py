@@ -50,7 +50,7 @@ def _partition_records(path: Path, size: int) -> Iterator[tuple[bytes, int]]:
 
 
 def _groups(
-    path: Path, value_width: int, memory_limit: int, stage_limit: int
+    path: Path, value_width: int, memory_limit: int, remaining_stage_bytes: int
 ) -> Iterator[tuple[bytes, int]]:
     """작은 파티션은 메모리, 큰 파티션은 디스크에서 값별 등장 횟수를 집계."""
     if path.stat().st_size <= memory_limit:
@@ -61,34 +61,36 @@ def _groups(
         return
 
     database = path.with_suffix(".sqlite3")
-    with closing(sqlite3.connect(database)) as connection:
-        connection.execute("PRAGMA synchronous=OFF")
-        connection.execute("PRAGMA journal_mode=OFF")
-        connection.execute("PRAGMA temp_store=FILE")
-        connection.execute("PRAGMA cache_size=-8192")
-        connection.execute(
-            "CREATE TABLE counts (value BLOB PRIMARY KEY, occurrences INTEGER NOT NULL) WITHOUT ROWID"
-        )
-        statement = (
-            "INSERT INTO counts(value, occurrences) VALUES (?, ?) "
-            "ON CONFLICT(value) DO UPDATE SET occurrences=occurrences+excluded.occurrences"
-        )
-        with connection:
-            chunk: list[tuple[bytes, int]] = []
-            for record in _partition_records(path, value_width):
-                chunk.append(record)
-                if len(chunk) == 8192:
+    try:
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute("PRAGMA synchronous=OFF")
+            connection.execute("PRAGMA journal_mode=OFF")
+            connection.execute("PRAGMA temp_store=FILE")
+            connection.execute("PRAGMA cache_size=-8192")
+            connection.execute(
+                "CREATE TABLE counts (value BLOB PRIMARY KEY, occurrences INTEGER NOT NULL) WITHOUT ROWID"
+            )
+            statement = (
+                "INSERT INTO counts(value, occurrences) VALUES (?, ?) "
+                "ON CONFLICT(value) DO UPDATE SET occurrences=occurrences+excluded.occurrences"
+            )
+            with connection:
+                chunk: list[tuple[bytes, int]] = []
+                for record in _partition_records(path, value_width):
+                    chunk.append(record)
+                    if len(chunk) == 8192:
+                        connection.executemany(statement, chunk)
+                        chunk.clear()
+                        if database.stat().st_size > remaining_stage_bytes:
+                            raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
+                if chunk:
                     connection.executemany(statement, chunk)
-                    chunk.clear()
-                    if database.stat().st_size > stage_limit:
-                        raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
-            if chunk:
-                connection.executemany(statement, chunk)
-        if path.stat().st_size + database.stat().st_size > stage_limit:
-            raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
-        yield from connection.execute("SELECT value, occurrences FROM counts")
-    # 파티션별 디스크 집계가 끝나면 다음 파티션 이전에 여유 공간 회수.
-    database.unlink(missing_ok=True)
+            if database.stat().st_size > remaining_stage_bytes:
+                raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
+            yield from connection.execute("SELECT value, occurrences FROM counts")
+    finally:
+        # 직접 실패해도 SQLite 임시 파일을 남기지 않는다.
+        database.unlink(missing_ok=True)
 
 
 def streaming_canonical_sample(
@@ -184,16 +186,22 @@ def streaming_canonical_sample(
                     # 각 배치에서 중복을 먼저 합치므로 동일 값이 수백만 번 나오는
                     # 경우에도 같은 값을 불필요하게 모두 디스크에 쓰지 않는다.
                     counts = Counter(row.tobytes() for row in matrix)
+                    partition_buffers: dict[int, bytearray] = {}
                     for key, count in counts.items():
                         bucket = zlib.crc32(key) % _BUCKETS
+                        records = partition_buffers.setdefault(bucket, bytearray())
+                        records.extend(key)
+                        records.extend(count.to_bytes(8, "little"))
+                        staged_bytes += value_width + 8
+                    if staged_bytes > stage_limit:
+                        raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
+                    # 작은 쓰기 호출 대신 배치당 파티션별로 한 번씩 기록한다.
+                    for bucket, records in partition_buffers.items():
                         if bucket not in buckets:
                             buckets[bucket] = writers.enter_context(
                                 (stage / f"bucket-{bucket:03d}.bin").open("ab")
                             )
-                        buckets[bucket].write(key + count.to_bytes(8, "little"))
-                        staged_bytes += value_width + 8
-                    if staged_bytes > stage_limit:
-                        raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
+                        buckets[bucket].write(records)
 
         if source_rows < 2:
             raise ValueError("Training requires at least two rows")
