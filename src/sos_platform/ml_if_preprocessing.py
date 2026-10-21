@@ -13,8 +13,8 @@ import numpy as np
 def _numeric_matrix(data: object, *, n_features: int) -> np.ndarray:
     """결측 NaN만 허용하는 2차원 숫자 입력을 검사하고 복사한다."""
     raw = np.asarray(data)
-    if raw.dtype.kind == "b":
-        raise ValueError("Boolean features are not supported")
+    if raw.dtype.kind not in "fiu":
+        raise ValueError("Features must be numeric; strings, booleans and objects are unsupported")
     if raw.dtype.kind in "iu" and raw.size and (raw.max() > 2**53 or raw.min() < -(2**53)):
         raise ValueError("Integer features exceed exact float64 range")
     try:
