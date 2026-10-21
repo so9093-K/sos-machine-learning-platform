@@ -736,3 +736,53 @@ def test_streaming_v2_sample_same_in_different_parquet_layouts(monkeypatch, tmp_
         fingerprints.append(evidence["selection_sha256"])
     np.testing.assert_array_equal(matrices[0], matrices[1])
     assert fingerprints[0] == fingerprints[1]
+
+
+def test_streaming_large_hash_bucket_falls_back_to_bounded_disk_grouping(monkeypatch, tmp_path):
+    from sos_platform import ml_sampling
+
+    # 파티션이 제한을 넘더라도 대량 중복 관측과 고유값을 정확히 합친다.
+    monkeypatch.setattr(ml_sampling, "_PARTITION_MEMORY_BYTES", 64)
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    source = pl.DataFrame({
+        "x": np.repeat(np.arange(900.0), 6),
+        "y": np.tile([0.0, 1.0, 0.0, 1.0, 0.0, 1.0], 900),
+    })
+    outputs = []
+    for frame in [source, source.reverse()]:
+        bind_frame(monkeypatch, frame)
+        matrix, evidence = ml_training.training_matrix(
+            None, {}, ["x", "y"], input_policy=sample(750, 13),
+            worker_memory_mib=8,
+        )
+        outputs.append((matrix, evidence))
+        assert list(stage.iterdir()) == []
+    np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
+    assert outputs[0][1] == outputs[1][1]
+
+
+def test_streaming_hash_bucket_sample_exact_logical_occurrence_reference(monkeypatch):
+    import hashlib
+
+    # 독립적인 BLAKE2b 128-bit 논리적 관측 기준 구현과 비교한다.
+    values = np.array([1.0, 1.0, 1.0, 2.0, 4.0, 4.0, 8.0, 16.0])
+    rows, seed = 4, 99
+    bind_frame(monkeypatch, pl.DataFrame({"x": values[::-1].copy()}))
+    matrix, _ = ml_training.training_matrix(
+        None, {}, ["x"], input_policy=sample(rows, seed), worker_memory_mib=8
+    )
+    priorities = []
+    for feature in np.unique(values):
+        key = np.array([feature], dtype="<f8").tobytes()
+        for ordinal in range(int(np.count_nonzero(values == feature))):
+            p = hashlib.blake2b(
+                key + ordinal.to_bytes(8, "little") + seed.to_bytes(4, "little"),
+                digest_size=16, person=b"SOS-SAMPLE-V2",
+            ).digest()
+            priorities.append((int.from_bytes(p, "little"), feature))
+    priorities.sort()
+    np.testing.assert_array_equal(matrix[:, 0], np.sort([
+        item[1] for item in priorities[:rows]
+    ]))
