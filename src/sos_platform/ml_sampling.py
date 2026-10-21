@@ -7,6 +7,7 @@
 
 import hashlib
 import heapq
+from contextlib import closing
 import os
 import sqlite3
 from pathlib import Path
@@ -73,7 +74,7 @@ def streaming_canonical_sample(
 
     # SQLite 커서와 Python Heap에 보존할 선택 키까지 함께 예산에 반영한다.
     per_selected_row = len(features) * 8 * 3 + 256
-    selection_bytes = int(budget_mib * 1024 * 1024) // 8
+    selection_bytes = int(budget_mib * 1024 * 1024) // 3
     if requested_rows > selection_bytes // per_selected_row:
         raise PlatformError("SOS-ML-TRAIN-CAPACITY")
 
@@ -91,7 +92,7 @@ def streaming_canonical_sample(
 
     with TemporaryDirectory(prefix="canonical-sample-", dir=root) as staging:
         db_path = Path(staging) / "multiset.sqlite3"
-        with sqlite3.connect(db_path) as db:
+        with closing(sqlite3.connect(db_path)) as db:
             db.execute("PRAGMA synchronous=OFF")
             db.execute("PRAGMA journal_mode=OFF")
             db.execute("PRAGMA temp_store=FILE")
