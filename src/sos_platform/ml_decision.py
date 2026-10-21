@@ -115,6 +115,31 @@ def validate_policy_for_scoring(
     return reference
 
 
+def _verified_temporal_nonoverlap(reference: dict, target: dict) -> bool:
+    """동일 Dataset 판본의 고정 UTC 분할에서 보정·평가 구간이 서로 분리되는지 확인한다.
+
+    이 결과는 관측치의 시간 구간 비중복이지 시계열 표본의 통계적 독립성이 아니다.
+    """
+    a = reference.get("score_summary", {}).get("temporal_scope")
+    b = target.get("score_summary", {}).get("temporal_scope")
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return False
+    pinned = (
+        "dataset_id", "dataset_version", "model_revision_id",
+        "timestamp_column", "train_end", "calibration_end",
+    )
+    return (
+        a.get("partition") == "calibration"
+        and b.get("partition") == "test"
+        and all(a.get(name) is not None and a.get(name) == b.get(name) for name in pinned)
+        and reference.get("dataset_id") == target.get("dataset_id") == a["dataset_id"]
+        and reference.get("dataset_version") == target.get("dataset_version")
+        == a["dataset_version"]
+        and reference.get("model_revision_id") == target.get("model_revision_id")
+        == a["model_revision_id"]
+    )
+
+
 def evaluate_scoring_policy(store, spec: dict) -> dict:
     """정책 산정 Scoring과 적용 Scoring을 구분해 평가 근거를 남긴다."""
     source = store.get_scoring_result(spec["scoring_result_id"])
@@ -147,11 +172,14 @@ def evaluate_scoring_policy(store, spec: dict) -> dict:
         )
     if reference is not None:
         summary["policy_reference_scoring_result_id"] = reference["id"]
+        temporal_nonoverlap = _verified_temporal_nonoverlap(reference, source)
         summary["policy_reference_relation"] = (
             "same_scoring_result" if reference["id"] == source["id"]
+            else "distinct_calibration_test_time_ranges" if temporal_nonoverlap
             else "different_scoring_result_disjointness_unverified"
         )
-        # 판본 ID가 다른 것만으로 Calibration/Test의 독립성을 주장하지 않는다.
+        summary["temporal_nonoverlap_confirmed"] = temporal_nonoverlap
+        # 시간 구간 비중복은 통계적 독립성이나 공격 탐지 성능의 증명이 아니다.
         summary["independent_validation_confirmed"] = False
     return {
         "scoring_result_id": source["id"],
