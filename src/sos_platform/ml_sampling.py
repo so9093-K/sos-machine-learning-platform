@@ -80,7 +80,7 @@ def _groups(
                 if len(chunk) == 8192:
                     connection.executemany(statement, chunk)
                     chunk.clear()
-                    if path.stat().st_size + database.stat().st_size > stage_limit:
+                    if database.stat().st_size > stage_limit:
                         raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
             if chunk:
                 connection.executemany(statement, chunk)
