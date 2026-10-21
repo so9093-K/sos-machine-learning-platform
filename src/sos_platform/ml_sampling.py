@@ -96,7 +96,7 @@ def canonical_sorted_batches(
         # Polars의 Streaming Sink로 Reader의 전체 배열을 보유하지 않는다.
         try:
             scan.sink_parquet(staged_file)
-        except (OSError, pl.exceptions.ComputeError) as exc:
+        except (OSError, pl.exceptions.PolarsError) as exc:
             if _stage_exhausted(exc):
                 raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT") from exc
             raise
