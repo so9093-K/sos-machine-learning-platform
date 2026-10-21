@@ -20,3 +20,16 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
+      - name: One-time PR33 sampling benchmark
+        run: |
+          mkdir -p /tmp/pr33
+          for scenario in "1370000 8" "1370000 63" "10000000 8"; do
+            set -- $scenario
+            rows=$1
+            features=$2
+            path="/tmp/pr33/input.parquet"
+            uv run --locked python scripts/_pr33_benchmark_temp.py generate "$rows" "$features" "$path"
+            uv run --locked python scripts/_pr33_benchmark_temp.py v1 "$rows" "$features" "$path"
+            uv run --locked python scripts/_pr33_benchmark_temp.py v2 "$rows" "$features" "$path"
+            rm -f "$path"
+          done
