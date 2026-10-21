@@ -43,7 +43,11 @@ def run(path: Path, nrows: int, width: int, memory: int, variant: str) -> None:
 
     def connect(*args, **kwargs):
         config = dict(kwargs["config"])
-        if variant == "scaled":
+        if variant == "baseline":
+            # PR 이전 메모리 512MiB 상한과 단일 정렬 스레드 설정.
+            config["memory_limit"] = f"{max(128, min(512, memory // 4))}MiB"
+            config["threads"] = "1"
+        elif variant == "scaled":
             config["memory_limit"] = f"{max(128, min(1024, memory // 4))}MiB"
             config["threads"] = "2" if memory >= 4096 else "1"
         elif variant == "parallel":
@@ -120,7 +124,7 @@ def main():
     parser.add_argument("features", type=int)
     parser.add_argument("path", type=Path)
     parser.add_argument("--memory", type=int, default=2048)
-    parser.add_argument("--variant", choices=["baseline", "scaled", "parallel"], default="baseline")
+    parser.add_argument("--variant", choices=["baseline", "scaled", "parallel", "product"], default="baseline")
     args = parser.parse_args()
     if args.action == "generate":
         generate(args.path, args.rows, args.features)
