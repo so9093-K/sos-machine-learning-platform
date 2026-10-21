@@ -33,11 +33,12 @@ class Step(BaseModel):
 
 
 class Transform(BaseModel):
-    """순서가 보존되는 재현 가능한 변환 정의."""
+    """기존 변환 단계 또는 단독 불변 관측치 UUID 발급 작업."""
 
-    steps: list[Step] = Field(min_length=1, max_length=30)
+    steps: list[Step] = Field(default_factory=list, max_length=30)
     order_by: str | None = None
     group_by: list[str] = Field(default_factory=list, max_length=4)
+    observation_id_column: str | None = Field(default=None, min_length=1, max_length=256)
 
     @model_validator(mode="after")
     def validate_grouping(self):
@@ -45,6 +46,11 @@ class Transform(BaseModel):
             raise ValueError("group_by columns must be distinct")
         if self.order_by and self.order_by in self.group_by:
             raise ValueError("order_by must not also be a group_by column")
+        if self.observation_id_column is not None:
+            if self.steps or self.order_by or self.group_by:
+                raise ValueError("Observation identity materialization must be a standalone transform")
+        elif not self.steps:
+            raise ValueError("Transform requires steps unless materializing observation IDs")
         return self
 
 
