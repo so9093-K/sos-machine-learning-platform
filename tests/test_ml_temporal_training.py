@@ -163,3 +163,95 @@ def test_temporal_split_requires_three_nonempty_periods():
             train_end=datetime(2026, 1, 1, 4, tzinfo=timezone.utc),
             calibration_end=datetime(2026, 1, 2, tzinfo=timezone.utc),
         )
+
+
+def test_time_split_applies_before_sampling_even_when_later_rows_are_extreme(monkeypatch):
+    from sos_platform.ml_input import TRAINING_SELECTION_LEGACY
+
+    bind_frame(monkeypatch, events())
+    selected, evidence = ml_training.training_matrix(
+        None, {"version": "d1"}, ["value"],
+        input_policy=MLTrainingInputPolicy(mode="sample", rows=2, seed=11),
+        selection_algorithm_version=TRAINING_SELECTION_LEGACY,
+        temporal_split=temporal_config(), missing_policy="train_median",
+        worker_memory_mib=64,
+    )
+    assert selected.shape == (2, 1)
+    assert np.nanmax(selected) <= 9.0
+    assert evidence["source_rows"] == 4
+    assert evidence["selected_rows"] == 2
+
+
+def test_http_submit_and_fork_preserve_temporal_boundaries_and_missing_policy():
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI, Request
+    from fastapi.testclient import TestClient
+
+    from sos_platform.api_ml_training import CREATE_JOB_DEP, training_router
+    from sos_platform.security import Actor
+
+    store = Mock()
+    actor = Actor("alice", "human", frozenset({"researcher"}))
+    spec = {
+        "algorithm": "isolation_forest",
+        "dataset_version": "d1",
+        "features": ["value"],
+        "params": {"n_estimators": 8, "random_state": 42},
+        "training_input": {"mode": "all"},
+        "missing_policy": "train_median",
+        "temporal_split": temporal_config().model_dump(mode="json"),
+    }
+    source_job = {
+        "id": "existing", "kind": "ml_train", "status": "Succeeded",
+        "dataset_id": "d1", "spec": spec,
+    }
+
+    def created(**kwargs):
+        return {
+            "id": "created", "kind": kwargs["kind"], "dataset_id": kwargs["dataset_id"],
+            "spec": kwargs["spec"], "status": "Queued", "cancel_requested": False,
+            "result": None, "error": None, "attempts": [],
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+        }
+
+    store.create_job.side_effect = created
+    app = FastAPI()
+    app.include_router(training_router(
+        store,
+        existing_dataset=lambda dataset_id, _actor: {"id": dataset_id, "version": "d1"},
+        existing_job=lambda _job_id, _actor: source_job,
+        require_submission_key=lambda _: None,
+    ))
+    app.dependency_overrides[CREATE_JOB_DEP.dependency] = lambda: actor
+
+    @app.middleware("http")
+    async def set_request_id(request: Request, call_next):
+        request.state.request_id = "temporal-test"
+        return await call_next(request)
+
+    with TestClient(app) as client:
+        result = client.post("/api/ml/train/jobs", json={
+            "dataset_id": "d1", "features": ["value"],
+            "missing_policy": "train_median", "temporal_split": spec["temporal_split"],
+        })
+        assert result.status_code == 202, result.text
+        received = store.create_job.call_args.kwargs["spec"]
+        assert received["missing_policy"] == "train_median"
+        assert received["temporal_split"] == spec["temporal_split"]
+
+        fork = client.post("/api/ml/train/jobs/existing/fork", json={})
+        assert fork.status_code == 202, fork.text
+        restored = store.create_job.call_args.kwargs["spec"]
+        assert restored["missing_policy"] == "train_median"
+        assert restored["temporal_split"] == spec["temporal_split"]
+
+        invalid = client.post("/api/ml/train/jobs", json={
+            "dataset_id": "d1", "features": ["value"],
+            "temporal_split": {
+                "timestamp_column": "ts",
+                "train_end": "2026-01-01T09:00:00",
+                "calibration_end": "2026-01-01T10:00:00Z",
+            },
+        })
+        assert invalid.status_code == 422
