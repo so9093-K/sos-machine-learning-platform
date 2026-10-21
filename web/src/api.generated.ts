@@ -2105,6 +2105,30 @@ export interface components {
             label_column?: string | null;
             /** Model Revision Id */
             model_revision_id: string;
+            temporal_scope?: components["schemas"]["MLScoringTemporalScope"] | null;
+        };
+        /**
+         * MLScoringTemporalScope
+         * @description 학습한 UTC 분할 정의의 Calibration 또는 Test 구간만 점수화한다.
+         */
+        MLScoringTemporalScope: {
+            /**
+             * Calibration End
+             * Format: date-time
+             */
+            calibration_end: string;
+            /**
+             * Partition
+             * @enum {string}
+             */
+            partition: "calibration" | "test";
+            /** Timestamp Column */
+            timestamp_column: string;
+            /**
+             * Train End
+             * Format: date-time
+             */
+            train_end: string;
         };
         /**
          * MLTemporalSplitSpec
