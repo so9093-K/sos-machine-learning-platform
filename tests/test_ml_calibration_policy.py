@@ -172,3 +172,59 @@ def test_policy_is_optional_for_unlabeled_evaluation(scoring_context):
     })
     assert result["decision_metrics"]["threshold"] is None
     assert "policy_reference_relation" not in result["decision_metrics"]
+
+
+def test_http_evaluation_validates_policy_reference_access_and_model(
+    monkeypatch, scoring_context, tmp_path
+):
+    """평가 제출 단계에서도 정책·보정 점수 접근 권한을 따로 검사한다."""
+    from unittest.mock import Mock
+
+    from fastapi.testclient import TestClient
+
+    from sos_platform import api
+    from sos_platform.security import Actor, IdentitySettings
+
+    _, calibration, test, scoring, policies = scoring_context
+    policies["policy-1"] = {
+        **create_policy(scoring_context[0], calibration),
+        "owner_actor": "owner-a",
+    }
+    fake_store = Mock()
+    fake_store.get_scoring_result.side_effect = lambda rid: scoring.get(rid)
+    fake_store.get_decision_policy_revision.side_effect = lambda rid: policies.get(rid)
+
+    def created(**kwargs):
+        return {
+            "id": "eval-job", "kind": kwargs["kind"], "dataset_id": kwargs["dataset_id"],
+            "spec": kwargs["spec"], "status": "Queued", "cancel_requested": False,
+            "result": None, "error": None, "attempts": [],
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+        }
+
+    fake_store.create_job.side_effect = created
+    monkeypatch.setattr(api, "Store", lambda home: fake_store)
+    app = api.create_app(tmp_path, identity=IdentitySettings("development", {}))
+    actor = Actor("owner-a", "human", frozenset({"researcher"}))
+    app.dependency_overrides[api.CREATE_JOB_DEP.dependency] = lambda: actor
+    with TestClient(app) as client:
+        response = client.post("/api/ml/evaluations/jobs", json={
+            "scoring_result_id": test["id"], "policy_revision_id": "policy-1",
+        })
+        assert response.status_code == 202, response.text
+        spec = fake_store.create_job.call_args.kwargs["spec"]
+        assert spec["policy_owner_actor"] == "owner-a"
+        assert spec["reference_owner_actor"] == "owner-a"
+
+        calibration["owner_actor"] = "owner-b"
+        denied = client.post("/api/ml/evaluations/jobs", json={
+            "scoring_result_id": test["id"], "policy_revision_id": "policy-1",
+        })
+        assert denied.status_code == 404
+        calibration["owner_actor"] = "owner-a"
+
+        test["model_revision_id"] = "unrelated-model"
+        incompatible = client.post("/api/ml/evaluations/jobs", json={
+            "scoring_result_id": test["id"], "policy_revision_id": "policy-1",
+        })
+        assert incompatible.status_code == 422
