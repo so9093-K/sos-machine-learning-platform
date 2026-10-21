@@ -72,9 +72,6 @@ def canonical_sorted_batches(
         raise ValueError("Worker training stage directory is unavailable")
 
     limit_bytes = ExecutionBudget.from_env().max_stage_mib * _MIB
-    if limit_bytes < _MIB:
-        raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
-
     # 기존 v1은 정렬 전에 Float32/64의 +0/-0을 동일 값으로 만든다.
     floats = [name for name in features if schema[name] in (pl.Float32, pl.Float64)]
     if floats:
