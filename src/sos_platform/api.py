@@ -569,6 +569,10 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
                 "model_owner_actor": model["owner_actor"],
                 "dataset_version": dataset["version"],
                 "label_column": body.label_column,
+                "temporal_scope": (
+                    body.temporal_scope.model_dump(mode="json")
+                    if body.temporal_scope is not None else None
+                ),
             },
             request_id=request.state.request_id,
             owner_actor=actor.id,
