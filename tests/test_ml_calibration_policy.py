@@ -239,3 +239,43 @@ def test_http_evaluation_validates_policy_reference_access_and_model(
             "scoring_result_id": test["id"], "policy_revision_id": "policy-1",
         })
         assert incompatible.status_code == 422
+
+
+def test_pinned_temporal_calibration_and_test_are_disjoint_not_statistically_independent(
+    scoring_context,
+):
+    """같은 고정 Dataset·시각 경계의 Calibration→Test만 구간 비중복으로 인정한다."""
+    store, calibration, test, _, policies = scoring_context
+    evidence = {
+        "dataset_id": "dataset-pinned",
+        "dataset_version": "revision-1",
+        "model_revision_id": "model-1",
+        "timestamp_column": "ts",
+        "train_end": "2026-01-01T04:00:00+00:00",
+        "calibration_end": "2026-01-01T07:00:00+00:00",
+    }
+    for result, partition in ((calibration, "calibration"), (test, "test")):
+        result["dataset_id"] = evidence["dataset_id"]
+        result["dataset_version"] = evidence["dataset_version"]
+        result["score_summary"]["temporal_scope"] = {**evidence, "partition": partition}
+
+    policies["policy-1"] = create_policy(store, calibration)
+    applied = ml_decision.evaluate_scoring_policy(store, {
+        "scoring_result_id": test["id"],
+        "source_owner_actor": "owner-a",
+        "policy_revision_id": "policy-1",
+    })
+    metrics = applied["decision_metrics"]
+    assert metrics["policy_reference_relation"] == "distinct_calibration_test_time_ranges"
+    assert metrics["temporal_nonoverlap_confirmed"] is True
+    assert metrics["independent_validation_confirmed"] is False
+
+    test["score_summary"]["temporal_scope"]["calibration_end"] = (
+        "2026-01-02T07:00:00+00:00"
+    )
+    changed = ml_decision.evaluate_scoring_policy(store, {
+        "scoring_result_id": test["id"],
+        "source_owner_actor": "owner-a",
+        "policy_revision_id": "policy-1",
+    })
+    assert changed["decision_metrics"]["temporal_nonoverlap_confirmed"] is False
