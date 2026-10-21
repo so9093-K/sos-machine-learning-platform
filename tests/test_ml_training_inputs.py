@@ -753,3 +753,40 @@ def test_duckdb_v1_matches_original_polars_sort_and_seed(monkeypatch, tmp_path):
     np.testing.assert_array_equal(actual, selected)
     assert evidence["selection_sha256"] == hashlib.sha256(selected.tobytes()).hexdigest()
     assert evidence["algorithm_version"] == TRAINING_SELECTION_CURRENT
+
+
+def test_duckdb_stage_limit_rejects_large_staged_input(monkeypatch, tmp_path):
+    from sos_platform import ml_sampling
+
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    monkeypatch.setattr(
+        ml_sampling.ExecutionBudget, "from_env",
+        lambda: type("Budget", (), {"max_stage_mib": 1})(),
+    )
+    values = np.random.default_rng(17).random(300_000)
+    bind_frame(monkeypatch, pl.DataFrame({"value": values}))
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["value"], input_policy=sample(1000, 12),
+            worker_memory_mib=256,
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert list(stage.iterdir()) == []
+
+
+def test_duckdb_canonical_quotes_feature_names_and_keeps_full_sample(monkeypatch):
+    frame = pl.DataFrame({
+        'a" b': [3.0, -0.0, 1.0, 2.0],
+        "from": [20, 10, 40, 30],
+    })
+    bind_frame(monkeypatch, frame.reverse())
+    matrix, evidence = ml_training.training_matrix(
+        None, {}, ['a" b', "from"], input_policy=sample(4, 3), worker_memory_mib=8
+    )
+    np.testing.assert_array_equal(matrix, np.array([
+        [0.0, 10.0], [1.0, 40.0], [2.0, 30.0], [3.0, 20.0],
+    ]))
+    assert evidence["source_rows"] == 4
+    assert evidence["selected_rows"] == 4
