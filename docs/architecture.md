@@ -14,6 +14,10 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**의 
 
 다이어그램은 장기 목표의 책임 경계를 나타낸다. 표시된 저장소·프레임워크와 아직 구현되지 않은 Serving 능력이 현재 필수 구성임을 의미하지 않는다. Data Explorer와 Model Playground도 같은 계약을 사용하는 경험이며 별도 플랫폼이 아니다.
 
+![신뢰 가능한 실행 및 데이터·결과 계약이 실험 플랫폼과 모델 개발 경험을 뒷받침하는 계층](references/ml-platform-execution-experiment-development-layers.png)
+
+계층은 기능 구현의 필수 완료 순서가 아니라 기반 계약과 그 위의 경험이 서로를 뒷받침하는 관계를 나타낸다.
+
 ## 변하지 않아야 할 경계
 
 1. **API-first:** 클라이언트 종류에 따라 핵심 기능이나 권한 판정이 달라지지 않는다.
