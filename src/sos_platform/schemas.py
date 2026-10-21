@@ -296,6 +296,22 @@ class ScoringResultOut(BaseModel):
     created_at: str
 
 
+class MLTrainingInputPolicy(BaseModel):
+    """명시적인 학습 데이터 입력 선택 정책."""
+
+    mode: Literal["all", "sample"] = "all"
+    rows: int | None = Field(default=None, strict=True, ge=2)
+    seed: int | None = Field(default=None, strict=True, ge=0, le=2**32 - 1)
+
+    @model_validator(mode="after")
+    def validate_selection(self):
+        if self.mode == "sample" and (self.rows is None or self.seed is None):
+            raise ValueError("Sample training requires rows and seed")
+        if self.mode == "all" and (self.rows is not None or self.seed is not None):
+            raise ValueError("Full training cannot specify sample rows or seed")
+        return self
+
+
 class MLForkRequest(BaseModel):
     """원본 학습 실행의 Feature/판본을 그대로 유지하고 모델 설정만 바꿀 수 있다."""
 
@@ -304,8 +320,9 @@ class MLForkRequest(BaseModel):
 
 class MLTrainRequest(BaseModel):
     dataset_id: str
-    features: list[str] = Field(min_length=1, max_length=32)
+    features: list[str] = Field(min_length=1)
     params: IsolationForestParameters = Field(default_factory=IsolationForestParameters)
+    training_input: MLTrainingInputPolicy = Field(default_factory=MLTrainingInputPolicy)
 
     @model_validator(mode="after")
     def validate_features(self):

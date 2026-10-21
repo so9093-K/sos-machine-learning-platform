@@ -22,12 +22,29 @@ function statistic(value: unknown): string {
   return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("ko-KR") : "—";
 }
 
+function trainingSelectionLabel(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "학습 입력 근거 미확인";
+  if ("method" in value && value.method === "all_rows") return "전체 입력";
+  if ("method" in value && (value.method === "canonical_multiset_v1" ||
+      value.method === "row_priority_bottom_k_v1")) {
+    const rows = "requested_rows" in value ? value.requested_rows : null;
+    const seed = "seed" in value ? value.seed : null;
+    const scope = value.method === "canonical_multiset_v1"
+      ? "순서 독립 부분집합" : "기존 부분집합 (스캔 순서 영향 가능)";
+    return `${scope} ${statistic(rows)}행 · 선택 Seed ${statistic(seed)} · 대표성 보장 없음`;
+  }
+  return "학습 입력 선택 방식 미확인";
+}
+
 /** 데이터 선택부터 비동기 학습·불변 결과 조회까지 같은 공개 API를 사용한다. */
 export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCancel }: Props) {
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
   const [nEstimators, setNEstimators] = useState(100);
   const [maxSamples, setMaxSamples] = useState("auto");
+  const [inputMode, setInputMode] = useState<"all" | "sample">("all");
+  const [inputRows, setInputRows] = useState(100000);
+  const [inputSeed, setInputSeed] = useState(42);
   const [loadingColumns, setLoadingColumns] = useState(false);
   const {
     items: history, nextCursor: historyCursor, refresh: reloadHistory, loadMore: loadOlderHistory,
@@ -124,7 +141,9 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   }, [compareJobId, history, model?.id, selectedJob?.id]);
 
   async function startTraining() {
-    if (!canTrain || !selectedId || features.length < 1 || submitting) return;
+    if (!canTrain || !selectedId || features.length < 1 || submitting ||
+        (inputMode === "sample" && (!Number.isSafeInteger(inputRows) || inputRows < 2 ||
+          !Number.isInteger(inputSeed) || inputSeed < 0 || inputSeed > 4294967295))) return;
     const requestedDataset = selectedId;
     const requestedSelection = ++selectionRequest.current;
     setSubmitting(true);
@@ -133,6 +152,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       const result = await submitJob<MLTrainingJob>("/api/ml/train/jobs", {
         dataset_id: selectedId,
         features,
+        training_input: inputMode === "all" ? { mode: "all" } :
+          { mode: "sample", rows: inputRows, seed: inputSeed },
         params: { n_estimators: nEstimators, max_samples: maxSamples === "auto"
           ? "auto" : Number(maxSamples), max_features: 1.0, bootstrap: false, random_state: 42 },
       });
@@ -203,10 +224,23 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     item.id !== selectedJob?.id &&
     item.status === "Succeeded" &&
     typeof item.result?.model_revision_id === "string");
+  const trainingFingerprint = (revision: ModelRevision): string | null => {
+    const selection = revision.runtime.training_selection;
+    if (!selection || typeof selection !== "object" || Array.isArray(selection) ||
+        !("selection_sha256" in selection)) return null;
+    return typeof selection.selection_sha256 === "string" ? selection.selection_sha256 : null;
+  };
+  const currentInputFingerprint = model ? trainingFingerprint(model) : null;
+  const comparisonInputFingerprint = comparisonModel ? trainingFingerprint(comparisonModel) : null;
+  const inputEvidenceMissing = Boolean(model && comparisonModel &&
+    (currentInputFingerprint === null || comparisonInputFingerprint === null));
   const sameInput = Boolean(model && comparisonModel &&
     model.dataset_id === comparisonModel.dataset_id &&
     model.dataset_version === comparisonModel.dataset_version &&
-    JSON.stringify(model.features) === JSON.stringify(comparisonModel.features));
+    JSON.stringify(model.features) === JSON.stringify(comparisonModel.features) &&
+    currentInputFingerprint !== null &&
+    currentInputFingerprint === comparisonInputFingerprint);
+
   const parameterKeys = ["n_estimators", "max_samples", "max_features",
     "bootstrap", "random_state"];
   const parameterText = (revision: ModelRevision, key: string): string =>
@@ -245,23 +279,51 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         </label>
       </div>
       <div className="steps">
-        <strong>학습에 사용할 숫자형 Feature ({features.length} / 32)</strong>
+        <strong>학습 입력 범위</strong>
+        <div className="form-row">
+          <label>입력 선택 방식
+            <select aria-label="학습 입력 선택 방식" value={inputMode}
+              onChange={event => setInputMode(event.target.value as "all" | "sample")}>
+              <option value="all">전체 Dataset</option>
+              <option value="sample">명시적 무작위 부분집합</option>
+            </select>
+          </label>
+          {inputMode === "sample" && <>
+            <label>학습 입력 행 수
+              <input aria-label="학습 표본 행 수" type="number" min={2} step={1}
+                value={inputRows} onChange={event => setInputRows(Number(event.target.value))} />
+            </label>
+            <label>입력 선택 Seed
+              <input aria-label="학습 입력 선택 Seed" type="number" min={0} max={4294967295}
+                step={1} value={inputSeed}
+                onChange={event => setInputSeed(Number(event.target.value))} />
+            </label>
+          </>}
+        </div>
+        <p className="hint">{inputMode === "all"
+          ? "Dataset의 모든 행을 학습에 사용합니다. Worker 예산을 넘으면 자동 축소하지 않고 실패합니다."
+          : "지정한 행 수와 Seed로 전체 Dataset에서 관측을 선택합니다. 같은 입력의 Feature 값과 중복 횟수라면 스캔 순서에 무관하게 같은 표본을 얻습니다. 요청 행 수보다 Dataset이 작거나 예산이 부족하면 실패합니다."}</p>
+      </div>
+      <div className="steps">
+        <strong>학습에 사용할 숫자형 Feature ({features.length}개)</strong>
         {!selectedId && <p className="hint">Dataset을 선택하면 입력 스키마를 조회합니다.</p>}
         {loadingColumns && <p role="status" className="hint">스키마를 조회하고 있습니다.</p>}
         {selectedId && !loadingColumns && numericColumns.length === 0 &&
           <p className="hint">사용 가능한 숫자형 Feature가 없습니다. 데이터 준비에서 숫자형 Feature를 생성하세요.</p>}
         <div className="form-row">{numericColumns.map(column => <label key={column.name}>
           <input type="checkbox" checked={features.includes(column.name)}
-            disabled={!canTrain || (!features.includes(column.name) && features.length >= 32)}
+            disabled={!canTrain}
             onChange={event => setFeatures(current => event.target.checked
               ? [...current, column.name] : current.filter(name => name !== column.name))} />
           {column.name} <small>{column.dtype}</small>
         </label>)}</div>
       </div>
-      <p className="hint">첫 학습 Runtime은 숫자형·최대 50,000행·32 Feature로 제한하며, 결측·NaN·Infinity는 학습 실패로 처리합니다. 학습 데이터의 점수 분포는 독립 검증 성능이 아닙니다.</p>
+      <p className="hint">숫자형 Feature를 선택하세요. 학습 입력은 위에서 선택한 정책에 따르며, 실행 예산에 맞지 않으면 실패합니다. 결측·비유한값·정밀도 오류는 실패로 처리합니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
       <div className="actions">
         <button disabled={!canTrain || submitting || !selectedId || features.length === 0 ||
-          !Number.isInteger(nEstimators) || nEstimators < 1 || nEstimators > 2000}
+          !Number.isInteger(nEstimators) || nEstimators < 1 || nEstimators > 2000 ||
+          (inputMode === "sample" && (!Number.isSafeInteger(inputRows) || inputRows < 2 ||
+            !Number.isInteger(inputSeed) || inputSeed < 0 || inputSeed > 4294967295))}
           onClick={() => void startTraining()}>
           {submitting ? "Job 접수 중…" : "학습 Job 제출"}
         </button>
@@ -305,13 +367,18 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           onClick={() => void forkTraining()}>
           {submitting ? "Fork 제출 중…" : "동일 조건으로 Fork·Reproduce"}
         </button>
-        <p className="hint">원본 Dataset 판본·Feature·Seed·모델 설정을 그대로 복사하고 새 Job·Model Revision을 만듭니다. 이 실행은 학습을 다시 수행합니다.</p>
+        <p className="hint">Dataset 판본·Feature·입력 선택 정책·선택 알고리즘 버전·Seed·모델 설정을 복사합니다. 과거 방식은 스캔 순서에 영향을 받으며, Runtime 변경에 따른 결과 차이는 별도로 확인해야 합니다.</p>
       </div>}
       {selectedJob.status === "Succeeded" &&
         <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id} />}
       {model && <div className="result">
         <h4>Model Revision · {model.id}</h4>
         <p className="hint">입력 판본: {model.dataset_version} · Feature: {model.features.join(", ")}</p>
+        {selectedJob?.result && selectedJob.result.training_selection != null && <p className="hint">
+          원본 {statistic(selectedJob.result.source_rows)}행 · 학습에 사용한 입력
+          {" "}{statistic(selectedJob.result.training_rows)}행 ·
+          {" "}{trainingSelectionLabel(selectedJob.result.training_selection)}
+        </p>}
         <div className="cards">
           <div className="stat"><span>학습 점수 대상</span><strong>{statistic(model.training_score_summary.score_count)}행</strong></div>
           <div className="stat"><span>학습 기준 이상 후보</span><strong>{statistic(model.training_score_summary.predicted_anomalies)}건</strong></div>
@@ -334,9 +401,11 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           </label>
           {comparisonModel && <>
             <p className="hint" role="status">
-              {sameInput
-                ? "데이터 판본과 Feature 순서가 같습니다. 설정 차이를 확인할 수 있습니다."
-                : "입력 Dataset 판본 또는 Feature 순서가 다릅니다. 점수·경보량을 직접 비교할 수 없습니다."}
+              {inputEvidenceMissing
+                ? "학습 입력 지문이 없는 과거 모델이 포함되어 실제 입력의 동일성을 확인할 수 없습니다."
+                : sameInput
+                  ? "데이터 판본·Feature 순서·실제 학습 입력 지문이 같습니다. 설정 차이를 확인할 수 있습니다."
+                  : "입력 판본·Feature 또는 실제 학습 입력이 다릅니다. 점수·경보량을 직접 비교할 수 없습니다."}
             </p>
             <table>
               <caption>두 모델의 학습 설정 비교 (성능 순위 아님)</caption>

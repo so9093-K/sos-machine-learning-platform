@@ -34,6 +34,11 @@ from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
 from .ml_explanation import explain_scored_row
 from .ml_scoring import run_dataset_scoring
 from .ml_training import train_dataset
+from .ml_training_staging import (
+    cleanup_training_stage,
+    training_stage_bytes,
+    training_stage_path,
+)
 from .mlflow_config import MLflowSettings
 from .mlflow_tracking import MLflowClient, run_tracking_once
 from .object_store import ObjectStore
@@ -106,6 +111,14 @@ def _perform(
             result = {"input_dataset_id": dataset["id"]}
         elif job["kind"] == "ml_train":
             stage = "processing"
+            # 정렬 Spill 파일은 이 Attempt만 소유한다. 종료 후 부모가 정리하고
+            # 자식 강제 종료 시에도 다음 Worker의 복구 경로에서 회수한다.
+            scratch = training_stage_path(store.home, job["attempts"][-1]["id"])
+            if scratch.parent.is_symlink():
+                raise OSError("Training stage root must not be a symlink")
+            scratch.parent.mkdir(parents=True, exist_ok=True)
+            scratch.mkdir(mode=0o700)
+            os.environ["POLARS_TEMP_DIR"] = str(scratch)
             result = train_dataset(store, dataset, job["spec"], pending.with_suffix(".joblib"))
         elif job["kind"] == "ml_score":
             stage = "processing"
@@ -275,6 +288,12 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                 stage_bytes=stage_bytes,
                 rss_bytes=process_rss_bytes(process.pid),
             )
+            if (
+                job["kind"] == "ml_train"
+                and training_stage_bytes(store.home, attempt_id)
+                > budget.max_stage_mib * 1024 * 1024
+            ):
+                raise ExecutionLimitExceeded("SOS-ML-TRAIN-STAGE-LIMIT", "storage")
             if time.monotonic() >= next_heartbeat:
                 store.heartbeat()
                 next_heartbeat = time.monotonic() + 2
@@ -479,6 +498,17 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                 attempt_id=attempt_id,
                 exception_type=type(exc).__name__,
             )
+        if job["kind"] == "ml_train":
+            try:
+                cleanup_training_stage(store.home, attempt_id)
+            except OSError:
+                emit(
+                    "worker.staging.cleanup_failed",
+                    service="sos-worker",
+                    level=logging.ERROR,
+                    job_id=job_id,
+                    attempt_id=attempt_id,
+                )
         if job["kind"] == "iceberg_import":
             # 자식이 SIGKILL되어도 Attempt에 속한 미완성 입력은 부모가 회수한다.
             try:
@@ -533,6 +563,7 @@ def main():
         # 단일 Worker 잠금 아래에서는 이전 실행의 자식이 남아 있지 않다.
         cleanup_recovered_results(store, interrupted)
         cleanup_iceberg_staging(store)
+        cleanup_training_stage(store.home)
         store.heartbeat()
         if args.once:
             run_once(store)

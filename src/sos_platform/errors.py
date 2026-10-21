@@ -109,6 +109,18 @@ DEFINITIONS = (
         "validation",
     ),
     spec(
+        "SOS-ML-TRAIN-STAGE-LIMIT",
+        "학습 임시 저장 공간 초과",
+        "학습 표본 선택의 정렬 임시 파일이 실행 저장 공간 예산을 초과했습니다. 입력 범위나 실행 자원을 확인하세요.",
+        "storage_capacity",
+    ),
+    spec(
+        "SOS-ML-TRAIN-CAPACITY",
+        "학습 입력 실행 예산 초과",
+        "요청한 학습 입력이 Worker 메모리 예산을 초과했습니다. 명시적인 부분집합 행 수를 선택하거나 실행 환경을 조정하세요.",
+        "capacity",
+    ),
+    spec(
         "SOS-CACHE-CAPACITY",
         "로컬 캐시 용량 초과",
         "원본 파일을 읽기 위한 안전한 캐시 공간이 부족합니다.",
