@@ -20,3 +20,21 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
+
+      # PR #33 one-time validation and representative benchmark. Remove before final.
+      - name: PR33 Ruff and Python contract verification
+        run: |
+          uv run --locked ruff check src/sos_platform/ml_input.py src/sos_platform/ml_training.py src/sos_platform/ml_sampling.py tests/test_ml_training_inputs.py
+          uv run --locked pytest -q tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: PR33 OpenAPI and Web build verification
+        run: |
+          cd web && npm ci --no-audit --no-fund
+          cd ..
+          bash scripts/generate_api_types.sh
+          git diff --exit-code -- web/src/api.generated.ts
+          cd web && npm run build
+      - name: PR33 v1 vs v2 benchmark
+        run: timeout 300s uv run --locked python scripts/_sampling_bench_tmp.py bench
