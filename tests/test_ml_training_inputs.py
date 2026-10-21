@@ -1031,3 +1031,64 @@ def test_canonical_sort_does_not_silently_override_platform_memory_reservation()
     ExecutionCapacity(pool_mib=8192).validate_worker_budget(
         worker_rss_mib=4096, discovery_memory_mib=1024
     )
+
+
+def test_worker_training_child_completes_actual_duckdb_sampling_and_model(
+    monkeypatch, tmp_path,
+):
+    import json
+    import os
+    from contextlib import contextmanager
+    from unittest.mock import Mock
+    from uuid import uuid4
+
+    from sos_platform import worker
+    from sos_platform.ml_training_staging import training_stage_path
+
+    source_path = tmp_path / "source.parquet"
+    pl.DataFrame({
+        "feature": np.arange(180.0, dtype=np.float64) % 41,
+        "context": np.arange(180.0, dtype=np.float64) % 11,
+    }).write_parquet(source_path)
+
+    @contextmanager
+    def scan(_store, _dataset):
+        yield pl.scan_parquet(source_path)
+
+    monkeypatch.setattr(ml_training, "pinned_scan_dataset", scan)
+    monkeypatch.setattr(worker, "_guard_child_parent", lambda _pid: None)
+    store = Mock()
+    store.home = tmp_path
+    store.get_dataset.return_value = {"version": "revision-a", "kind": "file"}
+    monkeypatch.setattr(worker, "Store", lambda _home, database_url: store)
+    cgroup = Mock()
+    monkeypatch.setattr(worker.CgroupIsolation, "from_env", lambda _limit: cgroup)
+    monkeypatch.setenv("SOS_WORKER_MAX_RSS_MIB", "2048")
+    monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "128")
+    attempt_id = str(uuid4())
+    job = {
+        "id": str(uuid4()),
+        "kind": "ml_train",
+        "dataset_id": "dataset",
+        "attempts": [{"id": attempt_id}],
+        "spec": {
+            "algorithm": "isolation_forest",
+            "dataset_version": "revision-a",
+            "features": ["feature", "context"],
+            "params": {"n_estimators": 8, "random_state": 7},
+            "training_input": sample(80, 19).model_dump(),
+            "selection_algorithm_version": TRAINING_SELECTION_CURRENT,
+        },
+    }
+    pending = tmp_path / "result.pending.parquet"
+    completed = tmp_path / "completed.json"
+    worker._perform(tmp_path, "postgresql://unused", job, completed, pending, os.getpid())
+    outcome = json.loads(completed.read_text(encoding="utf-8"))
+    assert "error_code" not in outcome, outcome
+    result = outcome["result"]
+    assert result["training_rows"] == 80
+    assert result["training_selection"]["algorithm_version"] == TRAINING_SELECTION_CURRENT
+    assert len(result["training_selection"]["selection_sha256"]) == 64
+    assert pending.with_suffix(".joblib").stat().st_size > 0
+    assert list(training_stage_path(tmp_path, attempt_id).iterdir()) == []
+    cgroup.attach_current_child.assert_called_once_with(attempt_id)
