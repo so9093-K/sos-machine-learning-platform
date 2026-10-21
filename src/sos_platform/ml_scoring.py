@@ -140,7 +140,11 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                     for name in features:
                         if schema[name] in INTEGER_DTYPES:
                             series = frame[name]
-                            if series.max() > 2**53 or series.min() < -(2**53):
+                            maximum, minimum = series.max(), series.min()
+                            if (
+                                (maximum is not None and maximum > 2**53)
+                                or (minimum is not None and minimum < -(2**53))
+                            ):
                                 raise ValueError("Integer feature exceeds the exact float64 range")
                     matrix = frame.select(features).to_numpy()
                     scores = model_adapter.score_anomalies(matrix)
