@@ -8,7 +8,6 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 from .datasets import pinned_scan_dataset
 from .ml_anomaly import evaluate_anomaly_scores
 from .ml_input import INTEGER_DTYPES, NUMERIC
-from .ml_isolation_forest import _matrix
 from .ml_runtime import load_trusted_isolation_forest
 
 MAX_SCORING_ROWS = 50_000
@@ -43,7 +42,10 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
         frame = source.select(fields).head(MAX_SCORING_ROWS + 1).collect()
     if not 1 <= frame.height <= MAX_SCORING_ROWS:
         raise ValueError("Scoring requires between 1 and 50000 rows")
-    if any(frame.select(features).null_count().row(0)):
+    # 과거 estimator-only 모델은 결측 입력을 허용하지 않는다.
+    # 새 아티팩트에서만 Train 기반 결측 처리를 적용한다.
+    supports_missing = model["runtime"].get("artifact_schema") == "if_model_with_preprocessing_v1"
+    if not supports_missing and any(frame.select(features).null_count().row(0)):
         raise ValueError("Scoring features contain null values")
     safe_integer = 2**53
     for name in features:
@@ -51,7 +53,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
             field = frame[name]
             if field.max() > safe_integer or field.min() < -safe_integer:
                 raise ValueError("Integer feature exceeds the exact float64 range")
-    matrix = _matrix(frame.select(features).to_numpy(), n_features=len(features))
+    matrix = frame.select(features).to_numpy()
     model_adapter = load_trusted_isolation_forest(model, store.home / "cache")
     scores = model_adapter.score_anomalies(matrix)
     score_summary = evaluate_anomaly_scores(scores)
