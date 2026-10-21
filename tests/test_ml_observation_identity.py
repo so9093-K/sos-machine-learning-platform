@@ -147,3 +147,56 @@ def test_request_schema_rejects_id_overlapping_time_or_label():
 def test_structural_uuid_is_version_4():
     value = observation_uuid(111)
     assert UUID(value).version == 4
+
+
+def test_http_scoring_identity_option_respects_dataset_and_model_ownership(
+    monkeypatch, tmp_path
+):
+    """식별자 옵션으로 별도의 Dataset·Model 열람 권한을 우회할 수 없다."""
+    from unittest.mock import Mock
+
+    from fastapi.testclient import TestClient
+
+    from sos_platform import api
+    from sos_platform.security import Actor, IdentitySettings
+
+    dataset = {"id": "dataset-a", "version": "v1", "owner_actor": "alice"}
+    model = {"id": "model-a", "owner_actor": "alice"}
+    fake_store = Mock()
+    fake_store.get_dataset.return_value = dataset
+    fake_store.get_model_revision.return_value = model
+
+    def created(**kwargs):
+        return {
+            "id": "score-job", "kind": kwargs["kind"], "dataset_id": kwargs["dataset_id"],
+            "spec": kwargs["spec"], "status": "Queued", "cancel_requested": False,
+            "result": None, "error": None, "attempts": [],
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+        }
+
+    fake_store.create_job.side_effect = created
+    monkeypatch.setattr(api, "Store", lambda home: fake_store)
+    app = api.create_app(tmp_path, identity=IdentitySettings("development", {}))
+    app.dependency_overrides[api.CREATE_JOB_DEP.dependency] = (
+        lambda: Actor("alice", "human", frozenset({"researcher"}))
+    )
+    request = {
+        "dataset_id": dataset["id"],
+        "model_revision_id": model["id"],
+        "observation_id_column": "observation_uuid",
+    }
+    with TestClient(app) as client:
+        response = client.post("/api/ml/scoring/jobs", json=request)
+        assert response.status_code == 202, response.text
+        fixed = fake_store.create_job.call_args.kwargs["spec"]
+        assert fixed["observation_id_column"] == "observation_uuid"
+        assert fixed["dataset_version"] == dataset["version"]
+
+        dataset["owner_actor"] = "bob"
+        denied_dataset = client.post("/api/ml/scoring/jobs", json=request)
+        assert denied_dataset.status_code == 404
+        dataset["owner_actor"] = "alice"
+
+        model["owner_actor"] = "bob"
+        denied_model = client.post("/api/ml/scoring/jobs", json=request)
+        assert denied_model.status_code == 404
