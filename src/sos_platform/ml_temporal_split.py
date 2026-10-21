@@ -5,18 +5,20 @@
 """
 
 from datetime import datetime, timezone
+from typing import Literal
 
 import polars as pl
 
 
-def split_training_source(
+def select_temporal_partition(
     source: pl.LazyFrame,
     *,
     timestamp_column: str,
     train_end: datetime,
     calibration_end: datetime,
+    partition: Literal["train", "calibration", "test"],
 ) -> tuple[pl.LazyFrame, dict]:
-    """고정된 Dataset을 UTC 시간순으로 분할하고 Train만 반환한다.
+    """동일한 분할 정의로 원하는 구간을 선택하고 전체 분할 근거를 반환한다.
 
     Args:
         source: 고정된 Dataset의 원본 LazyFrame.
@@ -25,7 +27,7 @@ def split_training_source(
         calibration_end: Test 시작 시각(Calibration은 이 시각 미만).
 
     Returns:
-        Train 필터 LazyFrame과 전체/각 구간의 정확한 행 수를 포함한 근거.
+        선택 구간 필터 LazyFrame과 전체/각 구간의 정확한 행 수를 포함한 근거.
 
     Raises:
         ValueError: 시각 형식이 불명확하거나 null·파싱 불가능 값이 있는 경우.
@@ -71,7 +73,15 @@ def split_training_source(
         raise ValueError("Temporal split contains missing, unzoned or malformed timestamps")
     if min(summary["train_rows"], summary["calibration_rows"], summary["test_rows"]) < 1:
         raise ValueError("Temporal split requires nonempty Train, Calibration and Test partitions")
-    train = prepared.filter(event < start_calibration).drop("__sos_event_time")
+    if partition == "train":
+        selected = event < start_calibration
+    elif partition == "calibration":
+        selected = (event >= start_calibration) & (event < start_test)
+    elif partition == "test":
+        selected = event >= start_test
+    else:
+        raise ValueError("Unknown temporal partition")
+    frame = prepared.filter(selected).drop("__sos_event_time")
     evidence = {
         "timestamp_column": timestamp_column,
         "train_end": start_calibration.isoformat(),
@@ -80,4 +90,22 @@ def split_training_source(
             "input_total_rows", "train_rows", "calibration_rows", "test_rows"
         )},
     }
-    return train, evidence
+    evidence["partition"] = partition
+    return frame, evidence
+
+
+def split_training_source(
+    source: pl.LazyFrame,
+    *,
+    timestamp_column: str,
+    train_end: datetime,
+    calibration_end: datetime,
+) -> tuple[pl.LazyFrame, dict]:
+    """기존 Train-only 실행 계약을 유지하는 시간 구간 선택 진입점."""
+    return select_temporal_partition(
+        source,
+        timestamp_column=timestamp_column,
+        train_end=train_end,
+        calibration_end=calibration_end,
+        partition="train",
+    )
