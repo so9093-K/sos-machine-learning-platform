@@ -28,7 +28,7 @@ PY
 make up          # Docker의 API·Worker·Web·PostgreSQL·S3 실행 및 Ready 확인
 make status
 make doctor
-make validate     # 신규로 구성된 소규모 Python 검증(전체 제품 보증 아님)
+make validate     # 현재 구성된 Python pytest 검증(전체 제품 보증 아님)
 make restart
 make logs
 make down        # 컨테이너만 종료, 데이터 볼륨 보존
@@ -92,8 +92,8 @@ Job 목록은 `GET /api/jobs?limit=20`에서 최근 순으로 조회하며, 응�
 
 전역 메뉴의 **ML Workbench**는 Data Explorer 실행 여부와 무관하게 등록된 Dataset에서 시작한다. 다음 기능은 현재 구현된 범위이며, 전문적인 모델 평가나 운영 배포를 완료했다는 뜻은 아니다.
 
-1. Dataset을 선택하고 숫자형 Feature를 1~32개 지정한다. 학습 입력은 2~50,000행이며, NULL·NaN·Infinity가 있거나 Float64로 정확히 변환할 수 없는 큰 정수값이 있으면 거부한다. 원본 데이터는 변경되지 않는다.
-2. 트리 개수와 트리별 표본 수를 설정하고 **학습 Job 제출**을 선택한다. 제출 후에는 ML 학습 이력에서 실제 Queued·Running·Succeeded·Failed·Cancelled 상태와 Attempt 기록을 확인할 수 있다. 시간제한·메모리 제한·잘못된 Feature는 오류 코드로 식별한다.
+1. Dataset을 선택하고 숫자형 Feature를 하나 이상 지정한다. 학습 입력은 전체 데이터(`all`, 기본값) 또는 행 수(2행 이상)·Seed를 명시한 부분집합(`sample`) 중에서 선택한다. 기존 32 Feature·50,000행 고정 상한은 없지만, 요청한 입력을 원본 행 수나 Worker 메모리·시간·임시 디스크 예산 때문에 수용할 수 없으면 자동 축소하지 않고 실패한다. NULL·NaN·Infinity 또는 Float64로 정확히 변환할 수 없는 큰 정수값은 거부하며, 원본 데이터는 변경하지 않는다.
+2. 트리 개수와 트리별 표본 수를 설정하고 **학습 Job 제출**을 선택한다. 학습 입력 부분집합의 `training_input.rows`와 Isolation Forest 트리별 `max_samples`는 서로 다른 설정이다. 제출 후에는 ML 학습 이력에서 실제 Queued·Running·Succeeded·Failed·Cancelled 상태와 Attempt 기록을 확인할 수 있다. 시간제한·메모리 제한·잘못된 Feature는 오류 코드로 식별한다.
 3. 완료한 Job에서 불변 **Model Revision** ID, 입력 Dataset ID·판본, Feature 순서, 학습 설정, 런타임 버전 및 학습 점수 요약을 확인한다. 모델은 내부 Worker가 생성하고 S3에 보존한다. 사용자가 제공한 pickle/joblib를 서버에서 복원하는 기능은 없다.
 4. 다른 성공한 학습 Job을 선택하면 두 모델의 설정·입력 판본을 비교할 수 있다. 서로 다른 Dataset 판본·Feature를 직접 비교할 수 없고, 입력이 같아도 학습 점수 평균이나 이상 후보 수는 정확도·모델 순위를 의미하지 않는다.
 
