@@ -636,10 +636,6 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             spec={
                 **body.model_dump(),
                 "source_owner_actor": score["owner_actor"],
-                **({
-                    "policy_owner_actor": policy["owner_actor"],
-                    "reference_owner_actor": reference["owner_actor"],
-                } if body.policy_revision_id else {}),
             },
             owner_actor=actor.id,
             actor_type=actor.kind,
@@ -680,6 +676,10 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             spec={
                 **body.model_dump(),
                 "source_owner_actor": score["owner_actor"],
+                **({
+                    "policy_owner_actor": policy["owner_actor"],
+                    "reference_owner_actor": reference["owner_actor"],
+                } if body.policy_revision_id else {}),
             },
             owner_actor=actor.id,
             actor_type=actor.kind,
