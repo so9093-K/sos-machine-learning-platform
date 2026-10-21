@@ -208,6 +208,17 @@ def test_http_evaluation_validates_policy_reference_access_and_model(
     actor = Actor("owner-a", "human", frozenset({"researcher"}))
     app.dependency_overrides[api.CREATE_JOB_DEP.dependency] = lambda: actor
     with TestClient(app) as client:
+        # 정책 생성 API는 평가 Job의 추가 근거를 요구하지 않아야 한다.
+        policy_job = client.post("/api/ml/policies/jobs", json={
+            "scoring_result_id": calibration["id"],
+            "mode": "quantile",
+            "alert_fraction": 0.25,
+        })
+        assert policy_job.status_code == 202, policy_job.text
+        policy_spec = fake_store.create_job.call_args.kwargs["spec"]
+        assert "policy_owner_actor" not in policy_spec
+        assert policy_spec["source_owner_actor"] == "owner-a"
+
         response = client.post("/api/ml/evaluations/jobs", json={
             "scoring_result_id": test["id"], "policy_revision_id": "policy-1",
         })
