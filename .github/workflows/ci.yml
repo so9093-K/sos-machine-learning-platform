@@ -20,16 +20,3 @@ jobs:
         run: uv sync --locked --group dev
       - name: Run configured product validation
         run: python scripts/validate.py run all
-
-      - name: Temporary isolated PostgreSQL/S3/Iceberg integration
-        env:
-          SOS_AUTH_TOKEN_HASHES: ""
-          AWS_EC2_METADATA_DISABLED: "true"
-        run: |
-          set -euo pipefail
-          project="sos-pr33-${GITHUB_RUN_ID}"
-          trap 'docker compose -p "$project" down -v --remove-orphans' EXIT
-          docker compose -p "$project" up -d --wait postgres storage
-          uv run --locked alembic upgrade head
-          uv run --locked python -m sos_platform.bootstrap
-          uv run --locked python scripts/_pr33_real_integration_temp.py
