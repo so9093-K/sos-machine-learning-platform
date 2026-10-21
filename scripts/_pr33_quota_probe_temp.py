@@ -36,6 +36,15 @@ def main():
         os.environ["POLARS_TEMP_DIR"] = str(stage)
         os.environ["SOS_WORKER_MAX_STAGE_MIB"] = "256"
         print(f"INPUT source_bytes={source.stat().st_size} stage_limit_mib=256", flush=True)
+        # 실제 DuckDB 정렬 엔진에 작은 Spill 한도를 강제로 주입한다.
+        from sos_platform import ml_sampling
+        original_connect = ml_sampling.duckdb.connect
+
+        def limited_spill(*args, **kwargs):
+            kwargs["config"] = {**kwargs["config"], "max_temp_directory_size": "1MiB"}
+            return original_connect(*args, **kwargs)
+
+        ml_sampling.duckdb.connect = limited_spill
         try:
             matrix, evidence = ml_training.training_matrix(
                 None, {"version":"test"}, names,
@@ -43,6 +52,7 @@ def main():
                 worker_memory_mib=2048,
             )
             print(f"OUTCOME success selected={len(matrix)} sha={evidence['selection_sha256']}", flush=True)
+            raise AssertionError("Spill quota 1MiB should have failed for this large sort")
         except PlatformError as exc:
             print(f"OUTCOME platform_error={exc.code} cause={type(exc.__cause__).__name__} cause_message={str(exc.__cause__)[:500]}", flush=True)
             if exc.code == "SOS-ML-TRAIN-STAGE-LIMIT":
