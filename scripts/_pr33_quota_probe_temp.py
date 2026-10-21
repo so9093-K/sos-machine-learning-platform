@@ -20,12 +20,12 @@ def main():
         directory = Path(folder)
         source = directory / "source.parquet"
         rng = np.random.default_rng(25)
-        names = [f"f{n}" for n in range(16)]
+        names = [f"f{n}" for n in range(63)]
         with pq.ParquetWriter(
             source, pa.schema([(n, pa.float64()) for n in names])
         ) as writer:
-            for _ in range(32):
-                block = rng.random((32768, len(names)), dtype=np.float64)
+            for _ in range(30):
+                block = rng.integers(0, 32, size=(32768, len(names))).astype(np.float64)
                 writer.write_table(pa.table({
                     name: pa.array(block[:, i]) for i, name in enumerate(names)
                 }))
@@ -34,8 +34,8 @@ def main():
         stage = directory / "stage"
         stage.mkdir()
         os.environ["POLARS_TEMP_DIR"] = str(stage)
-        os.environ["SOS_WORKER_MAX_STAGE_MIB"] = "143"
-        print(f"INPUT source_bytes={source.stat().st_size} stage_limit_mib=143", flush=True)
+        os.environ["SOS_WORKER_MAX_STAGE_MIB"] = "64"
+        print(f"INPUT source_bytes={source.stat().st_size} stage_limit_mib=64", flush=True)
         try:
             matrix, evidence = ml_training.training_matrix(
                 None, {"version":"test"}, names,
