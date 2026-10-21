@@ -8,6 +8,7 @@
 import hashlib
 import heapq
 import os
+import random
 import sqlite3
 import zlib
 from collections import Counter
@@ -50,14 +51,15 @@ def _partition_records(path: Path, size: int) -> Iterator[tuple[bytes, int]]:
 
 
 def _groups(
-    path: Path, value_width: int, memory_limit: int, remaining_stage_bytes: int
+    path: Path, value_width: int, memory_limit: int, remaining_stage_bytes: int,
+    *, ordered: bool = False
 ) -> Iterator[tuple[bytes, int]]:
     """작은 파티션은 메모리, 큰 파티션은 디스크에서 값별 등장 횟수를 집계."""
     if path.stat().st_size <= memory_limit:
         counts: dict[bytes, int] = {}
         for key, count in _partition_records(path, value_width):
             counts[key] = counts.get(key, 0) + count
-        yield from counts.items()
+        yield from (sorted(counts.items()) if ordered else counts.items())
         return
 
     database = path.with_suffix(".sqlite3")
@@ -87,7 +89,10 @@ def _groups(
                     connection.executemany(statement, chunk)
             if database.stat().st_size > remaining_stage_bytes:
                 raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
-            yield from connection.execute("SELECT value, occurrences FROM counts")
+            query = "SELECT value, occurrences FROM counts"
+            if ordered:
+                query += " ORDER BY value"
+            yield from connection.execute(query)
     finally:
         # 직접 실패해도 SQLite 임시 파일을 남기지 않는다.
         database.unlink(missing_ok=True)
@@ -102,6 +107,7 @@ def streaming_canonical_sample(
     requested_rows: int,
     seed: int | None,
     budget_mib: int,
+    selection_strategy: str = "priority",
 ) -> tuple[np.ndarray, dict]:
     """디스크 파티셔닝과 결정적 Bottom-K로 숫자형 학습 입력을 선택한다.
 
@@ -128,6 +134,8 @@ def streaming_canonical_sample(
     """
     if seed is None:
         raise ValueError("Sample selection requires a seed")
+    if selection_strategy not in ("priority", "positions"):
+        raise ValueError("Unsupported sampling strategy")
     if not features or len(set(features)) != len(features):
         raise ValueError("Training features must be nonempty and distinct")
     if requested_rows < 2:
@@ -208,28 +216,46 @@ def streaming_canonical_sample(
         if source_rows < requested_rows:
             raise ValueError("Sample rows exceed Dataset row count")
 
-        heap: list[tuple[int, bytes, int]] = []
-        for partition in sorted(stage.glob("bucket-*.bin")):
-            for key, count in _groups(
-                partition, value_width, partition_limit, stage_limit - staged_bytes
-            ):
-                for ordinal in range(count):
-                    priority = _priority(key, ordinal, seed_bytes)
-                    candidate = (-priority, key, ordinal)
-                    if len(heap) < requested_rows:
-                        heapq.heappush(heap, candidate)
-                    elif candidate > heap[0]:
-                        heapq.heapreplace(heap, candidate)
-
-    selected = np.empty((requested_rows, len(features)), dtype="<f8")
-    for index, (_, key, _) in enumerate(heap):
-        selected[index] = np.frombuffer(key, dtype="<f8")
+        selected = np.empty((requested_rows, len(features)), dtype="<f8")
+        if selection_strategy == "positions":
+            # 연구용 후보: 값·중복 횟수를 고정 순서로 펼친 가상 위치에서 K개 선택.
+            # 전체 N개 관측의 개별 해시를 만들지 않는다.
+            positions = sorted(random.Random(seed).sample(range(source_rows), requested_rows))
+            chosen = 0
+            offset = 0
+            for partition in sorted(stage.glob("bucket-*.bin")):
+                for key, count in _groups(
+                    partition, value_width, partition_limit, stage_limit - staged_bytes,
+                    ordered=True,
+                ):
+                    stop = offset + count
+                    while chosen < requested_rows and positions[chosen] < stop:
+                        selected[chosen] = np.frombuffer(key, dtype="<f8")
+                        chosen += 1
+                    offset = stop
+            if chosen != requested_rows or offset != source_rows:
+                raise ValueError("Incomplete canonical position selection")
+        else:
+            heap: list[tuple[int, bytes, int]] = []
+            for partition in sorted(stage.glob("bucket-*.bin")):
+                for key, count in _groups(
+                    partition, value_width, partition_limit, stage_limit - staged_bytes
+                ):
+                    for ordinal in range(count):
+                        priority = _priority(key, ordinal, seed_bytes)
+                        candidate = (-priority, key, ordinal)
+                        if len(heap) < requested_rows:
+                            heapq.heappush(heap, candidate)
+                        elif candidate > heap[0]:
+                            heapq.heapreplace(heap, candidate)
+            for index, (_, key, _) in enumerate(heap):
+                selected[index] = np.frombuffer(key, dtype="<f8")
     selected = np.ascontiguousarray(selected[np.lexsort(selected.T[::-1])], dtype=np.float64)
     evidence = {
         "source_rows": source_rows,
         "selected_rows": len(selected),
-        "method": TRAINING_SELECTION_CURRENT,
-        "algorithm_version": TRAINING_SELECTION_CURRENT,
+        "method": TRAINING_SELECTION_CURRENT if selection_strategy == "priority" else "experimental_positions",
+        "algorithm_version": TRAINING_SELECTION_CURRENT if selection_strategy == "priority" else "experimental_positions",
         "requested_rows": requested_rows,
         "seed": seed,
         "selection_sha256": hashlib.sha256(selected.tobytes()).hexdigest(),
