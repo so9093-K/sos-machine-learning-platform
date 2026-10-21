@@ -113,6 +113,9 @@ def test_scoring_and_explanation_use_same_bundle_without_refitting(
     evaluated = pl.DataFrame({
         "volume": [None, 3.0, 50.0],
         "count": [16.0, 20.0, 1.0],
+        "observation_uuid": [
+            f"00000000-0000-4000-8000-{index:012x}" for index in range(3)
+        ],
     })
 
     @contextmanager
@@ -125,6 +128,7 @@ def test_scoring_and_explanation_use_same_bundle_without_refitting(
         "model_revision_id": revision["id"],
         "model_owner_actor": revision["owner_actor"],
         "dataset_version": "test-v1",
+        "observation_id_column": "observation_uuid",
     }
     summary = ml_scoring.run_dataset_scoring(
         store, {"id": "data-b", "version": "test-v1"}, spec, pending
@@ -145,6 +149,9 @@ def test_scoring_and_explanation_use_same_bundle_without_refitting(
         "model_revision_id": revision["id"],
         "owner_actor": revision["owner_actor"],
         "row_count": 3,
+        "dataset_id": "data-b",
+        "dataset_version": "test-v1",
+        "score_summary": summary["score_summary"],
         "location": storage.location(scoring_key),
         "sha256": hashlib.sha256(pending.read_bytes()).hexdigest(),
     }
@@ -156,6 +163,12 @@ def test_scoring_and_explanation_use_same_bundle_without_refitting(
                 "row_index": 0}
     )
     assert explanation["score"] == pytest.approx(expected[0])
+    assert explanation["source_observation"] == {
+        "dataset_id": "data-b",
+        "dataset_version": "test-v1",
+        "id_column": "observation_uuid",
+        "observation_id": "00000000-0000-4000-8000-000000000000",
+    }
     first = explanation["feature_sensitivities"][0]
     assert first["feature"] == "volume"
     assert first["missing_imputed"] is True
