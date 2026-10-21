@@ -1116,3 +1116,23 @@ def test_canonical_sort_polars_wrapped_disk_error_preserves_stage_code(
         )
     assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
     assert not list(stage.iterdir())
+
+
+def test_canonical_sort_disk_quota_exhaustion_is_stage_limit(monkeypatch, tmp_path):
+    import errno
+
+    stage = tmp_path / "attempt"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(128.0)}))
+
+    def fail_sink(_source, _path, **_kwargs):
+        raise OSError(errno.EDQUOT, "Disk quota exceeded")
+
+    monkeypatch.setattr(pl.LazyFrame, "sink_parquet", fail_sink)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(50, 9), worker_memory_mib=2048
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert list(stage.iterdir()) == []
