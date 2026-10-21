@@ -99,7 +99,8 @@ def canonical_sorted_batches(
         try:
             path_literal = "'" + str(staged_file).replace("'", "''") + "'"
             conn.execute(f"SET allowed_paths = [{path_literal}]")
-            conn.execute(f"SET allowed_directories = [{path_literal}]")
+            stage_literal = "'" + str(stage).replace("'", "''") + "'"
+            conn.execute(f"SET allowed_directories = [{stage_literal}]")
             conn.execute("SET enable_external_access = false")
             conn.execute("SET lock_configuration = true")
             result_reader = conn.execute(
