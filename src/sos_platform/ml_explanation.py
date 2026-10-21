@@ -44,7 +44,8 @@ def explain_scored_row(store, spec: dict) -> dict:
     items = [
         {
             "feature": name,
-            "actual_value": float(original[index]),
+            "actual_value": None if np.isnan(original[index]) else float(original[index]),
+            "missing_imputed": bool(np.isnan(original[index])),
             "reference_median": float(reference[index]),
             "score_if_replaced": float(adjusted_scores[index]),
             "anomaly_score_delta": float(saved_score - adjusted_scores[index]),
