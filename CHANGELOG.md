@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Isolation Forest Training의 순서 독립 Sample 입력은 기존 Canonical v1 선택 의미와 Seed·입력 지문을 유지하면서, Dataset Reader의 배치를 DuckDB 외부 정렬로 전달해 대용량 입력의 메모리 사용을 제한하도록 개선했습니다. 임시 정렬 공간은 Worker Attempt별로 격리·정리하며, Worker 메모리 예산에 따라 DuckDB 정렬 버퍼·스레드 배분을 조절합니다.
+- Isolation Forest Training의 순서 독립 Sample 입력은 기존 Canonical v1 선택 의미와 Seed·입력 지문을 유지하면서, Dataset Reader의 입력을 Attempt 전용 Parquet에 Streaming 저장한 뒤 DuckDB 외부 정렬로 처리해 대용량 입력의 메모리 사용을 제한하도록 개선했습니다. 임시 정렬 공간은 Worker Attempt별로 격리·정리하며, Worker 메모리 예산에 따라 DuckDB 정렬 버퍼·스레드 배분을 조절합니다.
 
 - Isolation Forest Training의 고정 행·Feature 한도를 제거하고 전체 사용·명시적 부분집합 정책과 실행 메모리 수용 판단을 분리합니다. 부분집합은 중복 관측 수를 유지하며 스캔 순서와 무관하게 선택하고, 입력 정책·선택 알고리즘 버전·Seed·입력 지문을 기록합니다. Scoring의 현행 처리 범위는 유지합니다.
 
