@@ -57,15 +57,67 @@ def apply_scoring_policy(store, spec: dict) -> dict:
     }
 
 
+def validate_policy_for_scoring(
+    store,
+    policy: dict,
+    target: dict,
+    *,
+    expected_policy_owner: str | None = None,
+    expected_reference_owner: str | None = None,
+) -> dict:
+    """정책 보정 근거와 평가 입력의 모델·점수 의미가 같은지 검사한다.
+
+    정책은 보정 Scoring Result를 영구 참조하며 새 평가 대상에 재사용할 수 있다.
+    다른 Scoring Result라고 해서 관측 행이 서로 겹치지 않는다는 보장은 없다.
+
+    Args:
+        store: 판본 조회를 제공하는 SOS Store.
+        policy: 사용 권한을 확인한 불변 Policy Revision.
+        target: 평가 대상 Scoring Result.
+        expected_policy_owner: Job 제출 시 고정한 정책 소유자.
+        expected_reference_owner: Job 제출 시 고정한 보정 Scoring 소유자.
+
+    Returns:
+        dict: 보정 근거인 Scoring Result.
+
+    Raises:
+        ValueError: 보정 근거·소유자·Model Revision·점수 계약 불일치.
+    """
+    if expected_policy_owner is not None and policy["owner_actor"] != expected_policy_owner:
+        raise ValueError("Decision Policy owner changed")
+    reference = store.get_scoring_result(policy["scoring_result_id"])
+    if reference is None:
+        raise ValueError("Decision Policy calibration source is unavailable")
+    if expected_reference_owner is not None and reference["owner_actor"] != expected_reference_owner:
+        raise ValueError("Decision Policy calibration owner changed")
+    if reference["model_revision_id"] != target["model_revision_id"]:
+        raise ValueError("Decision Policy requires the same Model Revision")
+    if reference["score_direction"] != target["score_direction"]:
+        raise ValueError("Decision Policy score direction differs from target")
+    if reference["feature_names"] != target["feature_names"]:
+        raise ValueError("Decision Policy feature signature differs from target")
+    if reference["score_summary"].get("score_scale") != target["score_summary"].get("score_scale"):
+        raise ValueError("Decision Policy score scale differs from target")
+    return reference
+
+
 def evaluate_scoring_policy(store, spec: dict) -> dict:
-    """기존 점수와 선택한 정책으로 감독·비지도 평가 근거를 남긴다."""
+    """정책 산정 Scoring과 적용 Scoring을 구분해 평가 근거를 남긴다."""
     source = store.get_scoring_result(spec["scoring_result_id"])
     if source is None or source["owner_actor"] != spec["source_owner_actor"]:
         raise ValueError("Scoring Result is unavailable")
     policy_id = spec.get("policy_revision_id")
     policy = store.get_decision_policy_revision(policy_id) if policy_id else None
-    if policy_id and (policy is None or policy["scoring_result_id"] != source["id"]):
-        raise ValueError("Decision Policy does not belong to this Scoring Result")
+    if policy_id and policy is None:
+        raise ValueError("Decision Policy is unavailable")
+    reference = (
+        validate_policy_for_scoring(
+            store, policy, source,
+            expected_policy_owner=spec.get("policy_owner_actor"),
+            expected_reference_owner=spec.get("reference_owner_actor"),
+        )
+        if policy is not None else None
+    )
     frame = _verified_scoring(store, source)
     label_values = frame["label"].to_list() if "label" in frame.columns else None
     threshold = policy["threshold"] if policy else None
@@ -79,6 +131,14 @@ def evaluate_scoring_policy(store, spec: dict) -> dict:
             threshold=threshold,
             labels=label_values,
         )
+    if reference is not None:
+        summary["policy_reference_scoring_result_id"] = reference["id"]
+        summary["policy_reference_relation"] = (
+            "same_scoring_result" if reference["id"] == source["id"]
+            else "different_scoring_result_disjointness_unverified"
+        )
+        # 판본 ID가 다른 것만으로 Calibration/Test의 독립성을 주장하지 않는다.
+        summary["independent_validation_confirmed"] = False
     return {
         "scoring_result_id": source["id"],
         "policy_revision_id": policy_id,
