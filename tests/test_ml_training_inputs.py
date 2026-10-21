@@ -814,3 +814,47 @@ def test_streaming_sqlite_budget_counts_only_additional_disk_usage(tmp_path):
         list(ml_sampling._groups(path, 8, 1, database_bytes - 1))
     assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
     assert not database.exists()
+
+
+def test_streaming_partition_writes_once_per_batch(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from sos_platform import ml_sampling
+
+    # 동일 파티션에 고유 관측 16,384개가 있어도 쓰기는 배치당 한 번이다.
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    monkeypatch.setattr(ml_sampling, "_BUCKETS", 1)
+    original_open = Path.open
+    write_lengths = []
+
+    class CountingWriter:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def __enter__(self):
+            self.stream.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.stream.__exit__(*args)
+
+        def write(self, value):
+            write_lengths.append(len(value))
+            return self.stream.write(value)
+
+    def counting_open(path, *args, **kwargs):
+        stream = original_open(path, *args, **kwargs)
+        if path.name.startswith("bucket-") and args and args[0] == "ab":
+            return CountingWriter(stream)
+        return stream
+
+    monkeypatch.setattr(Path, "open", counting_open)
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(16384.0)}))
+    matrix, _ = ml_training.training_matrix(
+        None, {}, ["x"], input_policy=sample(100, 17), worker_memory_mib=8
+    )
+    assert matrix.shape == (100, 1)
+    assert write_lengths == [8192 * 16, 8192 * 16]
+    assert list(stage.iterdir()) == []
