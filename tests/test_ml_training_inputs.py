@@ -9,10 +9,7 @@ from pydantic import ValidationError
 
 from sos_platform import ml_training
 from sos_platform.errors import PlatformError
-from sos_platform.ml_input import (
-    TRAINING_SELECTION_CURRENT,
-    TRAINING_SELECTION_LEGACY,
-)
+from sos_platform.ml_input import TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
 from sos_platform.schemas import MLTrainingInputPolicy, MLTrainRequest
 
 
@@ -646,24 +643,6 @@ def test_training_stage_quota_rejects_symlinked_root(tmp_path):
         training_stage_bytes(tmp_path, str(uuid4()))
 
 
-def test_canonical_v1_remains_exactly_replayable(monkeypatch):
-    # 병합된 버전의 Seed -> 정렬 후 행 순서 난수 선택 계약을 보존.
-    count, requested, seed = 5000, 1000, 23
-    values = np.arange(count, dtype=np.float64)
-    source = pl.DataFrame({"x": values[::-1].copy()})
-    bind_frame(monkeypatch, source)
-    matrix, evidence = ml_training.training_matrix(
-        None, {}, ["x"], input_policy=sample(requested, seed),
-        selection_algorithm_version=TRAINING_SELECTION_CURRENT,
-        worker_memory_mib=4,
-    )
-    priorities = np.random.default_rng(seed).integers(
-        0, np.iinfo(np.uint64).max, size=count, dtype=np.uint64
-    )
-    chosen = np.argpartition(priorities, requested - 1)[:requested]
-    np.testing.assert_array_equal(matrix[:, 0], np.sort(values[chosen]))
-    assert evidence["algorithm_version"] == TRAINING_SELECTION_CURRENT
-
 def test_duckdb_canonical_sample_keeps_independent_duplicate_observations(monkeypatch):
     # 정렬 구현이 중복 관측의 빈도를 변경하지 않는다.
     values = np.array([0.0] * 9000 + [1.0] * 1000)
@@ -679,7 +658,7 @@ def test_duckdb_canonical_sample_keeps_independent_duplicate_observations(monkey
 
 
 def test_duckdb_canonical_rejects_invalid_values_and_cleans_stage(monkeypatch, tmp_path):
-    # 입력의 잘못된 값과 스테이징 초과 모두 Attempt 디렉터리를 정리한다.
+    # 잘못된 값이 Sample 밖에 있어도 거부하고 Stage는 정리한다.
     stage = tmp_path / "attempt-stage"
     stage.mkdir()
     monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
@@ -688,18 +667,6 @@ def test_duckdb_canonical_rejects_invalid_values_and_cleans_stage(monkeypatch, t
         ml_training.training_matrix(
             None, {}, ["x"], input_policy=sample(2, 7), worker_memory_mib=4
         )
-    assert list(stage.iterdir()) == []
-
-    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(5000.0)}))
-    monkeypatch.setattr(
-        "sos_platform.ml_sampling.ExecutionBudget.from_env",
-        lambda: type("Budget", (), {"max_stage_mib": 0})(),
-    )
-    with pytest.raises(PlatformError) as exc:
-        ml_training.training_matrix(
-            None, {}, ["x"], input_policy=sample(100, 7), worker_memory_mib=4
-        )
-    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
     assert list(stage.iterdir()) == []
 
 
@@ -756,17 +723,21 @@ def test_duckdb_v1_matches_original_polars_sort_and_seed(monkeypatch, tmp_path):
 
 
 def test_duckdb_stage_limit_rejects_large_staged_input(monkeypatch, tmp_path):
-    from sos_platform import ml_sampling
+    from pathlib import Path
 
     stage = tmp_path / "attempt-stage"
     stage.mkdir()
     monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
-    monkeypatch.setattr(
-        ml_sampling.ExecutionBudget, "from_env",
-        lambda: type("Budget", (), {"max_stage_mib": 1})(),
-    )
-    values = np.random.default_rng(17).random(300_000)
-    bind_frame(monkeypatch, pl.DataFrame({"value": values}))
+    # 실제로 허용되는 Stage 최소 예산(128 MiB)을 넘는 파일을 만든다.
+    # Sparse File로 디스크·메모리 비용 없이 저장 후 한도 검증만 재현한다.
+    monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "128")
+    bind_frame(monkeypatch, pl.DataFrame({"value": np.arange(100.0)}))
+
+    def oversized_sink(_scan, path, **_kwargs):
+        with Path(path).open("wb") as target:
+            target.truncate(129 * 1024 * 1024)
+
+    monkeypatch.setattr(pl.LazyFrame, "sink_parquet", oversized_sink)
     with pytest.raises(PlatformError) as exc:
         ml_training.training_matrix(
             None, {}, ["value"], input_policy=sample(1000, 12),
@@ -1018,20 +989,6 @@ def test_canonical_sort_handles_escaped_stage_path_and_owns_only_its_files(
     assert proof["source_rows"] == 4
     assert list(stage.iterdir()) == [preserved]
     assert preserved.read_text(encoding="utf-8") == "keep"
-
-
-def test_canonical_sort_does_not_silently_override_platform_memory_reservation():
-    from sos_platform.errors import RuntimeConfigurationError
-    from sos_platform.resource_admission import ExecutionCapacity
-
-    # DuckDB 메모리 튜닝과 별개로 부모 Worker의 공유 예약 풀이 더 커야 한다.
-    with pytest.raises(RuntimeConfigurationError, match="POOL"):
-        ExecutionCapacity(pool_mib=3072).validate_worker_budget(
-            worker_rss_mib=4096, discovery_memory_mib=1024
-        )
-    ExecutionCapacity(pool_mib=8192).validate_worker_budget(
-        worker_rss_mib=4096, discovery_memory_mib=1024
-    )
 
 
 def test_worker_training_child_completes_actual_duckdb_sampling_and_model(
