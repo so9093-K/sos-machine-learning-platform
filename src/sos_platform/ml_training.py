@@ -14,6 +14,7 @@ from .datasets import pinned_scan_dataset
 from .errors import PlatformError
 from .execution_budget import ExecutionBudget
 from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold
+from .ml_if_preprocessing import fit_if_median_imputer
 from .ml_input import (
     INTEGER_DTYPES,
     NUMERIC,
@@ -198,13 +199,24 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
     with pinned_scan_dataset(store, dataset) as source:
         schema = source.collect_schema()
         feature_dtypes = [str(schema[name]) for name in features]
-    model = train_isolation_forest(matrix, config)
-    scores = model.score_anomalies(matrix)
+    # 아직 유한 숫자 입력만 받는 기존 Training 계약은 유지한다.
+    # 전처리 상태를 함께 고정하면 별도 Scoring Worker도 동일 기준을 사용할 수 있다.
+    preprocessing = fit_if_median_imputer(matrix, feature_names=features)
+    transformed = preprocessing.transform(matrix, feature_names=features)
+    model = train_isolation_forest(transformed, config)
+    scores = model.score_anomalies(transformed)
     threshold = quantile_threshold(scores, 0.05)
     summary = evaluate_anomaly_scores(scores, threshold=threshold)
     summary["scope"] = "training_data_only"
     summary["threshold_source"] = "training_score_quantile_0.95"
-    joblib.dump(model.estimator, pending)
+    joblib.dump(
+        {
+            "schema": "if_model_with_preprocessing_v1",
+            "estimator": model.estimator,
+            "preprocessing": preprocessing,
+        },
+        pending,
+    )
     return {
         "algorithm": "isolation_forest",
         "dataset_version": dataset["version"],
@@ -216,9 +228,11 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
         "training_score_summary": summary,
         "runtime": {
             "model_format": "joblib",
+            "artifact_schema": "if_model_with_preprocessing_v1",
             "loading": "trusted_worker_only",
             "feature_dtypes": feature_dtypes,
-            "feature_reference_medians": np.median(matrix, axis=0).tolist(),
+            "feature_reference_medians": list(preprocessing.medians),
+            "preprocessing_mode": "train_median_v1",
             "training_selection": selection,
             "python": platform.python_version(),
             "numpy": np.__version__,
