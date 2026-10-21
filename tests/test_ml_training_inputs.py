@@ -840,3 +840,45 @@ def test_canonical_duckdb_spill_quota_failure_has_storage_error(monkeypatch, tmp
         )
     assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
     assert list(stage.iterdir()) == []
+
+
+@pytest.mark.parametrize("seed", [0, 17, 2**32 - 1])
+def test_canonical_duckdb_v1_equivalence_at_numeric_precision_boundaries(monkeypatch, seed):
+    import hashlib
+
+    i = np.arange(4096) % 13
+    floats32 = np.array([-0.0, 0.0, -1.25, 0.375, 42.5], dtype=np.float32)
+    floats64 = np.array([-1e300, -1e-300, -0.0, 0.0, 1e-300, 1e300], dtype=np.float64)
+    signed = np.array([-(2**53), -(2**53 - 1), -1, 0, 1, 2**53 - 1, 2**53], dtype=np.int64)
+    unsigned = np.array([0, 1, 2**53 - 1, 2**53], dtype=np.uint64)
+    frame = pl.DataFrame({
+        "u64": unsigned[i % len(unsigned)],
+        "f32": floats32[i % len(floats32)],
+        "i64": signed[i % len(signed)],
+        "f64": floats64[i % len(floats64)],
+    })
+    features = ["u64", "f32", "i64", "f64"]
+    rows = 1000
+    canonical = frame.with_columns(
+        pl.when(pl.col(name) == 0)
+        .then(pl.lit(0.0, dtype=frame.schema[name]))
+        .otherwise(pl.col(name))
+        .alias(name)
+        for name in ("f32", "f64")
+    ).sort(features).select(features)
+    sorted_values = np.asarray(canonical.to_numpy(), dtype=np.float64)
+    priorities = np.random.default_rng(seed).integers(
+        0, np.iinfo(np.uint64).max, size=len(sorted_values), dtype=np.uint64
+    )
+    picked = sorted_values[np.argpartition(priorities, rows - 1)[:rows]]
+    expected = np.ascontiguousarray(picked[np.lexsort(picked.T[::-1])])
+    sha = hashlib.sha256(expected.tobytes()).hexdigest()
+
+    for candidate in (frame, frame.reverse()):
+        bind_frame(monkeypatch, candidate)
+        actual, evidence = ml_training.training_matrix(
+            None, {}, features, input_policy=sample(rows, seed), worker_memory_mib=256
+        )
+        np.testing.assert_array_equal(actual, expected)
+        assert evidence["selection_sha256"] == sha
+        assert evidence["method"] == TRAINING_SELECTION_CURRENT
