@@ -133,7 +133,7 @@ def canonical_sorted_batches(
             result_reader = conn.execute(
                 f"SELECT {columns} FROM read_parquet(?) ORDER BY {columns}",
                 [str(staged_file)],
-            ).fetch_record_batch(rows_per_batch=chunk_rows)
+            ).to_arrow_reader(batch_size=chunk_rows)
             for batch in result_reader:
                 yield pl.from_arrow(batch)
         except (duckdb.OutOfMemoryException, duckdb.IOException) as exc:
