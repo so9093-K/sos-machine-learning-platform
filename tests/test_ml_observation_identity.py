@@ -37,7 +37,7 @@ def test_observation_uuid_preserved_across_batches(scoring_env, tmp_path):
     assert values["observation_id"][0] == observation_uuid(0)
     assert values["observation_id"][-1] == observation_uuid(n - 1)
     assert values["row_index"].to_list() == list(range(n))
-    assert all(len(batch) <= ml_scoring.SCORING_BATCH_ROWS for batch in scorer.batch_lengths)
+    assert all(batch <= ml_scoring.SCORING_BATCH_ROWS for batch in scorer.batch_lengths)
     assert "user_name" not in values.columns
     assert "host_ip" not in values.columns
     assert "private-name" not in str(summary)
