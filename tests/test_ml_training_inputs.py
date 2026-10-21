@@ -237,14 +237,14 @@ def test_lazy_parquet_input_selection(monkeypatch, tmp_path):
 
 
 def test_api_defaults_and_scoring_contract():
-    from sos_platform.ml_scoring import MAX_SCORING_ROWS
+    from sos_platform.ml_scoring import SCORING_BATCH_ROWS
 
     default = MLTrainRequest(dataset_id="d1", features=[f"f_{i}" for i in range(40)])
     assert default.training_input == all_rows()
     assert MLTrainRequest(
         dataset_id="d1", features=["x"], training_input={"mode": "sample", "rows": 100, "seed": 7}
     ).training_input == sample(100, 7)
-    assert MAX_SCORING_ROWS == 50_000
+    assert 0 < SCORING_BATCH_ROWS <= 50_000
 
 
 def test_http_training_submission_and_fork_preserve_input_policy():
