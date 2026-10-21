@@ -23,7 +23,8 @@ from .ml_input import (
 )
 from .ml_isolation_forest import IsolationForestConfig, train_isolation_forest
 from .ml_sampling import canonical_sorted_batches
-from .schemas import MLTrainingInputPolicy
+from .ml_temporal_split import split_training_source
+from .schemas import MLTemporalSplitSpec, MLTrainingInputPolicy
 
 
 def training_matrix(
@@ -34,6 +35,8 @@ def training_matrix(
     input_policy: MLTrainingInputPolicy,
     worker_memory_mib: int | None = None,
     selection_algorithm_version: str = TRAINING_SELECTION_CURRENT,
+    missing_policy: str = "reject",
+    temporal_split: MLTemporalSplitSpec | None = None,
 ) -> tuple[np.ndarray, dict]:
     """명시된 입력 정책을 Worker 예산에서 처리한다.
 
@@ -54,6 +57,10 @@ def training_matrix(
     """
     if not features or len(set(features)) != len(features):
         raise ValueError("Training features must be nonempty and distinct")
+    if missing_policy not in ("reject", "train_median"):
+        raise ValueError("Unsupported training missing policy")
+    if temporal_split is not None and temporal_split.timestamp_column in features:
+        raise ValueError("Temporal split timestamp cannot be a training feature")
     if selection_algorithm_version not in (
         TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
     ):
@@ -85,7 +92,15 @@ def training_matrix(
     source_rows = 0
     rng = np.random.default_rng(input_policy.seed) if sampled else None
 
+    temporal_evidence = None
     with pinned_scan_dataset(store, dataset) as source:
+        if temporal_split is not None:
+            source, temporal_evidence = split_training_source(
+                source,
+                timestamp_column=temporal_split.timestamp_column,
+                train_end=temporal_split.train_end,
+                calibration_end=temporal_split.calibration_end,
+            )
         schema = source.collect_schema()
         if any(name not in schema for name in features):
             raise ValueError("Unknown training feature")
@@ -105,7 +120,7 @@ def training_matrix(
                 if not sampled and source_rows > capacity_rows:
                     # 전체 사용 정책을 메모리 사정에 따라 조용히 부분집합으로 변경하지 않는다.
                     raise PlatformError("SOS-ML-TRAIN-CAPACITY")
-                if any(frame.null_count().row(0)):
+                if missing_policy == "reject" and any(frame.null_count().row(0)):
                     raise ValueError("Training features contain null values")
                 for name in features:
                     if schema[name] in INTEGER_DTYPES:
@@ -113,8 +128,10 @@ def training_matrix(
                         if values.max() > 2**53 or values.min() < -(2**53):
                             raise ValueError("Integer feature exceeds the exact float64 range")
                 matrix = np.asarray(frame.to_numpy(), dtype=np.float64)
-                if not np.isfinite(matrix).all():
+                if missing_policy == "reject" and not np.isfinite(matrix).all():
                     raise ValueError("Training features must be finite numeric values")
+                if missing_policy == "train_median" and np.isinf(matrix).any():
+                    raise ValueError("Training features contain infinity")
                 priority = (
                     rng.integers(0, np.iinfo(np.uint64).max, size=frame.height, dtype=np.uint64)
                     if rng is not None
@@ -176,6 +193,8 @@ def training_matrix(
         "seed": input_policy.seed,
         "selection_sha256": hashlib.sha256(selected.tobytes()).hexdigest(),
     }
+    if temporal_evidence is not None:
+        selection["temporal_split"] = temporal_evidence
     return selected, selection
 
 
@@ -188,8 +207,15 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
     features = spec["features"]
     config = IsolationForestConfig(**spec["params"])
     input_policy = MLTrainingInputPolicy.model_validate(spec.get("training_input", {}))
+    temporal_spec = (
+        MLTemporalSplitSpec.model_validate(spec["temporal_split"])
+        if spec.get("temporal_split") is not None else None
+    )
+    missing_policy = spec.get("missing_policy", "reject")
     matrix, selection = training_matrix(
         store, dataset, features, input_policy=input_policy,
+        missing_policy=missing_policy,
+        temporal_split=temporal_spec,
         # 정책/알고리즘 버전은 제출된 Job에 고정한다. 이 필드가 없는 기존
         # Job은 전환 이전의 읽기 순서 기반 선택으로 실행한다.
         selection_algorithm_version=spec.get(
@@ -199,8 +225,7 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
     with pinned_scan_dataset(store, dataset) as source:
         schema = source.collect_schema()
         feature_dtypes = [str(schema[name]) for name in features]
-    # 아직 유한 숫자 입력만 받는 기존 Training 계약은 유지한다.
-    # 전처리 상태를 함께 고정하면 별도 Scoring Worker도 동일 기준을 사용할 수 있다.
+    # 결측 정책이 허용된 Train 입력에만 중앙값을 Fit하고 이후 모델 판본에 고정한다.
     preprocessing = fit_if_median_imputer(matrix, feature_names=features)
     transformed = preprocessing.transform(matrix, feature_names=features)
     model = train_isolation_forest(transformed, config)
@@ -233,6 +258,7 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
             "feature_dtypes": feature_dtypes,
             "feature_reference_medians": list(preprocessing.medians),
             "preprocessing_mode": "train_median_v1",
+            "training_missing_policy": missing_policy,
             "training_selection": selection,
             "python": platform.python_version(),
             "numpy": np.__version__,
