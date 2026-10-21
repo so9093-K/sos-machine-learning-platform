@@ -4,6 +4,8 @@
 >
 > 연구, ML 실행, 외부 서비스 활용을 연결하는 확장 가능한 머신러닝 플랫폼.
 
+![외부 연구에서 SOS 실행·연구·운영·모델 사용 경험과 피드백까지 연결하는 장기 제품 비전](references/15-research-to-model-experience.png)
+
 ## 1. 제품 정체성
 
 ![Research Platform · ML Execution Platform · ML Service Platform](references/02-platform-pillars.png)
@@ -27,6 +29,8 @@ SOS의 중심 책임은 **모델의 실행·평가·불변 판본·배포·추�
 ![SOS 플랫폼의 기능적 책임 영역 — Data, Research & Experiment, Model Operations, Activity & Jobs](references/11-platform-capability-areas.png)
 
 그림은 Research Platform·ML Execution Platform·ML Service Platform이라는 제품 정체성을 대체하지 않는다. 공통 계약 위에서 Data Explorer·Data Preparation, 연구·실험, 모델 운영, 작업·이력 관리가 맡는 **기능적 책임**을 설명한다. 고정된 화면 메뉴, 독립 서비스의 수, 필수 실행 순서 또는 현재 기능 구현 완료를 의미하지 않는다.
+
+![외부 연구·모델 파이프라인을 SOS 실행·관리 및 모델 활용 경험에 연결하는 End-to-End 능력 개념도](references/16-research-to-model-consumption-capabilities.png)
 
 ### 공통 접근·독립 기능·선택적 조합
 
