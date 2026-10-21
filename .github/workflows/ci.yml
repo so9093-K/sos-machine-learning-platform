@@ -36,8 +36,8 @@ jobs:
             path="/tmp/pr33/input.parquet"
             uv run --locked python scripts/_pr33_duckdb_temp.py generate "$rows" "$features" "$path"
             if [ "$features" -eq 63 ]; then
-              uv run --locked python scripts/_pr33_duckdb_temp.py train "$rows" "$features" "$path"
               uv run --locked python scripts/_pr33_stage_temp.py
+              uv run --locked python scripts/_pr33_duckdb_temp.py train "$rows" "$features" "$path"
             fi
             uv run --locked python scripts/_pr33_duckdb_temp.py measure "$rows" "$features" "$path"
             rm -f "$path"
