@@ -37,7 +37,7 @@ def generate(path: Path, rows: int, features: int) -> None:
     print(f"GENERATED rows={rows} features={features} bytes={path.stat().st_size}", flush=True)
 
 
-def measure(path: Path, rows: int, features: int) -> None:
+def measure(path: Path, rows: int, features: int, train: bool = False) -> None:
     names = [f"f{i}" for i in range(features)]
     policy = MLTrainingInputPolicy.model_validate({"mode":"sample","rows":100000,"seed":11})
     ml_training.pinned_scan_dataset = lambda *_args: contextlib.nullcontext(pl.scan_parquet(path))
@@ -69,19 +69,35 @@ def measure(path: Path, rows: int, features: int) -> None:
         thread.start()
         start = time.perf_counter()
         try:
-            selected, evidence = ml_training.training_matrix(
-                None, {"version": "benchmark"}, names, input_policy=policy,
-                worker_memory_mib=2048,
-            )
+            if train:
+                output = Path(stage).parent / "pr33-trained-model.joblib"
+                spec = {
+                    "algorithm": "isolation_forest",
+                    "dataset_version": "benchmark",
+                    "features": names,
+                    "params": {"n_estimators": 100, "random_state": 42},
+                    "training_input": policy.model_dump(),
+                    "selection_algorithm_version": "canonical_multiset_v1",
+                }
+                result = ml_training.train_dataset(None, {"version": "benchmark"}, spec, output)
+                selected_rows = result["training_rows"]
+                evidence = result["training_selection"]
+                output.unlink(missing_ok=True)
+            else:
+                selected, evidence = ml_training.training_matrix(
+                    None, {"version": "benchmark"}, names, input_policy=policy,
+                    worker_memory_mib=2048,
+                )
+                selected_rows = len(selected)
         finally:
             stop.set()
             thread.join()
         elapsed = time.perf_counter() - start
         actual = evidence["selection_sha256"]
         assert actual == EXPECTED[(rows,features)], (actual, EXPECTED[(rows,features)])
-        assert selected.shape == (100000, features)
+        assert selected_rows == 100000
         print(
-            f"RESULT rows={rows} features={features} elapsed_s={elapsed:.3f} "
+            f"RESULT action={'train' if train else 'measure'} rows={rows} features={features} elapsed_s={elapsed:.3f} "
             f"peak_rss_mib={peaks['rss'] / (1024**2):.1f} "
             f"peak_stage_mib={peaks['disk'] / (1024**2):.1f} "
             f"ru_maxrss_mib={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024:.1f} "
@@ -95,7 +111,7 @@ def measure(path: Path, rows: int, features: int) -> None:
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument("action", choices=["generate", "measure"])
+    parser.add_argument("action", choices=["generate", "measure", "train"])
     parser.add_argument("rows", type=int)
     parser.add_argument("features", type=int)
     parser.add_argument("path", type=Path)
@@ -103,7 +119,7 @@ def main():
     if args.action=="generate":
         generate(args.path,args.rows,args.features)
     else:
-        measure(args.path,args.rows,args.features)
+        measure(args.path,args.rows,args.features,train=args.action=='train')
 
 
 if __name__ == "__main__":
