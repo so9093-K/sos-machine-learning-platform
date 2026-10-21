@@ -2,6 +2,9 @@
 
 import hashlib
 import json
+import signal
+import subprocess
+import sys
 import os
 import tempfile
 import threading
@@ -35,7 +38,7 @@ def check(job: dict, expected: str) -> None:
 
 
 
-def exercise_interruption_and_capacity(store: Store, base: Path) -> None:
+def exercise_interruption_and_capacity(store: Store, base: Path) -> tuple[str, list[str]]:
     """하나의 실제 Iceberg Snapshot에서 취소와 Stage 초과를 별도 Attempt로 확인."""
     file = base / "wide.parquet"
     width, rows = 48, 390_000
@@ -129,6 +132,83 @@ def exercise_interruption_and_capacity(store: Store, base: Path) -> None:
         f"attempt={failed['attempts'][-1]['id']}",
         flush=True,
     )
+    return pinned["id"], columns
+
+
+def exercise_worker_recovery(store: Store, pinned_id: str, features: list[str], base: Path) -> None:
+    """실제 Worker 부모 SIGKILL 뒤 이전 Attempt의 정리·새 Attempt 재실행."""
+    assert store._worker_lock is None
+    os.environ["SOS_WORKER_MAX_STAGE_MIB"] = "2048"
+    dataset = store.get_dataset(pinned_id)
+    job = store.create_job(
+        kind="ml_train", dataset_id=pinned_id,
+        spec={
+            "algorithm": "isolation_forest",
+            "dataset_version": dataset["version"],
+            "features": features,
+            "params": {"n_estimators": 20, "random_state": 42},
+            "training_input": {"mode": "sample", "rows": 100000, "seed": 117},
+            "selection_algorithm_version": TRAINING_SELECTION_CURRENT,
+        },
+    )
+    cmd = [sys.executable, "-m", "sos_platform.worker", "--once", "--home", str(store.home)]
+    first_log = base / "worker-killed.log"
+    with first_log.open("w", encoding="utf-8") as output:
+        first = subprocess.Popen(cmd, stdout=output, stderr=subprocess.STDOUT)
+        first_attempt = None
+        try:
+            deadline = time.monotonic() + 100
+            while time.monotonic() < deadline:
+                current = store.get_job(job["id"])
+                if current["status"] == "Running" and current["attempts"]:
+                    attempt = current["attempts"][-1]["id"]
+                    if training_stage_bytes(store.home, attempt) > 2 * 1024 * 1024:
+                        first_attempt = attempt
+                        break
+                if current["status"] in ("Succeeded", "Failed", "Cancelled"):
+                    raise AssertionError("Worker finished before parent SIGKILL")
+                if first.poll() is not None:
+                    raise AssertionError("Worker exited early: " + first_log.read_text()[-3000:])
+                time.sleep(0.025)
+            assert first_attempt, "No active DuckDB Stage after 100 seconds"
+
+            # 기존 Worker가 소유한 advisory lock을 두 번째 Worker가 우회할 수 없다.
+            competitor = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            assert competitor.returncode != 0, competitor.stdout
+            assert "Another worker already owns" in competitor.stderr + competitor.stdout
+            assert len(store.get_job(job["id"])["attempts"]) == 1
+            print("REAL_INTEGRATION WORKER_LOCK_EXCLUSIVE", flush=True)
+
+            os.kill(first.pid, signal.SIGKILL)
+            first.wait(timeout=10)
+            assert first.returncode < 0
+            print(f"REAL_INTEGRATION PARENT_KILLED attempt={first_attempt}", flush=True)
+        finally:
+            if first.poll() is None:
+                first.kill()
+                first.wait(timeout=10)
+    assert store.get_job(job["id"])["status"] == "Running"
+    second = subprocess.run(cmd, capture_output=True, text=True, timeout=150)
+    print("REAL_INTEGRATION RECOVERY_WORKER_EXIT=" + str(second.returncode), flush=True)
+    if second.returncode != 0:
+        print("REAL_INTEGRATION RECOVERY_LOG=" + (second.stdout + second.stderr)[-5000:], flush=True)
+    assert second.returncode == 0, second.stdout + second.stderr
+    recovered = store.get_job(job["id"])
+    check_recovery = [(x["status"], x["id"]) for x in recovered["attempts"]]
+    assert recovered["status"] == "Succeeded", json.dumps(recovered, default=str)[:5000]
+    assert len(check_recovery) == 2, check_recovery
+    assert check_recovery[0] == ("Interrupted", first_attempt), check_recovery
+    assert check_recovery[1][0] == "Succeeded", check_recovery
+    assert not training_stage_path(store.home, first_attempt).exists()
+    assert not training_stage_path(store.home, check_recovery[1][1]).exists()
+    revision_id = recovered["result"]["model_revision_id"]
+    rev = store.get_model_revision(revision_id)
+    assert rev["attempt_id"] == check_recovery[1][1]
+    print(
+        f"REAL_INTEGRATION RECOVERED old_attempt={first_attempt} "
+        f"new_attempt={check_recovery[1][1]} revision={revision_id}",
+        flush=True,
+    )
 
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="pr33-e2e-") as tmp:
@@ -204,7 +284,9 @@ def main() -> None:
                 f"sha256={proof['selection_sha256']}",
                 flush=True,
             )
-            exercise_interruption_and_capacity(store, Path(tmp))
+            wide_id, wide_features = exercise_interruption_and_capacity(store, Path(tmp))
+            store.release_worker()
+            exercise_worker_recovery(store, wide_id, wide_features, Path(tmp))
         finally:
             store.release_worker()
             store.engine.dispose()
