@@ -86,7 +86,10 @@ def canonical_sorted_batches(
         )
 
     columns = ", ".join(_quoted(name) for name in features)
-    duckdb_mib = max(128, min(512, budget_mib // 4))
+    # 작은 Worker에서는 현재 실행 특성을 보존한다. 큰 Worker는 검증된 범위에서
+    # 정렬 Buffer와 병렬성을 늘리되, 나머지 메모리는 Reader·모델에 남겨둔다.
+    duckdb_mib = max(128, min(1024, budget_mib // 4))
+    sort_threads = 2 if duckdb_mib >= 1024 else 1
     with TemporaryDirectory(prefix="canonical-sort-", dir=root) as directory:
         stage = Path(directory)
         staged_file = stage / "input.parquet"
@@ -107,7 +110,7 @@ def canonical_sorted_batches(
                 database=":memory:",
                 config={
                     "memory_limit": f"{duckdb_mib}MiB",
-                    "threads": "1",
+                    "threads": str(sort_threads),
                     "temp_directory": str(stage / "spill"),
                     "max_temp_directory_size": f"{remaining_bytes // _MIB}MiB",
                     "allow_community_extensions": "false",
