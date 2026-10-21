@@ -180,3 +180,61 @@ def test_api_request_disallows_train_partition_and_naive_boundaries():
     bad["train_end"] = "2026-01-01T04:00:00"
     with pytest.raises(ValidationError):
         MLScoringRequest(model_revision_id="m", dataset_id="d", temporal_scope=bad)
+
+ 
+
+def test_all_missing_nullable_integer_scoring_chunk_is_valid(scoring_env, monkeypatch, tmp_path):
+    """Train에서 결측 대체를 학습한 모델은 전체 null Integer Batch도 처리한다."""
+    store, model, dataset, _, frames = scoring_env
+    model["runtime"]["feature_dtypes"] = ["Int64"]
+    frames[0] = pl.DataFrame({"count": pl.Series([None, None], dtype=pl.Int64)})
+
+    class NullSafeScorer(RecordingScorer):
+        def score_anomalies(self, features):
+            self.batch_lengths.append(len(features))
+            return tuple(float(x) for x in np.nan_to_num(features[:, 0], nan=0.0))
+
+    monkeypatch.setattr(
+        ml_scoring, "load_trusted_isolation_forest",
+        lambda _model, _cache: NullSafeScorer(),
+    )
+    result = ml_scoring.run_dataset_scoring(store, dataset, spec(), tmp_path / "emptyints.parquet")
+    assert result["row_count"] == 2
+    assert pl.read_parquet(tmp_path / "emptyints.parquet")["anomaly_score"].to_list() == [0.0, 0.0]
+
+
+def test_policy_only_loads_scores_not_full_feature_vectors(scoring_env, monkeypatch, tmp_path):
+    """대용량 결과의 Policy/Evaluation은 Feature 구조를 메모리에 적재하지 않는다."""
+    import hashlib
+    import shutil
+
+    from sos_platform import ml_decision
+
+    store, _, dataset, _, frames = scoring_env
+    frames[0] = pl.DataFrame({"count": np.arange(20_021, dtype=np.float64)})
+    file = tmp_path / "scores.parquet"
+    result = ml_scoring.run_dataset_scoring(store, dataset, spec(), file)
+    key = "results/score-job/attempt-1.scores.parquet"
+
+    class LocalStorage:
+        def location(self, requested):
+            return f"mock://{requested}"
+
+        def get(self, requested, destination, *, expected_sha256):
+            assert requested == key
+            assert hashlib.sha256(file.read_bytes()).hexdigest() == expected_sha256
+            shutil.copyfile(file, destination)
+
+    monkeypatch.setattr(ml_decision, "ObjectStore", lambda: LocalStorage())
+    (tmp_path / "cache").mkdir()
+    scoring = {
+        "id": "scoring-a", "job_id": "score-job", "attempt_id": "attempt-1",
+        "location": f"mock://{key}", "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
+        "row_count": result["row_count"], "owner_actor": "researcher",
+    }
+    narrow = ml_decision._verified_scoring(store, scoring)
+    assert narrow.columns == ["row_index", "anomaly_score"]
+    assert narrow.height == 20_021
+    full = ml_decision._verified_scoring(store, scoring, include_features=True)
+    assert "features" in full.columns
+    assert full.height == narrow.height
