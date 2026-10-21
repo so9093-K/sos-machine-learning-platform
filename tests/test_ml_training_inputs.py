@@ -665,32 +665,22 @@ def test_canonical_v1_remains_exactly_replayable(monkeypatch):
     np.testing.assert_array_equal(matrix[:, 0], np.sort(values[chosen]))
     assert evidence["algorithm_version"] == TRAINING_SELECTION_CANONICAL_V1
 
-
-def test_streaming_canonical_sample_keeps_independent_duplicate_observations(monkeypatch):
-    # 관측 분포를 정렬/고유값 단위로 재해석하거나 중복을 제거하지 않는다.
+def test_duckdb_canonical_sample_keeps_independent_duplicate_observations(monkeypatch):
+    # 정렬 구현이 중복 관측의 빈도를 변경하지 않는다.
     values = np.array([0.0] * 9000 + [1.0] * 1000)
-    selection = sample(1800, 29)
     outputs = []
-    for frame in (
-        pl.DataFrame({"signal": values}),
-        pl.DataFrame({"signal": values[::-1].copy()}),
-    ):
+    for frame in (pl.DataFrame({"signal": values}), pl.DataFrame({"signal": values[::-1].copy()})):
         bind_frame(monkeypatch, frame)
-        outputs.append(
-            ml_training.training_matrix(
-                None, {}, ["signal"], input_policy=selection,
-                worker_memory_mib=8,
-            )
-        )
+        outputs.append(ml_training.training_matrix(
+            None, {}, ["signal"], input_policy=sample(1800, 29), worker_memory_mib=8
+        ))
     np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
     assert outputs[0][1] == outputs[1][1]
     assert 0.84 < np.mean(outputs[0][0][:, 0] == 0.0) < 0.96
 
 
-def test_streaming_canonical_rejects_invalid_values_and_preserves_stage(monkeypatch, tmp_path):
-    from sos_platform.errors import PlatformError
-
-    # 오류가 난 입력 스캔도 직접 생성한 SQLite 임시 파일을 남기지 않는다.
+def test_duckdb_canonical_rejects_invalid_values_and_cleans_stage(monkeypatch, tmp_path):
+    # 입력의 잘못된 값과 스테이징 초과 모두 Attempt 디렉터리를 정리한다.
     stage = tmp_path / "attempt-stage"
     stage.mkdir()
     monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
@@ -714,147 +704,53 @@ def test_streaming_canonical_rejects_invalid_values_and_preserves_stage(monkeypa
     assert list(stage.iterdir()) == []
 
 
-def test_streaming_v2_sample_same_in_different_parquet_layouts(monkeypatch, tmp_path):
-    # 고유값이 다수이고 중복도 존재하는 별도 Parquet 두 파일의 표본은 동일.
-    columns = {
-        "f1": np.repeat(np.arange(2000.0), 3),
+def test_duckdb_canonical_same_in_reordered_parquet_layouts(monkeypatch, tmp_path):
+    # 서로 다른 물리 배치, Float32, 중복 관측, Signed Zero.
+    source = pl.DataFrame({
+        "f1": np.repeat(np.arange(2000.0), 3).astype(np.float32),
         "f2": np.tile([0.0, -0.0, 1.0], 2000),
-    }
-    original = pl.DataFrame(columns)
+    })
     paths = [tmp_path / "a.parquet", tmp_path / "b.parquet"]
-    original.write_parquet(paths[0])
-    original.reverse().write_parquet(paths[1])
-    matrices = []
-    fingerprints = []
+    source.write_parquet(paths[0])
+    source.reverse().write_parquet(paths[1])
+    outputs = []
     for path in paths:
         bind_frame(monkeypatch, pl.scan_parquet(path))
-        matrix, evidence = ml_training.training_matrix(
-            None, {}, ["f1", "f2"], input_policy=sample(500, 11),
-            worker_memory_mib=8,
-        )
-        matrices.append(matrix)
-        fingerprints.append(evidence["selection_sha256"])
-    np.testing.assert_array_equal(matrices[0], matrices[1])
-    assert fingerprints[0] == fingerprints[1]
-
-
-def test_streaming_large_hash_bucket_falls_back_to_bounded_disk_grouping(monkeypatch, tmp_path):
-    from sos_platform import ml_sampling
-
-    # 파티션이 제한을 넘더라도 대량 중복 관측과 고유값을 정확히 합친다.
-    monkeypatch.setattr(ml_sampling, "_PARTITION_MEMORY_BYTES", 64)
-    stage = tmp_path / "attempt-stage"
-    stage.mkdir()
-    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
-    source = pl.DataFrame({
-        "x": np.repeat(np.arange(900.0), 6),
-        "y": np.tile([0.0, 1.0, 0.0, 1.0, 0.0, 1.0], 900),
-    })
-    outputs = []
-    for frame in [source, source.reverse()]:
-        bind_frame(monkeypatch, frame)
-        matrix, evidence = ml_training.training_matrix(
-            None, {}, ["x", "y"], input_policy=sample(750, 13),
-            worker_memory_mib=8,
-        )
-        outputs.append((matrix, evidence))
-        assert list(stage.iterdir()) == []
+        outputs.append(ml_training.training_matrix(
+            None, {}, ["f1", "f2"], input_policy=sample(500, 11), worker_memory_mib=8
+        ))
     np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
     assert outputs[0][1] == outputs[1][1]
 
 
-def test_streaming_hash_bucket_sample_exact_logical_occurrence_reference(monkeypatch):
+def test_duckdb_v1_matches_original_polars_sort_and_seed(monkeypatch, tmp_path):
     import hashlib
 
-    # 독립적인 BLAKE2b 128-bit 논리적 관측 기준 구현과 비교한다.
-    values = np.array([1.0, 1.0, 1.0, 2.0, 4.0, 4.0, 8.0, 16.0])
-    rows, seed = 4, 99
-    bind_frame(monkeypatch, pl.DataFrame({"x": values[::-1].copy()}))
-    matrix, _ = ml_training.training_matrix(
-        None, {}, ["x"], input_policy=sample(rows, seed), worker_memory_mib=8
+    rng = np.random.default_rng(1729)
+    values = np.array([0.0, -0.0, 1.5, -1.25, 3.75], dtype=np.float32)
+    frame = pl.DataFrame({
+        "z": rng.choice(values, size=15_001),
+        "x": rng.integers(-300, 300, size=15_001, dtype=np.int64),
+        "y": rng.choice([0.0, -0.0, 1.0, 2.0], size=15_001),
+    })
+    path = tmp_path / "mixed.parquet"
+    frame.write_parquet(path)
+    bind_frame(monkeypatch, pl.scan_parquet(path))
+    rows, seed = 1700, 23
+    actual, evidence = ml_training.training_matrix(
+        None, {}, ["z", "x", "y"], input_policy=sample(rows, seed), worker_memory_mib=32
     )
-    priorities = []
-    for feature in np.unique(values):
-        key = np.array([feature], dtype="<f8").tobytes()
-        for ordinal in range(int(np.count_nonzero(values == feature))):
-            p = hashlib.blake2b(
-                key + ordinal.to_bytes(8, "little") + seed.to_bytes(4, "little"),
-                digest_size=16, person=b"SOS-SAMPLE-V2",
-            ).digest()
-            priorities.append((int.from_bytes(p, "little"), feature))
-    priorities.sort()
-    np.testing.assert_array_equal(matrix[:, 0], np.sort([
-        item[1] for item in priorities[:rows]
-    ]))
 
-def test_streaming_sqlite_budget_counts_only_additional_disk_usage(tmp_path):
-    from sos_platform import ml_sampling
-    from sos_platform.errors import PlatformError
-
-    # 파티션 파일 크기는 호출자가 이미 예약했으므로 SQLite 추가분만 비교한다.
-    path = tmp_path / "bucket-000.bin"
-    counts = {index.to_bytes(8, "little"): index % 3 + 1 for index in range(400)}
-    path.write_bytes(b"".join(
-        key + count.to_bytes(8, "little") for key, count in counts.items()
-    ))
-    database = path.with_suffix(".sqlite3")
-
-    groups = ml_sampling._groups(path, 8, 1, 1024 * 1024)
-    first = next(groups)
-    database_bytes = database.stat().st_size
-    assert dict([first, *groups]) == counts
-    assert not database.exists()
-    assert database_bytes > 0
-
-    # 기존 구현은 기존 파티션 크기를 여기서 다시 더해 잘못 실패했다.
-    assert dict(ml_sampling._groups(path, 8, 1, database_bytes)) == counts
-    assert not database.exists()
-
-    with pytest.raises(PlatformError) as exc:
-        list(ml_sampling._groups(path, 8, 1, database_bytes - 1))
-    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
-    assert not database.exists()
-
-
-def test_streaming_partition_writes_once_per_batch(monkeypatch, tmp_path):
-    from pathlib import Path
-
-    from sos_platform import ml_sampling
-
-    # 동일 파티션에 고유 관측 16,384개가 있어도 쓰기는 배치당 한 번이다.
-    stage = tmp_path / "attempt-stage"
-    stage.mkdir()
-    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
-    monkeypatch.setattr(ml_sampling, "_BUCKETS", 1)
-    original_open = Path.open
-    write_lengths = []
-
-    class CountingWriter:
-        def __init__(self, stream):
-            self.stream = stream
-
-        def __enter__(self):
-            self.stream.__enter__()
-            return self
-
-        def __exit__(self, *args):
-            return self.stream.__exit__(*args)
-
-        def write(self, value):
-            write_lengths.append(len(value))
-            return self.stream.write(value)
-
-    def counting_open(path, *args, **kwargs):
-        stream = original_open(path, *args, **kwargs)
-        if path.name.startswith("bucket-") and args and args[0] == "ab":
-            return CountingWriter(stream)
-        return stream
-
-    monkeypatch.setattr(Path, "open", counting_open)
-    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(16384.0)}))
-    matrix, _ = ml_training.training_matrix(
-        None, {}, ["x"], input_policy=sample(100, 17), worker_memory_mib=8
+    source = frame.with_columns(
+        pl.when(pl.col(name) == 0).then(pl.lit(0.0)).otherwise(pl.col(name)).alias(name)
+        for name in ("z", "y")
+    ).sort(["z", "x", "y"])
+    full = np.asarray(source.select(["z", "x", "y"]).to_numpy(), dtype=np.float64)
+    priorities = np.random.default_rng(seed).integers(
+        0, np.iinfo(np.uint64).max, size=len(full), dtype=np.uint64
     )
-    assert matrix.shape == (100, 1)
-    assert write_lengths == [8192 * 16, 8192 * 16]
-    assert list(stage.iterdir()) == []
+    selected = full[np.argpartition(priorities, rows - 1)[:rows]]
+    selected = np.ascontiguousarray(selected[np.lexsort(selected.T[::-1])])
+    np.testing.assert_array_equal(actual, selected)
+    assert evidence["selection_sha256"] == hashlib.sha256(selected.tobytes()).hexdigest()
+    assert evidence["algorithm_version"] == TRAINING_SELECTION_CANONICAL_V1
