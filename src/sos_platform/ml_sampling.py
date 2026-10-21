@@ -87,6 +87,8 @@ def _groups(
         if path.stat().st_size + database.stat().st_size > stage_limit:
             raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
         yield from connection.execute("SELECT value, occurrences FROM counts")
+    # 파티션별 디스크 집계가 끝나면 다음 파티션 이전에 여유 공간 회수.
+    database.unlink(missing_ok=True)
 
 
 def streaming_canonical_sample(
