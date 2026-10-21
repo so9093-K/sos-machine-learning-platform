@@ -30,8 +30,9 @@ def generate(path: Path, nrows: int, width: int) -> None:
     print(f"GENERATED rows={nrows} width={width} bytes={path.stat().st_size}", flush=True)
 
 
-def run(path: Path, nrows: int, width: int, memory: int, variant: str) -> None:
+def run(path: Path, nrows: int, width: int, memory: int, variant: str, train: bool = False) -> None:
     os.environ["SOS_WORKER_MAX_STAGE_MIB"] = "2048"
+    os.environ["SOS_WORKER_MAX_RSS_MIB"] = str(memory)
     names = [f"f{i}" for i in range(width)]
     ml_training.pinned_scan_dataset = lambda *_args: contextlib.nullcontext(pl.scan_parquet(path))
     expected = {
@@ -87,13 +88,31 @@ def run(path: Path, nrows: int, width: int, memory: int, variant: str) -> None:
         t0 = time.perf_counter()
         status, sha = "success", ""
         try:
-            matrix, evidence = ml_training.training_matrix(
-                None, {"version": "benchmark"}, names,
-                input_policy=MLTrainingInputPolicy(mode="sample", rows=100000, seed=11),
-                worker_memory_mib=memory,
-            )
+            policy = MLTrainingInputPolicy(mode="sample", rows=100000, seed=11)
+            if train:
+                pending = Path(work) / "trained.joblib"
+                spec = {
+                    "algorithm": "isolation_forest",
+                    "dataset_version": "benchmark",
+                    "features": names,
+                    "params": {"n_estimators": 100, "random_state": 42},
+                    "training_input": policy.model_dump(),
+                    "selection_algorithm_version": "canonical_multiset_v1",
+                }
+                outcome = ml_training.train_dataset(
+                    None, {"version": "benchmark"}, spec, pending
+                )
+                evidence = outcome["training_selection"]
+                selected_rows = outcome["training_rows"]
+                assert pending.is_file() and pending.stat().st_size > 0
+            else:
+                matrix, evidence = ml_training.training_matrix(
+                    None, {"version": "benchmark"}, names,
+                    input_policy=policy, worker_memory_mib=memory,
+                )
+                selected_rows = len(matrix)
             sha = evidence["selection_sha256"]
-            if sha != expected or matrix.shape != (100000, width):
+            if sha != expected or selected_rows != 100000:
                 raise AssertionError("Existing v1 selection differs")
         except PlatformError as exc:
             status = exc.code
@@ -107,7 +126,7 @@ def run(path: Path, nrows: int, width: int, memory: int, variant: str) -> None:
         remaining = len(list(stage.iterdir()))
         print(
             f"MEASURE rows={nrows} width={width} budget_mib={memory} "
-            f"variant={variant} duckdb={configs} status={status} "
+            f"variant={variant} train={train} duckdb={configs} status={status} "
             f"time_s={elapsed:.3f} rss_mib={rss:.1f} "
             f"stage_peak_mib={peak['disk']/1024**2:.1f} "
             f"within_logical_rss={rss < memory} sha={sha} stage_left={remaining}",
@@ -124,12 +143,13 @@ def main():
     parser.add_argument("features", type=int)
     parser.add_argument("path", type=Path)
     parser.add_argument("--memory", type=int, default=2048)
+    parser.add_argument("--train", action="store_true")
     parser.add_argument("--variant", choices=["baseline", "scaled", "parallel", "product"], default="baseline")
     args = parser.parse_args()
     if args.action == "generate":
         generate(args.path, args.rows, args.features)
     else:
-        run(args.path, args.rows, args.features, args.memory, args.variant)
+        run(args.path, args.rows, args.features, args.memory, args.variant, train=args.train)
 
 
 if __name__ == "__main__":
