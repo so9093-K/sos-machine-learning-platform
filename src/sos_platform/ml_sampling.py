@@ -91,7 +91,13 @@ def canonical_sorted_batches(
     # 정렬 Buffer와 병렬성을 늘리되, 나머지 메모리는 Reader·모델에 남겨둔다.
     duckdb_mib = max(128, min(1024, budget_mib // 4))
     sort_threads = 2 if duckdb_mib >= 1024 else 1
-    with TemporaryDirectory(prefix="canonical-sort-", dir=root) as directory:
+    try:
+        temporary_stage = TemporaryDirectory(prefix="canonical-sort-", dir=root)
+    except OSError as exc:
+        if _stage_exhausted(exc):
+            raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT") from exc
+        raise
+    with temporary_stage as directory:
         stage = Path(directory)
         staged_file = stage / "input.parquet"
         # Polars의 Streaming Sink로 Reader의 전체 배열을 보유하지 않는다.
