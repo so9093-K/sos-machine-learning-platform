@@ -9,5 +9,4 @@ NUMERIC = INTEGER_DTYPES | frozenset((pl.Float32, pl.Float64))
 
 # Job 제출 시 확정하며, 기존 Job에 버전 필드가 없으면 이전 선택 의미를 보존한다.
 TRAINING_SELECTION_LEGACY = "row_priority_bottom_k_v1"
-TRAINING_SELECTION_CANONICAL_V1 = "canonical_multiset_v1"
-TRAINING_SELECTION_CURRENT = TRAINING_SELECTION_CANONICAL_V1
+TRAINING_SELECTION_CURRENT = "canonical_multiset_v1"
