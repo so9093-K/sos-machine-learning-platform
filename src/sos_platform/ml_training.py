@@ -22,8 +22,8 @@ from .ml_input import (
     TRAINING_SELECTION_LEGACY,
 )
 from .ml_isolation_forest import IsolationForestConfig, train_isolation_forest
-from .schemas import MLTrainingInputPolicy
 from .ml_sampling import streaming_canonical_sample
+from .schemas import MLTrainingInputPolicy
 
 
 def training_matrix(

@@ -7,12 +7,12 @@
 
 import hashlib
 import heapq
-from contextlib import closing
 import os
 import sqlite3
+from collections.abc import Callable
+from contextlib import AbstractContextManager, closing
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Callable, ContextManager
 
 import numpy as np
 import polars as pl
@@ -34,7 +34,7 @@ def _priority(value: bytes, ordinal: int, seed_bytes: bytes) -> int:
 
 def streaming_canonical_sample(
     *,
-    pinned_scan_dataset: Callable[..., ContextManager[pl.LazyFrame]],
+    pinned_scan_dataset: Callable[..., AbstractContextManager[pl.LazyFrame]],
     store: object,
     dataset: dict,
     features: list[str],
