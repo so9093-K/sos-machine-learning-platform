@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Scoring Job에서 미리 생성된 불투명 UUIDv4 관측치 컬럼을 선택적으로 연결할 수 있습니다. 전체·시간 구간별 결과에서 결측·중복·잘못된 ID를 거절하며, 원본 사용자·호스트 정보를 복제하지 않고도 Explanation에 Dataset 판본과 관측치 참조를 제공합니다.
+
 - Scoring에 학습 때 고정한 UTC 시간 분할 기준으로 Calibration/Test 구간을 선택하는 API를 추가했습니다. Batch별 결과를 스트리밍 게시해 종전 50,000행 상한을 제거하고, 전체 Dataset·모델 판본·구간별 행 수를 Scoring 근거로 남기며 Explain 요청의 행 번호 상한도 조정했습니다.
 
 - Decision Policy Revision의 보정 Scoring Result 출처를 유지하면서 호환되는 다른 Scoring Result에도 고정된 판정 기준을 적용할 수 있게 했습니다. 정책과 대상의 모델 판본·점수 의미·소유 권한을 검증하고, 서로 다른 결과라는 이유만으로 독립 Test 성능을 주장하지 않습니다.
