@@ -25,12 +25,16 @@ function statistic(value: unknown): string {
 function trainingSelectionLabel(value: unknown): string {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "학습 입력 근거 미확인";
   if ("method" in value && value.method === "all_rows") return "전체 입력";
-  if ("method" in value && (value.method === "canonical_multiset_v1" ||
+  if ("method" in value && (value.method === "canonical_multiset_v2" ||
+      value.method === "canonical_multiset_v1" ||
       value.method === "row_priority_bottom_k_v1")) {
     const rows = "requested_rows" in value ? value.requested_rows : null;
     const seed = "seed" in value ? value.seed : null;
-    const scope = value.method === "canonical_multiset_v1"
-      ? "순서 독립 부분집합" : "기존 부분집합 (스캔 순서 영향 가능)";
+    const scope = value.method === "canonical_multiset_v2"
+      ? "Streaming 순서 독립 부분집합"
+      : value.method === "canonical_multiset_v1"
+        ? "순서 독립 부분집합 (기존 전체 정렬)"
+        : "기존 부분집합 (스캔 순서 영향 가능)";
     return `${scope} ${statistic(rows)}행 · 선택 Seed ${statistic(seed)} · 대표성 보장 없음`;
   }
   return "학습 입력 선택 방식 미확인";
