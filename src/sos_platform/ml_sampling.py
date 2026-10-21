@@ -1,5 +1,6 @@
 """기존 Canonical v1의 입력 정렬을 Worker Stage의 DuckDB Spill로 실행한다."""
 
+import errno
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -17,6 +18,20 @@ _MIB = 1024 * 1024
 def _quoted(name: str) -> str:
     """검증된 Feature 이름을 DuckDB SQL 식별자로 안전하게 인용한다."""
     return '"' + name.replace('"', '""') + '"'
+
+
+def _stage_exhausted(exc: BaseException) -> bool:
+    """디스크 공간·Spill 할당량 초과만 정렬 Stage 용량 오류로 분류한다."""
+    if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
+        return True
+    message = str(exc).lower()
+    return any(phrase in message for phrase in (
+        "no space left on device",
+        "os error 28",
+        "maximum temporary directory size",
+        "max_temp_directory_size",
+        "temporary directory size limit",
+    ))
 
 
 def canonical_sorted_batches(
@@ -76,25 +91,37 @@ def canonical_sorted_batches(
         stage = Path(directory)
         staged_file = stage / "input.parquet"
         # Polars의 Streaming Sink로 Reader의 전체 배열을 보유하지 않는다.
-        scan.sink_parquet(staged_file)
+        try:
+            scan.sink_parquet(staged_file)
+        except (OSError, pl.exceptions.ComputeError) as exc:
+            if _stage_exhausted(exc):
+                raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT") from exc
+            raise
         staged_size = staged_file.stat().st_size
         remaining_bytes = limit_bytes - staged_size
         if remaining_bytes < _MIB:
             raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT")
 
-        conn = duckdb.connect(
-            database=":memory:",
-            config={
-                "memory_limit": f"{duckdb_mib}MiB",
-                "threads": "1",
-                "temp_directory": str(stage / "spill"),
-                "max_temp_directory_size": f"{remaining_bytes // _MIB}MiB",
-                "allow_community_extensions": "false",
-                "autoinstall_known_extensions": "false",
-                "autoload_known_extensions": "false",
-                "allow_unsigned_extensions": "false",
-            },
-        )
+        try:
+            conn = duckdb.connect(
+                database=":memory:",
+                config={
+                    "memory_limit": f"{duckdb_mib}MiB",
+                    "threads": "1",
+                    "temp_directory": str(stage / "spill"),
+                    "max_temp_directory_size": f"{remaining_bytes // _MIB}MiB",
+                    "allow_community_extensions": "false",
+                    "autoinstall_known_extensions": "false",
+                    "autoload_known_extensions": "false",
+                    "allow_unsigned_extensions": "false",
+                },
+            )
+        except (duckdb.OutOfMemoryException, duckdb.IOException) as exc:
+            if _stage_exhausted(exc):
+                raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT") from exc
+            if isinstance(exc, duckdb.OutOfMemoryException):
+                raise PlatformError("SOS-ML-TRAIN-CAPACITY") from exc
+            raise
         result_reader = None
         try:
             path_literal = "'" + str(staged_file).replace("'", "''") + "'"
@@ -109,8 +136,12 @@ def canonical_sorted_batches(
             ).fetch_record_batch(rows_per_batch=chunk_rows)
             for batch in result_reader:
                 yield pl.from_arrow(batch)
-        except duckdb.OutOfMemoryException as exc:
-            raise PlatformError("SOS-ML-TRAIN-CAPACITY") from exc
+        except (duckdb.OutOfMemoryException, duckdb.IOException) as exc:
+            if _stage_exhausted(exc):
+                raise PlatformError("SOS-ML-TRAIN-STAGE-LIMIT") from exc
+            if isinstance(exc, duckdb.OutOfMemoryException):
+                raise PlatformError("SOS-ML-TRAIN-CAPACITY") from exc
+            raise
         finally:
             if result_reader is not None:
                 result_reader.close()
