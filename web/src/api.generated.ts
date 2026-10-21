@@ -2105,6 +2105,8 @@ export interface components {
             label_column?: string | null;
             /** Model Revision Id */
             model_revision_id: string;
+            /** Observation Id Column */
+            observation_id_column?: string | null;
             temporal_scope?: components["schemas"]["MLScoringTemporalScope"] | null;
         };
         /**
