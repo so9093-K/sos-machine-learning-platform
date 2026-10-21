@@ -40,7 +40,7 @@ def main():
             matrix, evidence = ml_training.training_matrix(
                 None, {"version":"test"}, names,
                 input_policy=MLTrainingInputPolicy(mode="sample", rows=10000, seed=42),
-                worker_memory_mib=256,
+                worker_memory_mib=2048,
             )
             print(f"OUTCOME success selected={len(matrix)} sha={evidence['selection_sha256']}", flush=True)
         except PlatformError as exc:
