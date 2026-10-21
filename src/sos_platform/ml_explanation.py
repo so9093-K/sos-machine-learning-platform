@@ -27,7 +27,7 @@ def explain_scored_row(store, spec: dict) -> dict:
     if any(not isinstance(x, (int, float)) or not math.isfinite(x) for x in reference):
         raise ValueError("Model reference values are invalid")
     selected = spec["row_index"]
-    frame = _verified_scoring(store, scoring)
+    frame = _verified_scoring(store, scoring, include_features=True)
     if type(selected) is not int or not 0 <= selected < frame.height:
         raise ValueError("Explanation row_index is out of bounds")
     item = frame.row(selected, named=True)
