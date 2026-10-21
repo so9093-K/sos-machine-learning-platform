@@ -36,7 +36,7 @@ def _numeric_matrix(data: object, *, n_features: int) -> np.ndarray:
                     raise ValueError("Integer features exceed exact float64 range")
     with np.errstate(over="ignore", invalid="ignore"):
         matrix = np.asarray(raw, dtype=np.float64)
-    if not np.isfinite(matrix[~np.isnan(matrix)]).all():
+    if np.isinf(matrix).any():
         raise ValueError("Infinite or overflowed feature values are not supported")
     return matrix.copy()
 
