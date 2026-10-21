@@ -163,7 +163,8 @@ def test_sample_matches_global_row_priority_reference(monkeypatch):
     values = np.arange(count, dtype=np.float64)
     bind_frame(monkeypatch, pl.DataFrame({"x": values}))
     matrix, evidence = ml_training.training_matrix(
-        None, {}, ["x"], input_policy=sample(requested, seed), worker_memory_mib=4
+        None, {}, ["x"], input_policy=sample(requested, seed), worker_memory_mib=4,
+        selection_algorithm_version=TRAINING_SELECTION_LEGACY
     )
     priorities = np.random.default_rng(seed).integers(
         0, np.iinfo(np.uint64).max, size=count, dtype=np.uint64
@@ -640,3 +641,478 @@ def test_training_stage_quota_rejects_symlinked_root(tmp_path):
     training_stage_root(tmp_path).symlink_to(outside, target_is_directory=True)
     with pytest.raises(OSError, match="must not be a symlink"):
         training_stage_bytes(tmp_path, str(uuid4()))
+
+
+def test_duckdb_canonical_sample_keeps_independent_duplicate_observations(monkeypatch):
+    # 정렬 구현이 중복 관측의 빈도를 변경하지 않는다.
+    values = np.array([0.0] * 9000 + [1.0] * 1000)
+    outputs = []
+    for frame in (pl.DataFrame({"signal": values}), pl.DataFrame({"signal": values[::-1].copy()})):
+        bind_frame(monkeypatch, frame)
+        outputs.append(ml_training.training_matrix(
+            None, {}, ["signal"], input_policy=sample(1800, 29), worker_memory_mib=8
+        ))
+    np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
+    assert outputs[0][1] == outputs[1][1]
+    assert 0.84 < np.mean(outputs[0][0][:, 0] == 0.0) < 0.96
+
+
+def test_duckdb_canonical_rejects_invalid_values_and_cleans_stage(monkeypatch, tmp_path):
+    # 잘못된 값이 Sample 밖에 있어도 거부하고 Stage는 정리한다.
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": [0.0, float("nan"), 2.0]}))
+    with pytest.raises(ValueError, match="finite"):
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(2, 7), worker_memory_mib=4
+        )
+    assert list(stage.iterdir()) == []
+
+
+def test_duckdb_canonical_same_in_reordered_parquet_layouts(monkeypatch, tmp_path):
+    # 서로 다른 물리 배치, Float32, 중복 관측, Signed Zero.
+    source = pl.DataFrame({
+        "f1": np.repeat(np.arange(2000.0), 3).astype(np.float32),
+        "f2": np.tile([0.0, -0.0, 1.0], 2000),
+    })
+    paths = [tmp_path / "a.parquet", tmp_path / "b.parquet"]
+    source.write_parquet(paths[0])
+    source.reverse().write_parquet(paths[1])
+    outputs = []
+    for path in paths:
+        bind_frame(monkeypatch, pl.scan_parquet(path))
+        outputs.append(ml_training.training_matrix(
+            None, {}, ["f1", "f2"], input_policy=sample(500, 11), worker_memory_mib=8
+        ))
+    np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
+    assert outputs[0][1] == outputs[1][1]
+
+
+def test_duckdb_v1_matches_original_polars_sort_and_seed(monkeypatch, tmp_path):
+    import hashlib
+
+    rng = np.random.default_rng(1729)
+    values = np.array([0.0, -0.0, 1.5, -1.25, 3.75], dtype=np.float32)
+    frame = pl.DataFrame({
+        "z": rng.choice(values, size=15_001),
+        "x": rng.integers(-300, 300, size=15_001, dtype=np.int64),
+        "y": rng.choice([0.0, -0.0, 1.0, 2.0], size=15_001),
+    })
+    path = tmp_path / "mixed.parquet"
+    frame.write_parquet(path)
+    bind_frame(monkeypatch, pl.scan_parquet(path))
+    rows, seed = 1700, 23
+    actual, evidence = ml_training.training_matrix(
+        None, {}, ["z", "x", "y"], input_policy=sample(rows, seed), worker_memory_mib=32
+    )
+
+    source = frame.with_columns(
+        pl.when(pl.col(name) == 0).then(pl.lit(0.0)).otherwise(pl.col(name)).alias(name)
+        for name in ("z", "y")
+    ).sort(["z", "x", "y"])
+    full = np.asarray(source.select(["z", "x", "y"]).to_numpy(), dtype=np.float64)
+    priorities = np.random.default_rng(seed).integers(
+        0, np.iinfo(np.uint64).max, size=len(full), dtype=np.uint64
+    )
+    selected = full[np.argpartition(priorities, rows - 1)[:rows]]
+    selected = np.ascontiguousarray(selected[np.lexsort(selected.T[::-1])])
+    np.testing.assert_array_equal(actual, selected)
+    assert evidence["selection_sha256"] == hashlib.sha256(selected.tobytes()).hexdigest()
+    assert evidence["algorithm_version"] == TRAINING_SELECTION_CURRENT
+
+
+def test_duckdb_stage_limit_rejects_large_staged_input(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    # 실제로 허용되는 Stage 최소 예산(128 MiB)을 넘는 파일을 만든다.
+    # Sparse File로 디스크·메모리 비용 없이 저장 후 한도 검증만 재현한다.
+    monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "128")
+    bind_frame(monkeypatch, pl.DataFrame({"value": np.arange(100.0)}))
+
+    def oversized_sink(_scan, path, **_kwargs):
+        with Path(path).open("wb") as target:
+            target.truncate(129 * 1024 * 1024)
+
+    monkeypatch.setattr(pl.LazyFrame, "sink_parquet", oversized_sink)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["value"], input_policy=sample(1000, 12),
+            worker_memory_mib=256,
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert list(stage.iterdir()) == []
+
+
+def test_duckdb_canonical_quotes_feature_names_and_keeps_full_sample(monkeypatch):
+    frame = pl.DataFrame({
+        'a" b': [3.0, -0.0, 1.0, 2.0],
+        "from": [20, 10, 40, 30],
+    })
+    bind_frame(monkeypatch, frame.reverse())
+    matrix, evidence = ml_training.training_matrix(
+        None, {}, ['a" b', "from"], input_policy=sample(4, 3), worker_memory_mib=8
+    )
+    np.testing.assert_array_equal(matrix, np.array([
+        [0.0, 10.0], [1.0, 40.0], [2.0, 30.0], [3.0, 20.0],
+    ]))
+    assert evidence["source_rows"] == 4
+    assert evidence["selected_rows"] == 4
+
+
+def test_canonical_stage_disk_full_is_storage_capacity_and_cleans_stage(monkeypatch, tmp_path):
+    import errno
+    from pathlib import Path
+
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    unrelated = stage / "another-task.txt"
+    unrelated.write_text("retain")
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(100.0)}))
+
+    def fail_sink(_self, path, **_kwargs):
+        path = Path(path)
+        path.write_bytes(b"partly-written")
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(pl.LazyFrame, "sink_parquet", fail_sink)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(10, 17), worker_memory_mib=256
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert list(stage.iterdir()) == [unrelated]
+    assert unrelated.read_text() == "retain"
+
+
+def test_canonical_duckdb_spill_quota_failure_has_storage_error(monkeypatch, tmp_path):
+    import duckdb
+
+    from sos_platform import ml_sampling
+
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(100.0)}))
+
+    def no_spill(_args=None, **_kwargs):
+        raise duckdb.OutOfMemoryException(
+            "Out of Memory Error: failed to offload block: maximum temporary directory size"
+        )
+
+    monkeypatch.setattr(ml_sampling.duckdb, "connect", no_spill)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(10, 17), worker_memory_mib=256
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert list(stage.iterdir()) == []
+
+
+@pytest.mark.parametrize("seed", [0, 17, 2**32 - 1])
+def test_canonical_duckdb_v1_equivalence_at_numeric_precision_boundaries(monkeypatch, seed):
+    import hashlib
+
+    i = np.arange(4096) % 13
+    floats32 = np.array([-0.0, 0.0, -1.25, 0.375, 42.5], dtype=np.float32)
+    floats64 = np.array([-1e300, -1e-300, -0.0, 0.0, 1e-300, 1e300], dtype=np.float64)
+    signed = np.array([-(2**53), -(2**53 - 1), -1, 0, 1, 2**53 - 1, 2**53], dtype=np.int64)
+    unsigned = np.array([0, 1, 2**53 - 1, 2**53], dtype=np.uint64)
+    frame = pl.DataFrame({
+        "u64": unsigned[i % len(unsigned)],
+        "f32": floats32[i % len(floats32)],
+        "i64": signed[i % len(signed)],
+        "f64": floats64[i % len(floats64)],
+    })
+    features = ["u64", "f32", "i64", "f64"]
+    rows = 1000
+    canonical = frame.with_columns(
+        pl.when(pl.col(name) == 0)
+        .then(pl.lit(0.0, dtype=frame.schema[name]))
+        .otherwise(pl.col(name))
+        .alias(name)
+        for name in ("f32", "f64")
+    ).sort(features).select(features)
+    sorted_values = np.asarray(canonical.to_numpy(), dtype=np.float64)
+    priorities = np.random.default_rng(seed).integers(
+        0, np.iinfo(np.uint64).max, size=len(sorted_values), dtype=np.uint64
+    )
+    picked = sorted_values[np.argpartition(priorities, rows - 1)[:rows]]
+    expected = np.ascontiguousarray(picked[np.lexsort(picked.T[::-1])])
+    sha = hashlib.sha256(expected.tobytes()).hexdigest()
+
+    for candidate in (frame, frame.reverse()):
+        bind_frame(monkeypatch, candidate)
+        actual, evidence = ml_training.training_matrix(
+            None, {}, features, input_policy=sample(rows, seed), worker_memory_mib=256
+        )
+        np.testing.assert_array_equal(actual, expected)
+        assert evidence["selection_sha256"] == sha
+        assert evidence["method"] == TRAINING_SELECTION_CURRENT
+
+
+@pytest.mark.parametrize(
+    ("exception_name", "message", "expected_code"),
+    [
+        ("IOException", "No space left on device", "SOS-ML-TRAIN-STAGE-LIMIT"),
+        ("IOException", "Disk quota exceeded", "SOS-ML-TRAIN-STAGE-LIMIT"),
+        ("OutOfMemoryException", "could not allocate block", "SOS-ML-TRAIN-CAPACITY"),
+    ],
+)
+def test_duckdb_sort_execution_failure_classification_and_cleanup(
+    monkeypatch, tmp_path, exception_name, message, expected_code,
+):
+    import duckdb
+
+    from sos_platform import ml_sampling
+
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(128.0)}))
+    original_connect = ml_sampling.duckdb.connect
+
+    class FailingConnection:
+        def __init__(self, inner):
+            self.inner = inner
+
+        def execute(self, sql, *args, **kwargs):
+            if sql.startswith("SELECT "):
+                raise getattr(duckdb, exception_name)(message)
+            return self.inner.execute(sql, *args, **kwargs)
+
+        def close(self):
+            self.inner.close()
+
+    monkeypatch.setattr(
+        ml_sampling.duckdb, "connect",
+        lambda *args, **kwargs: FailingConnection(original_connect(*args, **kwargs)),
+    )
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(12, 8), worker_memory_mib=256
+        )
+    assert exc.value.code == expected_code
+    assert list(stage.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("budget_mib", "sort_memory_mib", "sort_threads"),
+    [(512, 128, 1), (2048, 512, 1), (4096, 1024, 2), (8192, 1024, 2)],
+)
+def test_canonical_sort_budget_scales_without_changing_v1_result(
+    monkeypatch, tmp_path, budget_mib, sort_memory_mib, sort_threads,
+):
+    from sos_platform import ml_sampling
+
+    stage = tmp_path / "attempt"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "128")
+    row_index = np.arange(16384)
+    frame = pl.DataFrame({
+        "x": (row_index % 197).astype(np.float64),
+        "y": (row_index % 13).astype(np.float32),
+    })
+    bind_frame(monkeypatch, frame.reverse() if budget_mib == 8192 else frame)
+    original_connect = ml_sampling.duckdb.connect
+    options = []
+
+    def record_connect(*args, **kwargs):
+        options.append(kwargs["config"])
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(ml_sampling.duckdb, "connect", record_connect)
+    matrix, evidence = ml_training.training_matrix(
+        None, {}, ["x", "y"], input_policy=sample(1000, 17),
+        worker_memory_mib=budget_mib,
+    )
+    assert len(options) == 1
+    assert options[0]["memory_limit"] == f"{sort_memory_mib}MiB"
+    assert options[0]["threads"] == str(sort_threads)
+    assert matrix.shape == (1000, 2)
+    assert evidence["method"] == TRAINING_SELECTION_CURRENT
+    assert not list(stage.iterdir())
+    # 동일 Dataset/Seed/K는 실행 자원과 물리적 입력 순서와 무관하다.
+    bind_frame(monkeypatch, frame)
+    expected, original = ml_training.training_matrix(
+        None, {}, ["x", "y"], input_policy=sample(1000, 17),
+        worker_memory_mib=2048,
+    )
+    np.testing.assert_array_equal(matrix, expected)
+    assert evidence == original
+
+
+def test_canonical_selection_is_independent_of_stage_budget_when_execution_fits(
+    monkeypatch, tmp_path,
+):
+    dataset = pl.DataFrame({
+        "feature": np.arange(28000, dtype=np.float64) % 311,
+        "other": np.arange(28000, dtype=np.float64) % 7,
+    })
+    bind_frame(monkeypatch, dataset)
+    stage = tmp_path / "attempt"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    outputs = []
+    for stage_mib in (128, 2048):
+        monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", str(stage_mib))
+        output = ml_training.training_matrix(
+            None, {}, ["feature", "other"], input_policy=sample(2500, 119),
+            worker_memory_mib=4096,
+        )
+        outputs.append(output)
+        assert list(stage.iterdir()) == []
+    np.testing.assert_array_equal(outputs[0][0], outputs[1][0])
+    assert outputs[0][1] == outputs[1][1]
+
+
+def test_canonical_sort_handles_escaped_stage_path_and_owns_only_its_files(
+    monkeypatch, tmp_path,
+):
+    # DuckDB 설정 문자열에 들어가는 경로는 SQL 리터럴로 이스케이프해야 한다.
+    stage = tmp_path / "worker's [training] stage"
+    stage.mkdir()
+    preserved = stage / "another-attempt.txt"
+    preserved.write_text("keep", encoding="utf-8")
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    source = pl.DataFrame({"x": [3.0, -0.0, 1.0, 2.0]})
+    bind_frame(monkeypatch, source.reverse())
+    selected, proof = ml_training.training_matrix(
+        None, {}, ["x"], input_policy=sample(4, 19), worker_memory_mib=4096
+    )
+    np.testing.assert_array_equal(selected[:, 0], [0.0, 1.0, 2.0, 3.0])
+    assert proof["source_rows"] == 4
+    assert list(stage.iterdir()) == [preserved]
+    assert preserved.read_text(encoding="utf-8") == "keep"
+
+
+def test_worker_training_child_completes_actual_duckdb_sampling_and_model(
+    monkeypatch, tmp_path,
+):
+    import json
+    import os
+    from contextlib import contextmanager
+    from unittest.mock import Mock
+    from uuid import uuid4
+
+    from sos_platform import worker
+    from sos_platform.ml_training_staging import training_stage_path
+
+    source_path = tmp_path / "source.parquet"
+    pl.DataFrame({
+        "feature": np.arange(180.0, dtype=np.float64) % 41,
+        "context": np.arange(180.0, dtype=np.float64) % 11,
+    }).write_parquet(source_path)
+
+    @contextmanager
+    def scan(_store, _dataset):
+        yield pl.scan_parquet(source_path)
+
+    monkeypatch.setattr(ml_training, "pinned_scan_dataset", scan)
+    monkeypatch.setattr(worker, "_guard_child_parent", lambda _pid: None)
+    store = Mock()
+    store.home = tmp_path
+    store.get_dataset.return_value = {"version": "revision-a", "kind": "file"}
+    monkeypatch.setattr(worker, "Store", lambda _home, database_url: store)
+    cgroup = Mock()
+    monkeypatch.setattr(worker.CgroupIsolation, "from_env", lambda _limit: cgroup)
+    monkeypatch.setenv("SOS_WORKER_MAX_RSS_MIB", "2048")
+    monkeypatch.setenv("SOS_WORKER_MAX_STAGE_MIB", "128")
+    # 자식 진입점은 env를 설정하므로 테스트에서는 원래 값을 복원한다.
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(tmp_path))
+    attempt_id = str(uuid4())
+    job = {
+        "id": str(uuid4()),
+        "kind": "ml_train",
+        "dataset_id": "dataset",
+        "attempts": [{"id": attempt_id}],
+        "spec": {
+            "algorithm": "isolation_forest",
+            "dataset_version": "revision-a",
+            "features": ["feature", "context"],
+            "params": {"n_estimators": 8, "random_state": 7},
+            "training_input": sample(80, 19).model_dump(),
+            "selection_algorithm_version": TRAINING_SELECTION_CURRENT,
+        },
+    }
+    pending = tmp_path / "result.pending.parquet"
+    completed = tmp_path / "completed.json"
+    worker._perform(tmp_path, "postgresql://unused", job, completed, pending, os.getpid())
+    outcome = json.loads(completed.read_text(encoding="utf-8"))
+    assert "error_code" not in outcome, outcome
+    result = outcome["result"]
+    assert result["training_rows"] == 80
+    assert result["training_selection"]["algorithm_version"] == TRAINING_SELECTION_CURRENT
+    assert len(result["training_selection"]["selection_sha256"]) == 64
+    assert pending.with_suffix(".joblib").stat().st_size > 0
+    assert list(training_stage_path(tmp_path, attempt_id).iterdir()) == []
+    cgroup.attach_current_child.assert_called_once_with(attempt_id)
+
+
+def test_canonical_sort_polars_wrapped_disk_error_preserves_stage_code(
+    monkeypatch, tmp_path,
+):
+    # Polars의 모든 스토리지 실패가 ComputeError로 전달된다고 가정하지 않는다.
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(256.0)}))
+
+    def fail_sink(_self, output, **_options):
+        from pathlib import Path
+
+        Path(output).write_bytes(b"partial")
+        raise pl.exceptions.InvalidOperationError("No space left on device")
+
+    monkeypatch.setattr(pl.LazyFrame, "sink_parquet", fail_sink)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(32, 9), worker_memory_mib=2048
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert not list(stage.iterdir())
+
+
+def test_canonical_sort_disk_quota_exhaustion_is_stage_limit(monkeypatch, tmp_path):
+    import errno
+
+    stage = tmp_path / "attempt"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(128.0)}))
+
+    def fail_sink(_source, _path, **_kwargs):
+        raise OSError(errno.EDQUOT, "Disk quota exceeded")
+
+    monkeypatch.setattr(pl.LazyFrame, "sink_parquet", fail_sink)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(50, 9), worker_memory_mib=2048
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+    assert list(stage.iterdir()) == []
+
+
+def test_canonical_sort_temp_directory_creation_disk_full_is_stage_limit(
+    monkeypatch,
+):
+    import errno
+
+    from sos_platform import ml_sampling
+
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(128.0)}))
+
+    def unavailable_stage(**_kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(ml_sampling, "TemporaryDirectory", unavailable_stage)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(40, 9), worker_memory_mib=2048
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
