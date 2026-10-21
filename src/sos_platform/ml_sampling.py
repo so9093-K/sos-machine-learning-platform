@@ -121,7 +121,7 @@ def streaming_canonical_sample(
                             column = frame[name]
                             if column.max() > 2**53 or column.min() < -(2**53):
                                 raise ValueError("Integer feature exceeds the exact float64 range")
-                    matrix = np.asarray(frame.to_numpy(), dtype="<f8")
+                    matrix = np.array(frame.to_numpy(), dtype="<f8", copy=True)
                     if not np.isfinite(matrix).all():
                         raise ValueError("Training features must be finite numeric values")
                     # +0.0/-0.0은 ML Feature 값과 정렬 의미가 같으므로 통일한다.
