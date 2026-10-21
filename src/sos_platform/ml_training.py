@@ -53,7 +53,9 @@ def training_matrix(
     """
     if not features or len(set(features)) != len(features):
         raise ValueError("Training features must be nonempty and distinct")
-    if selection_algorithm_version not in (TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY):
+    if selection_algorithm_version not in (
+        TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
+    ):
         raise ValueError("Unsupported training input selection algorithm")
     budget_mib = (
         ExecutionBudget.from_env().max_rss_mib
