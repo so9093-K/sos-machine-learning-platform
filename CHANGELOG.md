@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Scoring에 학습 때 고정한 UTC 시간 분할 기준으로 Calibration/Test 구간을 선택하는 API를 추가했습니다. Batch별 결과를 스트리밍 게시해 종전 50,000행 상한을 제거하고, 전체 Dataset·모델 판본·구간별 행 수를 Scoring 근거로 남기며 Explain 요청의 행 번호 상한도 조정했습니다.
+
 - Decision Policy Revision의 보정 Scoring Result 출처를 유지하면서 호환되는 다른 Scoring Result에도 고정된 판정 기준을 적용할 수 있게 했습니다. 정책과 대상의 모델 판본·점수 의미·소유 권한을 검증하고, 서로 다른 결과라는 이유만으로 독립 Test 성능을 주장하지 않습니다.
 
 - Isolation Forest 학습 요청에 선택적인 시간 기준 Train/Calibration/Test 분할과 Train 중앙값 기반 결측 처리 정책을 추가했습니다. Train 외 구간은 학습에 사용하지 않고 구간별 행 수와 UTC 경계를 근거로 기록하며, 기존 결측 불허 및 입력 선택 정책은 기본값으로 유지합니다.
