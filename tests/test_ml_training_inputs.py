@@ -882,3 +882,46 @@ def test_canonical_duckdb_v1_equivalence_at_numeric_precision_boundaries(monkeyp
         np.testing.assert_array_equal(actual, expected)
         assert evidence["selection_sha256"] == sha
         assert evidence["method"] == TRAINING_SELECTION_CURRENT
+
+
+@pytest.mark.parametrize(
+    ("exception_name", "message", "expected_code"),
+    [
+        ("IOException", "No space left on device", "SOS-ML-TRAIN-STAGE-LIMIT"),
+        ("OutOfMemoryException", "could not allocate block", "SOS-ML-TRAIN-CAPACITY"),
+    ],
+)
+def test_duckdb_sort_execution_failure_classification_and_cleanup(
+    monkeypatch, tmp_path, exception_name, message, expected_code,
+):
+    import duckdb
+    from sos_platform import ml_sampling
+
+    stage = tmp_path / "attempt-stage"
+    stage.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(128.0)}))
+    original_connect = ml_sampling.duckdb.connect
+
+    class FailingConnection:
+        def __init__(self, inner):
+            self.inner = inner
+
+        def execute(self, sql, *args, **kwargs):
+            if sql.startswith("SELECT "):
+                raise getattr(duckdb, exception_name)(message)
+            return self.inner.execute(sql, *args, **kwargs)
+
+        def close(self):
+            self.inner.close()
+
+    monkeypatch.setattr(
+        ml_sampling.duckdb, "connect",
+        lambda *args, **kwargs: FailingConnection(original_connect(*args, **kwargs)),
+    )
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(12, 8), worker_memory_mib=256
+        )
+    assert exc.value.code == expected_code
+    assert list(stage.iterdir()) == []
