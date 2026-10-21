@@ -1139,3 +1139,23 @@ def test_canonical_sort_disk_quota_exhaustion_is_stage_limit(monkeypatch, tmp_pa
         )
     assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
     assert list(stage.iterdir()) == []
+
+
+def test_canonical_sort_temp_directory_creation_disk_full_is_stage_limit(
+    monkeypatch,
+):
+    import errno
+
+    from sos_platform import ml_sampling
+
+    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(128.0)}))
+
+    def unavailable_stage(**_kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(ml_sampling, "TemporaryDirectory", unavailable_stage)
+    with pytest.raises(PlatformError) as exc:
+        ml_training.training_matrix(
+            None, {}, ["x"], input_policy=sample(40, 9), worker_memory_mib=2048
+        )
+    assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
