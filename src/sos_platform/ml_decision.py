@@ -3,6 +3,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import numpy as np
 import polars as pl
 import pyarrow.parquet as pq
 
@@ -37,9 +38,60 @@ def _verified_scoring(
         raise ValueError("Scoring artifact row count does not match the revision")
     if "anomaly_score" not in frame.columns or "row_index" not in frame.columns:
         raise ValueError("Invalid Scoring artifact columns")
-    if frame["row_index"].to_list() != list(range(frame.height)):
+    indices = frame["row_index"].to_numpy()
+    if not np.array_equal(indices, np.arange(frame.height, dtype=np.int64)):
         raise ValueError("Scoring artifact row order does not match its revision")
     return frame
+
+
+def _verified_scoring_row(store, scoring: dict, row_index: int) -> dict:
+    """해시 검증된 Scoring Parquet에서 설명 대상 Row Group만 불러온다.
+
+    Args:
+        store: 조회에 사용할 SOS Store와 Attempt별 캐시.
+        scoring: 원본 Scoring Result의 불변 위치·SHA-256·행 수.
+        row_index: 결과 Parquet에서 생성한 전역 순번.
+
+    Returns:
+        dict: 선택한 한 행의 점수, 원본 Feature struct, 선택적 관측치 UUID.
+
+    Raises:
+        ValueError: 범위, SHA, 경로, 아티팩트 행 수 또는 순서 위반.
+    """
+    if type(row_index) is not int or not 0 <= row_index < scoring["row_count"]:
+        raise ValueError("Explanation row_index is out of bounds")
+    storage = ObjectStore()
+    expected = f"results/{scoring['job_id']}/{scoring['attempt_id']}.scores.parquet"
+    if scoring["location"] != storage.location(expected):
+        raise ValueError("Scoring artifact is outside its immutable Attempt location")
+    with TemporaryDirectory(prefix="ml-scoring-", dir=store.home / "cache") as directory:
+        path = Path(directory) / "scores.parquet"
+        storage.get(expected, path, expected_sha256=scoring["sha256"])
+        with pq.ParquetFile(path) as parquet:
+            if parquet.metadata.num_rows != scoring["row_count"]:
+                raise ValueError("Scoring artifact row count does not match the revision")
+            required = {"row_index", "anomaly_score", "features"}
+            if not required.issubset(parquet.schema_arrow.names):
+                raise ValueError("Invalid Scoring artifact columns")
+            offset = 0
+            for group in range(parquet.num_row_groups):
+                length = parquet.metadata.row_group(group).num_rows
+                if offset <= row_index < offset + length:
+                    selected_columns = sorted(
+                        required | (
+                            {"observation_id"}
+                            if "observation_id" in parquet.schema_arrow.names else set()
+                        )
+                    )
+                    frame = pl.from_arrow(
+                        parquet.read_row_group(group, columns=selected_columns)
+                    )
+                    row = frame.row(row_index - offset, named=True)
+                    if row["row_index"] != row_index:
+                        raise ValueError("Scoring artifact row order does not match its revision")
+                    return row
+                offset += length
+    raise ValueError("Explanation row_index is out of bounds")
 
 
 def apply_scoring_policy(store, spec: dict) -> dict:
