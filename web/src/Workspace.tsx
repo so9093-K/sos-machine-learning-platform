@@ -407,7 +407,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         <DataSourceSidebar datasets={datasets} selected={selected} canWrite={canWrite} busy={busy}
           uploadRef={uploadRef} uploadPolicy={uploadPolicy}
           onFile={file => {
-            if (/\\.(tsv|txt)$/i.test(file.name)) {
+            if (/\.(tsv|txt)$/i.test(file.name)) {
               setPendingDelimited(file); setError(""); setNotice("");
             } else { void upload(file); }
           }}
