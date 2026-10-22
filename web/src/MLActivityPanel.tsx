@@ -102,7 +102,7 @@ export function MLActivityPanel({ compact = false, onNavigate, onOpenResource, o
     .flatMap(kind => sources[kind].items.map(job => toActivity(job, kind)))
     .filter(job => filter === "all" || filter === job.kind)
     .sort((a, b) => b.created.localeCompare(a.created) || b.id.localeCompare(a.id))
-    .slice(0, compact ? 4 : 40);
+    .slice(0, compact ? 4 : undefined);
   return <section className="panel ml-activity" aria-labelledby={compact ? "recent-ml-heading" : "ml-activity-heading"}>
     <div className="panel-head"><div>
       <h3 id={compact ? "recent-ml-heading" : "ml-activity-heading"}>
@@ -111,7 +111,7 @@ export function MLActivityPanel({ compact = false, onNavigate, onOpenResource, o
       <p>학습·점수화·정책·평가·설명 Job의 조회된 페이지 범위입니다.</p>
     </div>
       {compact
-        ? <button className="secondary" onClick={onViewAll ?? (() => onNavigate("jobs"))}>작업 이력 →</button>
+        ? <button className="secondary" onClick={onViewAll ?? (() => onNavigate("ml-jobs"))}>작업 이력 →</button>
         : <button className="secondary" onClick={() => void refresh()}>다시 조회</button>}
     </div>
     {!compact && <label className="ml-activity-filter">작업 유형
