@@ -393,3 +393,20 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
   border-radius:8px; font-size:13px; }
 .ml-resource-row span { min-width:0; overflow-wrap:anywhere; }
 @media(max-width:760px) { .ml-resource-fields { grid-template-columns:1fr; } }
+
+
+/* 영역을 구분해 전역 메뉴를 단순하게 유지한다. 독립 실행 경로는 모델 내부에서 탐색한다. */
+.model-area-nav { display:flex; flex-direction:row; flex-wrap:wrap; gap:8px; padding:0 0 20px;
+  margin:0 0 20px; border-bottom:1px solid var(--sos-border); }
+.model-area-link { display:flex; flex-direction:column; align-items:flex-start; gap:3px;
+  padding:10px 15px; border-radius:9px; color:var(--sos-text); background:var(--sos-panel);
+  border:1px solid var(--sos-border); text-decoration:none; min-width:94px; }
+.model-area-link small { color:var(--sos-muted); font-size:10px; }
+.model-area-link span { font-size:13px; font-weight:650; }
+.model-area-link:hover, .model-area-link[aria-current="page"] {
+  border-color:var(--sos-accent); background:var(--sos-accent-bg); text-decoration:none; }
+.model-area-link:focus-visible { outline:2px solid var(--sos-accent); outline-offset:3px; }
+@media(max-width:620px) {
+  .model-area-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  .model-area-link { min-width:0; padding:10px; }
+}
