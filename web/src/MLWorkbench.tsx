@@ -370,11 +370,16 @@ export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, on
         </label>
       </div>
       <div className="job-list">
-        {visibleHistory.map(item =>
-          <button className="secondary" key={item.id} onClick={() => void selectJob(item.id)}
+        {visibleHistory.map(item => <div className="ml-resource-row" key={item.id}>
+          <button className="secondary" onClick={() => void selectJob(item.id)}
             aria-pressed={selectedJob?.id === item.id}>
-            {item.id.slice(0, 8)} · {item.status} · {new Date(item.created_at).toLocaleString("ko-KR")}
-          </button>)}
+            학습 {item.id.slice(0, 8)} · {item.status} · {new Date(item.created_at).toLocaleString("ko-KR")}
+          </button>
+          {typeof item.result?.model_revision_id === "string" &&
+            <button className="secondary" onClick={() => onOpenModel(String(item.result?.model_revision_id))}>
+              Model Revision 열기 →
+            </button>}
+        </div>)}
         {visibleHistory.length === 0 && <p className="muted">현재 조회된 학습 Job이 없습니다.</p>}
         {historyCursor && <button className="secondary"
           onClick={() => void loadOlderHistory().catch(error => setError(formatError(error)))}>
