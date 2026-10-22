@@ -376,3 +376,20 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .model-view-switch [aria-pressed="true"] { box-shadow:0 0 0 1px var(--sos-accent); }
 .model-history-filter { display:flex; flex-wrap:wrap; margin-bottom:16px; }
 .model-history-filter label { display:grid; gap:7px; min-width:200px; font-size:12px; color:var(--sos-muted); }
+
+
+/* 불변 ML 리소스: 실행 폼과 판본 상세를 분리하며 ID·근거가 긴 경우에도 읽을 수 있게 한다. */
+.ml-resource-workspace { display:grid; gap:16px; min-width:0; }
+.ml-resource-workspace .panel, .ml-resource-detail { min-width:0; }
+.ml-resource-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:16px 0; }
+.ml-resource-field { min-width:0; border:1px solid var(--sos-border); border-radius:8px; padding:12px; }
+.ml-resource-field dt { color:var(--sos-muted); font-size:12px; margin-bottom:7px; }
+.ml-resource-field dd { margin:0; font-size:13px; line-height:1.65; overflow-wrap:anywhere; }
+.ml-resource-field button { max-width:100%; overflow-wrap:anywhere; white-space:normal; }
+.ml-resource-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.ml-resource-list { display:grid; gap:8px; margin:14px 0; }
+.ml-resource-row { display:flex; align-items:center; flex-wrap:wrap; gap:12px;
+  justify-content:space-between; min-width:0; padding:10px 12px; border:1px solid var(--sos-border);
+  border-radius:8px; font-size:13px; }
+.ml-resource-row span { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:760px) { .ml-resource-fields { grid-template-columns:1fr; } }
