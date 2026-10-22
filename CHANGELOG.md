@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 기존 Transform Job에서 선택적으로 불투명 UUIDv4 관측치 ID를 한 번 생성해 새 불변 Dataset으로 게시할 수 있습니다. 발급 후 판본 내부에서 안정적으로 연결되며, 별도 준비 실행 사이에 같은 UUID가 재현되는 것은 아닙니다. 게시 전 Preview는 임시 ID를 제공하지 않습니다.
+
 - Scoring Job에서 미리 생성된 불투명 UUIDv4 관측치 컬럼을 선택적으로 연결할 수 있습니다. 전체·시간 구간별 결과에서 결측·중복·잘못된 ID를 거절하며, 원본 사용자·호스트 정보를 복제하지 않고도 Explanation에 Dataset 판본과 관측치 참조를 제공합니다.
 
 - Scoring에 학습 때 고정한 UTC 시간 분할 기준으로 Calibration/Test 구간을 선택하는 API를 추가했습니다. Batch별 결과를 스트리밍 게시해 종전 50,000행 상한을 제거하고, 전체 Dataset·모델 판본·구간별 행 수를 Scoring 근거로 남기며 Explain 요청의 행 번호 상한도 조정했습니다.
