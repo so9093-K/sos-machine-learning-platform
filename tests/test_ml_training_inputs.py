@@ -1116,3 +1116,96 @@ def test_canonical_sort_temp_directory_creation_disk_full_is_stage_limit(
             None, {}, ["x"], input_policy=sample(40, 9), worker_memory_mib=2048
         )
     assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
+
+
+def test_staged_all_selection_preserves_full_sorted_matrix_and_hash(monkeypatch, tmp_path):
+    """입력 의미는 전과 같고 물리적 저장소만 Memmap으로 바뀐다."""
+    data = pl.DataFrame({
+        "a": [4.0, 2.0, None, 2.0, 10.0, 0.0],
+        "b": [9.0, 3.0, 7.0, 3.0, 8.0, 2.0],
+    })
+    bind_frame(monkeypatch, data)
+    legacy, earlier = ml_training.training_matrix(
+        None, {}, ["a", "b"], input_policy=all_rows(),
+        missing_policy="train_median", worker_memory_mib=64,
+    )
+    scratch = tmp_path / "training-stage"
+    scratch.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(scratch))
+    with ml_training.staged_all_training_matrix(
+        None, {}, ["a", "b"], missing_policy="train_median", temporal_split=None
+    ) as (staged, selection):
+        assert isinstance(staged, np.memmap)
+        np.testing.assert_array_equal(staged, legacy)
+        assert selection == earlier
+        assert selection["selected_rows"] == data.height
+        assert any(scratch.iterdir())
+    assert not list(scratch.iterdir())
+
+
+def test_all_model_training_no_longer_uses_sample_budget_as_row_cap(monkeypatch, tmp_path):
+    """Full 모델 학습은 Sample 배열의 보수적 사전 상한을 사용하지 않는다."""
+    count = 20_001
+    bind_frame(monkeypatch, pl.DataFrame({
+        "value": np.linspace(0.0, 10.0, count),
+        "secondary": np.linspace(4.0, 0.0, count),
+    }))
+    scratch = tmp_path / "worker-attempt-stage"
+    scratch.mkdir()
+    monkeypatch.setenv("POLARS_TEMP_DIR", str(scratch))
+    # 기존 training_matrix의 1 MiB RSS 예산에서는 이 모든 행이 거절된다.
+    with pytest.raises(PlatformError):
+        ml_training.training_matrix(
+            None, {}, ["value", "secondary"],
+            input_policy=all_rows(), worker_memory_mib=1,
+        )
+    # 실질적인 all 모델 학습은 입력을 줄이지 않고 Stage-backed 계약으로 실행한다.
+    artifact = tmp_path / "full.joblib"
+    outcome = ml_training.train_dataset(
+        None, {"version": "v1"},
+        {
+            "algorithm": "isolation_forest",
+            "dataset_version": "v1",
+            "features": ["value", "secondary"],
+            "params": {"n_estimators": 8, "random_state": 7},
+            "training_input": {"mode": "all"},
+            "missing_policy": "reject",
+        },
+        artifact,
+    )
+    assert outcome["training_rows"] == outcome["source_rows"] == count
+    assert outcome["training_selection"]["selected_rows"] == count
+    assert outcome["training_score_summary"]["score_count"] == count
+    assert artifact.is_file()
+    assert not list(scratch.iterdir())
+
+
+def test_all_model_and_sample_training_have_separate_selection_modes(monkeypatch, tmp_path):
+    """Full 모드가 의도치 않게 Sample 입력으로 전환되지 않는지 확인한다."""
+    count = 8_141
+    bind_frame(monkeypatch, pl.DataFrame({
+        "x": np.arange(count, dtype=np.float64),
+        "y": [None if i % 11 == 0 else float(i) for i in range(count)],
+    }))
+    raw_spec = {
+        "algorithm": "isolation_forest",
+        "dataset_version": "v1",
+        "features": ["x", "y"],
+        "params": {"n_estimators": 8, "random_state": 7},
+        "missing_policy": "train_median",
+    }
+    full = ml_training.train_dataset(
+        None, {"version": "v1"}, {
+            **raw_spec, "training_input": {"mode": "all"}
+        }, tmp_path / "full.joblib"
+    )
+    sampled = ml_training.train_dataset(
+        None, {"version": "v1"}, {
+            **raw_spec, "training_input": {"mode": "sample", "rows": 200, "seed": 17},
+        }, tmp_path / "sample.joblib"
+    )
+    assert full["training_rows"] == count
+    assert sampled["training_rows"] == 200
+    assert full["training_selection"]["method"] == "all_rows"
+    assert sampled["training_selection"]["method"] != "all_rows"
+    assert full["runtime"]["feature_reference_medians"] != sampled["runtime"]["feature_reference_medians"]
