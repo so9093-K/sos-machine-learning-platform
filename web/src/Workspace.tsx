@@ -17,9 +17,9 @@ import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
 import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQueryPanel";
 import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
-import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
-import { PlatformNavigation, useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
+import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
+import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { PlatformAreaPreview } from "./PlatformAreaPreview";
 import { DataSourceSidebar } from "./DataSourceSidebar";
@@ -32,19 +32,6 @@ import type { ExplorationRequest } from "./types";
 
 
 type Tab = WorkspaceTab;
-const pageLabels: Record<Tab, { eyebrow: string; title: string; description: string }> = {
-  overview: { eyebrow: "WORKSPACE", title: "Workspace Overview", description: "Data · Research · Models · Operations" },
-  research: { eyebrow: "RESEARCH", title: "Research & Experiments", description: "연구·실험 경험 설계" },
-  experience: { eyebrow: "MODEL EXPERIENCE", title: "Model Experience", description: "모델 활용 경험 설계" },
-  understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
-  preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
-  profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
-  preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "Dataset · Recipe · Transform" },
-  ml: { eyebrow: "RESEARCH & ML", title: "ML Workbench", description: "Experiment · Training · Model Revision" },
-  jobs: { eyebrow: "ACTIVITY & JOBS", title: "데이터 작업 이력", description: "Data Jobs · Exploration Jobs" },
-  storage: { eyebrow: "PLATFORM OPERATIONS", title: "저장소 상태", description: "Storage · Health" },
-  audit: { eyebrow: "PLATFORM OPERATIONS", title: "보안 감사", description: "Identity · Audit" },
-};
 type UploadProgress = {
   name: string; loaded: number; total: number;
   phase: "transferring" | "registering";
@@ -398,12 +385,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     };
   }, [preview, visualColumn, timeColumn]);
 
-  return <div className="shell">
-    <aside className="sidebar">
-      <InstanceBrand canEdit={canConfigure} />
-      <PlatformNavigation active={tab} onNavigate={setTab}
-        canInspectStorage={canInspectStorage} canViewAudit={canViewAudit} />
-      {(["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) &&
+  return <PlatformShell actor={actor} section={tab} onNavigate={setTab}
+    onSignOut={onSignOut} canConfigure={canConfigure}
+    canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
+    dataSidebar={(["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) &&
         <DataSourceSidebar datasets={datasets} selected={selected} canWrite={canWrite} busy={busy}
           uploadRef={uploadRef} uploadPolicy={uploadPolicy}
           onFile={file => {
@@ -425,24 +410,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           snapshotsLoading={snapshotsLoading}
           onLoadSnapshots={() => void loadSnapshots()}
           onConnectExisting={() => void connectExisting()}
-          hasMore={Boolean(nextDatasetCursor)} onLoadMore={() => void loadMoreDatasets()} />}
-      <div className="sidebar-bottom"><a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a></div>
-    </aside>
-    <main className="main">
-      <header className="workspace-header"><div>
-        <span className="eyebrow">{pageLabels[tab].eyebrow}</span>
-        <h1>{pageLabels[tab].title}</h1>
-        <p>{pageLabels[tab].description}</p>
-      </div>
-        <div className="header-meta">
-          <span className="environment">{actor.mode === "development" ? "로컬 인증" : "토큰 인증"}</span>
-          <div className="auth-status">
-            <span>{actor.actor_id} · {actor.roles.join(", ")}</span>
-            {actor.mode !== "development" &&
-              <button type="button" className="ghost" onClick={onSignOut}>인증 해제</button>}
-          </div>
-        </div>
-      </header>
+          hasMore={Boolean(nextDatasetCursor)} onLoadMore={() => void loadMoreDatasets()} />}>
       {error && <div role="alert" className="alert error"><strong>작업을 완료하지 못했습니다.</strong> {error}
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
       {notice && <div role="status" className="alert success">{notice}
@@ -645,7 +613,5 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         })}
         onCancel={id => void cancelJob(id)}
         onOpen={id => void openJobDataset(id)} />}
-      <footer>SOS · {pageLabels[tab].eyebrow} <span>Dataset · Job · Artifact</span></footer>
-    </main>
-  </div>;
+  </PlatformShell>;
 }
