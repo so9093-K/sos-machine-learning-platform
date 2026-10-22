@@ -57,6 +57,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
   const [comparisonModel, setComparisonModel] = useState<ModelRevision | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const currentDataset = useRef(selectedId);
   currentDataset.current = selectedId;
   const selectionRequest = useRef(0);
@@ -77,6 +78,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
     // 학습 입력 Dataset을 바꾸어도 이미 선택한 모델 판본은 별개의 조회 결과다.
     setColumns([]);
     setFeatures([]);
+    setLoadingColumns(false);
     setError("");
     if (!selectedId) return () => { alive = false; };
     setLoadingColumns(true);
@@ -99,7 +101,9 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
         if (alive) {
           setSelectedJob(next);
           if (TERMINAL.has(next.status)) {
-            void reloadHistory().catch(error => { if (alive) setError(formatError(error)); });
+            void reloadHistory().catch(() => {
+              if (alive) setNotice("학습 작업의 상태는 확인됐지만 이력 목록 갱신에 실패했습니다.");
+            });
           }
         }
       } catch (error) {
@@ -147,6 +151,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
     const requestedSelection = ++selectionRequest.current;
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
       const result = await submitJob<MLTrainingJob>("/api/ml/train/jobs", {
         dataset_id: selectedId,
@@ -164,7 +169,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
         setHistoryDatasetFilter("");
         setModelView("models");
       }
-      void reloadHistory().catch(error => setError(formatError(error)));
+      void reloadHistory().catch(() =>
+        setNotice("학습 Job은 접수됐지만 이력 목록을 갱신하지 못했습니다. 다시 조회할 수 있습니다."));
     } catch (error) {
       setError(formatError(error));
     } finally {
@@ -193,6 +199,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
     const requestedSelection = ++selectionRequest.current;
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
       const result = await submitJob<MLTrainingJob>(
         `/api/ml/train/jobs/${encodeURIComponent(selectedJob.id)}/fork`, { params: null },
@@ -203,7 +210,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
         setModel(null);
         setCompareJobId("");
       }
-      await reloadHistory();
+      try { await reloadHistory(); }
+      catch { setNotice("Fork Job은 접수됐지만 이력 목록을 갱신하지 못했습니다."); }
     } catch (error) { setError(formatError(error)); }
     finally { setSubmitting(false); }
   }
@@ -249,6 +257,9 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
     String(revision.params[key] ?? "—");
 
   return <div className="job-list">
+    {notice && <section className="alert success" role="status">
+      {notice}<button type="button" onClick={() => setNotice("")} aria-label="ML 알림 닫기">×</button>
+    </section>}
     {error && <section className="panel" role="alert">
       <strong>ML 작업을 처리하지 못했습니다.</strong> {error}
       <button className="ghost" onClick={() => setError("")}>닫기</button>
