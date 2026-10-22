@@ -1,4 +1,4 @@
-"""전문가가 제공하는 첫 IF Pipeline 정의와 Dataset 적합성 검사.
+"""Pipeline 제작자가 제공하는 첫 IF Pipeline 정의와 Dataset 적합성 검사.
 
 이 정의의 Feature 계약은 SOS Core의 공통 입력 규칙이 아니다.
 """

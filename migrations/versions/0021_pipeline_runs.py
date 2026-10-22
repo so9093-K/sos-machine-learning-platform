@@ -36,7 +36,7 @@ def upgrade() -> None:
         sa.Column("actor_id", sa.Text(), primary_key=True),
         sa.Column("submission_key", sa.String(128), primary_key=True),
         sa.Column("fingerprint", sa.String(64), nullable=False),
-        sa.Column("run_id", sa.String(36), sa.ForeignKey("pipeline_runs.id"), nullable=False),
+        sa.Column("run_id", sa.String(36), sa.ForeignKey("pipeline_runs.id", deferrable=True, initially="DEFERRED"), nullable=False),
     )
 
 

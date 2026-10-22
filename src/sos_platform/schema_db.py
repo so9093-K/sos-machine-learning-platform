@@ -296,7 +296,7 @@ pipeline_submissions = Table(
     Column("actor_id", Text, primary_key=True),
     Column("submission_key", String(128), primary_key=True),
     Column("fingerprint", String(64), nullable=False),
-    Column("run_id", String(36), ForeignKey("pipeline_runs.id"), nullable=False),
+    Column("run_id", String(36), ForeignKey("pipeline_runs.id", deferrable=True, initially="DEFERRED"), nullable=False),
 )
 
 audit_events = Table(

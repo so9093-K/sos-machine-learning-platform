@@ -35,7 +35,7 @@ const stageLabel: Record<string,string> = {
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 const count = (value: number) => value.toLocaleString("ko-KR");
 
-/** 전문가가 설계한 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
+/** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
 export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onOpenResource }: {
   datasets: Dataset[]; canRun: boolean; canCancel: boolean;
   onNavigate: (tab: WorkspaceTab) => void;
@@ -141,7 +141,7 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
   return <div className="platform-home">
     <section className="platform-intro">
       <span className="eyebrow">REGISTERED PIPELINE</span>
-      <h2>전문가가 설계한 ML 분석 시작</h2>
+      <h2>등록된 ML 분석 파이프라인</h2>
       <p>분석 방법을 직접 구성하지 않고, 자신의 데이터를 선택해 입력 조건을 확인한 다음 실행할 수 있습니다. 기존 개별 ML 기능도 계속 사용할 수 있습니다.</p>
     </section>
     {error && <div className="alert error" role="alert">{error}
@@ -176,7 +176,7 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
         <strong>분석 계획 · 입력 적합</strong>
         <p>Train {count(checked.plan.partition_sizes.train)}행 · Calibration {count(checked.plan.partition_sizes.calibration)}행 · Test {count(checked.plan.partition_sizes.test)}행</p>
         <p className="hint">Train 끝: {new Date(checked.plan.train_end).toLocaleString("ko-KR")} · Calibration 끝: {new Date(checked.plan.calibration_end).toLocaleString("ko-KR")}</p>
-        <p className="hint">전문가가 정의한 44개 수치 Feature와 Train-only 중앙값 전처리를 사용합니다. Calibration 기준 0.5% 후보 정책을 Test에 적용하며 실제 Test 후보율은 다를 수 있습니다.</p>
+        <p className="hint">등록된 파이프라인의 44개 수치 Feature와 Train-only 중앙값 전처리를 사용합니다. Calibration 기준 0.5% 후보 정책을 Test에 적용하며 실제 Test 후보율은 다를 수 있습니다.</p>
         <button disabled={!canRun || busy} onClick={() => void start()}>
           {busy ? "제출 중…" : "이 Dataset으로 Pipeline 실행"}
         </button>
