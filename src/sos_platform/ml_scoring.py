@@ -5,6 +5,7 @@ Scoring Result의 row_index는 결과 파일의 행 번호이지 원본 Dataset�
 """
 
 import math
+import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -21,6 +22,45 @@ from .ml_temporal_split import select_temporal_partition
 from .schemas import MLScoringTemporalScope
 
 SCORING_BATCH_ROWS = 10_000
+
+
+def scoring_stage_prefix(scoring_output: Path) -> str:
+    """Worker Attempt 결과 경로에 귀속된 임시 Scoring Stage 디렉터리 접두어."""
+    return f"ml-score-{scoring_output.name}-"
+
+
+def scoring_stage_directories(home: Path, scoring_output: Path) -> list[Path]:
+    """해당 Attempt가 소유하는 Stage만 탐색하고 심볼릭 링크는 거절한다."""
+    root = home / "results"
+    if not root.is_dir():
+        return []
+    prefix = scoring_stage_prefix(scoring_output)
+    matched = []
+    for item in root.iterdir():
+        if not item.name.startswith(prefix):
+            continue
+        if item.is_symlink() or not item.is_dir():
+            raise ValueError("Scoring Stage must be an owned directory")
+        matched.append(item)
+    return matched
+
+
+def scoring_stage_bytes(home: Path, scoring_output: Path) -> int:
+    """임시 입력 Stage와 현재 출력 Parquet의 실제 디스크 사용량."""
+    size = scoring_output.stat().st_size if scoring_output.is_file() else 0
+    for root in scoring_stage_directories(home, scoring_output):
+        for entry in root.rglob("*"):
+            if entry.is_symlink():
+                raise ValueError("Scoring Stage cannot contain symbolic links")
+            if entry.is_file():
+                size += entry.stat().st_size
+    return size
+
+
+def cleanup_scoring_stage(home: Path, scoring_output: Path) -> None:
+    """중단·재시도 Attempt에 한해 남은 임시 Stage 디렉터리를 제거한다."""
+    for directory in scoring_stage_directories(home, scoring_output):
+        shutil.rmtree(directory)
 
 
 def _scoring_scope(source: pl.LazyFrame, dataset: dict, model: dict, raw_scope: dict):
@@ -115,7 +155,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
     scope_evidence = None
     pending.parent.mkdir(parents=True, exist_ok=True)
     # 중간 파일의 수명은 Job Attempt에 한정한다. 데이터 전체는 메모리에 올리지 않는다.
-    with TemporaryDirectory(prefix="ml-score-", dir=pending.parent) as directory:
+    with TemporaryDirectory(prefix=scoring_stage_prefix(pending), dir=pending.parent) as directory:
         staged = Path(directory) / "selected.parquet"
         with pinned_scan_dataset(store, dataset) as source:
             if spec.get("temporal_scope") is not None:
