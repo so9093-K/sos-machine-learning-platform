@@ -637,7 +637,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       {(tab === "jobs" || tab === "ml-jobs") && <ActivityWorkspace
         active={tab === "ml-jobs" ? "ml" : "data"}
         onChange={view => setTab(view === "ml" ? "ml-jobs" : "jobs")}
-        onNavigate={setTab} onOpenResource={openResource}>
+        onNavigate={setTab} onOpenResource={openResource} canCancel={canCancel}>
         {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
           b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))}
           datasets={datasets} busy={busy} canCancel={canCancel}
