@@ -56,6 +56,9 @@ def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
 
 
 def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
+    if spec.observation_id_column is not None:
+        # Preview는 발급 뒤 게시된 Dataset 판본이 아니므로 임시 UUID를 보여주지 않는다.
+        raise InvalidRequestError("Observation identity requires a published Transform Job")
     schema = lf.collect_schema()
     if not set(spec.group_by).issubset(schema.names()):
         raise InvalidRequestError("Group column does not exist")
