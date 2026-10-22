@@ -41,6 +41,8 @@ function trainingSelectionLabel(value: unknown): string {
 export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCancel }: Props) {
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
+  const [modelView, setModelView] = useState<"models" | "training">("models");
+  const [historyDatasetFilter, setHistoryDatasetFilter] = useState("");
   const [nEstimators, setNEstimators] = useState(100);
   const [maxSamples, setMaxSamples] = useState("auto");
   const [inputMode, setInputMode] = useState<"all" | "sample">("all");
@@ -163,6 +165,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           selectionRequest.current === requestedSelection) {
         setSelectedJob(result);
         setModel(null);
+        setModelView("models");
       }
       void reloadHistory().catch(error => setError(formatError(error)));
     } catch (error) {
@@ -220,7 +223,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     } catch (error) { setError(formatError(error)); }
   }
 
-  const visibleHistory = history.filter(item => !selectedId || item.dataset_id === selectedId);
+  const visibleHistory = history.filter(item =>
+    !historyDatasetFilter || item.dataset_id === historyDatasetFilter);
   const comparisonCandidates = visibleHistory.filter(item =>
     item.id !== selectedJob?.id &&
     item.status === "Succeeded" &&
@@ -252,7 +256,17 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       <strong>ML 작업을 처리하지 못했습니다.</strong> {error}
       <button className="ghost" onClick={() => setError("")}>닫기</button>
     </section>}
-    <section className="panel">
+    <div className="panel model-view-controls">
+      <div><h3>모델 판본과 학습</h3>
+        <p className="hint">모델 결과를 조회하는 일과 새 학습을 시작하는 일은 별개의 작업입니다.</p></div>
+      <div className="model-view-switch" role="group" aria-label="모델 작업 선택">
+        <button type="button" className={modelView === "models" ? "" : "secondary"}
+          aria-pressed={modelView === "models"} onClick={() => setModelView("models")}>학습 이력·모델 판본</button>
+        <button type="button" className={modelView === "training" ? "" : "secondary"}
+          aria-pressed={modelView === "training"} onClick={() => setModelView("training")}>새 모델 학습</button>
+      </div>
+    </div>
+    {modelView === "training" && <section className="panel">
       <div className="panel-head"><div>
         <h3>Isolation Forest 실험</h3>
         <p>숫자형 결측 없는 입력으로 비동기 학습합니다. Dataset 판본과 모델 결과는 변경할 수 없습니다.</p>
@@ -324,13 +338,22 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           {submitting ? "Job 접수 중…" : "학습 Job 제출"}
         </button>
       </div>
-    </section>
+    </section>}
 
-    <section className="panel">
-      <div className="panel-head"><div><h3>ML 학습 이력</h3>
+    {modelView === "models" && <section className="panel">
+      <div className="panel-head"><div><h3>학습 이력·모델 판본</h3>
         <p>이동·새로고침 후에도 Job 상태와 모델 판본을 다시 조회할 수 있습니다.</p>
       </div><button className="secondary" onClick={() => void reloadHistory().catch(e => setError(formatError(e)))}>
         목록 새로고침</button></div>
+      <div className="model-history-filter">
+        <label>원본 Dataset
+          <select aria-label="모델 이력 Dataset 필터" value={historyDatasetFilter}
+            onChange={event => setHistoryDatasetFilter(event.target.value)}>
+            <option value="">모든 Dataset</option>
+            {datasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+      </div>
       <div className="job-list">
         {visibleHistory.map(item =>
           <button className="secondary" key={item.id} onClick={() => void selectJob(item.id)}
@@ -343,8 +366,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           이전 학습 더 보기
         </button>}
       </div>
-    </section>
-    {selectedJob && <section className="panel" aria-label="ML 실행 결과">
+    </section>}
+    {modelView === "models" && selectedJob && <section className="panel" aria-label="ML 실행 결과">
       <div className="panel-head"><div><h3>학습 Job 상세</h3>
         <p>{selectedJob.id} · {selectedJob.status}</p>
       </div>
