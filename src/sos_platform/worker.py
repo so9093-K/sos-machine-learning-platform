@@ -43,6 +43,7 @@ from .mlflow_config import MLflowSettings
 from .mlflow_tracking import MLflowClient, run_tracking_once
 from .object_store import ObjectStore
 from .observability import emit
+from .observation_preparation import materialize_observation_ids
 from .processing import transform
 from .resource_admission import ExecutionCapacity, reserve_execution_memory
 from .schemas import ExplorationSpec, Transform
@@ -106,9 +107,19 @@ def _perform(
             stage = "processing"
             spec = Transform.model_validate(job["spec"]["transform"])
             with pinned_scan_dataset(store, dataset) as source:
-                lf = transform(source, spec)
-                lf.sink_parquet(pending)
-            result = {"input_dataset_id": dataset["id"]}
+                if spec.observation_id_column is not None:
+                    evidence = materialize_observation_ids(
+                        source, pending, column=spec.observation_id_column
+                    )
+                else:
+                    lf = transform(source, spec)
+                    lf.sink_parquet(pending)
+                    evidence = {}
+            result = {
+                "input_dataset_id": dataset["id"],
+                "input_dataset_version": dataset["version"],
+                **evidence,
+            }
         elif job["kind"] == "ml_train":
             stage = "processing"
             # 정렬 Spill 파일은 이 Attempt만 소유한다. 종료 후 부모가 정리하고
