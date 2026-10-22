@@ -89,7 +89,7 @@ function ActivityJobDetails({ job, canCancel, onChanged }: {
       <button className="secondary" onClick={() => void loadDetails()}>다시 조회</button></div>}
     {notice && <p role="status">{notice}</p>}
     {detail && <>
-      <p className="hint">현재 상세 상태: {detail.status}
+      <p className="hint">마지막 상세 조회 상태: {detail.status}
         {detail.cancel_requested ? " · 취소 요청 중" : ""}
         {detail.error_code ? ` · 오류 코드 ${detail.error_code}` : ""}</p>
       {detail.error && <p role="alert">{detail.error}</p>}
