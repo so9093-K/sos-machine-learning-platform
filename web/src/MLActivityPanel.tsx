@@ -36,10 +36,11 @@ function toActivity(job: JobLike, kind: Kind): Activity {
 }
 
 /** 조회된 Job 페이지에 있는 활동만 보여준다. 전체 Job 수나 완료 진행률을 추정하지 않는다. */
-export function MLActivityPanel({ compact = false, onNavigate, onOpenResource }: {
+export function MLActivityPanel({ compact = false, onNavigate, onOpenResource, onViewAll }: {
   compact?: boolean;
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
+  onViewAll?: () => void;
 }) {
   const training = usePagedJobs<MLTrainingJobSummary>("/api/ml/train/jobs");
   const scoring = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
@@ -68,7 +69,7 @@ export function MLActivityPanel({ compact = false, onNavigate, onOpenResource }:
       <p>학습·점수화·정책·평가·설명 Job의 조회된 페이지 범위입니다.</p>
     </div>
       {compact
-        ? <button className="secondary" onClick={() => onNavigate("jobs")}>작업 이력 →</button>
+        ? <button className="secondary" onClick={onViewAll ?? (() => onNavigate("jobs"))}>작업 이력 →</button>
         : <button className="secondary" onClick={() => void refresh()}>다시 조회</button>}
     </div>
     {!compact && <label className="ml-activity-filter">작업 유형
