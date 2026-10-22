@@ -112,8 +112,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setTab("profile");
     requestAnimationFrame(() => document.getElementById("sos-tab-profile")?.focus());
   }
+  const isDataArea = (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab);
   const { overview, overviewStatus, overviewError, retryOverview } =
-    useDatasetOverview(selected, reloadRevision);
+    useDatasetOverview(isDataArea ? selected : "", reloadRevision);
   const { preview, profile, previewStatus, profileStatus, previewError, profileError } =
     useDatasetInspection(selected, reloadRevision, tab);
   const columnNames = preview ? Object.keys(preview.schema) : [];
