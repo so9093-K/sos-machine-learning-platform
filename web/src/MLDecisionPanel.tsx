@@ -308,7 +308,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       (evaluationJob !== null && !DONE.has(evaluationJob.status))}
       onClick={() => void createEvaluation()}>Evaluation 판본 생성</button>
     {policyJob && !policy && <p role="status">선택한 정책 판본을 확인하는 중입니다.
-      완료 전에는 평가를 제출할 수 없습니다.</p>
+      완료 전에는 평가를 제출할 수 없습니다.</p>}
     {evaluationJob && <p role="status">Evaluation Job · {evaluationJob.status}
       {evaluationJob.cancel_requested && evaluationJob.status === "Running" && " · 취소 요청됨"}
     </p>}
