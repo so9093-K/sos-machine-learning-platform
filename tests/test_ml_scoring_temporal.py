@@ -238,3 +238,22 @@ def test_policy_only_loads_scores_not_full_feature_vectors(scoring_env, monkeypa
     full = ml_decision._verified_scoring(store, scoring, include_features=True)
     assert "features" in full.columns
     assert full.height == narrow.height
+    row = ml_decision._verified_scoring_row(store, scoring, 20_011)
+    assert row["row_index"] == 20_011
+    assert row["features"]["count"] == pytest.approx(20_011.0)
+    assert row["anomaly_score"] == pytest.approx(20.011)
+    with pytest.raises(ValueError, match="out of bounds"):
+        ml_decision._verified_scoring_row(store, scoring, 20_021)
+
+    # 특정 행을 읽을 때 전체 Scoring 파일의 pl.read_parquet를 호출하면 회귀다.
+    monkeypatch.setattr(
+        pl, "read_parquet",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("Explanation loaded entire Scoring DataFrame")
+        ),
+    )
+    target = ml_decision._verified_scoring_row(store, scoring, 20_000)
+    assert target["row_index"] == 20_000
+    scoring["row_count"] += 1
+    with pytest.raises(ValueError, match="row count"):
+        ml_decision._verified_scoring_row(store, scoring, 20_000)
