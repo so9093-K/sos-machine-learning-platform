@@ -4,7 +4,7 @@ export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
   | "research" | "ml" | "training" | "scoring" | "policies"
   | "evaluations" | "explanations" | "experience"
-  | "jobs" | "storage" | "audit";
+  | "jobs" | "ml-jobs" | "storage" | "audit";
 export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
 export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
 
@@ -15,7 +15,7 @@ const paths: Record<WorkspaceTab, string> = {
   scoring: "/scoring", policies: "/policies",
   evaluations: "/evaluations", explanations: "/explanations",
   experience: "/model-experience",
-  jobs: "/activity/jobs", storage: "/operations/storage", audit: "/operations/audit",
+  jobs: "/activity/jobs", "ml-jobs": "/activity/ml", storage: "/operations/storage", audit: "/operations/audit",
 };
 const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }> = {
   model: { base: "/models", tab: "ml" },
@@ -129,7 +129,8 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
 }) {
   const isCurrent = (tab: WorkspaceTab) =>
     tab === "understanding" ? ["understanding", "preview", "profile"].includes(active)
-      : tab === "ml" ? isModelsArea(active) : active === tab;
+      : tab === "ml" ? isModelsArea(active)
+      : tab === "jobs" ? ["jobs", "ml-jobs"].includes(active) : active === tab;
   return <nav className="global-nav platform-nav" aria-label="플랫폼 메뉴">
     {groups.map(group => <div className="platform-nav-group" key={group.title}>
       <span className="section-title">{group.title}</span>
