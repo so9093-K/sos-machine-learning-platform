@@ -2521,15 +2521,17 @@ export interface components {
         };
         /**
          * Transform
-         * @description 순서가 보존되는 재현 가능한 변환 정의.
+         * @description 기존 변환 단계 또는 단독 불변 관측치 UUID 발급 작업.
          */
         Transform: {
             /** Group By */
             group_by?: string[];
+            /** Observation Id Column */
+            observation_id_column?: string | null;
             /** Order By */
             order_by?: string | null;
             /** Steps */
-            steps: components["schemas"]["Step"][];
+            steps?: components["schemas"]["Step"][];
         };
         /** UnderstandingColumnOut */
         UnderstandingColumnOut: {
