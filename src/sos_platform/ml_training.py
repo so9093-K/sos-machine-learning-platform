@@ -125,7 +125,13 @@ def training_matrix(
                 for name in features:
                     if schema[name] in INTEGER_DTYPES:
                         values = frame[name]
-                        if values.max() > 2**53 or values.min() < -(2**53):
+                        maximum, minimum = values.max(), values.min()
+                        # 전부 null인 Batch는 극값이 None이다. Train 전체에는 값이
+                        # 있을 수 있으므로 전처리 단계에서 결측 정책을 판단한다.
+                        if (
+                            (maximum is not None and maximum > 2**53)
+                            or (minimum is not None and minimum < -(2**53))
+                        ):
                             raise ValueError("Integer feature exceeds the exact float64 range")
                 matrix = np.asarray(frame.to_numpy(), dtype=np.float64)
                 if missing_policy == "reject" and not np.isfinite(matrix).all():
