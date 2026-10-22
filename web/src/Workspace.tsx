@@ -24,6 +24,8 @@ import { PlatformOverview } from "./PlatformOverview";
 import { PlatformAreaPreview } from "./PlatformAreaPreview";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { MLWorkbench } from "./MLWorkbench";
+import { MLResourceDetail, ScoringWorkspace, DecisionWorkspace } from "./MLResourcePages";
+import type { DecisionView } from "./MLDecisionPanel";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
 import { useDatasetOverview } from "./useDatasetOverview";
 import { useDatasetInspection } from "./useDatasetInspection";
@@ -63,7 +65,17 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
   const [reloadRevision, setReloadRevision] = useState(0);
-  const { tab, navigate: setTab } = useWorkspaceNavigation();
+  const { tab, resource, navigate: setTab, openResource } = useWorkspaceNavigation();
+  const [scoringModelId, setScoringModelId] = useState("");
+  const [decisionScoringId, setDecisionScoringId] = useState("");
+  function startScoring(modelId: string) {
+    setScoringModelId(modelId);
+    setTab("scoring");
+  }
+  function startDecision(view: DecisionView, scoringId: string) {
+    setDecisionScoringId(scoringId);
+    setTab(view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations");
+  }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadPolicy, setUploadPolicy] = useState<UploadPolicy | null>(null);
@@ -599,8 +611,25 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </>}
 
       </>}
-      {tab === "ml" && <MLWorkbench datasets={datasets}
+      {tab === "ml" && !resource && <MLWorkbench datasets={datasets}
+        view="models" onViewChange={view => setTab(view === "models" ? "ml" : "training")}
+        onOpenModel={id => openResource("model", id)}
         canTrain={canRun} canCancel={canCancel} />}
+      {tab === "training" && <MLWorkbench datasets={datasets}
+        view="training" onViewChange={view => setTab(view === "models" ? "ml" : "training")}
+        onOpenModel={id => openResource("model", id)}
+        canTrain={canRun} canCancel={canCancel} />}
+      {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
+        kind={resource.kind} id={resource.id} onOpenResource={openResource}
+        onScoring={startScoring} onDecision={startDecision} />}
+      {tab === "scoring" && !resource && <ScoringWorkspace
+        datasets={datasets} preferredModelId={scoringModelId}
+        canRun={canRun} canCancel={canCancel} onOpenResource={openResource} />}
+      {(["policies","evaluations","explanations"] as Tab[]).includes(tab) && !resource &&
+        <DecisionWorkspace
+          key={tab} view={tab === "policies" ? "policy" : tab === "evaluations" ? "evaluation" : "explanation"}
+          preferredScoringId={decisionScoringId} canRun={canRun} canCancel={canCancel}
+          onOpenResource={openResource} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
       {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
