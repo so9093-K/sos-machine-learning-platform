@@ -2,41 +2,74 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
-  | "research" | "ml" | "experience" | "jobs" | "storage" | "audit";
+  | "research" | "ml" | "training" | "scoring" | "policies"
+  | "evaluations" | "explanations" | "experience"
+  | "jobs" | "storage" | "audit";
+export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
+export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
 
 const paths: Record<WorkspaceTab, string> = {
   overview: "/", understanding: "/data", preview: "/data/query",
   profile: "/data/profile", preparation: "/data/prepare",
-  research: "/research", ml: "/models", experience: "/model-experience",
+  research: "/research", ml: "/models", training: "/training",
+  scoring: "/scoring", policies: "/policies",
+  evaluations: "/evaluations", explanations: "/explanations",
+  experience: "/model-experience",
   jobs: "/activity/jobs", storage: "/operations/storage", audit: "/operations/audit",
 };
-
-function tabAt(pathname: string): WorkspaceTab {
-  return (Object.keys(paths) as WorkspaceTab[]).find(tab => paths[tab] === pathname) ?? "overview";
+const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }> = {
+  model: { base: "/models", tab: "ml" },
+  scoring: { base: "/scoring/results", tab: "scoring" },
+  policy: { base: "/policies", tab: "policies" },
+  evaluation: { base: "/evaluations", tab: "evaluations" },
+  explanation: { base: "/explanations", tab: "explanations" },
+};
+export function resourcePath(kind: MLResourceKind, id: string): string {
+  return `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
+}
+function routeAt(pathname: string): { tab: WorkspaceTab; resource: ResourceRoute } {
+  for (const [kind, config] of Object.entries(resourcePaths) as
+      Array<[MLResourceKind, { base: string; tab: WorkspaceTab }]>) {
+    if (pathname.startsWith(config.base + "/")) {
+      const id = pathname.slice(config.base.length + 1);
+      if (id && !id.includes("/")) {
+        try { return { tab: config.tab, resource: { kind, id: decodeURIComponent(id) } }; }
+        catch { break; }
+      }
+    }
+  }
+  const tab = (Object.keys(paths) as WorkspaceTab[]).find(key => paths[key] === pathname);
+  return { tab: tab ?? "overview", resource: null };
 }
 
-/** 페이지 주소를 사용자 내비게이션 상태와 일치시킨다. */
+/** 탭과 불변 결과 주소를 같은 탐색 상태로 유지한다. */
 export function useWorkspaceNavigation() {
-  const [tab, setActive] = useState<WorkspaceTab>(() => tabAt(window.location.pathname));
-  const current = useRef(tab);
+  const [route, setRoute] = useState(() => routeAt(window.location.pathname));
+  const current = useRef(route);
   useEffect(() => {
     const sync = () => {
-      current.current = tabAt(window.location.pathname);
-      setActive(current.current);
+      current.current = routeAt(window.location.pathname);
+      setRoute(current.current);
       requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
     };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
-  const navigate = useCallback((target: WorkspaceTab | ((previous: WorkspaceTab) => WorkspaceTab)) => {
-    const next = typeof target === "function" ? target(current.current) : target;
-    if (current.current !== next || window.location.pathname !== paths[next]) {
-      window.history.pushState(null, "", paths[next]);
-    }
+  const update = useCallback((next: { tab: WorkspaceTab; resource: ResourceRoute }, path: string) => {
+    if (window.location.pathname !== path) window.history.pushState(null, "", path);
     current.current = next;
-    setActive(next);
+    setRoute(next);
+    requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
   }, []);
-  return { tab, navigate };
+  const navigate = useCallback((target: WorkspaceTab | ((previous: WorkspaceTab) => WorkspaceTab)) => {
+    const tab = typeof target === "function" ? target(current.current.tab) : target;
+    update({ tab, resource: null }, paths[tab]);
+  }, [update]);
+  const openResource = useCallback((kind: MLResourceKind, id: string) => {
+    if (!id) return;
+    update({ tab: resourcePaths[kind].tab, resource: { kind, id } }, resourcePath(kind, id));
+  }, [update]);
+  return { tab: route.tab, resource: route.resource, navigate, openResource };
 }
 
 type NavItem = { tab: WorkspaceTab; label: string; concept?: boolean };
@@ -46,9 +79,14 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
     { tab: "understanding", label: "데이터 탐색" },
     { tab: "preparation", label: "데이터 준비" },
   ] },
-  { title: "RESEARCH & MODELS", items: [
-    { tab: "research", label: "연구·실험", concept: true },
-    { tab: "ml", label: "모델·학습" },
+  { title: "RESEARCH", items: [{ tab: "research", label: "연구·실험", concept: true }] },
+  { title: "MODELS & RESULTS", items: [
+    { tab: "ml", label: "모델 판본" },
+    { tab: "training", label: "학습" },
+    { tab: "scoring", label: "점수화" },
+    { tab: "policies", label: "판정 정책" },
+    { tab: "evaluations", label: "평가" },
+    { tab: "explanations", label: "설명" },
     { tab: "experience", label: "모델 활용", concept: true },
   ] },
   { title: "ACTIVITY & OPERATIONS", items: [
@@ -58,7 +96,7 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
   ] },
 ];
 
-/** 제품 경험의 영역은 실행 파이프라인과 독립적으로 탐색한다. */
+/** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
 export function PlatformNavigation({ active, onNavigate, canInspectStorage, canViewAudit }: {
   active: WorkspaceTab;
   onNavigate: (tab: WorkspaceTab) => void;
@@ -78,7 +116,6 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           onNavigate(item.tab);
-          requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
         }}>
         <span>{item.label}</span>{item.concept && <small>설계</small>}
       </a>)}
