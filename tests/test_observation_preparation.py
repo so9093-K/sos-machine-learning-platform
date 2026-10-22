@@ -168,3 +168,46 @@ def test_transform_job_http_submission_pins_source_revision_and_uses_existing_pe
             },
         })
         assert mixed.status_code == 422
+
+
+def test_prepared_dataset_scoring_keeps_observation_identity_across_time_scopes(
+    monkeypatch, scoring_env, tmp_path
+):
+    """Dataset 준비 → 고정 판본 → Calibration/Test 점수화에서 UUID가 유지된다."""
+    import hashlib
+    from contextlib import contextmanager
+
+    from sos_platform import ml_scoring
+    from test_ml_scoring_temporal import scope, spec
+
+    store, model, dataset, _, _ = scoring_env
+    raw = pl.DataFrame({
+        "ts": [f"2026-01-01T{hour:02d}:00:00Z" for hour in range(9)],
+        "count": [float(value) for value in range(9)],
+    })
+    prepared_path = tmp_path / "prepared.parquet"
+    materialize_observation_ids(
+        raw.lazy(), prepared_path, column="observation_uuid"
+    )
+    # 실제 Dataset 게시 후에는 원본 바이트의 불변 판본을 참조하게 된다.
+    dataset["version"] = hashlib.sha256(prepared_path.read_bytes()).hexdigest()
+    model["dataset_version"] = dataset["version"]
+
+    @contextmanager
+    def scan_published(_store, pinned):
+        assert pinned["version"] == dataset["version"]
+        yield pl.scan_parquet(prepared_path)
+
+    monkeypatch.setattr(ml_scoring, "pinned_scan_dataset", scan_published)
+    originals = pl.read_parquet(prepared_path)["observation_uuid"].to_list()
+    for partition, expected in (("calibration", originals[4:7]), ("test", originals[7:9])):
+        request = spec(partition)
+        request["dataset_version"] = dataset["version"]
+        request["observation_id_column"] = "observation_uuid"
+        output = tmp_path / f"{partition}.scores.parquet"
+        scored = ml_scoring.run_dataset_scoring(store, dataset, request, output)
+        assert scored["row_count"] == len(expected)
+        assert pl.read_parquet(output)["observation_id"].to_list() == expected
+        assert scored["score_summary"]["observation_identity"]["dataset_version"] == (
+            dataset["version"]
+        )
