@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
-import { MLScoringPanel } from "./MLScoringPanel";
 import { MLTrackingStatus } from "./MLTrackingStatus";
 import { FeatureSelector } from "./FeatureSelector";
 import type {
@@ -15,6 +14,9 @@ type Props = {
   datasets: Dataset[];
   canTrain: boolean;
   canCancel: boolean;
+  view: "models" | "training";
+  onViewChange: (view: "models" | "training") => void;
+  onOpenModel: (id: string) => void;
 };
 
 function statistic(value: unknown): string {
@@ -36,11 +38,10 @@ function trainingSelectionLabel(value: unknown): string {
 }
 
 /** 데이터 선택부터 비동기 학습·불변 결과 조회까지 같은 공개 API를 사용한다. */
-export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
+export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, onViewChange, onOpenModel }: Props) {
   const [selectedId, onSelect] = useState("");
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
-  const [modelView, setModelView] = useState<"models" | "training">("models");
   const [historyDatasetFilter, setHistoryDatasetFilter] = useState("");
   const [nEstimators, setNEstimators] = useState(100);
   const [maxSamples, setMaxSamples] = useState("auto");
@@ -167,7 +168,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
         setSelectedJob(result);
         setModel(null);
         setHistoryDatasetFilter("");
-        setModelView("models");
+        onViewChange("models");
       }
       void reloadHistory().catch(() =>
         setNotice("학습 Job은 접수됐지만 이력 목록을 갱신하지 못했습니다. 다시 조회할 수 있습니다."));
@@ -269,9 +270,9 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
         <p className="hint">모델 결과를 조회하는 일과 새 학습을 시작하는 일은 별개의 작업입니다.</p></div>
       <div className="model-view-switch" role="group" aria-label="모델 작업 선택">
         <button type="button" className={modelView === "models" ? "" : "secondary"}
-          aria-pressed={modelView === "models"} onClick={() => setModelView("models")}>학습 이력·모델 판본</button>
+          aria-pressed={modelView === "models"} onClick={() => onViewChange("models")}>학습 이력·모델 판본</button>
         <button type="button" className={modelView === "training" ? "" : "secondary"}
-          aria-pressed={modelView === "training"} onClick={() => setModelView("training")}>새 모델 학습</button>
+          aria-pressed={modelView === "training"} onClick={() => onViewChange("training")}>새 모델 학습</button>
       </div>
     </div>
     {modelView === "training" && <section className="panel">
@@ -418,8 +419,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
           <div className="stat"><span>학습 점수 평균</span><strong>{statistic(model.training_score_summary.score_mean)}</strong></div>
         </div>
         <p className="hint">이 수치는 학습 데이터의 설명적 요약이며 검증 Precision·Recall·최적 임계값을 의미하지 않습니다. Scoring·정책·평가·설명은 아래에서 별도 결과로 생성하며, MLflow 추적 상태는 운영자 설정 시 표시합니다.</p>
-        <MLScoringPanel key={model.id} model={model} datasets={datasets}
-          canRun={canTrain} canCancel={canCancel} />
+        <div className="actions"><button type="button" className="secondary"
+          onClick={() => onOpenModel(model.id)}>모델 판본 상세·점수화로 이동 →</button></div>
         <div className="steps">
           <h4>학습 설정 비교</h4>
           <p className="hint">이미 완료한 모델의 입력 조건과 설정만 비교합니다. 재학습하거나 새로운 임계값을 적용하지 않습니다.</p>
