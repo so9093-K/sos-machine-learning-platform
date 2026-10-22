@@ -1,5 +1,6 @@
 """신뢰된 등록형 Pipeline의 API-first 진입점."""
 import base64
+import binascii
 import heapq
 import json
 import math
@@ -46,7 +47,7 @@ def _cursor(value: str | None) -> tuple[float, int] | None:
         if type(score) not in (float, int) or not math.isfinite(score) or type(index) is not int or index < 0:
             raise ValueError
         return (float(score), index)
-    except (ValueError, TypeError, json.JSONDecodeError):
+    except (ValueError, TypeError, json.JSONDecodeError, binascii.Error):
         raise HTTPException(status_code=422, detail="Invalid cursor") from None
 
 

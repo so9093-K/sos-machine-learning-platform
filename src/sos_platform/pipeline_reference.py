@@ -13,7 +13,7 @@ from .ml_temporal_split import select_temporal_partition
 PIPELINE_ID = "activity-anomaly-if"
 PIPELINE_VERSION = "1"
 FEATURES = ("io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create", "cnt_file_del", "cnt_file_write", "cnt_file_rename", "cnt_proc_exec", "cnt_net_tcp", "cnt_net_udp", "cnt_large_write", "cnt_rename_ext_change", "cnt_proc_completed_in_batch", "max_write_size", "ratio_offhour_activity", "delta_file_vol", "velocity_net_conn", "velocity_proc_exec", "delta_avg_filename_entropy", "avg_write_chunk_size", "cv_write_chunk_size", "uniq_browser_pages", "uniq_file_touched", "uniq_new_ext_on_rename", "uniq_proc_image", "uniq_dest_port", "uniq_dest_ip", "ratio_private_ip", "uniq_file_ext", "uniq_dir_touched", "avg_filename_entropy", "max_cmd_len", "max_url_len", "avg_file_path_depth", "avg_net_payload_out", "ratio_no_ui", "ratio_hidden_file_ops", "read_write_bytes_ratio", "ratio_rename_burst", "ratio_large_write", "ratio_ext_change_on_rename", "ratio_proc_churn", "ratio_top1_dest_bytes_out", "ratio_outbound_traffic", "avg_ops_per_file")
-STAGES = ("training", "calibration", "policy", "test", "evaluation")
+STAGES = ("preflight", "training", "calibration", "policy", "test", "evaluation")
 
 
 def definition() -> dict:
@@ -58,10 +58,10 @@ def _event_time(source: pl.LazyFrame) -> pl.Expr:
     ).otherwise(pl.lit(None, dtype=pl.Datetime(time_zone="UTC")))
 
 
-def inspect_dataset(store, dataset: dict) -> dict:
-    """등록된 Dataset의 실제 시각 분포로 60/20/20 경계를 제안한다.
+def inspect_dataset(store, dataset: dict, *, full: bool = False) -> dict:
+    """기본 스키마 검사와 자원 격리된 Worker 내 전체 시간 검사를 구별한다.
 
-    검사도 데이터 읽기를 수행하며 Runtime Job 제출과는 별개다.
+    full=True 검사는 반드시 Worker의 자원 예산 안에서만 호출한다.
     """
     issues: list[str] = []
     plan = None
@@ -74,7 +74,11 @@ def inspect_dataset(store, dataset: dict) -> dict:
         bad_types = [name for name in FEATURES if name in schema and schema[name] not in NUMERIC]
         if bad_types:
             issues.append("숫자형이 아닌 Feature: " + ", ".join(bad_types[:12]))
-        if not issues:
+        if "ts" in schema and schema["ts"] != pl.String and not (
+            isinstance(schema["ts"], pl.Datetime) and schema["ts"].time_zone
+        ):
+            issues.append("ts는 명시적 시간대가 있는 문자열 또는 Datetime이어야 합니다.")
+        if not issues and full:
             try:
                 event = _event_time(source)
                 milliseconds = event.dt.epoch("ms")

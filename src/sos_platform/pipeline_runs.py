@@ -58,7 +58,7 @@ def create_run(store, dataset: dict, owner_actor: str, inspection: dict,
                submission_key: str | None) -> dict:
     """동일 Actor·제출 키에 같은 내용이면 같은 Run을 반환한다."""
     plan = inspection["plan"]
-    if not inspection["ready"] or plan is None:
+    if not inspection["ready"]:
         raise ValueError("Pipeline 입력 적합성 검사에 실패했습니다.")
     fingerprint = hashlib.sha256(json.dumps({
         "definition": PIPELINE_ID, "version": PIPELINE_VERSION,
@@ -118,6 +118,12 @@ def _stage_job_spec(store, run: dict, stage: str) -> tuple[str, dict]:
         "train_end": plan["train_end"],
         "calibration_end": plan["calibration_end"],
     }
+    if stage == "preflight":
+        return "ml_pipeline_preflight", {
+            "dataset_version": dataset_version,
+            "definition_id": PIPELINE_ID,
+            "definition_version": PIPELINE_VERSION,
+        }
     if stage == "training":
         return "ml_train", {
             "algorithm": "isolation_forest",
@@ -206,6 +212,17 @@ def advance_run(store) -> bool:
     if job["status"] != "Succeeded":
         _update_run(store, run["id"], status=job["status"],
                     error_code=job.get("error_code"))
+        return True
+    if stage == "preflight":
+        plan = job["result"]["plan"]
+        if not plan:
+            _update_run(store, run["id"], status="Failed", error_code="SOS-ML-INPUT-INVALID")
+            return True
+        with store.connection() as db:
+            db.execute(text(
+                "UPDATE pipeline_runs SET input_plan=:plan,stage_index=1,updated_at=:at "
+                "WHERE id=:id AND status='Running'"
+            ), {"id": run["id"], "plan": json.dumps(plan), "at": now()})
         return True
     if run["stage_index"] + 1 == len(STAGES):
         _update_run(store, run["id"], status="Succeeded",

@@ -29,7 +29,7 @@ type CandidatePage = {
 };
 const PIPELINE = "activity-anomaly-if";
 const stageLabel: Record<string,string> = {
-  training: "모델 학습", calibration: "Calibration 점수화",
+  preflight: "시간 범위·데이터 검사", training: "모델 학습", calibration: "Calibration 점수화",
   policy: "판정 기준 생성", test: "Test 점수화", evaluation: "정책 적용 평가",
 };
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -172,10 +172,9 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
         <strong>이 Dataset은 아직 실행할 수 없습니다.</strong>
         <ul>{checked.issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
       </div>}
-      {checked?.ready && checked.plan && <div className="steps" role="status">
+      {checked?.ready && <div className="steps" role="status">
         <strong>분석 계획 · 입력 적합</strong>
-        <p>Train {count(checked.plan.partition_sizes.train)}행 · Calibration {count(checked.plan.partition_sizes.calibration)}행 · Test {count(checked.plan.partition_sizes.test)}행</p>
-        <p className="hint">Train 끝: {new Date(checked.plan.train_end).toLocaleString("ko-KR")} · Calibration 끝: {new Date(checked.plan.calibration_end).toLocaleString("ko-KR")}</p>
+        <p>필수 Feature와 시간 컬럼의 구조가 적합합니다. 전체 시간 분포와 Train/Calibration/Test의 유효성은 실행 시 자원 제한을 적용하는 Worker가 검사합니다.</p>
         <p className="hint">등록된 파이프라인의 44개 수치 Feature와 Train-only 중앙값 전처리를 사용합니다. Calibration 기준 0.5% 후보 정책을 Test에 적용하며 실제 Test 후보율은 다를 수 있습니다.</p>
         <button disabled={!canRun || busy} onClick={() => void start()}>
           {busy ? "제출 중…" : "이 Dataset으로 Pipeline 실행"}
@@ -189,6 +188,7 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
           {run.cancel_requested ? " · 취소 요청됨" : ""}
           {run.error_code ? " · 오류 코드 " + run.error_code : ""}</p>
         <p className="hint">실행은 서버 Worker에서 진행됩니다. 화면을 닫아도 Run을 다시 조회할 수 있습니다. 표시할 근거 없는 완료율은 추정하지 않습니다.</p>
+        {completed.find(item => item.name === "preflight")?.job.result?.plan && <p className="hint">시간 분할 검사가 완료되었습니다. 개별 Job에서 실제 처리 행과 시간 경계를 확인할 수 있습니다.</p>}
         {!terminal.has(run.status) && canCancel &&
           <button className="secondary" disabled={busy || run.cancel_requested} onClick={() => void cancel()}>Pipeline 취소 요청</button>}
         <div className="job-list">
