@@ -165,6 +165,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           selectionRequest.current === requestedSelection) {
         setSelectedJob(result);
         setModel(null);
+        setHistoryDatasetFilter("");
         setModelView("models");
       }
       void reloadHistory().catch(error => setError(formatError(error)));
@@ -348,7 +349,13 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
       <div className="model-history-filter">
         <label>원본 Dataset
           <select aria-label="모델 이력 Dataset 필터" value={historyDatasetFilter}
-            onChange={event => setHistoryDatasetFilter(event.target.value)}>
+            onChange={event => {
+              setHistoryDatasetFilter(event.target.value);
+              setSelectedJob(null);
+              setModel(null);
+              setCompareJobId("");
+              setComparisonModel(null);
+            }}>
             <option value="">모든 Dataset</option>
             {datasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
