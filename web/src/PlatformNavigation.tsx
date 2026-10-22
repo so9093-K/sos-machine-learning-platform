@@ -23,6 +23,7 @@ export function useWorkspaceNavigation() {
     const sync = () => {
       current.current = tabAt(window.location.pathname);
       setActive(current.current);
+      requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
     };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
@@ -77,6 +78,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           onNavigate(item.tab);
+          requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
         }}>
         <span>{item.label}</span>{item.concept && <small>설계</small>}
       </a>)}
