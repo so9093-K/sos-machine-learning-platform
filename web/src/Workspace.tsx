@@ -17,9 +17,15 @@ import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
 import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQueryPanel";
 import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
-import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
+import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
+import { PlatformShell } from "./PlatformShell";
+import { PlatformOverview } from "./PlatformOverview";
+import { PlatformAreaPreview } from "./PlatformAreaPreview";
+import { DataSourceSidebar } from "./DataSourceSidebar";
 import { MLWorkbench } from "./MLWorkbench";
+import { MLResourceDetail, ScoringWorkspace, DecisionWorkspace } from "./MLResourcePages";
+import type { DecisionView } from "./MLDecisionPanel";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
 import { useDatasetOverview } from "./useDatasetOverview";
 import { useDatasetInspection } from "./useDatasetInspection";
@@ -27,17 +33,7 @@ import { usePagedJobs } from "./usePagedJobs";
 import type { ExplorationRequest } from "./types";
 
 
-type Tab = DatasetTab | "preparation" | "ml" | "jobs" | "storage" | "audit";
-const pageLabels: Record<Tab, { eyebrow: string; title: string; description: string }> = {
-  understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
-  preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
-  profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
-  preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "Dataset · Recipe · Transform" },
-  ml: { eyebrow: "RESEARCH & ML", title: "ML Workbench", description: "Experiment · Training · Model Revision" },
-  jobs: { eyebrow: "ACTIVITY & JOBS", title: "전체 Jobs", description: "Job · Attempt · Result" },
-  storage: { eyebrow: "PLATFORM OPERATIONS", title: "저장소 상태", description: "Storage · Health" },
-  audit: { eyebrow: "PLATFORM OPERATIONS", title: "보안 감사", description: "Identity · Audit" },
-};
+type Tab = WorkspaceTab;
 type UploadProgress = {
   name: string; loaded: number; total: number;
   phase: "transferring" | "registering";
@@ -69,7 +65,17 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
   const [reloadRevision, setReloadRevision] = useState(0);
-  const [tab, setTab] = useState<Tab>("understanding");
+  const { tab, resource, navigate: setTab, openResource } = useWorkspaceNavigation();
+  const [scoringModelId, setScoringModelId] = useState("");
+  const [decisionScoringId, setDecisionScoringId] = useState("");
+  function startScoring(modelId: string) {
+    setScoringModelId(modelId);
+    setTab("scoring");
+  }
+  function startDecision(view: DecisionView, scoringId: string) {
+    setDecisionScoringId(scoringId);
+    setTab(view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations");
+  }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadPolicy, setUploadPolicy] = useState<UploadPolicy | null>(null);
@@ -118,8 +124,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setTab("profile");
     requestAnimationFrame(() => document.getElementById("sos-tab-profile")?.focus());
   }
+  const isDataArea = (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab);
   const { overview, overviewStatus, overviewError, retryOverview } =
-    useDatasetOverview(selected, reloadRevision);
+    useDatasetOverview(isDataArea ? selected : "", reloadRevision);
   const { preview, profile, previewStatus, profileStatus, previewError, profileError } =
     useDatasetInspection(selected, reloadRevision, tab);
   const columnNames = preview ? Object.keys(preview.schema) : [];
@@ -391,113 +398,32 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     };
   }, [preview, visualColumn, timeColumn]);
 
-  return <div className="shell">
-    <aside className="sidebar">
-      <InstanceBrand canEdit={canConfigure} />
-      <nav className="global-nav" aria-label="전역 메뉴">
-      <div className="section-title">DATA WORKSPACES</div>
-      <button className="job-navigation secondary"
-        aria-current={["understanding", "preview", "profile"].includes(tab) ? "page" : undefined}
-        onClick={() => setTab("understanding")}>데이터 탐색</button>
-      <button className="job-navigation secondary"
-        aria-current={tab === "preparation" ? "page" : undefined}
-        onClick={() => setTab("preparation")}>데이터 준비</button>
-      <div className="section-title">RESEARCH & ML</div>
-      <button className="job-navigation secondary"
-        aria-current={tab === "ml" ? "page" : undefined}
-        onClick={() => setTab("ml")}>ML Workbench</button>
-      <div className="section-title">PLATFORM</div>
-      <button className="job-navigation secondary" aria-current={tab === "jobs" ? "page" : undefined}
-        onClick={() => setTab("jobs")}>
-        전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
-      </button>
-      {canInspectStorage && <button className="job-navigation secondary" aria-current={tab === "storage" ? "page" : undefined}
-        onClick={() => setTab("storage")}>
-        저장소 상태 보기
-      </button>}
-      {canViewAudit && <button className="job-navigation secondary" aria-current={tab === "audit" ? "page" : undefined}
-        onClick={() => setTab("audit")}>
-        보안 감사 보기
-      </button>}
-      </nav>
-
-      <div className="section-title">DATA SOURCES</div>
-      {canWrite && <label className="upload" role="button" tabIndex={0} aria-label="CSV·Parquet·TSV·TXT 파일 업로드"
-        aria-disabled={busy} onKeyDown={event => {
-          if (busy || !["Enter", " "].includes(event.key)) return;
-          event.preventDefault(); uploadRef.current?.click();
-        }}>
-        + 파일 가져오기 (CSV·Parquet·TSV·TXT)
-        {uploadPolicy && <small>최대 {mebibytes(uploadPolicy.max_size_bytes)} MiB</small>}
-        <input ref={uploadRef} type="file"
-          accept={uploadPolicy?.supported_extensions.join(",") ?? ".csv,.parquet,.tsv,.txt"} disabled={busy}
-          onChange={event => {
-            const file = event.target.files?.[0];
-            if (file && /\.(tsv|txt)$/i.test(file.name)) {
+  return <PlatformShell actor={actor} section={tab} onNavigate={setTab}
+    onSignOut={onSignOut} canConfigure={canConfigure}
+    canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
+    dataSidebar={(["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) &&
+        <DataSourceSidebar datasets={datasets} selected={selected} canWrite={canWrite} busy={busy}
+          uploadRef={uploadRef} uploadPolicy={uploadPolicy}
+          onFile={file => {
+            if (/\.(tsv|txt)$/i.test(file.name)) {
               setPendingDelimited(file); setError(""); setNotice("");
-            } else if (file) void upload(file);
-            event.target.value = "";
-          }} />
-      </label>}
-      {canWrite && <div className="connect-existing">
-        <label>기존 Iceberg 테이블
-          <input aria-label="Iceberg 테이블 이름" value={existingTableName}
-            onChange={e => changeExistingTableName(e.target.value)}
-            placeholder="sensor_data" />
-        </label>
-        <button className="secondary" disabled={busy || snapshotsLoading || !existingTableName.trim()}
-          onClick={() => void loadSnapshots()}>
-          {snapshotsLoading ? "조회 중" : "Snapshot 조회"}
-        </button>
-        {snapshots.length > 0 && <label>사용할 Snapshot
-          <select aria-label="Iceberg Snapshot 선택" value={snapshotId}
-            onChange={event => setSnapshotId(event.target.value)}>
-            {snapshots.map(item => <option key={item.snapshot_id} value={item.snapshot_id}>
-              {item.snapshot_id} · {new Date(item.timestamp_ms).toLocaleString("ko-KR")}
-            </option>)}
-          </select>
-        </label>}
-        <button className="secondary" disabled={busy || !existingTableName.trim()}
-          onClick={() => void connectExisting()}>
-          {snapshotId ? "선택한 Snapshot 연결" : "최신 Snapshot 연결"}
-        </button>
-      </div>}
-      <button className="job-navigation secondary" onClick={() => {
-        showExamples.current = true;
-        setSelected(""); setTab(current => current === "preparation" ? current : "preview");
-      }}>예제 데이터 살펴보기</button>
-            <div className="section-title dataset-section-title">DATASETS</div>
-      <nav className="dataset-nav" aria-label="데이터셋 목록">
-        {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
-        {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
-          onClick={() => { showExamples.current = false; setSelected(d.id);
+            } else { void upload(file); }
+          }}
+          onExample={() => {
+            showExamples.current = true;
+            setSelected(""); setTab(current => current === "preparation" ? current : "preview");
+          }}
+          onChoose={id => {
+            showExamples.current = false; setSelected(id);
             setTab(current => ["preparation", "preview", "profile"].includes(current)
-              ? current : "understanding"); }}>
-          <span className="dataset-name">{d.name}</span>
-          <span className="dataset-kind">{d.kind === "iceberg" ? "◆ Iceberg" : "◫ File"}</span>
-        </button>)}
-      </nav>
-      {nextDatasetCursor && <button className="job-navigation secondary"
-        disabled={busy} onClick={() => void loadMoreDatasets()}>
-        이전 데이터셋 더 불러오기
-      </button>}
-      <div className="sidebar-bottom"><a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a></div>
-    </aside>
-    <main className="main">
-      <header className="workspace-header"><div>
-        <span className="eyebrow">{pageLabels[tab].eyebrow}</span>
-        <h1>{pageLabels[tab].title}</h1>
-        <p>{pageLabels[tab].description}</p>
-      </div>
-        <div className="header-meta">
-          <span className="environment">{actor.mode === "development" ? "로컬 인증" : "토큰 인증"}</span>
-          <div className="auth-status">
-            <span>{actor.actor_id} · {actor.roles.join(", ")}</span>
-            {actor.mode !== "development" &&
-              <button type="button" className="ghost" onClick={onSignOut}>인증 해제</button>}
-          </div>
-        </div>
-      </header>
+              ? current : "understanding");
+          }}
+          existingTableName={existingTableName} onChangeExistingName={changeExistingTableName}
+          snapshots={snapshots} snapshotId={snapshotId} onSnapshotId={setSnapshotId}
+          snapshotsLoading={snapshotsLoading}
+          onLoadSnapshots={() => void loadSnapshots()}
+          onConnectExisting={() => void connectExisting()}
+          hasMore={Boolean(nextDatasetCursor)} onLoadMore={() => void loadMoreDatasets()} />}>
       {error && <div role="alert" className="alert error"><strong>작업을 완료하지 못했습니다.</strong> {error}
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
       {notice && <div role="status" className="alert success">{notice}
@@ -514,7 +440,13 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           <progress max={uploadProgress.total} value={uploadProgress.loaded}
             aria-label="파일 전송 진행률" />}
       </div>}
-      {!dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && tab !== "ml" && <div className="empty">
+      {tab === "overview" && <PlatformOverview
+        datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
+        jobs={[...jobs, ...discoveryJobs].map(j => ({ id: j.id, status: j.status, created_at: j.created_at }))}
+        onNavigate={setTab}
+        onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
+      {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab} onNavigate={setTab} />}
+      {!dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
         <p>{tab === "preparation"
           ? "Data Preparation은 Explorer 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
@@ -527,7 +459,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             ? "이 예제로 데이터 준비 시작 →" : undefined}
           onUse={id => void selectExample(id)} />
       </div>}
-      {dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <>
+      {dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <>
         <div className="dataset-hero">
           <div><span className="eyebrow">DATASET</span><h2>{dataset.name}</h2>
             <p>{dataset.kind.toUpperCase()} · {readableVersion(dataset)}</p></div>
@@ -543,7 +475,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               </button>
             </>}</div>
         </div>
-        {tab !== "preparation" && <WorkspaceTabs active={tab as DatasetTab} onChange={setTab} />}
+        {(["understanding", "preview", "profile"] as Tab[]).includes(tab) && <WorkspaceTabs active={tab as DatasetTab} onChange={setTab} />}
         {tab === "understanding" && <section className="panel" role="tabpanel"
           id="sos-panel-understanding" aria-labelledby="sos-tab-understanding" tabIndex={0}>
           <UnderstandingPanel key={selected + ":" + reloadRevision} datasetId={selected}
@@ -679,8 +611,25 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </>}
 
       </>}
-      {tab === "ml" && <MLWorkbench datasets={datasets} selectedId={selected}
-        onSelect={setSelected} canTrain={canRun} canCancel={canCancel} />}
+      {tab === "ml" && !resource && <MLWorkbench datasets={datasets}
+        view="models" onViewChange={view => setTab(view === "models" ? "ml" : "training")}
+        onOpenModel={id => openResource("model", id)}
+        canTrain={canRun} canCancel={canCancel} />}
+      {tab === "training" && <MLWorkbench datasets={datasets}
+        view="training" onViewChange={view => setTab(view === "models" ? "ml" : "training")}
+        onOpenModel={id => openResource("model", id)}
+        canTrain={canRun} canCancel={canCancel} />}
+      {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
+        kind={resource.kind} id={resource.id} onOpenResource={openResource}
+        onScoring={startScoring} onDecision={startDecision} />}
+      {tab === "scoring" && !resource && <ScoringWorkspace
+        datasets={datasets} preferredModelId={scoringModelId}
+        canRun={canRun} canCancel={canCancel} onOpenResource={openResource} />}
+      {(["policies","evaluations","explanations"] as Tab[]).includes(tab) && !resource &&
+        <DecisionWorkspace
+          key={tab} view={tab === "policies" ? "policy" : tab === "evaluations" ? "evaluation" : "explanation"}
+          preferredScoringId={decisionScoringId} canRun={canRun} canCancel={canCancel}
+          onOpenResource={openResource} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
       {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
@@ -694,7 +643,5 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         })}
         onCancel={id => void cancelJob(id)}
         onOpen={id => void openJobDataset(id)} />}
-      <footer>SOS · {pageLabels[tab].eyebrow} <span>Dataset · Job · Artifact</span></footer>
-    </main>
-  </div>;
+  </PlatformShell>;
 }

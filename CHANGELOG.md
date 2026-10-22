@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- SOS 프런트엔드에서 Data·Research·Models·Activity의 진입 구조를 재구성하고, Model Revision·Training·Scoring·Decision Policy·Evaluation·Explanation을 독립 화면과 결과별 직접 주소로 제공합니다. 기존 Job 결과에서 발견한 불변 판본과 API 계약을 재사용하며, 미구현 Experiment·Serving은 구상 화면임을 명확히 구분합니다.
+
 - Isolation Forest의 `all` 학습은 Worker 메모리로 계산한 임의 행 수 사전 상한 대신 Attempt별 디스크 기반 입력과 청크 전처리를 사용합니다. 요청한 Train 전체 행 사용은 그대로 유지하고, 실행 중 실제 RSS·스테이징 사용량 보호는 기존 Worker 예산으로 관리합니다. `sample`의 명시적 행 수·Seed 선택 의미는 변경하지 않습니다.
 
 - 누적 ML Reference Pipeline 검토에서 실제 Parquet의 명시적 `+00` UTC 시각을 시간 분할에 지원하고, 전체 결측 정수 Batch의 학습 오류를 수정했습니다. Scoring 임시 Stage는 Attempt 단위 자원 한도·중단 후 회수 대상으로 관리하며, 단일 관측치 Explanation은 전체 결과 대신 필요한 Parquet Row Group만 읽도록 개선했습니다.

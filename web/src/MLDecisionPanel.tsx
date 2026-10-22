@@ -7,18 +7,27 @@ import type {
   MLExplanationJobSummary, MLPolicyJob, MLPolicyJobSummary, ScoringResult,
 } from "./types";
 
-type Props = { scoring: ScoringResult; canRun: boolean; canCancel: boolean };
+export type DecisionView = "policy" | "evaluation" | "explanation";
+type Props = {
+  scoring: ScoringResult;
+  view: DecisionView;
+  canRun: boolean;
+  canCancel: boolean;
+  onOpenResult: (kind: DecisionView, id: string) => void;
+};
 
 const DONE = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 /** Scoring Result를 변경하지 않고 정책·평가·개별 점수 설명을 재실행한다. */
-export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
+export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult }: Props) {
   const [mode, setMode] = useState<"fixed" | "quantile">("quantile");
   const [fixed, setFixed] = useState(0.5);
   const [fraction, setFraction] = useState(0.05);
   const [rowIndex, setRowIndex] = useState(0);
   const [policyJob, setPolicyJob] = useState<MLPolicyJob | null>(null);
   const [policy, setPolicy] = useState<DecisionPolicyRevision | null>(null);
+  const [policyIdDraft, setPolicyIdDraft] = useState("");
+  const [loadingPolicy, setLoadingPolicy] = useState(false);
   const [evaluationJob, setEvaluationJob] = useState<MLEvaluationJob | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationRevision | null>(null);
   const [explanationJob, setExplanationJob] = useState<MLExplanationJob | null>(null);
@@ -30,11 +39,12 @@ export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
 
   useEffect(() => {
     let alive = true;
-    void Promise.all([
-      policyHistory.refresh(), evaluationHistory.refresh(), explanationHistory.refresh(),
-    ]).catch(e => { if (alive) setError(formatError(e)); });
+    const reads = view === "policy" ? [policyHistory.refresh()] :
+      view === "evaluation" ? [evaluationHistory.refresh(), policyHistory.refresh()] :
+      [explanationHistory.refresh()];
+    void Promise.all(reads).catch(e => { if (alive) setError(formatError(e)); });
     return () => { alive = false; };
-  }, [scoring.id]);
+  }, [scoring.id, view]);
 
   // 사용자가 별도 작업을 시작하는 동안에도 각 Job의 상태를 독립적으로 갱신한다.
   useEffect(() => {
@@ -128,6 +138,22 @@ export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
       setEvaluationJob(null);
       setPolicyJob(await request<MLPolicyJob>(`/api/ml/policies/jobs/${encodeURIComponent(id)}`));
     } catch (e) { setError(formatError(e)); }
+  }
+
+  async function loadPolicyById() {
+    const identifier = policyIdDraft.trim();
+    if (!identifier) return;
+    setLoadingPolicy(true);
+    setPolicyJob(null);
+    setPolicy(null);
+    setError("");
+    try {
+      const loaded = await request<DecisionPolicyRevision>(
+        `/api/ml/policies/${encodeURIComponent(identifier)}`,
+      );
+      setPolicy(loaded);
+    } catch (e) { setError(formatError(e)); }
+    finally { setLoadingPolicy(false); }
   }
 
   async function restoreEvaluation(id: string) {
@@ -224,9 +250,11 @@ export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
   const sensitivities = Array.isArray(details?.feature_sensitivities)
     ? details.feature_sensitivities as Array<Record<string, unknown>> : [];
   return <div className="steps" role="region" aria-label="임계값 정책과 평가">
-    <h4>Decision Policy · Evaluation</h4>
+    <h4>{view === "policy" ? "Decision Policy" : view === "evaluation" ? "Evaluation" : "Explanation"}</h4>
     {error && <p role="alert">{error}</p>}
-    <p className="hint">이 Scoring Result를 재사용하므로 모델을 다시 학습하거나 점수를 재계산하지 않습니다. 분위수 정책은 이 Scoring 점수 자체에서 임계값을 선택하며 별도의 보정·검증 Dataset을 사용하지 않습니다.</p>
+    <p className="hint">Scoring Result {scoring.id}의 점수를 재사용합니다. 모델 재학습이나 재점수화를 수행하지 않습니다.</p>
+    {view === "policy" && <>
+    <p className="hint">분위수 정책은 선택한 Scoring 점수에서 임계값을 산정하며, 별도 보정·검증 데이터의 근거가 아닙니다.</p>
     <div className="form-row">
       <label>임계값 정책
         <select aria-label="임계값 정책" value={mode}
@@ -269,9 +297,55 @@ export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
       <p>적용 임계값: {metric(policy.threshold)} · 이상 판정 수:
         {String(policy.decision_summary.predicted_anomalies ?? "—")}</p>
       <p className="hint">동점이 있으면 분위수로 설정한 경보 비율과 실제 판정 비율은 다를 수 있습니다.</p>
+      <button type="button" className="secondary"
+        onClick={() => onOpenResult("policy", policy.id)}>정책 판본 상세 보기 →</button>
     </div>}
-    <button disabled={!canRun || (evaluationJob !== null && !DONE.has(evaluationJob.status))}
+    </>}
+    {view === "evaluation" && <>
+    <label>평가에 적용할 정책 (선택)
+      <select aria-label="평가 정책 판본 선택" disabled={loadingPolicy} value={policyJob?.id ?? ""}
+        onChange={event => {
+          setPolicyIdDraft("");
+          if (event.target.value) void restorePolicy(event.target.value);
+          else { setPolicyJob(null); setPolicy(null); }
+        }}>
+        <option value="">정책 없음 · 레이블이 있으면 순위 지표만 평가</option>
+        {policyHistory.items.filter(job =>
+          job.status === "Succeeded" && job.spec.scoring_result_id === scoring.id &&
+          typeof job.result?.policy_revision_id === "string"
+        ).map(job => <option key={job.id} value={job.id}>
+          정책 {String(job.result?.policy_revision_id).slice(0, 12)}
+        </option>)}
+      </select>
+    </label>
+    <div className="form-row">
+      <label>기존 정책 판본 ID (다른 Scoring의 정책도 입력 가능)
+        <input aria-label="재사용할 정책 판본 ID" disabled={loadingPolicy} value={policyIdDraft}
+          placeholder="호환되는 Decision Policy Revision ID"
+          onChange={event => {
+            setPolicyIdDraft(event.target.value);
+            setPolicyJob(null);
+            setPolicy(null);
+          }} />
+      </label>
+      <button type="button" className="secondary"
+        disabled={!policyIdDraft.trim() || loadingPolicy}
+        onClick={() => void loadPolicyById()}>
+        {loadingPolicy ? "정책 조회 중" : "정책 판본 조회"}
+      </button>
+    </div>
+    <p className="hint">다른 점수 결과의 정책도 호환된다면 적용할 수 있습니다.
+      모델·Feature·점수 의미·접근 권한은 제출 시 API가 검증합니다.</p>
+    {policyHistory.nextCursor && <button type="button" className="secondary"
+      onClick={() => void policyHistory.loadMore().catch(e => setError(formatError(e)))}>
+      이전 정책 더 보기
+    </button>}
+    {policy && <p className="hint">선택한 정책: {policy.id} · 점수 경계 {metric(policy.threshold)}</p>}
+    <button disabled={!canRun || loadingPolicy || (policyJob !== null && policy === null) ||
+      (evaluationJob !== null && !DONE.has(evaluationJob.status))}
       onClick={() => void createEvaluation()}>Evaluation 판본 생성</button>
+    {policyJob && !policy && <p role="status">선택한 정책 판본을 확인하는 중입니다.
+      완료 전에는 평가를 제출할 수 없습니다.</p>}
     {evaluationJob && <p role="status">Evaluation Job · {evaluationJob.status}
       {evaluationJob.cancel_requested && evaluationJob.status === "Running" && " · 취소 요청됨"}
     </p>}
@@ -302,7 +376,11 @@ export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
         <div className="stat"><span>F1</span><strong>{metric(evaluation.decision_metrics.f1)}</strong></div>
       </div>
       <p className="hint">동일 평가 점수에서 임계값을 선택하고 평가한 지표는 독립 검증셋 성능을 보증하지 않습니다. 레이블이 없거나 정의할 수 없는 경우에는 미정의로 표시합니다.</p>
+      <button type="button" className="secondary"
+        onClick={() => onOpenResult("evaluation", evaluation.id)}>평가 판본 상세 보기 →</button>
     </div>}
+    </>}
+    {view === "explanation" && <>
     <h4>개별 이상 점수 설명</h4>
     <label>결과 내 행 번호
       <input type="number" aria-label="설명할 행 번호" min="0"
@@ -343,6 +421,9 @@ export function MLDecisionPanel({ scoring, canRun, canCancel }: Props) {
         </tr>)}</tbody>
       </table>
       <p className="hint">이 결과는 Feature 치환에 대한 모델의 국소 민감도입니다. SHAP·LIME이나 가법적 기여도, 실제 이상 발생 원인의 증명이 아닙니다.</p>
+      <button type="button" className="secondary"
+        onClick={() => onOpenResult("explanation", explanation.id)}>설명 결과 상세 보기 →</button>
     </div>}
+    </>}
   </div>;
 }

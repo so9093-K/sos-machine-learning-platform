@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
-import { MLDecisionPanel } from "./MLDecisionPanel";
 import type {
   Dataset, DatasetColumns, MLScoringJob, MLScoringJobSummary, ModelRevision, ScoringResult,
 } from "./types";
@@ -11,12 +10,13 @@ type Props = {
   datasets: Dataset[];
   canRun: boolean;
   canCancel: boolean;
+  onOpenResult: (id: string) => void;
 };
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 /** 학습된 모델을 다른 Dataset에 적용하는 독립 Scoring 경험. */
-export function MLScoringPanel({ model, datasets, canRun, canCancel }: Props) {
+export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResult }: Props) {
   const [datasetId, setDatasetId] = useState("");
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [labelColumn, setLabelColumn] = useState("");
@@ -192,7 +192,9 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel }: Props) {
         <p className="hint">모델과 Scoring Dataset의 판본 및 점수 아티팩트가 보존됩니다. 위 지표는 완전한 이진 레이블과 양성·음성 사례가 모두 있을 때만 계산합니다. 임계값 정책과 판정 정확도는 별도 평가 대상입니다.</p>
         {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&
           <p className="hint">학습에 사용한 동일 Dataset 판본을 점수화했습니다. 이 결과의 순위·판정 지표는 독립 검증 데이터의 성능이 아닙니다.</p>}
-        <MLDecisionPanel key={result.id} scoring={result} canRun={canRun} canCancel={canCancel} />
+        <button type="button" className="secondary" onClick={() => onOpenResult(result.id)}>
+          Scoring Result 상세·정책·평가·설명 보기 →
+        </button>
       </div>}
     </div>}
   </section>;

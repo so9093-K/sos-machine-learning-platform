@@ -276,3 +276,120 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   box-shadow:inset 3px 0 var(--sos-accent);
 }
 .brand-error .ghost { color:var(--sos-accent); padding-left:0; text-decoration:underline; }
+
+
+/* 플랫폼 IA: 기능 단계와 무관한 전역 탐색, 데이터 작업에서만 보이는 데이터 컨텍스트. */
+.platform-nav { gap:16px; padding:8px 0 15px; }
+.platform-nav-group { display:grid; gap:4px; min-width:0; }
+.platform-nav .section-title { padding:7px 10px 5px; }
+.global-nav a.workspace-link {
+  width:100%; min-height:36px; display:flex; align-items:center; justify-content:space-between;
+  padding:9px 12px; color:var(--sos-text); font-size:13px; text-align:left;
+  border-radius:8px; border:1px solid transparent; background:transparent; font-weight:500;
+}
+.global-nav a.workspace-link:hover { background:var(--sos-raised); }
+.global-nav a.workspace-link[aria-current="page"] {
+  background:var(--sos-accent-bg); color:var(--sos-text);
+  border-color:var(--sos-border); box-shadow:inset 3px 0 var(--sos-accent);
+}
+.workspace-link small { font-size:10px; color:var(--sos-muted); }
+.data-sidebar { display:grid; gap:8px; margin-top:8px; }
+.data-sidebar .section-title { padding-top:8px; }
+.data-sidebar .dataset-nav { overflow-y:auto; }
+
+/* Overview는 추정된 전역 지표 대신 실제 진입과 조회된 활동을 보여준다. */
+.platform-home { display:grid; gap:25px; min-width:0; }
+.platform-intro { padding:28px 30px; border-radius:12px; background:var(--sos-panel);
+  border:1px solid var(--sos-border); }
+.platform-intro h2 { font-size:clamp(22px,2.5vw,29px); margin:10px 0; letter-spacing:-.025em; }
+.platform-intro p { color:var(--sos-muted); font-size:13px; line-height:1.7; max-width:750px; }
+.platform-section-title { font-size:17px; margin-bottom:14px; }
+.platform-destinations { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+button.platform-destination.ghost { text-align:left; width:100%; display:grid; gap:11px;
+  min-height:114px; padding:20px; border:1px solid var(--sos-border);
+  border-radius:12px; background:var(--sos-panel); color:var(--sos-text); }
+button.platform-destination.ghost:hover { border-color:var(--sos-accent); background:var(--sos-raised); }
+.platform-destination strong { display:flex; justify-content:space-between; gap:8px; font-size:15px; }
+.platform-destination span:not(strong span) { font-size:12px; line-height:1.6; color:var(--sos-muted); }
+.platform-overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.platform-overview-grid .panel { min-width:0; padding:22px; }
+.platform-compact-list { display:grid; gap:1px; }
+button.platform-list-link.ghost { min-width:0; width:100%; display:flex; justify-content:space-between;
+  align-items:center; gap:12px; text-align:left; border-bottom:1px solid var(--sos-border);
+  padding:12px 4px; border-radius:0; color:var(--sos-text); font-size:13px; }
+button.platform-list-link.ghost:hover { color:var(--sos-accent); }
+.platform-resource-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.platform-list-link small { color:var(--sos-muted); flex-shrink:0; }
+.platform-outlook { border-top:1px solid var(--sos-border); padding-top:20px; }
+.platform-outlook h3 { font-size:17px; margin-bottom:8px; }
+.platform-outlook p { font-size:13px; line-height:1.6; color:var(--sos-muted); max-width:790px; }
+.platform-outlook-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:17px; }
+.platform-concept-card { border:1px solid var(--sos-border); background:var(--sos-panel);
+  border-radius:12px; padding:22px; }
+.platform-concept-card h4 { font-size:15px; margin-bottom:8px; }
+.platform-concept-card p { color:var(--sos-muted); font-size:12px; line-height:1.7; }
+@media(max-width:980px) {
+  .platform-destinations,.platform-overview-grid { grid-template-columns:1fr; }
+}
+@media(max-width:850px) {
+  .platform-nav { display:grid; gap:10px; }
+  .platform-nav-group { display:flex; align-items:center; flex-wrap:wrap; }
+  .platform-nav .section-title { flex-basis:100%; }
+  .global-nav a.workspace-link { width:auto; }
+  .data-sidebar { width:100%; }
+}
+@media(max-width:620px) {
+  .platform-intro { padding:22px 18px; }
+  button.platform-destination.ghost { padding:16px; min-height:0; }
+  .platform-overview-grid .panel { padding:18px 14px; }
+}
+
+
+/* Feature 이름·자료형을 한 항목으로 읽고, 현재 검색 범위만 일괄 선택한다. */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.feature-selector { margin-top:12px; display:grid; gap:12px; min-width:0; }
+.feature-selector-toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+.feature-selector-toolbar label { display:grid; gap:6px; flex:1 1 240px;
+  color:var(--sos-muted); font-size:12px; }
+.feature-selector-toolbar label input { width:100%; }
+.feature-selector-toolbar>span { color:var(--sos-muted); font-size:12px; }
+.feature-selector-options { min-width:0; max-height:320px; overflow-y:auto;
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px;
+  margin:0; padding:10px; border:1px solid var(--sos-border); border-radius:10px; }
+.feature-selector-item { display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+  min-width:0; padding:10px 12px; font-size:13px; border-radius:8px; background:var(--sos-raised);
+  color:var(--sos-text); cursor:pointer; }
+.feature-selector-item:hover { outline:1px solid var(--sos-accent); }
+.feature-selector-item input { flex-shrink:0; margin:0; }
+.feature-selector-name { flex:1 1 100px; min-width:0; overflow-wrap:anywhere; }
+.feature-selector-item small { flex-shrink:0; color:var(--sos-muted); }
+.feature-selector-options:disabled .feature-selector-item { opacity:.6; cursor:not-allowed; }
+@media(max-width:700px) { .feature-selector-options { grid-template-columns:1fr; } }
+
+
+/* 모델 판본 탐색은 학습 설정 폼과 별도로 시작할 수 있다. */
+.model-view-controls { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
+.model-view-controls h3 { font-size:18px; }
+.model-view-controls .hint { margin-top:6px; }
+.model-view-switch { display:flex; flex-wrap:wrap; gap:8px; }
+.model-view-switch [aria-pressed="true"] { box-shadow:0 0 0 1px var(--sos-accent); }
+.model-history-filter { display:flex; flex-wrap:wrap; margin-bottom:16px; }
+.model-history-filter label { display:grid; gap:7px; min-width:200px; font-size:12px; color:var(--sos-muted); }
+
+
+/* 불변 ML 리소스: 실행 폼과 판본 상세를 분리하며 ID·근거가 긴 경우에도 읽을 수 있게 한다. */
+.ml-resource-workspace { display:grid; gap:16px; min-width:0; }
+.ml-resource-workspace .panel, .ml-resource-detail { min-width:0; }
+.ml-resource-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:16px 0; }
+.ml-resource-field { min-width:0; border:1px solid var(--sos-border); border-radius:8px; padding:12px; }
+.ml-resource-field dt { color:var(--sos-muted); font-size:12px; margin-bottom:7px; }
+.ml-resource-field dd { margin:0; font-size:13px; line-height:1.65; overflow-wrap:anywhere; }
+.ml-resource-field button { max-width:100%; overflow-wrap:anywhere; white-space:normal; }
+.ml-resource-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.ml-resource-list { display:grid; gap:8px; margin:14px 0; }
+.ml-resource-row { display:flex; align-items:center; flex-wrap:wrap; gap:12px;
+  justify-content:space-between; min-width:0; padding:10px 12px; border:1px solid var(--sos-border);
+  border-radius:8px; font-size:13px; }
+.ml-resource-row span { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:760px) { .ml-resource-fields { grid-template-columns:1fr; } }

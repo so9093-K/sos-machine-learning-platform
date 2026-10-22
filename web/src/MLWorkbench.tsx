@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
-import { MLScoringPanel } from "./MLScoringPanel";
 import { MLTrackingStatus } from "./MLTrackingStatus";
+import { FeatureSelector } from "./FeatureSelector";
 import type {
   Dataset, DatasetColumns, MLTrainingJob, MLTrainingJobSummary, ModelRevision,
 } from "./types";
@@ -12,10 +12,11 @@ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 type Props = {
   datasets: Dataset[];
-  selectedId: string;
-  onSelect: (id: string) => void;
   canTrain: boolean;
   canCancel: boolean;
+  view: "models" | "training";
+  onViewChange: (view: "models" | "training") => void;
+  onOpenModel: (id: string) => void;
 };
 
 function statistic(value: unknown): string {
@@ -37,9 +38,12 @@ function trainingSelectionLabel(value: unknown): string {
 }
 
 /** 데이터 선택부터 비동기 학습·불변 결과 조회까지 같은 공개 API를 사용한다. */
-export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCancel }: Props) {
+export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, onViewChange, onOpenModel }: Props) {
+  const [selectedId, onSelect] = useState("");
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
+  const [historyDatasetFilter, setHistoryDatasetFilter] = useState("");
+  const [modelIdDraft, setModelIdDraft] = useState("");
   const [nEstimators, setNEstimators] = useState(100);
   const [maxSamples, setMaxSamples] = useState("auto");
   const [inputMode, setInputMode] = useState<"all" | "sample">("all");
@@ -55,6 +59,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   const [comparisonModel, setComparisonModel] = useState<ModelRevision | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const currentDataset = useRef(selectedId);
   currentDataset.current = selectedId;
   const selectionRequest = useRef(0);
@@ -72,12 +77,10 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
   useEffect(() => {
     let alive = true;
     selectionRequest.current += 1;
-    setSelectedJob(null);
-    setModel(null);
-    setCompareJobId("");
-    setComparisonModel(null);
+    // 학습 입력 Dataset을 바꾸어도 이미 선택한 모델 판본은 별개의 조회 결과다.
     setColumns([]);
     setFeatures([]);
+    setLoadingColumns(false);
     setError("");
     if (!selectedId) return () => { alive = false; };
     setLoadingColumns(true);
@@ -100,7 +103,9 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         if (alive) {
           setSelectedJob(next);
           if (TERMINAL.has(next.status)) {
-            void reloadHistory().catch(error => { if (alive) setError(formatError(error)); });
+            void reloadHistory().catch(() => {
+              if (alive) setNotice("학습 작업의 상태는 확인됐지만 이력 목록 갱신에 실패했습니다.");
+            });
           }
         }
       } catch (error) {
@@ -148,6 +153,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     const requestedSelection = ++selectionRequest.current;
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
       const result = await submitJob<MLTrainingJob>("/api/ml/train/jobs", {
         dataset_id: selectedId,
@@ -162,8 +168,11 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           selectionRequest.current === requestedSelection) {
         setSelectedJob(result);
         setModel(null);
+        setHistoryDatasetFilter("");
+        onViewChange("models");
       }
-      void reloadHistory().catch(error => setError(formatError(error)));
+      void reloadHistory().catch(() =>
+        setNotice("학습 Job은 접수됐지만 이력 목록을 갱신하지 못했습니다. 다시 조회할 수 있습니다."));
     } catch (error) {
       setError(formatError(error));
     } finally {
@@ -192,6 +201,7 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     const requestedSelection = ++selectionRequest.current;
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
       const result = await submitJob<MLTrainingJob>(
         `/api/ml/train/jobs/${encodeURIComponent(selectedJob.id)}/fork`, { params: null },
@@ -202,7 +212,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         setModel(null);
         setCompareJobId("");
       }
-      await reloadHistory();
+      try { await reloadHistory(); }
+      catch { setNotice("Fork Job은 접수됐지만 이력 목록을 갱신하지 못했습니다."); }
     } catch (error) { setError(formatError(error)); }
     finally { setSubmitting(false); }
   }
@@ -219,7 +230,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     } catch (error) { setError(formatError(error)); }
   }
 
-  const visibleHistory = history.filter(item => !selectedId || item.dataset_id === selectedId);
+  const visibleHistory = history.filter(item =>
+    !historyDatasetFilter || item.dataset_id === historyDatasetFilter);
   const comparisonCandidates = visibleHistory.filter(item =>
     item.id !== selectedJob?.id &&
     item.status === "Succeeded" &&
@@ -247,11 +259,24 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
     String(revision.params[key] ?? "—");
 
   return <div className="job-list">
+    {notice && <section className="alert success" role="status">
+      {notice}<button type="button" onClick={() => setNotice("")} aria-label="ML 알림 닫기">×</button>
+    </section>}
     {error && <section className="panel" role="alert">
       <strong>ML 작업을 처리하지 못했습니다.</strong> {error}
       <button className="ghost" onClick={() => setError("")}>닫기</button>
     </section>}
-    <section className="panel">
+    <div className="panel model-view-controls">
+      <div><h3>모델 판본과 학습</h3>
+        <p className="hint">모델 결과를 조회하는 일과 새 학습을 시작하는 일은 별개의 작업입니다.</p></div>
+      <div className="model-view-switch" role="group" aria-label="모델 작업 선택">
+        <button type="button" className={modelView === "models" ? "" : "secondary"}
+          aria-pressed={modelView === "models"} onClick={() => onViewChange("models")}>학습 이력·모델 판본</button>
+        <button type="button" className={modelView === "training" ? "" : "secondary"}
+          aria-pressed={modelView === "training"} onClick={() => onViewChange("training")}>새 모델 학습</button>
+      </div>
+    </div>
+    {modelView === "training" && <section className="panel">
       <div className="panel-head"><div>
         <h3>Isolation Forest 실험</h3>
         <p>숫자형 결측 없는 입력으로 비동기 학습합니다. Dataset 판본과 모델 결과는 변경할 수 없습니다.</p>
@@ -310,13 +335,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         {loadingColumns && <p role="status" className="hint">스키마를 조회하고 있습니다.</p>}
         {selectedId && !loadingColumns && numericColumns.length === 0 &&
           <p className="hint">사용 가능한 숫자형 Feature가 없습니다. 데이터 준비에서 숫자형 Feature를 생성하세요.</p>}
-        <div className="form-row">{numericColumns.map(column => <label key={column.name}>
-          <input type="checkbox" checked={features.includes(column.name)}
-            disabled={!canTrain}
-            onChange={event => setFeatures(current => event.target.checked
-              ? [...current, column.name] : current.filter(name => name !== column.name))} />
-          {column.name} <small>{column.dtype}</small>
-        </label>)}</div>
+        <FeatureSelector key={selectedId} columns={numericColumns} selected={features}
+          disabled={!canTrain} onChange={setFeatures} />
       </div>
       <p className="hint">숫자형 Feature를 선택하세요. 학습 입력은 위에서 선택한 정책에 따르며, 실행 예산에 맞지 않으면 실패합니다. 결측·비유한값·정밀도 오류는 실패로 처리합니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
       <div className="actions">
@@ -328,27 +348,59 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           {submitting ? "Job 접수 중…" : "학습 Job 제출"}
         </button>
       </div>
-    </section>
+    </section>}
 
-    <section className="panel">
-      <div className="panel-head"><div><h3>ML 학습 이력</h3>
+    {modelView === "models" && <section className="panel">
+      <div className="panel-head"><div><h3>학습 이력·모델 판본</h3>
         <p>이동·새로고침 후에도 Job 상태와 모델 판본을 다시 조회할 수 있습니다.</p>
       </div><button className="secondary" onClick={() => void reloadHistory().catch(e => setError(formatError(e)))}>
         목록 새로고침</button></div>
+      <form className="model-history-filter" onSubmit={event => {
+        event.preventDefault();
+        if (modelIdDraft.trim()) onOpenModel(modelIdDraft.trim());
+      }}>
+        <label>Model Revision ID
+          <input value={modelIdDraft} onChange={event => setModelIdDraft(event.target.value)}
+            placeholder="기존 판본 ID" aria-label="기존 모델 판본 ID" />
+        </label>
+        <button type="submit" className="secondary" disabled={!modelIdDraft.trim()}>
+          모델 판본 직접 조회
+        </button>
+      </form>
+      <div className="model-history-filter">
+        <label>원본 Dataset
+          <select aria-label="모델 이력 Dataset 필터" value={historyDatasetFilter}
+            onChange={event => {
+              setHistoryDatasetFilter(event.target.value);
+              setSelectedJob(null);
+              setModel(null);
+              setCompareJobId("");
+              setComparisonModel(null);
+            }}>
+            <option value="">모든 Dataset</option>
+            {datasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+      </div>
       <div className="job-list">
-        {visibleHistory.map(item =>
-          <button className="secondary" key={item.id} onClick={() => void selectJob(item.id)}
+        {visibleHistory.map(item => <div className="ml-resource-row" key={item.id}>
+          <button className="secondary" onClick={() => void selectJob(item.id)}
             aria-pressed={selectedJob?.id === item.id}>
-            {item.id.slice(0, 8)} · {item.status} · {new Date(item.created_at).toLocaleString("ko-KR")}
-          </button>)}
+            학습 {item.id.slice(0, 8)} · {item.status} · {new Date(item.created_at).toLocaleString("ko-KR")}
+          </button>
+          {typeof item.result?.model_revision_id === "string" &&
+            <button className="secondary" onClick={() => onOpenModel(String(item.result?.model_revision_id))}>
+              Model Revision 열기 →
+            </button>}
+        </div>)}
         {visibleHistory.length === 0 && <p className="muted">현재 조회된 학습 Job이 없습니다.</p>}
         {historyCursor && <button className="secondary"
           onClick={() => void loadOlderHistory().catch(error => setError(formatError(error)))}>
           이전 학습 더 보기
         </button>}
       </div>
-    </section>
-    {selectedJob && <section className="panel" aria-label="ML 실행 결과">
+    </section>}
+    {modelView === "models" && selectedJob && <section className="panel" aria-label="ML 실행 결과">
       <div className="panel-head"><div><h3>학습 Job 상세</h3>
         <p>{selectedJob.id} · {selectedJob.status}</p>
       </div>
@@ -385,8 +437,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
           <div className="stat"><span>학습 점수 평균</span><strong>{statistic(model.training_score_summary.score_mean)}</strong></div>
         </div>
         <p className="hint">이 수치는 학습 데이터의 설명적 요약이며 검증 Precision·Recall·최적 임계값을 의미하지 않습니다. Scoring·정책·평가·설명은 아래에서 별도 결과로 생성하며, MLflow 추적 상태는 운영자 설정 시 표시합니다.</p>
-        <MLScoringPanel key={model.id} model={model} datasets={datasets}
-          canRun={canTrain} canCancel={canCancel} />
+        <div className="actions"><button type="button" className="secondary"
+          onClick={() => onOpenModel(model.id)}>모델 판본 상세·점수화로 이동 →</button></div>
         <div className="steps">
           <h4>학습 설정 비교</h4>
           <p className="hint">이미 완료한 모델의 입력 조건과 설정만 비교합니다. 재학습하거나 새로운 임계값을 적용하지 않습니다.</p>
