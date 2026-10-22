@@ -470,3 +470,10 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
   border-radius:8px; font-weight:650; }
 .data-import-controls summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:2px; }
 .data-import-actions { display:grid; gap:8px; margin-top:10px; }
+
+
+.ml-activity-details summary { color:var(--sos-muted); cursor:pointer; font-size:12px; padding:6px 0; }
+.ml-activity-details summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:2px; }
+.ml-activity-details pre { padding:12px; border-radius:8px; max-height:300px; overflow:auto;
+  font-size:11px; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--sos-sidebar); }
+.ml-activity-details p { font-size:12px; margin:10px 0; line-height:1.6; }
