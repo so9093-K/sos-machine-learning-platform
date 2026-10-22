@@ -40,7 +40,7 @@ const pageLabels: Record<Tab, { eyebrow: string; title: string; description: str
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "Dataset · Recipe · Transform" },
   ml: { eyebrow: "RESEARCH & ML", title: "ML Workbench", description: "Experiment · Training · Model Revision" },
-  jobs: { eyebrow: "ACTIVITY & JOBS", title: "전체 Jobs", description: "Job · Attempt · Result" },
+  jobs: { eyebrow: "ACTIVITY & JOBS", title: "데이터 작업 이력", description: "Data Jobs · Exploration Jobs" },
   storage: { eyebrow: "PLATFORM OPERATIONS", title: "저장소 상태", description: "Storage · Health" },
   audit: { eyebrow: "PLATFORM OPERATIONS", title: "보안 감사", description: "Identity · Audit" },
 };
