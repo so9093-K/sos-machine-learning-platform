@@ -410,3 +410,29 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
   .model-area-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
   .model-area-link { min-width:0; padding:10px; }
 }
+
+
+/* Workspace: 실제 활동을 우선하고 기능 진입은 작은 보조 영역으로 둔다. */
+.platform-quick-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.platform-quick-actions .platform-destination { min-height:0; }
+.platform-dataset-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:20px; }
+.ml-activity { min-width:0; }
+.ml-activity-list { display:grid; gap:10px; }
+.ml-activity-row { display:grid; gap:7px; border-bottom:1px solid var(--sos-border);
+  padding:8px 0 12px; }
+.ml-activity-row:last-child { border-bottom:0; }
+.ml-activity-title { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+.ml-activity-title strong { font-size:13px; }
+.ml-activity-meta { font-size:11px; color:var(--sos-muted); overflow-wrap:anywhere; }
+.ml-activity-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.ml-activity-actions button { font-size:11px!important; padding:7px 10px!important; }
+.ml-activity-filter { display:grid; gap:6px; max-width:320px; margin-bottom:18px;
+  color:var(--sos-muted); font-size:12px; }
+.platform-activity { display:grid; gap:18px; }
+.platform-section-intro h2 { font-size:19px; margin-bottom:7px; }
+.platform-section-intro p { color:var(--sos-muted); font-size:13px; line-height:1.65; }
+.activity-scope-nav { display:flex; flex-direction:row; flex-wrap:wrap; gap:8px; padding:0; }
+.activity-scope-nav [aria-current="page"] { box-shadow:0 2px 0 var(--sos-accent); }
+@media(max-width:850px) {
+  .platform-dataset-list,.platform-quick-actions { grid-template-columns:1fr; }
+}
