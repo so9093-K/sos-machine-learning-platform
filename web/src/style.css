@@ -343,3 +343,26 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
   button.platform-destination.ghost { padding:16px; min-height:0; }
   .platform-overview-grid .panel { padding:18px 14px; }
 }
+
+
+/* Feature 이름·자료형을 한 항목으로 읽고, 현재 검색 범위만 일괄 선택한다. */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.feature-selector { margin-top:12px; display:grid; gap:12px; min-width:0; }
+.feature-selector-toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+.feature-selector-toolbar label { display:grid; gap:6px; flex:1 1 240px;
+  color:var(--sos-muted); font-size:12px; }
+.feature-selector-toolbar label input { width:100%; }
+.feature-selector-toolbar>span { color:var(--sos-muted); font-size:12px; }
+.feature-selector-options { min-width:0; max-height:320px; overflow-y:auto;
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px;
+  margin:0; padding:10px; border:1px solid var(--sos-border); border-radius:10px; }
+.feature-selector-item { display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+  min-width:0; padding:10px 12px; font-size:13px; border-radius:8px; background:var(--sos-raised);
+  color:var(--sos-text); cursor:pointer; }
+.feature-selector-item:hover { outline:1px solid var(--sos-accent); }
+.feature-selector-item input { flex-shrink:0; margin:0; }
+.feature-selector-name { flex:1 1 100px; min-width:0; overflow-wrap:anywhere; }
+.feature-selector-item small { flex-shrink:0; color:var(--sos-muted); }
+.feature-selector-options:disabled .feature-selector-item { opacity:.6; cursor:not-allowed; }
+@media(max-width:700px) { .feature-selector-options { grid-template-columns:1fr; } }
