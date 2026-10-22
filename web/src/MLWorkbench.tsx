@@ -266,16 +266,6 @@ export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, on
       <strong>ML 작업을 처리하지 못했습니다.</strong> {error}
       <button className="ghost" onClick={() => setError("")}>닫기</button>
     </section>}
-    <div className="panel model-view-controls">
-      <div><h3>모델 판본과 학습</h3>
-        <p className="hint">모델 결과를 조회하는 일과 새 학습을 시작하는 일은 별개의 작업입니다.</p></div>
-      <div className="model-view-switch" role="group" aria-label="모델 작업 선택">
-        <button type="button" className={modelView === "models" ? "" : "secondary"}
-          aria-pressed={modelView === "models"} onClick={() => onViewChange("models")}>학습 이력·모델 판본</button>
-        <button type="button" className={modelView === "training" ? "" : "secondary"}
-          aria-pressed={modelView === "training"} onClick={() => onViewChange("training")}>새 모델 학습</button>
-      </div>
-    </div>
     {modelView === "training" && <section className="panel">
       <div className="panel-head"><div>
         <h3>Isolation Forest 실험</h3>
