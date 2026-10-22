@@ -39,7 +39,12 @@ def scoring_stage_directories(home: Path, scoring_output: Path) -> list[Path]:
     for item in root.iterdir():
         if not item.name.startswith(prefix):
             continue
-        if item.is_symlink() or not item.is_dir():
+        if item.is_symlink():
+            raise ValueError("Scoring Stage must be an owned directory")
+        # 자식이 성공적으로 TemporaryDirectory를 정리한 직후일 수 있다.
+        if not item.exists():
+            continue
+        if not item.is_dir():
             raise ValueError("Scoring Stage must be an owned directory")
         matched.append(item)
     return matched
@@ -47,20 +52,33 @@ def scoring_stage_directories(home: Path, scoring_output: Path) -> list[Path]:
 
 def scoring_stage_bytes(home: Path, scoring_output: Path) -> int:
     """임시 입력 Stage와 현재 출력 Parquet의 실제 디스크 사용량."""
-    size = scoring_output.stat().st_size if scoring_output.is_file() else 0
+    try:
+        size = scoring_output.stat().st_size if scoring_output.is_file() else 0
+    except FileNotFoundError:
+        size = 0
     for root in scoring_stage_directories(home, scoring_output):
-        for entry in root.rglob("*"):
-            if entry.is_symlink():
-                raise ValueError("Scoring Stage cannot contain symbolic links")
-            if entry.is_file():
-                size += entry.stat().st_size
+        try:
+            for entry in root.rglob("*"):
+                if entry.is_symlink():
+                    raise ValueError("Scoring Stage cannot contain symbolic links")
+                try:
+                    if entry.is_file():
+                        size += entry.stat().st_size
+                except FileNotFoundError:
+                    # 임시 파일이 폴링 사이에 정상 삭제될 수 있다.
+                    continue
+        except FileNotFoundError:
+            continue
     return size
 
 
 def cleanup_scoring_stage(home: Path, scoring_output: Path) -> None:
     """중단·재시도 Attempt에 한해 남은 임시 Stage 디렉터리를 제거한다."""
     for directory in scoring_stage_directories(home, scoring_output):
-        shutil.rmtree(directory)
+        try:
+            shutil.rmtree(directory)
+        except FileNotFoundError:
+            continue
 
 
 def _scoring_scope(source: pl.LazyFrame, dataset: dict, model: dict, raw_scope: dict):
