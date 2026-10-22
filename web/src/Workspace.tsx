@@ -617,14 +617,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </>}
 
       </>}
-      {tab === "ml" && !resource && <MLWorkbench datasets={datasets}
-        view="models" onViewChange={view => setTab(view === "models" ? "ml" : "training")}
-        onOpenModel={id => openResource("model", id)}
-        canTrain={canRun} canCancel={canCancel} />}
-      {tab === "training" && <MLWorkbench datasets={datasets}
-        view="training" onViewChange={view => setTab(view === "models" ? "ml" : "training")}
-        onOpenModel={id => openResource("model", id)}
-        canTrain={canRun} canCancel={canCancel} />}
+      {(tab === "ml" || tab === "training") && !resource &&
+        <MLWorkbench datasets={datasets} view={tab === "ml" ? "models" : "training"}
+          onViewChange={view => setTab(view === "models" ? "ml" : "training")}
+          onOpenModel={id => openResource("model", id)}
+          canTrain={canRun} canCancel={canCancel} />}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         onScoring={startScoring} onDecision={startDecision} />}
