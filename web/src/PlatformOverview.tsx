@@ -1,4 +1,5 @@
-import type { WorkspaceTab } from "./PlatformNavigation";
+import { MLActivityPanel } from "./MLActivityPanel";
+import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 
 type DatasetLink = { id: string; name: string; kind: string };
 type Activity = { id: string; status: string; created_at: string };
@@ -7,67 +8,84 @@ type Props = {
   jobs: Activity[];
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenDataset: (datasetId: string) => void;
+  onOpenResource: (kind: MLResourceKind, id: string) => void;
+  onViewMlActivity: () => void;
+  onViewDataActivity: () => void;
 };
 
-const destinations: Array<{ tab: WorkspaceTab; heading: string; summary: string }> = [
-  { tab: "understanding", heading: "데이터 이해하기", summary: "Dataset의 구조·분포·품질을 확인하고 탐색합니다." },
-  { tab: "preparation", heading: "데이터 준비하기", summary: "원본을 보존하면서 변환하고 새 결과를 만듭니다." },
-  { tab: "ml", heading: "모델 살펴보기", summary: "기존 모델 판본과 학습 결과를 독립적으로 살펴봅니다." },
-  { tab: "scoring", heading: "점수화 실행·조회", summary: "기존 모델의 점수를 계산하거나 결과를 다시 엽니다." },
-  { tab: "evaluations", heading: "평가 결과 살펴보기", summary: "정책과 레이블 근거를 확인하고 평가합니다." },
-  { tab: "jobs", heading: "실행 확인하기", summary: "데이터 작업의 실행 상태와 결과를 확인합니다." },
-];
-
-/** Overview는 실행 단계가 아니라 독립 기능으로 향하는 출발점이다. */
-export function PlatformOverview({ datasets, jobs, onNavigate, onOpenDataset }: Props) {
-  const recent = [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0,3);
+/** 조회 가능한 활동·리소스로 작업을 이어서 진행하게 하며 임의의 전체 집계를 만들지 않는다. */
+export function PlatformOverview({ datasets, jobs, onNavigate, onOpenDataset, onOpenResource,
+  onViewMlActivity, onViewDataActivity }: Props) {
+  const recentData = [...jobs].sort((a, b) =>
+    b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)).slice(0, 4);
   return <div className="platform-home">
     <section className="platform-intro">
       <span className="eyebrow">EXPLORE · EXPERIMENT · UNDERSTAND · EVOLVE</span>
-      <h2>무엇을 살펴보고 싶으신가요?</h2>
-      <p>데이터 탐색과 모델 실험, 실행 결과 확인은 독립적으로 시작할 수 있습니다.
-        특정 파이프라인을 거칠 필요가 없습니다.</p>
+      <h2>작업을 이어서 시작하세요</h2>
+      <p>데이터를 이해하고, 기존 모델과 실행 결과를 다시 찾고, 필요할 때 새 작업을 시작합니다.
+        정해진 파이프라인을 순서대로 진행할 필요는 없습니다.</p>
     </section>
-    <section aria-labelledby="entry-heading">
-      <h3 id="entry-heading" className="platform-section-title">작업 시작</h3>
-      <div className="platform-destinations">
-        {destinations.map(item => <button key={item.tab} type="button"
-          className="platform-destination ghost" onClick={() => onNavigate(item.tab)}>
-          <strong>{item.heading} <span aria-hidden="true">↗</span></strong>
-          <span>{item.summary}</span>
-        </button>)}
+    <section aria-label="최근 활동">
+      <h3 className="platform-section-title">최근 활동과 결과</h3>
+      <div className="platform-overview-grid">
+        <MLActivityPanel compact onNavigate={onNavigate} onOpenResource={onOpenResource}
+          onViewAll={onViewMlActivity}/>
+        <section className="panel" aria-labelledby="recent-data-heading">
+          <div className="panel-head"><div>
+            <h3 id="recent-data-heading">최근 데이터 작업</h3>
+            <p>현재 조회된 데이터·탐색 Job의 범위에서 표시합니다.</p>
+          </div><button className="secondary" onClick={onViewDataActivity}>작업 이력 →</button></div>
+          {recentData.length === 0 ? <p className="muted">조회된 데이터 작업이 없습니다.</p>
+            : <div className="platform-compact-list">{recentData.map(job =>
+              <button key={job.id} className="platform-list-link ghost" onClick={onViewDataActivity}>
+                <span className="platform-resource-name">Job {job.id.slice(0, 12)}</span>
+                <span className={`status ${job.status.toLowerCase()}`}>{job.status}</span>
+              </button>)}</div>}
+        </section>
       </div>
     </section>
-    <div className="platform-overview-grid">
-      <section className="panel" aria-labelledby="dataset-heading">
-        <div className="panel-head"><div><h3 id="dataset-heading">Dataset</h3>
-          <p>최근 불러온 목록에서 바로 데이터로 이동합니다.</p></div>
-          <button className="secondary" onClick={() => onNavigate("understanding")}>모두 보기</button></div>
-        {datasets.length === 0 ? <p className="muted">등록된 Dataset이 없습니다. 데이터 탐색에서 시작하세요.</p> :
-          <div className="platform-compact-list">{datasets.slice(0,4).map(item =>
-            <button key={item.id} className="platform-list-link ghost" onClick={() => onOpenDataset(item.id)}>
-              <span className="platform-resource-name">{item.name}</span><small>{item.kind}</small>
-            </button>)}</div>}
-      </section>
-      <section className="panel" aria-labelledby="activity-heading">
-        <div className="panel-head"><div><h3 id="activity-heading">최근 데이터 작업</h3>
-          <p>현재 조회된 데이터·탐색 실행 기록입니다.</p></div>
-          <button className="secondary" onClick={() => onNavigate("jobs")}>이력 보기</button></div>
-        {recent.length === 0 ? <p className="muted">조회된 데이터 작업이 없습니다.</p> :
-          <div className="platform-compact-list">{recent.map(item =>
-            <button key={item.id} className="platform-list-link ghost" onClick={() => onNavigate("jobs")}>
-              <span className="platform-resource-name">Job {item.id.slice(0,8)}</span>
-              <small>{item.status}</small>
-            </button>)}</div>}
-      </section>
-    </div>
-    <section className="platform-outlook" aria-labelledby="outlook-heading">
-      <h3 id="outlook-heading">플랫폼의 다음 경험</h3>
-      <p>연구·실험과 모델 활용 경험도 SOS의 독립적인 영역입니다. 현재 구현된 기능과
-        구상 중인 경험을 구분해 살펴볼 수 있습니다.</p>
+    <section className="panel" aria-labelledby="known-datasets-heading">
+      <div className="panel-head"><div>
+        <h3 id="known-datasets-heading">Dataset</h3>
+        <p>현재 조회된 Dataset 목록입니다. 선택하면 데이터 이해 화면으로 이동합니다.</p>
+      </div><button className="secondary" onClick={() => onNavigate("understanding")}>데이터 탐색 →</button></div>
+      {datasets.length === 0
+        ? <p className="muted">조회된 Dataset이 없습니다. 데이터 탐색에서 등록하거나 연결할 수 있습니다.</p>
+        : <div className="platform-compact-list platform-dataset-list">
+          {datasets.slice(0, 5).map(dataset => <button className="platform-list-link ghost"
+            key={dataset.id} onClick={() => onOpenDataset(dataset.id)}>
+            <span className="platform-resource-name">{dataset.name}</span><small>{dataset.kind}</small>
+          </button>)}
+        </div>}
+    </section>
+    <section aria-labelledby="new-work-heading">
+      <h3 className="platform-section-title" id="new-work-heading">새 작업 시작</h3>
+      <div className="platform-quick-actions">
+        <button className="platform-destination ghost" onClick={() => onNavigate("understanding")}>
+          <strong>데이터 이해하기 <span aria-hidden="true">↗</span></strong>
+          <span>기존 Dataset에서 구조·분포·품질을 탐색합니다.</span>
+        </button>
+        <button className="platform-destination ghost" onClick={() => onNavigate("preparation")}>
+          <strong>데이터 준비하기 <span aria-hidden="true">↗</span></strong>
+          <span>탐색을 거치지 않고도 변환을 시작할 수 있습니다.</span>
+        </button>
+        <button className="platform-destination ghost" onClick={() => onNavigate("ml")}>
+          <strong>모델과 결과 <span aria-hidden="true">↗</span></strong>
+          <span>모델 판본을 발견하고 학습·평가 활동에 접근합니다.</span>
+        </button>
+        <button className="platform-destination ghost" onClick={() => onNavigate("scoring")}>
+          <strong>기존 모델 사용하기 <span aria-hidden="true">↗</span></strong>
+          <span>새 학습 없이 모델의 Scoring을 요청합니다.</span>
+        </button>
+      </div>
+    </section>
+    <section className="platform-outlook" aria-labelledby="future-experience-heading">
+      <h3 id="future-experience-heading">확장할 경험</h3>
+      <p>연구·실험과 모델 활용은 독립적인 제품 경험입니다. 목표 화면은 고려하되,
+        현재 구현되지 않은 Experiment 관리와 온라인 Serving은 동작하는 기능으로 표시하지 않습니다.</p>
       <div className="platform-outlook-actions">
-        <button className="secondary" onClick={() => onNavigate("research")}>연구·실험 화면 구상 →</button>
-        <button className="secondary" onClick={() => onNavigate("experience")}>모델 활용 화면 구상 →</button>
+        <button className="secondary" onClick={() => onNavigate("research")}>연구 경험 살펴보기 →</button>
+        <button className="secondary" onClick={() => onNavigate("experience")}>모델 활용 경험 살펴보기 →</button>
       </div>
     </section>
   </div>;
