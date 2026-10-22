@@ -22,6 +22,7 @@ import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { PlatformNavigation, useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformOverview } from "./PlatformOverview";
 import { PlatformAreaPreview } from "./PlatformAreaPreview";
+import { DataSourceSidebar } from "./DataSourceSidebar";
 import { MLWorkbench } from "./MLWorkbench";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
 import { useDatasetOverview } from "./useDatasetOverview";
@@ -402,68 +403,29 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       <InstanceBrand canEdit={canConfigure} />
       <PlatformNavigation active={tab} onNavigate={setTab}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit} />
-      {(["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="data-sidebar">
-      <div className="section-title">DATA SOURCES</div>
-      {canWrite && <label className="upload" role="button" tabIndex={0} aria-label="CSV·Parquet·TSV·TXT 파일 업로드"
-        aria-disabled={busy} onKeyDown={event => {
-          if (busy || !["Enter", " "].includes(event.key)) return;
-          event.preventDefault(); uploadRef.current?.click();
-        }}>
-        + 파일 가져오기 (CSV·Parquet·TSV·TXT)
-        {uploadPolicy && <small>최대 {mebibytes(uploadPolicy.max_size_bytes)} MiB</small>}
-        <input ref={uploadRef} type="file"
-          accept={uploadPolicy?.supported_extensions.join(",") ?? ".csv,.parquet,.tsv,.txt"} disabled={busy}
-          onChange={event => {
-            const file = event.target.files?.[0];
-            if (file && /\.(tsv|txt)$/i.test(file.name)) {
+      {(["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) &&
+        <DataSourceSidebar datasets={datasets} selected={selected} canWrite={canWrite} busy={busy}
+          uploadRef={uploadRef} uploadPolicy={uploadPolicy}
+          onFile={file => {
+            if (/\\.(tsv|txt)$/i.test(file.name)) {
               setPendingDelimited(file); setError(""); setNotice("");
-            } else if (file) void upload(file);
-            event.target.value = "";
-          }} />
-      </label>}
-      {canWrite && <div className="connect-existing">
-        <label>기존 Iceberg 테이블
-          <input aria-label="Iceberg 테이블 이름" value={existingTableName}
-            onChange={e => changeExistingTableName(e.target.value)}
-            placeholder="sensor_data" />
-        </label>
-        <button className="secondary" disabled={busy || snapshotsLoading || !existingTableName.trim()}
-          onClick={() => void loadSnapshots()}>
-          {snapshotsLoading ? "조회 중" : "Snapshot 조회"}
-        </button>
-        {snapshots.length > 0 && <label>사용할 Snapshot
-          <select aria-label="Iceberg Snapshot 선택" value={snapshotId}
-            onChange={event => setSnapshotId(event.target.value)}>
-            {snapshots.map(item => <option key={item.snapshot_id} value={item.snapshot_id}>
-              {item.snapshot_id} · {new Date(item.timestamp_ms).toLocaleString("ko-KR")}
-            </option>)}
-          </select>
-        </label>}
-        <button className="secondary" disabled={busy || !existingTableName.trim()}
-          onClick={() => void connectExisting()}>
-          {snapshotId ? "선택한 Snapshot 연결" : "최신 Snapshot 연결"}
-        </button>
-      </div>}
-      <button className="job-navigation secondary" onClick={() => {
-        showExamples.current = true;
-        setSelected(""); setTab(current => current === "preparation" ? current : "preview");
-      }}>예제 데이터 살펴보기</button>
-            <div className="section-title dataset-section-title">DATASETS</div>
-      <nav className="dataset-nav" aria-label="데이터셋 목록">
-        {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
-        {datasets.map(d => <button key={d.id} className={`dataset ${selected === d.id ? "active" : ""}`}
-          onClick={() => { showExamples.current = false; setSelected(d.id);
+            } else { void upload(file); }
+          }}
+          onExample={() => {
+            showExamples.current = true;
+            setSelected(""); setTab(current => current === "preparation" ? current : "preview");
+          }}
+          onChoose={id => {
+            showExamples.current = false; setSelected(id);
             setTab(current => ["preparation", "preview", "profile"].includes(current)
-              ? current : "understanding"); }}>
-          <span className="dataset-name">{d.name}</span>
-          <span className="dataset-kind">{d.kind === "iceberg" ? "◆ Iceberg" : "◫ File"}</span>
-        </button>)}
-      </nav>
-      {nextDatasetCursor && <button className="job-navigation secondary"
-        disabled={busy} onClick={() => void loadMoreDatasets()}>
-        이전 데이터셋 더 불러오기
-      </button>}
-      </div>}
+              ? current : "understanding");
+          }}
+          existingTableName={existingTableName} onChangeExistingName={changeExistingTableName}
+          snapshots={snapshots} snapshotId={snapshotId} onSnapshotId={setSnapshotId}
+          snapshotsLoading={snapshotsLoading}
+          onLoadSnapshots={() => void loadSnapshots()}
+          onConnectExisting={() => void connectExisting()}
+          hasMore={Boolean(nextDatasetCursor)} onLoadMore={() => void loadMoreDatasets()} />}
       <div className="sidebar-bottom"><a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a></div>
     </aside>
     <main className="main">
