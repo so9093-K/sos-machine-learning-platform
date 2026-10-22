@@ -463,7 +463,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         disabled={busy} onClick={() => void loadMoreDatasets()}>
         이전 데이터셋 더 불러오기
       </button>}
-      </div>
+      </div>}
       <div className="sidebar-bottom"><a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a></div>
     </aside>
     <main className="main">
