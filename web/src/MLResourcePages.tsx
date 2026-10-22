@@ -27,9 +27,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /** 불변 ID로 직접 조회하므로 목록 첫 페이지나 이전 학습 화면을 요구하지 않는다. */
-export function MLResourceDetail({ kind, id, onOpenResource, onScoring }: {
+export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecision }: {
   kind: MLResourceKind; id: string; onOpenResource: OpenResource;
   onScoring: (modelId: string) => void;
+  onDecision: (kind: ResultKind, scoringId: string) => void;
 }) {
   const endpoints: Record<MLResourceKind, string> = {
     model: "/api/ml/models", scoring: "/api/ml/scoring/results",
@@ -99,11 +100,11 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring }: {
         <div className="ml-resource-actions">
           {(["policy", "evaluation", "explanation"] as const).map(k =>
             <button key={k} className="secondary"
-              onClick={() => onOpenResource(k, r.id)} disabled>
+              onClick={() => onDecision(k, r.id)}>
               {resultConfig[k].title}
             </button>)}
         </div>
-        <p className="hint">위 세 기능은 각 메뉴에서 이 Scoring Result ID를 선택해 실행할 수 있습니다.</p>
+        <p className="hint">해당 Scoring Result를 고정한 상태로 정책·평가·설명 작업을 독립 실행할 수 있습니다.</p>
       </>;
     })()}
     {kind === "policy" && (() => {
