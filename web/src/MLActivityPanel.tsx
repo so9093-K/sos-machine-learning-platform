@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatError } from "./api";
+import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 import type {
@@ -17,13 +17,13 @@ type JobLike = {
   cancel_requested?: boolean;
 };
 const operations: Record<Kind, {
-  label: string; tab: WorkspaceTab; resource: MLResourceKind; field: string;
+  label: string; tab: WorkspaceTab; resource: MLResourceKind; field: string; endpoint: string;
 }> = {
-  training: { label: "모델 학습", tab: "training", resource: "model", field: "model_revision_id" },
-  scoring: { label: "점수화", tab: "scoring", resource: "scoring", field: "scoring_result_id" },
-  policy: { label: "판정 정책", tab: "policies", resource: "policy", field: "policy_revision_id" },
-  evaluation: { label: "평가", tab: "evaluations", resource: "evaluation", field: "evaluation_revision_id" },
-  explanation: { label: "설명", tab: "explanations", resource: "explanation", field: "explanation_result_id" },
+  training: { label: "모델 학습", tab: "training", resource: "model", field: "model_revision_id", endpoint: "/api/ml/train/jobs" },
+  scoring: { label: "점수화", tab: "scoring", resource: "scoring", field: "scoring_result_id", endpoint: "/api/ml/scoring/jobs" },
+  policy: { label: "판정 정책", tab: "policies", resource: "policy", field: "policy_revision_id", endpoint: "/api/ml/policies/jobs" },
+  evaluation: { label: "평가", tab: "evaluations", resource: "evaluation", field: "evaluation_revision_id", endpoint: "/api/ml/evaluations/jobs" },
+  explanation: { label: "설명", tab: "explanations", resource: "explanation", field: "explanation_result_id", endpoint: "/api/ml/explanations/jobs" },
 };
 type Activity = { id: string; kind: Kind; status: string; created: string;
   resultId: string | null; error: string | null; cancelRequested: boolean };
@@ -33,6 +33,48 @@ function toActivity(job: JobLike, kind: Kind): Activity {
   return { id: job.id, kind, status: job.status, created: job.created_at,
     resultId: typeof value === "string" ? value : null,
     error: job.error_code ?? null, cancelRequested: job.cancel_requested === true };
+}
+
+type JobDetail = {
+  status: string;
+  cancel_requested?: boolean;
+  error?: string | null;
+  error_code?: string | null;
+  spec?: unknown;
+  attempts?: unknown;
+};
+function ActivityJobDetails({ job }: { job: Activity }) {
+  const [detail, setDetail] = useState<JobDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  async function loadDetails() {
+    if (loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const result = await request<JobDetail>(
+        `${operations[job.kind].endpoint}/${encodeURIComponent(job.id)}`);
+      setDetail(result);
+    } catch (e) { setError(formatError(e)); }
+    finally { setLoading(false); }
+  }
+  return <details className="ml-activity-details" onToggle={event => {
+    if (event.currentTarget.open && !detail && !loading && !error) void loadDetails();
+  }}>
+    <summary>Job 상태·설정·진단</summary>
+    {loading && <p role="status">실행 상세 조회 중…</p>}
+    {error && <div><p role="alert">{error}</p>
+      <button className="secondary" onClick={() => void loadDetails()}>다시 조회</button></div>}
+    {detail && <>
+      <p className="hint">현재 상세 상태: {detail.status}
+        {detail.cancel_requested ? " · 취소 요청 중" : ""}
+        {detail.error_code ? ` · 오류 코드 ${detail.error_code}` : ""}</p>
+      {detail.error && <p role="alert">{detail.error}</p>}
+      <pre>{JSON.stringify({ spec: detail.spec ?? "제공되지 않음",
+        attempts: detail.attempts ?? "상세 API에 실행 시도 정보 없음" }, null, 2)}</pre>
+      <button className="secondary" onClick={() => void loadDetails()}>상태 다시 조회</button>
+    </>}
+  </details>;
 }
 
 /** 조회된 Job 페이지에 있는 활동만 보여준다. 전체 Job 수나 완료 진행률을 추정하지 않는다. */
@@ -101,6 +143,7 @@ export function MLActivityPanel({ compact = false, onNavigate, onOpenResource, o
             {job.resultId ? "관련 작업" : "실행 화면"} →
           </button>
         </div>
+        {!compact && <ActivityJobDetails job={job}/>}
       </article>)}
       {items.length === 0 && <p className="muted">
         {error ? "ML 작업을 모두 조회하지 못했습니다." : "현재 조회된 ML Job이 없습니다."}
