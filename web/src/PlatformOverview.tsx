@@ -12,7 +12,7 @@ type Props = {
 const destinations: Array<{ tab: WorkspaceTab; heading: string; summary: string }> = [
   { tab: "understanding", heading: "데이터 이해하기", summary: "Dataset의 구조·분포·품질을 확인하고 탐색합니다." },
   { tab: "preparation", heading: "데이터 준비하기", summary: "원본을 보존하면서 변환하고 새 결과를 만듭니다." },
-  { tab: "ml", heading: "모델 실험하기", summary: "모델 학습과 판본, 점수화·평가 결과를 살펴봅니다." },
+  { tab: "ml", heading: "모델 살펴보기", summary: "모델 판본과 결과를 확인하고, 필요할 때 새 학습을 시작합니다." },
   { tab: "jobs", heading: "실행 확인하기", summary: "데이터 작업의 실행 상태와 결과를 확인합니다." },
 ];
 
