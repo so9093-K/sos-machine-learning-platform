@@ -436,3 +436,12 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 @media(max-width:850px) {
   .platform-dataset-list,.platform-quick-actions { grid-template-columns:1fr; }
 }
+
+
+/* Research·Model Experience의 실행 가능한 모델 목록과 장기 설계 목표를 구별한다. */
+.platform-discovered-model { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center;
+  gap:14px; padding:16px 2px; border-bottom:1px solid var(--sos-border); }
+.platform-discovered-model:last-child { border-bottom:0; }
+.platform-discovered-model strong { font-size:14px; overflow-wrap:anywhere; }
+.platform-discovered-model p { margin-top:6px; line-height:1.55; }
+.platform-discovered-model .platform-outlook-actions { margin:0; }
