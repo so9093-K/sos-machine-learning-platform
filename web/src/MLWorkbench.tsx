@@ -43,6 +43,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, on
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
   const [historyDatasetFilter, setHistoryDatasetFilter] = useState("");
+  const [modelIdDraft, setModelIdDraft] = useState("");
   const [nEstimators, setNEstimators] = useState(100);
   const [maxSamples, setMaxSamples] = useState("auto");
   const [inputMode, setInputMode] = useState<"all" | "sample">("all");
@@ -354,6 +355,18 @@ export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, on
         <p>이동·새로고침 후에도 Job 상태와 모델 판본을 다시 조회할 수 있습니다.</p>
       </div><button className="secondary" onClick={() => void reloadHistory().catch(e => setError(formatError(e)))}>
         목록 새로고침</button></div>
+      <form className="model-history-filter" onSubmit={event => {
+        event.preventDefault();
+        if (modelIdDraft.trim()) onOpenModel(modelIdDraft.trim());
+      }}>
+        <label>Model Revision ID
+          <input value={modelIdDraft} onChange={event => setModelIdDraft(event.target.value)}
+            placeholder="기존 판본 ID" aria-label="기존 모델 판본 ID" />
+        </label>
+        <button type="submit" className="secondary" disabled={!modelIdDraft.trim()}>
+          모델 판본 직접 조회
+        </button>
+      </form>
       <div className="model-history-filter">
         <label>원본 Dataset
           <select aria-label="모델 이력 Dataset 필터" value={historyDatasetFilter}
