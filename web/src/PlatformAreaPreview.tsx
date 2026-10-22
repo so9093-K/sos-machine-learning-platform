@@ -83,10 +83,6 @@ export function PlatformAreaPreview({ area, onNavigate, onOpenModel, onStartScor
           </div>
         </div>)}
       </div>
-      {history.nextCursor && <button className="secondary"
-        onClick={() => void history.loadMore().catch(e => setError(formatError(e)))}>
-        이전 학습 Job 더 보기
-      </button>}
     </section>
     <section aria-labelledby="experience-goals-heading">
       <h3 id="experience-goals-heading" className="platform-section-title">이 영역의 목표 경험</h3>
