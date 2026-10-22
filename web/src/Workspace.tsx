@@ -21,6 +21,7 @@ import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
+import { ActivityWorkspace } from "./ActivityWorkspace";
 import { PlatformAreaPreview } from "./PlatformAreaPreview";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { MLWorkbench } from "./MLWorkbench";
@@ -443,9 +444,13 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       {tab === "overview" && <PlatformOverview
         datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
         jobs={[...jobs, ...discoveryJobs].map(j => ({ id: j.id, status: j.status, created_at: j.created_at }))}
-        onNavigate={setTab}
+        onNavigate={setTab} onOpenResource={openResource}
+        onViewMlActivity={() => setTab("ml-jobs")}
+        onViewDataActivity={() => setTab("jobs")}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
-      {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab} onNavigate={setTab} />}
+      {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab}
+        onNavigate={setTab} onOpenModel={id => openResource("model", id)}
+        onStartScoring={startScoring} canRun={canRun} />}
       {!dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
         <p>{tab === "preparation"
@@ -611,14 +616,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </>}
 
       </>}
-      {tab === "ml" && !resource && <MLWorkbench datasets={datasets}
-        view="models" onViewChange={view => setTab(view === "models" ? "ml" : "training")}
-        onOpenModel={id => openResource("model", id)}
-        canTrain={canRun} canCancel={canCancel} />}
-      {tab === "training" && <MLWorkbench datasets={datasets}
-        view="training" onViewChange={view => setTab(view === "models" ? "ml" : "training")}
-        onOpenModel={id => openResource("model", id)}
-        canTrain={canRun} canCancel={canCancel} />}
+      {(tab === "ml" || tab === "training") && !resource &&
+        <MLWorkbench datasets={datasets} view={tab === "ml" ? "models" : "training"}
+          onViewChange={view => setTab(view === "models" ? "ml" : "training")}
+          onOpenModel={id => openResource("model", id)}
+          canTrain={canRun} canCancel={canCancel} />}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         onScoring={startScoring} onDecision={startDecision} />}
@@ -632,16 +634,21 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           onOpenResource={openResource} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
-      {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
+      {(tab === "jobs" || tab === "ml-jobs") && <ActivityWorkspace
+        active={tab === "ml-jobs" ? "ml" : "data"}
+        onChange={view => setTab(view === "ml" ? "ml-jobs" : "jobs")}
+        onNavigate={setTab} onOpenResource={openResource} canCancel={canCancel}>
+        {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
           b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))}
-        datasets={datasets} busy={busy} canCancel={canCancel}
-        nextCursor={nextJobsCursor} discoveryNextCursor={nextDiscoveryCursor}
-        onLoadMore={() => void loadMoreJobs()}
-        onLoadMoreDiscovery={() => void loadMoreDiscoveryJobs()}
-        onRefresh={() => void withFeedback(async () => {
-          await Promise.all([refreshJobs(), refreshDiscoveryJobs()]);
-        })}
-        onCancel={id => void cancelJob(id)}
-        onOpen={id => void openJobDataset(id)} />}
+          datasets={datasets} busy={busy} canCancel={canCancel}
+          nextCursor={nextJobsCursor} discoveryNextCursor={nextDiscoveryCursor}
+          onLoadMore={() => void loadMoreJobs()}
+          onLoadMoreDiscovery={() => void loadMoreDiscoveryJobs()}
+          onRefresh={() => void withFeedback(async () => {
+            await Promise.all([refreshJobs(), refreshDiscoveryJobs()]);
+          })}
+          onCancel={id => void cancelJob(id)}
+          onOpen={id => void openJobDataset(id)} />}
+      </ActivityWorkspace>}
   </PlatformShell>;
 }

@@ -38,6 +38,7 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
     explanation: "/api/ml/explanations",
   };
   const key = kind + ":" + id;
+  const [retry, setRetry] = useState(0);
   const [state, setState] = useState<{
     key: string; data: ModelRevision | ScoringResult | DecisionPolicyRevision |
       EvaluationRevision | ExplanationResult | null; error: string;
@@ -50,11 +51,12 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
       .then(data => { if (active) setState({ key, data, error: "" }); })
       .catch(error => { if (active) setState({ key, data: null, error: formatError(error) }); });
     return () => { active = false; };
-  }, [key]);
+  }, [key, retry]);
   const current = state?.key === key ? state : null;
   if (current?.error) return <section className="panel" role="alert">
     <h3>결과를 열 수 없습니다.</h3><p>{current.error}</p>
     <p className="hint">판본 ID, 접근 권한 또는 서비스 상태를 확인하세요.</p>
+    <button className="secondary" onClick={() => setRetry(value => value + 1)}>다시 조회</button>
   </section>;
   if (!current?.data) return <section className="panel" role="status">불변 결과를 조회하는 중입니다.</section>;
   const data = current.data;
@@ -66,19 +68,28 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
     {kind === "model" && (() => {
       const m = data as ModelRevision;
       return <>
+        <div className="ml-resource-summary">
+          <h4>{m.algorithm} · 모델 판본</h4>
+          <p>학습에서 생성한 불변 결과입니다. 새 학습 없이 기존 모델을 활용할 수 있습니다.</p>
+          <div className="ml-resource-actions">
+            <button onClick={() => onScoring(m.id)}>이 모델로 점수화 시작 →</button>
+          </div>
+        </div>
         <dl className="ml-resource-fields">
-          <Field label="알고리즘">{m.algorithm}</Field>
-          <Field label="학습 Dataset">{m.dataset_id}</Field>
-          <Field label="데이터 판본">{m.dataset_version}</Field>
-          <Field label="Feature">{m.features.join(", ")}</Field>
-          <Field label="Training Job">{m.job_id}</Field>
-          <Field label="생성 시각">{m.created_at}</Field>
-          <Field label="Runtime">{String(m.runtime.scikit_learn ?? "상세 근거 미확인")}</Field>
+          <Field label="원본 Dataset">{m.dataset_id}</Field>
+          <Field label="Dataset 판본">{m.dataset_version}</Field>
+          <Field label="입력 Feature 수">{m.features.length.toLocaleString("ko-KR")}개</Field>
+          <Field label="생성 시각">{new Date(m.created_at).toLocaleString("ko-KR")}</Field>
         </dl>
-        <p className="hint">학습 결과의 요약은 독립 검증 성능을 의미하지 않습니다.</p>
-        <div className="ml-resource-actions"><button onClick={() => onScoring(m.id)}>
-          이 모델로 Scoring 시작 →
-        </button></div>
+        <p className="hint">학습 데이터의 점수 요약은 독립 검증 성능을 의미하지 않습니다.</p>
+        <details className="ml-resource-evidence">
+          <summary>모델 입력·학습 Job·Runtime 근거 확인</summary>
+          <dl className="ml-resource-fields">
+            <Field label="전체 Feature 및 순서">{m.features.join(", ")}</Field>
+            <Field label="Training Job">{m.job_id}</Field>
+            <Field label="Runtime">{String(m.runtime.scikit_learn ?? "상세 근거 미확인")}</Field>
+          </dl>
+        </details>
       </>;
     })()}
     {kind === "scoring" && (() => {

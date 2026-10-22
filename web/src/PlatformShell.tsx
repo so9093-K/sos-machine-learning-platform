@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import type { Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
-import { PlatformNavigation, type WorkspaceTab } from "./PlatformNavigation";
+import { PlatformNavigation, ModelAreaNavigation, isModelsArea, type WorkspaceTab } from "./PlatformNavigation";
 
 const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: "WORKSPACE", title: "Workspace Overview", description: "Data · Research · Models · Operations" },
@@ -17,7 +17,8 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
   evaluations: { eyebrow: "EVALUATION", title: "평가 결과", description: "평가 근거 · 레이블 · 지표" },
   explanations: { eyebrow: "EXPLANATION", title: "점수 설명", description: "관측 결과 · 국소 민감도" },
   experience: { eyebrow: "MODEL EXPERIENCE", title: "Model Experience", description: "모델 활용 경험 설계" },
-  jobs: { eyebrow: "ACTIVITY & JOBS", title: "데이터 작업 이력", description: "Data Jobs · Exploration Jobs" },
+  jobs: { eyebrow: "ACTIVITY & JOBS", title: "작업 이력", description: "Data · Exploration · ML 실행 현황" },
+  "ml-jobs": { eyebrow: "ACTIVITY & JOBS", title: "ML 작업 이력", description: "학습 · Scoring · 정책 · 평가 · 설명" },
   storage: { eyebrow: "PLATFORM OPERATIONS", title: "저장소 상태", description: "Storage · Health" },
   audit: { eyebrow: "PLATFORM OPERATIONS", title: "보안 감사", description: "Identity · Audit" },
 };
@@ -62,6 +63,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
           </div>
         </div>
       </header>
+      {isModelsArea(section) && <ModelAreaNavigation active={section} onNavigate={onNavigate} />}
       {children}
       <footer>SOS · {label.eyebrow}<span>Dataset · Job · Artifact</span></footer>
     </main>

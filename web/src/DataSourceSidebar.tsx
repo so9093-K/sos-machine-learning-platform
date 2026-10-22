@@ -35,46 +35,7 @@ export function DataSourceSidebar(props: Props) {
     onLoadSnapshots, onConnectExisting, hasMore, onLoadMore,
   } = props;
   return <div className="data-sidebar">
-    <div className="section-title">DATA SOURCES</div>
-    {canWrite && <label className="upload" role="button" tabIndex={0}
-      aria-label="CSV·Parquet·TSV·TXT 파일 업로드" aria-disabled={busy}
-      onKeyDown={event => {
-        if (busy || !["Enter", " "].includes(event.key)) return;
-        event.preventDefault(); uploadRef.current?.click();
-      }}>
-      + 파일 가져오기 (CSV·Parquet·TSV·TXT)
-      {uploadPolicy && <small>최대 {mebibytes(uploadPolicy.max_size_bytes)} MiB</small>}
-      <input ref={uploadRef} type="file"
-        accept={uploadPolicy?.supported_extensions.join(",") ?? ".csv,.parquet,.tsv,.txt"}
-        disabled={busy}
-        onChange={event => {
-          const file = event.target.files?.[0];
-          if (file) onFile(file);
-          event.target.value = "";
-        }} />
-    </label>}
-    {canWrite && <div className="connect-existing">
-      <label>기존 Iceberg 테이블
-        <input aria-label="Iceberg 테이블 이름" value={existingTableName}
-          onChange={event => onChangeExistingName(event.target.value)} placeholder="sensor_data" />
-      </label>
-      <button className="secondary" disabled={busy || snapshotsLoading || !existingTableName.trim()}
-        onClick={onLoadSnapshots}>{snapshotsLoading ? "조회 중" : "Snapshot 조회"}</button>
-      {snapshots.length > 0 && <label>사용할 Snapshot
-        <select aria-label="Iceberg Snapshot 선택" value={snapshotId}
-          onChange={event => onSnapshotId(event.target.value)}>
-          {snapshots.map(item => <option key={item.snapshot_id} value={item.snapshot_id}>
-            {item.snapshot_id} · {new Date(item.timestamp_ms).toLocaleString("ko-KR")}
-          </option>)}
-        </select>
-      </label>}
-      <button className="secondary" disabled={busy || !existingTableName.trim()}
-        onClick={onConnectExisting}>
-        {snapshotId ? "선택한 Snapshot 연결" : "최신 Snapshot 연결"}
-      </button>
-    </div>}
-    <button className="job-navigation secondary" onClick={onExample}>예제 데이터 살펴보기</button>
-    <div className="section-title dataset-section-title">DATASETS</div>
+    <div className="section-title">DATASETS</div>
     <nav className="dataset-nav" aria-label="데이터셋 목록">
       {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
       {datasets.map(item => <button key={item.id}
@@ -87,5 +48,48 @@ export function DataSourceSidebar(props: Props) {
     {hasMore && <button className="job-navigation secondary" disabled={busy} onClick={onLoadMore}>
       이전 데이터셋 더 불러오기
     </button>}
+    <button className="job-navigation secondary" onClick={onExample}>예제 데이터 살펴보기</button>
+    {canWrite && <details className="data-import-controls">
+      <summary>데이터 추가·연결</summary>
+      <div className="data-import-actions">
+        <label className="upload" role="button" tabIndex={0}
+          aria-label="CSV·Parquet·TSV·TXT 파일 업로드" aria-disabled={busy}
+          onKeyDown={event => {
+            if (busy || !["Enter", " "].includes(event.key)) return;
+            event.preventDefault(); uploadRef.current?.click();
+          }}>
+          + 파일 가져오기 (CSV·Parquet·TSV·TXT)
+          {uploadPolicy && <small>최대 {mebibytes(uploadPolicy.max_size_bytes)} MiB</small>}
+          <input ref={uploadRef} type="file"
+            accept={uploadPolicy?.supported_extensions.join(",") ?? ".csv,.parquet,.tsv,.txt"}
+            disabled={busy}
+            onChange={event => {
+              const file = event.target.files?.[0];
+              if (file) onFile(file);
+              event.target.value = "";
+            }} />
+        </label>
+        <div className="connect-existing">
+          <label>기존 Iceberg 테이블
+            <input aria-label="Iceberg 테이블 이름" value={existingTableName}
+              onChange={event => onChangeExistingName(event.target.value)} placeholder="sensor_data" />
+          </label>
+          <button className="secondary" disabled={busy || snapshotsLoading || !existingTableName.trim()}
+            onClick={onLoadSnapshots}>{snapshotsLoading ? "조회 중" : "Snapshot 조회"}</button>
+          {snapshots.length > 0 && <label>사용할 Snapshot
+            <select aria-label="Iceberg Snapshot 선택" value={snapshotId}
+              onChange={event => onSnapshotId(event.target.value)}>
+              {snapshots.map(item => <option key={item.snapshot_id} value={item.snapshot_id}>
+                {item.snapshot_id} · {new Date(item.timestamp_ms).toLocaleString("ko-KR")}
+              </option>)}
+            </select>
+          </label>}
+          <button className="secondary" disabled={busy || !existingTableName.trim()}
+            onClick={onConnectExisting}>
+            {snapshotId ? "선택한 Snapshot 연결" : "최신 Snapshot 연결"}
+          </button>
+        </div>
+      </div>
+    </details>}
   </div>;
 }

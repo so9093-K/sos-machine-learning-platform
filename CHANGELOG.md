@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- SOS 웹 전역 탐색을 Workspace·Data·Research·Models·Model Experience·Activity 중심으로 간결하게 정리하고, 모델의 독립 학습·점수화·평가·정책·설명은 영역 내부에서 직접 접근하도록 개선했습니다. Workspace에서 조회된 데이터·ML 활동과 모델 판본을 다시 찾을 수 있고, Data 화면은 Dataset 탐색을 우선하며, Research·Model Experience에서도 실제 모델 판본 및 지원 중인 배치 점수화로 연결합니다. 데이터/ML 실행 이력은 URL로 구분하고, ML Job의 이전 페이지·상세 진단·허용된 취소 요청과 조회 실패 복구를 지원합니다.
+
 - SOS 프런트엔드에서 Data·Research·Models·Activity의 진입 구조를 재구성하고, Model Revision·Training·Scoring·Decision Policy·Evaluation·Explanation을 독립 화면과 결과별 직접 주소로 제공합니다. 기존 Job 결과에서 발견한 불변 판본과 API 계약을 재사용하며, 미구현 Experiment·Serving은 구상 화면임을 명확히 구분합니다.
 
 - Isolation Forest의 `all` 학습은 Worker 메모리로 계산한 임의 행 수 사전 상한 대신 Attempt별 디스크 기반 입력과 청크 전처리를 사용합니다. 요청한 Train 전체 행 사용은 그대로 유지하고, 실행 중 실제 RSS·스테이징 사용량 보호는 기존 Worker 예산으로 관리합니다. `sample`의 명시적 행 수·Seed 선택 의미는 변경하지 않습니다.
