@@ -5,11 +5,12 @@ import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 export type ActivityView = "data" | "ml";
 
 /** Job API는 종류별로 분리되어 있다. 화면도 조회 범위를 숨기지 않고 작업 유형을 전환한다. */
-export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource, children }: {
+export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource, canCancel, children }: {
   active: ActivityView;
   onChange: (view: ActivityView) => void;
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
+  canCancel: boolean;
   children: ReactNode;
 }) {
   return <div className="platform-activity">
@@ -29,6 +30,6 @@ export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource
       </button>
     </nav>
     {active === "data" ? children :
-      <MLActivityPanel onNavigate={onNavigate} onOpenResource={onOpenResource} />}
+      <MLActivityPanel onNavigate={onNavigate} onOpenResource={onOpenResource} canCancel={canCancel} />}
   </div>;
 }
