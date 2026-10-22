@@ -179,9 +179,13 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   const models = usePagedJobs<MLTrainingJobSummary>("/api/ml/train/jobs");
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const [modelId, setModelId] = useState(preferredModelId);
+  const [loadedModelId, setLoadedModelId] = useState(preferredModelId);
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => { setModelId(preferredModelId); }, [preferredModelId]);
+  useEffect(() => {
+    setModelId(preferredModelId);
+    setLoadedModelId(preferredModelId);
+  }, [preferredModelId]);
   useEffect(() => {
     void models.refresh().catch(e => setError(formatError(e)));
     void scores.refresh().catch(e => setError(formatError(e)));
@@ -189,13 +193,13 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   useEffect(() => {
     let active = true;
     setModel(null);
-    if (modelId.trim()) {
-      void request<ModelRevision>(`/api/ml/models/${encodeURIComponent(modelId.trim())}`)
+    if (loadedModelId) {
+      void request<ModelRevision>(`/api/ml/models/${encodeURIComponent(loadedModelId)}`)
         .then(value => { if (active) { setModel(value); setError(""); } })
         .catch(e => { if (active) setError(formatError(e)); });
     }
     return () => { active = false; };
-  }, [modelId]);
+  }, [loadedModelId]);
   const available = useMemo(() => [...new Set(models.items.map(j =>
     revisionId(j, "model_revision_id")).filter((id): id is string => Boolean(id)))], [models.items]);
   return <div className="ml-resource-workspace">
@@ -211,17 +215,24 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
         </label>
         <label>조회된 모델 판본
           <select value={available.includes(modelId) ? modelId : ""}
-            aria-label="조회된 모델 판본 선택" onChange={event => setModelId(event.target.value)}>
+            aria-label="조회된 모델 판본 선택" onChange={event => {
+              setModelId(event.target.value);
+              setLoadedModelId(event.target.value);
+            }}>
             <option value="">모델 선택</option>
             {available.map(id => <option key={id} value={id}>{id}</option>)}
           </select>
         </label>
       </div>
+      <button type="button" className="secondary" disabled={!modelId.trim()}
+        onClick={() => setLoadedModelId(modelId.trim())}>모델 판본 조회</button>
+      {modelId.trim() !== loadedModelId && <p className="hint">
+        모델 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
       {models.nextCursor && <button className="secondary"
         onClick={() => void models.loadMore().catch(e => setError(formatError(e)))}>이전 모델 더 보기</button>}
-      {model && <p className="hint">선택 모델: {model.algorithm} · {model.id} · 입력 Feature {model.features.length}개</p>}
+      {model && modelId.trim() === loadedModelId && <p className="hint">선택 모델: {model.algorithm} · {model.id} · 입력 Feature {model.features.length}개</p>}
     </section>
-    {model && <MLScoringPanel key={model.id} model={model} datasets={datasets}
+    {model && modelId.trim() === loadedModelId && <MLScoringPanel key={model.id} model={model} datasets={datasets}
       canRun={canRun} canCancel={canCancel} onOpenResult={id => onOpenResource("scoring", id)} />}
     <section className="panel">
       <div className="panel-head"><div><h3>전체 Scoring Job 이력</h3>
@@ -257,21 +268,25 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
   const histories = { policy: policies, evaluation: evaluations, explanation: explanations };
   const history = histories[view];
   const [scoringId, setScoringId] = useState(preferredScoringId);
+  const [loadedScoringId, setLoadedScoringId] = useState(preferredScoringId);
   const [scoring, setScoring] = useState<ScoringResult | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => { setScoringId(preferredScoringId); }, [preferredScoringId]);
+  useEffect(() => {
+    setScoringId(preferredScoringId);
+    setLoadedScoringId(preferredScoringId);
+  }, [preferredScoringId]);
   useEffect(() => {
     void scores.refresh().catch(e => setError(formatError(e)));
     void history.refresh().catch(e => setError(formatError(e)));
   }, [view]);
   useEffect(() => {
     let active = true; setScoring(null);
-    if (scoringId.trim()) void request<ScoringResult>(
-      `/api/ml/scoring/results/${encodeURIComponent(scoringId.trim())}`)
+    if (loadedScoringId) void request<ScoringResult>(
+      `/api/ml/scoring/results/${encodeURIComponent(loadedScoringId)}`)
       .then(value => { if (active) { setScoring(value); setError(""); } })
       .catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
-  }, [scoringId]);
+  }, [loadedScoringId]);
   const available = useMemo(() => [...new Set(scores.items.map(j =>
     revisionId(j,"scoring_result_id")).filter((id): id is string => Boolean(id)))], [scores.items]);
   const config = resultConfig[view];
@@ -287,7 +302,10 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
         </label>
         <label>조회된 Scoring Result
           <select aria-label="조회된 점수 결과 선택" value={available.includes(scoringId) ? scoringId : ""}
-            onChange={event => setScoringId(event.target.value)}>
+            onChange={event => {
+              setScoringId(event.target.value);
+              setLoadedScoringId(event.target.value);
+            }}>
             <option value="">결과 선택</option>
             {available.map(id => <option key={id} value={id}>{id}</option>)}
           </select>
@@ -295,9 +313,13 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
       </div>
       {scores.nextCursor && <button className="secondary"
         onClick={() => void scores.loadMore().catch(e => setError(formatError(e)))}>이전 Scoring 더 보기</button>}
-      {scoring && <p>점수화된 행: {scoring.row_count.toLocaleString("ko-KR")} · 모델 {scoring.model_revision_id}</p>}
+      <button type="button" className="secondary" disabled={!scoringId.trim()}
+        onClick={() => setLoadedScoringId(scoringId.trim())}>Scoring Result 조회</button>
+      {scoringId.trim() !== loadedScoringId && <p className="hint">
+        Scoring Result ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
+      {scoring && scoringId.trim() === loadedScoringId && <p>점수화된 행: {scoring.row_count.toLocaleString("ko-KR")} · 모델 {scoring.model_revision_id}</p>}
     </section>
-    {scoring && <section className="panel">
+    {scoring && scoringId.trim() === loadedScoringId && <section className="panel">
       <MLDecisionPanel key={scoring.id + view} scoring={scoring} view={view}
         canRun={canRun} canCancel={canCancel}
         onOpenResult={(kind,id) => onOpenResource(kind,id)} />
