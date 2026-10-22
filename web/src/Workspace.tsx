@@ -599,8 +599,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </>}
 
       </>}
-      {tab === "ml" && <MLWorkbench datasets={datasets} selectedId={selected}
-        onSelect={setSelected} canTrain={canRun} canCancel={canCancel} />}
+      {tab === "ml" && <MLWorkbench datasets={datasets}
+        canTrain={canRun} canCancel={canCancel} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
       {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
