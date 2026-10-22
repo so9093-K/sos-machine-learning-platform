@@ -74,10 +74,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
   useEffect(() => {
     let alive = true;
     selectionRequest.current += 1;
-    setSelectedJob(null);
-    setModel(null);
-    setCompareJobId("");
-    setComparisonModel(null);
+    // 학습 입력 Dataset을 바꾸어도 이미 선택한 모델 판본은 별개의 조회 결과다.
     setColumns([]);
     setFeatures([]);
     setError("");
