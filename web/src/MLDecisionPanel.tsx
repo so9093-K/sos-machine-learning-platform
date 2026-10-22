@@ -304,8 +304,11 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       이전 정책 더 보기
     </button>}
     {policy && <p className="hint">선택한 정책: {policy.id} · 점수 경계 {metric(policy.threshold)}</p>}
-    <button disabled={!canRun || (evaluationJob !== null && !DONE.has(evaluationJob.status))}
+    <button disabled={!canRun || (policyJob !== null && policy === null) ||
+      (evaluationJob !== null && !DONE.has(evaluationJob.status))}
       onClick={() => void createEvaluation()}>Evaluation 판본 생성</button>
+    {policyJob && !policy && <p role="status">선택한 정책 판본을 확인하는 중입니다.
+      완료 전에는 평가를 제출할 수 없습니다.</p>
     {evaluationJob && <p role="status">Evaluation Job · {evaluationJob.status}
       {evaluationJob.cancel_requested && evaluationJob.status === "Running" && " · 취소 요청됨"}
     </p>}
