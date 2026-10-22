@@ -3,6 +3,7 @@ import { formatError, request, submitJob } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { MLScoringPanel } from "./MLScoringPanel";
 import { MLTrackingStatus } from "./MLTrackingStatus";
+import { FeatureSelector } from "./FeatureSelector";
 import type {
   Dataset, DatasetColumns, MLTrainingJob, MLTrainingJobSummary, ModelRevision,
 } from "./types";
@@ -310,13 +311,8 @@ export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCance
         {loadingColumns && <p role="status" className="hint">스키마를 조회하고 있습니다.</p>}
         {selectedId && !loadingColumns && numericColumns.length === 0 &&
           <p className="hint">사용 가능한 숫자형 Feature가 없습니다. 데이터 준비에서 숫자형 Feature를 생성하세요.</p>}
-        <div className="form-row">{numericColumns.map(column => <label key={column.name}>
-          <input type="checkbox" checked={features.includes(column.name)}
-            disabled={!canTrain}
-            onChange={event => setFeatures(current => event.target.checked
-              ? [...current, column.name] : current.filter(name => name !== column.name))} />
-          {column.name} <small>{column.dtype}</small>
-        </label>)}</div>
+        <FeatureSelector key={selectedId} columns={numericColumns} selected={features}
+          disabled={!canTrain} onChange={setFeatures} />
       </div>
       <p className="hint">숫자형 Feature를 선택하세요. 학습 입력은 위에서 선택한 정책에 따르며, 실행 예산에 맞지 않으면 실패합니다. 결측·비유한값·정밀도 오류는 실패로 처리합니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
       <div className="actions">
