@@ -303,8 +303,9 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     </>}
     {view === "evaluation" && <>
     <label>평가에 적용할 정책 (선택)
-      <select aria-label="평가 정책 판본 선택" value={policyJob?.id ?? ""}
+      <select aria-label="평가 정책 판본 선택" disabled={loadingPolicy} value={policyJob?.id ?? ""}
         onChange={event => {
+          setPolicyIdDraft("");
           if (event.target.value) void restorePolicy(event.target.value);
           else { setPolicyJob(null); setPolicy(null); }
         }}>
@@ -319,7 +320,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     </label>
     <div className="form-row">
       <label>기존 정책 판본 ID (다른 Scoring의 정책도 입력 가능)
-        <input aria-label="재사용할 정책 판본 ID" value={policyIdDraft}
+        <input aria-label="재사용할 정책 판본 ID" disabled={loadingPolicy} value={policyIdDraft}
           placeholder="호환되는 Decision Policy Revision ID"
           onChange={event => {
             setPolicyIdDraft(event.target.value);
