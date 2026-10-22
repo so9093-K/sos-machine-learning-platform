@@ -20,10 +20,9 @@ jobs:
         run: uv sync --locked --group dev
       - name: Web dependencies
         run: cd web && npm ci
-      - name: Generate API types and print diff
+      - name: Check regenerated API types and Web build
         run: |
           bash scripts/generate_api_types.sh
-          echo GEN_DIFF_START
-          git diff -- web/src/api.generated.ts | base64 -w0
-          echo
-          echo GEN_DIFF_END
+          git diff --exit-code -- web/src/api.generated.ts
+          cd web
+          npm run build
