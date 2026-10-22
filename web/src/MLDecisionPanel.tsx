@@ -26,6 +26,8 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
   const [rowIndex, setRowIndex] = useState(0);
   const [policyJob, setPolicyJob] = useState<MLPolicyJob | null>(null);
   const [policy, setPolicy] = useState<DecisionPolicyRevision | null>(null);
+  const [policyIdDraft, setPolicyIdDraft] = useState("");
+  const [loadingPolicy, setLoadingPolicy] = useState(false);
   const [evaluationJob, setEvaluationJob] = useState<MLEvaluationJob | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationRevision | null>(null);
   const [explanationJob, setExplanationJob] = useState<MLExplanationJob | null>(null);
@@ -136,6 +138,22 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       setEvaluationJob(null);
       setPolicyJob(await request<MLPolicyJob>(`/api/ml/policies/jobs/${encodeURIComponent(id)}`));
     } catch (e) { setError(formatError(e)); }
+  }
+
+  async function loadPolicyById() {
+    const identifier = policyIdDraft.trim();
+    if (!identifier) return;
+    setLoadingPolicy(true);
+    setPolicyJob(null);
+    setPolicy(null);
+    setError("");
+    try {
+      const loaded = await request<DecisionPolicyRevision>(
+        `/api/ml/policies/${encodeURIComponent(identifier)}`,
+      );
+      setPolicy(loaded);
+    } catch (e) { setError(formatError(e)); }
+    finally { setLoadingPolicy(false); }
   }
 
   async function restoreEvaluation(id: string) {
@@ -299,12 +317,30 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
         </option>)}
       </select>
     </label>
+    <div className="form-row">
+      <label>기존 정책 판본 ID (다른 Scoring의 정책도 입력 가능)
+        <input aria-label="재사용할 정책 판본 ID" value={policyIdDraft}
+          placeholder="호환되는 Decision Policy Revision ID"
+          onChange={event => {
+            setPolicyIdDraft(event.target.value);
+            setPolicyJob(null);
+            setPolicy(null);
+          }} />
+      </label>
+      <button type="button" className="secondary"
+        disabled={!policyIdDraft.trim() || loadingPolicy}
+        onClick={() => void loadPolicyById()}>
+        {loadingPolicy ? "정책 조회 중" : "정책 판본 조회"}
+      </button>
+    </div>
+    <p className="hint">다른 점수 결과의 정책도 호환된다면 적용할 수 있습니다.
+      모델·Feature·점수 의미·접근 권한은 제출 시 API가 검증합니다.</p>
     {policyHistory.nextCursor && <button type="button" className="secondary"
       onClick={() => void policyHistory.loadMore().catch(e => setError(formatError(e)))}>
       이전 정책 더 보기
     </button>}
     {policy && <p className="hint">선택한 정책: {policy.id} · 점수 경계 {metric(policy.threshold)}</p>}
-    <button disabled={!canRun || (policyJob !== null && policy === null) ||
+    <button disabled={!canRun || loadingPolicy || (policyJob !== null && policy === null) ||
       (evaluationJob !== null && !DONE.has(evaluationJob.status))}
       onClick={() => void createEvaluation()}>Evaluation 판본 생성</button>
     {policyJob && !policy && <p role="status">선택한 정책 판본을 확인하는 중입니다.
