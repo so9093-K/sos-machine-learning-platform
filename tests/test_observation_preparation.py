@@ -10,6 +10,7 @@ from sos_platform.errors import InvalidRequestError
 from sos_platform.observation_preparation import materialize_observation_ids
 from sos_platform.processing import bounded_feature_preview, transform
 from sos_platform.schemas import Transform, WorkRequest
+from test_ml_scoring_temporal import scoring_env  # noqa: F401 — 공유 픽스처
 
 
 def _frame(size: int = 31) -> pl.LazyFrame:
