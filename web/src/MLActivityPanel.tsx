@@ -122,12 +122,16 @@ export function MLActivityPanel({ compact = false, canCancel = false, onNavigate
   const evaluation = usePagedJobs<MLEvaluationJobSummary>("/api/ml/evaluations/jobs");
   const explanation = usePagedJobs<MLExplanationJobSummary>("/api/ml/explanations/jobs");
   const [filter, setFilter] = useState<Kind | "all">("all");
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const sources = { training, scoring, policy, evaluation, explanation };
   async function refresh() {
-    const settled = await Promise.allSettled(Object.values(sources).map(source => source.refresh()));
-    setError(settled.some(entry => entry.status === "rejected")
-      ? "일부 ML 작업 목록을 조회하지 못했습니다. 결과가 누락될 수 있습니다." : "");
+    setLoading(true);
+    try {
+      const settled = await Promise.allSettled(Object.values(sources).map(source => source.refresh()));
+      setError(settled.some(entry => entry.status === "rejected")
+        ? "일부 ML 작업 목록을 조회하지 못했습니다. 결과가 누락되거나 이전 조회 상태일 수 있습니다." : "");
+    } finally { setLoading(false); }
   }
   useEffect(() => { void refresh(); }, []);
   const items = (Object.keys(operations) as Kind[])
@@ -144,7 +148,8 @@ export function MLActivityPanel({ compact = false, canCancel = false, onNavigate
     </div>
       {compact
         ? <button className="secondary" onClick={onViewAll ?? (() => onNavigate("ml-jobs"))}>작업 이력 →</button>
-        : <button className="secondary" onClick={() => void refresh()}>다시 조회</button>}
+        : <button className="secondary" disabled={loading} onClick={() => void refresh()}>
+          {loading ? "조회 중…" : "다시 조회"}</button>}
     </div>
     {!compact && <label className="ml-activity-filter">작업 유형
       <select value={filter} onChange={event => setFilter(event.target.value as Kind | "all")}>
@@ -153,6 +158,7 @@ export function MLActivityPanel({ compact = false, canCancel = false, onNavigate
           <option value={kind} key={kind}>{operations[kind].label}</option>)}
       </select>
     </label>}
+    {loading && <p role="status" className="hint">조회 가능한 ML 작업 이력을 확인하는 중입니다.</p>}
     {error && <p className="hint" role="alert">{error}</p>}
     <div className="ml-activity-list">
       {items.map(job => <article className="ml-activity-row" key={job.kind + ":" + job.id}>
@@ -178,8 +184,8 @@ export function MLActivityPanel({ compact = false, canCancel = false, onNavigate
         {!compact && <ActivityJobDetails job={job} canCancel={canCancel}
           onChanged={() => void refresh()}/>}
       </article>)}
-      {items.length === 0 && <p className="muted">
-        {error ? "ML 작업을 모두 조회하지 못했습니다." : "현재 조회된 ML Job이 없습니다."}
+      {!loading && items.length === 0 && <p className="muted">
+        {error ? "일부 이력을 조회하지 못해 표시할 작업이 없습니다." : "현재 조회된 ML Job이 없습니다."}
       </p>}
     </div>
     {!compact && filter !== "all" && sources[filter].nextCursor &&
