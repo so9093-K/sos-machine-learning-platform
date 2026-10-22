@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Isolation Forest의 `all` 학습은 Worker 메모리로 계산한 임의 행 수 사전 상한 대신 Attempt별 디스크 기반 입력과 청크 전처리를 사용합니다. 요청한 Train 전체 행 사용은 그대로 유지하고, 실행 중 실제 RSS·스테이징 사용량 보호는 기존 Worker 예산으로 관리합니다. `sample`의 명시적 행 수·Seed 선택 의미는 변경하지 않습니다.
+
 - 누적 ML Reference Pipeline 검토에서 실제 Parquet의 명시적 `+00` UTC 시각을 시간 분할에 지원하고, 전체 결측 정수 Batch의 학습 오류를 수정했습니다. Scoring 임시 Stage는 Attempt 단위 자원 한도·중단 후 회수 대상으로 관리하며, 단일 관측치 Explanation은 전체 결과 대신 필요한 Parquet Row Group만 읽도록 개선했습니다.
 
 - 기존 Transform Job에서 선택적으로 불투명 UUIDv4 관측치 ID를 한 번 생성해 새 불변 Dataset으로 게시할 수 있습니다. 발급 후 판본 내부에서 안정적으로 연결되며, 별도 준비 실행 사이에 같은 UUID가 재현되는 것은 아닙니다. 게시 전 Preview는 임시 ID를 제공하지 않습니다.
