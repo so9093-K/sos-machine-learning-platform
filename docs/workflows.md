@@ -2,6 +2,8 @@
 
 SOS는 데이터 이해·가공·학습·평가·추론·관측을 필요한 만큼 독립 실행하거나 조합한다. 모두에게 하나의 선형 파이프라인을 요구하지 않는다.
 
+신뢰된 등록형 Pipeline Run은 기존 ML Job의 확정 결과를 다음 단계의 입력으로 연결한다. 실행자가 화면을 닫아도 Worker가 상태를 이어가며, 중복 제출은 멱등성으로 제한한다. Pipeline 취소 요청은 진행 중인 Job의 실제 중단·완료 확인과 구별한다.
+
 ## 실행 단위와 Job 상태
 
 Workflow Definition은 작업 사이의 재사용 가능한 관계, Workflow Run은 그 실행 기록이다. **Job은 개별 실행 요청**, **Execution Attempt는 실제 수행 시도**이며 Workflow가 없는 Job도 가능하다. 식별자와 자산 판본의 의미는 [Contracts](contracts.md)가 정본이다.

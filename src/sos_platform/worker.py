@@ -48,6 +48,7 @@ from .processing import transform
 from .resource_admission import ExecutionCapacity, reserve_execution_memory
 from .schemas import ExplorationSpec, Transform
 from .store import Store, WorkerOwnershipLost
+from .pipeline_runs import advance_run
 from .understanding import build_understanding
 
 
@@ -595,15 +596,17 @@ def main():
         cleanup_training_stage(store.home)
         store.heartbeat()
         if args.once:
+            advance_run(store)
             run_once(store)
             if mlflow_client:
                 run_tracking_once(store, mlflow_client)
             return
         while True:
             store.heartbeat()
+            advanced = advance_run(store)
             executed = run_once(store)
             exported = run_tracking_once(store, mlflow_client) if mlflow_client else False
-            if not executed and not exported:
+            if not advanced and not executed and not exported:
                 time.sleep(args.poll)
     except KeyboardInterrupt:
         pass
