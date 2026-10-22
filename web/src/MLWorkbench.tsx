@@ -13,8 +13,6 @@ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 type Props = {
   datasets: Dataset[];
-  selectedId: string;
-  onSelect: (id: string) => void;
   canTrain: boolean;
   canCancel: boolean;
 };
@@ -38,7 +36,8 @@ function trainingSelectionLabel(value: unknown): string {
 }
 
 /** 데이터 선택부터 비동기 학습·불변 결과 조회까지 같은 공개 API를 사용한다. */
-export function MLWorkbench({ datasets, selectedId, onSelect, canTrain, canCancel }: Props) {
+export function MLWorkbench({ datasets, canTrain, canCancel }: Props) {
+  const [selectedId, onSelect] = useState("");
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
   const [modelView, setModelView] = useState<"models" | "training">("models");
