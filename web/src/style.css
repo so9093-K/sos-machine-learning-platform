@@ -461,3 +461,12 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .ml-resource-summary p { color:var(--sos-muted); font-size:13px; line-height:1.6; }
 .ml-resource-evidence { border-top:1px solid var(--sos-border); margin-top:15px; }
 .ml-resource-evidence .ml-resource-fields { margin-top:9px; }
+
+
+/* Dataset 탐색을 주 화면 문맥으로, 등록·연결은 필요 시 펼치는 조작으로 둔다. */
+.data-import-controls { margin-top:10px; border-top:1px solid var(--sos-border);
+  padding-top:12px; font-size:12px; }
+.data-import-controls summary { color:var(--sos-accent); cursor:pointer; padding:8px 10px;
+  border-radius:8px; font-weight:650; }
+.data-import-controls summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:2px; }
+.data-import-actions { display:grid; gap:8px; margin-top:10px; }
