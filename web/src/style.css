@@ -445,3 +445,19 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .platform-discovered-model strong { font-size:14px; overflow-wrap:anywhere; }
 .platform-discovered-model p { margin-top:6px; line-height:1.55; }
 .platform-discovered-model .platform-outlook-actions { margin:0; }
+
+
+/* 모델 리소스는 ID 입력 폼보다 이해·근거·다음 행동을 우선한다. */
+.model-index-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.model-index-row { align-items:center; }
+.model-index-summary { min-width:0; display:grid; gap:6px; }
+.model-index-summary strong { font-size:14px; overflow-wrap:anywhere; }
+.model-index-summary .status { justify-self:start; }
+.model-lookup { margin-bottom:18px; font-size:13px; }
+.model-lookup summary,.ml-resource-evidence summary { padding:10px 0; cursor:pointer; color:var(--sos-accent); }
+.model-lookup .model-history-filter { margin:12px 0; }
+.ml-resource-summary { display:grid; gap:9px; border-bottom:1px solid var(--sos-border); padding-bottom:17px; }
+.ml-resource-summary h4 { font-size:18px; }
+.ml-resource-summary p { color:var(--sos-muted); font-size:13px; line-height:1.6; }
+.ml-resource-evidence { border-top:1px solid var(--sos-border); margin-top:15px; }
+.ml-resource-evidence .ml-resource-fields { margin-top:9px; }
