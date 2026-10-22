@@ -109,3 +109,62 @@ def test_existing_transform_steps_still_work():
     data = transform(_frame(2), spec).collect()
     assert data.columns == ["value"]
     assert data.height == 2
+
+
+def test_transform_job_http_submission_pins_source_revision_and_uses_existing_permission(
+    monkeypatch, tmp_path,
+):
+    """UUID 준비 Job도 기존 Dataset 읽기·Job 제출 권한, Job/Attempt 계약을 사용한다."""
+    from unittest.mock import Mock
+
+    from fastapi.testclient import TestClient
+
+    from sos_platform import api
+    from sos_platform.security import Actor, IdentitySettings
+
+    dataset = {"id": "raw-dataset", "version": "raw-v1", "owner_actor": "alice"}
+    store = Mock()
+    store.get_dataset.return_value = dataset
+
+    def created(**kwargs):
+        return {
+            "id": "prepare-job", "kind": kwargs["kind"], "dataset_id": kwargs["dataset_id"],
+            "spec": kwargs["spec"], "status": "Queued", "cancel_requested": False,
+            "result": None, "error": None, "attempts": [],
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+        }
+
+    store.create_job.side_effect = created
+    monkeypatch.setattr(api, "Store", lambda home: store)
+    app = api.create_app(tmp_path, identity=IdentitySettings("development", {}))
+    app.dependency_overrides[api.CREATE_JOB_DEP.dependency] = (
+        lambda: Actor("alice", "human", frozenset({"researcher"}))
+    )
+    body = {
+        "dataset_id": dataset["id"], "kind": "transform",
+        "transform": {"steps": [], "observation_id_column": "observation_uuid"},
+    }
+    with TestClient(app) as client:
+        created_job = client.post("/api/jobs", json=body)
+        assert created_job.status_code == 202, created_job.text
+        submitted = store.create_job.call_args.kwargs
+        assert submitted["kind"] == "transform"
+        assert submitted["dataset_id"] == dataset["id"]
+        assert submitted["spec"]["transform"]["observation_id_column"] == (
+            "observation_uuid"
+        )
+        assert submitted["spec"]["transform"]["steps"] == []
+
+        dataset["owner_actor"] = "bob"
+        denied = client.post("/api/jobs", json=body)
+        assert denied.status_code == 404
+        dataset["owner_actor"] = "alice"
+
+        mixed = client.post("/api/jobs", json={
+            **body,
+            "transform": {
+                "steps": [{"op": "select", "columns": ["value"]}],
+                "observation_id_column": "observation_uuid",
+            },
+        })
+        assert mixed.status_code == 422
