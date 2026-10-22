@@ -86,6 +86,22 @@ def test_pipeline_run_advances_to_test_evaluation():
     assert store.jobs[finished["job_ids"]["evaluation"]]["spec"]["policy_revision_id"] == "policy-1"
 
 
+def test_unknown_definition_version_fails_safely():
+    store = FakeStore()
+    run = pipeline_runs.create_run(
+        store, {"id": "dataset-version", "version": "version-1"},
+        "owner-version", {"ready": True, "plan": None}, None,
+    )
+    with store.connection() as db:
+        db.execute(text(
+            "UPDATE pipeline_runs SET definition_version='unknown' WHERE id=:id"
+        ), {"id": run["id"]})
+    assert pipeline_runs.advance_run(store)
+    result = pipeline_runs.get_run(store, run["id"])
+    assert result["status"] == "Failed"
+    assert store.next_job == 0
+
+
 def test_cancel_before_claim_does_not_create_ml_jobs():
     store = FakeStore()
     run = pipeline_runs.create_run(

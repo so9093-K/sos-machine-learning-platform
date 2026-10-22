@@ -180,6 +180,9 @@ def advance_run(store) -> bool:
     if row is None:
         return False
     run = get_run(store, row, include_jobs=False)
+    if run["definition_id"] != PIPELINE_ID or run["definition_version"] != PIPELINE_VERSION:
+        _update_run(store, run["id"], status="Failed", error_code="SOS-ML-INPUT-INVALID")
+        return True
     if run["stage_index"] >= len(STAGES):
         return False
     stage = STAGES[run["stage_index"]]

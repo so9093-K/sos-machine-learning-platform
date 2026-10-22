@@ -136,6 +136,7 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
     finally { setBusy(false); }
   }
   const selected = datasets.find(item => item.id === datasetId);
+  const currentCheck = checked?.dataset_id === datasetId ? checked : null;
   const current = catalog.find(item => item.id === PIPELINE);
   const completed = run?.stages ?? [];
   return <div className="platform-home">
@@ -168,11 +169,11 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
         </button>
       </div>
       {selected && <p className="hint">선택한 Dataset 판본: {selected.version.slice(0, 16)} · 입력 검사는 데이터를 읽으며 분석 Job을 자동 제출하지 않습니다.</p>}
-      {checked && !checked.ready && <div role="alert" className="alert error">
+      {currentCheck && !currentCheck.ready && <div role="alert" className="alert error">
         <strong>이 Dataset은 아직 실행할 수 없습니다.</strong>
-        <ul>{checked.issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
+        <ul>{currentCheck.issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
       </div>}
-      {checked?.ready && <div className="steps" role="status">
+      {currentCheck?.ready && <div className="steps" role="status">
         <strong>분석 계획 · 입력 적합</strong>
         <p>필수 Feature와 시간 컬럼의 구조가 적합합니다. 전체 시간 분포와 Train/Calibration/Test의 유효성은 실행 시 자원 제한을 적용하는 Worker가 검사합니다.</p>
         <p className="hint">등록된 파이프라인의 44개 수치 Feature와 Train-only 중앙값 전처리를 사용합니다. Calibration 기준 0.5% 후보 정책을 Test에 적용하며 실제 Test 후보율은 다를 수 있습니다.</p>

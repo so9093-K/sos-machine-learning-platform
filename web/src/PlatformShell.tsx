@@ -9,7 +9,7 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
   preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "Dataset · Recipe · Transform" },
-  pipelines: { eyebrow: "PIPELINES", title: "등록형 ML Pipeline", description: "검증된 분석 방법을 내 데이터로 실행합니다." },
+  pipelines: { eyebrow: "PIPELINES", title: "등록형 ML Pipeline", description: "등록된 분석 방법을 내 데이터로 실행합니다." },
   research: { eyebrow: "RESEARCH", title: "Research & Experiments", description: "연구·실험 경험 설계" },
   ml: { eyebrow: "MODELS", title: "Model Revisions", description: "불변 모델 판본 · 학습 이력 · 비교" },
   training: { eyebrow: "TRAINING", title: "모델 학습", description: "Dataset · Feature · Training Job" },
