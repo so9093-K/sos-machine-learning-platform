@@ -38,14 +38,16 @@ export function PlatformAreaPreview({ area, onNavigate, onOpenModel, onStartScor
   const history = usePagedJobs<MLTrainingJobSummary>("/api/ml/train/jobs");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true;
+    setError("");
     setLoading(true);
     void history.refresh()
       .catch(e => { if (active) setError(formatError(e)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [area, reload]);
   const revisions = history.items.filter(item =>
     item.status === "Succeeded" && typeof item.result?.model_revision_id === "string").slice(0, 5);
   return <div className="platform-home">
@@ -60,7 +62,13 @@ export function PlatformAreaPreview({ area, onNavigate, onOpenModel, onStartScor
           {area === "research" ? "연결된 학습 결과" : "확인할 수 있는 모델 판본"}
         </h3>
         <p>현재 조회된 학습 Job에서 발견한 모델 결과입니다. 전체 Model Registry는 아닙니다.</p>
-      </div><button className="secondary" onClick={() => onNavigate("ml")}>모델·실행 전체 보기 →</button></div>
+      </div><div className="model-index-actions">
+        <button className="secondary" disabled={loading}
+          onClick={() => setReload(value => value + 1)}>
+          {loading ? "조회 중…" : "다시 조회"}
+        </button>
+        <button className="secondary" onClick={() => onNavigate("ml")}>모델·실행 전체 보기 →</button>
+      </div></div>
       {loading && <p role="status">모델 판본의 근거를 조회하고 있습니다.</p>}
       {error && <p role="alert" className="hint">{error}</p>}
       {!loading && revisions.length === 0 && <p className="muted">
