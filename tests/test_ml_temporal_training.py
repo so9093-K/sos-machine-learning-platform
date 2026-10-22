@@ -255,3 +255,62 @@ def test_http_submit_and_fork_preserve_temporal_boundaries_and_missing_policy():
             },
         })
         assert invalid.status_code == 422
+
+
+@pytest.mark.parametrize("utc_text", [
+    "2026-01-01 02:00:00+00",
+    "2026-01-01 02:00:00+0000",
+    "2026-01-01 02:00:00+00:00",
+    "2026-01-01T02:00:00Z",
+    "2026-01-01 11:00:00+09",
+    "2026-01-01 11:00:00+0900",
+    "2026-01-01 11:00:00+09:00",
+])
+def test_explicit_offset_formats_from_real_parquet_normalize_to_utc(utc_text):
+    # 실파일 ts의 예: "2025-11-13 21:21:00+00" (오프셋은 명시됨).
+    frame = pl.DataFrame({
+        "ts": [utc_text, "2026-01-01 05:00:00+00", "2026-01-01 08:00:00+00"],
+        "value": [10.0, 20.0, 30.0],
+    })
+    train, evidence = split_training_source(
+        frame.lazy(), timestamp_column="ts",
+        train_end=temporal_config().train_end,
+        calibration_end=temporal_config().calibration_end,
+    )
+    assert train.select("value").collect()["value"].to_list() == [10.0]
+    assert (evidence["train_rows"], evidence["calibration_rows"], evidence["test_rows"]) == (
+        1, 1, 1
+    )
+
+
+def test_nullable_integer_feature_with_all_null_first_batch_is_not_typeerror(monkeypatch):
+    # 8192행 첫 Batch는 모두 null, 그 다음 Batch에 유효값이 있다.
+    # Train 전체 중앙값을 Fit할 수 있어야 한다.
+    from sos_platform.ml_if_preprocessing import fit_if_median_imputer
+
+    values = pl.Series("count", [None] * 8192 + [3, 7], dtype=pl.Int64)
+    bind_frame(monkeypatch, pl.DataFrame({"count": values}))
+    matrix, evidence = ml_training.training_matrix(
+        None, {"version": "d1"}, ["count"],
+        input_policy=MLTrainingInputPolicy(mode="all"),
+        missing_policy="train_median",
+        worker_memory_mib=256,
+    )
+    fitted = fit_if_median_imputer(matrix, feature_names=["count"])
+    assert fitted.medians == (5.0,)
+    assert evidence["source_rows"] == 8194
+
+
+def test_completely_null_integer_training_feature_reports_model_input_error(monkeypatch):
+    from sos_platform.ml_if_preprocessing import fit_if_median_imputer
+
+    bind_frame(monkeypatch, pl.DataFrame({
+        "count": pl.Series([None, None, None], dtype=pl.Int64),
+    }))
+    matrix, _ = ml_training.training_matrix(
+        None, {"version": "d1"}, ["count"],
+        input_policy=MLTrainingInputPolicy(mode="all"),
+        missing_policy="train_median", worker_memory_mib=256,
+    )
+    with pytest.raises(ValueError, match="Entirely missing"):
+        fit_if_median_imputer(matrix, feature_names=["count"])
