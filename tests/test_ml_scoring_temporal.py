@@ -257,3 +257,98 @@ def test_policy_only_loads_scores_not_full_feature_vectors(scoring_env, monkeypa
     scoring["row_count"] += 1
     with pytest.raises(ValueError, match="row count"):
         ml_decision._verified_scoring_row(store, scoring, 20_000)
+
+
+def test_scoring_stage_is_attempt_scoped_counted_and_cleaned(tmp_path):
+    from uuid import uuid4
+
+    from sos_platform.ml_scoring import (
+        cleanup_scoring_stage,
+        scoring_stage_bytes,
+        scoring_stage_prefix,
+    )
+    from sos_platform.worker import attempt_result_paths, cleanup_recovered_results
+
+    job_id, attempt_id, another_attempt = str(uuid4()), str(uuid4()), str(uuid4())
+    root = tmp_path / "results"
+    root.mkdir()
+    _, pending, _ = attempt_result_paths(
+        type("Local", (), {"home": tmp_path})(), job_id, attempt_id
+    )
+    _, foreign_pending, _ = attempt_result_paths(
+        type("Local", (), {"home": tmp_path})(), job_id, another_attempt
+    )
+    target = pending.with_suffix(".scores.parquet")
+    foreign = foreign_pending.with_suffix(".scores.parquet")
+    stage = root / f"{scoring_stage_prefix(target)}a"
+    foreign_stage = root / f"{scoring_stage_prefix(foreign)}b"
+    stage.mkdir()
+    foreign_stage.mkdir()
+    (stage / "selected.parquet").write_bytes(b"a" * 29)
+    (foreign_stage / "selected.parquet").write_bytes(b"b" * 31)
+    target.write_bytes(b"c" * 17)
+    assert scoring_stage_bytes(tmp_path, target) == 46
+    cleanup_recovered_results(
+        type("Local", (), {"home": tmp_path})(), [(job_id, attempt_id)]
+    )
+    assert not stage.exists()
+    assert not target.exists()
+    assert foreign_stage.is_dir()
+    assert scoring_stage_bytes(tmp_path, foreign) == 31
+    cleanup_scoring_stage(tmp_path, foreign)
+    assert not foreign_stage.exists()
+
+
+def test_scoring_stage_never_follows_symlinks(tmp_path):
+    from sos_platform.ml_scoring import scoring_stage_bytes, scoring_stage_prefix
+
+    root = tmp_path / "results"
+    root.mkdir()
+    output = root / "test.pending.scores.parquet"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "private.txt").write_text("preserve")
+    (root / f"{scoring_stage_prefix(output)}evil").symlink_to(
+        outside, target_is_directory=True
+    )
+    with pytest.raises(ValueError, match="owned directory"):
+        scoring_stage_bytes(tmp_path, output)
+    assert (outside / "private.txt").read_text() == "preserve"
+
+
+def test_worker_stops_scoring_stage_overflow_with_distinct_failure_code(
+    monkeypatch, tmp_path
+):
+    from unittest.mock import Mock
+    from uuid import uuid4
+
+    from sos_platform import worker
+    from sos_platform.execution_budget import ExecutionBudget
+
+    attempt_id, job_id = str(uuid4()), str(uuid4())
+    store = Mock()
+    store.home = tmp_path
+    (tmp_path / "results").mkdir()
+    store.claim.return_value = {
+        "id": job_id, "kind": "ml_score", "attempts": [{"id": attempt_id}],
+    }
+    process = Mock()
+    process.pid = 1234
+    alive = {"value": True}
+    process.is_alive.side_effect = lambda: alive["value"]
+    process.terminate.side_effect = lambda: alive.update(value=False)
+    context = Mock()
+    context.Process.return_value = process
+    monkeypatch.setattr(worker.multiprocessing, "get_context", lambda _method: context)
+    monkeypatch.setattr(worker, "process_rss_bytes", lambda _pid: None)
+    monkeypatch.setattr(worker, "scoring_stage_bytes", lambda _home, _output: 2 * 1024 * 1024)
+    monkeypatch.setattr(worker, "emit", lambda *_args, **_kwargs: None)
+    cgroup = Mock()
+    assert worker._run_once_reserved(
+        store, ExecutionBudget(max_stage_mib=1), cgroup
+    ) is True
+    args, kwargs = store.finish.call_args
+    assert args == (job_id, "Failed")
+    assert kwargs["error_code"] == "SOS-ML-SCORE-STAGE-LIMIT"
+    assert kwargs["failure_category"] == "storage"
+    process.terminate.assert_called_once()
