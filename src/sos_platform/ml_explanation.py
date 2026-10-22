@@ -8,7 +8,7 @@ import math
 
 import numpy as np
 
-from .ml_decision import _verified_scoring
+from .ml_decision import _verified_scoring_row
 from .ml_runtime import load_trusted_isolation_forest
 
 
@@ -27,10 +27,7 @@ def explain_scored_row(store, spec: dict) -> dict:
     if any(not isinstance(x, (int, float)) or not math.isfinite(x) for x in reference):
         raise ValueError("Model reference values are invalid")
     selected = spec["row_index"]
-    frame = _verified_scoring(store, scoring, include_features=True)
-    if type(selected) is not int or not 0 <= selected < frame.height:
-        raise ValueError("Explanation row_index is out of bounds")
-    item = frame.row(selected, named=True)
+    item = _verified_scoring_row(store, scoring, selected)
     struct = item["features"]
     original = np.asarray([struct[name] for name in names], dtype=np.float64)
     model_runtime = load_trusted_isolation_forest(model, store.home / "cache")
