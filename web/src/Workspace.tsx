@@ -449,7 +449,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onViewMlActivity={() => { setActivityView("ml"); setTab("jobs"); }}
         onViewDataActivity={() => { setActivityView("data"); setTab("jobs"); }}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
-      {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab} onNavigate={setTab} />}
+      {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab}
+        onNavigate={setTab} onOpenModel={id => openResource("model", id)}
+        onStartScoring={startScoring} canRun={canRun} />}
       {!dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
         <p>{tab === "preparation"
