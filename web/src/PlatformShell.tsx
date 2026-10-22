@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
 import { PlatformNavigation, type WorkspaceTab } from "./PlatformNavigation";
@@ -31,6 +31,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
   children: ReactNode;
 }) {
   const label = pageLabels[section];
+  useEffect(() => { document.title = `${label.title} · SOS`; }, [label.title]);
   return <div className="shell">
     <aside className="sidebar">
       <InstanceBrand canEdit={canConfigure} />
@@ -44,7 +45,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
     <main className="main">
       <header className="workspace-header"><div>
         <span className="eyebrow">{label.eyebrow}</span>
-        <h1>{label.title}</h1>
+        <h1 id="sos-page-heading" tabIndex={-1}>{label.title}</h1>
         <p>{label.description}</p>
       </div>
         <div className="header-meta">
