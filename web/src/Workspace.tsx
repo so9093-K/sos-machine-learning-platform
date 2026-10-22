@@ -19,6 +19,9 @@ import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQu
 import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
+import { PlatformNavigation, useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
+import { PlatformOverview } from "./PlatformOverview";
+import { PlatformAreaPreview } from "./PlatformAreaPreview";
 import { MLWorkbench } from "./MLWorkbench";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
 import { useDatasetOverview } from "./useDatasetOverview";
@@ -27,8 +30,11 @@ import { usePagedJobs } from "./usePagedJobs";
 import type { ExplorationRequest } from "./types";
 
 
-type Tab = DatasetTab | "preparation" | "ml" | "jobs" | "storage" | "audit";
+type Tab = WorkspaceTab;
 const pageLabels: Record<Tab, { eyebrow: string; title: string; description: string }> = {
+  overview: { eyebrow: "WORKSPACE", title: "Workspace Overview", description: "Data · Research · Models · Operations" },
+  research: { eyebrow: "RESEARCH", title: "Research & Experiments", description: "연구·실험 경험 설계" },
+  experience: { eyebrow: "MODEL EXPERIENCE", title: "Model Experience", description: "모델 활용 경험 설계" },
   understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
@@ -69,7 +75,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
   const [reloadRevision, setReloadRevision] = useState(0);
-  const [tab, setTab] = useState<Tab>("understanding");
+  const { tab, navigate: setTab } = useWorkspaceNavigation();
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadPolicy, setUploadPolicy] = useState<UploadPolicy | null>(null);
@@ -394,33 +400,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   return <div className="shell">
     <aside className="sidebar">
       <InstanceBrand canEdit={canConfigure} />
-      <nav className="global-nav" aria-label="전역 메뉴">
-      <div className="section-title">DATA WORKSPACES</div>
-      <button className="job-navigation secondary"
-        aria-current={["understanding", "preview", "profile"].includes(tab) ? "page" : undefined}
-        onClick={() => setTab("understanding")}>데이터 탐색</button>
-      <button className="job-navigation secondary"
-        aria-current={tab === "preparation" ? "page" : undefined}
-        onClick={() => setTab("preparation")}>데이터 준비</button>
-      <div className="section-title">RESEARCH & ML</div>
-      <button className="job-navigation secondary"
-        aria-current={tab === "ml" ? "page" : undefined}
-        onClick={() => setTab("ml")}>ML Workbench</button>
-      <div className="section-title">PLATFORM</div>
-      <button className="job-navigation secondary" aria-current={tab === "jobs" ? "page" : undefined}
-        onClick={() => setTab("jobs")}>
-        전체 Jobs 보기 {jobs.length > 0 ? `· ${jobs.length}` : ""}
-      </button>
-      {canInspectStorage && <button className="job-navigation secondary" aria-current={tab === "storage" ? "page" : undefined}
-        onClick={() => setTab("storage")}>
-        저장소 상태 보기
-      </button>}
-      {canViewAudit && <button className="job-navigation secondary" aria-current={tab === "audit" ? "page" : undefined}
-        onClick={() => setTab("audit")}>
-        보안 감사 보기
-      </button>}
-      </nav>
-
+      <PlatformNavigation active={tab} onNavigate={setTab}
+        canInspectStorage={canInspectStorage} canViewAudit={canViewAudit} />
+      {(["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="data-sidebar">
       <div className="section-title">DATA SOURCES</div>
       {canWrite && <label className="upload" role="button" tabIndex={0} aria-label="CSV·Parquet·TSV·TXT 파일 업로드"
         aria-disabled={busy} onKeyDown={event => {
@@ -481,6 +463,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         disabled={busy} onClick={() => void loadMoreDatasets()}>
         이전 데이터셋 더 불러오기
       </button>}
+      </div>
       <div className="sidebar-bottom"><a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a></div>
     </aside>
     <main className="main">
@@ -514,7 +497,13 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           <progress max={uploadProgress.total} value={uploadProgress.loaded}
             aria-label="파일 전송 진행률" />}
       </div>}
-      {!dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && tab !== "ml" && <div className="empty">
+      {tab === "overview" && <PlatformOverview
+        datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
+        jobs={[...jobs, ...discoveryJobs].map(j => ({ id: j.id, status: j.status, created_at: j.created_at }))}
+        onNavigate={setTab}
+        onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
+      {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab} onNavigate={setTab} />}
+      {!dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
         <p>{tab === "preparation"
           ? "Data Preparation은 Explorer 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
@@ -527,7 +516,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             ? "이 예제로 데이터 준비 시작 →" : undefined}
           onUse={id => void selectExample(id)} />
       </div>}
-      {dataset && tab !== "jobs" && tab !== "storage" && tab !== "audit" && <>
+      {dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <>
         <div className="dataset-hero">
           <div><span className="eyebrow">DATASET</span><h2>{dataset.name}</h2>
             <p>{dataset.kind.toUpperCase()} · {readableVersion(dataset)}</p></div>
@@ -543,7 +532,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               </button>
             </>}</div>
         </div>
-        {tab !== "preparation" && <WorkspaceTabs active={tab as DatasetTab} onChange={setTab} />}
+        {(["understanding", "preview", "profile"] as Tab[]).includes(tab) && <WorkspaceTabs active={tab as DatasetTab} onChange={setTab} />}
         {tab === "understanding" && <section className="panel" role="tabpanel"
           id="sos-panel-understanding" aria-labelledby="sos-tab-understanding" tabIndex={0}>
           <UnderstandingPanel key={selected + ":" + reloadRevision} datasetId={selected}
