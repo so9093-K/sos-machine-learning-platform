@@ -71,11 +71,15 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
       <span className="section-title">{group.title}</span>
       {group.items.filter(item =>
         (item.tab !== "storage" || canInspectStorage) && (item.tab !== "audit" || canViewAudit)
-      ).map(item => <button key={item.tab} type="button"
-        className="workspace-link ghost" aria-current={isCurrent(item.tab) ? "page" : undefined}
-        onClick={() => onNavigate(item.tab)}>
+      ).map(item => <a key={item.tab} href={paths[item.tab]}
+        className="workspace-link" aria-current={isCurrent(item.tab) ? "page" : undefined}
+        onClick={event => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          onNavigate(item.tab);
+        }}>
         <span>{item.label}</span>{item.concept && <small>설계</small>}
-      </button>)}
+      </a>)}
     </div>)}
   </nav>;
 }
