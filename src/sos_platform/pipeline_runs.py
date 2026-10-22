@@ -113,17 +113,19 @@ def _stage_job_spec(store, run: dict, stage: str) -> tuple[str, dict]:
     dataset_version = run["dataset_version"]
     owner = run["owner_actor"]
     plan = run["input_plan"]
-    time_scope = {
-        "timestamp_column": plan["timestamp_column"],
-        "train_end": plan["train_end"],
-        "calibration_end": plan["calibration_end"],
-    }
     if stage == "preflight":
         return "ml_pipeline_preflight", {
             "dataset_version": dataset_version,
             "definition_id": PIPELINE_ID,
             "definition_version": PIPELINE_VERSION,
         }
+    if plan is None:
+        raise ValueError("Pipeline 사전 검사가 완료되지 않았습니다.")
+    time_scope = {
+        "timestamp_column": plan["timestamp_column"],
+        "train_end": plan["train_end"],
+        "calibration_end": plan["calibration_end"],
+    }
     if stage == "training":
         return "ml_train", {
             "algorithm": "isolation_forest",
