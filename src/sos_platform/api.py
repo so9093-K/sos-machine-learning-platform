@@ -569,6 +569,11 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
                 "model_owner_actor": model["owner_actor"],
                 "dataset_version": dataset["version"],
                 "label_column": body.label_column,
+                "observation_id_column": body.observation_id_column,
+                "temporal_scope": (
+                    body.temporal_scope.model_dump(mode="json")
+                    if body.temporal_scope is not None else None
+                ),
             },
             request_id=request.state.request_id,
             owner_actor=actor.id,
@@ -662,8 +667,13 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             if policy is None:
                 raise HTTPException(status_code=404, detail="Decision Policy not found")
             check_ownership(actor, policy["owner_actor"], "decision_policy", policy["id"])
-            if policy["scoring_result_id"] != score["id"]:
-                raise HTTPException(status_code=422, detail="Policy does not belong to Scoring")
+            reference = required_scoring_result(policy["scoring_result_id"], actor)
+            from .ml_decision import validate_policy_for_scoring
+
+            try:
+                validate_policy_for_scoring(store, policy, score)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
         require_job_submission_key(idempotency_key)
         return store.create_job(
             kind="ml_evaluate",
@@ -671,6 +681,10 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             spec={
                 **body.model_dump(),
                 "source_owner_actor": score["owner_actor"],
+                **({
+                    "policy_owner_actor": policy["owner_actor"],
+                    "reference_owner_actor": reference["owner_actor"],
+                } if body.policy_revision_id else {}),
             },
             owner_actor=actor.id,
             actor_type=actor.kind,

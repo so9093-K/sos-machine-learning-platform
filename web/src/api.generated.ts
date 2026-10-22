@@ -2105,6 +2105,50 @@ export interface components {
             label_column?: string | null;
             /** Model Revision Id */
             model_revision_id: string;
+            /** Observation Id Column */
+            observation_id_column?: string | null;
+            temporal_scope?: components["schemas"]["MLScoringTemporalScope"] | null;
+        };
+        /**
+         * MLScoringTemporalScope
+         * @description 학습한 UTC 분할 정의의 Calibration 또는 Test 구간만 점수화한다.
+         */
+        MLScoringTemporalScope: {
+            /**
+             * Calibration End
+             * Format: date-time
+             */
+            calibration_end: string;
+            /**
+             * Partition
+             * @enum {string}
+             */
+            partition: "calibration" | "test";
+            /** Timestamp Column */
+            timestamp_column: string;
+            /**
+             * Train End
+             * Format: date-time
+             */
+            train_end: string;
+        };
+        /**
+         * MLTemporalSplitSpec
+         * @description 시간순 Train/Calibration/Test 경계. Train 이외 구간은 학습에 사용하지 않는다.
+         */
+        MLTemporalSplitSpec: {
+            /**
+             * Calibration End
+             * Format: date-time
+             */
+            calibration_end: string;
+            /** Timestamp Column */
+            timestamp_column: string;
+            /**
+             * Train End
+             * Format: date-time
+             */
+            train_end: string;
         };
         /** MLTrainRequest */
         MLTrainRequest: {
@@ -2112,7 +2156,14 @@ export interface components {
             dataset_id: string;
             /** Features */
             features: string[];
+            /**
+             * Missing Policy
+             * @default reject
+             * @enum {string}
+             */
+            missing_policy: "reject" | "train_median";
             params?: components["schemas"]["IsolationForestParameters"];
+            temporal_split?: components["schemas"]["MLTemporalSplitSpec"] | null;
             training_input?: components["schemas"]["MLTrainingInputPolicy"];
         };
         /**
@@ -2470,15 +2521,17 @@ export interface components {
         };
         /**
          * Transform
-         * @description 순서가 보존되는 재현 가능한 변환 정의.
+         * @description 기존 변환 단계 또는 단독 불변 관측치 UUID 발급 작업.
          */
         Transform: {
             /** Group By */
             group_by?: string[];
+            /** Observation Id Column */
+            observation_id_column?: string | null;
             /** Order By */
             order_by?: string | null;
             /** Steps */
-            steps: components["schemas"]["Step"][];
+            steps?: components["schemas"]["Step"][];
         };
         /** UnderstandingColumnOut */
         UnderstandingColumnOut: {

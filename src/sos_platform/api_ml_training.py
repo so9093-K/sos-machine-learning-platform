@@ -61,6 +61,11 @@ def training_router(
                 "features": body.features,
                 "params": body.params.model_dump(),
                 "training_input": body.training_input.model_dump(),
+                "missing_policy": body.missing_policy,
+                "temporal_split": (
+                    body.temporal_split.model_dump(mode="json")
+                    if body.temporal_split is not None else None
+                ),
                 "selection_algorithm_version": TRAINING_SELECTION_CURRENT,
             },
             owner_actor=actor.id,
@@ -121,6 +126,8 @@ def training_router(
                 "selection_algorithm_version": source["spec"].get(
                     "selection_algorithm_version", TRAINING_SELECTION_LEGACY
                 ),
+                "missing_policy": source["spec"].get("missing_policy", "reject"),
+                "temporal_split": source["spec"].get("temporal_split"),
                 "forked_from_job_id": source_job_id,
             },
             request_id=request.state.request_id,

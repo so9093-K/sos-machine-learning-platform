@@ -1,5 +1,6 @@
 """API와 실행기가 공유하는 Data Workspace 입력 계약."""
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -32,11 +33,12 @@ class Step(BaseModel):
 
 
 class Transform(BaseModel):
-    """순서가 보존되는 재현 가능한 변환 정의."""
+    """기존 변환 단계 또는 단독 불변 관측치 UUID 발급 작업."""
 
-    steps: list[Step] = Field(min_length=1, max_length=30)
+    steps: list[Step] = Field(default_factory=list, max_length=30)
     order_by: str | None = None
     group_by: list[str] = Field(default_factory=list, max_length=4)
+    observation_id_column: str | None = Field(default=None, min_length=1, max_length=256)
 
     @model_validator(mode="after")
     def validate_grouping(self):
@@ -44,6 +46,11 @@ class Transform(BaseModel):
             raise ValueError("group_by columns must be distinct")
         if self.order_by and self.order_by in self.group_by:
             raise ValueError("order_by must not also be a group_by column")
+        if self.observation_id_column is not None:
+            if self.steps or self.order_by or self.group_by:
+                raise ValueError("Observation identity materialization must be a standalone transform")
+        elif not self.steps:
+            raise ValueError("Transform requires steps unless materializing observation IDs")
         return self
 
 
@@ -228,7 +235,7 @@ class MLflowExportStatusOut(BaseModel):
 
 class MLExplanationRequest(BaseModel):
     scoring_result_id: str
-    row_index: int = Field(strict=True, ge=0, le=49_999)
+    row_index: int = Field(strict=True, ge=0, le=2**63 - 1)
 
 
 class ExplanationResultOut(BaseModel):
@@ -272,10 +279,50 @@ class EvaluationRevisionOut(BaseModel):
     created_at: str
 
 
+class MLTemporalSplitSpec(BaseModel):
+    """시간순 Train/Calibration/Test 경계. Train 이외 구간은 학습에 사용하지 않는다."""
+
+    timestamp_column: str = Field(min_length=1, max_length=256)
+    train_end: datetime
+    calibration_end: datetime
+
+    @model_validator(mode="after")
+    def validate_boundaries(self):
+        if (
+            self.train_end.tzinfo is None
+            or self.calibration_end.tzinfo is None
+            or self.train_end.utcoffset() is None
+            or self.calibration_end.utcoffset() is None
+            or self.train_end >= self.calibration_end
+        ):
+            raise ValueError("Temporal boundaries must be ordered and timezone-aware")
+        return self
+
+
+class MLScoringTemporalScope(MLTemporalSplitSpec):
+    """학습한 UTC 분할 정의의 Calibration 또는 Test 구간만 점수화한다."""
+
+    partition: Literal["calibration", "test"]
+
+
 class MLScoringRequest(BaseModel):
     model_revision_id: str
     dataset_id: str
     label_column: str | None = Field(default=None, min_length=1, max_length=256)
+    temporal_scope: MLScoringTemporalScope | None = None
+    observation_id_column: str | None = Field(default=None, min_length=1, max_length=256)
+
+    @model_validator(mode="after")
+    def validate_observation_column(self):
+        if self.observation_id_column is not None and (
+            self.observation_id_column == self.label_column
+            or (
+                self.temporal_scope is not None
+                and self.observation_id_column == self.temporal_scope.timestamp_column
+            )
+        ):
+            raise ValueError("Observation ID cannot also be the label or time column")
+        return self
 
 
 class ScoringResultOut(BaseModel):
@@ -323,6 +370,8 @@ class MLTrainRequest(BaseModel):
     features: list[str] = Field(min_length=1)
     params: IsolationForestParameters = Field(default_factory=IsolationForestParameters)
     training_input: MLTrainingInputPolicy = Field(default_factory=MLTrainingInputPolicy)
+    missing_policy: Literal["reject", "train_median"] = "reject"
+    temporal_split: MLTemporalSplitSpec | None = None
 
     @model_validator(mode="after")
     def validate_features(self):
@@ -330,6 +379,8 @@ class MLTrainRequest(BaseModel):
             raise ValueError("Features must be distinct")
         if any(not name or len(name) > 256 for name in self.features):
             raise ValueError("Invalid feature name")
+        if self.temporal_split is not None and self.temporal_split.timestamp_column in self.features:
+            raise ValueError("Temporal split timestamp must not be a training feature")
         return self
 
 

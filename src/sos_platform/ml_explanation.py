@@ -8,7 +8,7 @@ import math
 
 import numpy as np
 
-from .ml_decision import _verified_scoring
+from .ml_decision import _verified_scoring_row
 from .ml_runtime import load_trusted_isolation_forest
 
 
@@ -27,10 +27,7 @@ def explain_scored_row(store, spec: dict) -> dict:
     if any(not isinstance(x, (int, float)) or not math.isfinite(x) for x in reference):
         raise ValueError("Model reference values are invalid")
     selected = spec["row_index"]
-    frame = _verified_scoring(store, scoring)
-    if type(selected) is not int or not 0 <= selected < frame.height:
-        raise ValueError("Explanation row_index is out of bounds")
-    item = frame.row(selected, named=True)
+    item = _verified_scoring_row(store, scoring, selected)
     struct = item["features"]
     original = np.asarray([struct[name] for name in names], dtype=np.float64)
     model_runtime = load_trusted_isolation_forest(model, store.home / "cache")
@@ -44,14 +41,15 @@ def explain_scored_row(store, spec: dict) -> dict:
     items = [
         {
             "feature": name,
-            "actual_value": float(original[index]),
+            "actual_value": None if np.isnan(original[index]) else float(original[index]),
+            "missing_imputed": bool(np.isnan(original[index])),
             "reference_median": float(reference[index]),
             "score_if_replaced": float(adjusted_scores[index]),
             "anomaly_score_delta": float(saved_score - adjusted_scores[index]),
         }
         for index, name in enumerate(names)
     ]
-    return {
+    result = {
         "scoring_result_id": scoring["id"],
         "model_revision_id": model["id"],
         "row_index": selected,
@@ -61,3 +59,19 @@ def explain_scored_row(store, spec: dict) -> dict:
         "baseline_source": "model_training_feature_medians",
         "additive_attribution": False,
     }
+    identity = scoring.get("score_summary", {}).get("observation_identity")
+    if identity is not None:
+        if (
+            identity.get("kind") != "opaque_uuid4"
+            or identity.get("dataset_id") != scoring["dataset_id"]
+            or identity.get("dataset_version") != scoring["dataset_version"]
+            or "observation_id" not in item
+        ):
+            raise ValueError("Scoring observation identity evidence is invalid")
+        result["source_observation"] = {
+            "dataset_id": scoring["dataset_id"],
+            "dataset_version": scoring["dataset_version"],
+            "id_column": identity["source_column"],
+            "observation_id": item["observation_id"],
+        }
+    return result

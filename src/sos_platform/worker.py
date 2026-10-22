@@ -32,7 +32,7 @@ from .errors import ERRORS, PlatformError, RuntimeConfigurationError
 from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
 from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
 from .ml_explanation import explain_scored_row
-from .ml_scoring import run_dataset_scoring
+from .ml_scoring import cleanup_scoring_stage, run_dataset_scoring, scoring_stage_bytes
 from .ml_training import train_dataset
 from .ml_training_staging import (
     cleanup_training_stage,
@@ -43,6 +43,7 @@ from .mlflow_config import MLflowSettings
 from .mlflow_tracking import MLflowClient, run_tracking_once
 from .object_store import ObjectStore
 from .observability import emit
+from .observation_preparation import materialize_observation_ids
 from .processing import transform
 from .resource_admission import ExecutionCapacity, reserve_execution_memory
 from .schemas import ExplorationSpec, Transform
@@ -106,9 +107,19 @@ def _perform(
             stage = "processing"
             spec = Transform.model_validate(job["spec"]["transform"])
             with pinned_scan_dataset(store, dataset) as source:
-                lf = transform(source, spec)
-                lf.sink_parquet(pending)
-            result = {"input_dataset_id": dataset["id"]}
+                if spec.observation_id_column is not None:
+                    evidence = materialize_observation_ids(
+                        source, pending, column=spec.observation_id_column
+                    )
+                else:
+                    lf = transform(source, spec)
+                    lf.sink_parquet(pending)
+                    evidence = {}
+            result = {
+                "input_dataset_id": dataset["id"],
+                "input_dataset_version": dataset["version"],
+                **evidence,
+            }
         elif job["kind"] == "ml_train":
             stage = "processing"
             # 정렬 Spill 파일은 이 Attempt만 소유한다. 종료 후 부모가 정리하고
@@ -203,6 +214,7 @@ def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) 
             pending.with_suffix(".scores.parquet"),
         ):
             path.unlink(missing_ok=True)
+        cleanup_scoring_stage(store.home, pending.with_suffix(".scores.parquet"))
 
 
 def cleanup_orphaned_cgroups_before_recovery(store: Store, isolation: CgroupIsolation) -> None:
@@ -294,6 +306,12 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                 > budget.max_stage_mib * 1024 * 1024
             ):
                 raise ExecutionLimitExceeded("SOS-ML-TRAIN-STAGE-LIMIT", "storage")
+            if (
+                job["kind"] == "ml_score"
+                and scoring_stage_bytes(store.home, pending.with_suffix(".scores.parquet"))
+                > budget.max_stage_mib * 1024 * 1024
+            ):
+                raise ExecutionLimitExceeded("SOS-ML-SCORE-STAGE-LIMIT", "storage")
             if time.monotonic() >= next_heartbeat:
                 store.heartbeat()
                 next_heartbeat = time.monotonic() + 2
@@ -498,6 +516,17 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                 attempt_id=attempt_id,
                 exception_type=type(exc).__name__,
             )
+        if job["kind"] == "ml_score":
+            try:
+                cleanup_scoring_stage(store.home, pending.with_suffix(".scores.parquet"))
+            except (OSError, ValueError):
+                emit(
+                    "worker.staging.cleanup_failed",
+                    service="sos-worker",
+                    level=logging.ERROR,
+                    job_id=job_id,
+                    attempt_id=attempt_id,
+                )
         if job["kind"] == "ml_train":
             try:
                 cleanup_training_stage(store.home, attempt_id)

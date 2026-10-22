@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Isolation Forest의 `all` 학습은 Worker 메모리로 계산한 임의 행 수 사전 상한 대신 Attempt별 디스크 기반 입력과 청크 전처리를 사용합니다. 요청한 Train 전체 행 사용은 그대로 유지하고, 실행 중 실제 RSS·스테이징 사용량 보호는 기존 Worker 예산으로 관리합니다. `sample`의 명시적 행 수·Seed 선택 의미는 변경하지 않습니다.
+
+- 누적 ML Reference Pipeline 검토에서 실제 Parquet의 명시적 `+00` UTC 시각을 시간 분할에 지원하고, 전체 결측 정수 Batch의 학습 오류를 수정했습니다. Scoring 임시 Stage는 Attempt 단위 자원 한도·중단 후 회수 대상으로 관리하며, 단일 관측치 Explanation은 전체 결과 대신 필요한 Parquet Row Group만 읽도록 개선했습니다.
+
+- 기존 Transform Job에서 선택적으로 불투명 UUIDv4 관측치 ID를 한 번 생성해 새 불변 Dataset으로 게시할 수 있습니다. 발급 후 판본 내부에서 안정적으로 연결되며, 별도 준비 실행 사이에 같은 UUID가 재현되는 것은 아닙니다. 게시 전 Preview는 임시 ID를 제공하지 않습니다.
+
+- Scoring Job에서 미리 생성된 불투명 UUIDv4 관측치 컬럼을 선택적으로 연결할 수 있습니다. 전체·시간 구간별 결과에서 결측·중복·잘못된 ID를 거절하며, 원본 사용자·호스트 정보를 복제하지 않고도 Explanation에 Dataset 판본과 관측치 참조를 제공합니다.
+
+- Scoring에 학습 때 고정한 UTC 시간 분할 기준으로 Calibration/Test 구간을 선택하는 API를 추가했습니다. Batch별 결과를 스트리밍 게시해 종전 50,000행 상한을 제거하고, 전체 Dataset·모델 판본·구간별 행 수를 Scoring 근거로 남기며 Explain 요청의 행 번호 상한도 조정했습니다.
+
+- Decision Policy Revision의 보정 Scoring Result 출처를 유지하면서 호환되는 다른 Scoring Result에도 고정된 판정 기준을 적용할 수 있게 했습니다. 정책과 대상의 모델 판본·점수 의미·소유 권한을 검증하고, 서로 다른 결과라는 이유만으로 독립 Test 성능을 주장하지 않습니다.
+
+- Isolation Forest 학습 요청에 선택적인 시간 기준 Train/Calibration/Test 분할과 Train 중앙값 기반 결측 처리 정책을 추가했습니다. Train 외 구간은 학습에 사용하지 않고 구간별 행 수와 UTC 경계를 근거로 기록하며, 기존 결측 불허 및 입력 선택 정책은 기본값으로 유지합니다.
+
 - Isolation Forest Training의 순서 독립 Sample 입력은 기존 Canonical v1 선택 의미와 Seed·입력 지문을 유지하면서, Dataset Reader의 입력을 Attempt 전용 Parquet에 Streaming 저장한 뒤 DuckDB 외부 정렬로 처리해 대용량 입력의 메모리 사용을 제한하도록 개선했습니다. 임시 정렬 공간은 Worker Attempt별로 격리·정리하며, Worker 메모리 예산에 따라 DuckDB 정렬 버퍼·스레드 배분을 조절합니다.
 
 - Isolation Forest Training의 고정 행·Feature 한도를 제거하고 전체 사용·명시적 부분집합 정책과 실행 메모리 수용 판단을 분리합니다. 부분집합은 중복 관측 수를 유지하며 스캔 순서와 무관하게 선택하고, 입력 정책·선택 알고리즘 버전·Seed·입력 지문을 기록합니다. Scoring의 현행 처리 범위는 유지합니다.
