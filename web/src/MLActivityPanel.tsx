@@ -43,10 +43,16 @@ type JobDetail = {
   spec?: unknown;
   attempts?: unknown;
 };
-function ActivityJobDetails({ job }: { job: Activity }) {
+function ActivityJobDetails({ job, canCancel, onChanged }: {
+  job: Activity;
+  canCancel: boolean;
+  onChanged: () => void;
+}) {
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   async function loadDetails() {
     if (loading) return;
     setLoading(true);
@@ -58,6 +64,22 @@ function ActivityJobDetails({ job }: { job: Activity }) {
     } catch (e) { setError(formatError(e)); }
     finally { setLoading(false); }
   }
+  async function cancel() {
+    if (!canCancel || !detail || !["Queued", "Running"].includes(detail.status) ||
+      detail.cancel_requested || cancelling) return;
+    setCancelling(true);
+    setError("");
+    try {
+      const updated = await request<JobDetail>(
+        `${operations[job.kind].endpoint}/${encodeURIComponent(job.id)}/cancel`,
+        { method: "POST" },
+      );
+      setDetail(updated);
+      setNotice("취소 요청이 접수됐습니다. 실제 종료 상태는 다시 조회해 확인하세요.");
+      onChanged();
+    } catch (e) { setError(formatError(e)); }
+    finally { setCancelling(false); }
+  }
   return <details className="ml-activity-details" onToggle={event => {
     if (event.currentTarget.open && !detail && !loading && !error) void loadDetails();
   }}>
@@ -65,6 +87,7 @@ function ActivityJobDetails({ job }: { job: Activity }) {
     {loading && <p role="status">실행 상세 조회 중…</p>}
     {error && <div><p role="alert">{error}</p>
       <button className="secondary" onClick={() => void loadDetails()}>다시 조회</button></div>}
+    {notice && <p role="status">{notice}</p>}
     {detail && <>
       <p className="hint">현재 상세 상태: {detail.status}
         {detail.cancel_requested ? " · 취소 요청 중" : ""}
@@ -72,14 +95,23 @@ function ActivityJobDetails({ job }: { job: Activity }) {
       {detail.error && <p role="alert">{detail.error}</p>}
       <pre>{JSON.stringify({ spec: detail.spec ?? "제공되지 않음",
         attempts: detail.attempts ?? "상세 API에 실행 시도 정보 없음" }, null, 2)}</pre>
-      <button className="secondary" onClick={() => void loadDetails()}>상태 다시 조회</button>
+      <div className="ml-activity-actions">
+        {canCancel && ["Queued", "Running"].includes(detail.status) &&
+          !detail.cancel_requested && <button className="secondary"
+            disabled={cancelling || loading} onClick={() => void cancel()}>
+            {cancelling ? "취소 요청 중…" : "작업 취소 요청"}
+          </button>}
+        <button className="secondary" disabled={loading}
+          onClick={() => void loadDetails()}>상태 다시 조회</button>
+      </div>
     </>}
   </details>;
 }
 
 /** 조회된 Job 페이지에 있는 활동만 보여준다. 전체 Job 수나 완료 진행률을 추정하지 않는다. */
-export function MLActivityPanel({ compact = false, onNavigate, onOpenResource, onViewAll }: {
+export function MLActivityPanel({ compact = false, canCancel = false, onNavigate, onOpenResource, onViewAll }: {
   compact?: boolean;
+  canCancel?: boolean;
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onViewAll?: () => void;
@@ -143,7 +175,8 @@ export function MLActivityPanel({ compact = false, onNavigate, onOpenResource, o
             {job.resultId ? "관련 작업" : "실행 화면"} →
           </button>
         </div>
-        {!compact && <ActivityJobDetails job={job}/>}
+        {!compact && <ActivityJobDetails job={job} canCancel={canCancel}
+          onChanged={() => void refresh()}/>}
       </article>)}
       {items.length === 0 && <p className="muted">
         {error ? "ML 작업을 모두 조회하지 못했습니다." : "현재 조회된 ML Job이 없습니다."}
