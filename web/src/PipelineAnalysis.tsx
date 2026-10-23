@@ -27,6 +27,48 @@ function resultRef(run: PipelineRun, stage: string, field: string): string | nul
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
+/** 저장된 고정 폭 구간 빈도만 표시하며 행 표본을 임의로 확대하지 않는다. */
+function ScoreHistogram({ summary, title, threshold }: {
+  summary: Record<string, unknown>; title: string; threshold?: number;
+}) {
+  const raw = summary.histogram;
+  const hist = raw && typeof raw === "object" ? raw as Record<string, unknown> : null;
+  const edges = hist && Array.isArray(hist.bin_edges) ? hist.bin_edges : [];
+  const counts = hist && Array.isArray(hist.bin_counts) ? hist.bin_counts : [];
+  const valid = hist?.method === "equal_width_exact_v1" &&
+    typeof hist.score_count === "number" && Number.isInteger(hist.score_count) &&
+    edges.length === counts.length + 1 && counts.length >= 1 && counts.length <= 128 &&
+    edges.every(x => typeof x === "number" && Number.isFinite(x)) &&
+    counts.every(x => typeof x === "number" && Number.isInteger(x) && x >= 0) &&
+    counts.reduce((a: number, b: unknown) => a + Number(b), 0) === hist.score_count &&
+    edges.every((x, i) => i === 0 || x > edges[i - 1]);
+  if (!valid) return <p className="hint">이 Run에는 전체 점수 분포 집계가 저장돼 있지 않습니다.
+    기존 최솟값·평균·최댓값 근거는 위 비교 그래프에서 확인할 수 있습니다.</p>;
+  const option = {
+    aria: { enabled: true },
+    tooltip: { trigger: "item" },
+    grid: { left: 60, right: 38, top: 26, bottom: 55 },
+    xAxis: { type: "value" as const, name: "이상 점수", min: edges[0], max: edges[edges.length - 1] },
+    yAxis: { type: "value" as const, name: "행 수", minInterval: 1 },
+    series: [{
+      type: "bar" as const, name: "구간별 실제 관측 수",
+      data: counts.map((n, i) => [(edges[i] + edges[i + 1]) / 2, n]),
+      ...(threshold === undefined ? {} : { markLine: {
+        silent: true, symbol: "none",
+        label: { formatter: "Calibration 기준", position: "insideEndTop" as const },
+        data: [{ xAxis: threshold }],
+      } }),
+    }],
+  };
+  return <div className="pipeline-score-chart">
+    <DataChart option={option} ariaLabel={title + " 점수 구간별 전체 관측 수" +
+      (threshold === undefined ? "" : " 및 Calibration 임계값")} />
+    <p className="hint">{title}의 실제 점수를 전체 조회해 집계한 {counts.length}개 고정 폭 구간입니다.
+      {hist?.constant_scores ? "모든 점수가 같아 그래프 표시 범위만 확장했습니다. " : ""}
+      임계값 경계에 걸친 단일 막대는 후보 수를 의미하지 않습니다.</p>
+  </div>;
+}
+
 /** 각 점은 실제 저장된 최소·평균·최대값이며, 분포나 학습 곡선을 추정하지 않는다. */
 function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
   const summaries = [
@@ -94,6 +136,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
           <div><dt>학습 점수 범위</dt><dd>{format(metric(train, "score_min"))} ~ {format(metric(train, "score_max"))}</dd></div>
           <div><dt>학습 평균 점수</dt><dd>{format(metric(train, "score_mean"))}</dd></div>
         </dl>
+        <ScoreHistogram summary={train} title="Training" />
         <p className="hint">학습 점수는 Train 데이터 내부 진단이며 독립적인 탐지 정확도가 아닙니다.
           Isolation Forest에는 epoch별 loss/accuracy 곡선이 정의되어 있지 않습니다.</p>
         <details><summary>학습 설정·Feature 계약 확인</summary>
@@ -117,6 +160,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
           <div><dt>Calibration 후보 수</dt>
             <dd>{format(metric(policy.decision_summary, "predicted_anomalies"))}건</dd></div>
         </dl>
+        <ScoreHistogram summary={cal} title="Calibration" threshold={policy.threshold} />
         <p className="hint">현재 IF Pipeline은 EVT/POT가 아닌 Calibration 점수의
           선형 보간 분위수로 경계를 정합니다. 동점 때문에 실제 후보 비율은 설정값과 다를 수 있습니다.</p>
         <div className="pipeline-actions">
@@ -137,6 +181,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
             ? "미계산" : format(metric(decision, "alert_rate")! * 100) + "%"}</dd></div>
           <div><dt>정답 레이블</dt><dd>{evaluation.label_coverage === "none" ? "없음" : evaluation.label_coverage}</dd></div>
         </dl>
+        <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} />
         <p className="hint">Calibration에서 정한 정책을 별도 Test 시간 구간에 적용합니다.
           검토 후보는 실제 이상 사건이 아니며, 레이블이 없는 결과에는 정확도·Precision·Recall을 부여하지 않습니다.</p>
         <div className="pipeline-actions">

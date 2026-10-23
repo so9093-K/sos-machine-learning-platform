@@ -15,6 +15,7 @@ import pyarrow.parquet as pq
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from .datasets import pinned_scan_dataset
+from .ml_anomaly import histogram_edges
 from .ml_input import INTEGER_DTYPES, NUMERIC
 from .ml_observation_identity import validate_observation_identity
 from .ml_runtime import load_trusted_isolation_forest
@@ -131,6 +132,35 @@ def _score_summary(score_sums: list[float], count: int, low: float, high: float)
         "predicted_anomalies": None,
         "alert_rate": None,
         "evaluation_kind": "unlabeled",
+    }
+
+
+def histogram_from_scoring_file(
+    path: Path, *, low: float, high: float, expected_rows: int, bins: int = 32,
+) -> dict:
+    """불변 게시 전 Parquet의 실제 점수만 일정 배치로 재조회해 정확한 구간 빈도 기록.
+
+    Scoring 요약의 min/max는 이미 전체 Batch에서 계산됐으므로 구간 폭 결정에는
+    별도 데이터 스캔이 필요하지 않다. 추가 조회도 메모리에 모든 행을 적재하지 않는다.
+    """
+    edges = histogram_edges(low, high, bins=bins)
+    counts = np.zeros(bins, dtype=np.int64)
+    inspected = 0
+    with pq.ParquetFile(path) as reader:
+        for batch in reader.iter_batches(batch_size=8192, columns=["anomaly_score"]):
+            values = batch.column(0).to_numpy(zero_copy_only=False)
+            if not np.isfinite(values).all():
+                raise ValueError("Histogram encountered non-finite anomaly scores")
+            counts += np.histogram(values, bins=edges)[0]
+            inspected += len(values)
+    if inspected != expected_rows or int(counts.sum()) != expected_rows:
+        raise ValueError("Histogram score count differs from scoring artifact")
+    return {
+        "method": "equal_width_exact_v1",
+        "bin_edges": edges,
+        "bin_counts": counts.tolist(),
+        "score_count": inspected,
+        "constant_scores": low == high,
     }
 
 
@@ -267,6 +297,9 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
         if scope_evidence is not None and count != scope_evidence[f"{scope_evidence['partition']}_rows"]:
             raise ValueError("Scoring partition row count differs from pinned temporal evidence")
         score_summary = _score_summary(score_sums, count, low, high)
+        score_summary["histogram"] = histogram_from_scoring_file(
+            pending, low=low, high=high, expected_rows=count,
+        )
         score_summary["scope"] = "scoring_dataset"
         score_summary["score_scale"] = "negative_sklearn_score_samples"
         same_input_revision = (

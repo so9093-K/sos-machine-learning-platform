@@ -5,6 +5,7 @@
 """
 
 import math
+from bisect import bisect_right
 from collections.abc import Sequence
 
 
@@ -27,6 +28,41 @@ def normalize_isolation_forest_scores(raw_scores: Sequence[float]) -> tuple[floa
     점수는 확률이 아니며 다른 모델·판본 간 직접 비교를 보장하지 않는다.
     """
     return tuple(-value for value in _finite_scores(raw_scores))
+
+
+def histogram_edges(low: float, high: float, *, bins: int = 32) -> list[float]:
+    """실제 점수 범위의 고정 폭 구간을 결정한다. 동일 점수일 때는 표시 폭만 부여한다."""
+    if not isinstance(bins, int) or isinstance(bins, bool) or not 1 <= bins <= 128:
+        raise ValueError("Histogram bin count is invalid")
+    if not math.isfinite(low) or not math.isfinite(high) or low > high:
+        raise ValueError("Histogram score bounds are invalid")
+    if low == high:
+        half_width = max(abs(low) * 0.01, 1e-6)
+        left, right = low - half_width, high + half_width
+    else:
+        left, right = low, high
+    step = (right - left) / bins
+    if not math.isfinite(step) or step <= 0:
+        raise ValueError("Histogram score range is invalid")
+    return [left + step * i for i in range(bins)] + [right]
+
+
+def score_histogram(values: Sequence[float], *, bins: int = 32) -> dict:
+    """Train 점수로 정확한 구간 빈도를 계산하되 원래 점수와 판정 의미는 변경하지 않는다."""
+    checked = _finite_scores(values)
+    low, high = min(checked), max(checked)
+    edges = histogram_edges(low, high, bins=bins)
+    counts = [0] * bins
+    for score in checked:
+        slot = min(max(bisect_right(edges, score) - 1, 0), bins - 1)
+        counts[slot] += 1
+    return {
+        "method": "equal_width_exact_v1",
+        "bin_edges": edges,
+        "bin_counts": counts,
+        "score_count": len(checked),
+        "constant_scores": low == high,
+    }
 
 
 def quantile_threshold(reference_scores: Sequence[float], alert_fraction: float) -> float:
