@@ -48,7 +48,11 @@ class MLflowClient:
             if not isinstance(result, dict):
                 raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
             return result
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        except HTTPError as exc:
+            # 원격 응답 본문·URL·토큰은 기록하지 않고 명시적 API 경계만 식별한다.
+            code = endpoint.replace("/", "_")
+            raise MLflowDeliveryError(f"SOS-MLFLOW-HTTP-{exc.code}-{code}") from exc
+        except (URLError, TimeoutError, OSError) as exc:
             raise MLflowDeliveryError("SOS-MLFLOW-UNAVAILABLE") from exc
         except (UnicodeDecodeError, ValueError) as exc:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID") from exc
@@ -74,7 +78,11 @@ class MLflowClient:
             if not isinstance(parsed, dict):
                 raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
             return parsed
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        except HTTPError as exc:
+            # 원격 응답 본문·URL·토큰은 기록하지 않고 명시적 API 경계만 식별한다.
+            code = endpoint.replace("/", "_")
+            raise MLflowDeliveryError(f"SOS-MLFLOW-HTTP-{exc.code}-{code}") from exc
+        except (URLError, TimeoutError, OSError) as exc:
             raise MLflowDeliveryError("SOS-MLFLOW-UNAVAILABLE") from exc
         except (UnicodeDecodeError, ValueError) as exc:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID") from exc
