@@ -1,0 +1,43 @@
+name: PR 55 one-time API type generation
+
+on:
+  push:
+    branches:
+      - refactor/mlflow-management-ownership
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sos-pr55-typegen
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/mlflow-management-ownership
+          persist-credentials: true
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: uv python install 3.12
+      - run: uv sync --locked --group dev
+      - run: npm ci --no-audit
+        working-directory: web
+      - name: Generate TypeScript API contract from FastAPI OpenAPI
+        run: bash scripts/generate_api_types.sh
+      - name: Commit generated type file only
+        run: |
+          if ! git diff --quiet -- web/src/api.generated.ts; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add web/src/api.generated.ts
+            git commit -m "chore(api): OpenAPI에서 TypeScript 계약 재생성"
+            git push origin HEAD:refactor/mlflow-management-ownership
+          fi
