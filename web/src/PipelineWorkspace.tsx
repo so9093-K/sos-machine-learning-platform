@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, formatError, request, submitJob } from "./api";
 import { PipelineAnalysis } from "./PipelineAnalysis";
+import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
@@ -46,6 +47,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   const [rows, setRows] = useState<CandidatePage | null>(null);
   const [candidateError, setCandidateError] = useState("");
   const [candidateReload, setCandidateReload] = useState(0);
+  const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [error, setError] = useState("");
@@ -74,6 +76,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
       setRunId(initialRunId);
       setRun(null);
       setRows(null);
+      setSelectedCandidate(null);
       setError("");
       setRunLoadError("");
     }
@@ -136,7 +139,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
     const runDatasetId = history.find(item => item.id === id)?.dataset_id ??
       (run?.id === id ? run.dataset_id : datasetId);
     selectedRunId.current = id;
-    setRunId(id); setRun(null); setRows(null); setError(""); setBusy(false);
+    setRunId(id); setRun(null); setRows(null); setSelectedCandidate(null); setError(""); setBusy(false);
     setCandidateError("");
     setRunLoadError("");
     onSelectRun(id, runDatasetId);
@@ -470,14 +473,22 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
           {rows && <>
             {rows.items.length === 0 && <p>현재 페이지에는 이상 후보가 없습니다.</p>}
             {rows.items.length > 0 && <div className="table-scroll"><table>
-              <thead><tr><th>결과 행 번호</th><th>이상 점수</th><th>Feature 값</th></tr></thead>
+              <thead><tr><th>결과 행 번호</th><th>이상 점수</th><th>선택·확인</th></tr></thead>
               <tbody>{rows.items.map(item => <tr key={item.row_index}>
                 <td>{count(item.row_index)}</td>
                 <td>{item.anomaly_score.toPrecision(6)}</td>
-                <td><details><summary>상세 Feature</summary>
-                  <pre>{JSON.stringify(item.features, null, 2)}</pre></details></td>
+                <td><button type="button" className="secondary" aria-pressed={selectedCandidate === item.row_index}
+                  onClick={() => setSelectedCandidate(item.row_index)}>
+                  {selectedCandidate === item.row_index ? "선택됨" : "이 후보 분석"}
+                </button></td>
               </tr>)}</tbody>
             </table></div>}
+            {rows.items.find(item => item.row_index === selectedCandidate) &&
+              <PipelineCandidateInvestigation
+                key={run.id + ":" + rows.result_id + ":" + selectedCandidate}
+                candidate={rows.items.find(item => item.row_index === selectedCandidate)!}
+                scoringResultId={rows.result_id} canRun={canRun}
+                onOpenResource={onOpenResource} />}
             {rows.next_cursor && <button type="button" className="secondary" disabled={busy}
               onClick={() => void more()}>다음 후보 25건 보기</button>}
           </>}

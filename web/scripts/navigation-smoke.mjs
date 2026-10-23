@@ -124,6 +124,7 @@ try {
   // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
   const { PipelineWorkspace } = await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
   const { PipelineAnalysis } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
+  const { PipelineCandidateInvestigation } = await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
   const props = {
     datasets: [], initialDatasetId: "", initialRunId: "",
     hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
@@ -148,6 +149,10 @@ try {
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
+  assert.match(renderToStaticMarkup(React.createElement(PipelineCandidateInvestigation, {
+    candidate: { row_index: 5, anomaly_score: 0.8, features: { "io_bytes_per_sec": 42 } },
+    scoringResultId: "score-1", canRun: true, onOpenResource: () => {},
+  })), /이 후보의 점수 민감도 계산/);
   assert.match(renderToStaticMarkup(React.createElement(PipelineAnalysis, {
     run: { id: "run-1", stages: [], status: "Succeeded" }, onOpenResource: () => {},
   })), /분석 판본 참조가 불완전합니다/);

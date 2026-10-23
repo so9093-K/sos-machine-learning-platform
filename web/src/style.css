@@ -578,3 +578,8 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .pipeline-analysis-phase pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .78rem; }
 .pipeline-analysis-phase details { min-width: 0; overflow-wrap: anywhere; }
 .pipeline-analysis-phase .pipeline-actions { align-self: end; }
+
+.pipeline-candidate-inspection { display: grid; gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--sos-border); border-radius: 12px; }
+.pipeline-candidate-inspection h5 { margin: 0; font-size: 1rem; }
+.pipeline-candidate-inspection .chart { min-height: 400px; }
+.pipeline-candidate-inspection .table-scroll { max-height: 320px; }
