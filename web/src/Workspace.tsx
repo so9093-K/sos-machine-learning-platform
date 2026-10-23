@@ -449,7 +449,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onViewMlActivity={() => setTab("ml-jobs")}
         onViewDataActivity={() => setTab("jobs")}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
-      {tab === "pipelines" && <PipelineWorkspace datasets={datasets} canRun={canRun}
+      {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
+        initialDatasetId={selected} hasMoreDatasets={Boolean(nextDatasetCursor)}
+        onLoadMoreDatasets={loadMoreDatasets} canRun={canRun}
         canCancel={canCancel} onNavigate={setTab} onOpenResource={openResource} />}
       {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab}
         onNavigate={setTab} onOpenModel={id => openResource("model", id)}

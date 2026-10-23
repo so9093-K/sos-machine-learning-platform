@@ -206,7 +206,13 @@ def _advance_one_run(store, run_id: str) -> bool:
         _update_run(store, run["id"], status="Cancelled")
         return True
     if not job_id:
-        kind, spec = _stage_job_spec(store, run, stage)
+        try:
+            kind, spec = _stage_job_spec(store, run, stage)
+        except (KeyError, TypeError, ValueError):
+            # 앞 단계의 게시 결과가 예상한 계약과 다르면 해당 Run만 실패시킨다.
+            # Worker 전체를 중지하면 다른 사용자의 정상 Job까지 멈추게 된다.
+            _update_run(store, run["id"], status="Failed", error_code="SOS-JOB-FAILED")
+            return True
         job = store.create_job(
             kind=kind, dataset_id=run["dataset_id"], spec=spec,
             owner_actor=run["owner_actor"], actor_type="human",
@@ -230,8 +236,11 @@ def _advance_one_run(store, run_id: str) -> bool:
                     error_code=job.get("error_code"))
         return True
     if stage == "preflight":
-        plan = job["result"]["plan"]
-        if not plan:
+        result = job.get("result") or {}
+        plan = result.get("plan") if isinstance(result, dict) else None
+        if not isinstance(plan, dict) or not all(
+            key in plan for key in ("timestamp_column", "train_end", "calibration_end")
+        ):
             _update_run(store, run["id"], status="Failed", error_code="SOS-ML-INPUT-INVALID")
             return True
         with store.connection() as db:

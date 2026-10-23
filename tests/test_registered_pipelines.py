@@ -187,3 +187,17 @@ def test_worker_crash_after_job_commit_reuses_job_on_resume():
     restored = pipeline_runs.get_run(store, run["id"])
     assert restored["job_ids"]["preflight"] == "job-1"
     assert store.next_job == 1
+
+
+def test_invalid_completed_stage_result_does_not_stop_worker():
+    store = FakeStore()
+    run = pipeline_runs.create_run(
+        store, {"id": "corrupt-output", "version": "revision"}, "owner",
+        {"ready": True, "plan": None}, None,
+    )
+    assert pipeline_runs.advance_run(store)  # Preflight Job 접수
+    preflight = pipeline_runs.get_run(store, run["id"])["job_ids"]["preflight"]
+    store.jobs[preflight]["result"] = {}
+    assert pipeline_runs.advance_run(store)
+    assert pipeline_runs.get_run(store, run["id"])["status"] == "Failed"
+    assert store.next_job == 1

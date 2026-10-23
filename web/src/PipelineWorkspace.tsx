@@ -18,28 +18,32 @@ const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 const count = (value: number) => value.toLocaleString("ko-KR");
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onOpenResource }: {
-  datasets: Dataset[]; canRun: boolean; canCancel: boolean;
+export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets, onLoadMoreDatasets, canRun, canCancel, onNavigate, onOpenResource }: {
+  datasets: Dataset[]; initialDatasetId: string; hasMoreDatasets: boolean;
+  onLoadMoreDatasets: () => Promise<void>;
+  canRun: boolean; canCancel: boolean;
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
   const [catalog, setCatalog] = useState<Definition[]>([]);
-  const [datasetId, setDatasetId] = useState("");
+  const [datasetId, setDatasetId] = useState(initialDatasetId);
   const [checked, setChecked] = useState<Check | null>(null);
   const [runId, setRunId] = useState(() => new URLSearchParams(window.location.search).get("run") ?? "");
   const [run, setRun] = useState<Run | null>(null);
   const [history, setHistory] = useState<Run[]>([]);
   const [rows, setRows] = useState<CandidatePage | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    void Promise.all([
-      request<Definition[]>("/api/pipelines"),
-      request<Run[]>("/api/pipeline-runs"),
-    ]).then(([definitions, runs]) => {
-      if (active) { setCatalog(definitions); setHistory(runs); }
-    }).catch(e => { if (active) setError(formatError(e)); });
+    // Run 이력이 일시적으로 실패해도 Pipeline Catalog 자체는 이용할 수 있다.
+    void request<Definition[]>("/api/pipelines")
+      .then(definitions => { if (active) setCatalog(definitions); })
+      .catch(e => { if (active) setError(formatError(e)); });
+    void request<Run[]>("/api/pipeline-runs")
+      .then(runs => { if (active) setHistory(runs); })
+      .catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -56,7 +60,11 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
         if (active) setRun(next);
         if (active && !terminal.has(next.status)) handle = setTimeout(() => void refresh(), 2400);
       } catch (e) {
-        if (active) setError(formatError(e));
+        if (active) {
+          setError(formatError(e));
+          // 일시적 네트워크 오류가 Run 상태 조회를 영구 중단시키지 않는다.
+          handle = setTimeout(() => void refresh(), 5000);
+        }
       }
     }
     void refresh();
@@ -73,6 +81,13 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
   function selectRun(id: string) {
     setRunId(id); setRows(null); setError("");
     window.history.replaceState(null, "", "/pipelines?run=" + encodeURIComponent(id));
+  }
+  async function loadMoreDatasets() {
+    if (!hasMoreDatasets || loadingDatasets) return;
+    setLoadingDatasets(true);
+    try { await onLoadMoreDatasets(); }
+    catch (e) { setError(formatError(e)); }
+    finally { setLoadingDatasets(false); }
   }
   async function inspect() {
     if (!datasetId || busy) return;
@@ -143,6 +158,10 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
             {datasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>
+        {hasMoreDatasets && <button className="secondary" disabled={loadingDatasets}
+          onClick={() => void loadMoreDatasets()}>
+          {loadingDatasets ? "목록 불러오는 중…" : "더 오래된 내 Dataset 보기"}
+        </button>}
       </div>
       <div className="actions">
         <button className="secondary" onClick={() => onNavigate("understanding")}>데이터 등록·탐색 →</button>
