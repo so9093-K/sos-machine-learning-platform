@@ -193,6 +193,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const [modelId, setModelId] = useState(preferredModelId);
   const [loadedModelId, setLoadedModelId] = useState(preferredModelId);
+  const [modelLookupRevision, retryModelLookup] = useState(0);
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -206,13 +207,14 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   useEffect(() => {
     let active = true;
     setModel(null);
+    setError("");
     if (loadedModelId) {
       void request<ModelRevision>(`/api/ml/models/${encodeURIComponent(loadedModelId)}`)
         .then(value => { if (active) { setModel(value); setError(""); } })
         .catch(e => { if (active) setError(formatError(e)); });
     }
     return () => { active = false; };
-  }, [loadedModelId]);
+  }, [loadedModelId, modelLookupRevision]);
   const available = useMemo(() => [...new Set(models.items.map(j =>
     revisionId(j, "model_revision_id")).filter((id): id is string => Boolean(id)))], [models.items]);
   return <div className="ml-resource-workspace">
@@ -240,8 +242,10 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
       </div>
       <button type="button" className="secondary" disabled={!modelId.trim()}
         onClick={() => {
-          setLoadedModelId(modelId.trim());
-          onModelSelected(modelId.trim());
+          const identifier = modelId.trim();
+          if (identifier === loadedModelId) retryModelLookup(n => n + 1);
+          else setLoadedModelId(identifier);
+          onModelSelected(identifier);
         }}>모델 판본 조회</button>
       {modelId.trim() !== loadedModelId && <p className="hint">
         모델 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
@@ -299,6 +303,7 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
   const history = histories[view];
   const [scoringId, setScoringId] = useState(preferredScoringId);
   const [loadedScoringId, setLoadedScoringId] = useState(preferredScoringId);
+  const [scoringLookupRevision, retryScoringLookup] = useState(0);
   const [scoring, setScoring] = useState<ScoringResult | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -310,13 +315,13 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
     void history.refresh().catch(e => setError(formatError(e)));
   }, [view]);
   useEffect(() => {
-    let active = true; setScoring(null);
+    let active = true; setScoring(null); setError("");
     if (loadedScoringId) void request<ScoringResult>(
       `/api/ml/scoring/results/${encodeURIComponent(loadedScoringId)}`)
       .then(value => { if (active) { setScoring(value); setError(""); } })
       .catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
-  }, [loadedScoringId]);
+  }, [loadedScoringId, scoringLookupRevision]);
   const available = useMemo(() => [...new Set(scores.items.map(j =>
     revisionId(j,"scoring_result_id")).filter((id): id is string => Boolean(id)))], [scores.items]);
   const config = resultConfig[view];
@@ -346,8 +351,10 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
         onClick={() => void scores.loadMore().catch(e => setError(formatError(e)))}>이전 Scoring 더 보기</button>}
       <button type="button" className="secondary" disabled={!scoringId.trim()}
         onClick={() => {
-          setLoadedScoringId(scoringId.trim());
-          onScoringSelected(scoringId.trim());
+          const identifier = scoringId.trim();
+          if (identifier === loadedScoringId) retryScoringLookup(n => n + 1);
+          else setLoadedScoringId(identifier);
+          onScoringSelected(identifier);
         }}>Scoring Result 조회</button>
       {scoringId.trim() !== loadedScoringId && <p className="hint">
         Scoring Result ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
