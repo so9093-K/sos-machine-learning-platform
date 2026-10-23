@@ -80,7 +80,15 @@ try {
   }));
   assert.match(trainingForm, /<option value="data-v1" selected=""/);
 
-  console.log("ML navigation context: 21 cases passed");
+  const pagedDatasetForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
+    datasets: [], initialDatasetId: "data-not-on-first-page",
+    onDatasetSelected: () => {}, canTrain: false, canCancel: false,
+    view: "training", onViewChange: () => {}, onOpenModel: () => {},
+  }));
+  assert.match(pagedDatasetForm, /현재 목록 외 Dataset/);
+  assert.match(pagedDatasetForm, /<option value="data-not-on-first-page" selected=""/);
+
+  console.log("ML navigation context: 25 assertions passed");
 } finally {
   await vite.close();
 }

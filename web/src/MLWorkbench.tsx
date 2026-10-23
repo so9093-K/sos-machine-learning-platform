@@ -280,6 +280,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, on
           <select aria-label="ML 학습 Dataset" value={selectedId}
             onChange={event => onDatasetSelected(event.target.value)}>
             <option value="">선택하세요</option>
+            {selectedId && !datasets.some(item => item.id === selectedId) &&
+              <option value={selectedId}>현재 목록 외 Dataset · {selectedId}</option>}
             {datasets.map(dataset => <option value={dataset.id} key={dataset.id}>{dataset.name}</option>)}
           </select>
         </label>
