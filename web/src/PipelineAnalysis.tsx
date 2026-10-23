@@ -188,9 +188,18 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
 }
 
 /** 불변 결과의 실제 의미와 출처를 확인한 뒤 단계별 분석 근거를 제공한다. */
-export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
+export type PipelineAnalysisSection = "overview" | "training" | "calibration" | "test";
+export const PIPELINE_ANALYSIS_SECTIONS: Array<{ id: PipelineAnalysisSection; label: string; description: string }> = [
+  { id: "overview", label: "전체 개요", description: "구간 간 점수 비교" },
+  { id: "training", label: "Training", description: "학습과 모델 근거" },
+  { id: "calibration", label: "Calibration", description: "판정 기준 검토" },
+  { id: "test", label: "Test", description: "후보와 평가 결과" },
+];
+export function PipelineEvidenceView({ evidence, run, onOpenResource, initialSection = "overview" }: {
   evidence: Evidence; run: PipelineRun; onOpenResource: OpenResult;
+  initialSection?: PipelineAnalysisSection;
 }) {
+  const [section, setSection] = useState<PipelineAnalysisSection>(initialSection);
   const { model, calibration, test, policy, evaluation } = evidence;
   const train = model.training_score_summary;
   const cal = calibration.score_summary;
@@ -208,9 +217,20 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
           같은 Dataset 판본의 근거로 연결해 확인합니다.</p>
       </div>
     </div>
-    <ScoreRangeChart evidence={evidence} />
+    <nav className="pipeline-analysis-nav" aria-label="이 Run의 분석 근거 탐색">
+      {PIPELINE_ANALYSIS_SECTIONS.map(item => <button key={item.id} type="button"
+        className={section === item.id ? "pipeline-analysis-nav-item active" : "pipeline-analysis-nav-item"}
+        aria-pressed={section === item.id} onClick={() => setSection(item.id)}>
+        <strong>{item.label}</strong><small>{item.description}</small>
+      </button>)}
+    </nav>
+    {section === "overview" && <section className="pipeline-analysis-overview" aria-label="점수 요약 비교">
+      <p className="hint">동일한 Run의 Train·Calibration·Test 점수 범위를 비교합니다.
+        실제 구간별 점수 분포와 근거는 각 분석 영역에서 확인하세요.</p>
+      <ScoreRangeChart evidence={evidence} />
+    </section>}
     <div className="pipeline-analysis-phases">
-      <section className="pipeline-analysis-phase" aria-labelledby="pipeline-training-evidence">
+      {section === "training" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-training-evidence">
         <h5 id="pipeline-training-evidence">01 · Training — 무엇을 학습했는가?</h5>
         <dl>
           <div><dt>학습 구간</dt><dd>{format(trainRows)}행</dd></div>
@@ -230,8 +250,8 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
         </details>
         <button type="button" className="secondary" onClick={() =>
           onOpenResource("model", model.id)}>모델 판본 열기 →</button>
-      </section>
-      <section className="pipeline-analysis-phase" aria-labelledby="pipeline-calibration-evidence">
+      </section>}
+      {section === "calibration" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-calibration-evidence">
         <h5 id="pipeline-calibration-evidence">02 · Calibration — 기준은 어떻게 정했는가?</h5>
         <dl>
           <div><dt>Calibration 구간</dt><dd>{format(calibrationRows)}행</dd></div>
@@ -254,8 +274,8 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
           <button type="button" className="secondary" onClick={() =>
             onOpenResource("scoring", calibration.id)}>Calibration 점수 근거 →</button>
         </div>
-      </section>
-      <section className="pipeline-analysis-phase" aria-labelledby="pipeline-test-evidence">
+      </section>}
+      {section === "test" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-test-evidence">
         <h5 id="pipeline-test-evidence">03 · Test — 적용 후 무엇이 달라졌는가?</h5>
         <dl>
           <div><dt>Test 구간</dt><dd>{format(testRows)}행</dd></div>
@@ -278,7 +298,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
           <button type="button" className="secondary" onClick={() =>
             onOpenResource("evaluation", evaluation.id)}>평가 판본 열기 →</button>
         </div>
-      </section>
+      </section>}
     </div>
   </div>;
 }

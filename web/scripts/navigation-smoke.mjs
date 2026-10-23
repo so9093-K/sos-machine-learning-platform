@@ -228,18 +228,25 @@ try {
       ...resultEvidence.evaluation.decision_metrics, predicted_anomalies: 4,
     } },
   }), /평가 근거/);
-  const report = renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
-    run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
+  const reportFor = initialSection => renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
+    run: completedRun, evidence: resultEvidence, initialSection, onOpenResource: () => {},
   }));
-  assert.match(report, /Training — 무엇을 학습했는가/);
-  assert.match(report, /Calibration — 기준은 어떻게 정했는가/);
-  assert.match(report, /Test — 적용 후 무엇이 달라졌는가/);
-  assert.match(report, /0.5%/);
-  assert.match(report, /15%/);
+  const report = reportFor("overview");
+  assert.match(report, /이 Run의 분석 근거 탐색/);
+  assert.match(report, /aria-pressed="true"/);
   assert.match(report, /실제 최소·평균·최대 이상 점수/);
-  assert.match(report, /Training 점수 구간별 전체 관측 수/);
-  assert.match(report, /Calibration 점수 구간별 전체 관측 수/);
-  assert.match(report, /Test 점수 구간별 전체 관측 수/);
+  assert.doesNotMatch(report, /Training 점수 구간별 전체 관측 수/);
+  const trainingReport = reportFor("training");
+  assert.match(trainingReport, /Training — 무엇을 학습했는가/);
+  assert.match(trainingReport, /Training 점수 구간별 전체 관측 수/);
+  const calibrationReport = reportFor("calibration");
+  assert.match(calibrationReport, /Calibration — 기준은 어떻게 정했는가/);
+  assert.match(calibrationReport, /0.5%/);
+  assert.match(calibrationReport, /Calibration 점수 구간별 전체 관측 수/);
+  const testReport = reportFor("test");
+  assert.match(testReport, /Test — 적용 후 무엇이 달라졌는가/);
+  assert.match(testReport, /15%/);
+  assert.match(testReport, /Test 점수 구간별 전체 관측 수/);
   const sensitivity = renderToStaticMarkup(React.createElement(SensitivityChart, {
     result: { output: { feature_sensitivities: [
       { feature: "f1", anomaly_score_delta: 0.12 },

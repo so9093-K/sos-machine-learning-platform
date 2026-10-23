@@ -583,3 +583,21 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .pipeline-candidate-inspection h5 { margin: 0; font-size: 1rem; }
 .pipeline-candidate-inspection .chart { min-height: 400px; }
 .pipeline-candidate-inspection .table-scroll { max-height: 320px; }
+
+/* 첫 IF Pipeline은 모델·보정·검토 결과를 넓은 분석 작업 공간에서 선택적으로 제공한다. */
+.pipeline-analysis-nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:0; margin:0 0 16px; }
+.pipeline-analysis-nav-item { display:grid; gap:5px; text-align:left; background:var(--sos-raised)!important;
+  border:1px solid var(--sos-border)!important; color:var(--sos-text)!important; padding:13px!important; min-width:0; }
+.pipeline-analysis-nav-item small { color:var(--sos-muted); font-weight:400; line-height:1.4; }
+.pipeline-analysis-nav-item.active { border-color:var(--sos-accent)!important; box-shadow:inset 0 -3px var(--sos-accent); }
+.pipeline-analysis-overview { min-width:0; }
+.pipeline-analysis-phases { grid-template-columns:minmax(0,1fr); }
+.pipeline-analysis-phase .pipeline-score-chart { width:100%; }
+.pipeline-analysis-phase .chart { height:390px; }
+.pipeline-analysis-phase dl { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 16px; }
+.pipeline-analysis-phase dl>div { min-width:0; gap:10px; }
+.pipeline-analysis-phase dl dd { font-weight:600; }
+@media(max-width:760px) {
+  .pipeline-analysis-nav { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .pipeline-analysis-phase dl { grid-template-columns:minmax(0,1fr); }
+}
