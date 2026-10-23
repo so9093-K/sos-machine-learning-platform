@@ -24,7 +24,7 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   return {};
 }
 
-function contextPath(tab: WorkspaceTab, context: MLNavigationContext): string {
+export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): string {
   const params = new URLSearchParams();
   if ((tab === "training" || tab === "ml") && context.datasetId) {
     params.set("dataset", context.datasetId);
@@ -53,7 +53,7 @@ const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }>
 export function resourcePath(kind: MLResourceKind, id: string): string {
   return `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
 }
-function routeAt(pathname: string, search: string): WorkspaceRoute {
+export function routeAt(pathname: string, search: string): WorkspaceRoute {
   for (const [kind, config] of Object.entries(resourcePaths) as
       Array<[MLResourceKind, { base: string; tab: WorkspaceTab }]>) {
     if (pathname.startsWith(config.base + "/")) {
@@ -67,6 +67,18 @@ function routeAt(pathname: string, search: string): WorkspaceRoute {
   const tab = (Object.keys(paths) as WorkspaceTab[]).find(key => paths[key] === pathname);
   return { tab: tab ?? "overview", resource: null,
     context: contextAt(tab ?? "overview", search) };
+}
+
+/** 독립 화면 간에 목적과 관련된 선택만 전달한다. */
+export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTab): MLNavigationContext {
+  if (isDecisionTab(tab) && isDecisionTab(previous.tab)) {
+    return { scoringId: previous.context.scoringId };
+  }
+  if ((tab === "training" || tab === "ml") &&
+      (previous.tab === "training" || previous.tab === "ml")) {
+    return { datasetId: previous.context.datasetId };
+  }
+  return {};
 }
 
 /** 탭과 불변 결과 주소를 같은 탐색 상태로 유지한다. */
@@ -99,12 +111,7 @@ export function useWorkspaceNavigation() {
   const navigate = useCallback((target: WorkspaceTab | ((previous: WorkspaceTab) => WorkspaceTab)) => {
     const previous = current.current;
     const tab = typeof target === "function" ? target(previous.tab) : target;
-    // 같은 Scoring Result의 정책·평가·설명을 이동할 때만 선택을 전달한다.
-    const context = isDecisionTab(tab) && isDecisionTab(previous.tab)
-      ? { scoringId: previous.context.scoringId }
-      : (tab === "training" || tab === "ml") &&
-        (previous.tab === "training" || previous.tab === "ml")
-        ? { datasetId: previous.context.datasetId } : {};
+    const context = nextNavigationContext(previous, tab);
     update({ tab, resource: null, context }, contextPath(tab, context));
   }, [update]);
   const selectContext = useCallback((context: MLNavigationContext) => {
