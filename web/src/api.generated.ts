@@ -536,6 +536,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ml Experiments */
+        get: operations["list_ml_experiments_api_ml_experiments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/experiments/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ml Runs */
+        get: operations["list_ml_runs_api_ml_experiments_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/explanations/jobs": {
         parameters: {
             query?: never;
@@ -683,6 +717,23 @@ export interface paths {
         };
         /** Get Policy Revision */
         get: operations["get_policy_revision_api_ml_policies__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/registry/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Registered Models */
+        get: operations["list_registered_models_api_ml_registry_models_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2290,6 +2341,11 @@ export interface components {
         MLTrainRequest: {
             /** Dataset Id */
             dataset_id: string;
+            /**
+             * Experiment Title
+             * @default 기본 실험
+             */
+            experiment_title: string;
             /** Features */
             features: string[];
             /**
@@ -2415,6 +2471,20 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** MLflowExperimentOut */
+        MLflowExperimentOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** MLflowExperimentPageOut */
+        MLflowExperimentPageOut: {
+            /** Items */
+            items: components["schemas"]["MLflowExperimentOut"][];
+            /** Next Page Token */
+            next_page_token?: string | null;
+        };
         /** MLflowExportStatusOut */
         MLflowExportStatusOut: {
             /**
@@ -2435,6 +2505,58 @@ export interface components {
              * @enum {string}
              */
             state: "Disabled" | "Pending" | "Sending" | "Retry" | "Succeeded";
+        };
+        /** MLflowModelVersionOut */
+        MLflowModelVersionOut: {
+            /** Aliases */
+            aliases?: string[];
+            /** Job Id */
+            job_id: string;
+            /** Model Id */
+            model_id: string;
+            /** Name */
+            name: string;
+            /** Run Id */
+            run_id?: string | null;
+            /** Status */
+            status: string;
+            /** Version */
+            version: string;
+        };
+        /** MLflowModelVersionPageOut */
+        MLflowModelVersionPageOut: {
+            /** Items */
+            items: components["schemas"]["MLflowModelVersionOut"][];
+            /** Next Page Token */
+            next_page_token?: string | null;
+        };
+        /** MLflowRunOut */
+        MLflowRunOut: {
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Job Kind */
+            job_kind: string;
+            /** Metrics */
+            metrics: {
+                [key: string]: number;
+            };
+            /** Params */
+            params: {
+                [key: string]: string;
+            };
+            /** Start Time */
+            start_time?: number | null;
+            /** Status */
+            status?: string | null;
+        };
+        /** MLflowRunPageOut */
+        MLflowRunPageOut: {
+            /** Items */
+            items: components["schemas"]["MLflowRunOut"][];
+            /** Next Page Token */
+            next_page_token?: string | null;
         };
         /** ModelRevisionOut */
         ModelRevisionOut: {
@@ -4040,6 +4162,69 @@ export interface operations {
             };
         };
     };
+    list_ml_experiments_api_ml_experiments_get: {
+        parameters: {
+            query?: {
+                page_token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLflowExperimentPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_ml_runs_api_ml_experiments_runs_get: {
+        parameters: {
+            query?: {
+                experiment_id?: string | null;
+                page_token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLflowRunPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_ml_explanation_jobs_api_ml_explanations_jobs_get: {
         parameters: {
             query?: {
@@ -4378,6 +4563,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DecisionPolicyRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_registered_models_api_ml_registry_models_get: {
+        parameters: {
+            query?: {
+                page_token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLflowModelVersionPageOut"];
                 };
             };
             /** @description Structured API error */
