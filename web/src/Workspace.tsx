@@ -486,6 +486,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
         initialDatasetId={context.datasetId ?? ""}
         initialRunId={context.pipelineRunId ?? ""}
+        initialCandidateRowIndex={context.candidateRowIndex}
         hasMoreDatasets={Boolean(nextDatasetCursor)}
         onLoadMoreDatasets={loadMoreDatasets}
         onSelectDataset={id => {
@@ -496,6 +497,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           setSelected(datasetId);
           navigateWithContext("pipelines", { datasetId, pipelineRunId: id });
         }}
+        onSelectCandidate={rowIndex => selectContext({
+          datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
+          candidateRowIndex: rowIndex,
+        })}
         canRun={canRun} canCancel={canCancel}
         onNavigate={(tab, datasetId) => navigateWithContext(tab, {
           pipelineReturn: true, datasetId,
@@ -708,6 +713,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           <button type="button" className="secondary" onClick={() =>
             navigateWithContext("pipelines", {
               datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
+              candidateRowIndex: context.candidateRowIndex,
             })}>원래 Pipeline Run으로 돌아가기 →</button>
         </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}

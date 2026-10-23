@@ -45,14 +45,21 @@ try {
   assert.equal(immutablePath, "/scoring/results/score%2Fwith%20space");
   const pipelineResource = resourcePath("model", "model/first", {
     pipelineReturn: true, pipelineRunId: "run/1", datasetId: "data v1",
+    candidateRowIndex: 42,
   });
   assert.equal(pipelineResource,
-    "/models/model%2Ffirst?from=pipeline&run=run%2F1&dataset=data+v1");
+    "/models/model%2Ffirst?from=pipeline&run=run%2F1&dataset=data+v1&candidate=42");
   assert.deepEqual(routeAt("/models/model%2Ffirst",
-    "?from=pipeline&run=run%2F1&dataset=data+v1").context,
-    { pipelineReturn: true, pipelineRunId: "run/1", datasetId: "data v1" });
+    "?from=pipeline&run=run%2F1&dataset=data+v1&candidate=42").context,
+    { pipelineReturn: true, pipelineRunId: "run/1", datasetId: "data v1",
+      candidateRowIndex: 42 });
   assert.deepEqual(routeAt("/models/model-v1", "").context, {});
   assert.deepEqual(routeAt("/models/model-v1", "?from=pipeline").context, {});
+  assert.equal(contextPath("pipelines", { pipelineRunId: "run-1", candidateRowIndex: 7 }),
+    "/pipelines?run=run-1&candidate=7");
+  assert.equal(routeAt("/pipelines", "?run=run-1&candidate=7").context.candidateRowIndex, 7);
+  assert.equal(routeAt("/pipelines", "?run=run-1&candidate=abc").context.candidateRowIndex, undefined);
+  assert.equal(routeAt("/pipelines", "?candidate=7").context.candidateRowIndex, undefined);
   // 직접 연 Scoring/Model 상세에서 영역 탭으로 이동해도 동일 자산을 이어받는다.
   assert.equal(nextNavigationContext(
     routeAt("/scoring/results/score-v1", ""), "policies").scoringId, "score-v1");

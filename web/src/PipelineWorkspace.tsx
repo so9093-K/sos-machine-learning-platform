@@ -20,12 +20,14 @@ const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 const count = (value: number) => value.toLocaleString("ko-KR");
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, canRun, canCancel, onNavigate, onOpenResource }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, canRun, canCancel, onNavigate, onOpenResource }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
+  initialCandidateRowIndex?: number;
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
   onSelectDataset: (datasetId: string) => void;
   onSelectRun: (runId: string, datasetId: string) => void;
+  onSelectCandidate: (rowIndex: number) => void;
   canRun: boolean; canCancel: boolean;
   onNavigate: (tab: WorkspaceTab, datasetId: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
@@ -48,7 +50,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   const [rows, setRows] = useState<CandidatePage | null>(null);
   const [candidateError, setCandidateError] = useState("");
   const [candidateReload, setCandidateReload] = useState(0);
-  const [selectedCandidate, setSelectedCandidate] = useState<number | null>(null);
+  const [selectedCandidate, setSelectedCandidate] = useState<number | null>(initialCandidateRowIndex ?? null);
   const [busy, setBusy] = useState(false);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [error, setError] = useState("");
@@ -85,6 +87,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   useEffect(() => {
     setChecked(null);
   }, [datasetId]);
+  useEffect(() => {
+    setSelectedCandidate(initialCandidateRowIndex ?? null);
+  }, [initialCandidateRowIndex]);
   useEffect(() => {
     // 직접 Run URL은 서버가 반환한 원본 Dataset을 기준으로 연결한다.
     // Dataset을 새로 선택해 URL에서 Run을 지운 경우, 이전 Run으로 되돌리지 않는다.
@@ -150,6 +155,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   }
   function selectCandidateRow(rowIndex: number) {
     setSelectedCandidate(rowIndex);
+    onSelectCandidate(rowIndex);
     requestAnimationFrame(() => {
       document.getElementById("pipeline-candidate-detail-heading")?.focus();
     });
@@ -557,6 +563,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
                   onClick={() => void more()}>다음 후보 25건 보기</button>}
               </div>
               <div className="pipeline-candidate-detail">
+                {selectedCandidate !== null && !activeCandidate && <div className="pipeline-next-step" role="status">
+                  <strong>선택했던 후보 #{count(selectedCandidate)}를 찾는 중입니다.</strong>
+                  <p>선택한 후보는 현재 불러온 점수 순위 범위에 없습니다.
+                    {rows.next_cursor ? " 다음 후보를 불러오면 계속 확인할 수 있습니다." :
+                    " 이 Run에서 해당 후보를 찾지 못했습니다."}</p>
+                </div>}
                 {activeCandidate ? <PipelineCandidateInvestigation
                   key={run.id + ":" + rows.result_id + ":" + activeCandidate.row_index}
                   candidate={activeCandidate} scoringResultId={rows.result_id}
