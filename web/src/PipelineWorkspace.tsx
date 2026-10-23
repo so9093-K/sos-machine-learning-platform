@@ -36,7 +36,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   const [checked, setChecked] = useState<Check | null>(null);
   const [runId, setRunId] = useState(initialRunId);
   const selectedRunId = useRef(runId);
-  const [run, setRun] = useState<Run | null>(null);
+  const [loadedRun, setRun] = useState<Run | null>(null);
+  // 브라우저 Back/Forward 직후에도 이전 Run을 새 URL의 결과처럼 잠시 보여주지 않는다.
+  const run = loadedRun?.id === runId && loadedRun.id === initialRunId ? loadedRun : null;
   const [runLoadError, setRunLoadError] = useState("");
   const [runReload, setRunReload] = useState(0);
   const [history, setHistory] = useState<Run[]>([]);
