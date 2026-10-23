@@ -195,7 +195,17 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
           {run.cancel_requested ? " · 취소 요청됨" : ""}
           {run.error_code ? " · 오류 코드 " + run.error_code : ""}</p>
         <p className="hint">실행은 서버 Worker에서 진행됩니다. 화면을 닫아도 Run을 다시 조회할 수 있습니다. 표시할 근거 없는 완료율은 추정하지 않습니다.</p>
-        {Boolean(completed.find(item => item.name === "preflight")?.job.result?.plan) && <p className="hint">시간 분할 검사가 완료되었습니다. 개별 Job에서 실제 처리 행과 시간 경계를 확인할 수 있습니다.</p>}
+        {run.input_plan && <div className="steps">
+          <strong>Worker가 확인한 실제 데이터 분할</strong>
+          <p>Train {count(run.input_plan.partition_sizes.train)}행 ·
+            Calibration {count(run.input_plan.partition_sizes.calibration)}행 ·
+            Test {count(run.input_plan.partition_sizes.test)}행</p>
+          <p className="hint">
+            Train 종료: {new Date(run.input_plan.train_end).toLocaleString("ko-KR")} ·
+            Calibration 종료: {new Date(run.input_plan.calibration_end).toLocaleString("ko-KR")}
+          </p>
+          <p className="hint">실제 데이터 검사 결과이며 오프라인 참고 분석의 수치를 대신 표시하지 않습니다.</p>
+        </div>}}
         {!terminal.has(run.status) && canCancel &&
           <button className="secondary" disabled={busy || run.cancel_requested} onClick={() => void cancel()}>Pipeline 취소 요청</button>}
         <div className="job-list">
