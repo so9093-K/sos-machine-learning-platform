@@ -331,6 +331,14 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         "예제는 정상 등록됐습니다. 목록 갱신 결과를 확인하지 못했지만 다시 등록할 필요는 없습니다.");
     });
   }
+  /** Pipeline 예제는 요청할 때만 등록하며 EDA 화면으로 강제 이동하지 않는다. */
+  async function usePipelineExample(): Promise<Dataset> {
+    const data = await jsonPost<Dataset>("/api/examples/activity-anomaly-if/use", {});
+    setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+    showExamples.current = false;
+    setSelected(data.id);
+    return data;
+  }
   async function openJobDataset(datasetId: string) {
     await withFeedback(async () => {
       // 완료 Job의 출력은 최신 Dataset 첫 페이지 밖에 있을 수 있다.
@@ -484,6 +492,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onViewDataActivity={() => setTab("jobs")}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
       {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
+        canCreateDataset={canWrite}
+        hasPipelineExample={examples.some(item => item.id === "activity-anomaly-if")}
+        examplesLoading={examplesLoading}
+        onUseExample={usePipelineExample}
         initialDatasetId={context.datasetId ?? ""}
         initialRunId={context.pipelineRunId ?? ""}
         initialCandidateRowIndex={context.candidateRowIndex}
