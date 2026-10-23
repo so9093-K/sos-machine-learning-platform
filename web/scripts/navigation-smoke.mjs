@@ -143,6 +143,8 @@ try {
   };
   const emptyJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, props));
   assert.match(emptyJourney, /내 데이터로 시작하기/);
+  assert.match(emptyJourney, /분석 Run 선택/);
+  assert.match(emptyJourney, /새 분석 시작/);
   assert.match(emptyJourney, /다음 행동: Dataset을 선택하세요/);
   assert.match(emptyJourney, /자동 생성하는 단계는 현재 등록되어 있지 않습니다/);
   assert.match(emptyJourney, /아직 선택된 실행이 없습니다/);
@@ -158,6 +160,7 @@ try {
     ...props, initialRunId: "previous-run",
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
+  assert.match(deepLinkedJourney, /현재 Run/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
   const completedRun = {
     id: "run-demo", definition_id: "activity-anomaly-if", status: "Succeeded",
