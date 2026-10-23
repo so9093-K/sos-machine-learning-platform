@@ -55,6 +55,40 @@ jobs:
           PY
       - name: Start isolated API, Worker, Web and storage
         run: docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app up --build -d --wait
+      - name: Verify actual MLflow REST and Registry registration
+        run: |
+          docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app exec -T worker python - <<'PY'
+          from uuid import uuid4
+          from sos_platform.mlflow_config import MLflowSettings
+          from sos_platform.mlflow_tracking import MLflowClient, send_to_mlflow
+          from sos_platform.mlflow_registry import register_model_version, verify_registered_version
+          from sos_platform.mlflow_experiments import ensure_experiment
+
+          settings = MLflowSettings.from_env()
+          assert settings is not None
+          client = MLflowClient(settings)
+          owner = "e2e-mlflow-smoke"
+          job_id = str(uuid4())
+          assert ensure_experiment(client, owner).isdigit()
+          job = {
+              "id": job_id, "owner_actor": owner, "dataset_id": "e2e-synthetic",
+              "kind": "ml_train", "status": "Succeeded",
+              "spec": {"params": {"n_estimators": 10}},
+              "result": {"training_score_summary": {"score_mean": 0.15}},
+          }
+          run = send_to_mlflow(client, job, known_run_id=None, remember_run=lambda _: None)
+          model = {
+              "owner_actor": owner, "algorithm": "isolation_forest", "job_id": job_id,
+              "location": f"s3://sos-data/results/{job_id}/smoke.model.joblib",
+              "sha256": "a" * 64,
+          }
+          name, version = register_model_version(client, model, run)
+          assert register_model_version(client, model, run) == (name, version)
+          verify_registered_version(client, {
+              **model, "registry_model": name, "registry_version": version,
+          })
+          print("MLflow 실제 Experiment·Run·Model Version 등록 및 재조회: 통과")
+          PY
       - name: Verify complete browser Pipeline consumer journey
         run: node web/scripts/browser-pipeline-e2e.mjs
       - name: Upload screenshot when browser test fails
@@ -66,7 +100,7 @@ jobs:
           if-no-files-found: ignore
       - name: Diagnose isolated integration failures
         if: failure()
-        run: docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app logs --tail 100 api worker web
+        run: docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app logs --tail 100 api worker web mlflow
       - name: Remove only this test's isolated project and volumes
         if: always()
         run: |
