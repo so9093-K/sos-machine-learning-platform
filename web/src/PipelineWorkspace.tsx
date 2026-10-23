@@ -138,7 +138,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
     setRunLoadError("");
     onSelectRun(id, runDatasetId);
     // 이전 실행을 열었을 때 새로 열린 상태·결과를 바로 확인할 수 있도록 한다.
-    requestAnimationFrame(() => document.getElementById("pipeline-run-heading")?.scrollIntoView({
+    requestAnimationFrame(() => document.getElementById(id
+      ? "pipeline-run-heading" : "pipeline-prepare-title")?.scrollIntoView({
       block: "start", behavior: "smooth",
     }));
   }

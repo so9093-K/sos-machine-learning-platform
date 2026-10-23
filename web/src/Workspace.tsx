@@ -477,7 +477,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onViewDataActivity={() => setTab("jobs")}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
       {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
-        initialDatasetId={context.datasetId || selected}
+        initialDatasetId={context.datasetId ?? ""}
         initialRunId={context.pipelineRunId ?? ""}
         hasMoreDatasets={Boolean(nextDatasetCursor)}
         onLoadMoreDatasets={loadMoreDatasets}
