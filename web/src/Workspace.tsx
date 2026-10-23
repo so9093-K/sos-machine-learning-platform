@@ -67,16 +67,16 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
   const [reloadRevision, setReloadRevision] = useState(0);
-  const { tab, resource, navigate: setTab, openResource } = useWorkspaceNavigation();
-  const [scoringModelId, setScoringModelId] = useState("");
-  const [decisionScoringId, setDecisionScoringId] = useState("");
+  const { tab, resource, context, navigate: setTab, navigateWithContext,
+    selectContext, openResource } = useWorkspaceNavigation();
   function startScoring(modelId: string) {
-    setScoringModelId(modelId);
-    setTab("scoring");
+    navigateWithContext("scoring", { modelId });
   }
   function startDecision(view: DecisionView, scoringId: string) {
-    setDecisionScoringId(scoringId);
-    setTab(view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations");
+    navigateWithContext(
+      view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
+      { scoringId },
+    );
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -478,6 +478,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             <button className="secondary" onClick={() => setReloadRevision(value => value + 1)}>
               데이터 다시 불러오기
             </button>
+            {canRun && tab !== "preparation" &&
+              <button className="secondary" type="button"
+                onClick={() => navigateWithContext("training", { datasetId: selected })}>
+                이 Dataset으로 학습 →
+              </button>}
             {canRun && tab === "preparation" && <>
               <input aria-label="Iceberg 테이블명" value={importTableName}
                 onChange={e => setImportTableName(e.target.value)} placeholder="Iceberg table" />
@@ -624,6 +629,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       </>}
       {(tab === "ml" || tab === "training") && !resource &&
         <MLWorkbench datasets={datasets} view={tab === "ml" ? "models" : "training"}
+          initialDatasetId={context.datasetId ?? ""}
+          onDatasetSelected={datasetId => selectContext({ datasetId })}
           onViewChange={view => setTab(view === "models" ? "ml" : "training")}
           onOpenModel={id => openResource("model", id)}
           canTrain={canRun} canCancel={canCancel} />}
@@ -631,12 +638,15 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         onScoring={startScoring} onDecision={startDecision} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
-        datasets={datasets} preferredModelId={scoringModelId}
+        datasets={datasets} preferredModelId={context.modelId ?? ""}
+        onModelSelected={modelId => selectContext({ modelId })} onNavigate={setTab}
         canRun={canRun} canCancel={canCancel} onOpenResource={openResource} />}
       {(["policies","evaluations","explanations"] as Tab[]).includes(tab) && !resource &&
         <DecisionWorkspace
           key={tab} view={tab === "policies" ? "policy" : tab === "evaluations" ? "evaluation" : "explanation"}
-          preferredScoringId={decisionScoringId} canRun={canRun} canCancel={canCancel}
+          preferredScoringId={context.scoringId ?? ""}
+          onScoringSelected={scoringId => selectContext({ scoringId })}
+          onNavigate={setTab} canRun={canRun} canCancel={canCancel}
           onOpenResource={openResource} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
