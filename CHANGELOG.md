@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 모델·학습·Scoring·정책·평가·설명 화면의 독립 실행 경험을 유지하면서 Dataset·Model Revision·Scoring Result 선택을 URL과 함께 전달·복원하도록 개선했습니다. 데이터 탐색에서 선택적 학습 진입, 결과가 없는 화면의 다음 행동 안내, 학습 점수 상위 5% 후보의 기준 표시를 제공하며 기존 ML API·판본은 변경하지 않습니다.
+
 - 전문가가 정의한 첫 시간 기반 Isolation Forest Pipeline을 Catalog로 제공하고, 호환 Dataset 검사·별도 Run 생성·기존 ML Job의 단계 연결·완료 결과 후보 조회를 API-first로 지원합니다. 기존 개별 ML Job의 실행·권한 계약은 유지합니다.
 
 
