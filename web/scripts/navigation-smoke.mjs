@@ -302,7 +302,7 @@ try {
   ], "score-1", 5), undefined);
   assert.match(renderToStaticMarkup(React.createElement(PipelineCandidateInvestigation, {
     candidate: { row_index: 5, anomaly_score: 0.8, features: { "io_bytes_per_sec": 42 } },
-    scoringResultId: "score-1", canRun: true, onOpenResource: () => {},
+    scoringResultId: "score-1", canRun: true, canCancel: true, onOpenResource: () => {},
   })), /이 후보의 점수 민감도 계산/);
   assert.match(renderToStaticMarkup(React.createElement(PipelineAnalysis, {
     run: { id: "run-1", stages: [], status: "Succeeded" }, onOpenResource: () => {},

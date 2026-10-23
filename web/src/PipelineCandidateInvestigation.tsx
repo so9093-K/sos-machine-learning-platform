@@ -65,8 +65,10 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
   </>;
 }
 
-export function PipelineCandidateInvestigation({ candidate, scoringResultId, canRun, onOpenResource }: {
-  candidate: Candidate; scoringResultId: string; canRun: boolean;
+export function PipelineCandidateInvestigation({
+  candidate, scoringResultId, canRun, canCancel, onOpenResource,
+}: {
+  candidate: Candidate; scoringResultId: string; canRun: boolean; canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
   const [job, setJob] = useState<MLExplanationJob | null>(null);
@@ -149,6 +151,19 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
     } catch (e) { setError(formatError(e)); }
     finally { setBusy(false); }
   }
+  async function cancelExplanation() {
+    if (!job || terminal.has(job.status) || job.cancel_requested || busy || !canCancel) return;
+    const requestedJobId = job.id;
+    setBusy(true); setError("");
+    try {
+      const updated = await request<MLExplanationJob>(
+        "/api/ml/explanations/jobs/" + encodeURIComponent(requestedJobId) + "/cancel",
+        { method: "POST" },
+      );
+      setJob(previous => previous?.id === requestedJobId ? updated : previous);
+    } catch (e) { setError(formatError(e)); }
+    finally { setBusy(false); }
+  }
   return <section className="pipeline-candidate-inspection" aria-label="선택한 후보 분석">
     <h5 id="pipeline-candidate-detail-heading" tabIndex={-1}>
       선택한 후보 #{candidate.row_index.toLocaleString("ko-KR")}</h5>
@@ -185,8 +200,14 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
     </p>}
     {!canRun && <p className="hint">현재 계정은 설명 Job을 제출할 권한이 없습니다.</p>}
     {job && <p role="status">설명 Job: {job.status}
-      {job.status === "Running" || job.status === "Queued" ? " · 계산 중" : ""}
+      {job.cancel_requested ? " · 취소 요청됨 (Worker 확인 중)" :
+        job.status === "Running" || job.status === "Queued" ? " · 계산 중" : ""}
       {job.error_code ? " · 오류 " + job.error_code : ""}</p>}
+    {job && !terminal.has(job.status) && canCancel && <button
+      type="button" className="secondary" disabled={busy || job.cancel_requested}
+      onClick={() => void cancelExplanation()}>
+      {job.cancel_requested ? "설명 Job 취소 요청 처리 중" : "설명 Job 취소 요청"}
+    </button>}
     {job?.status === "Failed" && <p role="alert">설명 Job이 실패했습니다. 실행 이력에서 오류 근거를 확인하세요.</p>}
     {job?.status === "Cancelled" && <p>설명 계산이 취소됐습니다.</p>}
     {error && <div role="alert" className="pipeline-readiness-blocked">{error}
