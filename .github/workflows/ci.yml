@@ -56,9 +56,5 @@ jobs:
         run: npm ci --no-audit
       - name: Generate OpenAPI types
         run: bash scripts/generate_api_types.sh
-      - name: Emit temporary generated types for PR synchronization
-        run: |
-          echo '__SOS_TYPES_BEGIN__'
-          base64 -w 4000 web/src/api.generated.ts
-          echo
-          echo '__SOS_TYPES_END__'
+      - name: Verify committed generated OpenAPI types
+        run: git diff --exit-code -- web/src/api.generated.ts
