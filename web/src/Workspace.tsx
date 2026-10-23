@@ -18,7 +18,7 @@ import { UnderstandingPanel } from "./UnderstandingPanel";
 import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQueryPanel";
 import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
-import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
+import { useWorkspaceNavigation, pipelineRunSelectionContext, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
@@ -496,7 +496,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         }}
         onSelectRun={(id, datasetId) => {
           setSelected(datasetId);
-          navigateWithContext("pipelines", { datasetId, pipelineRunId: id });
+          navigateWithContext("pipelines", pipelineRunSelectionContext(context, id, datasetId));
         }}
         onSelectCandidate={rowIndex => selectContext({
           datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,

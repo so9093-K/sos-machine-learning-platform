@@ -15,7 +15,7 @@ const vite = await createServer({
 
 try {
   const { routeAt, contextPath, nextNavigationContext, resourcePath,
-    ModelAreaNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
+    pipelineRunSelectionContext, ModelAreaNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
@@ -67,6 +67,15 @@ try {
     "/pipelines?run=run-1&candidate=8&section=calibration");
   assert.equal(routeAt("/pipelines", "?run=run-1&section=incorrect").context.pipelineAnalysisSection,
     undefined);
+  const preselectedRun = routeAt("/pipelines", "?run=run-1&candidate=8&section=test").context;
+  assert.equal(contextPath("pipelines",
+    pipelineRunSelectionContext(preselectedRun, "run-1", "actual-dataset")),
+    "/pipelines?dataset=actual-dataset&run=run-1&candidate=8&section=test");
+  assert.equal(contextPath("pipelines",
+    pipelineRunSelectionContext(preselectedRun, "other-run", "other-dataset")),
+    "/pipelines?dataset=other-dataset&run=other-run");
+  assert.equal(contextPath("pipelines", pipelineRunSelectionContext(preselectedRun, "", "")),
+    "/pipelines");
   assert.equal(resourcePath("policy", "policy-1", {
     pipelineReturn: true, pipelineRunId: "run-1",
     pipelineAnalysisSection: "calibration", candidateRowIndex: 8,

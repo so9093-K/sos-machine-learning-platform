@@ -57,6 +57,19 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   return {};
 }
 
+/** 동일한 Run의 Dataset 참조를 정정할 때 조사 문맥을 보존한다. 다른 Run은 새 선택이다. */
+export function pipelineRunSelectionContext(
+  previous: MLNavigationContext, runId: string, datasetId: string,
+): MLNavigationContext {
+  return {
+    datasetId, pipelineRunId: runId,
+    ...(runId && runId === previous.pipelineRunId
+      ? { candidateRowIndex: previous.candidateRowIndex,
+          pipelineAnalysisSection: previous.pipelineAnalysisSection }
+      : {}),
+  };
+}
+
 export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): string {
   const params = new URLSearchParams();
   if (tab === "pipelines") {
