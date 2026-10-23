@@ -23,3 +23,4 @@
 - [0012 — ML 실험·이상 점수·외부 추적의 책임 경계](0012-ml-experiment-boundaries.md) · Proposed
 - [0013 — 레거시 검증 자동화 초기화](0013-validation-reset.md) · Accepted (0009 대체·0011 검증 관리 조항 종료)
 - [0014 — Iceberg 과도기 쓰기 소유권 채택 종료](0014-remove-iceberg-adoption.md) · Accepted
+- [0015 — MLflow 모델·실험 관리 정본 전환](0015-mlflow-management-ownership.md) · Accepted (0012의 관리 책임 제안 대체)

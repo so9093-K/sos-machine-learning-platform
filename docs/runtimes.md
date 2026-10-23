@@ -21,7 +21,7 @@ Worker는 자식 실행의 시간·메모리·스테이징 사용량을 감시�
 
 Dataset 캐시는 재사용 가능한 로컬 복사본이며 원본 S3 객체·모델·Iceberg Snapshot의 보존 정책과 다르다. 사용 중인 캐시를 임의 축출하지 않으며 데이터 손상 시 원본으로부터 무결성을 확인한다.
 
-선택적 MLflow 연결은 Worker가 사용하는 외부 Tracking 어댑터다. SOS의 모델·평가·Job 결과를 대체하지 않으며, 외부 전송 실패를 내부 실행 실패와 혼동하지 않는다. 자격 증명·외부 연결 설정은 실행 권한과 분리한다. 전송 상태의 의미는 [Workflows](workflows.md)가 정의한다.
+MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·Alias의 정본은 MLflow이지만 SOS는 신뢰된 Worker가 발급한 모델 위치·SHA-256·Feature·Runtime·권한을 검증한 뒤 실행한다. 외부 Registry 등록만으로 임의 직렬화 파일을 신뢰하지 않는다. 인증정보는 서버 측에만 제공한다. 연결 상태의 의미는 [Workflows](workflows.md)를 따른다.
 
 ## 현재 구현의 범위
 
