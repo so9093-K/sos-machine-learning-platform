@@ -1,18 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatError, request } from "./api";
-
-type Page<T> = { items: T[]; next_page_token: string | null };
-type Experiment = { id: string; name: string };
-type ModelVersion = {
-  name: string; version: string; model_id: string; run_id: string | null;
-  status: string; job_id: string; aliases: string[];
-};
-type Run = {
-  id: string; job_id: string; job_kind: string; status: string | null;
-  start_time: number | null;
-  params: Record<string, string>;
-  metrics: Record<string, number>;
-};
+import type {
+  MLflowExperiment, MLflowExperimentPage, MLflowModelVersion,
+  MLflowModelVersionPage, MLflowRun, MLflowRunPage,
+} from "./types";
 
 function url(path: string, params: Record<string, string | null>) {
   const query = new URLSearchParams();
@@ -26,9 +17,9 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
   onScoreModel: (id: string) => void;
   onTrain: () => void;
 }) {
-  const [experiments, setExperiments] = useState<Experiment[]>([]);
-  const [models, setModels] = useState<ModelVersion[]>([]);
-  const [runs, setRuns] = useState<Run[]>([]);
+  const [experiments, setExperiments] = useState<MLflowExperiment[]>([]);
+  const [models, setModels] = useState<MLflowModelVersion[]>([]);
+  const [runs, setRuns] = useState<MLflowRun[]>([]);
   const [experimentCursor, setExperimentCursor] = useState<string | null>(null);
   const [modelCursor, setModelCursor] = useState<string | null>(null);
   const [runCursor, setRunCursor] = useState<string | null>(null);
@@ -45,12 +36,12 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
     setLoading(true);
     setError("");
     void Promise.all([
-      request<Page<Experiment>>("/api/ml/experiments"),
-      request<Page<ModelVersion>>("/api/ml/registry/models"),
+      request<MLflowExperimentPage>("/api/ml/experiments"),
+      request<MLflowModelVersionPage>("/api/ml/registry/models"),
     ]).then(([exp, model]) => {
       if (!active) return;
-      setExperiments(exp.items); setExperimentCursor(exp.next_page_token);
-      setModels(model.items); setModelCursor(model.next_page_token);
+      setExperiments(exp.items); setExperimentCursor(exp.next_page_token ?? null);
+      setModels(model.items); setModelCursor(model.next_page_token ?? null);
     }).catch(exc => { if (active) setError(formatError(exc)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -59,12 +50,12 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
   useEffect(() => {
     let active = true;
     setRuns([]); setRunCursor(null); setSelected([]);
-    void request<Page<Run>>(url("/api/ml/experiments/runs", {
+    void request<MLflowRunPage>(url("/api/ml/experiments/runs", {
       experiment_id: experimentId, page_token: null,
     })).then(page => {
       if (!active) return;
       setRuns(page.items);
-      setRunCursor(page.next_page_token);
+      setRunCursor(page.next_page_token ?? null);
     }).catch(exc => { if (active) setError(formatError(exc)); });
     return () => { active = false; };
   }, [revision, experimentId]);
@@ -77,19 +68,19 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
     setLoadingMore(true); setError("");
     try {
       if (kind === "experiments") {
-        const page = await request<Page<Experiment>>(url("/api/ml/experiments", { page_token: cursor }));
+        const page = await request<MLflowExperimentPage>(url("/api/ml/experiments", { page_token: cursor }));
         setExperiments(old => [...old, ...page.items]);
-        setExperimentCursor(page.next_page_token);
+        setExperimentCursor(page.next_page_token ?? null);
       } else if (kind === "models") {
-        const page = await request<Page<ModelVersion>>(url("/api/ml/registry/models", { page_token: cursor }));
+        const page = await request<MLflowModelVersionPage>(url("/api/ml/registry/models", { page_token: cursor }));
         setModels(old => [...old, ...page.items]);
-        setModelCursor(page.next_page_token);
+        setModelCursor(page.next_page_token ?? null);
       } else {
-        const page = await request<Page<Run>>(url("/api/ml/experiments/runs", {
+        const page = await request<MLflowRunPage>(url("/api/ml/experiments/runs", {
           experiment_id: experimentId, page_token: cursor,
         }));
         setRuns(old => [...old, ...page.items]);
-        setRunCursor(page.next_page_token);
+        setRunCursor(page.next_page_token ?? null);
       }
     } catch (exc) {
       setError(formatError(exc));
@@ -106,7 +97,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
     [item.id, item.job_id, item.job_kind].some(value => value.toLowerCase().includes(filter))),
     [runs, filter]);
   const compared = selected.map(id => runs.find(item => item.id === id))
-    .filter((item): item is Run => item !== undefined);
+    .filter((item): item is MLflowRun => item !== undefined);
   const comparableKeys = (field: "metrics" | "params") =>
     [...new Set(compared.flatMap(item => Object.keys(item[field])))].sort();
   function toggleRun(id: string) {
@@ -151,7 +142,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
         {filteredModels.map(item => <article className="ml-resource-row" key={item.name + "@" + item.version}>
           <div><strong>{item.name} · v{item.version}</strong>
             <p className="hint">상태 {item.status} · 생성 Job {item.job_id.slice(0, 12)}
-              {item.aliases.length ? " · Alias " + item.aliases.join(", ") : ""}</p>
+              {item.aliases?.length ? " · Alias " + item.aliases.join(", ") : ""}</p>
           </div>
           <div className="model-index-actions">
             <button type="button" className="secondary" onClick={() => onOpenModel(item.model_id)}>

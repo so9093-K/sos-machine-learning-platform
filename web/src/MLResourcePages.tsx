@@ -7,7 +7,7 @@ import type { MLResourceKind } from "./PlatformNavigation";
 import type {
   Dataset, MLScoringJobSummary, MLPolicyJobSummary,
   MLEvaluationJobSummary, MLExplanationJobSummary, ModelRevision, ScoringResult,
-  DecisionPolicyRevision, EvaluationRevision, ExplanationResult,
+  DecisionPolicyRevision, EvaluationRevision, ExplanationResult, MLflowModelVersionPage,
 } from "./types";
 
 type OpenResource = (kind: MLResourceKind, id: string) => void;
@@ -189,7 +189,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   onOpenResource: OpenResource; onModelSelected: (id: string) => void;
   onNavigate: (tab: "ml" | "scoring") => void;
 }) {
-  const [registeredModels, setRegisteredModels] = useState<Array<{model_id: string; name: string; version: string}>>([]);
+  const [registeredModels, setRegisteredModels] = useState<MLflowModelVersionPage["items"]>([]);
   const [nextModelPage, setNextModelPage] = useState<string | null>(null);
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const [modelId, setModelId] = useState(preferredModelId);
@@ -203,11 +203,11 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   }, [preferredModelId]);
   useEffect(() => {
     let active = true;
-    void request<{ items: Array<{model_id: string; name: string; version: string}>; next_page_token: string | null }>("/api/ml/registry/models")
+    void request<MLflowModelVersionPage>("/api/ml/registry/models")
       .then(page => {
         if (active) {
           setRegisteredModels(page.items);
-          setNextModelPage(page.next_page_token);
+          setNextModelPage(page.next_page_token ?? null);
         }
       })
       .catch(e => { if (active) setError(formatError(e)); });
@@ -254,11 +254,11 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
       {nextModelPage && <button type="button" className="secondary" onClick={() => {
         const token = nextModelPage;
         setNextModelPage(null);
-        void request<{ items: Array<{model_id: string; name: string; version: string}>; next_page_token: string | null }>(
+        void request<MLflowModelVersionPage>(
           `/api/ml/registry/models?page_token=${encodeURIComponent(token)}`,
         ).then(page => {
           setRegisteredModels(old => [...old, ...page.items]);
-          setNextModelPage(page.next_page_token);
+          setNextModelPage(page.next_page_token ?? null);
         }).catch(e => { setNextModelPage(token); setError(formatError(e)); });
       }}>모델 판본 더 보기</button>}
       <button type="button" className="secondary" disabled={!modelId.trim()}

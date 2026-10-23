@@ -44,6 +44,12 @@ export type EvaluationRevision = components["schemas"]["EvaluationRevisionOut"];
 export type ExplanationResult = components["schemas"]["ExplanationResultOut"];
 
 export type MLflowExportStatus = components["schemas"]["MLflowExportStatusOut"];
+export type MLflowExperiment = components["schemas"]["MLflowExperimentOut"];
+export type MLflowExperimentPage = components["schemas"]["MLflowExperimentPageOut"];
+export type MLflowRun = components["schemas"]["MLflowRunOut"];
+export type MLflowRunPage = components["schemas"]["MLflowRunPageOut"];
+export type MLflowModelVersion = components["schemas"]["MLflowModelVersionOut"];
+export type MLflowModelVersionPage = components["schemas"]["MLflowModelVersionPageOut"];
 
 export type MLPolicyJobSummary = components["schemas"]["MLPolicyJobSummaryOut"];
 export type MLEvaluationJobSummary = components["schemas"]["MLEvaluationJobSummaryOut"];
