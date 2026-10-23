@@ -123,8 +123,8 @@ try {
 
   // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
   const { PipelineWorkspace } = await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
-  const { PipelineAnalysis } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
-  const { PipelineCandidateInvestigation } = await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
+  const { PipelineAnalysis, PipelineEvidenceView } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
+  const { PipelineCandidateInvestigation, SensitivityChart } = await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
   const props = {
     datasets: [], initialDatasetId: "", initialRunId: "",
     hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
@@ -149,6 +149,39 @@ try {
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
+  const completedRun = { id: "run-demo", status: "Succeeded",
+    input_plan: { partition_sizes: { train: 60, calibration: 20, test: 20 } } };
+  const resultEvidence = {
+    model: { id: "model-a", algorithm: "isolation_forest", params: { n_estimators: 100 },
+      features: ["f1"], training_score_summary: {
+        score_min: 0.1, score_mean: 0.2, score_max: 0.4, score_count: 60,
+      } },
+    calibration: { id: "cal-a", score_summary: {
+      score_min: 0.15, score_mean: 0.25, score_max: 0.5,
+    } },
+    test: { id: "test-a", score_summary: {
+      score_min: 0.2, score_mean: 0.3, score_max: 0.6,
+    } },
+    policy: { id: "policy-a", mode: "quantile", alert_fraction: 0.005,
+      threshold: 0.47, decision_summary: { predicted_anomalies: 2 } },
+    evaluation: { id: "eval-a", label_coverage: "none",
+      decision_metrics: { predicted_anomalies: 3, alert_rate: 0.15 } },
+  };
+  const report = renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
+    run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
+  }));
+  assert.match(report, /Training — 무엇을 학습했는가/);
+  assert.match(report, /Calibration — 기준은 어떻게 정했는가/);
+  assert.match(report, /Test — 적용 후 무엇이 달라졌는가/);
+  assert.match(report, /0.5%/);
+  assert.match(report, /15%/);
+  assert.match(report, /실제 최소·평균·최대 이상 점수/);
+  const sensitivity = renderToStaticMarkup(React.createElement(SensitivityChart, {
+    result: { output: { feature_sensitivities: [
+      { feature: "f1", anomaly_score_delta: 0.12 },
+    ] } },
+  }));
+  assert.match(sensitivity, /SHAP·가법 기여도·원인 판정이 아닙니다/);
   assert.match(renderToStaticMarkup(React.createElement(PipelineCandidateInvestigation, {
     candidate: { row_index: 5, anomaly_score: 0.8, features: { "io_bytes_per_sec": 42 } },
     scoringResultId: "score-1", canRun: true, onOpenResource: () => {},

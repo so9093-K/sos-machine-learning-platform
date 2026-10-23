@@ -16,7 +16,7 @@ function format(value: unknown): string {
     num.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
 }
 
-function SensitivityChart({ result }: { result: ExplanationResult }) {
+export function SensitivityChart({ result }: { result: ExplanationResult }) {
   const raw = result.output.feature_sensitivities;
   const entries = Array.isArray(raw) ? raw as Array<Record<string, unknown>> : [];
   const ranked = entries.filter(entry => typeof entry.feature === "string" &&
@@ -52,7 +52,7 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    if (!job || terminal.has(job.status)) return;
+    if (!job || terminal.has(job.status) || error) return;
     let active = true;
     const interval = setInterval(() => {
       void request<MLExplanationJob>("/api/ml/explanations/jobs/" + encodeURIComponent(job.id))
@@ -60,7 +60,7 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
         .catch(e => { if (active) setError(formatError(e)); });
     }, 2000);
     return () => { active = false; clearInterval(interval); };
-  }, [job?.id, job?.status, retry]);
+  }, [job?.id, job?.status, error, retry]);
   useEffect(() => {
     const resultId = job?.result?.explanation_result_id;
     if (job?.status !== "Succeeded" || typeof resultId !== "string") return;

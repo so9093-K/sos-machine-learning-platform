@@ -38,8 +38,7 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
   const labels = ["최소 점수", "평균 점수", "최대 점수"];
   const option = {
     aria: { enabled: true },
-    tooltip: { trigger: "item", valueFormatter: (value: unknown) =>
-      Array.isArray(value) ? format(Number(value[1])) : String(value) },
+    tooltip: { trigger: "item" },
     legend: { data: labels, bottom: 0 },
     grid: { left: 72, right: 35, top: 36, bottom: 75 },
     xAxis: { type: "category" as const, data: ["Train", "Calibration", "Test"] },
@@ -177,11 +176,16 @@ export function PipelineAnalysis({ run, onOpenResource }: {
       if (model.id !== modelId || calibration.id !== calibrationId || test.id !== testId ||
           policy.id !== policyId || evaluation.id !== evaluationId ||
           model.dataset_id !== run.dataset_id || model.dataset_version !== run.dataset_version ||
+          calibration.dataset_id !== run.dataset_id || test.dataset_id !== run.dataset_id ||
           calibration.dataset_version !== run.dataset_version ||
           test.dataset_version !== run.dataset_version ||
           calibration.model_revision_id !== model.id || test.model_revision_id !== model.id ||
           policy.scoring_result_id !== calibration.id ||
-          evaluation.scoring_result_id !== test.id || evaluation.policy_revision_id !== policy.id) {
+          evaluation.scoring_result_id !== test.id || evaluation.policy_revision_id !== policy.id ||
+          (run.input_plan != null && (
+            metric(model.training_score_summary, "score_count") !== run.input_plan.partition_sizes.train ||
+            calibration.row_count !== run.input_plan.partition_sizes.calibration ||
+            test.row_count !== run.input_plan.partition_sizes.test))) {
         throw new Error("분석 결과의 입력 판본 또는 Calibration·Test 참조가 일치하지 않습니다.");
       }
       if (active) setState({ key, evidence: { model, calibration, test, policy, evaluation }, error: "" });
