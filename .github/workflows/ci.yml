@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# 같은 PR에서 새 커밋이 생기면 오래된 Python·Web 검사 자원 낭비를 방지한다.
+concurrency:
+  group: validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validation:
     runs-on: ubuntu-latest
