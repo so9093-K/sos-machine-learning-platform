@@ -134,7 +134,8 @@ try {
   // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
   const { PipelineWorkspace } = await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
   const { PipelineAnalysis, PipelineEvidenceView, validatePipelineEvidence } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
-  const { PipelineCandidateInvestigation, SensitivityChart } = await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
+  const { PipelineCandidateInvestigation, SensitivityChart, matchingExplanationJob } =
+    await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
   const props = {
     datasets: [], initialDatasetId: "", initialRunId: "",
     hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
@@ -256,6 +257,17 @@ try {
     ] } },
   }));
   assert.match(sensitivity, /SHAP·가법 기여도·원인 판정이 아닙니다/);
+  const explanationJobSummary = (id, scoring_result_id, row_index, created_at) => ({
+    id, spec: { scoring_result_id, row_index }, created_at,
+  });
+  assert.equal(matchingExplanationJob([
+    explanationJobSummary("older", "score-1", 5, "2026-10-20T12:00:00Z"),
+    explanationJobSummary("other-row", "score-1", 6, "2026-10-22T12:00:00Z"),
+    explanationJobSummary("latest", "score-1", 5, "2026-10-23T12:00:00Z"),
+  ], "score-1", 5)?.id, "latest");
+  assert.equal(matchingExplanationJob([
+    explanationJobSummary("other", "score-2", 5, "2026-10-23T12:00:00Z"),
+  ], "score-1", 5), undefined);
   assert.match(renderToStaticMarkup(React.createElement(PipelineCandidateInvestigation, {
     candidate: { row_index: 5, anomaly_score: 0.8, features: { "io_bytes_per_sec": 42 } },
     scoringResultId: "score-1", canRun: true, onOpenResource: () => {},
