@@ -400,7 +400,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     };
   }, [preview, visualColumn, timeColumn]);
 
-  return <PlatformShell actor={actor} section={tab} modelContext={context} onNavigate={setTab}
+  return <PlatformShell actor={actor} section={tab} modelContext={context}
+    modelResource={resource} onNavigate={setTab}
     onSignOut={onSignOut} canConfigure={canConfigure}
     canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
     dataSidebar={(["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) &&

@@ -71,6 +71,13 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
 
 /** 독립 화면 간에 목적과 관련된 선택만 전달한다. */
 export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTab): MLNavigationContext {
+  // 결과 상세에서 모델 영역 탭을 직접 선택해도 이미 확인한 리소스를 전달한다.
+  if (previous.resource?.kind === "scoring" && isDecisionTab(tab)) {
+    return { scoringId: previous.resource.id };
+  }
+  if (previous.resource?.kind === "model" && tab === "scoring") {
+    return { modelId: previous.resource.id };
+  }
   if (isDecisionTab(tab) && isDecisionTab(previous.tab)) {
     return { scoringId: previous.context.scoringId };
   }
@@ -161,15 +168,16 @@ export function isModelsArea(tab: WorkspaceTab): boolean {
 }
 
 /** 전역 내비게이션이 아니라 모델 리소스 문맥 안에서 독립 기능을 탐색한다. */
-export function ModelAreaNavigation({ active, context, onNavigate }: {
+export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
   active: WorkspaceTab;
   context: MLNavigationContext;
+  resource: ResourceRoute;
   onNavigate: (tab: WorkspaceTab) => void;
 }) {
   return <nav className="model-area-nav" aria-label="모델 관련 화면">
     {modelTabs.map(item => <a key={item.tab}
       href={contextPath(item.tab, nextNavigationContext(
-        { tab: active, resource: null, context }, item.tab))}
+        { tab: active, resource, context }, item.tab))}
       aria-current={active === item.tab ? "page" : undefined}
       className="model-area-link"
       onClick={event => {

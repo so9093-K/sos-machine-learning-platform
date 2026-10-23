@@ -247,7 +247,9 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
         모델 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
       {models.nextCursor && <button className="secondary"
         onClick={() => void models.loadMore().catch(e => setError(formatError(e)))}>이전 모델 더 보기</button>}
-      {model && modelId.trim() === loadedModelId && <p className="hint">선택 모델: {model.algorithm} · {model.id} · 입력 Feature {model.features.length}개</p>}
+      {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
+        modelId.trim() === loadedModelId &&
+        <p className="hint">선택 모델: {model.algorithm} · {model.id} · 입력 Feature {model.features.length}개</p>}
       {!loadedModelId && <div className="steps">
         <p className="hint">점수화하려면 기존 Model Revision을 선택하세요. 모델이 없다면 독립 학습을 시작할 수 있습니다.</p>
         <button className="secondary" type="button" onClick={() => onNavigate("ml")}>
@@ -255,7 +257,9 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
         </button>
       </div>}
     </section>
-    {model && modelId.trim() === loadedModelId && <MLScoringPanel key={model.id} model={model} datasets={datasets}
+    {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
+      modelId.trim() === loadedModelId &&
+      <MLScoringPanel key={model.id} model={model} datasets={datasets}
       canRun={canRun} canCancel={canCancel} onOpenResult={id => onOpenResource("scoring", id)} />}
     <section className="panel">
       <div className="panel-head"><div><h3>전체 Scoring Job 이력</h3>
@@ -347,7 +351,9 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
         }}>Scoring Result 조회</button>
       {scoringId.trim() !== loadedScoringId && <p className="hint">
         Scoring Result ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
-      {scoring && scoringId.trim() === loadedScoringId && <p>점수화된 행: {scoring.row_count.toLocaleString("ko-KR")} · 모델 {scoring.model_revision_id}</p>}
+      {scoring && scoring.id === loadedScoringId && preferredScoringId === loadedScoringId &&
+        scoringId.trim() === loadedScoringId &&
+        <p>점수화된 행: {scoring.row_count.toLocaleString("ko-KR")} · 모델 {scoring.model_revision_id}</p>}
       {!loadedScoringId && <div className="steps">
         <p className="hint">평가·정책·설명은 이미 계산된 Scoring Result를 독립적으로 재사용합니다.
           기존 결과 ID를 선택하거나 먼저 모델 점수를 계산하세요.</p>
@@ -356,7 +362,8 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
         </button>
       </div>}
     </section>
-    {scoring && scoringId.trim() === loadedScoringId && <section className="panel">
+    {scoring && scoring.id === loadedScoringId && preferredScoringId === loadedScoringId &&
+      scoringId.trim() === loadedScoringId && <section className="panel">
       <MLDecisionPanel key={scoring.id + view} scoring={scoring} view={view}
         canRun={canRun} canCancel={canCancel}
         onOpenResult={(kind,id) => onOpenResource(kind,id)} />

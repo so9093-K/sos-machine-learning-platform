@@ -41,10 +41,20 @@ try {
   assert.deepEqual(routeAt("/scoring/results/score%2Fwith%20space", "?scoring=other").resource,
     { kind: "scoring", id: "score/with space" });
   assert.equal(immutablePath, "/scoring/results/score%2Fwith%20space");
+  // 직접 연 Scoring/Model 상세에서 영역 탭으로 이동해도 동일 자산을 이어받는다.
   assert.equal(nextNavigationContext(
-    routeAt("/scoring/results/score-v1", ""), "policies").scoringId, undefined);
+    routeAt("/scoring/results/score-v1", ""), "policies").scoringId, "score-v1");
+  assert.equal(contextPath("evaluations", nextNavigationContext(
+    routeAt("/scoring/results/score-v1", ""), "evaluations")),
+    "/evaluations?scoring=score-v1");
+  assert.equal(contextPath("scoring", nextNavigationContext(
+    routeAt("/models/model-v1", ""), "scoring")), "/scoring?model=model-v1");
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/models/model-v1", ""), "evaluations"), {});
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/scoring/results/score-v1", ""), "training"), {});
 
-  console.log("ML navigation context: 12 cases passed");
+  console.log("ML navigation context: 16 cases passed");
 } finally {
   await vite.close();
 }
