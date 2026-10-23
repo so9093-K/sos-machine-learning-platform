@@ -18,7 +18,7 @@ function isDecisionTab(tab: WorkspaceTab): boolean {
 
 function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
-  if (tab === "training") return { datasetId: params.get("dataset") ?? "" };
+  if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "" };
   if (tab === "scoring") return { modelId: params.get("model") ?? "" };
   if (isDecisionTab(tab)) return { scoringId: params.get("scoring") ?? "" };
   return {};
@@ -26,7 +26,9 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
 
 function contextPath(tab: WorkspaceTab, context: MLNavigationContext): string {
   const params = new URLSearchParams();
-  if (tab === "training" && context.datasetId) params.set("dataset", context.datasetId);
+  if ((tab === "training" || tab === "ml") && context.datasetId) {
+    params.set("dataset", context.datasetId);
+  }
   if (tab === "scoring" && context.modelId) params.set("model", context.modelId);
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
   return paths[tab] + (params.size ? "?" + params.toString() : "");
@@ -99,7 +101,10 @@ export function useWorkspaceNavigation() {
     const tab = typeof target === "function" ? target(previous.tab) : target;
     // 같은 Scoring Result의 정책·평가·설명을 이동할 때만 선택을 전달한다.
     const context = isDecisionTab(tab) && isDecisionTab(previous.tab)
-      ? { scoringId: previous.context.scoringId } : {};
+      ? { scoringId: previous.context.scoringId }
+      : (tab === "training" || tab === "ml") &&
+        (previous.tab === "training" || previous.tab === "ml")
+        ? { datasetId: previous.context.datasetId } : {};
     update({ tab, resource: null, context }, contextPath(tab, context));
   }, [update]);
   const selectContext = useCallback((context: MLNavigationContext) => {
