@@ -102,14 +102,13 @@ export function useWorkspaceNavigation() {
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
-  const update = useCallback((next: WorkspaceRoute, path: string, replace = false) => {
+  const update = useCallback((next: WorkspaceRoute, path: string) => {
     if (window.location.pathname + window.location.search !== path) {
-      if (replace) window.history.replaceState(null, "", path);
-      else window.history.pushState(null, "", path);
+      window.history.pushState(null, "", path);
     }
     current.current = next;
     setRoute(next);
-    if (!replace) requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
+    requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
   }, []);
   const navigateWithContext = useCallback((tab: WorkspaceTab, context: MLNavigationContext) => {
     const next = contextAt(tab, contextPath(tab, context).split("?")[1] ?? "");
@@ -126,7 +125,14 @@ export function useWorkspaceNavigation() {
     if (previous.resource) return;
     const path = contextPath(previous.tab, context);
     const parsed = contextAt(previous.tab, path.split("?")[1] ?? "");
-    update({ ...previous, context: parsed }, path, true);
+    // 사용자가 확인한 Dataset/Model/Scoring 선택은 뒤로 가기로 복원할 수 있어야 한다.
+    // 입력 한 글자마다 호출하지 않으며, 같은 화면의 선택은 헤더 포커스를 움직이지 않는다.
+    if (window.location.pathname + window.location.search !== path) {
+      window.history.pushState(null, "", path);
+    }
+    const next = { ...previous, context: parsed };
+    current.current = next;
+    setRoute(next);
   }, [update]);
   const openResource = useCallback((kind: MLResourceKind, id: string) => {
     if (!id) return;

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createServer } from "vite";
 import react from "@vitejs/plugin-react";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 // 기존 Vite 변환을 사용한다. 브라우저/서버에 의존하지 않는 URL 선택 계약만 확인한다.
 const vite = await createServer({
@@ -12,8 +14,8 @@ const vite = await createServer({
 });
 
 try {
-  const { routeAt, contextPath, nextNavigationContext, resourcePath } =
-    await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
+  const { routeAt, contextPath, nextNavigationContext, resourcePath,
+    ModelAreaNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
@@ -54,7 +56,21 @@ try {
   assert.deepEqual(nextNavigationContext(
     routeAt("/scoring/results/score-v1", ""), "training"), {});
 
-  console.log("ML navigation context: 16 cases passed");
+  // 실제 모델 영역 링크도 Ctrl/새 탭 열기에서 같은 문맥을 유지한다.
+  const resultNav = renderToStaticMarkup(React.createElement(ModelAreaNavigation, {
+    active: "scoring", context: {},
+    resource: { kind: "scoring", id: scoringId }, onNavigate: () => {},
+  }));
+  assert.match(resultNav, /href="\/evaluations\?scoring=score-v1"/);
+  assert.match(resultNav, /href="\/policies\?scoring=score-v1"/);
+  assert.match(resultNav, /href="\/explanations\?scoring=score-v1"/);
+  const modelNav = renderToStaticMarkup(React.createElement(ModelAreaNavigation, {
+    active: "ml", context: {},
+    resource: { kind: "model", id: "model-v1" }, onNavigate: () => {},
+  }));
+  assert.match(modelNav, /href="\/scoring\?model=model-v1"/);
+
+  console.log("ML navigation context: 20 cases passed");
 } finally {
   await vite.close();
 }
