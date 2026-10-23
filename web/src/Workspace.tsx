@@ -23,6 +23,7 @@ import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
 import { PlatformAreaPreview } from "./PlatformAreaPreview";
+import { PipelineWorkspace } from "./PipelineWorkspace";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { MLWorkbench } from "./MLWorkbench";
 import { MLResourceDetail, ScoringWorkspace, DecisionWorkspace } from "./MLResourcePages";
@@ -448,6 +449,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onViewMlActivity={() => setTab("ml-jobs")}
         onViewDataActivity={() => setTab("jobs")}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
+      {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
+        initialDatasetId={selected} hasMoreDatasets={Boolean(nextDatasetCursor)}
+        onLoadMoreDatasets={loadMoreDatasets} onSelectDataset={setSelected}
+        canRun={canRun}
+        canCancel={canCancel} onNavigate={setTab} onOpenResource={openResource} />}
       {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab}
         onNavigate={setTab} onOpenModel={id => openResource("model", id)}
         onStartScoring={startScoring} canRun={canRun} />}

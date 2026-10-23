@@ -48,3 +48,10 @@ export type MLflowExportStatus = components["schemas"]["MLflowExportStatusOut"];
 export type MLPolicyJobSummary = components["schemas"]["MLPolicyJobSummaryOut"];
 export type MLEvaluationJobSummary = components["schemas"]["MLEvaluationJobSummaryOut"];
 export type MLExplanationJobSummary = components["schemas"]["MLExplanationJobSummaryOut"];
+
+// Pipeline API 응답은 FastAPI OpenAPI에서 생성한 타입을 사용한다.
+export type PipelineDefinition = components["schemas"]["PipelineDefinitionOut"];
+export type PipelineCheck = components["schemas"]["PipelineCheckOut"];
+export type PipelineRun = components["schemas"]["PipelineRunOut"];
+export type PipelineJob = components["schemas"]["PipelineJobOut"];
+export type PipelineCandidates = components["schemas"]["PipelineCandidatesOut"];

@@ -18,6 +18,16 @@ Builder / Operator는 모델·실행·평가·배포를 관리하고, Consumer /
 
 웹 UI는 공통 플랫폼 기능을 활용한다. 특정 화면만 사용할 수 있는 숨겨진 핵심 기능이나 UI에 종속된 실행 계약을 만들지 않는다. API-first가 웹 사용성의 대체물은 아니다.
 
+## 등록형 Pipeline 경험
+
+![등록된 방법을 자신의 데이터로 실행하는 Pipeline Consumer와 새로운 방법을 설계·검증·등록하는 Pipeline Creator의 경험](references/pipeline-consumer-creator-experience.png)
+
+**Pipeline Consumer(이용자)**는 등록된 분석·학습·평가 방법의 목적과 지원 데이터 계약을 확인하고 자신의 Dataset을 연결한다. 입력 적합성을 확인해 명시적으로 실행한 뒤 Run 상태·오류·결과를 이해하고 활용한다. 미리 설계된 방법을 이용하는 경험이지, 모든 내부 ML 설정을 사용자가 직접 구성해야 한다는 뜻은 아니다.
+
+**Pipeline Creator(제작자)**는 독립적인 ML 기능과 공통 API를 활용해 새로운 방법을 설계·검증하고 필요할 때 재사용 가능한 Pipeline으로 등록한다. 연구·실험이 항상 Pipeline 등록으로 끝나는 것은 아니며 외부 연구 환경과 독립 기능을 사용할 수 있다. Consumer와 Creator는 고정된 계정 유형이나 상호 배타적인 역할이 아니라 이용 목적에 따른 경험의 구분이다.
+
+첫 참조 Pipeline은 활동 Feature의 이름·자료형과 UTC 시간을 요구하며 서로 다른 사용자 데이터로 새 모델을 학습한다. 입력 오류를 무단 보정하지 않고 원본 데이터와 타인의 결과를 공유하지 않는다. 다른 연구·학습·Scoring 기능은 Pipeline 없이도 실행할 수 있다. 이 경험의 장기 개념적 책임 관계는 [Platform Identity](vision/PLATFORM_IDENTITY.md#pipeline-경험과-공통-실행-경계)를 따른다.
+
 ## 연구·실행의 목표 경험
 
 1. **탐색:** 이용 가능한 데이터, 입력 스키마, 품질·시간 범위 및 제약을 이해한다.

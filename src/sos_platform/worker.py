@@ -48,6 +48,8 @@ from .processing import transform
 from .resource_admission import ExecutionCapacity, reserve_execution_memory
 from .schemas import ExplorationSpec, Transform
 from .store import Store, WorkerOwnershipLost
+from .pipeline_runs import advance_run
+from .pipeline_reference import inspect_dataset as inspect_pipeline_dataset
 from .understanding import build_understanding
 
 
@@ -120,6 +122,14 @@ def _perform(
                 "input_dataset_version": dataset["version"],
                 **evidence,
             }
+        elif job["kind"] == "ml_pipeline_preflight":
+            stage = "processing"
+            if job["spec"]["dataset_version"] != dataset["version"]:
+                raise ValueError("Pipeline Dataset 판본이 변경됐습니다.")
+            inspection = inspect_pipeline_dataset(store, dataset, full=True)
+            if not inspection["ready"] or not inspection["plan"]:
+                raise ValueError("Pipeline 입력 데이터의 시간/Feature 적합성 검사에 실패했습니다.")
+            result = {"plan": inspection["plan"], "feature_count": inspection["feature_count"]}
         elif job["kind"] == "ml_train":
             stage = "processing"
             # 정렬 Spill 파일은 이 Attempt만 소유한다. 종료 후 부모가 정리하고
@@ -163,7 +173,7 @@ def _perform(
     except Exception as exc:
         code = (
             "SOS-ML-INPUT-INVALID"
-            if job["kind"] in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain")
+            if job["kind"] in ("ml_pipeline_preflight", "ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain")
             and isinstance(exc, ValueError)
             else "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
@@ -595,15 +605,17 @@ def main():
         cleanup_training_stage(store.home)
         store.heartbeat()
         if args.once:
+            advance_run(store)
             run_once(store)
             if mlflow_client:
                 run_tracking_once(store, mlflow_client)
             return
         while True:
             store.heartbeat()
+            advanced = advance_run(store)
             executed = run_once(store)
             exported = run_tracking_once(store, mlflow_client) if mlflow_client else False
-            if not executed and not exported:
+            if not advanced and not executed and not exported:
                 time.sleep(args.poll)
     except KeyboardInterrupt:
         pass

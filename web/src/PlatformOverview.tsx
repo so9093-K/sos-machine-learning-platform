@@ -61,6 +61,10 @@ export function PlatformOverview({ datasets, jobs, onNavigate, onOpenDataset, on
     <section aria-labelledby="new-work-heading">
       <h3 className="platform-section-title" id="new-work-heading">새 작업 시작</h3>
       <div className="platform-quick-actions">
+        <button className="platform-destination ghost" onClick={() => onNavigate("pipelines")}>
+          <strong>등록된 분석 Pipeline 사용하기 <span aria-hidden="true">↗</span></strong>
+          <span>미리 구성된 분석 방법을 내 Dataset에 적용합니다.</span>
+        </button>
         <button className="platform-destination ghost" onClick={() => onNavigate("understanding")}>
           <strong>데이터 이해하기 <span aria-hidden="true">↗</span></strong>
           <span>기존 Dataset에서 구조·분포·품질을 탐색합니다.</span>

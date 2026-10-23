@@ -846,6 +846,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pipeline-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pipeline History */
+        get: operations["pipeline_history_api_pipeline_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pipeline-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pipeline Run Detail */
+        get: operations["pipeline_run_detail_api_pipeline_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pipeline-runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pipeline Cancel */
+        post: operations["pipeline_cancel_api_pipeline_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pipeline-runs/{run_id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pipeline Candidates */
+        get: operations["pipeline_candidates_api_pipeline_runs__run_id__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pipelines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pipelines */
+        get: operations["pipelines_api_pipelines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pipelines/{definition_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pipeline Detail */
+        get: operations["pipeline_detail_api_pipelines__definition_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pipelines/{definition_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pipeline Check */
+        get: operations["pipeline_check_api_pipelines__definition_id__check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pipelines/{definition_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Pipeline */
+        post: operations["submit_pipeline_api_pipelines__definition_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ready": {
         parameters: {
             query?: never;
@@ -2334,6 +2470,158 @@ export interface components {
             training_score_summary: {
                 [key: string]: unknown;
             };
+        };
+        /** PipelineCandidateOut */
+        PipelineCandidateOut: {
+            /** Anomaly Score */
+            anomaly_score: number;
+            /** Features */
+            features: {
+                [key: string]: number | null;
+            };
+            /** Row Index */
+            row_index: number;
+        };
+        /** PipelineCandidatesOut */
+        PipelineCandidatesOut: {
+            /** Items */
+            items: components["schemas"]["PipelineCandidateOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Result Id */
+            result_id: string;
+            /** Threshold */
+            threshold: number;
+        };
+        /** PipelineCheckOut */
+        PipelineCheckOut: {
+            /** Dataset Id */
+            dataset_id: string;
+            /** Dataset Version */
+            dataset_version: string;
+            /** Feature Count */
+            feature_count: number;
+            /** Issues */
+            issues: string[];
+            /** Pipeline Id */
+            pipeline_id: string;
+            /** Pipeline Version */
+            pipeline_version: string;
+            plan: components["schemas"]["PipelinePlanOut"] | null;
+            /** Ready */
+            ready: boolean;
+        };
+        /** PipelineDefinitionOut */
+        PipelineDefinitionOut: {
+            /** Algorithm */
+            algorithm: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Label Requirement */
+            label_requirement: string;
+            /** Limitations */
+            limitations: string[];
+            /** Model Reuse */
+            model_reuse: boolean;
+            /** Name */
+            name: string;
+            /** Required Features */
+            required_features: string[];
+            /** Required Time Column */
+            required_time_column: string;
+            /** Stages */
+            stages: string[];
+            /** Version */
+            version: string;
+        };
+        /** PipelineJobOut */
+        PipelineJobOut: {
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Error Code */
+            error_code?: string | null;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+        };
+        /** PipelinePartitionSizesOut */
+        PipelinePartitionSizesOut: {
+            /** Calibration */
+            calibration: number;
+            /** Test */
+            test: number;
+            /** Train */
+            train: number;
+        };
+        /** PipelinePlanOut */
+        PipelinePlanOut: {
+            /** Calibration End */
+            calibration_end: string;
+            partition_sizes: components["schemas"]["PipelinePartitionSizesOut"];
+            /** Timestamp Column */
+            timestamp_column: string;
+            /** Train End */
+            train_end: string;
+        };
+        /** PipelineRunOut */
+        PipelineRunOut: {
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Current Stage */
+            current_stage: string | null;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Dataset Version */
+            dataset_version: string;
+            /** Definition Id */
+            definition_id: string;
+            /** Definition Version */
+            definition_version: string;
+            /** Error Code */
+            error_code?: string | null;
+            /** Id */
+            id: string;
+            input_plan: components["schemas"]["PipelinePlanOut"] | null;
+            /** Job Ids */
+            job_ids: {
+                [key: string]: string;
+            };
+            /** Stage Index */
+            stage_index: number;
+            /** Stages */
+            stages?: components["schemas"]["PipelineStageOut"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** PipelineStageOut */
+        PipelineStageOut: {
+            job: components["schemas"]["PipelineJobOut"];
+            /** Name */
+            name: string;
+        };
+        /** PipelineStartRequest */
+        PipelineStartRequest: {
+            /** Dataset Id */
+            dataset_id: string;
         };
         /**
          * PreviewOut
@@ -4447,6 +4735,261 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MLTrainingJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    pipeline_history_api_pipeline_runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineRunOut"][];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    pipeline_run_detail_api_pipeline_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineRunOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    pipeline_cancel_api_pipeline_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineRunOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    pipeline_candidates_api_pipeline_runs__run_id__candidates_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineCandidatesOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    pipelines_api_pipelines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineDefinitionOut"][];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    pipeline_detail_api_pipelines__definition_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineDefinitionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    pipeline_check_api_pipelines__definition_id__check_get: {
+        parameters: {
+            query: {
+                dataset_id: string;
+            };
+            header?: never;
+            path: {
+                definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineCheckOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    submit_pipeline_api_pipelines__definition_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PipelineStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineRunOut"];
                 };
             };
             /** @description Structured API error */

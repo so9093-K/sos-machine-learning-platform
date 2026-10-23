@@ -213,7 +213,7 @@ class JobStoreMixin:
             filters.append("kind!=:exclude_kind")
         if exclude_ml_train:
             filters.append(
-                "kind NOT IN ('ml_train','ml_score','ml_policy','ml_evaluate','ml_explain')"
+                "kind NOT IN ('ml_pipeline_preflight','ml_train','ml_score','ml_policy','ml_evaluate','ml_explain')"
             )
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(

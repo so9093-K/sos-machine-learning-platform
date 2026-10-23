@@ -40,6 +40,14 @@ SOS의 중심 책임은 **모델의 실행·평가·불변 판본·배포·추�
 
 이 그림은 **개념적 책임 구조**로, 고정된 서비스 배치·호출 순서·필수 Workflow나 현재 모든 기능의 구현 완료를 의미하지 않는다. 계약의 안정성은 의미와 호환성에 관한 원칙이며 기술·API 필드를 영구적으로 고정하지 않는다. 기능별 공통화 범위는 [Contracts](../contracts.md#ml-기능별-책임과-공통화-경계)를 따른다.
 
+### Pipeline 경험과 공통 실행 경계
+
+![Pipeline Experience와 Research / Builder Experience가 독립 ML 기능·선택적 조합·공통 API·Runtime을 공유하는 개념도](references/17-pipeline-experience-capability-boundaries.png)
+
+등록된 방법을 선택해 사용하는 **Pipeline Experience**와 새로운 방법을 탐구·설계하는 **Research / Builder Experience**는 독립적인 ML 기능과 공통 API·실행 계약을 공유한다. 등록형 Pipeline·Workflow는 이러한 기능을 조합하는 선택적 방법이며, 모든 연구·학습·평가의 필수 진입점이 아니다.
+
+이 그림은 사용자 경험, 독립 기능, 공통 계약, 실행 환경 사이의 **논리적 책임 관계**를 나타낸다. 고정된 호출 순서나 배포 구조, 모든 Builder 활동의 Pipeline 등록 의무 또는 현재 전체 기능의 구현 완료를 의미하지 않는다. Pipeline Consumer와 Pipeline Creator의 이용 목적은 [Experience](../experience.md#등록형-pipeline-경험)에서 구분한다.
+
 ## 2. Data Explorer — 데이터 이해와 탐색
 
 ![알 수 없는 Dataset → System Discovery → Dataset Understanding → Explore · Prepare · Experiment](references/07-dataset-understanding.png)

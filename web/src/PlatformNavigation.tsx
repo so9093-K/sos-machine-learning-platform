@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
-  | "research" | "ml" | "training" | "scoring" | "policies"
+  | "research" | "pipelines" | "ml" | "training" | "scoring" | "policies"
   | "evaluations" | "explanations" | "experience"
   | "jobs" | "ml-jobs" | "storage" | "audit";
 export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
@@ -11,7 +11,7 @@ export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
 const paths: Record<WorkspaceTab, string> = {
   overview: "/", understanding: "/data", preview: "/data/query",
   profile: "/data/profile", preparation: "/data/prepare",
-  research: "/research", ml: "/models", training: "/training",
+  research: "/research", pipelines: "/pipelines", ml: "/models", training: "/training",
   scoring: "/scoring", policies: "/policies",
   evaluations: "/evaluations", explanations: "/explanations",
   experience: "/model-experience",
@@ -80,6 +80,7 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
     { tab: "preparation", label: "데이터 준비" },
   ] },
   { title: "RESEARCH", items: [{ tab: "research", label: "연구·실험", concept: true }] },
+  { title: "PIPELINES", items: [{ tab: "pipelines", label: "등록형 분석 Pipeline" }] },
   { title: "MODELS", items: [{ tab: "ml", label: "모델과 실행" }] },
   { title: "MODEL EXPERIENCE", items: [{ tab: "experience", label: "모델 활용", concept: true }] },
   { title: "ACTIVITY & OPERATIONS", items: [
