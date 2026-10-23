@@ -561,3 +561,20 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
   .pipeline-hero-foot { flex-direction:column; }
   .pipeline-actions button { width:100%; }
 }
+
+
+/* Pipeline Run의 불변 결과를 분석하는 패널: 기능별 분석 근거를 고유하게 표현한다. */
+.pipeline-analysis-report { display: grid; gap: 1.2rem; margin: 1.1rem 0 1.5rem; }
+.pipeline-analysis-report h4 { margin: 0; }
+.pipeline-score-chart { min-width: 0; }
+.pipeline-score-chart .chart { min-height: 320px; }
+.pipeline-analysis-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 1rem; }
+.pipeline-analysis-phase { min-width: 0; padding: 1.1rem; border: 1px solid var(--sos-border); border-radius: 12px; display: grid; gap: .75rem; align-content: start; }
+.pipeline-analysis-phase h5 { margin: 0; font-size: 1rem; }
+.pipeline-analysis-phase dl { display: grid; gap: .45rem; margin: 0; }
+.pipeline-analysis-phase dl > div { display: flex; gap: 1rem; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--sos-border); padding-bottom: .4rem; }
+.pipeline-analysis-phase dt { color: var(--sos-muted); }
+.pipeline-analysis-phase dd { text-align: right; margin: 0; overflow-wrap: anywhere; }
+.pipeline-analysis-phase pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .78rem; }
+.pipeline-analysis-phase details { min-width: 0; overflow-wrap: anywhere; }
+.pipeline-analysis-phase .pipeline-actions { align-self: end; }

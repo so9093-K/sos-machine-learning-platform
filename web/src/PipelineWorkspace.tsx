@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, formatError, request, submitJob } from "./api";
+import { PipelineAnalysis } from "./PipelineAnalysis";
 import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
@@ -449,30 +450,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
             Pipeline 취소 요청
           </button>}
         </div>}
-        {run.status === "Succeeded" && <div className="pipeline-result-overview" aria-label="분석 결과 요약">
-          <h4>완료된 분석의 핵심 결과</h4>
-          {run.input_plan && <div className="pipeline-result-metrics">
-            <div><span>Train 입력</span><strong>{count(run.input_plan.partition_sizes.train)}행</strong></div>
-            <div><span>Calibration 입력</span><strong>{count(run.input_plan.partition_sizes.calibration)}행</strong></div>
-            <div><span>Test 입력</span><strong>{count(run.input_plan.partition_sizes.test)}행</strong></div>
-          </div>}
-          <div className="pipeline-result-metrics">
-            <div><span>현재 조회된 Test 후보</span><strong>{rows ? count(rows.items.length) + "건" :
-              candidateError ? "조회 실패" : "조회 중"}</strong></div>
-            <div><span>후보 경계 점수</span><strong>{rows ? rows.threshold.toPrecision(6) :
-              candidateError ? "조회 실패" : "조회 중"}</strong></div>
-          </div>
-          <p className="hint">후보 건수는 현재 조회한 페이지의 수이며 전체 후보 수가 아닙니다.
-            이상 점수와 정책 판정은 사건 확정이나 정확도 지표가 아닙니다.</p>
-          <div className="pipeline-actions">
-            {testScoringId && <button type="button" className="secondary"
-              onClick={() => onOpenResource("scoring", testScoringId)}>전체 Scoring 결과 확인 →</button>}
-            {evaluationId && <button type="button" className="secondary"
-              onClick={() => onOpenResource("evaluation", evaluationId)}>평가 근거 확인 →</button>}
-            {modelRevisionId && <button type="button" className="secondary"
-              onClick={() => onOpenResource("model", modelRevisionId)}>모델 판본 확인 →</button>}
-          </div>
-        </div>}
+        {run.status === "Succeeded" && <PipelineAnalysis run={run}
+          onOpenResource={onOpenResource} />}
         {run.status === "Succeeded" && <section className="pipeline-candidates" aria-labelledby="pipeline-candidates-heading">
           <h4 id="pipeline-candidates-heading">Test 이상 후보 살펴보기</h4>
           <p>보정 구간에서 정한 점수 경계 이상인 Test 결과를 순서대로 표시합니다.

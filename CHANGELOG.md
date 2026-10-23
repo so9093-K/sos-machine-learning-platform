@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 첫 IF Pipeline 성공 Run에서 독립 Model·Calibration·Test·Policy·Evaluation 판본을 검증해 한 화면에서 학습 근거, 점수 범위 비교, 임계값 선정, 실제 Test 판정 결과와 연결된 결과를 분석할 수 있게 했습니다. 그래프는 저장된 최소·평균·최대 점수만 사용하며 실제 분포를 추정하지 않습니다.
+
 - 첫 등록형 Isolation Forest 분석의 Consumer Experience를 분석 소개·데이터 준비/복귀·입력 검사·실행 상태·결과 요약과 후보 확인 순으로 구성했습니다. 원본 로그에서 미등록 Feature를 자동 생성한다고 안내하지 않으며, 독립 데이터 준비 기능과 기존 Pipeline/ML 실행 API를 재사용합니다.
 
 - 모델·학습·Scoring·정책·평가·설명 화면의 독립 실행 경험을 유지하면서 Dataset·Model Revision·Scoring Result 선택을 URL과 함께 전달·복원하도록 개선했습니다. 데이터 탐색에서 선택적 학습 진입, 결과가 없는 화면의 다음 행동 안내, 학습 점수 상위 5% 후보의 기준 표시를 제공하며 기존 ML API·판본은 변경하지 않습니다.
