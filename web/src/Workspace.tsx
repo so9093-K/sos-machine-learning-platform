@@ -206,7 +206,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   }
   /** HTTP 202 접수 이후의 목록 조회 실패는 Job 제출 실패가 아니다. */
   async function showSubmittedJob(job: Job, message: string) {
-    setTab("jobs");
+    if (context.pipelineReturn) navigateWithContext("jobs", {
+      pipelineReturn: true, datasetId: selected,
+    });
+    else setTab("jobs");
     try {
       await refreshJobs();
       setNotice(message);
@@ -334,7 +337,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       const item = await request<Dataset>(`/api/datasets/${encodeURIComponent(datasetId)}`);
       setDatasets(previous => [item, ...previous.filter(d => d.id !== item.id)]);
       showExamples.current = false;
-      setSelected(item.id); setTab("preview");
+      setSelected(item.id);
+      if (context.pipelineReturn) navigateWithContext("preview", {
+        pipelineReturn: true, datasetId: item.id,
+      });
+      else setTab("preview");
     });
   }
   async function upload(file: File) {
@@ -498,11 +505,14 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onNavigate={setTab} onOpenModel={id => openResource("model", id)}
         onStartScoring={startScoring} canRun={canRun} />}
       {context.pipelineReturn &&
-        (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) &&
+        (["understanding", "preview", "profile", "preparation", "jobs"] as Tab[]).includes(tab) &&
         <section className="pipeline-return" role="status">
           <div><strong>등록된 분석을 준비하는 중입니다</strong>
-            <p>Dataset을 등록하거나 내용을 확인한 뒤 이전 분석으로 돌아가 입력 조건을 검사하세요.
-              44개 활동 Feature가 없다면 현재 등록형 분석은 자동 생성할 수 없습니다.</p>
+            {tab === "jobs"
+              ? <p>준비 Job이 완료되면 출력 Dataset을 열고 입력 조건을 확인하세요.
+                  기존 Dataset으로도 언제든 분석 화면에 돌아갈 수 있습니다.</p>
+              : <p>Dataset을 등록하거나 내용을 확인한 뒤 이전 분석으로 돌아가 입력 조건을 검사하세요.
+                  44개 활동 Feature가 없다면 현재 등록형 분석은 자동 생성할 수 없습니다.</p>}
           </div>
           <button className="secondary" type="button"
             onClick={() => navigateWithContext("pipelines", { datasetId: selected })}>

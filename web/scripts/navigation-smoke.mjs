@@ -106,6 +106,16 @@ try {
     { pipelineReturn: true, datasetId: "dataset-1" });
   assert.equal(routeAt("/data", "?from=pipeline&dataset=dataset-1").context.datasetId, "dataset-1");
   assert.equal(routeAt("/data", "?dataset=ignored").context.datasetId, "");
+  assert.equal(contextPath("jobs", { pipelineReturn: true, datasetId: "dataset-1" }),
+    "/activity/jobs?from=pipeline&dataset=dataset-1");
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/data/prepare", "?from=pipeline&dataset=dataset-1"), "jobs"),
+    { pipelineReturn: true, datasetId: "dataset-1" });
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/activity/jobs", "?from=pipeline&dataset=dataset-1"), "preview"),
+    { pipelineReturn: true, datasetId: "dataset-1" });
+  assert.deepEqual(nextNavigationContext(routeAt("/activity/jobs", ""), "understanding"),
+    { pipelineReturn: false });
   assert.deepEqual(nextNavigationContext(
     routeAt("/data", "?from=pipeline"), "ml"), {});
   assert.equal(contextPath("pipelines", { datasetId: "dataset-from-data" }),
