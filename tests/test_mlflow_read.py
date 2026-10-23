@@ -16,6 +16,11 @@ class ResearchClient:
     def get(self, endpoint, params):
         if endpoint == "model-versions/search":
             return {"model_versions": self.versions}
+        if endpoint == "experiments/get":
+            if self.experiment and self.experiment["experiment_id"] == params["experiment_id"]:
+                return {"experiment": self.experiment}
+            return {}
+
         raise AssertionError(endpoint)
 
     def post(self, endpoint, data):
@@ -35,9 +40,9 @@ def test_owner_experiment_uses_stable_name_and_reuses_existing():
     client = ResearchClient()
     assert ensure_experiment(client, "alice") == "23"
     assert ensure_experiment(client, "alice") == "23"
-    assert read_experiments(client, "bob") == []
-    assert read_experiments(client, "alice") == [
-        {"id": "23", "name": "내 ML 실험"},
+    assert read_experiments(client, "bob")["items"] == []
+    assert read_experiments(client, "alice")["items"] == [
+        {"id": "23", "name": "기본 실험"},
     ]
     assert experiment_name("alice") != experiment_name("bob")
 
@@ -61,9 +66,10 @@ def test_run_search_rechecks_sos_job_owner():
     }
     store = SimpleNamespace(get_job=jobs.get)
     result = read_runs(client, store, "alice")
-    assert len(result) == 1
-    assert result[0]["id"] == "r1"
-    assert result[0]["metrics"]["sos.score_mean"] == 0.9
+    assert len(result["items"]) == 1
+    assert result["items"][0]["id"] == "r1"
+    assert result["items"][0]["metrics"]["sos.score_mean"] == 0.9
+    assert len(read_runs(client, store, "alice", experiment_id="23")["items"]) == 1
 
 
 def test_model_search_rechecks_owner_and_bound_artifact_digest():
@@ -92,10 +98,26 @@ def test_model_search_rechecks_owner_and_bound_artifact_digest():
                         "sha256": "a" * 64, "owner_actor": "alice"}}
     store = SimpleNamespace(get_job=jobs.get, get_model_revision=refs.get)
     result = read_model_versions(client, store, "alice")
-    assert len(result) == 1
-    assert result[0]["model_id"] == "model-a"
+    assert len(result["items"]) == 1
+    assert result["items"][0]["model_id"] == "model-a"
     refs["model-a"]["sha256"] = "c" * 64
-    assert read_model_versions(client, store, "alice") == []
+    assert read_model_versions(client, store, "alice")["items"] == []
     refs["model-a"]["sha256"] = "a" * 64
     refs["model-a"]["location"] = "s3://sos-data/results/different.model.joblib"
-    assert read_model_versions(client, store, "alice") == []
+    assert read_model_versions(client, store, "alice")["items"] == []
+
+
+def test_experiment_titles_are_separate_without_sos_management_table():
+    assert experiment_name("alice", "baseline") != experiment_name("alice", "ablation")
+    assert experiment_name("alice", "baseline") != experiment_name("bob", "baseline")
+
+
+def test_run_search_rejects_other_actor_experiment():
+    client = ResearchClient()
+    client.experiment = {"name": experiment_name("bob"), "experiment_id": "23"}
+    store = SimpleNamespace(get_job=lambda _: None)
+    from sos_platform.mlflow_errors import MLflowDeliveryError
+    import pytest
+
+    with pytest.raises(MLflowDeliveryError, match="EXPERIMENT-NOT-FOUND"):
+        read_runs(client, store, "alice", experiment_id="23")
