@@ -16,7 +16,7 @@ import sklearn
 from .datasets import pinned_scan_dataset
 from .errors import PlatformError
 from .execution_budget import ExecutionBudget
-from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold
+from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold, score_histogram
 from .ml_if_preprocessing import FittedIFMedianImputer, _train_median, fit_if_median_imputer
 from .ml_input import (
     INTEGER_DTYPES,
@@ -368,6 +368,7 @@ def _training_score_summary(model, matrix: np.ndarray) -> tuple[dict, int]:
     threshold = quantile_threshold(scores, 0.05)
     summary = evaluate_anomaly_scores(scores, threshold=threshold)
     summary["scope"] = "training_data_only"
+    summary["histogram"] = score_histogram(scores)
     summary["threshold_source"] = "training_score_quantile_0.95"
     return summary, len(scores)
 

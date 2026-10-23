@@ -9,7 +9,8 @@ export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "ex
 export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
 export type MLNavigationContext = {
   datasetId?: string; modelId?: string; scoringId?: string;
-  pipelineRunId?: string; pipelineReturn?: boolean;
+  pipelineRunId?: string; pipelineReturn?: boolean; candidateRowIndex?: number;
+  pipelineAnalysisSection?: "overview" | "training" | "calibration" | "test";
 };
 type WorkspaceRoute = {
   tab: WorkspaceTab; resource: ResourceRoute; context: MLNavigationContext;
@@ -19,12 +20,32 @@ function isDecisionTab(tab: WorkspaceTab): boolean {
   return tab === "policies" || tab === "evaluations" || tab === "explanations";
 }
 
+function candidateRowAt(params: URLSearchParams): number | undefined {
+  const value = params.get("candidate");
+  if (value === null || !/^(0|[1-9][0-9]*)$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function analysisSectionAt(params: URLSearchParams): MLNavigationContext["pipelineAnalysisSection"] {
+  const value = params.get("section");
+  return value === "overview" || value === "training" ||
+    value === "calibration" || value === "test" ? value : undefined;
+}
+
 function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
-  if (tab === "pipelines") return {
-    datasetId: params.get("dataset") ?? "",
-    pipelineRunId: params.get("run") ?? "",
-  };
+  if (tab === "pipelines") {
+    const runId = params.get("run") ?? "";
+    return {
+      datasetId: params.get("dataset") ?? "",
+      pipelineRunId: runId,
+      ...(runId && candidateRowAt(params) !== undefined
+        ? { candidateRowIndex: candidateRowAt(params) } : {}),
+      ...(runId && analysisSectionAt(params) !== undefined
+        ? { pipelineAnalysisSection: analysisSectionAt(params) } : {}),
+    };
+  }
   if (tab === "understanding" || tab === "preparation" || tab === "preview" ||
       tab === "profile" || tab === "jobs") {
     const pipelineReturn = params.get("from") === "pipeline";
@@ -36,11 +57,28 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   return {};
 }
 
+/** 동일한 Run의 Dataset 참조를 정정할 때 조사 문맥을 보존한다. 다른 Run은 새 선택이다. */
+export function pipelineRunSelectionContext(
+  previous: MLNavigationContext, runId: string, datasetId: string,
+): MLNavigationContext {
+  return {
+    datasetId, pipelineRunId: runId,
+    ...(runId && runId === previous.pipelineRunId
+      ? { candidateRowIndex: previous.candidateRowIndex,
+          pipelineAnalysisSection: previous.pipelineAnalysisSection }
+      : {}),
+  };
+}
+
 export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): string {
   const params = new URLSearchParams();
   if (tab === "pipelines") {
     if (context.datasetId) params.set("dataset", context.datasetId);
     if (context.pipelineRunId) params.set("run", context.pipelineRunId);
+    if (context.pipelineRunId && context.candidateRowIndex !== undefined)
+      params.set("candidate", String(context.candidateRowIndex));
+    if (context.pipelineRunId && context.pipelineAnalysisSection)
+      params.set("section", context.pipelineAnalysisSection);
   }
   if ((tab === "understanding" || tab === "preparation" || tab === "preview" ||
         tab === "profile" || tab === "jobs") && context.pipelineReturn) {
@@ -71,8 +109,26 @@ const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }>
   evaluation: { base: "/evaluations", tab: "evaluations" },
   explanation: { base: "/explanations", tab: "explanations" },
 };
-export function resourcePath(kind: MLResourceKind, id: string): string {
-  return `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
+export function resourcePath(kind: MLResourceKind, id: string, context: MLNavigationContext = {}): string {
+  const path = `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
+  if (!context.pipelineReturn || !context.pipelineRunId) return path;
+  const params = new URLSearchParams({ from: "pipeline", run: context.pipelineRunId });
+  if (context.datasetId) params.set("dataset", context.datasetId);
+  if (context.candidateRowIndex !== undefined)
+    params.set("candidate", String(context.candidateRowIndex));
+  if (context.pipelineAnalysisSection)
+    params.set("section", context.pipelineAnalysisSection);
+  return path + "?" + params.toString();
+}
+
+function resourceContext(search: string): MLNavigationContext {
+  const params = new URLSearchParams(search);
+  if (params.get("from") !== "pipeline" || !params.get("run")) return {};
+  return { pipelineReturn: true, pipelineRunId: params.get("run")!,
+    datasetId: params.get("dataset") ?? "",
+    ...(candidateRowAt(params) !== undefined ? { candidateRowIndex: candidateRowAt(params) } : {}),
+    ...(analysisSectionAt(params) !== undefined
+      ? { pipelineAnalysisSection: analysisSectionAt(params) } : {}) };
 }
 export function routeAt(pathname: string, search: string): WorkspaceRoute {
   for (const [kind, config] of Object.entries(resourcePaths) as
@@ -80,7 +136,8 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
     if (pathname.startsWith(config.base + "/")) {
       const id = pathname.slice(config.base.length + 1);
       if (id && !id.includes("/")) {
-        try { return { tab: config.tab, resource: { kind, id: decodeURIComponent(id) }, context: {} }; }
+        try { return { tab: config.tab, resource: { kind, id: decodeURIComponent(id) },
+          context: resourceContext(search) }; }
         catch { break; }
       }
     }
@@ -163,8 +220,17 @@ export function useWorkspaceNavigation() {
   }, [update]);
   const openResource = useCallback((kind: MLResourceKind, id: string) => {
     if (!id) return;
-    update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context: {} },
-      resourcePath(kind, id));
+    const previous = current.current;
+    // Pipeline에서 열었던 결과 판본은 직접 링크·새로고침에서도 원래 Run에 돌아갈 수 있다.
+    const fromPipeline = (previous.tab === "pipelines" || previous.resource !== null)
+      && previous.context.pipelineReturn !== false;
+    const context = fromPipeline && previous.context.pipelineRunId
+      ? { pipelineReturn: true, pipelineRunId: previous.context.pipelineRunId,
+          datasetId: previous.context.datasetId,
+          candidateRowIndex: previous.context.candidateRowIndex,
+          pipelineAnalysisSection: previous.context.pipelineAnalysisSection } : {};
+    update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context },
+      resourcePath(kind, id, context));
   }, [update]);
   return { tab: route.tab, resource: route.resource, context: route.context,
     navigate, navigateWithContext, selectContext, openResource };

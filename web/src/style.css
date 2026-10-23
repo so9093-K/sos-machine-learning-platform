@@ -561,3 +561,73 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
   .pipeline-hero-foot { flex-direction:column; }
   .pipeline-actions button { width:100%; }
 }
+
+
+/* Pipeline Run의 불변 결과를 분석하는 패널: 기능별 분석 근거를 고유하게 표현한다. */
+.pipeline-analysis-report { display: grid; gap: 1.2rem; margin: 1.1rem 0 1.5rem; }
+.pipeline-analysis-report h4 { margin: 0; }
+.pipeline-score-chart { min-width: 0; }
+.pipeline-score-chart .chart { min-height: 320px; }
+.pipeline-analysis-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 1rem; }
+.pipeline-analysis-phase { min-width: 0; padding: 1.1rem; border: 1px solid var(--sos-border); border-radius: 12px; display: grid; gap: .75rem; align-content: start; }
+.pipeline-analysis-phase h5 { margin: 0; font-size: 1rem; }
+.pipeline-analysis-phase dl { display: grid; gap: .45rem; margin: 0; }
+.pipeline-analysis-phase dl > div { display: flex; gap: 1rem; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--sos-border); padding-bottom: .4rem; }
+.pipeline-analysis-phase dt { color: var(--sos-muted); }
+.pipeline-analysis-phase dd { text-align: right; margin: 0; overflow-wrap: anywhere; }
+.pipeline-analysis-phase pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .78rem; }
+.pipeline-analysis-phase details { min-width: 0; overflow-wrap: anywhere; }
+.pipeline-analysis-phase .pipeline-actions { align-self: end; }
+
+.pipeline-candidate-inspection { display: grid; gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--sos-border); border-radius: 12px; }
+.pipeline-candidate-inspection h5 { margin: 0; font-size: 1rem; }
+.pipeline-candidate-inspection .chart { min-height: 400px; }
+.pipeline-candidate-inspection .table-scroll { max-height: 320px; }
+
+/* 첫 IF Pipeline은 모델·보정·검토 결과를 넓은 분석 작업 공간에서 선택적으로 제공한다. */
+.pipeline-analysis-nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:0; margin:0 0 16px; }
+.pipeline-analysis-nav-item { display:grid; gap:5px; text-align:left; background:var(--sos-raised)!important;
+  border:1px solid var(--sos-border)!important; color:var(--sos-text)!important; padding:13px!important; min-width:0; }
+.pipeline-analysis-nav-item small { color:var(--sos-muted); font-weight:400; line-height:1.4; }
+.pipeline-analysis-nav-item.active { border-color:var(--sos-accent)!important; box-shadow:inset 0 -3px var(--sos-accent); }
+.pipeline-analysis-overview { min-width:0; }
+.pipeline-analysis-phases { grid-template-columns:minmax(0,1fr); }
+.pipeline-analysis-phase .pipeline-score-chart { width:100%; }
+.pipeline-analysis-phase .chart { height:390px; }
+.pipeline-analysis-phase dl { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 16px; }
+.pipeline-analysis-phase dl>div { min-width:0; gap:10px; }
+.pipeline-analysis-phase dl dd { font-weight:600; }
+@media(max-width:760px) {
+  .pipeline-analysis-nav { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .pipeline-analysis-phase dl { grid-template-columns:minmax(0,1fr); }
+}
+
+/* Run을 먼저 확인하고, 선택한 후보와 상세 근거를 함께 검토한다. */
+.pipeline-run-context { display:grid; gap:14px; }
+.pipeline-run-context-header { display:flex; align-items:end; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+.pipeline-run-context-header h3 { font-size:19px; margin:6px 0; }
+.pipeline-run-context-header p { color:var(--sos-muted); line-height:1.6; font-size:12px; }
+.pipeline-run-context-header label { display:grid; gap:7px; color:var(--sos-muted); min-width:min(100%,300px); font-size:12px; }
+.pipeline-context-facts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.pipeline-context-facts>div { display:grid; gap:7px; min-width:0; padding:12px; background:var(--sos-raised); border-radius:9px; }
+.pipeline-context-facts span { color:var(--sos-muted); font-size:11px; }
+.pipeline-context-facts strong,.pipeline-context-facts code { overflow-wrap:anywhere; font-size:12px; }
+.pipeline-context-error,.pipeline-run-failure-code { color:var(--sos-danger); font-size:12px; }
+.pipeline-candidate-workspace { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); gap:16px; min-width:0; align-items:start; }
+.pipeline-candidate-list,.pipeline-candidate-detail { min-width:0; display:grid; gap:10px; }
+.pipeline-candidate-list .table-scroll { max-height:550px; }
+.pipeline-candidate-selected { background:var(--sos-accent-bg); box-shadow:inset 3px 0 var(--sos-accent); }
+.pipeline-candidate-detail .pipeline-candidate-inspection { margin:0; }
+.pipeline-candidate-detail .pipeline-candidate-inspection .chart { height:340px; }
+.pipeline-result-count { margin:0; }
+.pipeline-consumer h3[tabindex="-1"],.pipeline-consumer h4[tabindex="-1"],
+.pipeline-consumer h5[tabindex="-1"] { scroll-margin-top:24px; }
+.pipeline-consumer [tabindex="-1"]:focus { outline:2px solid var(--sos-accent); outline-offset:4px; }
+@media(max-width:1280px) {
+  .pipeline-context-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .pipeline-candidate-workspace { grid-template-columns:minmax(0,1fr); }
+}
+@media(max-width:620px) {
+  .pipeline-context-facts { grid-template-columns:minmax(0,1fr); }
+  .pipeline-run-context-header label { width:100%; }
+}

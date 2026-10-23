@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 첫 IF Pipeline의 분석 Run·Dataset 판본을 상단에 표시하고, 완료 Run의 Training·Calibration·Test를 넓은 화면에서 선택해 검토할 수 있게 했습니다. 이전 Run 선택 시 해당 결과로 이동하고, Test 후보 목록·상세·Feature 민감도 수치를 같은 작업 공간에서 확인할 수 있습니다. 분석 영역과 후보 번호는 Run URL에 보존되어 독립 ML 판본 확인 후에도 복원되며, Dataset 참조만 보정할 때에도 선택을 유지합니다. 기존 설명 Job 조회·재시도·권한 기반 취소 요청, Catalog·이전 Run 목록 조회 오류 복구도 개선했습니다. 원본 관측 시각·ID가 보존되지 않은 첫 IF 결과는 추적 가능하다고 오인시키지 않습니다.
+
+- 첫 IF Pipeline의 완료 Run에서 Model·Calibration·Test·Policy·Evaluation 판본과 시간 분할·Feature 서명을 교차 검증하고, 학습 설정·실제 점수 분포·보정 임계값·Test 판정 근거를 분석할 수 있게 했습니다. 실행 후 결과를 먼저 표시하며 불변 ML 판본을 열었다가 원래 Run으로 돌아올 수 있습니다.
+
+- 실제 Training·Scoring 점수의 32개 구간별 정확한 빈도를 결과 요약에 보존하고 차트·집계 표로 제공합니다. 기존 결과에 분포가 없거나 집계가 불일치하면 추정하지 않으며, 거의 같은 점수의 구간 경계도 처리합니다. Test 후보별 Feature와 명시적으로 실행한 중앙값 치환 점수 민감도 설명을 살펴보고 실패·취소 시 다시 시도할 수 있습니다. EVT/POT·SHAP·실제 사건 원인을 주장하지 않습니다.
+
 - 첫 등록형 Isolation Forest 분석의 Consumer Experience를 분석 소개·데이터 준비/복귀·입력 검사·실행 상태·결과 요약과 후보 확인 순으로 구성했습니다. 원본 로그에서 미등록 Feature를 자동 생성한다고 안내하지 않으며, 독립 데이터 준비 기능과 기존 Pipeline/ML 실행 API를 재사용합니다.
 
 - 모델·학습·Scoring·정책·평가·설명 화면의 독립 실행 경험을 유지하면서 Dataset·Model Revision·Scoring Result 선택을 URL과 함께 전달·복원하도록 개선했습니다. 데이터 탐색에서 선택적 학습 진입, 결과가 없는 화면의 다음 행동 안내, 학습 점수 상위 5% 후보의 기준 표시를 제공하며 기존 ML API·판본은 변경하지 않습니다.

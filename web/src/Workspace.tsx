@@ -18,7 +18,7 @@ import { UnderstandingPanel } from "./UnderstandingPanel";
 import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQueryPanel";
 import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
-import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
+import { useWorkspaceNavigation, pipelineRunSelectionContext, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
@@ -486,6 +486,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
         initialDatasetId={context.datasetId ?? ""}
         initialRunId={context.pipelineRunId ?? ""}
+        initialCandidateRowIndex={context.candidateRowIndex}
+        initialAnalysisSection={context.pipelineAnalysisSection}
         hasMoreDatasets={Boolean(nextDatasetCursor)}
         onLoadMoreDatasets={loadMoreDatasets}
         onSelectDataset={id => {
@@ -494,8 +496,16 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         }}
         onSelectRun={(id, datasetId) => {
           setSelected(datasetId);
-          navigateWithContext("pipelines", { datasetId, pipelineRunId: id });
+          navigateWithContext("pipelines", pipelineRunSelectionContext(context, id, datasetId));
         }}
+        onSelectCandidate={rowIndex => selectContext({
+          datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
+          candidateRowIndex: rowIndex, pipelineAnalysisSection: context.pipelineAnalysisSection,
+        })}
+        onSelectAnalysisSection={section => selectContext({
+          datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
+          candidateRowIndex: context.candidateRowIndex, pipelineAnalysisSection: section,
+        })}
         canRun={canRun} canCancel={canCancel}
         onNavigate={(tab, datasetId) => navigateWithContext(tab, {
           pipelineReturn: true, datasetId,
@@ -700,6 +710,18 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           onViewChange={view => setTab(view === "models" ? "ml" : "training")}
           onOpenModel={id => openResource("model", id)}
           canTrain={canRun} canCancel={canCancel} />}
+      {resource && context.pipelineReturn && context.pipelineRunId &&
+        <section className="pipeline-return" role="status">
+          <div><strong>이 Pipeline Run에서 열린 분석 결과입니다.</strong>
+            <p>불변 모델·점수·판정·평가 근거를 확인한 뒤 동일한 Run 분석으로 돌아갈 수 있습니다.</p>
+          </div>
+          <button type="button" className="secondary" onClick={() =>
+            navigateWithContext("pipelines", {
+              datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
+              candidateRowIndex: context.candidateRowIndex,
+              pipelineAnalysisSection: context.pipelineAnalysisSection,
+            })}>원래 Pipeline Run으로 돌아가기 →</button>
+        </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         onScoring={startScoring} onDecision={startDecision} />}
