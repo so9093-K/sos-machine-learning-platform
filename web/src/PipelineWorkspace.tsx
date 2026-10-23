@@ -210,6 +210,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
         <span>현재 제공: 준비된 Feature Dataset을 이용하는 분석</span>
         <span>결과: 이상 점수 · 후보 목록 · 실행 근거</span>
       </div>
+      <div className="pipeline-actions">
+        <button type="button" onClick={() =>
+          document.getElementById("pipeline-prepare-title")?.scrollIntoView({ block: "start" })}>
+          내 데이터로 분석 시작하기 →
+        </button>
+      </div>
     </section>
 
     <nav className="pipeline-journey" aria-label="분석 이용 단계">
