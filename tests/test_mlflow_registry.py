@@ -63,6 +63,10 @@ def test_registry_pins_artifact_source_and_rejects_changed_version(model):
     client.versions[0]["status"] = "READY"
     pinned = {**model, "registry_model": name, "registry_version": version}
     verify_registered_version(client, pinned)
+    client.versions[0]["status"] = "PENDING_REGISTRATION"
+    with pytest.raises(MLflowDeliveryError, match="MISMATCH"):
+        verify_registered_version(client, pinned)
+    client.versions[0]["status"] = "READY"
     with pytest.raises(MLflowDeliveryError, match="MISMATCH"):
         verify_registered_version(client, {**pinned, "sha256": "b" * 64})
     client.versions[0]["source"] = "s3://sos-data/results/other.model.joblib"

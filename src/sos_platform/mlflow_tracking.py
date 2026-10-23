@@ -17,7 +17,7 @@ from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
 from .mlflow_errors import MLflowDeliveryError
 from .mlflow_experiments import ensure_experiment
-from .mlflow_registry import register_model_version
+from .mlflow_registry import register_model_version, verify_registered_version
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -208,6 +208,11 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
             if model is None:
                 raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
             name, version = register_model_version(client, model, run_id)
+            # Registry가 실제 READY 상태인지 검증한 뒤에만 SOS 실행 경로를 연다.
+            # 생성 직후 비동기 PENDING이면 전송을 Retry로 남기며 학습 결과는 유지한다.
+            verify_registered_version(
+                client, {**model, "registry_model": name, "registry_version": version}
+            )
             store.save_registry_version(model_id, name, version)
     except MLflowDeliveryError as exc:
         store.finish_tracking_export(job_id, error_code=str(exc))
