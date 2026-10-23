@@ -279,6 +279,7 @@ pipeline_runs = Table(
     Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
     Column("dataset_version", Text, nullable=False),
     Column("owner_actor", Text, nullable=False),
+    Column("owner_actor_type", String(16), nullable=False),
     Column("input_plan", Text, nullable=False),
     Column("stage_index", Integer, nullable=False),
     Column("job_ids", Text, nullable=False),

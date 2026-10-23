@@ -246,7 +246,8 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         if not inspected["ready"]:
             raise HTTPException(status_code=422, detail=inspected["issues"])
         try:
-            return create_run(store, dataset, actor.id, inspected, idempotency_key)
+            return create_run(store, dataset, actor.id, inspected, idempotency_key,
+                              actor_type=actor.kind)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 

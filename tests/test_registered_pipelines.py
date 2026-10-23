@@ -16,7 +16,7 @@ class FakeStore:
             db.execute(text(
                 "CREATE TABLE pipeline_runs("
                 "id TEXT PRIMARY KEY, definition_id TEXT, definition_version TEXT,"
-                "dataset_id TEXT, dataset_version TEXT, owner_actor TEXT,"
+                "dataset_id TEXT, dataset_version TEXT, owner_actor TEXT, owner_actor_type TEXT,"
                 "input_plan TEXT, stage_index INTEGER, job_ids TEXT, status TEXT,"
                 "cancel_requested BOOLEAN, error_code TEXT, created_at TEXT, updated_at TEXT)"
             ))
@@ -26,6 +26,7 @@ class FakeStore:
                 "PRIMARY KEY(actor_id,submission_key))"
             ))
         self.jobs = {}
+        self.actor_types = {}
         self.next_job = 0
         self.idempotency = {}
 
@@ -61,6 +62,7 @@ class FakeStore:
         result = {"id": job_id, "kind": kind, "spec": spec, "status": "Succeeded",
                   "cancel_requested": False, "result": outcomes[kind]}
         self.jobs[job_id] = result
+        self.actor_types[job_id] = actor_type
         return result
 
     def request_cancel(self, job_id, *, actor_id):
@@ -201,3 +203,14 @@ def test_invalid_completed_stage_result_does_not_stop_worker():
     assert pipeline_runs.advance_run(store)
     assert pipeline_runs.get_run(store, run["id"])["status"] == "Failed"
     assert store.next_job == 1
+
+
+def test_service_actor_type_is_preserved_for_pipeline_jobs():
+    store = FakeStore()
+    run = pipeline_runs.create_run(
+        store, {"id": "service-data", "version": "v1"}, "agent-service",
+        {"ready": True, "plan": None}, None, actor_type="service",
+    )
+    assert pipeline_runs.advance_run(store)
+    job_id = pipeline_runs.get_run(store, run["id"])["job_ids"]["preflight"]
+    assert store.actor_types[job_id] == "service"

@@ -21,6 +21,7 @@ def upgrade() -> None:
         sa.Column("dataset_id", sa.String(36), sa.ForeignKey("datasets.id"), nullable=False),
         sa.Column("dataset_version", sa.Text(), nullable=False),
         sa.Column("owner_actor", sa.Text(), nullable=False),
+        sa.Column("owner_actor_type", sa.String(16), nullable=False),
         sa.Column("input_plan", sa.Text(), nullable=False),
         sa.Column("stage_index", sa.Integer(), nullable=False),
         sa.Column("job_ids", sa.Text(), nullable=False),

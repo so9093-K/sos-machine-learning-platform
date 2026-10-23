@@ -55,8 +55,10 @@ def list_runs(store, *, actor_id: str | None, limit: int = 30) -> list[dict]:
 
 
 def create_run(store, dataset: dict, owner_actor: str, inspection: dict,
-               submission_key: str | None) -> dict:
+               submission_key: str | None, *, actor_type: str = "human") -> dict:
     """동일 Actor·제출 키에 같은 내용이면 같은 Run을 반환한다."""
+    if actor_type not in ("human", "service"):
+        raise ValueError("Unsupported Pipeline owner actor type")
     plan = inspection["plan"]
     if not inspection["ready"]:
         raise ValueError("Pipeline 입력 적합성 검사에 실패했습니다.")
@@ -86,14 +88,15 @@ def create_run(store, dataset: dict, owner_actor: str, inspection: dict,
             db.execute(text(
                 "INSERT INTO pipeline_runs"
                 "(id,definition_id,definition_version,dataset_id,dataset_version,"
-                "owner_actor,input_plan,stage_index,job_ids,status,cancel_requested,"
+                "owner_actor,owner_actor_type,input_plan,stage_index,job_ids,status,cancel_requested,"
                 "created_at,updated_at) "
                 "VALUES(:id,:definition_id,:version,:dataset_id,:dataset_version,"
-                ":owner_actor,:plan,0,'{}','Queued',FALSE,:created,:updated)"
+                ":owner_actor,:owner_actor_type,:plan,0,'{}','Queued',FALSE,:created,:updated)"
             ), {
                 "id": run_id, "definition_id": PIPELINE_ID, "version": PIPELINE_VERSION,
                 "dataset_id": dataset["id"], "dataset_version": dataset["version"],
-                "owner_actor": owner_actor, "plan": json.dumps(plan),
+                "owner_actor": owner_actor, "owner_actor_type": actor_type,
+                "plan": json.dumps(plan),
                 "created": now(), "updated": now(),
             })
     return get_run(store, run_id)
@@ -215,7 +218,8 @@ def _advance_one_run(store, run_id: str) -> bool:
             return True
         job = store.create_job(
             kind=kind, dataset_id=run["dataset_id"], spec=spec,
-            owner_actor=run["owner_actor"], actor_type="human",
+            owner_actor=run["owner_actor"],
+            actor_type=run["owner_actor_type"],
             idempotency_key="pipeline:" + run["id"] + ":" + stage,
         )
         refs = {**run["job_ids"], stage: job["id"]}
