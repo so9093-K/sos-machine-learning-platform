@@ -1,0 +1,76 @@
+name: Pipeline Browser E2E
+
+on:
+  # 전체 API·Worker·S3 검사는 매 커밋이 아니라 관련 PR의 리뷰 진입에 실시한다.
+  pull_request:
+    types: [ready_for_review, labeled]
+    paths:
+      - 'src/sos_platform/**'
+      - 'web/src/**'
+      - 'web/scripts/browser-pipeline-e2e.mjs'
+      - 'web/Dockerfile'
+      - 'Dockerfile'
+      - 'compose.yaml'
+      - '.github/workflows/pipeline-browser-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pipeline-browser-e2e:
+    if: github.event_name == 'workflow_dispatch' || github.event.action == 'ready_for_review' || github.event.label.name == 'run-pipeline-e2e'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMPOSE_PROJECT_NAME: sos-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare isolated Compose settings and temporary identity
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import secrets
+          from pathlib import Path
+
+          token = secrets.token_urlsafe(48)
+          fingerprint = hashlib.sha256(token.encode()).hexdigest()
+          actor = {fingerprint: {"actor_id": "e2e-operator", "kind": "human", "roles": ["administrator"]}}
+          config = Path(os.environ["RUNNER_TEMP"]) / "sos-pipeline-e2e.env"
+          example = Path(".env.example").read_text(encoding="utf-8")
+          config.write_text(example + "\nSOS_AUTH_TOKEN_HASHES=" +
+                            json.dumps(actor, separators=(",", ":")) + "\n", encoding="utf-8")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"SOS_E2E_ENV_FILE={config}\n")
+              env.write(f"SOS_E2E_TOKEN={token}\n")
+          PY
+      - name: Start isolated API, Worker, Web and storage
+        run: docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app up --build -d --wait
+      - name: Verify complete browser Pipeline consumer journey
+        run: node web/scripts/browser-pipeline-e2e.mjs
+      - name: Upload screenshot when browser test fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-browser-e2e-failure
+          path: artifacts/pipeline-e2e-failure.png
+          if-no-files-found: ignore
+      - name: Diagnose isolated integration failures
+        if: failure()
+        run: docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app logs --tail 100 api worker web
+      - name: Remove only this test's isolated project and volumes
+        if: always()
+        run: |
+          if [ -n "${SOS_E2E_ENV_FILE:-}" ] && [ -f "$SOS_E2E_ENV_FILE" ]; then
+            docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app down -v --remove-orphans
+            rm -f "$SOS_E2E_ENV_FILE"
+          fi
