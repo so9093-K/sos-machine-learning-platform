@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 import pyarrow.parquet as pq
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
+from typing import Literal
 
 from .object_store import ObjectStore
 from .pipeline_reference import PIPELINE_ID, definition, inspect_dataset
@@ -21,6 +22,89 @@ READ_DATASET = Depends(require("dataset.read"))
 READ_JOB = Depends(require("job.read"))
 CREATE_JOB = Depends(require("job.create"))
 CANCEL_JOB = Depends(require("job.cancel"))
+
+
+class PipelineDefinitionOut(BaseModel):
+    id: str
+    version: str
+    name: str
+    description: str
+    algorithm: str
+    required_time_column: str
+    required_features: list[str]
+    stages: list[str]
+    model_reuse: bool
+    label_requirement: str
+    limitations: list[str]
+
+
+class PipelinePartitionSizesOut(BaseModel):
+    train: int
+    calibration: int
+    test: int
+
+
+class PipelinePlanOut(BaseModel):
+    timestamp_column: str
+    train_end: str
+    calibration_end: str
+    partition_sizes: PipelinePartitionSizesOut
+
+
+class PipelineCheckOut(BaseModel):
+    pipeline_id: str
+    pipeline_version: str
+    dataset_id: str
+    dataset_version: str
+    ready: bool
+    issues: list[str]
+    feature_count: int
+    plan: PipelinePlanOut | None
+
+
+class PipelineJobOut(BaseModel):
+    id: str
+    kind: str
+    status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
+    cancel_requested: bool
+    error_code: str | None = None
+    result: dict[str, object] | None
+
+
+class PipelineStageOut(BaseModel):
+    name: str
+    job: PipelineJobOut
+
+
+class PipelineRunOut(BaseModel):
+    id: str
+    definition_id: str
+    definition_version: str
+    dataset_id: str
+    dataset_version: str
+    input_plan: PipelinePlanOut | None
+    stage_index: int
+    job_ids: dict[str, str]
+    status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
+    cancel_requested: bool
+    error_code: str | None = None
+    created_at: str
+    updated_at: str
+    current_stage: str | None
+    stages: list[PipelineStageOut] = Field(default_factory=list)
+
+
+class PipelineCandidateOut(BaseModel):
+    row_index: int
+    anomaly_score: float
+    features: dict[str, float | int | None]
+
+
+class PipelineCandidatesOut(BaseModel):
+    items: list[PipelineCandidateOut]
+    threshold: float
+    next_cursor: str | None
+    result_id: str
 
 
 class PipelineStartRequest(BaseModel):
@@ -120,17 +204,17 @@ def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None) -> 
 def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
     router = APIRouter()
 
-    @router.get("/api/pipelines")
+    @router.get("/api/pipelines", response_model=list[PipelineDefinitionOut])
     def pipelines(actor: Actor = READ_DATASET):
         return [definition()]
 
-    @router.get("/api/pipelines/{definition_id}")
+    @router.get("/api/pipelines/{definition_id}", response_model=PipelineDefinitionOut)
     def pipeline_detail(definition_id: str, actor: Actor = READ_DATASET):
         if definition_id != PIPELINE_ID:
             raise HTTPException(status_code=404, detail="Pipeline not found")
         return definition()
 
-    @router.get("/api/pipelines/{definition_id}/check")
+    @router.get("/api/pipelines/{definition_id}/check", response_model=PipelineCheckOut)
     def pipeline_check(
         definition_id: str,
         dataset_id: str = Query(min_length=1),
@@ -142,7 +226,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         _visible(actor, dataset)
         return inspect_dataset(store, dataset)
 
-    @router.post("/api/pipelines/{definition_id}/runs", status_code=202)
+    @router.post("/api/pipelines/{definition_id}/runs", status_code=202, response_model=PipelineRunOut)
     def submit_pipeline(
         definition_id: str,
         body: PipelineStartRequest,
@@ -167,20 +251,20 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    @router.get("/api/pipeline-runs")
+    @router.get("/api/pipeline-runs", response_model=list[PipelineRunOut])
     def pipeline_history(actor: Actor = READ_JOB):
         return list_runs(store, actor_id=None if actor.privileged else actor.id)
 
-    @router.get("/api/pipeline-runs/{run_id}")
+    @router.get("/api/pipeline-runs/{run_id}", response_model=PipelineRunOut)
     def pipeline_run_detail(run_id: str, actor: Actor = READ_JOB):
         return _visible(actor, get_run(store, run_id))
 
-    @router.post("/api/pipeline-runs/{run_id}/cancel")
+    @router.post("/api/pipeline-runs/{run_id}/cancel", response_model=PipelineRunOut)
     def pipeline_cancel(run_id: str, actor: Actor = CANCEL_JOB):
         _visible(actor, get_run(store, run_id, include_jobs=False))
         return cancel_run(store, run_id)
 
-    @router.get("/api/pipeline-runs/{run_id}/candidates")
+    @router.get("/api/pipeline-runs/{run_id}/candidates", response_model=PipelineCandidatesOut)
     def pipeline_candidates(
         run_id: str, limit: int = Query(default=25, ge=1, le=100),
         cursor: str | None = Query(default=None, max_length=160),
