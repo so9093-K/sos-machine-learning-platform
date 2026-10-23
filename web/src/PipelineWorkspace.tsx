@@ -408,7 +408,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
           </div>}
           {!rows && !candidateError && <p role="status">
             완료된 Run의 후보를 불러오는 중입니다.
-          </p>
+          </p>}
           {rows && <>
             {rows.items.length === 0 && <p>현재 페이지에는 이상 후보가 없습니다.</p>}
             {rows.items.length > 0 && <div className="table-scroll"><table>
