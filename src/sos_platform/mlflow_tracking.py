@@ -124,7 +124,9 @@ def send_to_mlflow(
         raise ValueError("Only successful ML jobs can be tracked")
     run_id = known_run_id
     if run_id is None:
-        experiment = ensure_experiment(client, job["owner_actor"])
+        experiment = ensure_experiment(
+            client, job["owner_actor"], job.get("spec", {}).get("experiment_title") or "기본 실험"
+        )
         # 입력 Job ID는 SOS가 발급한 UUID이며 SQL/검색 필터의 사용자 문자열이 아니다.
         found = client.post(
             "runs/search",

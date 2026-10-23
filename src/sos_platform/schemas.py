@@ -367,6 +367,7 @@ class MLForkRequest(BaseModel):
 
 class MLTrainRequest(BaseModel):
     dataset_id: str
+    experiment_title: str = Field(default="기본 실험", min_length=1, max_length=80)
     features: list[str] = Field(min_length=1)
     params: IsolationForestParameters = Field(default_factory=IsolationForestParameters)
     training_input: MLTrainingInputPolicy = Field(default_factory=MLTrainingInputPolicy)

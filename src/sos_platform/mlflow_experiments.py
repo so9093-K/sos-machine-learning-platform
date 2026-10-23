@@ -1,22 +1,36 @@
-"""MLflow Experiment는 연구 묶음이고 SOS Job/Attempt는 실행의 정본이다."""
+"""연구 목적별 MLflow Experiment 식별과 Actor 소유권 확인.
+
+실험 메타데이터의 정본은 MLflow이며 SOS에 별도 연구 관리 테이블을 만들지 않는다.
+"""
 
 import hashlib
 
 from .mlflow_errors import MLflowDeliveryError
 
+DEFAULT_EXPERIMENT = "기본 실험"
 
-def experiment_name(owner: str) -> str:
-    """Actor별 연구 영역 이름에 Actor ID 원문을 사용하지 않는다."""
+
+def experiment_prefix(owner: str) -> str:
+    """Actor 식별자 원문을 MLflow 이름으로 보내지 않는다."""
     if not isinstance(owner, str) or not owner:
         raise MLflowDeliveryError("SOS-MLFLOW-OWNER-INVALID")
     return "sos-research-" + hashlib.sha256(owner.encode("utf-8")).hexdigest()[:24]
 
 
-def find_experiment(client, owner: str) -> dict | None:
-    """이름으로 정확하게 검색하며 실험 정보의 소유 경계를 검증한다."""
-    name = experiment_name(owner)
+def experiment_name(owner: str, title: str = DEFAULT_EXPERIMENT) -> str:
+    if not isinstance(title, str) or not title.strip() or len(title) > 80:
+        raise MLflowDeliveryError("SOS-MLFLOW-EXPERIMENT-INVALID")
+    normalized = title.strip()
+    return experiment_prefix(owner) + "-" + hashlib.sha256(
+        normalized.encode("utf-8")
+    ).hexdigest()[:16]
+
+
+def find_experiment(client, owner: str, title: str = DEFAULT_EXPERIMENT) -> dict | None:
+    """연구 제목에서 파생된 고정 이름을 정확히 검색한다."""
+    name = experiment_name(owner, title)
     result = client.post("experiments/search", {
-        "filter": f"name = '{name}'", "max_results": 1000,
+        "filter": f"name = '{name}'", "max_results": 100,
     })
     entries = result.get("experiments") or []
     if not isinstance(entries, list):
@@ -27,14 +41,17 @@ def find_experiment(client, owner: str) -> dict | None:
     return found[0] if found else None
 
 
-def ensure_experiment(client, owner: str) -> str:
-    """첫 실행에서 생성하고 재시도 시 동일한 Experiment를 이용한다."""
-    item = find_experiment(client, owner)
+def ensure_experiment(client, owner: str, title: str = DEFAULT_EXPERIMENT) -> str:
+    """연구 묶음이 없다면 생성하고, 동일 제목은 기존 Experiment를 사용한다."""
+    item = find_experiment(client, owner, title)
     identifier = (
         item.get("experiment_id") if item else client.post(
             "experiments/create", {
-                "name": experiment_name(owner),
-                "tags": [{"key": "sos.source", "value": "sos-platform"}],
+                "name": experiment_name(owner, title),
+                "tags": [
+                    {"key": "sos.source", "value": "sos-platform"},
+                    {"key": "sos.title", "value": title.strip()},
+                ],
             },
         ).get("experiment_id")
     )

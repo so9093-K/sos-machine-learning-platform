@@ -1,34 +1,80 @@
 """MLflow 연구 기록을 SOS Actor 접근 계약에 맞춰 제한해 노출한다."""
 
 from .mlflow_errors import MLflowDeliveryError
-from .mlflow_experiments import find_experiment
+from .mlflow_experiments import (
+    DEFAULT_EXPERIMENT,
+    experiment_prefix,
+    find_experiment,
+)
 from .mlflow_registry import registered_model_name
 
 
-def read_experiments(client, actor_id: str) -> list[dict]:
-    """현재 Actor가 소유한 연구 Experiment만 반환한다."""
-    experiment = find_experiment(client, actor_id)
-    if experiment is None:
-        return []
-    return [{
-        "id": experiment["experiment_id"],
-        "name": "내 ML 실험",
-    }]
-
-
-def read_runs(client, store, actor_id: str) -> list[dict]:
-    """외부 Run 목록에 SOS Job 소유권 검사를 다시 적용한다."""
-    experiment = find_experiment(client, actor_id)
-    if experiment is None:
-        return []
-    experiment_id = experiment.get("experiment_id")
-    if not isinstance(experiment_id, str):
+def _page_token(result: dict) -> str | None:
+    token = result.get("next_page_token")
+    if token is not None and (not isinstance(token, str) or not token):
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-    result = client.post("runs/search", {
-        "experiment_ids": [experiment_id],
+    return token
+
+
+def read_experiments(client, actor_id: str, *, page_token: str | None = None) -> dict:
+    """Actor 이름 공간의 Experiment를 이름/표시 제목과 함께 페이지 단위 조회한다."""
+    prefix = experiment_prefix(actor_id)
+    request = {
+        "filter": f"name LIKE '{prefix}-%'",
+        "max_results": 100,
+    }
+    if page_token:
+        request["page_token"] = page_token
+    result = client.post("experiments/search", request)
+    records = result.get("experiments") or []
+    if not isinstance(records, list):
+        raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+    items = []
+    for experiment in records:
+        if not isinstance(experiment, dict) or not str(experiment.get("name", "")).startswith(prefix + "-"):
+            continue
+        tags = experiment.get("tags") or []
+        if not isinstance(tags, list):
+            raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+        title = next((
+            tag.get("value") for tag in tags if isinstance(tag, dict)
+            and tag.get("key") == "sos.title"
+        ), DEFAULT_EXPERIMENT)
+        identifier = experiment.get("experiment_id")
+        if isinstance(title, str) and isinstance(identifier, str) and identifier.isdigit():
+            items.append({"id": identifier, "name": title})
+    return {"items": items, "next_page_token": _page_token(result)}
+
+
+def _actor_experiment_id(client, actor_id: str, experiment_id: str | None) -> str | None:
+    if experiment_id is None:
+        default = find_experiment(client, actor_id)
+        return default.get("experiment_id") if default else None
+    experiment = client.get("experiments/get", {"experiment_id": experiment_id}).get("experiment")
+    if not isinstance(experiment, dict) or (
+        experiment.get("experiment_id") != experiment_id or not isinstance(experiment.get("name"), str)
+        or not experiment["name"].startswith(experiment_prefix(actor_id) + "-")
+    ):
+        raise MLflowDeliveryError("SOS-MLFLOW-EXPERIMENT-NOT-FOUND")
+    return experiment_id
+
+
+def read_runs(
+    client, store, actor_id: str, *, experiment_id: str | None = None,
+    page_token: str | None = None,
+) -> dict:
+    """현재 Actor의 연구 Experiment에서 Run을 조회하고 Job 소유권을 다시 확인한다."""
+    selected_id = _actor_experiment_id(client, actor_id, experiment_id)
+    if selected_id is None:
+        return {"items": [], "next_page_token": None}
+    request = {
+        "experiment_ids": [selected_id],
         "max_results": 100,
         "order_by": ["attributes.start_time DESC"],
-    })
+    }
+    if page_token:
+        request["page_token"] = page_token
+    result = client.post("runs/search", request)
     runs = result.get("runs") or []
     if not isinstance(runs, list):
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
@@ -59,17 +105,19 @@ def read_runs(client, store, actor_id: str) -> list[dict]:
                 if isinstance(item, dict) and isinstance(item.get("key"), str)
             },
         })
-    return visible
+    return {"items": visible, "next_page_token": _page_token(result)}
 
 
-def read_model_versions(client, store, actor_id: str) -> list[dict]:
-    """MLflow Registry가 소유한 버전을 조회하되 실행 ID는 SOS가 검증한다."""
+def read_model_versions(client, store, actor_id: str, *, page_token: str | None = None) -> dict:
+    """Registry 판본과 SOS 아티팩트를 대조하며 페이지 정보를 보존한다."""
     name = registered_model_name({
         "owner_actor": actor_id, "algorithm": "isolation_forest",
     })
-    versions = client.get("model-versions/search", {
-        "filter": f"name = '{name}'", "max_results": 100,
-    }).get("model_versions") or []
+    request = {"filter": f"name = '{name}'", "max_results": 100}
+    if page_token:
+        request["page_token"] = page_token
+    result = client.get("model-versions/search", request)
+    versions = result.get("model_versions") or []
     if not isinstance(versions, list):
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
     visible = []
@@ -101,4 +149,4 @@ def read_model_versions(client, store, actor_id: str) -> list[dict]:
             "status": version.get("status"), "job_id": job_id,
             "aliases": version.get("aliases") or [],
         })
-    return visible
+    return {"items": visible, "next_page_token": _page_token(result)}

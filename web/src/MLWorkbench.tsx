@@ -28,6 +28,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
   const [nEstimators, setNEstimators] = useState(100);
+  const [experimentTitle, setExperimentTitle] = useState("기본 실험");
   const [maxSamples, setMaxSamples] = useState("auto");
   const [inputMode, setInputMode] = useState<"all" | "sample">("all");
   const [inputRows, setInputRows] = useState(100000);
@@ -93,7 +94,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
   }, [selectedJob?.status, selectedJob?.result?.model_revision_id]);
 
   async function startTraining() {
-    if (!canTrain || !selectedId || features.length < 1 || submitting ||
+    if (!canTrain || !selectedId || features.length < 1 || !experimentTitle.trim() ||
+        experimentTitle.trim().length > 80 || submitting ||
         (inputMode === "sample" && (!Number.isSafeInteger(inputRows) || inputRows < 2 ||
           !Number.isInteger(inputSeed) || inputSeed < 0 || inputSeed > 4294967295))) return;
     const expectedDataset = selectedId;
@@ -101,7 +103,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
     setSubmitting(true); setError(""); setNotice("");
     try {
       const result = await submitJob<MLTrainingJob>("/api/ml/train/jobs", {
-        dataset_id: selectedId, features,
+        dataset_id: selectedId, features, experiment_title: experimentTitle.trim(),
         training_input: inputMode === "all" ? { mode: "all" } :
           { mode: "sample", rows: inputRows, seed: inputSeed },
         params: { n_estimators: nEstimators, max_samples: maxSamples === "auto"
@@ -169,6 +171,11 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
             {datasets.map(dataset => <option value={dataset.id} key={dataset.id}>{dataset.name}</option>)}
           </select>
         </label>
+        <label>연구 Experiment
+          <input aria-label="연구 Experiment 이름" maxLength={80}
+            value={experimentTitle} onChange={event => setExperimentTitle(event.target.value)}
+            placeholder="연구 목적을 입력하세요" />
+        </label>
         <label>트리 개수
           <input type="number" aria-label="Isolation Forest 트리 개수"
             min={1} max={2000} value={nEstimators}
@@ -222,6 +229,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
       <p className="hint">숫자형 Feature를 선택하세요. 학습 입력은 위에서 선택한 정책에 따르며, 실행 예산에 맞지 않으면 실패합니다. 결측·비유한값·정밀도 오류는 실패로 처리합니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
       <div className="actions">
         <button disabled={!canTrain || submitting || !selectedId || features.length === 0 ||
+          !experimentTitle.trim() || experimentTitle.trim().length > 80 ||
           !Number.isInteger(nEstimators) || nEstimators < 1 || nEstimators > 2000 ||
           (inputMode === "sample" && (!Number.isSafeInteger(inputRows) || inputRows < 2 ||
             !Number.isInteger(inputSeed) || inputSeed < 0 || inputSeed > 4294967295))}
