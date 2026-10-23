@@ -94,6 +94,7 @@ jobs:
       - name: Verify real trained IF model is bound to MLflow Registry
         run: |
           docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app exec -T worker python - <<'PY'
+          import os
           from pathlib import Path
           from sqlalchemy import text
           from sos_platform.store import Store
@@ -101,7 +102,7 @@ jobs:
           from sos_platform.mlflow_tracking import MLflowClient
           from sos_platform.mlflow_registry import verify_registered_version
 
-          store = Store(Path(".sos"))
+          store = Store(Path(os.environ["SOS_HOME"]))
           with store.connection() as db:
               model_id = db.execute(
                   text("SELECT id FROM model_revisions WHERE owner_actor=:owner "
