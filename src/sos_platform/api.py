@@ -76,6 +76,9 @@ from .schemas import (
     MLExplanationJobPageOut,
     MLExplanationRequest,
     MLflowExportStatusOut,
+    MLflowExperimentPageOut,
+    MLflowRunPageOut,
+    MLflowModelVersionPageOut,
     MLPolicyJobOut,
     MLPolicyJobPageOut,
     MLPolicyRequest,
@@ -857,24 +860,39 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             raise HTTPException(status_code=503, detail="MLflow management is unavailable")
         return MLflowClient(settings)
 
-    @app.get("/api/ml/experiments")
-    def list_ml_experiments(actor: Actor = READ_JOB_DEP):
+    @app.get("/api/ml/experiments", response_model=MLflowExperimentPageOut)
+    def list_ml_experiments(
+        page_token: str | None = Query(default=None, max_length=2048),
+        actor: Actor = READ_JOB_DEP,
+    ):
         try:
-            return read_experiments(_management_client(), actor.id)
+            return read_experiments(_management_client(), actor.id, page_token=page_token)
         except MLflowDeliveryError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    @app.get("/api/ml/experiments/runs")
-    def list_ml_runs(actor: Actor = READ_JOB_DEP):
+    @app.get("/api/ml/experiments/runs", response_model=MLflowRunPageOut)
+    def list_ml_runs(
+        experiment_id: str | None = Query(default=None, pattern=r"^[0-9]+$"),
+        page_token: str | None = Query(default=None, max_length=2048),
+        actor: Actor = READ_JOB_DEP,
+    ):
         try:
-            return read_runs(_management_client(), store, actor.id)
+            return read_runs(
+                _management_client(), store, actor.id,
+                experiment_id=experiment_id, page_token=page_token,
+            )
         except MLflowDeliveryError as exc:
+            if str(exc) == "SOS-MLFLOW-EXPERIMENT-NOT-FOUND":
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    @app.get("/api/ml/registry/models")
-    def list_registered_models(actor: Actor = READ_JOB_DEP):
+    @app.get("/api/ml/registry/models", response_model=MLflowModelVersionPageOut)
+    def list_registered_models(
+        page_token: str | None = Query(default=None, max_length=2048),
+        actor: Actor = READ_JOB_DEP,
+    ):
         try:
-            return read_model_versions(_management_client(), store, actor.id)
+            return read_model_versions(_management_client(), store, actor.id, page_token=page_token)
         except MLflowDeliveryError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 

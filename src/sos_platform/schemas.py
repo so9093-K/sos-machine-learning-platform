@@ -224,6 +224,46 @@ class MLPolicyRequest(BaseModel):
         return self
 
 
+class MLflowExperimentOut(BaseModel):
+    id: str
+    name: str
+
+
+class MLflowExperimentPageOut(BaseModel):
+    items: list[MLflowExperimentOut]
+    next_page_token: str | None = None
+
+
+class MLflowRunOut(BaseModel):
+    id: str
+    job_id: str
+    job_kind: str
+    status: str | None = None
+    start_time: int | None = None
+    params: dict[str, str]
+    metrics: dict[str, float]
+
+
+class MLflowRunPageOut(BaseModel):
+    items: list[MLflowRunOut]
+    next_page_token: str | None = None
+
+
+class MLflowModelVersionOut(BaseModel):
+    name: str
+    version: str
+    model_id: str
+    run_id: str | None = None
+    status: str
+    job_id: str
+    aliases: list[str] = Field(default_factory=list)
+
+
+class MLflowModelVersionPageOut(BaseModel):
+    items: list[MLflowModelVersionOut]
+    next_page_token: str | None = None
+
+
 class MLflowExportStatusOut(BaseModel):
     job_id: str
     state: Literal["Disabled", "Pending", "Sending", "Retry", "Succeeded"]
