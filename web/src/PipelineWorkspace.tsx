@@ -206,6 +206,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   async function startExample() {
     if (!onUseExample || !hasPipelineExample || !canCreateDataset || exampleBusy || busy) return;
     const selectionRevision = datasetSelectionRevision.current;
+    let expectedRevision = selectionRevision;
     const previousRunId = selectedRunId.current;
     setExampleBusy(true);
     setError("");
@@ -216,6 +217,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           previousRunId !== selectedRunId.current) return;
       selectedDatasetId.current = dataset.id;
       const revision = ++datasetSelectionRevision.current;
+      expectedRevision = revision;
       setDatasetId(dataset.id);
       setChecked(null);
       onSelectDataset(dataset.id);
@@ -226,8 +228,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       if (revision === datasetSelectionRevision.current &&
           selectedDatasetId.current === dataset.id) setChecked(inspection);
     } catch (reason) {
-      if (selectionRevision === datasetSelectionRevision.current &&
-          previousRunId === selectedRunId.current) setError(formatError(reason));
+      if (expectedRevision === datasetSelectionRevision.current &&
+          (expectedRevision !== selectionRevision || previousRunId === selectedRunId.current)) {
+        setError(formatError(reason));
+      }
     } finally {
       setExampleBusy(false);
     }
