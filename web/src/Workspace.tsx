@@ -451,13 +451,35 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onViewDataActivity={() => setTab("jobs")}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
       {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
-        initialDatasetId={selected} hasMoreDatasets={Boolean(nextDatasetCursor)}
-        onLoadMoreDatasets={loadMoreDatasets} onSelectDataset={setSelected}
-        canRun={canRun}
-        canCancel={canCancel} onNavigate={setTab} onOpenResource={openResource} />}
+        initialDatasetId={context.datasetId || selected}
+        initialRunId={context.pipelineRunId ?? ""}
+        hasMoreDatasets={Boolean(nextDatasetCursor)}
+        onLoadMoreDatasets={loadMoreDatasets}
+        onSelectDataset={id => {
+          setSelected(id);
+          navigateWithContext("pipelines", { datasetId: id });
+        }}
+        onSelectRun={(id, datasetId) => navigateWithContext("pipelines", {
+          datasetId, pipelineRunId: id,
+        })}
+        canRun={canRun} canCancel={canCancel}
+        onNavigate={tab => navigateWithContext(tab, { pipelineReturn: true })}
+        onOpenResource={openResource} />}
       {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab}
         onNavigate={setTab} onOpenModel={id => openResource("model", id)}
         onStartScoring={startScoring} canRun={canRun} />}
+      {context.pipelineReturn &&
+        (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) &&
+        <section className="pipeline-return" role="status">
+          <div><strong>등록된 분석을 준비하는 중입니다</strong>
+            <p>Dataset을 등록하거나 내용을 확인한 뒤 이전 분석으로 돌아가 입력 조건을 검사하세요.
+              44개 활동 Feature가 없다면 현재 등록형 분석은 자동 생성할 수 없습니다.</p>
+          </div>
+          <button className="secondary" type="button"
+            onClick={() => navigateWithContext("pipelines", { datasetId: selected })}>
+            {selected ? "이 Dataset으로 분석 계속하기 →" : "분석 화면으로 돌아가기 →"}
+          </button>
+        </section>}
       {!dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
         <p>{tab === "preparation"

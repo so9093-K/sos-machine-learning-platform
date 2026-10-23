@@ -7,7 +7,10 @@ export type WorkspaceTab =
   | "jobs" | "ml-jobs" | "storage" | "audit";
 export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
 export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
-export type MLNavigationContext = { datasetId?: string; modelId?: string; scoringId?: string };
+export type MLNavigationContext = {
+  datasetId?: string; modelId?: string; scoringId?: string;
+  pipelineRunId?: string; pipelineReturn?: boolean;
+};
 type WorkspaceRoute = {
   tab: WorkspaceTab; resource: ResourceRoute; context: MLNavigationContext;
 };
@@ -18,6 +21,13 @@ function isDecisionTab(tab: WorkspaceTab): boolean {
 
 function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
+  if (tab === "pipelines") return {
+    datasetId: params.get("dataset") ?? "",
+    pipelineRunId: params.get("run") ?? "",
+  };
+  if (tab === "understanding" || tab === "preparation" || tab === "preview" || tab === "profile") {
+    return { pipelineReturn: params.get("from") === "pipeline" };
+  }
   if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "" };
   if (tab === "scoring") return { modelId: params.get("model") ?? "" };
   if (isDecisionTab(tab)) return { scoringId: params.get("scoring") ?? "" };
@@ -26,6 +36,12 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
 
 export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): string {
   const params = new URLSearchParams();
+  if (tab === "pipelines") {
+    if (context.datasetId) params.set("dataset", context.datasetId);
+    if (context.pipelineRunId) params.set("run", context.pipelineRunId);
+  }
+  if ((tab === "understanding" || tab === "preparation" || tab === "preview" || tab === "profile")
+      && context.pipelineReturn) params.set("from", "pipeline");
   if ((tab === "training" || tab === "ml") && context.datasetId) {
     params.set("dataset", context.datasetId);
   }
@@ -77,6 +93,10 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
   }
   if (previous.resource?.kind === "model" && tab === "scoring") {
     return { modelId: previous.resource.id };
+  }
+  if (["understanding", "preparation", "preview", "profile"].includes(tab) &&
+      ["understanding", "preparation", "preview", "profile"].includes(previous.tab)) {
+    return { pipelineReturn: previous.context.pipelineReturn };
   }
   if (isDecisionTab(tab) && isDecisionTab(previous.tab)) {
     return { scoringId: previous.context.scoringId };
