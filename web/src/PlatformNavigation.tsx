@@ -101,7 +101,8 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
   if (["understanding", "preparation", "preview", "profile"].includes(tab) &&
       ["understanding", "preparation", "preview", "profile"].includes(previous.tab)) {
     return { pipelineReturn: previous.context.pipelineReturn,
-      datasetId: previous.context.pipelineReturn ? previous.context.datasetId : "" };
+      ...(previous.context.pipelineReturn && previous.context.datasetId
+        ? { datasetId: previous.context.datasetId } : {}) };
   }
   if (isDecisionTab(tab) && isDecisionTab(previous.tab)) {
     return { scoringId: previous.context.scoringId };
