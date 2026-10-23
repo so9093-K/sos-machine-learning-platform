@@ -36,6 +36,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
   const [catalog, setCatalog] = useState<Definition[]>([]);
+  const [catalogError, setCatalogError] = useState("");
+  const [historyError, setHistoryError] = useState("");
+  const [listReload, setListReload] = useState(0);
   const [datasetId, setDatasetId] = useState(initialDatasetId);
   const selectedDatasetId = useRef(initialDatasetId);
   // 다른 Dataset으로 전환하면 이전 검사·제출의 늦은 응답을 무효화한다.
@@ -60,14 +63,19 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   useEffect(() => {
     let active = true;
     // Run 이력이 일시적으로 실패해도 Pipeline Catalog 자체는 이용할 수 있다.
+    setCatalogError(""); setHistoryError("");
     void request<Definition[]>("/api/pipelines")
-      .then(definitions => { if (active) setCatalog(definitions); })
-      .catch(e => { if (active) setError(formatError(e)); });
+      .then(definitions => {
+        if (active) { setCatalog(definitions); setCatalogError(""); }
+      })
+      .catch(e => { if (active) setCatalogError(formatError(e)); });
     void request<Run[]>("/api/pipeline-runs")
-      .then(runs => { if (active) setHistory(runs); })
-      .catch(e => { if (active) setError(formatError(e)); });
+      .then(runs => {
+        if (active) { setHistory(runs); setHistoryError(""); }
+      })
+      .catch(e => { if (active) setHistoryError(formatError(e)); });
     return () => { active = false; };
-  }, []);
+  }, [listReload]);
   useEffect(() => {
     if (selectedDatasetId.current === initialDatasetId) return;
     selectedDatasetId.current = initialDatasetId;
@@ -314,6 +322,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           }</h3>
           <p>{run ? "실행에 고정된 Dataset 판본과 상태를 확인합니다." :
             "이전에 수행한 분석을 열거나 새로운 분석을 실행하세요."}</p>
+          {historyError && <p className="pipeline-context-error" role="alert">
+            이전 Run 목록 조회 실패: {historyError}
+            <button type="button" className="secondary" onClick={() =>
+              setListReload(n => n + 1)}>목록 다시 조회</button>
+          </p>}
         </div>
         <label>분석 Run 선택
           <select aria-label="분석 Run 선택" value={runId} onChange={event => selectRun(event.target.value)}>
@@ -367,8 +380,14 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <h3 id="pipeline-start-title">{current?.name ?? "시간 기반 활동 이상 탐지"}</h3>
           <p>{current?.description ?? "등록된 분석 방법의 정의를 불러오고 있습니다."}</p>
         </div>
-        <span className="chip">등록형 Reference · {current ? "이용 가능" : "조회 중"}</span>
+        <span className="chip">등록형 Reference · {current ? "이용 가능" :
+          catalogError ? "정의 조회 실패" : "조회 중"}</span>
       </div>
+      {catalogError && <div className="pipeline-readiness-blocked" role="alert">
+        등록된 Pipeline의 지원 조건을 조회하지 못했습니다: {catalogError}
+        <button type="button" className="secondary" onClick={() =>
+          setListReload(n => n + 1)}>Pipeline 정의 다시 조회</button>
+      </div>}
       <div className="pipeline-facts">
         <div><strong>어떤 데이터?</strong><p>사용자·호스트 활동을 시간 창으로 집계한 Feature 데이터</p></div>
         <div><strong>어떤 작업?</strong><p>새 모델 학습, 보정 점수 계산, 정책 생성, 별도 Test 점수화와 평가</p></div>
@@ -627,7 +646,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
             {datasets.find(data => data.id === item.dataset_id)?.name ?? item.dataset_id.slice(0, 12)}
             {" · "}{item.status}{" · "}{new Date(item.created_at).toLocaleString("ko-KR")}
           </button>)}
-          {history.length === 0 && <p className="muted">조회된 Run이 없습니다. 새 분석을 실행할 수 있습니다.</p>}
+          {history.length === 0 && <p className="muted">{
+            historyError ? "Run 목록을 확인하지 못했습니다. 상단에서 다시 조회하세요." :
+              "조회된 Run이 없습니다. 새 분석을 실행할 수 있습니다."
+          }</p>}
         </div>
       </details>
     </section>
