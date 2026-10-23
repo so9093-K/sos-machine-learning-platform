@@ -83,9 +83,9 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
       {loading && <p role="status">MLflow 관리 기록을 조회하고 있습니다.</p>}
       {error && <p role="alert">{error}</p>}
       <p className="hint">연구 영역: {experiments.map(item => item.name).join(", ") || "기록 없음"}</p>
-      <label>실험·모델 검색
+      <label>모델 및 Run 검색
         <input value={term} onChange={event => setTerm(event.target.value)}
-          placeholder="모델 이름·버전·Job/Run ID" aria-label="실험과 모델 검색"/>
+          placeholder="모델 이름·버전·Job/Run ID" aria-label="모델과 Run 검색"/>
       </label>
     </section>
     <section className="panel">

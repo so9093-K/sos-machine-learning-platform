@@ -6,7 +6,7 @@ type Props = { jobId: string };
 
 const TERMINAL = new Set(["Disabled", "Succeeded"]);
 
-/** SOS Job과 독립적인 외부 추적 상태를 표시한다. */
+/** Job 성공과 별개인 MLflow 관리·모델 등록 상태를 표시한다. */
 export function MLTrackingStatus({ jobId }: Props) {
   const [status, setStatus] = useState<MLflowExportStatus | null>(null);
   const [error, setError] = useState("");
@@ -33,18 +33,18 @@ export function MLTrackingStatus({ jobId }: Props) {
   }, [jobId]);
 
   return <div className="steps" aria-label="MLflow 추적 상태">
-    <strong>MLflow Tracking (선택 사항)</strong>
+    <strong>MLflow 실행 기록 및 모델 등록</strong>
     {status && <p role="status">
       {status.state === "Disabled"
-        ? "비활성: SOS 결과는 정상적으로 보존됩니다."
+        ? "관리 서버가 연결되지 않았습니다. 학습 결과는 보존되지만 모델 등록·사용은 불가능합니다."
         : status.state === "Succeeded"
-          ? `전송 완료 · Run ID ${status.run_id ?? "미확인"}`
+          ? `MLflow 등록 완료 · Run ID ${status.run_id ?? "미확인"}`
           : status.state === "Retry"
-            ? `전송 재시도 대기 · 시도 ${status.attempts}회`
-            : status.state === "Sending" ? "외부 전송 중" : "외부 전송 대기"}
+            ? `기록·모델 등록 재시도 대기 · 시도 ${status.attempts}회`
+            : status.state === "Sending" ? "외부 전송 중" : "MLflow 등록 대기"}
     </p>}
     {status?.last_error_code && status.state === "Retry" &&
-      <p className="hint">Tracking 오류 코드: {status.last_error_code}. 학습·평가 결과의 성공 상태에는 영향을 주지 않습니다.</p>}
+      <p className="hint">MLflow 등록 오류 코드: {status.last_error_code}. 학습 성공은 유지되지만 등록 전 모델은 사용할 수 없습니다.</p>}
     {error && <p role="alert">{error}</p>}
   </div>;
 }

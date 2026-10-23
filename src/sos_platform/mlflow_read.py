@@ -91,6 +91,8 @@ def read_model_versions(client, store, actor_id: str) -> list[dict]:
             or model.get("registry_model") != name
             or model.get("registry_version") != version.get("version")
             or model.get("sha256") != tags.get("sos.sha256")
+            or model.get("location") != version.get("source")
+            or version.get("status") != "READY"
         ):
             continue
         visible.append({

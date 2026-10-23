@@ -11,8 +11,6 @@ type Props = {
   datasets: Dataset[];
   canTrain: boolean;
   canCancel: boolean;
-  view: "models" | "training";
-  onViewChange: (view: "models" | "training") => void;
   onOpenModel: (id: string) => void;
   initialDatasetId: string;
   onDatasetSelected: (id: string) => void;

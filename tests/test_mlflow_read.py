@@ -71,11 +71,13 @@ def test_model_search_rechecks_owner_and_bound_artifact_digest():
     name = registered_model_name({"owner_actor": "alice", "algorithm": "isolation_forest"})
     client.versions = [
         {"name": name, "version": "1", "status": "READY",
+         "source": "s3://sos-data/results/job/attempt.model.joblib",
          "tags": [
              {"key": "sos.job_id", "value": "own"},
              {"key": "sos.sha256", "value": "a" * 64},
          ]},
         {"name": name, "version": "2", "status": "READY",
+         "source": "s3://sos-data/results/foreign/attempt.model.joblib",
          "tags": [
              {"key": "sos.job_id", "value": "foreign"},
              {"key": "sos.sha256", "value": "b" * 64},
@@ -86,10 +88,14 @@ def test_model_search_rechecks_owner_and_bound_artifact_digest():
         "foreign": {"owner_actor": "bob", "result": {"model_revision_id": "model-b"}},
     }
     refs = {"model-a": {"registry_model": name, "registry_version": "1",
+                        "location": "s3://sos-data/results/job/attempt.model.joblib",
                         "sha256": "a" * 64, "owner_actor": "alice"}}
     store = SimpleNamespace(get_job=jobs.get, get_model_revision=refs.get)
     result = read_model_versions(client, store, "alice")
     assert len(result) == 1
     assert result[0]["model_id"] == "model-a"
     refs["model-a"]["sha256"] = "c" * 64
+    assert read_model_versions(client, store, "alice") == []
+    refs["model-a"]["sha256"] = "a" * 64
+    refs["model-a"]["location"] = "s3://sos-data/results/different.model.joblib"
     assert read_model_versions(client, store, "alice") == []

@@ -718,10 +718,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onScoreModel={startScoring}
         onTrain={() => setTab("training")} />}
       {tab === "training" && !resource &&
-        <MLWorkbench datasets={datasets} view="training"
+        <MLWorkbench datasets={datasets}
           initialDatasetId={context.datasetId ?? ""}
           onDatasetSelected={datasetId => selectContext({ datasetId })}
-          onViewChange={view => setTab(view === "models" ? "ml" : "training")}
           onOpenModel={id => openResource("model", id)}
           canTrain={canRun} canCancel={canCancel} />}
       {resource && context.pipelineReturn && context.pipelineRunId &&
