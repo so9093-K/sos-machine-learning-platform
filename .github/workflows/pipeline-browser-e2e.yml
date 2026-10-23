@@ -91,6 +91,33 @@ jobs:
           PY
       - name: Verify complete browser Pipeline consumer journey
         run: node web/scripts/browser-pipeline-e2e.mjs
+      - name: Verify real trained IF model is bound to MLflow Registry
+        run: |
+          docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app exec -T worker python - <<'PY'
+          from pathlib import Path
+          from sqlalchemy import text
+          from sos_platform.store import Store
+          from sos_platform.mlflow_config import MLflowSettings
+          from sos_platform.mlflow_tracking import MLflowClient
+          from sos_platform.mlflow_registry import verify_registered_version
+
+          store = Store(Path(".sos"))
+          with store.connection() as db:
+              model_id = db.execute(
+                  text("SELECT id FROM model_revisions WHERE owner_actor=:owner "
+                       "ORDER BY created_at DESC LIMIT 1"),
+                  {"owner": "e2e-operator"},
+              ).scalar_one()
+          model = store.get_model_revision(model_id)
+          assert model is not None and model["registry_model"] and model["registry_version"]
+          tracking = store.tracking_status(model["job_id"])
+          assert tracking is not None and tracking["state"] == "Succeeded"
+          assert tracking["run_id"]
+          settings = MLflowSettings.from_env()
+          assert settings is not None
+          verify_registered_version(MLflowClient(settings), model)
+          print("실제 IF 학습 → Registry 판본 → 고정 실행 아티팩트 무결성 검증: 통과")
+          PY
       - name: Upload screenshot when browser test fails
         if: failure()
         uses: actions/upload-artifact@v4

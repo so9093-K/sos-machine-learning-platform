@@ -3,7 +3,9 @@
 import pytest
 
 from sos_platform.mlflow_errors import MLflowDeliveryError
-from sos_platform.mlflow_registry import register_model_version, registered_model_name
+from sos_platform.mlflow_registry import (
+    register_model_version, registered_model_name, verify_registered_version,
+)
 
 
 class FakeClient:
@@ -17,6 +19,12 @@ class FakeClient:
             return {"registered_models": self.models}
         if endpoint == "model-versions/search":
             return {"model_versions": self.versions}
+        if endpoint == "model-versions/get":
+            selected = [
+                item for item in self.versions
+                if item["name"] == params["name"] and item["version"] == params["version"]
+            ]
+            return {"model_version": selected[0]} if selected else {}
         raise AssertionError(endpoint)
 
     def post(self, endpoint, data):
@@ -47,6 +55,19 @@ def test_registry_register_and_retry_share_exact_version(model):
     assert first == (registered_model_name(model), "1")
     assert register_model_version(client, model, "run-1") == first
     assert client.created == 1
+
+
+def test_registry_pins_artifact_source_and_rejects_changed_version(model):
+    client = FakeClient()
+    name, version = register_model_version(client, model, "run-1")
+    client.versions[0]["status"] = "READY"
+    pinned = {**model, "registry_model": name, "registry_version": version}
+    verify_registered_version(client, pinned)
+    with pytest.raises(MLflowDeliveryError, match="MISMATCH"):
+        verify_registered_version(client, {**pinned, "sha256": "b" * 64})
+    client.versions[0]["source"] = "s3://sos-data/results/other.model.joblib"
+    with pytest.raises(MLflowDeliveryError, match="MISMATCH"):
+        verify_registered_version(client, pinned)
 
 
 def test_registry_rejects_mutated_artifact_same_job(model):
