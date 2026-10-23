@@ -190,6 +190,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   onNavigate: (tab: "ml" | "scoring") => void;
 }) {
   const [registeredModels, setRegisteredModels] = useState<Array<{model_id: string; name: string; version: string}>>([]);
+  const [nextModelPage, setNextModelPage] = useState<string | null>(null);
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const [modelId, setModelId] = useState(preferredModelId);
   const [loadedModelId, setLoadedModelId] = useState(preferredModelId);
@@ -202,8 +203,13 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   }, [preferredModelId]);
   useEffect(() => {
     let active = true;
-    void request<Array<{model_id: string; name: string; version: string}>>("/api/ml/registry/models")
-      .then(items => { if (active) setRegisteredModels(items); })
+    void request<{ items: Array<{model_id: string; name: string; version: string}>; next_page_token: string | null }>("/api/ml/registry/models")
+      .then(page => {
+        if (active) {
+          setRegisteredModels(page.items);
+          setNextModelPage(page.next_page_token);
+        }
+      })
       .catch(e => { if (active) setError(formatError(e)); });
     void scores.refresh().catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
@@ -245,6 +251,16 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
           </select>
         </label>
       </div>
+      {nextModelPage && <button type="button" className="secondary" onClick={() => {
+        const token = nextModelPage;
+        setNextModelPage(null);
+        void request<{ items: Array<{model_id: string; name: string; version: string}>; next_page_token: string | null }>(
+          `/api/ml/registry/models?page_token=${encodeURIComponent(token)}`,
+        ).then(page => {
+          setRegisteredModels(old => [...old, ...page.items]);
+          setNextModelPage(page.next_page_token);
+        }).catch(e => { setNextModelPage(token); setError(formatError(e)); });
+      }}>모델 판본 더 보기</button>}
       <button type="button" className="secondary" disabled={!modelId.trim()}
         onClick={() => {
           const identifier = modelId.trim();
