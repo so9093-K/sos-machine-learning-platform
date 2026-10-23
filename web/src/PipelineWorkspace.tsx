@@ -335,7 +335,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       </div>
     </section>
 
-    {(Boolean(!runId)) && <div className="pipeline-journey" aria-label="분석 이용 단계" role="group">
+    <div className="pipeline-journey" aria-label="분석 이용 단계" role="group">
       {[
         { name: "분석 이해", detail: "목적·입력·결과" },
         { name: "데이터 준비", detail: "등록·선택·확인" },
@@ -348,7 +348,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <strong>{step.name}</strong>
         <small>{step.detail}</small>
       </div>)}
-    </div>}
+    </div>
     <section className="panel pipeline-capabilities" aria-labelledby="pipeline-capabilities-title">
       <div className="pipeline-section-heading"><div>
         <span className="eyebrow">제공되는 기능</span>
