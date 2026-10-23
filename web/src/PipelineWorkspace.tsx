@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, formatError, request, submitJob } from "./api";
 import { PipelineAnalysis } from "./PipelineAnalysis";
+import type { PipelineAnalysisSection } from "./PipelineAnalysis";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
@@ -20,14 +21,16 @@ const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 const count = (value: number) => value.toLocaleString("ko-KR");
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, canRun, canCancel, onNavigate, onOpenResource }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
   initialCandidateRowIndex?: number;
+  initialAnalysisSection?: PipelineAnalysisSection;
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
   onSelectDataset: (datasetId: string) => void;
   onSelectRun: (runId: string, datasetId: string) => void;
   onSelectCandidate: (rowIndex: number) => void;
+  onSelectAnalysisSection: (section: PipelineAnalysisSection) => void;
   canRun: boolean; canCancel: boolean;
   onNavigate: (tab: WorkspaceTab, datasetId: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
@@ -344,7 +347,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
             관심 있는 Test 후보를 더 자세히 검토하세요.</p>
         </div>
       </div>
-      <PipelineAnalysis run={run} onOpenResource={onOpenResource} />
+      <PipelineAnalysis run={run} onOpenResource={onOpenResource}
+        initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection} />
       <div className="pipeline-actions">
         <button type="button" onClick={() =>
           moveFocusTo("pipeline-candidates-heading")}>이상 후보 상세 검토 →</button>

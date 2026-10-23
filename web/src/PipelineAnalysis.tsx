@@ -195,11 +195,14 @@ export const PIPELINE_ANALYSIS_SECTIONS: Array<{ id: PipelineAnalysisSection; la
   { id: "calibration", label: "Calibration", description: "판정 기준 검토" },
   { id: "test", label: "Test", description: "후보와 평가 결과" },
 ];
-export function PipelineEvidenceView({ evidence, run, onOpenResource, initialSection = "overview" }: {
+export function PipelineEvidenceView({ evidence, run, onOpenResource,
+  initialSection = "overview", onSectionChange }: {
   evidence: Evidence; run: PipelineRun; onOpenResource: OpenResult;
   initialSection?: PipelineAnalysisSection;
+  onSectionChange?: (section: PipelineAnalysisSection) => void;
 }) {
   const [section, setSection] = useState<PipelineAnalysisSection>(initialSection);
+  useEffect(() => { setSection(initialSection); }, [initialSection]);
   const { model, calibration, test, policy, evaluation } = evidence;
   const train = model.training_score_summary;
   const cal = calibration.score_summary;
@@ -220,7 +223,10 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource, initialSec
     <nav className="pipeline-analysis-nav" aria-label="이 Run의 분석 근거 탐색">
       {PIPELINE_ANALYSIS_SECTIONS.map(item => <button key={item.id} type="button"
         className={section === item.id ? "pipeline-analysis-nav-item active" : "pipeline-analysis-nav-item"}
-        aria-pressed={section === item.id} onClick={() => setSection(item.id)}>
+        aria-pressed={section === item.id} onClick={() => {
+          setSection(item.id);
+          onSectionChange?.(item.id);
+        }}>
         <strong>{item.label}</strong><small>{item.description}</small>
       </button>)}
     </nav>
@@ -304,8 +310,10 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource, initialSec
 }
 
 /** URL Run이 변경되면 이전 응답을 폐기하며, 어떤 결과도 섞지 않는다. */
-export function PipelineAnalysis({ run, onOpenResource }: {
+export function PipelineAnalysis({ run, onOpenResource, initialSection, onSectionChange }: {
   run: PipelineRun; onOpenResource: OpenResult;
+  initialSection?: PipelineAnalysisSection;
+  onSectionChange?: (section: PipelineAnalysisSection) => void;
 }) {
   const modelId = resultRef(run, "training", "model_revision_id");
   const calibrationId = resultRef(run, "calibration", "scoring_result_id");
@@ -344,5 +352,7 @@ export function PipelineAnalysis({ run, onOpenResource }: {
     <button type="button" className="secondary" onClick={() => setRetry(v => v + 1)}>분석 근거 다시 조회</button>
   </section>;
   if (!current?.evidence) return <p role="status">모델·Calibration·Test의 불변 분석 근거를 불러오는 중입니다.</p>;
-  return <PipelineEvidenceView evidence={current.evidence} run={run} onOpenResource={onOpenResource} />;
+  return <PipelineEvidenceView evidence={current.evidence} run={run}
+    onOpenResource={onOpenResource} initialSection={initialSection}
+    onSectionChange={onSectionChange} />;
 }

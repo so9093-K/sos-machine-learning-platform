@@ -60,6 +60,17 @@ try {
   assert.equal(routeAt("/pipelines", "?run=run-1&candidate=7").context.candidateRowIndex, 7);
   assert.equal(routeAt("/pipelines", "?run=run-1&candidate=abc").context.candidateRowIndex, undefined);
   assert.equal(routeAt("/pipelines", "?candidate=7").context.candidateRowIndex, undefined);
+  const focusedRoute = routeAt("/pipelines", "?run=run-1&candidate=8&section=calibration");
+  assert.equal(focusedRoute.context.pipelineAnalysisSection, "calibration");
+  assert.equal(focusedRoute.context.candidateRowIndex, 8);
+  assert.equal(contextPath("pipelines", focusedRoute.context),
+    "/pipelines?run=run-1&candidate=8&section=calibration");
+  assert.equal(routeAt("/pipelines", "?run=run-1&section=incorrect").context.pipelineAnalysisSection,
+    undefined);
+  assert.equal(resourcePath("policy", "policy-1", {
+    pipelineReturn: true, pipelineRunId: "run-1",
+    pipelineAnalysisSection: "calibration", candidateRowIndex: 8,
+  }), "/policies/policy-1?from=pipeline&run=run-1&candidate=8&section=calibration");
   // 직접 연 Scoring/Model 상세에서 영역 탭으로 이동해도 동일 자산을 이어받는다.
   assert.equal(nextNavigationContext(
     routeAt("/scoring/results/score-v1", ""), "policies").scoringId, "score-v1");

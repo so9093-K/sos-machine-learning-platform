@@ -10,6 +10,7 @@ export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
 export type MLNavigationContext = {
   datasetId?: string; modelId?: string; scoringId?: string;
   pipelineRunId?: string; pipelineReturn?: boolean; candidateRowIndex?: number;
+  pipelineAnalysisSection?: "overview" | "training" | "calibration" | "test";
 };
 type WorkspaceRoute = {
   tab: WorkspaceTab; resource: ResourceRoute; context: MLNavigationContext;
@@ -26,6 +27,12 @@ function candidateRowAt(params: URLSearchParams): number | undefined {
   return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
+function analysisSectionAt(params: URLSearchParams): MLNavigationContext["pipelineAnalysisSection"] {
+  const value = params.get("section");
+  return value === "overview" || value === "training" ||
+    value === "calibration" || value === "test" ? value : undefined;
+}
+
 function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
   if (tab === "pipelines") {
@@ -35,6 +42,8 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
       pipelineRunId: runId,
       ...(runId && candidateRowAt(params) !== undefined
         ? { candidateRowIndex: candidateRowAt(params) } : {}),
+      ...(runId && analysisSectionAt(params) !== undefined
+        ? { pipelineAnalysisSection: analysisSectionAt(params) } : {}),
     };
   }
   if (tab === "understanding" || tab === "preparation" || tab === "preview" ||
@@ -55,6 +64,8 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
     if (context.pipelineRunId) params.set("run", context.pipelineRunId);
     if (context.pipelineRunId && context.candidateRowIndex !== undefined)
       params.set("candidate", String(context.candidateRowIndex));
+    if (context.pipelineRunId && context.pipelineAnalysisSection)
+      params.set("section", context.pipelineAnalysisSection);
   }
   if ((tab === "understanding" || tab === "preparation" || tab === "preview" ||
         tab === "profile" || tab === "jobs") && context.pipelineReturn) {
@@ -92,6 +103,8 @@ export function resourcePath(kind: MLResourceKind, id: string, context: MLNaviga
   if (context.datasetId) params.set("dataset", context.datasetId);
   if (context.candidateRowIndex !== undefined)
     params.set("candidate", String(context.candidateRowIndex));
+  if (context.pipelineAnalysisSection)
+    params.set("section", context.pipelineAnalysisSection);
   return path + "?" + params.toString();
 }
 
@@ -100,7 +113,9 @@ function resourceContext(search: string): MLNavigationContext {
   if (params.get("from") !== "pipeline" || !params.get("run")) return {};
   return { pipelineReturn: true, pipelineRunId: params.get("run")!,
     datasetId: params.get("dataset") ?? "",
-    ...(candidateRowAt(params) !== undefined ? { candidateRowIndex: candidateRowAt(params) } : {}) };
+    ...(candidateRowAt(params) !== undefined ? { candidateRowIndex: candidateRowAt(params) } : {}),
+    ...(analysisSectionAt(params) !== undefined
+      ? { pipelineAnalysisSection: analysisSectionAt(params) } : {}) };
 }
 export function routeAt(pathname: string, search: string): WorkspaceRoute {
   for (const [kind, config] of Object.entries(resourcePaths) as
@@ -199,7 +214,8 @@ export function useWorkspaceNavigation() {
     const context = fromPipeline && previous.context.pipelineRunId
       ? { pipelineReturn: true, pipelineRunId: previous.context.pipelineRunId,
           datasetId: previous.context.datasetId,
-          candidateRowIndex: previous.context.candidateRowIndex } : {};
+          candidateRowIndex: previous.context.candidateRowIndex,
+          pipelineAnalysisSection: previous.context.pipelineAnalysisSection } : {};
     update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context },
       resourcePath(kind, id, context));
   }, [update]);
