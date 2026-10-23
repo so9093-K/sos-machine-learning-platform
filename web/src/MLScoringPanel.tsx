@@ -133,7 +133,7 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
 
   return <section className="panel" aria-label="독립 이상 점수 계산">
     <div className="panel-head"><div>
-      <h4>다른 Dataset의 이상 점수 계산</h4>
+      <h4>선택한 Dataset의 이상 점수 계산</h4>
       <p>모델을 재학습하지 않고 불변 Scoring Result를 생성합니다.</p>
     </div></div>
     {error && <p role="alert">{error}</p>}

@@ -183,14 +183,17 @@ function revisionId(job: { result: { [key: string]: unknown } | null }, key: str
 }
 
 /** 특정 학습 화면을 거치지 않고 Model Revision과 Dataset으로 Scoring한다. */
-export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel, onOpenResource }: {
+export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel,
+  onOpenResource, onModelSelected, onNavigate }: {
   datasets: Dataset[]; preferredModelId: string; canRun: boolean; canCancel: boolean;
-  onOpenResource: OpenResource;
+  onOpenResource: OpenResource; onModelSelected: (id: string) => void;
+  onNavigate: (tab: "ml" | "scoring") => void;
 }) {
   const models = usePagedJobs<MLTrainingJobSummary>("/api/ml/train/jobs");
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const [modelId, setModelId] = useState(preferredModelId);
   const [loadedModelId, setLoadedModelId] = useState(preferredModelId);
+  const [modelLookupRevision, retryModelLookup] = useState(0);
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -204,13 +207,14 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   useEffect(() => {
     let active = true;
     setModel(null);
+    setError("");
     if (loadedModelId) {
       void request<ModelRevision>(`/api/ml/models/${encodeURIComponent(loadedModelId)}`)
         .then(value => { if (active) { setModel(value); setError(""); } })
         .catch(e => { if (active) setError(formatError(e)); });
     }
     return () => { active = false; };
-  }, [loadedModelId]);
+  }, [loadedModelId, modelLookupRevision]);
   const available = useMemo(() => [...new Set(models.items.map(j =>
     revisionId(j, "model_revision_id")).filter((id): id is string => Boolean(id)))], [models.items]);
   return <div className="ml-resource-workspace">
@@ -229,6 +233,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
             aria-label="조회된 모델 판본 선택" onChange={event => {
               setModelId(event.target.value);
               setLoadedModelId(event.target.value);
+              onModelSelected(event.target.value);
             }}>
             <option value="">모델 선택</option>
             {available.map(id => <option key={id} value={id}>{id}</option>)}
@@ -236,14 +241,29 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
         </label>
       </div>
       <button type="button" className="secondary" disabled={!modelId.trim()}
-        onClick={() => setLoadedModelId(modelId.trim())}>모델 판본 조회</button>
+        onClick={() => {
+          const identifier = modelId.trim();
+          if (identifier === loadedModelId) retryModelLookup(n => n + 1);
+          else setLoadedModelId(identifier);
+          onModelSelected(identifier);
+        }}>모델 판본 조회</button>
       {modelId.trim() !== loadedModelId && <p className="hint">
         모델 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
       {models.nextCursor && <button className="secondary"
         onClick={() => void models.loadMore().catch(e => setError(formatError(e)))}>이전 모델 더 보기</button>}
-      {model && modelId.trim() === loadedModelId && <p className="hint">선택 모델: {model.algorithm} · {model.id} · 입력 Feature {model.features.length}개</p>}
+      {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
+        modelId.trim() === loadedModelId &&
+        <p className="hint">선택 모델: {model.algorithm} · {model.id} · 입력 Feature {model.features.length}개</p>}
+      {!loadedModelId && <div className="steps">
+        <p className="hint">점수화하려면 기존 Model Revision을 선택하세요. 모델이 없다면 독립 학습을 시작할 수 있습니다.</p>
+        <button className="secondary" type="button" onClick={() => onNavigate("ml")}>
+          모델 판본·학습 확인 →
+        </button>
+      </div>}
     </section>
-    {model && modelId.trim() === loadedModelId && <MLScoringPanel key={model.id} model={model} datasets={datasets}
+    {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
+      modelId.trim() === loadedModelId &&
+      <MLScoringPanel key={model.id} model={model} datasets={datasets}
       canRun={canRun} canCancel={canCancel} onOpenResult={id => onOpenResource("scoring", id)} />}
     <section className="panel">
       <div className="panel-head"><div><h3>전체 Scoring Job 이력</h3>
@@ -268,9 +288,12 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
 }
 
 /** Scoring Result를 직접 선택해 정책·평가·설명을 독립 실행한다. */
-export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel, onOpenResource }: {
+export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
+  onOpenResource, onScoringSelected, onNavigate }: {
   view: DecisionView; preferredScoringId: string;
   canRun: boolean; canCancel: boolean; onOpenResource: OpenResource;
+  onScoringSelected: (id: string) => void;
+  onNavigate: (tab: "scoring") => void;
 }) {
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const policies = usePagedJobs<MLPolicyJobSummary>("/api/ml/policies/jobs");
@@ -280,6 +303,7 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
   const history = histories[view];
   const [scoringId, setScoringId] = useState(preferredScoringId);
   const [loadedScoringId, setLoadedScoringId] = useState(preferredScoringId);
+  const [scoringLookupRevision, retryScoringLookup] = useState(0);
   const [scoring, setScoring] = useState<ScoringResult | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -291,13 +315,13 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
     void history.refresh().catch(e => setError(formatError(e)));
   }, [view]);
   useEffect(() => {
-    let active = true; setScoring(null);
+    let active = true; setScoring(null); setError("");
     if (loadedScoringId) void request<ScoringResult>(
       `/api/ml/scoring/results/${encodeURIComponent(loadedScoringId)}`)
       .then(value => { if (active) { setScoring(value); setError(""); } })
       .catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
-  }, [loadedScoringId]);
+  }, [loadedScoringId, scoringLookupRevision]);
   const available = useMemo(() => [...new Set(scores.items.map(j =>
     revisionId(j,"scoring_result_id")).filter((id): id is string => Boolean(id)))], [scores.items]);
   const config = resultConfig[view];
@@ -316,6 +340,7 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
             onChange={event => {
               setScoringId(event.target.value);
               setLoadedScoringId(event.target.value);
+              onScoringSelected(event.target.value);
             }}>
             <option value="">결과 선택</option>
             {available.map(id => <option key={id} value={id}>{id}</option>)}
@@ -325,12 +350,27 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
       {scores.nextCursor && <button className="secondary"
         onClick={() => void scores.loadMore().catch(e => setError(formatError(e)))}>이전 Scoring 더 보기</button>}
       <button type="button" className="secondary" disabled={!scoringId.trim()}
-        onClick={() => setLoadedScoringId(scoringId.trim())}>Scoring Result 조회</button>
+        onClick={() => {
+          const identifier = scoringId.trim();
+          if (identifier === loadedScoringId) retryScoringLookup(n => n + 1);
+          else setLoadedScoringId(identifier);
+          onScoringSelected(identifier);
+        }}>Scoring Result 조회</button>
       {scoringId.trim() !== loadedScoringId && <p className="hint">
         Scoring Result ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
-      {scoring && scoringId.trim() === loadedScoringId && <p>점수화된 행: {scoring.row_count.toLocaleString("ko-KR")} · 모델 {scoring.model_revision_id}</p>}
+      {scoring && scoring.id === loadedScoringId && preferredScoringId === loadedScoringId &&
+        scoringId.trim() === loadedScoringId &&
+        <p>점수화된 행: {scoring.row_count.toLocaleString("ko-KR")} · 모델 {scoring.model_revision_id}</p>}
+      {!loadedScoringId && <div className="steps">
+        <p className="hint">평가·정책·설명은 이미 계산된 Scoring Result를 독립적으로 재사용합니다.
+          기존 결과 ID를 선택하거나 먼저 모델 점수를 계산하세요.</p>
+        <button type="button" className="secondary" onClick={() => onNavigate("scoring")}>
+          모델 점수화 화면으로 →
+        </button>
+      </div>}
     </section>
-    {scoring && scoringId.trim() === loadedScoringId && <section className="panel">
+    {scoring && scoring.id === loadedScoringId && preferredScoringId === loadedScoringId &&
+      scoringId.trim() === loadedScoringId && <section className="panel">
       <MLDecisionPanel key={scoring.id + view} scoring={scoring} view={view}
         canRun={canRun} canCancel={canCancel}
         onOpenResult={(kind,id) => onOpenResource(kind,id)} />

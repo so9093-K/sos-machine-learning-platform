@@ -17,6 +17,8 @@ type Props = {
   view: "models" | "training";
   onViewChange: (view: "models" | "training") => void;
   onOpenModel: (id: string) => void;
+  initialDatasetId: string;
+  onDatasetSelected: (id: string) => void;
 };
 
 function statistic(value: unknown): string {
@@ -38,8 +40,10 @@ function trainingSelectionLabel(value: unknown): string {
 }
 
 /** 데이터 선택부터 비동기 학습·불변 결과 조회까지 같은 공개 API를 사용한다. */
-export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, onViewChange, onOpenModel }: Props) {
-  const [selectedId, onSelect] = useState("");
+export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, onViewChange,
+  onOpenModel, initialDatasetId, onDatasetSelected }: Props) {
+  // 선택 Dataset의 정본은 URL이며, 별도 로컬 상태로 복제하지 않는다.
+  const selectedId = initialDatasetId;
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
   const [historyDatasetFilter, setHistoryDatasetFilter] = useState("");
@@ -273,8 +277,11 @@ export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, on
       </div></div>
       <div className="form-row">
         <label>학습 Dataset
-          <select aria-label="ML 학습 Dataset" value={selectedId} onChange={event => onSelect(event.target.value)}>
+          <select aria-label="ML 학습 Dataset" value={selectedId}
+            onChange={event => onDatasetSelected(event.target.value)}>
             <option value="">선택하세요</option>
+            {selectedId && !datasets.some(item => item.id === selectedId) &&
+              <option value={selectedId}>현재 목록 외 Dataset · {selectedId}</option>}
             {datasets.map(dataset => <option value={dataset.id} key={dataset.id}>{dataset.name}</option>)}
           </select>
         </label>
@@ -440,8 +447,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, on
         </p>}
         <div className="cards">
           <div className="stat"><span>학습 점수 대상</span><strong>{statistic(model.training_score_summary.score_count)}행</strong></div>
-          <div className="stat"><span>학습 기준 이상 후보</span><strong>{statistic(model.training_score_summary.predicted_anomalies)}건</strong></div>
-          <div className="stat"><span>학습 점수 평균</span><strong>{statistic(model.training_score_summary.score_mean)}</strong></div>
+          <div className="stat"><span>학습 점수 상위 5% 후보</span><strong>{statistic(model.training_score_summary.predicted_anomalies)}건</strong></div>
+          <div className="stat"><span>학습 이상 점수 평균 (확률 아님)</span><strong>{statistic(model.training_score_summary.score_mean)}</strong></div>
         </div>
         <p className="hint">이 수치는 학습 데이터의 설명적 요약이며 검증 Precision·Recall·최적 임계값을 의미하지 않습니다. Scoring·정책·평가·설명은 아래에서 별도 결과로 생성하며, MLflow 추적 상태는 운영자 설정 시 표시합니다.</p>
         <div className="actions"><button type="button" className="secondary"
