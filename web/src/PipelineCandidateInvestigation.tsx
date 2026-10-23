@@ -50,6 +50,7 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
   const [result, setResult] = useState<ExplanationResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     if (!job || terminal.has(job.status)) return;
     let active = true;
@@ -59,7 +60,7 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
         .catch(e => { if (active) setError(formatError(e)); });
     }, 2000);
     return () => { active = false; clearInterval(interval); };
-  }, [job?.id, job?.status]);
+  }, [job?.id, job?.status, retry]);
   useEffect(() => {
     const resultId = job?.result?.explanation_result_id;
     if (job?.status !== "Succeeded" || typeof resultId !== "string") return;
@@ -76,7 +77,7 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
       })
       .catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
-  }, [job?.id, job?.status, job?.result?.explanation_result_id, scoringResultId, candidate.row_index]);
+  }, [job?.id, job?.status, job?.result?.explanation_result_id, scoringResultId, candidate.row_index, retry]);
   async function start() {
     if (!canRun || busy || job) return;
     setBusy(true); setError("");
@@ -107,8 +108,9 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
     {job?.status === "Failed" && <p role="alert">설명 Job이 실패했습니다. 실행 이력에서 오류 근거를 확인하세요.</p>}
     {job?.status === "Cancelled" && <p>설명 계산이 취소됐습니다.</p>}
     {error && <div role="alert" className="pipeline-readiness-blocked">{error}
-      {job && <button className="secondary" type="button" onClick={() =>
-        setJob({ ...job })}>상태 다시 조회하기</button>}</div>}
+      {job && <button className="secondary" type="button" onClick={() => {
+        setError(""); setRetry(n => n + 1);
+      }}>설명 근거 다시 조회하기</button>}</div>}
     {result && <>
       <SensitivityChart result={result} />
       <button type="button" className="secondary" onClick={() =>

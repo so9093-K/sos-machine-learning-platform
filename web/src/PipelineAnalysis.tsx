@@ -22,7 +22,7 @@ function format(value: number | null | undefined): string {
     ? value.toLocaleString("ko-KR", { maximumFractionDigits: 6 }) : "미계산";
 }
 function resultRef(run: PipelineRun, stage: string, field: string): string | null {
-  const result = run.stages.find(item => item.name === stage)?.job.result;
+  const result = run.stages?.find(item => item.name === stage)?.job.result;
   const id = result?.[field];
   return typeof id === "string" && id.length > 0 ? id : null;
 }
