@@ -27,6 +27,72 @@ function resultRef(run: PipelineRun, stage: string, field: string): string | nul
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
+/** 여러 독립 판본을 한 분석으로 연결할 때 시간 분할·모델·점수 의미까지 검증한다. */
+export function validatePipelineEvidence(run: PipelineRun, evidence: Evidence): string | null {
+  const { model, calibration, test, policy, evaluation } = evidence;
+  const plan = run.input_plan;
+  if (!plan || !run.stages) return "완료된 Run의 시간 분할 또는 단계 근거가 없습니다.";
+  if (model.id !== resultRef(run, "training", "model_revision_id") ||
+      calibration.id !== resultRef(run, "calibration", "scoring_result_id") ||
+      test.id !== resultRef(run, "test", "scoring_result_id") ||
+      policy.id !== resultRef(run, "policy", "policy_revision_id") ||
+      evaluation.id !== resultRef(run, "evaluation", "evaluation_revision_id") ||
+      model.dataset_id !== run.dataset_id || model.dataset_version !== run.dataset_version ||
+      calibration.dataset_id !== run.dataset_id || test.dataset_id !== run.dataset_id ||
+      calibration.dataset_version !== run.dataset_version ||
+      test.dataset_version !== run.dataset_version ||
+      model.algorithm !== "isolation_forest" ||
+      policy.mode !== "quantile" || policy.alert_fraction !== 0.005 ||
+      !Number.isFinite(policy.threshold) ||
+      calibration.model_revision_id !== model.id || test.model_revision_id !== model.id ||
+      policy.scoring_result_id !== calibration.id ||
+      evaluation.scoring_result_id !== test.id || evaluation.policy_revision_id !== policy.id ||
+      metric(model.training_score_summary, "score_count") !== plan.partition_sizes.train) {
+    return "분석 결과의 모델·Dataset·정책 또는 판본 참조가 일치하지 않습니다.";
+  }
+  const sameMoment = (left: unknown, right: string) =>
+    typeof left === "string" && Number.isFinite(Date.parse(left)) &&
+    Date.parse(left) === Date.parse(right);
+  for (const [scoring, partition, rows] of [
+    [calibration, "calibration", plan.partition_sizes.calibration],
+    [test, "test", plan.partition_sizes.test],
+  ] as const) {
+    const scope = scoring.score_summary.temporal_scope;
+    if (!scope || typeof scope !== "object") {
+      return "Scoring Result의 시간 구간 근거가 누락됐습니다.";
+    }
+    const time = scope as Record<string, unknown>;
+    if (scoring.row_count !== rows ||
+        metric(scoring.score_summary, "score_count") !== rows ||
+        scoring.score_direction !== "higher_is_more_anomalous" ||
+        scoring.feature_names.length !== model.features.length ||
+        scoring.feature_names.some((feature, i) => feature !== model.features[i]) ||
+        time.partition !== partition ||
+        time.timestamp_column !== plan.timestamp_column ||
+        !sameMoment(time.train_end, plan.train_end) ||
+        !sameMoment(time.calibration_end, plan.calibration_end) ||
+        time.model_revision_id !== model.id ||
+        time.dataset_id !== run.dataset_id ||
+        time.dataset_version !== run.dataset_version ||
+        time.train_rows !== plan.partition_sizes.train ||
+        time.calibration_rows !== plan.partition_sizes.calibration ||
+        time.test_rows !== plan.partition_sizes.test) {
+      return "분석 결과의 Feature 서명 또는 Train·Calibration·Test 시간 분할이 일치하지 않습니다.";
+    }
+  }
+  const count = metric(evaluation.decision_metrics, "score_count");
+  const candidates = metric(evaluation.decision_metrics, "predicted_anomalies");
+  const rate = metric(evaluation.decision_metrics, "alert_rate");
+  const calibrated = metric(policy.decision_summary, "score_count");
+  if (calibrated !== calibration.row_count || count !== test.row_count ||
+      candidates === null || !Number.isInteger(candidates) ||
+      candidates < 0 || candidates > test.row_count ||
+      rate === null || Math.abs(rate - candidates / test.row_count) > 1e-10) {
+    return "Calibration 정책 또는 Test 후보 수·비율의 평가 근거가 일치하지 않습니다.";
+  }
+  return null;
+}
+
 /** 저장된 고정 폭 구간 빈도만 표시하며 행 표본을 임의로 확대하지 않는다. */
 function ScoreHistogram({ summary, title, threshold }: {
   summary: Record<string, unknown>; title: string; threshold?: number;
@@ -228,21 +294,8 @@ export function PipelineAnalysis({ run, onOpenResource }: {
       request<DecisionPolicyRevision>("/api/ml/policies/" + encodeURIComponent(policyId)),
       request<EvaluationRevision>("/api/ml/evaluations/" + encodeURIComponent(evaluationId)),
     ]).then(([model, calibration, test, policy, evaluation]) => {
-      if (model.id !== modelId || calibration.id !== calibrationId || test.id !== testId ||
-          policy.id !== policyId || evaluation.id !== evaluationId ||
-          model.dataset_id !== run.dataset_id || model.dataset_version !== run.dataset_version ||
-          calibration.dataset_id !== run.dataset_id || test.dataset_id !== run.dataset_id ||
-          calibration.dataset_version !== run.dataset_version ||
-          test.dataset_version !== run.dataset_version ||
-          calibration.model_revision_id !== model.id || test.model_revision_id !== model.id ||
-          policy.scoring_result_id !== calibration.id ||
-          evaluation.scoring_result_id !== test.id || evaluation.policy_revision_id !== policy.id ||
-          (run.input_plan != null && (
-            metric(model.training_score_summary, "score_count") !== run.input_plan.partition_sizes.train ||
-            calibration.row_count !== run.input_plan.partition_sizes.calibration ||
-            test.row_count !== run.input_plan.partition_sizes.test))) {
-        throw new Error("분석 결과의 입력 판본 또는 Calibration·Test 참조가 일치하지 않습니다.");
-      }
+      const issue = validatePipelineEvidence(run, { model, calibration, test, policy, evaluation });
+      if (issue) throw new Error(issue);
       if (active) setState({ key, evidence: { model, calibration, test, policy, evaluation }, error: "" });
     }).catch(error => { if (active) setState({ key, evidence: null, error: formatError(error) }); });
     return () => { active = false; };

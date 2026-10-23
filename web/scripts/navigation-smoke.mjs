@@ -123,7 +123,7 @@ try {
 
   // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
   const { PipelineWorkspace } = await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
-  const { PipelineAnalysis, PipelineEvidenceView } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
+  const { PipelineAnalysis, PipelineEvidenceView, validatePipelineEvidence } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
   const { PipelineCandidateInvestigation, SensitivityChart } = await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
   const props = {
     datasets: [], initialDatasetId: "", initialRunId: "",
@@ -149,31 +149,75 @@ try {
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
-  const completedRun = { id: "run-demo", status: "Succeeded",
-    input_plan: { partition_sizes: { train: 60, calibration: 20, test: 20 } } };
+  const completedRun = {
+    id: "run-demo", definition_id: "activity-anomaly-if", status: "Succeeded",
+    dataset_id: "dataset-1", dataset_version: "v1",
+    stages: [
+      { name: "training", job: { result: { model_revision_id: "model-a" } } },
+      { name: "calibration", job: { result: { scoring_result_id: "cal-a" } } },
+      { name: "policy", job: { result: { policy_revision_id: "policy-a" } } },
+      { name: "test", job: { result: { scoring_result_id: "test-a" } } },
+      { name: "evaluation", job: { result: { evaluation_revision_id: "eval-a" } } },
+    ],
+    input_plan: {
+      timestamp_column: "ts", train_end: "2026-01-02T00:00:00+00:00",
+      calibration_end: "2026-01-03T00:00:00+00:00",
+      partition_sizes: { train: 60, calibration: 20, test: 20 },
+    },
+  };
+  const temporalScope = partition => ({
+    partition, timestamp_column: "ts", train_end: "2026-01-02T00:00:00+00:00",
+    calibration_end: "2026-01-03T00:00:00+00:00",
+    model_revision_id: "model-a", dataset_id: "dataset-1", dataset_version: "v1",
+    train_rows: 60, calibration_rows: 20, test_rows: 20,
+  });
   const resultEvidence = {
     model: { id: "model-a", algorithm: "isolation_forest", params: { n_estimators: 100 },
-      features: ["f1"], runtime: { preprocessing_mode: "train_median_v1" },
+      dataset_id: "dataset-1", dataset_version: "v1", features: ["f1"],
+      runtime: { preprocessing_mode: "train_median_v1" },
       training_score_summary: {
         score_min: 0.1, score_mean: 0.2, score_max: 0.4, score_count: 60,
         histogram: { method: "equal_width_exact_v1", bin_edges: [0.1, 0.25, 0.4],
           bin_counts: [30, 30], score_count: 60, constant_scores: false },
       } },
-    calibration: { id: "cal-a", score_summary: {
+    calibration: { id: "cal-a", dataset_id: "dataset-1", dataset_version: "v1",
+      model_revision_id: "model-a", row_count: 20, score_direction: "higher_is_more_anomalous",
+      feature_names: ["f1"], score_summary: {
+      temporal_scope: temporalScope("calibration"),
       score_min: 0.15, score_mean: 0.25, score_max: 0.5, score_count: 20,
       histogram: { method: "equal_width_exact_v1", bin_edges: [0.15, 0.325, 0.5],
         bin_counts: [10, 10], score_count: 20, constant_scores: false },
     } },
-    test: { id: "test-a", score_summary: {
+    test: { id: "test-a", dataset_id: "dataset-1", dataset_version: "v1",
+      model_revision_id: "model-a", row_count: 20, score_direction: "higher_is_more_anomalous",
+      feature_names: ["f1"], score_summary: {
+      temporal_scope: temporalScope("test"),
       score_min: 0.2, score_mean: 0.3, score_max: 0.6, score_count: 20,
       histogram: { method: "equal_width_exact_v1", bin_edges: [0.2, 0.4, 0.6],
         bin_counts: [15, 5], score_count: 20, constant_scores: false },
     } },
     policy: { id: "policy-a", mode: "quantile", alert_fraction: 0.005,
-      threshold: 0.47, decision_summary: { predicted_anomalies: 2 } },
-    evaluation: { id: "eval-a", label_coverage: "none",
-      decision_metrics: { predicted_anomalies: 3, alert_rate: 0.15 } },
+      threshold: 0.47, scoring_result_id: "cal-a",
+      decision_summary: { score_count: 20, predicted_anomalies: 2 } },
+    evaluation: { id: "eval-a", scoring_result_id: "test-a",
+      policy_revision_id: "policy-a", label_coverage: "none",
+      decision_metrics: { score_count: 20, predicted_anomalies: 3, alert_rate: 0.15 } },
   };
+  assert.equal(validatePipelineEvidence(completedRun, resultEvidence), null);
+  assert.match(validatePipelineEvidence(completedRun, {
+    ...resultEvidence,
+    calibration: { ...resultEvidence.calibration, score_summary: {
+      ...resultEvidence.calibration.score_summary, temporal_scope: temporalScope("test"),
+    } },
+  }), /시간 분할/);
+  assert.match(validatePipelineEvidence(completedRun, {
+    ...resultEvidence, test: { ...resultEvidence.test, feature_names: ["other_feature"] },
+  }), /Feature 서명/);
+  assert.match(validatePipelineEvidence(completedRun, {
+    ...resultEvidence, evaluation: { ...resultEvidence.evaluation, decision_metrics: {
+      ...resultEvidence.evaluation.decision_metrics, predicted_anomalies: 4,
+    } },
+  }), /평가 근거/);
   const report = renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
     run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
   }));

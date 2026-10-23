@@ -63,7 +63,11 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
   }, [job?.id, job?.status, error, retry]);
   useEffect(() => {
     const resultId = job?.result?.explanation_result_id;
-    if (job?.status !== "Succeeded" || typeof resultId !== "string") return;
+    if (job?.status !== "Succeeded") return;
+    if (typeof resultId !== "string") {
+      setError("완료된 설명 Job에서 설명 결과 판본을 찾지 못했습니다.");
+      return;
+    }
     let active = true;
     void request<ExplanationResult>("/api/ml/explanations/" + encodeURIComponent(resultId))
       .then(next => {
@@ -79,8 +83,8 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
     return () => { active = false; };
   }, [job?.id, job?.status, job?.result?.explanation_result_id, scoringResultId, candidate.row_index, retry]);
   async function start() {
-    if (!canRun || busy || job) return;
-    setBusy(true); setError("");
+    if (!canRun || busy || (job && !terminal.has(job.status))) return;
+    setBusy(true); setJob(null); setResult(null); setError("");
     try {
       setJob(await submitJob<MLExplanationJob>("/api/ml/explanations/jobs", {
         scoring_result_id: scoringResultId, row_index: candidate.row_index,
@@ -98,9 +102,11 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
           <tr key={name}><th>{name}</th><td>{format(value)}</td></tr>)}</tbody>
       </table></div>
     </details>
-    {!job && canRun && <button type="button" onClick={() => void start()} disabled={busy}>
-      {busy ? "설명 Job 제출 중…" : "이 후보의 점수 민감도 계산 →"}
-    </button>}
+    {(!job || job.status === "Failed" || job.status === "Cancelled") && canRun &&
+      <button type="button" onClick={() => void start()} disabled={busy}>
+        {busy ? "설명 Job 제출 중…" : job ? "새 설명 Job으로 다시 계산 →" :
+          "이 후보의 점수 민감도 계산 →"}
+      </button>}
     {!canRun && <p className="hint">현재 계정은 설명 Job을 제출할 권한이 없습니다.</p>}
     {job && <p role="status">설명 Job: {job.status}
       {job.status === "Running" || job.status === "Queued" ? " · 계산 중" : ""}
