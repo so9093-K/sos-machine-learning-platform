@@ -153,7 +153,8 @@ try {
     input_plan: { partition_sizes: { train: 60, calibration: 20, test: 20 } } };
   const resultEvidence = {
     model: { id: "model-a", algorithm: "isolation_forest", params: { n_estimators: 100 },
-      features: ["f1"], training_score_summary: {
+      features: ["f1"], runtime: { preprocessing_mode: "train_median_v1" },
+      training_score_summary: {
         score_min: 0.1, score_mean: 0.2, score_max: 0.4, score_count: 60,
         histogram: { method: "equal_width_exact_v1", bin_edges: [0.1, 0.25, 0.4],
           bin_counts: [30, 30], score_count: 60, constant_scores: false },
