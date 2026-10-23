@@ -37,6 +37,10 @@ from .file_formats import upload_options_from_mime
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .object_store import ObjectStore
 from .observability import emit
+from .mlflow_config import MLflowSettings
+from .mlflow_errors import MLflowDeliveryError
+from .mlflow_read import read_experiments, read_runs, read_model_versions
+from .mlflow_tracking import MLflowClient
 from .pagination import decode_cursor, page_from_rows
 from .processing import bounded_feature_preview
 from .reconciler import inspect_iceberg_references, inspect_page
@@ -839,6 +843,33 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             raise HTTPException(status_code=404, detail="ML Job not found")
         status = store.tracking_status(job_id)
         return status or {"job_id": job_id, "state": "Disabled"}
+
+    def _management_client() -> MLflowClient:
+        settings = MLflowSettings.from_env()
+        if settings is None:
+            raise HTTPException(status_code=503, detail="MLflow management is unavailable")
+        return MLflowClient(settings)
+
+    @app.get("/api/ml/experiments")
+    def list_ml_experiments(actor: Actor = READ_JOB_DEP):
+        try:
+            return read_experiments(_management_client(), actor.id)
+        except MLflowDeliveryError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.get("/api/ml/experiments/runs")
+    def list_ml_runs(actor: Actor = READ_JOB_DEP):
+        try:
+            return read_runs(_management_client(), store, actor.id)
+        except MLflowDeliveryError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.get("/api/ml/registry/models")
+    def list_registered_models(actor: Actor = READ_JOB_DEP):
+        try:
+            return read_model_versions(_management_client(), store, actor.id)
+        except MLflowDeliveryError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @app.get("/api/ml/models/{revision_id}", response_model=ModelRevisionOut)
     def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):

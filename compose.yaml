@@ -47,6 +47,9 @@ services:
       <<: *sos-storage-env
       SOS_AUTH_MODE: token
       SOS_AUTH_TOKEN_HASHES: ${SOS_AUTH_TOKEN_HASHES:-}
+      SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
+      SOS_MLFLOW_TOKEN: ${SOS_MLFLOW_TOKEN:-}
     command:
       - uvicorn
       - sos_platform.api:create_app
