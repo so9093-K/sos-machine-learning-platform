@@ -11,7 +11,9 @@ from .mlflow_registry import registered_model_name
 
 def _page_token(result: dict) -> str | None:
     token = result.get("next_page_token")
-    if token is not None and (not isinstance(token, str) or not token):
+    if token is None or token == "":
+        return None
+    if not isinstance(token, str):
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
     return token
 

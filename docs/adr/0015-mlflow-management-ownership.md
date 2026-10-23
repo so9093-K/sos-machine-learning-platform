@@ -12,6 +12,10 @@ MLflow와 유사한 역할이 중복된다. 초기 개발 프로젝트에는 유
 ## 결정
 
 1. MLflow는 Experiment·Run·Registered Model·Model Version·Alias의 관리 정본이다.
+   연구 Experiment는 학습에서 지정하는 연구 제목으로 묶으며, 지정하지 않은 Pipeline은
+   기본 실험을 사용한다. SOS에 별도 Experiment 관리 테이블을 만들지 않는다.
+   현재 첫 IF 모델의 Registered Model은 Actor·알고리즘 계열별 한 개이며 학습 결과마다
+   새 MLflow Model Version을 발급한다. 이는 후속 모델 종류나 Pipeline을 추가한다는 뜻이 아니다.
 2. SOS는 Dataset·Job/Attempt·Scoring·Policy·Evaluation·Actor 권한·신뢰된 모델
    아티팩트의 불변 실행 참조를 책임진다. SOS Model Revision은 별도의 모델 Registry가 아니다.
 3. SOS Worker는 학습 완료와 외부 Registry 등록을 구별한다. 성공한 학습의 상태는
