@@ -328,7 +328,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </label>
       </div>
       {run && <div className="pipeline-context-facts">
-        <div><span>실행 상태</span><strong>{run.status}{run.cancel_requested ? " · 취소 요청됨" : ""}</strong></div>
+        <div><span>실행 상태</span><strong>{
+          runLoadError ? "마지막 확인: " + run.status : run.status
+        }{run.cancel_requested ? " · 취소 요청됨" : ""}</strong></div>
         <div><span>Dataset</span><strong>{activeDataset?.name ?? run.dataset_id}</strong></div>
         <div><span>Dataset 판본</span><code title={run.dataset_version}>{run.dataset_version}</code></div>
         <div><span>Run</span><code title={run.id}>{run.id}</code></div>

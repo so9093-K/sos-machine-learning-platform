@@ -347,9 +347,25 @@ export function PipelineAnalysis({ run, onOpenResource, initialSection, onSectio
   }
   const current = state?.key === key ? state : null;
   if (current?.error) return <section className="pipeline-readiness-blocked" role="alert">
-    <strong>분석 근거를 조회하지 못했습니다.</strong>
+    <strong>이번 Run의 통합 분석 근거를 완전히 검증하지 못했습니다.</strong>
     <p>{current.error}</p>
-    <button type="button" className="secondary" onClick={() => setRetry(v => v + 1)}>분석 근거 다시 조회</button>
+    <p>일부 결과 판본을 조회할 수 없거나 참조가 일치하지 않습니다.
+      이 상태에서는 전체 분석 보고서를 완성된 결과로 표시하지 않습니다.
+      아래의 독립 판본은 각각의 권한 검사와 출처를 확인해 열 수 있습니다.</p>
+    <div className="pipeline-actions">
+      <button type="button" className="secondary" onClick={() => setRetry(v => v + 1)}>
+        통합 분석 근거 다시 조회
+      </button>
+      {([
+        ["model", modelId, "학습 모델"],
+        ["scoring", calibrationId, "Calibration 점수"],
+        ["policy", policyId, "판정 정책"],
+        ["scoring", testId, "Test 점수"],
+        ["evaluation", evaluationId, "평가 결과"],
+      ] as const).map(([kind, id, label]) => id &&
+        <button key={kind + ":" + id} type="button" className="secondary"
+          onClick={() => onOpenResource(kind, id)}>{label} 개별 판본 보기 →</button>)}
+    </div>
   </section>;
   if (!current?.evidence) return <p role="status">모델·Calibration·Test의 불변 분석 근거를 불러오는 중입니다.</p>;
   return <PipelineEvidenceView evidence={current.evidence} run={run}

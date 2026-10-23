@@ -47,7 +47,21 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
   return <>
     <DataChart option={option} ariaLabel="선택한 후보의 Feature별 참조 중앙값 치환에 따른 이상 점수 민감도" />
     <p className="hint">실제 모델에서 각 Feature를 Train 참조 중앙값으로 하나씩 치환했을 때의 점수 차이입니다.
-      SHAP·가법 기여도·원인 판정이 아닙니다.</p>
+      SHAP·가법 기여도·원인 판정이 아닙니다. 양수는 기준값 치환 시 이상 점수가 낮아진 경우입니다.</p>
+    <details>
+      <summary>전체 Feature의 실제 값·참조값·점수 변화 표</summary>
+      <div className="table-scroll"><table>
+        <thead><tr><th>Feature</th><th>관측값</th><th>Train 참조 중앙값</th>
+          <th>치환 시 점수</th><th>원래 점수와의 차이</th></tr></thead>
+        <tbody>{entries.map((item, i) => <tr key={String(item.feature) + ":" + i}>
+          <th>{String(item.feature)}</th>
+          <td>{item.missing_imputed ? "결측값 대체" : format(item.actual_value)}</td>
+          <td>{format(item.reference_median)}</td>
+          <td>{format(item.score_if_replaced)}</td>
+          <td>{format(item.anomaly_score_delta)}</td>
+        </tr>)}</tbody>
+      </table></div>
+    </details>
   </>;
 }
 
@@ -136,6 +150,8 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
     <h5 id="pipeline-candidate-detail-heading" tabIndex={-1}>
       선택한 후보 #{candidate.row_index.toLocaleString("ko-KR")}</h5>
     <p>이상 점수 <strong>{format(candidate.anomaly_score)}</strong> · Test Scoring 내부 행 번호</p>
+    <p className="hint">이 결과에는 원본 관측 시각·고유 관측 ID가 연결돼 있지 않습니다.
+      행 번호만으로 원본 활동을 특정하거나 실제 이상 사건으로 단정할 수 없습니다.</p>
     <details><summary>이 후보의 Feature 값 확인</summary>
       <div className="table-scroll"><table>
         <thead><tr><th>Feature</th><th>관측값</th></tr></thead>
