@@ -30,6 +30,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
 }) {
   const [catalog, setCatalog] = useState<Definition[]>([]);
   const [datasetId, setDatasetId] = useState(initialDatasetId);
+  const selectedDatasetId = useRef(initialDatasetId);
+  // 다른 Dataset으로 전환하면 이전 검사·제출의 늦은 응답을 무효화한다.
+  const datasetSelectionRevision = useRef(0);
   const [checked, setChecked] = useState<Check | null>(null);
   const [runId, setRunId] = useState(initialRunId);
   const selectedRunId = useRef(runId);
@@ -53,7 +56,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
     return () => { active = false; };
   }, []);
   useEffect(() => {
+    if (selectedDatasetId.current === initialDatasetId) return;
+    selectedDatasetId.current = initialDatasetId;
+    datasetSelectionRevision.current += 1;
     setDatasetId(initialDatasetId);
+    setChecked(null);
+    setBusy(false);
   }, [initialDatasetId]);
   useEffect(() => {
     if (selectedRunId.current !== initialRunId) {
@@ -66,8 +74,13 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   }, [initialRunId]);
   useEffect(() => {
     setChecked(null);
-    setRows(null);
   }, [datasetId]);
+  useEffect(() => {
+    // 직접 Run URL은 서버가 반환한 원본 Dataset을 기준으로 연결한다.
+    if (run && run.id === runId && datasetId !== run.dataset_id) {
+      onSelectRun(run.id, run.dataset_id);
+    }
+  }, [run?.id, run?.dataset_id, runId, datasetId, onSelectRun]);
   useEffect(() => {
     if (!runId) { setRun(null); return; }
     let active = true;
@@ -128,30 +141,44 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   }
   async function inspect() {
     if (!datasetId || busy) return;
+    const revision = datasetSelectionRevision.current;
+    const requestedDatasetId = datasetId;
     setBusy(true); setError(""); setChecked(null);
     try {
-      setChecked(await request<Check>(
-        `/api/pipelines/${PIPELINE}/check?dataset_id=${encodeURIComponent(datasetId)}`
-      ));
-    } catch (e) { setError(formatError(e)); }
-    finally { setBusy(false); }
+      const inspected = await request<Check>(
+        `/api/pipelines/${PIPELINE}/check?dataset_id=${encodeURIComponent(requestedDatasetId)}`
+      );
+      if (revision === datasetSelectionRevision.current &&
+          selectedDatasetId.current === requestedDatasetId) setChecked(inspected);
+    } catch (e) {
+      if (revision === datasetSelectionRevision.current) setError(formatError(e));
+    } finally {
+      if (revision === datasetSelectionRevision.current) setBusy(false);
+    }
   }
   async function start() {
     if (!datasetId || checked?.dataset_id !== datasetId || !checked.ready || busy || !canRun) return;
     const previousRunId = selectedRunId.current;
+    const submittedDatasetId = datasetId;
+    const revision = datasetSelectionRevision.current;
     setBusy(true); setError("");
     try {
-      const next = await submitJob<Run>(`/api/pipelines/${PIPELINE}/runs`, { dataset_id: datasetId });
-      // 제출 중 다른 Run을 선택했다면 늦은 응답으로 사용자의 화면을 전환하지 않는다.
-      if (selectedRunId.current === previousRunId) {
+      const next = await submitJob<Run>(`/api/pipelines/${PIPELINE}/runs`,
+        { dataset_id: submittedDatasetId });
+      // 제출 중 Run이나 Dataset을 바꿨다면 늦은 결과로 사용자 화면을 전환하지 않는다.
+      if (selectedRunId.current === previousRunId &&
+          selectedDatasetId.current === submittedDatasetId &&
+          datasetSelectionRevision.current === revision) {
         selectRun(next.id);
         setRun(next);
       }
       void request<Run[]>("/api/pipeline-runs").then(setHistory).catch(() => {});
     } catch (e) {
-      if (selectedRunId.current === previousRunId) setError(formatError(e));
+      if (selectedRunId.current === previousRunId &&
+          datasetSelectionRevision.current === revision) setError(formatError(e));
     } finally {
-      if (selectedRunId.current === previousRunId) setBusy(false);
+      if (selectedRunId.current === previousRunId &&
+          datasetSelectionRevision.current === revision) setBusy(false);
     }
   }
   async function cancel() {
@@ -285,9 +312,15 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
       <div className="form-row">
         <label>분석할 Dataset
           <select aria-label="Pipeline 분석 Dataset" value={datasetId} onChange={e => {
-            setDatasetId(e.target.value);
-            onSelectDataset(e.target.value);
+            const nextId = e.target.value;
+            if (selectedDatasetId.current === nextId) return;
+            selectedDatasetId.current = nextId;
+            datasetSelectionRevision.current += 1;
+            setDatasetId(nextId);
+            setChecked(null);
+            setBusy(false);
             setError("");
+            onSelectDataset(nextId);
           }}>
             <option value="">내 Dataset 선택</option>
             {datasetId && !selected &&
@@ -400,8 +433,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
             <div><span>Test 입력</span><strong>{count(run.input_plan.partition_sizes.test)}행</strong></div>
           </div>}
           <div className="pipeline-result-metrics">
-            <div><span>현재 조회된 Test 후보</span><strong>{rows ? count(rows.items.length) + "건" : "조회 중"}</strong></div>
-            <div><span>후보 경계 점수</span><strong>{rows ? rows.threshold.toPrecision(6) : "조회 중"}</strong></div>
+            <div><span>현재 조회된 Test 후보</span><strong>{rows ? count(rows.items.length) + "건" :
+              candidateError ? "조회 실패" : "조회 중"}</strong></div>
+            <div><span>후보 경계 점수</span><strong>{rows ? rows.threshold.toPrecision(6) :
+              candidateError ? "조회 실패" : "조회 중"}</strong></div>
           </div>
           <p className="hint">후보 건수는 현재 조회한 페이지의 수이며 전체 후보 수가 아닙니다.
             이상 점수와 정책 판정은 사건 확정이나 정확도 지표가 아닙니다.</p>
