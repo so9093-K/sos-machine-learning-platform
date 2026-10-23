@@ -133,7 +133,7 @@ services:
       - --artifacts-destination
       - /mlflow-data/artifacts
       - --allowed-hosts
-      - mlflow,localhost,127.0.0.1
+      - mlflow:5000,localhost:*,127.0.0.1:*
     ports:
       - "127.0.0.1:${SOS_MLFLOW_PORT:-9606}:5000"
     volumes:
