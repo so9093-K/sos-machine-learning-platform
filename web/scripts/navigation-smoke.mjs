@@ -70,7 +70,17 @@ try {
   }));
   assert.match(modelNav, /href="\/scoring\?model=model-v1"/);
 
-  console.log("ML navigation context: 20 cases passed");
+  // 학습 폼도 URL Dataset을 최초 선택값으로 렌더한다.
+  const { MLWorkbench } = await vite.ssrLoadModule("/src/MLWorkbench.tsx");
+  const trainingForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
+    datasets: [{ id: "data-v1", name: "Example Dataset", kind: "file" }],
+    initialDatasetId: "data-v1", onDatasetSelected: () => {},
+    canTrain: false, canCancel: false, view: "training",
+    onViewChange: () => {}, onOpenModel: () => {},
+  }));
+  assert.match(trainingForm, /<option value="data-v1" selected=""/);
+
+  console.log("ML navigation context: 21 cases passed");
 } finally {
   await vite.close();
 }

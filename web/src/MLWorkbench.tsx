@@ -42,7 +42,8 @@ function trainingSelectionLabel(value: unknown): string {
 /** 데이터 선택부터 비동기 학습·불변 결과 조회까지 같은 공개 API를 사용한다. */
 export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, onViewChange,
   onOpenModel, initialDatasetId, onDatasetSelected }: Props) {
-  const [selectedId, onSelect] = useState(initialDatasetId);
+  // 선택 Dataset의 정본은 URL이며, 별도 로컬 상태로 복제하지 않는다.
+  const selectedId = initialDatasetId;
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
   const [historyDatasetFilter, setHistoryDatasetFilter] = useState("");
@@ -66,11 +67,6 @@ export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, on
   const currentDataset = useRef(selectedId);
   currentDataset.current = selectedId;
   const selectionRequest = useRef(0);
-
-  useEffect(() => {
-    // URL에서 지정된 Dataset으로 직접 진입하거나 뒤로 가면 그 입력을 복원한다.
-    onSelect(initialDatasetId);
-  }, [initialDatasetId]);
 
   const numericColumns = useMemo(
     () => columns.filter(column => NUMERIC.test(column.dtype)), [columns],
@@ -281,10 +277,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel, view: modelView, on
       </div></div>
       <div className="form-row">
         <label>학습 Dataset
-          <select aria-label="ML 학습 Dataset" value={selectedId} onChange={event => {
-            onSelect(event.target.value);
-            onDatasetSelected(event.target.value);
-          }}>
+          <select aria-label="ML 학습 Dataset" value={selectedId}
+            onChange={event => onDatasetSelected(event.target.value)}>
             <option value="">선택하세요</option>
             {datasets.map(dataset => <option value={dataset.id} key={dataset.id}>{dataset.name}</option>)}
           </select>
