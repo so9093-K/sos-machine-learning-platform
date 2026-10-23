@@ -205,8 +205,8 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
     void request<Array<{model_id: string; name: string; version: string}>>("/api/ml/registry/models")
       .then(items => { if (active) setRegisteredModels(items); })
       .catch(e => { if (active) setError(formatError(e)); });
+    void scores.refresh().catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
-    void scores.refresh().catch(e => setError(formatError(e)));
   }, []);
   useEffect(() => {
     let active = true;
