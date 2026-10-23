@@ -116,6 +116,7 @@ try {
   assert.match(emptyJourney, /내 데이터로 시작하기/);
   assert.match(emptyJourney, /자동 생성하는 단계는 현재 등록되어 있지 않습니다/);
   assert.match(emptyJourney, /아직 선택된 실행이 없습니다/);
+  assert.match(emptyJourney, /class="pipeline-journey-item active" aria-current="step"/);
   assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행하기/);
   const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, datasets: [{ id: "dataset-1", name: "활동 데이터", version: "revision-1", kind: "file" }],

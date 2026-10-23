@@ -114,6 +114,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
     setRunId(id); setRun(null); setRows(null); setError(""); setBusy(false);
     setCandidateError("");
     onSelectRun(id, runDatasetId);
+    // 이전 실행을 열었을 때 새로 열린 상태·결과를 바로 확인할 수 있도록 한다.
+    requestAnimationFrame(() => document.getElementById("pipeline-run-heading")?.scrollIntoView({
+      block: "start", behavior: "smooth",
+    }));
   }
   async function loadMoreDatasets() {
     if (!hasMoreDatasets || loadingDatasets) return;
@@ -194,6 +198,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   const evaluationId = resultId(completed.find(item => item.name === "evaluation")?.job, "evaluation_revision_id");
   const inputReady = Boolean(currentCheck?.ready);
   const activeStage = run?.current_stage ? stageLabel[run.current_stage] ?? run.current_stage : null;
+  const currentJourneyStep = run ? run.status === "Succeeded" ? 4 : 3 :
+    inputReady ? 3 : datasetId ? 2 : 1;
   return <div className="platform-home pipeline-consumer">
     <section className="platform-intro pipeline-hero">
       <span className="eyebrow">PIPELINE EXPERIENCE · 설계된 분석 이용</span>
@@ -207,10 +213,18 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
     </section>
 
     <nav className="pipeline-journey" aria-label="분석 이용 단계">
-      <div className="pipeline-journey-item"><span>01</span><strong>분석 이해</strong><small>목적·입력·결과</small></div>
-      <div className="pipeline-journey-item"><span>02</span><strong>데이터 준비</strong><small>등록·선택·확인</small></div>
-      <div className="pipeline-journey-item"><span>03</span><strong>실행</strong><small>상태·취소·복구</small></div>
-      <div className="pipeline-journey-item"><span>04</span><strong>결과 활용</strong><small>후보·상세 근거</small></div>
+      {[
+        { name: "분석 이해", detail: "목적·입력·결과" },
+        { name: "데이터 준비", detail: "등록·선택·확인" },
+        { name: "실행", detail: "상태·취소·복구" },
+        { name: "결과 활용", detail: "후보·상세 근거" },
+      ].map((step, index) => <div key={step.name}
+        className={"pipeline-journey-item" + (currentJourneyStep === index + 1 ? " active" : "")}
+        aria-current={currentJourneyStep === index + 1 ? "step" : undefined}>
+        <span>{String(index + 1).padStart(2, "0")}</span>
+        <strong>{step.name}</strong>
+        <small>{step.detail}</small>
+      </div>)}
     </nav>
     {error && <div className="alert error" role="alert">{error}
       <button className="ghost" onClick={() => setError("")}>닫기</button></div>}

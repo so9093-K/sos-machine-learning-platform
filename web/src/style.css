@@ -488,6 +488,8 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
   width:30px; height:30px; background:var(--sos-raised); border-radius:8px;
   color:var(--sos-accent); font-size:12px; font-weight:700; }
 .pipeline-journey-item strong { font-size:13px; }
+.pipeline-journey-item.active { border-color:var(--sos-accent); background:var(--sos-accent-bg); }
+.pipeline-journey-item.active span { background:var(--sos-accent); color:var(--sos-sidebar); }
 .pipeline-journey-item small { font-size:12px; color:var(--sos-muted); line-height:1.5; }
 .pipeline-section-heading { display:flex; justify-content:space-between; gap:18px;
   align-items:flex-start; flex-wrap:wrap; margin-bottom:20px; }
