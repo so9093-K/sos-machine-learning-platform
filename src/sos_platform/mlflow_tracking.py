@@ -16,6 +16,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
 from .mlflow_errors import MLflowDeliveryError
+from .mlflow_experiments import ensure_experiment
 from .mlflow_registry import register_model_version
 
 
@@ -113,9 +114,9 @@ def send_to_mlflow(
     """
     if job["status"] != "Succeeded" or not job["kind"].startswith("ml_"):
         raise ValueError("Only successful ML jobs can be tracked")
-    experiment = client.settings.experiment_id
     run_id = known_run_id
     if run_id is None:
+        experiment = ensure_experiment(client, job["owner_actor"])
         # 입력 Job ID는 SOS가 발급한 UUID이며 SQL/검색 필터의 사용자 문자열이 아니다.
         found = client.post(
             "runs/search",
@@ -170,8 +171,8 @@ def send_to_mlflow(
 
 
 def _destination_fingerprint(settings: MLflowSettings) -> str:
-    """인증정보를 제외한 Tracking 서버와 Experiment의 연결 지문."""
-    identity = f"{settings.endpoint}\0{settings.experiment_id}".encode()
+    """인증정보를 제외한 Tracking 서버·Experiment 정책의 연결 지문."""
+    identity = f"{settings.endpoint}\0owner-experiment-v1".encode()
     return hashlib.sha256(identity).hexdigest()
 
 

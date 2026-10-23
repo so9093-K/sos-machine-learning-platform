@@ -10,7 +10,6 @@ from .errors import RuntimeConfigurationError
 @dataclass(frozen=True)
 class MLflowSettings:
     endpoint: str
-    experiment_id: str
     token: str | None
     timeout_seconds: int = 2
 
@@ -36,11 +35,7 @@ class MLflowSettings:
             or (split.scheme == "http" and not (local or allow_http))
         ):
             raise RuntimeConfigurationError("Invalid MLflow Tracking endpoint")
-        experiment = os.getenv("SOS_MLFLOW_EXPERIMENT_ID", "").strip()
-        if not experiment.isdigit():
-            raise RuntimeConfigurationError("SOS_MLFLOW_EXPERIMENT_ID must be numeric")
         return cls(
             endpoint=url.rstrip("/"),
-            experiment_id=experiment,
             token=os.getenv("SOS_MLFLOW_TOKEN") or None,
         )
