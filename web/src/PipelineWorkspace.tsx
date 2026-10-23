@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatError, request, submitJob } from "./api";
+import { ApiError, formatError, request, submitJob } from "./api";
 import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
@@ -63,8 +63,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
       } catch (e) {
         if (active) {
           setError(formatError(e));
-          // 일시적 네트워크 오류가 Run 상태 조회를 영구 중단시키지 않는다.
-          handle = setTimeout(() => void refresh(), 5000);
+          // 권한 거부·존재하지 않는 Run에는 반복 요청하지 않는다.
+          const permanent = e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 429;
+          if (!permanent) handle = setTimeout(() => void refresh(), 5000);
         }
       }
     }
