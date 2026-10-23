@@ -416,6 +416,8 @@ class MLTrainRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_features(self):
+        if not self.experiment_title.strip():
+            raise ValueError("Experiment title must not be blank")
         if len(set(self.features)) != len(self.features):
             raise ValueError("Features must be distinct")
         if any(not name or len(name) > 256 for name in self.features):

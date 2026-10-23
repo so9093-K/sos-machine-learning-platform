@@ -120,8 +120,8 @@ def send_to_mlflow(
     응답이 소실된 신규 Run 생성은 전송 전 검색으로 최대한 복구하나,
     MLflow 서버의 비원자적 search/create 때문에 완전한 exactly-once는 보장하지 않는다.
     """
-    if job["status"] != "Succeeded" or not job["kind"].startswith("ml_"):
-        raise ValueError("Only successful ML jobs can be tracked")
+    if job["status"] not in ("Succeeded", "Failed", "Cancelled") or not job["kind"].startswith("ml_"):
+        raise ValueError("Only terminal ML jobs can be tracked")
     run_id = known_run_id
     if run_id is None:
         experiment = ensure_experiment(
@@ -176,7 +176,12 @@ def send_to_mlflow(
             "tags": [{"key": "sos.source", "value": "sos-platform"}],
         },
     )
-    client.post("runs/update", {"run_id": run_id, "status": "FINISHED"})
+    client.post("runs/update", {
+        "run_id": run_id,
+        "status": {
+            "Succeeded": "FINISHED", "Failed": "FAILED", "Cancelled": "KILLED",
+        }[job["status"]],
+    })
     return run_id
 
 
@@ -204,7 +209,7 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
             known_run_id=export["run_id"],
             remember_run=lambda value: store.save_tracking_run_id(job_id, value),
         )
-        if job["kind"] == "ml_train":
+        if job["kind"] == "ml_train" and job["status"] == "Succeeded":
             model_id = (job.get("result") or {}).get("model_revision_id")
             model = store.get_model_revision(model_id) if model_id else None
             if model is None:

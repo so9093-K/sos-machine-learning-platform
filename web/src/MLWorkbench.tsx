@@ -250,8 +250,9 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
       {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
         !selectedJob.cancel_requested && <button type="button" className="secondary"
           onClick={() => void cancelJob()}>취소 요청</button>}
+      {TERMINAL.has(selectedJob.status) &&
+        <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id}/>}
       {selectedJob.status === "Succeeded" && <>
-        <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id}/>
         <button type="button" className="secondary" disabled={!canTrain || submitting}
           onClick={() => void forkTraining()}>동일 조건 Fork·Reproduce</button>
       </>}
