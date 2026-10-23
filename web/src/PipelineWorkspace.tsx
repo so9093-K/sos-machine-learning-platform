@@ -36,6 +36,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   const [run, setRun] = useState<Run | null>(null);
   const [history, setHistory] = useState<Run[]>([]);
   const [rows, setRows] = useState<CandidatePage | null>(null);
+  const [candidateError, setCandidateError] = useState("");
+  const [candidateReload, setCandidateReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [error, setError] = useState("");
@@ -92,15 +94,26 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   useEffect(() => {
     if (run?.status !== "Succeeded") return;
     let active = true;
+    setCandidateError("");
     void request<CandidatePage>(`/api/pipeline-runs/${encodeURIComponent(run.id)}/candidates?limit=25`)
-      .then(page => { if (active && selectedRunId.current === run.id) setRows(page); })
-      .catch(e => { if (active && selectedRunId.current === run.id) setError(formatError(e)); });
+      .then(page => {
+        if (active && selectedRunId.current === run.id) {
+          setRows(page);
+          setCandidateError("");
+        }
+      })
+      .catch(e => {
+        if (active && selectedRunId.current === run.id) setCandidateError(formatError(e));
+      });
     return () => { active = false; };
-  }, [run?.id, run?.status]);
+  }, [run?.id, run?.status, candidateReload]);
   function selectRun(id: string) {
+    const runDatasetId = history.find(item => item.id === id)?.dataset_id ??
+      (run?.id === id ? run.dataset_id : datasetId);
     selectedRunId.current = id;
     setRunId(id); setRun(null); setRows(null); setError(""); setBusy(false);
-    onSelectRun(id, datasetId);
+    setCandidateError("");
+    onSelectRun(id, runDatasetId);
   }
   async function loadMoreDatasets() {
     if (!hasMoreDatasets || loadingDatasets) return;
@@ -351,6 +364,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
         </p>}
         {!terminal.has(run.status) && <div className="pipeline-next-step" role="status">
           <strong>{run.cancel_requested ? "취소 요청을 처리하고 있습니다." :
+            run.status === "Queued" ? "분석 실행을 기다리고 있습니다." :
             activeStage ? activeStage + " 단계 진행 중" : "실행 대기 또는 단계 전환 중"}</strong>
           <p>서버 Worker에서 실제 Job 상태를 확인합니다. 완료 시간을 추정한 진행률로 표현하지 않습니다.</p>
           {canCancel && <button type="button" className="secondary"
@@ -384,8 +398,17 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
           <h4 id="pipeline-candidates-heading">Test 이상 후보 살펴보기</h4>
           <p>보정 구간에서 정한 점수 경계 이상인 Test 결과를 순서대로 표시합니다.
             결과의 행 번호는 Scoring 내부 번호이며 원본 관측치 식별자가 아닙니다.</p>
-          {!rows && <p role="status">완료된 Run의 후보를 불러오는 중입니다.
-            조회 오류가 표시되면 Run을 다시 선택해 재조회할 수 있습니다.</p>}
+          {!rows && candidateError && <div className="pipeline-readiness-blocked" role="alert">
+            <strong>후보 조회에 실패했습니다.</strong>
+            <p>{candidateError}</p>
+            <button type="button" className="secondary" onClick={() => {
+              setCandidateError("");
+              setCandidateReload(current => current + 1);
+            }}>후보 다시 조회하기</button>
+          </div>}
+          {!rows && !candidateError && <p role="status">
+            완료된 Run의 후보를 불러오는 중입니다.
+          </p>
           {rows && <>
             {rows.items.length === 0 && <p>현재 페이지에는 이상 후보가 없습니다.</p>}
             {rows.items.length > 0 && <div className="table-scroll"><table>

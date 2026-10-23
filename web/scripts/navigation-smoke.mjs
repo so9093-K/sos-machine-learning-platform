@@ -101,6 +101,8 @@ try {
   assert.equal(routeAt("/data/prepare", "?from=pipeline").context.pipelineReturn, true);
   assert.deepEqual(nextNavigationContext(
     routeAt("/data", "?from=pipeline"), "ml"), {});
+  assert.equal(contextPath("pipelines", { datasetId: "dataset-from-data" }),
+    "/pipelines?dataset=dataset-from-data");
 
   // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
   const { PipelineWorkspace } = await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");

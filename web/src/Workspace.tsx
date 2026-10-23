@@ -459,9 +459,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           setSelected(id);
           navigateWithContext("pipelines", { datasetId: id });
         }}
-        onSelectRun={(id, datasetId) => navigateWithContext("pipelines", {
-          datasetId, pipelineRunId: id,
-        })}
+        onSelectRun={(id, datasetId) => {
+          setSelected(datasetId);
+          navigateWithContext("pipelines", { datasetId, pipelineRunId: id });
+        }}
         canRun={canRun} canCancel={canCancel}
         onNavigate={tab => navigateWithContext(tab, { pipelineReturn: true })}
         onOpenResource={openResource} />}
@@ -500,6 +501,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           <div className="hero-actions">
             <button className="secondary" onClick={() => setReloadRevision(value => value + 1)}>
               데이터 다시 불러오기
+            </button>
+            <button className="secondary" type="button"
+              onClick={() => navigateWithContext("pipelines", { datasetId: selected })}>
+              등록된 Pipeline 입력 조건 확인 →
             </button>
             {canRun && tab !== "preparation" &&
               <button className="secondary" type="button"

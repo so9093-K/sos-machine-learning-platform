@@ -63,7 +63,7 @@ export function PlatformOverview({ datasets, jobs, onNavigate, onOpenDataset, on
       <div className="platform-quick-actions">
         <button className="platform-destination ghost" onClick={() => onNavigate("pipelines")}>
           <strong>등록된 분석 Pipeline 사용하기 <span aria-hidden="true">↗</span></strong>
-          <span>미리 구성된 분석 방법을 내 Dataset에 적용합니다.</span>
+          <span>분석 목적과 필요한 데이터를 확인하고, 준비·실행·결과까지 안내받습니다.</span>
         </button>
         <button className="platform-destination ghost" onClick={() => onNavigate("understanding")}>
           <strong>데이터 이해하기 <span aria-hidden="true">↗</span></strong>
