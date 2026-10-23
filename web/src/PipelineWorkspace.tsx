@@ -90,11 +90,13 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       setRunId(initialRunId);
       setRun(null);
       setRows(null);
-      setSelectedCandidate(null);
+      // URL의 Run과 선택 후보는 하나의 탐색 상태다. 이전 Run의 행만 지운 채
+      // 이미 URL에 있는 새 Run의 후보 선택을 잃어버리지 않는다.
+      setSelectedCandidate(initialCandidateRowIndex ?? null);
       setError("");
       setRunLoadError("");
     }
-  }, [initialRunId]);
+  }, [initialRunId, initialCandidateRowIndex]);
   useEffect(() => {
     setChecked(null);
   }, [datasetId]);
@@ -598,11 +600,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                   key={run.id + ":" + rows.result_id + ":" + activeCandidate.row_index}
                   candidate={activeCandidate} scoringResultId={rows.result_id}
                   canRun={canRun} onOpenResource={onOpenResource} />
-                  : <div className="pipeline-next-step" role="status">
+                  : selectedCandidate === null ? <div className="pipeline-next-step" role="status">
                     <strong>검토할 후보를 선택하세요.</strong>
                     <p>왼쪽 목록에서 점수를 확인하고 후보를 선택하면 Feature 값과
                       설명 계산을 같은 작업 공간에서 살펴볼 수 있습니다.</p>
-                  </div>}
+                  </div> : null}
               </div>
             </div>}
           </>}
