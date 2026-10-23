@@ -3,8 +3,8 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0022_mlflow_model_registry"
-down_revision = "0021_pipeline_runs"
+revision = "0022"
+down_revision = "0021"
 branch_labels = None
 depends_on = None
 

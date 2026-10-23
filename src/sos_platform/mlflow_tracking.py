@@ -1,7 +1,7 @@
-"""MLflow REST Tracking 어댑터: 선택적이고 재시도 가능한 외부 투영.
+"""MLflow 연구 기록 및 Registry 관리 어댑터.
 
-MLflow 서버를 SOS의 모델/Job 정본으로 사용하지 않는다. 모델 바이트,
-원시 Feature, 개인 데이터, 토큰은 외부로 전송하지 않는다.
+모델 자산 이름·버전은 MLflow에서 관리한다. SOS 실행·무결성 근거는
+SOS가 소유하며 모델 바이트, 원시 Feature, 비밀정보는 전송하지 않는다.
 """
 
 import hashlib
@@ -15,11 +15,8 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
+from .mlflow_errors import MLflowDeliveryError
 from .mlflow_registry import register_model_version
-
-
-class MLflowDeliveryError(Exception):
-    """외부 전송 실패의 원문이나 원격 응답을 노출하지 않는다."""
 
 
 class _NoRedirect(HTTPRedirectHandler):

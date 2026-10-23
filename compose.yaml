@@ -79,10 +79,10 @@ services:
     environment:
       <<: *sos-storage-env
       # MLflow는 설정되지 않으면 연결하지 않는다. 자격 증명은 Worker에만 전달한다.
-      SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-}
-      SOS_MLFLOW_EXPERIMENT_ID: ${SOS_MLFLOW_EXPERIMENT_ID:-}
+      SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      SOS_MLFLOW_EXPERIMENT_ID: ${SOS_MLFLOW_EXPERIMENT_ID:-0}
       SOS_MLFLOW_TOKEN: ${SOS_MLFLOW_TOKEN:-}
-      SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-false}
+      SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
     command: ["python", "-m", "sos_platform.worker"]
     volumes:
       - worker_state:/var/lib/sos
@@ -115,6 +115,35 @@ services:
       retries: 30
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
+  mlflow:
+    logging: *sos-logging
+    profiles: [app]
+    image: ghcr.io/mlflow/mlflow:v3.17.2
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - sqlite:////mlflow-data/mlflow.db
+      - --artifacts-destination
+      - /mlflow-data/artifacts
+      - --allowed-hosts
+      - mlflow,localhost,127.0.0.1
+    ports:
+      - "127.0.0.1:${SOS_MLFLOW_PORT:-9606}:5000"
+    volumes:
+      - mlflow_data:/mlflow-data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3).close()"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
   postgres:
     logging: *sos-logging
     image: postgres:17
@@ -157,3 +186,4 @@ volumes:
   object_data:
   api_state:
   worker_state:
+  mlflow_data:

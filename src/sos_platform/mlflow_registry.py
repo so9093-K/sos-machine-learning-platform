@@ -6,9 +6,7 @@ MLflow가 논리적 모델 이름과 버전을 발급한다. SOS는 기존 Worke
 
 import hashlib
 import re
-from urllib.parse import urlencode
-
-from .mlflow_tracking import MLflowDeliveryError
+from .mlflow_errors import MLflowDeliveryError
 
 
 def registered_model_name(model: dict) -> str:
