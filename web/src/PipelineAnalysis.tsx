@@ -103,8 +103,9 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
   };
   return <div className="pipeline-score-chart">
     <DataChart option={option} ariaLabel="Train, Calibration, Test의 실제 최소·평균·최대 이상 점수와 Calibration 임계값 비교" />
-    <p className="hint">세 구간의 실제 점수 요약 비교입니다. 전체 분포 히스토그램이나 시간별 변화,
-      모델 학습 손실 곡선이 아닙니다. 표시된 임계값은 Calibration으로 정해 Test에 적용한 기준입니다.</p>
+    <p className="hint">위 비교 그래프는 세 구간의 최솟값·평균·최댓값만 표현합니다.
+      전체 점수 분포는 아래의 단계별 히스토그램에서 확인할 수 있습니다.
+      표시된 임계값은 Calibration에서 정해 Test에 적용한 기준입니다.</p>
   </div>;
 }
 

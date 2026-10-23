@@ -160,12 +160,12 @@ try {
           bin_counts: [30, 30], score_count: 60, constant_scores: false },
       } },
     calibration: { id: "cal-a", score_summary: {
-      score_min: 0.15, score_mean: 0.25, score_max: 0.5,
+      score_min: 0.15, score_mean: 0.25, score_max: 0.5, score_count: 20,
       histogram: { method: "equal_width_exact_v1", bin_edges: [0.15, 0.325, 0.5],
         bin_counts: [10, 10], score_count: 20, constant_scores: false },
     } },
     test: { id: "test-a", score_summary: {
-      score_min: 0.2, score_mean: 0.3, score_max: 0.6,
+      score_min: 0.2, score_mean: 0.3, score_max: 0.6, score_count: 20,
       histogram: { method: "equal_width_exact_v1", bin_edges: [0.2, 0.4, 0.6],
         bin_counts: [15, 5], score_count: 20, constant_scores: false },
     } },
