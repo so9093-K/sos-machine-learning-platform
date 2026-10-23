@@ -4,7 +4,9 @@
 """
 import json
 import os
+import sys
 import time
+from pathlib import Path
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from urllib.error import HTTPError
@@ -140,5 +142,43 @@ def main() -> None:
     print("Registered Pipeline E2E: two isolated Dataset -> Training -> Scoring -> Policy -> Evaluation runs succeeded")
 
 
+def _cancel_record() -> Path:
+    return Path(os.environ["RUNNER_TEMP"]) / "sos-pipeline-cancelled-run"
+
+
+def queued_cancel_submission() -> None:
+    """Worker가 정지된 동안 제출과 취소 요청을 별개로 확정한다."""
+    token = os.environ["SOS_E2E_TOKEN_A"]
+    dataset = upload(token, 5)
+    run = start(token, dataset["id"])
+    assert run["status"] == "Queued", run
+    cancelled = request(token, "POST", f"/api/pipeline-runs/{run['id']}/cancel")
+    assert cancelled["cancel_requested"] and cancelled["status"] == "Queued", cancelled
+    _cancel_record().write_text(run["id"], encoding="ascii")
+
+
+def check_cancelled_after_restart() -> None:
+    """Worker 재시작 후 이미 취소된 Run이 ML Job을 만들지 않는지 검증한다."""
+    token = os.environ["SOS_E2E_TOKEN_A"]
+    run_id = _cancel_record().read_text(encoding="ascii")
+    until = time.monotonic() + 60
+    while time.monotonic() < until:
+        run = request(token, "GET", f"/api/pipeline-runs/{run_id}")
+        if run["status"] == "Cancelled":
+            assert run["stages"] == [], run
+            print("Pipeline queued cancellation remained effective across worker restart")
+            return
+        time.sleep(1)
+    raise TimeoutError("Cancelled Pipeline Run was not finalized after Worker restart")
+
+
 if __name__ == "__main__":
-    main()
+    mode = sys.argv[1] if len(sys.argv) > 1 else "full"
+    if mode == "full":
+        main()
+    elif mode == "queue-cancel":
+        queued_cancel_submission()
+    elif mode == "check-cancelled":
+        check_cancelled_after_restart()
+    else:
+        raise SystemExit("Unknown E2E scenario")

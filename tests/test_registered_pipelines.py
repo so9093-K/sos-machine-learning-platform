@@ -27,6 +27,7 @@ class FakeStore:
             ))
         self.jobs = {}
         self.next_job = 0
+        self.idempotency = {}
 
     @contextmanager
     def connection(self):
@@ -40,8 +41,11 @@ class FakeStore:
         return self.jobs.get(job_id)
 
     def create_job(self, *, kind, dataset_id, spec, owner_actor, actor_type, idempotency_key):
+        if idempotency_key in self.idempotency:
+            return self.jobs[self.idempotency[idempotency_key]]
         self.next_job += 1
         job_id = f"job-{self.next_job}"
+        self.idempotency[idempotency_key] = job_id
         outcomes = {
             "ml_pipeline_preflight": {"plan": {
                 "timestamp_column": "ts",
@@ -156,3 +160,30 @@ def test_blocked_run_does_not_starve_other_users():
     actual = pipeline_runs.get_run(store, second["id"])
     assert actual["job_ids"]["preflight"] in store.jobs
     assert pipeline_runs.get_run(store, first["id"])["status"] == "Running"
+
+
+def test_worker_crash_after_job_commit_reuses_job_on_resume():
+    class InterruptedStore(FakeStore):
+        interrupted = False
+
+        def create_job(self, **kwargs):
+            result = super().create_job(**kwargs)
+            if not self.interrupted:
+                self.interrupted = True
+                raise RuntimeError("crashed before the Run stored the Job ID")
+            return result
+
+    import pytest
+    store = InterruptedStore()
+    run = pipeline_runs.create_run(
+        store, {"id": "recovery", "version": "v1"}, "owner-recovery",
+        {"ready": True, "plan": None}, None,
+    )
+    with pytest.raises(RuntimeError, match="crashed"):
+        pipeline_runs.advance_run(store)
+    assert store.next_job == 1
+    assert pipeline_runs.get_run(store, run["id"])["job_ids"] == {}
+    assert pipeline_runs.advance_run(store)
+    restored = pipeline_runs.get_run(store, run["id"])
+    assert restored["job_ids"]["preflight"] == "job-1"
+    assert store.next_job == 1

@@ -94,6 +94,14 @@ jobs:
         run: docker compose --profile app up --build -d --wait
       - name: Execute API-first two-user Pipeline E2E
         run: uv run --locked python scripts/pipeline_e2e.py
+      - name: Stop Worker before a queued Pipeline submission
+        run: docker compose --profile app stop worker
+      - name: Submit and cancel a queued Pipeline
+        run: uv run --locked python scripts/pipeline_e2e.py queue-cancel
+      - name: Restart Worker
+        run: docker compose --profile app start worker
+      - name: Confirm cancellation after Worker restart
+        run: uv run --locked python scripts/pipeline_e2e.py check-cancelled
       - name: Inspect failed services
         if: failure()
         run: docker compose --profile app logs --tail 120 api worker init postgres storage
