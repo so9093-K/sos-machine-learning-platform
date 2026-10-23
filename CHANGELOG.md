@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 완료된 Pipeline Run에 재진입하면 입력 준비보다 Training·Calibration·Test 결과 분석을 먼저 표시하고, 후보 검토·새 분석 시작으로 이동할 수 있게 했습니다.
+
 - Isolation Forest의 실제 Training·Scoring 점수 분포를 실행 결과의 기존 요약 필드에 32개 고정 폭 구간의 정확한 빈도로 보존합니다. Scoring은 게시 전 Parquet을 배치로 추가 조회하며 ML 판단 정책·원본 점수·API 응답 모델은 변경하지 않습니다.
 
 - Test 후보별 Feature를 확인하고, 선택한 후보의 참조 중앙값 치환 기반 점수 민감도 설명 Job을 명시적으로 제출해 결과 그래프로 검토할 수 있게 했습니다. 설명 결과는 SHAP·인과적 원인으로 표현하지 않습니다.

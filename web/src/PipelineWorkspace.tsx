@@ -256,8 +256,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
       </div>
       <div className="pipeline-actions">
         <button type="button" onClick={() =>
-          document.getElementById("pipeline-prepare-title")?.scrollIntoView({ block: "start" })}>
-          내 데이터로 분석 시작하기 →
+          document.getElementById(run?.status === "Succeeded"
+            ? "pipeline-analysis-first-heading" : "pipeline-prepare-title")?.scrollIntoView({ block: "start" })}>
+          {run?.status === "Succeeded" ? "이번 Run의 분석 결과 보기 →" : "내 데이터로 분석 시작하기 →"}
         </button>
       </div>
     </section>
@@ -276,6 +277,28 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
         <small>{step.detail}</small>
       </div>)}
     </nav>
+    {run?.status === "Succeeded" && <section className="panel pipeline-results-priority"
+      aria-labelledby="pipeline-analysis-first-heading">
+      <div className="pipeline-section-heading">
+        <div>
+          <span className="eyebrow">이번 Pipeline Run · 분석과 결과</span>
+          <h3 id="pipeline-analysis-first-heading">학습부터 Test까지 살펴보기</h3>
+          <p>Train·Calibration·Test의 실제 점수 분포와 판정 근거를 먼저 확인한 뒤,
+            관심 있는 Test 후보를 더 자세히 검토하세요.</p>
+        </div>
+      </div>
+      <PipelineAnalysis run={run} onOpenResource={onOpenResource} />
+      <div className="pipeline-actions">
+        <button type="button" onClick={() =>
+          document.getElementById("pipeline-candidates-heading")?.scrollIntoView({
+            block: "start", behavior: "smooth",
+          })}>이상 후보 상세 검토 →</button>
+        <button type="button" className="secondary" onClick={() =>
+          document.getElementById("pipeline-prepare-title")?.scrollIntoView({
+            block: "start", behavior: "smooth",
+          })}>다른 Dataset으로 새 분석 →</button>
+      </div>
+    </section>}
     {error && <div className="alert error" role="alert">{error}
       <button className="ghost" onClick={() => setError("")}>닫기</button></div>}
 
@@ -453,8 +476,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
             Pipeline 취소 요청
           </button>}
         </div>}
-        {run.status === "Succeeded" && <PipelineAnalysis run={run}
-          onOpenResource={onOpenResource} />}
         {run.status === "Succeeded" && <section className="pipeline-candidates" aria-labelledby="pipeline-candidates-heading">
           <h4 id="pipeline-candidates-heading">Test 이상 후보 살펴보기</h4>
           <p>보정 구간에서 정한 점수 경계 이상인 Test 결과를 순서대로 표시합니다.
