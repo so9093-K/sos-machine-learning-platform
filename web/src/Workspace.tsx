@@ -186,7 +186,12 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
     showExamples.current = false;
     // 데이터 준비에서 명시적으로 데이터를 등록했다면 Explorer로 강제 이동하지 않는다.
-    setSelected(data.id); setTab(current => current === "preparation" ? current : "understanding");
+    setSelected(data.id);
+    const target = tab === "preparation" ? "preparation" : "understanding";
+    if (context.pipelineReturn) navigateWithContext(target, {
+      pipelineReturn: true, datasetId: data.id,
+    });
+    else setTab(target);
     const revision = feedbackRevision.current;
     // HTTP 201이 등록 완료의 정본이며 목록 GET 응답을 기다리지 않고 먼저 안내한다.
     setNotice(success);
@@ -201,7 +206,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   }
   /** HTTP 202 접수 이후의 목록 조회 실패는 Job 제출 실패가 아니다. */
   async function showSubmittedJob(job: Job, message: string) {
-    setTab("jobs");
+    if (context.pipelineReturn) navigateWithContext("jobs", {
+      pipelineReturn: true, datasetId: selected,
+    });
+    else setTab("jobs");
     try {
       await refreshJobs();
       setNotice(message);
@@ -227,6 +235,20 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   async function loadMoreJobs() {
     await withFeedback(loadOlderJobs);
   }
+  useEffect(() => {
+    if (!context.pipelineReturn || !context.datasetId) return;
+    let active = true;
+    const requestedId = context.datasetId;
+    setSelected(requestedId);
+    // 직접 URL과 새로고침에서 첫 Dataset 목록 밖의 판본도 조회한다.
+    if (!datasets.some(item => item.id === requestedId)) {
+      void request<Dataset>(`/api/datasets/${encodeURIComponent(requestedId)}`)
+        .then(item => { if (active) setDatasets(previous =>
+          [item, ...previous.filter(entry => entry.id !== item.id)]); })
+        .catch(e => { if (active) setError(formatError(e)); });
+    }
+    return () => { active = false; };
+  }, [context.pipelineReturn, context.datasetId]);
   useEffect(() => {
     if (canWrite) {
       request<UploadPolicy>("/api/datasets/upload-policy")
@@ -315,7 +337,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       const item = await request<Dataset>(`/api/datasets/${encodeURIComponent(datasetId)}`);
       setDatasets(previous => [item, ...previous.filter(d => d.id !== item.id)]);
       showExamples.current = false;
-      setSelected(item.id); setTab("preview");
+      setSelected(item.id);
+      if (context.pipelineReturn) navigateWithContext("preview", {
+        pipelineReturn: true, datasetId: item.id,
+      });
+      else setTab("preview");
     });
   }
   async function upload(file: File) {
@@ -414,12 +440,19 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           }}
           onExample={() => {
             showExamples.current = true;
-            setSelected(""); setTab(current => current === "preparation" ? current : "preview");
+            setSelected("");
+            const target = tab === "preparation" ? "preparation" : "preview";
+            if (context.pipelineReturn) navigateWithContext(target, { pipelineReturn: true });
+            else setTab(target);
           }}
           onChoose={id => {
             showExamples.current = false; setSelected(id);
-            setTab(current => ["preparation", "preview", "profile"].includes(current)
-              ? current : "understanding");
+            const target = ["preparation", "preview", "profile"].includes(tab)
+              ? tab : "understanding";
+            if (context.pipelineReturn) navigateWithContext(target, {
+              pipelineReturn: true, datasetId: id,
+            });
+            else setTab(target);
           }}
           existingTableName={existingTableName} onChangeExistingName={changeExistingTableName}
           snapshots={snapshots} snapshotId={snapshotId} onSnapshotId={setSnapshotId}
@@ -451,13 +484,41 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onViewDataActivity={() => setTab("jobs")}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
       {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
-        initialDatasetId={selected} hasMoreDatasets={Boolean(nextDatasetCursor)}
-        onLoadMoreDatasets={loadMoreDatasets} onSelectDataset={setSelected}
-        canRun={canRun}
-        canCancel={canCancel} onNavigate={setTab} onOpenResource={openResource} />}
+        initialDatasetId={context.datasetId ?? ""}
+        initialRunId={context.pipelineRunId ?? ""}
+        hasMoreDatasets={Boolean(nextDatasetCursor)}
+        onLoadMoreDatasets={loadMoreDatasets}
+        onSelectDataset={id => {
+          setSelected(id);
+          navigateWithContext("pipelines", { datasetId: id });
+        }}
+        onSelectRun={(id, datasetId) => {
+          setSelected(datasetId);
+          navigateWithContext("pipelines", { datasetId, pipelineRunId: id });
+        }}
+        canRun={canRun} canCancel={canCancel}
+        onNavigate={(tab, datasetId) => navigateWithContext(tab, {
+          pipelineReturn: true, datasetId,
+        })}
+        onOpenResource={openResource} />}
       {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab}
         onNavigate={setTab} onOpenModel={id => openResource("model", id)}
         onStartScoring={startScoring} canRun={canRun} />}
+      {context.pipelineReturn &&
+        (["understanding", "preview", "profile", "preparation", "jobs"] as Tab[]).includes(tab) &&
+        <section className="pipeline-return" role="status">
+          <div><strong>등록된 분석을 준비하는 중입니다</strong>
+            {tab === "jobs"
+              ? <p>준비 Job이 완료되면 출력 Dataset을 열고 입력 조건을 확인하세요.
+                  기존 Dataset으로도 언제든 분석 화면에 돌아갈 수 있습니다.</p>
+              : <p>Dataset을 등록하거나 내용을 확인한 뒤 이전 분석으로 돌아가 입력 조건을 검사하세요.
+                  44개 활동 Feature가 없다면 현재 등록형 분석은 자동 생성할 수 없습니다.</p>}
+          </div>
+          <button className="secondary" type="button"
+            onClick={() => navigateWithContext("pipelines", { datasetId: selected })}>
+            {selected ? "이 Dataset으로 분석 계속하기 →" : "분석 화면으로 돌아가기 →"}
+          </button>
+        </section>}
       {!dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
         <p>{tab === "preparation"
@@ -478,6 +539,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           <div className="hero-actions">
             <button className="secondary" onClick={() => setReloadRevision(value => value + 1)}>
               데이터 다시 불러오기
+            </button>
+            <button className="secondary" type="button"
+              onClick={() => navigateWithContext("pipelines", { datasetId: selected })}>
+              등록된 Pipeline 입력 조건 확인 →
             </button>
             {canRun && tab !== "preparation" &&
               <button className="secondary" type="button"

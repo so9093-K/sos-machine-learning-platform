@@ -88,7 +88,67 @@ try {
   assert.match(pagedDatasetForm, /현재 목록 외 Dataset/);
   assert.match(pagedDatasetForm, /<option value="data-not-on-first-page" selected=""/);
 
-  console.log("ML navigation context: 25 assertions passed");
+
+  // 등록형 Pipeline의 선택 Dataset·Run 및 준비 화면 복귀 문맥.
+  const pipelineRoute = routeAt("/pipelines", "?dataset=dataset-1&run=run-1");
+  assert.equal(pipelineRoute.context.datasetId, "dataset-1");
+  assert.equal(pipelineRoute.context.pipelineRunId, "run-1");
+  assert.equal(contextPath("pipelines", { datasetId: "data 1", pipelineRunId: "run/1" }),
+    "/pipelines?dataset=data+1&run=run%2F1");
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/data", "?from=pipeline"), "preparation"), { pipelineReturn: true });
+  assert.equal(contextPath("understanding", { pipelineReturn: true }), "/data?from=pipeline");
+  assert.equal(routeAt("/data/prepare", "?from=pipeline").context.pipelineReturn, true);
+  assert.equal(contextPath("preparation", { pipelineReturn: true, datasetId: "dataset-1" }),
+    "/data/prepare?from=pipeline&dataset=dataset-1");
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/data", "?from=pipeline&dataset=dataset-1"), "preparation"),
+    { pipelineReturn: true, datasetId: "dataset-1" });
+  assert.equal(routeAt("/data", "?from=pipeline&dataset=dataset-1").context.datasetId, "dataset-1");
+  assert.equal(routeAt("/data", "?dataset=ignored").context.datasetId, "");
+  assert.equal(contextPath("jobs", { pipelineReturn: true, datasetId: "dataset-1" }),
+    "/activity/jobs?from=pipeline&dataset=dataset-1");
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/data/prepare", "?from=pipeline&dataset=dataset-1"), "jobs"),
+    { pipelineReturn: true, datasetId: "dataset-1" });
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/activity/jobs", "?from=pipeline&dataset=dataset-1"), "preview"),
+    { pipelineReturn: true, datasetId: "dataset-1" });
+  assert.deepEqual(nextNavigationContext(routeAt("/activity/jobs", ""), "understanding"),
+    { pipelineReturn: false });
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/data", "?from=pipeline"), "ml"), {});
+  assert.equal(contextPath("pipelines", { datasetId: "dataset-from-data" }),
+    "/pipelines?dataset=dataset-from-data");
+
+  // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
+  const { PipelineWorkspace } = await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
+  const props = {
+    datasets: [], initialDatasetId: "", initialRunId: "",
+    hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
+    onSelectDataset: () => {}, onSelectRun: () => {},
+    canRun: true, canCancel: true, onNavigate: () => {}, onOpenResource: () => {},
+  };
+  const emptyJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, props));
+  assert.match(emptyJourney, /내 데이터로 시작하기/);
+  assert.match(emptyJourney, /다음 행동: Dataset을 선택하세요/);
+  assert.match(emptyJourney, /자동 생성하는 단계는 현재 등록되어 있지 않습니다/);
+  assert.match(emptyJourney, /아직 선택된 실행이 없습니다/);
+  assert.match(emptyJourney, /class="pipeline-journey-item active" aria-current="step"/);
+  assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행하기/);
+  const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
+    ...props, datasets: [{ id: "dataset-1", name: "활동 데이터", version: "revision-1", kind: "file" }],
+    initialDatasetId: "dataset-1",
+  }));
+  assert.match(selectedJourney, /<option value="dataset-1" selected=""/);
+  assert.match(selectedJourney, /입력 조건 확인/);
+  const deepLinkedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
+    ...props, initialRunId: "previous-run",
+  }));
+  assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
+  assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
+
+  console.log("ML / Pipeline navigation and Consumer entry: assertions passed");
 } finally {
   await vite.close();
 }
