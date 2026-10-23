@@ -1,32 +1,14 @@
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
-import type { Dataset } from "./types";
+import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
+  PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 
-type Definition = {
-  id: string; version: string; name: string; description: string;
-  required_features: string[]; stages: string[]; limitations: string[];
+const resultId = (job: PipelineJob | undefined, key: string): string | null => {
+  const value = job?.result?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
 };
-type Check = {
-  ready: boolean; issues: string[]; dataset_id: string; dataset_version: string;
-  feature_count: number;
-  plan: null | {
-    train_end: string; calibration_end: string;
-    partition_sizes: { train: number; calibration: number; test: number };
-  };
-};
-type Job = { id: string; kind: string; status: string; error_code?: string | null;
-  result?: Record<string, string> | null; };
-type Run = {
-  id: string; definition_id: string; dataset_id: string; dataset_version: string;
-  status: string; cancel_requested: boolean; error_code?: string | null;
-  current_stage: string | null; created_at: string;
-  stages?: { name: string; job: Job }[];
-};
-type CandidatePage = {
-  items: { row_index: number; anomaly_score: number; features: Record<string, number | null> }[];
-  threshold: number; next_cursor: string | null; result_id: string;
-};
+
 const PIPELINE = "activity-anomaly-if";
 const stageLabel: Record<string,string> = {
   preflight: "시간 범위·데이터 검사", training: "모델 학습", calibration: "Calibration 점수화",
@@ -189,22 +171,25 @@ export function PipelineWorkspace({ datasets, canRun, canCancel, onNavigate, onO
           {run.cancel_requested ? " · 취소 요청됨" : ""}
           {run.error_code ? " · 오류 코드 " + run.error_code : ""}</p>
         <p className="hint">실행은 서버 Worker에서 진행됩니다. 화면을 닫아도 Run을 다시 조회할 수 있습니다. 표시할 근거 없는 완료율은 추정하지 않습니다.</p>
-        {completed.find(item => item.name === "preflight")?.job.result?.plan && <p className="hint">시간 분할 검사가 완료되었습니다. 개별 Job에서 실제 처리 행과 시간 경계를 확인할 수 있습니다.</p>}
+        {Boolean(completed.find(item => item.name === "preflight")?.job.result?.plan) && <p className="hint">시간 분할 검사가 완료되었습니다. 개별 Job에서 실제 처리 행과 시간 경계를 확인할 수 있습니다.</p>}
         {!terminal.has(run.status) && canCancel &&
           <button className="secondary" disabled={busy || run.cancel_requested} onClick={() => void cancel()}>Pipeline 취소 요청</button>}
         <div className="job-list">
           {current?.stages.map(stage => {
             const entry = completed.find(item => item.name === stage);
+            const modelId = resultId(entry?.job, "model_revision_id");
+            const scoringId = resultId(entry?.job, "scoring_result_id");
+            const evaluationId = resultId(entry?.job, "evaluation_revision_id");
             return <div className="ml-resource-row" key={stage}>
               <strong>{stageLabel[stage] ?? stage}</strong>
               <span>{entry ? entry.job.status : run.current_stage === stage ? "대기" : "미시작"}</span>
               {entry?.job.error_code && <small>{entry.job.error_code}</small>}
-              {entry?.job.result?.model_revision_id && <button className="secondary"
-                onClick={() => onOpenResource("model", entry.job.result!.model_revision_id!)}>모델 결과 →</button>}
-              {entry?.job.result?.scoring_result_id && <button className="secondary"
-                onClick={() => onOpenResource("scoring", entry.job.result!.scoring_result_id!)}>Scoring 결과 →</button>}
-              {entry?.job.result?.evaluation_revision_id && <button className="secondary"
-                onClick={() => onOpenResource("evaluation", entry.job.result!.evaluation_revision_id!)}>평가 결과 →</button>}
+              {modelId && <button className="secondary"
+                onClick={() => onOpenResource("model", modelId)}>모델 결과 →</button>}
+              {scoringId && <button className="secondary"
+                onClick={() => onOpenResource("scoring", scoringId)}>Scoring 결과 →</button>}
+              {evaluationId && <button className="secondary"
+                onClick={() => onOpenResource("evaluation", evaluationId)}>평가 결과 →</button>}
             </div>;
           })}
         </div>
