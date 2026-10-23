@@ -41,6 +41,7 @@ function ScoreHistogram({ summary, title, threshold }: {
     edges.every(x => typeof x === "number" && Number.isFinite(x)) &&
     counts.every(x => typeof x === "number" && Number.isInteger(x) && x >= 0) &&
     counts.reduce((a: number, b: unknown) => a + Number(b), 0) === hist.score_count &&
+    metric(summary, "score_count") === hist.score_count &&
     edges.every((x, i) => i === 0 || x > edges[i - 1]);
   if (!valid) return <p className="hint">이 Run에는 전체 점수 분포 집계가 저장돼 있지 않습니다.
     기존 최솟값·평균·최댓값 근거는 위 비교 그래프에서 확인할 수 있습니다.</p>;
@@ -48,7 +49,10 @@ function ScoreHistogram({ summary, title, threshold }: {
     aria: { enabled: true },
     tooltip: { trigger: "item" },
     grid: { left: 60, right: 38, top: 26, bottom: 55 },
-    xAxis: { type: "value" as const, name: "이상 점수", min: edges[0], max: edges[edges.length - 1] },
+    xAxis: { type: "value" as const, name: "이상 점수",
+      min: threshold === undefined ? edges[0] : Math.min(edges[0], threshold),
+      max: threshold === undefined ? edges[edges.length - 1]
+        : Math.max(edges[edges.length - 1], threshold) },
     yAxis: { type: "value" as const, name: "행 수", minInterval: 1 },
     series: [{
       type: "bar" as const, name: "구간별 실제 관측 수",
@@ -133,6 +137,8 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
           <div><dt>학습 구간</dt><dd>{format(trainRows)}행</dd></div>
           <div><dt>알고리즘</dt><dd>{model.algorithm}</dd></div>
           <div><dt>입력 Feature</dt><dd>{model.features.length}개</dd></div>
+          <div><dt>결측값 처리</dt><dd>{model.runtime.preprocessing_mode === "train_median_v1"
+            ? "Train 중앙값 대체" : "별도 모델 판본 근거 확인"}</dd></div>
           <div><dt>학습 점수 범위</dt><dd>{format(metric(train, "score_min"))} ~ {format(metric(train, "score_max"))}</dd></div>
           <div><dt>학습 평균 점수</dt><dd>{format(metric(train, "score_mean"))}</dd></div>
         </dl>
@@ -180,6 +186,9 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource }: {
           <div><dt>실제 Test 후보 비율</dt><dd>{metric(decision, "alert_rate") === null
             ? "미계산" : format(metric(decision, "alert_rate")! * 100) + "%"}</dd></div>
           <div><dt>정답 레이블</dt><dd>{evaluation.label_coverage === "none" ? "없음" : evaluation.label_coverage}</dd></div>
+          <div><dt>Calibration/Test 시간 구간</dt><dd>{
+            decision.temporal_nonoverlap_confirmed === true ? "비중복 확인" : "근거 미확인"
+          }</dd></div>
         </dl>
         <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} />
         <p className="hint">Calibration에서 정한 정책을 별도 Test 시간 구간에 적용합니다.
