@@ -58,3 +58,45 @@ jobs:
         run: bash scripts/generate_api_types.sh
       - name: Verify committed generated OpenAPI types
         run: git diff --exit-code -- web/src/api.generated.ts
+
+  pipeline-e2e:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Prepare Python
+        run: uv python install 3.12
+      - name: Install development dependencies
+        run: uv sync --locked --group dev
+      - name: Prepare ephemeral local-only auth
+        run: |
+          uv run --locked python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import secrets
+
+          tokens = [secrets.token_urlsafe(48), secrets.token_urlsafe(48)]
+          mapping = {
+              hashlib.sha256(token.encode()).hexdigest(): {
+                  "actor_id": f"e2e-user-{i + 1}", "kind": "human", "roles": ["researcher"]
+              }
+              for i, token in enumerate(tokens)
+          }
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
+              handle.write("SOS_AUTH_TOKEN_HASHES=" + json.dumps(mapping, separators=(",", ":")) + "\\n")
+              for i, token in enumerate(tokens):
+                  handle.write(f"SOS_E2E_TOKEN_{'AB'[i]}={token}\\n")
+          PY
+      - name: Start isolated platform
+        run: docker compose --profile app up --build -d --wait
+      - name: Execute API-first two-user Pipeline E2E
+        run: uv run --locked python scripts/pipeline_e2e.py
+      - name: Inspect failed services
+        if: failure()
+        run: docker compose --profile app logs --tail 120 api worker init postgres storage
+      - name: Remove ephemeral platform data
+        if: always()
+        run: docker compose --profile app down --volumes --remove-orphans
