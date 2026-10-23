@@ -51,6 +51,20 @@ def test_scoring_histogram_reads_full_parquet_and_matches_train_logic(tmp_path):
         )
 
 
+def test_nearly_identical_floating_scores_keep_strict_edges_and_exact_counts(tmp_path):
+    low = 0.5
+    high = math.nextafter(low, math.inf)
+    values = [low] * 13 + [high] * 7
+    trained = score_histogram(values)
+    edges = trained["bin_edges"]
+    assert all(b > a for a, b in zip(edges, edges[1:]))
+    assert sum(trained["bin_counts"]) == 20
+    path = tmp_path / "close.parquet"
+    pq.write_table(pa.table({"anomaly_score": values}), path)
+    scored = histogram_from_scoring_file(path, low=low, high=high, expected_rows=20)
+    assert trained == scored
+
+
 def test_scoring_histogram_constant_scores(tmp_path):
     values = [0.4] * 17
     path = tmp_path / "scores.parquet"

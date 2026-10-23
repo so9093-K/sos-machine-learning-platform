@@ -44,7 +44,20 @@ def histogram_edges(low: float, high: float, *, bins: int = 32) -> list[float]:
     step = (right - left) / bins
     if not math.isfinite(step) or step <= 0:
         raise ValueError("Histogram score range is invalid")
-    return [left + step * i for i in range(bins)] + [right]
+    edges = [left + step * i for i in range(bins)] + [right]
+    if any(previous >= following for previous, following in zip(edges, edges[1:])):
+        # 근접한 float 점수 두 값의 차이가 32개 구간보다 작으면 엣지가
+        # 같은 float로 반올림된다. 구간만 확장해 중복 경계를 없앤다.
+        min_span = 2 * bins * max(math.ulp(low), math.ulp(high))
+        expanded = (min_span - (high - low)) / 2
+        left, right = low - expanded, high + expanded
+        step = (right - left) / bins
+        edges = [left + step * i for i in range(bins)] + [right]
+        if not all(math.isfinite(edge) for edge in edges) or any(
+            previous >= following for previous, following in zip(edges, edges[1:])
+        ):
+            raise ValueError("Histogram score range cannot be represented accurately")
+    return edges
 
 
 def score_histogram(values: Sequence[float], *, bins: int = 32) -> dict:
