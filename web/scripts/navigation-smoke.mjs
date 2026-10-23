@@ -131,6 +131,11 @@ try {
   }));
   assert.match(selectedJourney, /<option value="dataset-1" selected=""/);
   assert.match(selectedJourney, /입력 조건 확인/);
+  const deepLinkedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
+    ...props, initialRunId: "previous-run",
+  }));
+  assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
+  assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
 
   console.log("ML / Pipeline navigation and Consumer entry: assertions passed");
 } finally {

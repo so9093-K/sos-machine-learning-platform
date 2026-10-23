@@ -37,6 +37,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   const [runId, setRunId] = useState(initialRunId);
   const selectedRunId = useRef(runId);
   const [run, setRun] = useState<Run | null>(null);
+  const [runLoadError, setRunLoadError] = useState("");
+  const [runReload, setRunReload] = useState(0);
   const [history, setHistory] = useState<Run[]>([]);
   const [rows, setRows] = useState<CandidatePage | null>(null);
   const [candidateError, setCandidateError] = useState("");
@@ -70,6 +72,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
       setRun(null);
       setRows(null);
       setError("");
+      setRunLoadError("");
     }
   }, [initialRunId]);
   useEffect(() => {
@@ -84,19 +87,23 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
     }
   }, [run?.id, run?.dataset_id, initialRunId, runId, datasetId, onSelectRun]);
   useEffect(() => {
-    if (!runId) { setRun(null); return; }
+    if (!runId) { setRun(null); setRunLoadError(""); return; }
     let active = true;
+    setRunLoadError("");
     let handle: ReturnType<typeof setTimeout>;
     async function refresh() {
       try {
         const next = await request<Run>(`/api/pipeline-runs/${encodeURIComponent(runId)}`);
-        if (active && selectedRunId.current === runId) setRun(next);
+        if (active && selectedRunId.current === runId) {
+          setRun(next);
+          setRunLoadError("");
+        }
         if (active && selectedRunId.current === runId && !terminal.has(next.status)) {
           handle = setTimeout(() => void refresh(), 2400);
         }
       } catch (e) {
         if (active && selectedRunId.current === runId) {
-          setError(formatError(e));
+          setRunLoadError(formatError(e));
           // 권한 거부·존재하지 않는 Run에는 반복 요청하지 않는다.
           const permanent = e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 429;
           if (!permanent) handle = setTimeout(() => void refresh(), 5000);
@@ -105,7 +112,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
     }
     void refresh();
     return () => { active = false; clearTimeout(handle); };
-  }, [runId]);
+  }, [runId, runReload]);
   useEffect(() => {
     if (run?.status !== "Succeeded") return;
     let active = true;
@@ -128,6 +135,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
     selectedRunId.current = id;
     setRunId(id); setRun(null); setRows(null); setError(""); setBusy(false);
     setCandidateError("");
+    setRunLoadError("");
     onSelectRun(id, runDatasetId);
     // 이전 실행을 열었을 때 새로 열린 상태·결과를 바로 확인할 수 있도록 한다.
     requestAnimationFrame(() => document.getElementById("pipeline-run-heading")?.scrollIntoView({
@@ -394,10 +402,21 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
         </div>
         {run && <span className="chip">{run.status}{run.cancel_requested ? " · 취소 요청됨" : ""}</span>}
       </div>
-      {!run && <div className="pipeline-next-step">
-        <strong>아직 선택된 실행이 없습니다.</strong>
-        <p>위에서 Dataset을 선택하고 입력 구조를 확인한 뒤 명시적으로 실행하거나,
-          아래의 이전 Run을 열어 보세요.</p>
+      {!run && <div className="pipeline-next-step" role={runLoadError ? "alert" : "status"}>
+        <strong>{runId ? runLoadError ? "선택한 실행을 조회하지 못했습니다." :
+          "선택한 실행을 불러오는 중입니다." : "아직 선택된 실행이 없습니다."}</strong>
+        {runId && runLoadError && <>
+          <p>{runLoadError}</p>
+          <div className="pipeline-actions">
+            <button type="button" className="secondary" onClick={() =>
+              setRunReload(n => n + 1)}>이 Run 다시 조회하기</button>
+            <button type="button" className="secondary" onClick={() => selectRun("")}>
+              새 분석 준비하기 →
+            </button>
+          </div>
+        </>}
+        {!runId && <p>위에서 Dataset을 선택하고 입력 구조를 확인한 뒤 명시적으로 실행하거나,
+          아래의 이전 Run을 열어 보세요.</p>}
       </div>}
       {run && <>
         <div className="pipeline-run-identity">
