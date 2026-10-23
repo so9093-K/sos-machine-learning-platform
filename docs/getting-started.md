@@ -85,7 +85,7 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 로컬 Compose는 MLflow 관리 서버를 실행합니다. SOS 웹의 **모델 판본**에서 등록된 모델과 Run 비교를 확인할 수 있습니다. Experiment·Run·Registered Model/Version은 MLflow가 관리하고, SOS는 Dataset·Job/Attempt·Scoring·Evaluation 및 불변 모델 실행 근거를 소유합니다.
 
-학습 성공과 MLflow Registry 등록 성공은 구별합니다. 관리 연결이 실패하면 학습 성공은 유지되지만 새 모델의 Scoring 및 Pipeline 후속 단계는 Registry 등록을 기다립니다. 기존 `SOS_MLFLOW_EXPERIMENT_ID`는 사용하지 않고 Actor별 Experiment를 생성합니다.
+학습 성공과 MLflow Registry 등록 성공은 구별합니다. 관리 연결이 실패하면 학습 성공은 유지되지만 새 모델의 Scoring 및 Pipeline 후속 단계는 Registry 등록을 기다립니다. 기존 `SOS_MLFLOW_EXPERIMENT_ID`는 사용하지 않습니다. 독립 학습에서 입력한 연구 Experiment 이름으로 MLflow 내 Actor별 연구 묶음을 만들며, Pipeline처럼 연구 이름을 지정하지 않은 실행은 기본 실험에 기록합니다.
 
 외부 MLflow 서버를 사용하는 경우 `SOS_MLFLOW_TRACKING_URI`를 변경하고 필요한 인증은 `SOS_MLFLOW_TOKEN`에 설정할 수 있습니다. 기본 MLflow UI는 로컬 운영자 도구이며 사용자별 격리를 제공하지 않으므로 **외부 네트워크에 공개하지 마세요**. SOS API는 Actor별로 실행과 모델의 실제 소유권을 재검증합니다.
 
