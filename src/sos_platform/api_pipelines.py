@@ -4,15 +4,13 @@ import binascii
 import heapq
 import json
 import math
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import pyarrow.parquet as pq
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Literal
 
-from .object_store import ObjectStore
+from .cache import cached_dataset_file
 from .pipeline_reference import PIPELINE_ID, definition, inspect_dataset
 from .pipeline_runs import cancel_run, create_run, get_run, list_runs
 from .security import Actor, require, resource_allowed
@@ -151,12 +149,13 @@ def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None) -> 
         raise HTTPException(status_code=404, detail="Pipeline result unavailable")
     threshold = policy["threshold"]
     after = _cursor(cursor)
-    with TemporaryDirectory(prefix="pipeline-rows-", dir=store.home / "cache") as temp:
-        path = Path(temp) / "scores.parquet"
-        ObjectStore().get(
-            ObjectStore().key(scoring["location"]), path,
-            expected_sha256=scoring["sha256"],
-        )
+    # 이미 검증된 불변 S3 결과를 SOS의 기존 캐시·공유 읽기 Lease로 재사용한다.
+    # 새 캐시 구현 없이 다운로드 중복과 조회 중 축출 경합을 방지한다.
+    cache_entry = {
+        "kind": "file", "version": scoring["sha256"],
+        "location": scoring["location"],
+    }
+    with cached_dataset_file(store, cache_entry) as path:
         reader = pq.ParquetFile(path)
 
         def eligible():
