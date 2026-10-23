@@ -155,12 +155,18 @@ try {
     model: { id: "model-a", algorithm: "isolation_forest", params: { n_estimators: 100 },
       features: ["f1"], training_score_summary: {
         score_min: 0.1, score_mean: 0.2, score_max: 0.4, score_count: 60,
+        histogram: { method: "equal_width_exact_v1", bin_edges: [0.1, 0.25, 0.4],
+          bin_counts: [30, 30], score_count: 60, constant_scores: false },
       } },
     calibration: { id: "cal-a", score_summary: {
       score_min: 0.15, score_mean: 0.25, score_max: 0.5,
+      histogram: { method: "equal_width_exact_v1", bin_edges: [0.15, 0.325, 0.5],
+        bin_counts: [10, 10], score_count: 20, constant_scores: false },
     } },
     test: { id: "test-a", score_summary: {
       score_min: 0.2, score_mean: 0.3, score_max: 0.6,
+      histogram: { method: "equal_width_exact_v1", bin_edges: [0.2, 0.4, 0.6],
+        bin_counts: [15, 5], score_count: 20, constant_scores: false },
     } },
     policy: { id: "policy-a", mode: "quantile", alert_fraction: 0.005,
       threshold: 0.47, decision_summary: { predicted_anomalies: 2 } },
@@ -176,6 +182,9 @@ try {
   assert.match(report, /0.5%/);
   assert.match(report, /15%/);
   assert.match(report, /실제 최소·평균·최대 이상 점수/);
+  assert.match(report, /Training 점수 구간별 전체 관측 수/);
+  assert.match(report, /Calibration 점수 구간별 전체 관측 수/);
+  assert.match(report, /Test 점수 구간별 전체 관측 수/);
   const sensitivity = renderToStaticMarkup(React.createElement(SensitivityChart, {
     result: { output: { feature_sensitivities: [
       { feature: "f1", anomaly_score_delta: 0.12 },
