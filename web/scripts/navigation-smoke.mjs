@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react";
 const vite = await createServer({
   configFile: false,
   plugins: [react()],
+  optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true },
   appType: "custom",
 });
