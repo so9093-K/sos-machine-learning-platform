@@ -67,6 +67,7 @@ jobs:
           from sos_platform.mlflow_config import MLflowSettings
           from sos_platform.mlflow_tracking import MLflowClient
           from sos_platform.mlflow_registry import verify_registered_version
+          from sos_platform.mlflow_read import read_experiments, read_runs, read_model_versions
 
           store = Store(Path(os.environ["SOS_HOME"]))
           with store.connection() as db:
@@ -82,8 +83,17 @@ jobs:
           assert tracking["run_id"]
           settings = MLflowSettings.from_env()
           assert settings is not None
-          verify_registered_version(MLflowClient(settings), model)
-          print("실제 IF 학습 → Registry 판본 → 고정 실행 아티팩트 무결성 검증: 통과")
+          client = MLflowClient(settings)
+          verify_registered_version(client, model)
+          # 기존 브라우저 E2E가 만든 데이터를 관리 조회 API가 실제로 찾을 수 있는지 확인한다.
+          experiments = read_experiments(client, "e2e-operator")["items"]
+          assert any(item["name"] == "기본 실험" for item in experiments)
+          chosen = next(item for item in experiments if item["name"] == "기본 실험")
+          runs = read_runs(client, store, "e2e-operator", experiment_id=chosen["id"])["items"]
+          assert any(item["job_id"] == model["job_id"] for item in runs)
+          models = read_model_versions(client, store, "e2e-operator")["items"]
+          assert any(item["model_id"] == model_id for item in models)
+          print("실제 IF 학습 → MLflow Experiment 검색·Run·Registry 판본·아티팩트 검증: 통과")
           PY
       - name: Upload screenshot when browser test fails
         if: failure()

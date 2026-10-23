@@ -121,3 +121,11 @@ def test_run_search_rejects_other_actor_experiment():
 
     with pytest.raises(MLflowDeliveryError, match="EXPERIMENT-NOT-FOUND"):
         read_runs(client, store, "alice", experiment_id="23")
+
+
+def test_mlflow_empty_page_token_is_end_of_results():
+    from sos_platform.mlflow_read import _page_token
+
+    assert _page_token({}) is None
+    assert _page_token({"next_page_token": ""}) is None
+    assert _page_token({"next_page_token": "opaque-cursor"}) == "opaque-cursor"
