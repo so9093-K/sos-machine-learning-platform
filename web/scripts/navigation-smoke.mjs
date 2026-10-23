@@ -99,6 +99,13 @@ try {
     routeAt("/data", "?from=pipeline"), "preparation"), { pipelineReturn: true });
   assert.equal(contextPath("understanding", { pipelineReturn: true }), "/data?from=pipeline");
   assert.equal(routeAt("/data/prepare", "?from=pipeline").context.pipelineReturn, true);
+  assert.equal(contextPath("preparation", { pipelineReturn: true, datasetId: "dataset-1" }),
+    "/data/prepare?from=pipeline&dataset=dataset-1");
+  assert.deepEqual(nextNavigationContext(
+    routeAt("/data", "?from=pipeline&dataset=dataset-1"), "preparation"),
+    { pipelineReturn: true, datasetId: "dataset-1" });
+  assert.equal(routeAt("/data", "?from=pipeline&dataset=dataset-1").context.datasetId, "dataset-1");
+  assert.equal(routeAt("/data", "?dataset=ignored").context.datasetId, "");
   assert.deepEqual(nextNavigationContext(
     routeAt("/data", "?from=pipeline"), "ml"), {});
   assert.equal(contextPath("pipelines", { datasetId: "dataset-from-data" }),

@@ -26,7 +26,8 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
     pipelineRunId: params.get("run") ?? "",
   };
   if (tab === "understanding" || tab === "preparation" || tab === "preview" || tab === "profile") {
-    return { pipelineReturn: params.get("from") === "pipeline" };
+    const pipelineReturn = params.get("from") === "pipeline";
+    return { pipelineReturn, datasetId: pipelineReturn ? params.get("dataset") ?? "" : "" };
   }
   if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "" };
   if (tab === "scoring") return { modelId: params.get("model") ?? "" };
@@ -41,7 +42,10 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
     if (context.pipelineRunId) params.set("run", context.pipelineRunId);
   }
   if ((tab === "understanding" || tab === "preparation" || tab === "preview" || tab === "profile")
-      && context.pipelineReturn) params.set("from", "pipeline");
+      && context.pipelineReturn) {
+    params.set("from", "pipeline");
+    if (context.datasetId) params.set("dataset", context.datasetId);
+  }
   if ((tab === "training" || tab === "ml") && context.datasetId) {
     params.set("dataset", context.datasetId);
   }
@@ -96,7 +100,8 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
   }
   if (["understanding", "preparation", "preview", "profile"].includes(tab) &&
       ["understanding", "preparation", "preview", "profile"].includes(previous.tab)) {
-    return { pipelineReturn: previous.context.pipelineReturn };
+    return { pipelineReturn: previous.context.pipelineReturn,
+      datasetId: previous.context.pipelineReturn ? previous.context.datasetId : "" };
   }
   if (isDecisionTab(tab) && isDecisionTab(previous.tab)) {
     return { scoringId: previous.context.scoringId };

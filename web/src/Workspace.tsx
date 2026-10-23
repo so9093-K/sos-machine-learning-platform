@@ -186,7 +186,12 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
     showExamples.current = false;
     // 데이터 준비에서 명시적으로 데이터를 등록했다면 Explorer로 강제 이동하지 않는다.
-    setSelected(data.id); setTab(current => current === "preparation" ? current : "understanding");
+    setSelected(data.id);
+    const target = tab === "preparation" ? "preparation" : "understanding";
+    if (context.pipelineReturn) navigateWithContext(target, {
+      pipelineReturn: true, datasetId: data.id,
+    });
+    else setTab(target);
     const revision = feedbackRevision.current;
     // HTTP 201이 등록 완료의 정본이며 목록 GET 응답을 기다리지 않고 먼저 안내한다.
     setNotice(success);
@@ -227,6 +232,20 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   async function loadMoreJobs() {
     await withFeedback(loadOlderJobs);
   }
+  useEffect(() => {
+    if (!context.pipelineReturn || !context.datasetId) return;
+    let active = true;
+    const requestedId = context.datasetId;
+    setSelected(requestedId);
+    // 직접 URL과 새로고침에서 첫 Dataset 목록 밖의 판본도 조회한다.
+    if (!datasets.some(item => item.id === requestedId)) {
+      void request<Dataset>(`/api/datasets/${encodeURIComponent(requestedId)}`)
+        .then(item => { if (active) setDatasets(previous =>
+          [item, ...previous.filter(entry => entry.id !== item.id)]); })
+        .catch(e => { if (active) setError(formatError(e)); });
+    }
+    return () => { active = false; };
+  }, [context.pipelineReturn, context.datasetId]);
   useEffect(() => {
     if (canWrite) {
       request<UploadPolicy>("/api/datasets/upload-policy")
@@ -414,12 +433,19 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           }}
           onExample={() => {
             showExamples.current = true;
-            setSelected(""); setTab(current => current === "preparation" ? current : "preview");
+            setSelected("");
+            const target = tab === "preparation" ? "preparation" : "preview";
+            if (context.pipelineReturn) navigateWithContext(target, { pipelineReturn: true });
+            else setTab(target);
           }}
           onChoose={id => {
             showExamples.current = false; setSelected(id);
-            setTab(current => ["preparation", "preview", "profile"].includes(current)
-              ? current : "understanding");
+            const target = ["preparation", "preview", "profile"].includes(tab)
+              ? tab : "understanding";
+            if (context.pipelineReturn) navigateWithContext(target, {
+              pipelineReturn: true, datasetId: id,
+            });
+            else setTab(target);
           }}
           existingTableName={existingTableName} onChangeExistingName={changeExistingTableName}
           snapshots={snapshots} snapshotId={snapshotId} onSnapshotId={setSnapshotId}
@@ -464,7 +490,9 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           navigateWithContext("pipelines", { datasetId, pipelineRunId: id });
         }}
         canRun={canRun} canCancel={canCancel}
-        onNavigate={tab => navigateWithContext(tab, { pipelineReturn: true })}
+        onNavigate={(tab, datasetId) => navigateWithContext(tab, {
+          pipelineReturn: true, datasetId,
+        })}
         onOpenResource={openResource} />}
       {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab}
         onNavigate={setTab} onOpenModel={id => openResource("model", id)}

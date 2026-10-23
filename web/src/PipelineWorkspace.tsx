@@ -25,7 +25,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   onSelectDataset: (datasetId: string) => void;
   onSelectRun: (runId: string, datasetId: string) => void;
   canRun: boolean; canCancel: boolean;
-  onNavigate: (tab: WorkspaceTab) => void;
+  onNavigate: (tab: WorkspaceTab, datasetId: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
   const [catalog, setCatalog] = useState<Definition[]>([]);
@@ -303,10 +303,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
       {datasetId && <p className="hint">선택한 Dataset: {selected?.name ?? datasetId} ·
         판본: {selected?.version.slice(0, 16) ?? "현재 목록에서 판본 조회 불가"}</p>}
       <div className="pipeline-actions">
-        <button className="secondary" type="button" onClick={() => onNavigate("understanding")}>
+        <button className="secondary" type="button" onClick={() => onNavigate("understanding", datasetId)}>
           Dataset 등록·내용 확인 →
         </button>
-        <button className="secondary" type="button" onClick={() => onNavigate("preparation")}>
+        <button className="secondary" type="button" onClick={() => onNavigate("preparation", datasetId)}>
           독립 데이터 준비 도구 →
         </button>
         <button type="button" disabled={!current || !datasetId || busy}
@@ -327,10 +327,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
         <p>다음 내용을 확인한 뒤 데이터를 준비하거나 다른 Dataset을 선택하세요.</p>
         <ul>{currentCheck.issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
         <div className="pipeline-actions">
-          <button type="button" className="secondary" onClick={() => onNavigate("understanding")}>
+          <button type="button" className="secondary" onClick={() => onNavigate("understanding", datasetId)}>
             Dataset 구조 확인 →
           </button>
-          <button type="button" className="secondary" onClick={() => onNavigate("preparation")}>
+          <button type="button" className="secondary" onClick={() => onNavigate("preparation", datasetId)}>
             가능한 변환 확인 →
           </button>
         </div>
@@ -375,7 +375,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
           <strong>분석이 완료되지 않았습니다.</strong>
           <p>위 오류 코드와 단계별 근거를 확인하세요. 입력 조건 문제라면 Dataset 내용을 확인하고,
             다른 Dataset이나 수정된 판본으로 다시 검사해 새 Run을 제출할 수 있습니다.</p>
-          <button type="button" className="secondary" onClick={() => onNavigate("understanding")}>
+          <button type="button" className="secondary" onClick={() => onNavigate("understanding", datasetId)}>
             Dataset 확인 →
           </button>
         </div>}
