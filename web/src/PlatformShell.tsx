@@ -5,7 +5,7 @@ import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
   type WorkspaceTab, type MLNavigationContext, type ResourceRoute } from "./PlatformNavigation";
 
 const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; description: string }> = {
-  overview: { eyebrow: "WORKSPACE", title: "Workspace Overview", description: "Data · Research · Models · Operations" },
+  overview: { eyebrow: "WORKSPACE", title: "SOS Workspace", description: "데이터 탐색 · 활동 이상 탐지 · 이전 분석 이어하기" },
   understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
