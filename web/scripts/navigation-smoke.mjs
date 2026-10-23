@@ -43,6 +43,16 @@ try {
   assert.deepEqual(routeAt("/scoring/results/score%2Fwith%20space", "?scoring=other").resource,
     { kind: "scoring", id: "score/with space" });
   assert.equal(immutablePath, "/scoring/results/score%2Fwith%20space");
+  const pipelineResource = resourcePath("model", "model/first", {
+    pipelineReturn: true, pipelineRunId: "run/1", datasetId: "data v1",
+  });
+  assert.equal(pipelineResource,
+    "/models/model%2Ffirst?from=pipeline&run=run%2F1&dataset=data+v1");
+  assert.deepEqual(routeAt("/models/model%2Ffirst",
+    "?from=pipeline&run=run%2F1&dataset=data+v1").context,
+    { pipelineReturn: true, pipelineRunId: "run/1", datasetId: "data v1" });
+  assert.deepEqual(routeAt("/models/model-v1", "").context, {});
+  assert.deepEqual(routeAt("/models/model-v1", "?from=pipeline").context, {});
   // 직접 연 Scoring/Model 상세에서 영역 탭으로 이동해도 동일 자산을 이어받는다.
   assert.equal(nextNavigationContext(
     routeAt("/scoring/results/score-v1", ""), "policies").scoringId, "score-v1");

@@ -71,8 +71,19 @@ const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }>
   evaluation: { base: "/evaluations", tab: "evaluations" },
   explanation: { base: "/explanations", tab: "explanations" },
 };
-export function resourcePath(kind: MLResourceKind, id: string): string {
-  return `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
+export function resourcePath(kind: MLResourceKind, id: string, context: MLNavigationContext = {}): string {
+  const path = `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
+  if (!context.pipelineReturn || !context.pipelineRunId) return path;
+  const params = new URLSearchParams({ from: "pipeline", run: context.pipelineRunId });
+  if (context.datasetId) params.set("dataset", context.datasetId);
+  return path + "?" + params.toString();
+}
+
+function resourceContext(search: string): MLNavigationContext {
+  const params = new URLSearchParams(search);
+  if (params.get("from") !== "pipeline" || !params.get("run")) return {};
+  return { pipelineReturn: true, pipelineRunId: params.get("run")!,
+    datasetId: params.get("dataset") ?? "" };
 }
 export function routeAt(pathname: string, search: string): WorkspaceRoute {
   for (const [kind, config] of Object.entries(resourcePaths) as
@@ -80,7 +91,8 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
     if (pathname.startsWith(config.base + "/")) {
       const id = pathname.slice(config.base.length + 1);
       if (id && !id.includes("/")) {
-        try { return { tab: config.tab, resource: { kind, id: decodeURIComponent(id) }, context: {} }; }
+        try { return { tab: config.tab, resource: { kind, id: decodeURIComponent(id) },
+          context: resourceContext(search) }; }
         catch { break; }
       }
     }
@@ -163,8 +175,15 @@ export function useWorkspaceNavigation() {
   }, [update]);
   const openResource = useCallback((kind: MLResourceKind, id: string) => {
     if (!id) return;
-    update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context: {} },
-      resourcePath(kind, id));
+    const previous = current.current;
+    // Pipeline에서 열었던 결과 판본은 직접 링크·새로고침에서도 원래 Run에 돌아갈 수 있다.
+    const fromPipeline = (previous.tab === "pipelines" || previous.resource !== null)
+      && previous.context.pipelineReturn !== false;
+    const context = fromPipeline && previous.context.pipelineRunId
+      ? { pipelineReturn: true, pipelineRunId: previous.context.pipelineRunId,
+          datasetId: previous.context.datasetId } : {};
+    update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context },
+      resourcePath(kind, id, context));
   }, [update]);
   return { tab: route.tab, resource: route.resource, context: route.context,
     navigate, navigateWithContext, selectContext, openResource };

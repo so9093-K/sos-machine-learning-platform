@@ -700,6 +700,16 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           onViewChange={view => setTab(view === "models" ? "ml" : "training")}
           onOpenModel={id => openResource("model", id)}
           canTrain={canRun} canCancel={canCancel} />}
+      {resource && context.pipelineReturn && context.pipelineRunId &&
+        <section className="pipeline-return" role="status">
+          <div><strong>이 Pipeline Run에서 열린 분석 결과입니다.</strong>
+            <p>불변 모델·점수·판정·평가 근거를 확인한 뒤 동일한 Run 분석으로 돌아갈 수 있습니다.</p>
+          </div>
+          <button type="button" className="secondary" onClick={() =>
+            navigateWithContext("pipelines", {
+              datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
+            })}>원래 Pipeline Run으로 돌아가기 →</button>
+        </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         onScoring={startScoring} onDecision={startDecision} />}
