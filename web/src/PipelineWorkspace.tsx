@@ -205,7 +205,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
             Calibration 종료: {new Date(run.input_plan.calibration_end).toLocaleString("ko-KR")}
           </p>
           <p className="hint">실제 데이터 검사 결과이며 오프라인 참고 분석의 수치를 대신 표시하지 않습니다.</p>
-        </div>}}
+        </div>}
         {!terminal.has(run.status) && canCancel &&
           <button className="secondary" disabled={busy || run.cancel_requested} onClick={() => void cancel()}>Pipeline 취소 요청</button>}
         <div className="job-list">
