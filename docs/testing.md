@@ -25,7 +25,7 @@ python scripts/validate.py run all
 
 현재 `python` Suite는 `tests/`의 Python 테스트를 pytest로 자동 수집·실행한다. 구체적인 검증 범위는 실제 테스트 코드와 실행 결과를 따른다.
 
-웹의 URL·결과 문맥 렌더링 검사는 `cd web && npm run test:navigation`으로 실행한다. 실제 브라우저 검증은 격리된 환경에서 Compose 서비스를 먼저 준비한 후 `SOS_E2E_TOKEN`을 임시 인증 계정의 Bearer Token으로 지정하고 `node web/scripts/browser-pipeline-e2e.mjs`를 실행한다. Chrome/Chromium이 필요하며, 이 검증은 사용자가 예제를 명시적으로 선택해 등록하고 Pipeline 실행·학습 결과·모델 재사용까지 확인한다. 테스트 계정과 저장 데이터는 검증용 Compose에서만 사용하고 해당 격리 볼륨은 검사 후 제거한다. 이 통합 검사는 `.github/workflows/pipeline-browser-e2e.yml`로 분리되어 관련 코드가 변경된 PR을 **리뷰 준비(Ready for review)** 상태로 전환할 때 자동 실행한다. 이후에는 `run-pipeline-e2e` 라벨 부착 또는 GitHub Actions 수동 실행으로 다시 검증한다. **매 PR 커밋이나 문서 수정 때 자동 반복하지 않는다.** 각 실행에는 고유 Compose 프로젝트와 CI 임시 설정·데이터 볼륨을 사용하며 종료 시 해당 소유 범위만 정리한다. 변경 뒤 통합 검증을 다시 실행하지 않았다면 이전 성공 결과가 새 HEAD를 검증했다고 표시하지 않는다. 프로덕션 서비스의 사용자 데이터에는 실행하지 않는다.
+웹의 URL·결과 문맥 렌더링 검사는 `cd web && npm run test:navigation`으로 실행한다. 실제 브라우저 검증은 격리된 환경에서 Compose 서비스를 먼저 준비한 후 `SOS_E2E_TOKEN`을 임시 인증 계정의 Bearer Token으로 지정하고 `node web/scripts/browser-pipeline-e2e.mjs`를 실행한다. Chrome/Chromium이 필요하며, 이 검증은 사용자가 예제를 명시적으로 선택해 등록하고 Pipeline 실행·학습 결과·모델 재사용까지 확인한다. 테스트 계정과 저장 데이터는 검증용 Compose에서만 사용하고 해당 격리 볼륨은 검사 후 제거한다. 이 통합 검사는 `.github/workflows/pipeline-browser-e2e.yml`로 분리되어 관련 코드가 변경된 PR을 **리뷰 준비 상태로 처음 열거나 Draft에서 Ready for review로 전환할 때** 자동 실행한다. 이후에는 `run-pipeline-e2e` 라벨 부착 또는 GitHub Actions 수동 실행으로 다시 검증한다. **매 PR 커밋이나 문서 수정 때 자동 반복하지 않는다.** 각 실행에는 고유 Compose 프로젝트와 CI 임시 설정·데이터 볼륨을 사용하며 종료 시 해당 소유 범위만 정리한다. 변경 뒤 통합 검증을 다시 실행하지 않았다면 이전 성공 결과가 새 HEAD를 검증했다고 표시하지 않는다. 프로덕션 서비스의 사용자 데이터에는 실행하지 않는다.
 
 `all`은 **현재 CLI에 등록된 Suite 전체**라는 뜻이지 SOS 제품 계약 전체를 뜻하지 않는다. pytest가 테스트를 수집하지 못해 비정상 종료하면 CLI도 실패한다. CI의 `validation` 상태도 이 범위에만 해당한다.
 
