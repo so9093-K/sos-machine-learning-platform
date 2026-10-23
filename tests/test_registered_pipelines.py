@@ -137,3 +137,22 @@ def test_schema_check_does_not_scan_full_input(monkeypatch):
     assert checked["plan"]["partition_sizes"]["calibration"] >= 1
     assert checked["plan"]["partition_sizes"]["test"] >= 1
     assert sum(checked["plan"]["partition_sizes"].values()) == len(values)
+
+
+def test_blocked_run_does_not_starve_other_users():
+    store = FakeStore()
+    first = pipeline_runs.create_run(
+        store, {"id": "dataset-1", "version": "v1"}, "user-1",
+        {"ready": True, "plan": None}, None,
+    )
+    assert pipeline_runs.advance_run(store)
+    first_preflight_id = pipeline_runs.get_run(store, first["id"])["job_ids"]["preflight"]
+    store.jobs[first_preflight_id]["status"] = "Running"
+    second = pipeline_runs.create_run(
+        store, {"id": "dataset-2", "version": "v2"}, "user-2",
+        {"ready": True, "plan": None}, None,
+    )
+    assert pipeline_runs.advance_run(store)
+    actual = pipeline_runs.get_run(store, second["id"])
+    assert actual["job_ids"]["preflight"] in store.jobs
+    assert pipeline_runs.get_run(store, first["id"])["status"] == "Running"

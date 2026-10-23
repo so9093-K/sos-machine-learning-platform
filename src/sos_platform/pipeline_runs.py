@@ -172,14 +172,22 @@ def advance_run(store) -> bool:
     Worker 외 경로에서는 호출하지 않는다.
     """
     store._assert_worker_ownership()
+    # 대기 중인 선행 Job이 뒤의 독립 Run까지 가로막지 않도록 순회한다.
     with store.connection() as db:
-        row = db.execute(text(
+        ids = db.execute(text(
             "SELECT id FROM pipeline_runs WHERE status IN ('Queued','Running') "
-            "ORDER BY created_at,id LIMIT 1"
-        )).scalar_one_or_none()
-    if row is None:
+            "ORDER BY created_at,id"
+        )).scalars().all()
+    for run_id in ids:
+        if _advance_one_run(store, run_id):
+            return True
+    return False
+
+
+def _advance_one_run(store, run_id: str) -> bool:
+    run = get_run(store, run_id, include_jobs=False)
+    if run is None or run["status"] not in ("Queued", "Running"):
         return False
-    run = get_run(store, row, include_jobs=False)
     if run["definition_id"] != PIPELINE_ID or run["definition_version"] != PIPELINE_VERSION:
         _update_run(store, run["id"], status="Failed", error_code="SOS-ML-INPUT-INVALID")
         return True
@@ -212,7 +220,10 @@ def advance_run(store) -> bool:
             ), {"jobs": json.dumps(refs), "at": now(), "id":run["id"]})
         return True
     job = store.get_job(job_id)
-    if not job or job["status"] in ("Queued", "Running"):
+    if job is None:
+        _update_run(store, run["id"], status="Failed", error_code="SOS-JOB-FAILED")
+        return True
+    if job["status"] in ("Queued", "Running"):
         return False
     if job["status"] != "Succeeded":
         _update_run(store, run["id"], status=job["status"],
