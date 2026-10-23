@@ -216,6 +216,7 @@ try {
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
   assert.match(deepLinkedJourney, /현재 Run/);
+  assert.match(deepLinkedJourney, /aria-label="분석 이용 단계"/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
   const completedRun = {
     id: "run-demo", definition_id: "activity-anomaly-if", status: "Succeeded",
