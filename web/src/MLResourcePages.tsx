@@ -5,7 +5,7 @@ import { MLScoringPanel } from "./MLScoringPanel";
 import { MLDecisionPanel, type DecisionView } from "./MLDecisionPanel";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type {
-  Dataset, MLTrainingJobSummary, MLScoringJobSummary, MLPolicyJobSummary,
+  Dataset, MLScoringJobSummary, MLPolicyJobSummary,
   MLEvaluationJobSummary, MLExplanationJobSummary, ModelRevision, ScoringResult,
   DecisionPolicyRevision, EvaluationRevision, ExplanationResult,
 } from "./types";
@@ -189,7 +189,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   onOpenResource: OpenResource; onModelSelected: (id: string) => void;
   onNavigate: (tab: "ml" | "scoring") => void;
 }) {
-  const models = usePagedJobs<MLTrainingJobSummary>("/api/ml/train/jobs");
+  const [registeredModels, setRegisteredModels] = useState<Array<{model_id: string; name: string; version: string}>>([]);
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const [modelId, setModelId] = useState(preferredModelId);
   const [loadedModelId, setLoadedModelId] = useState(preferredModelId);
@@ -201,7 +201,11 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
     setLoadedModelId(preferredModelId);
   }, [preferredModelId]);
   useEffect(() => {
-    void models.refresh().catch(e => setError(formatError(e)));
+    let active = true;
+    void request<Array<{model_id: string; name: string; version: string}>>("/api/ml/registry/models")
+      .then(items => { if (active) setRegisteredModels(items); })
+      .catch(e => { if (active) setError(formatError(e)); });
+    return () => { active = false; };
     void scores.refresh().catch(e => setError(formatError(e)));
   }, []);
   useEffect(() => {
@@ -215,20 +219,19 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
     }
     return () => { active = false; };
   }, [loadedModelId, modelLookupRevision]);
-  const available = useMemo(() => [...new Set(models.items.map(j =>
-    revisionId(j, "model_revision_id")).filter((id): id is string => Boolean(id)))], [models.items]);
+  const available = useMemo(() => [...new Set(registeredModels.map(item => item.model_id))], [registeredModels]);
   return <div className="ml-resource-workspace">
     <section className="panel">
       <h3>Scoring 대상 모델</h3>
       <p className="hint">기존 모델 판본을 선택하거나 ID를 직접 입력할 수 있습니다. 새 학습은 필요하지 않습니다.
-        목록은 조회된 학습 Job 범위에 한정됩니다.</p>
+        목록은 MLflow Registry에서 현재 Actor가 이용할 수 있는 모델을 조회합니다.</p>
       {error && <p role="alert">{error}</p>}
       <div className="form-row">
         <label>Model Revision ID
           <input value={modelId} onChange={event => setModelId(event.target.value)}
             placeholder="기존 모델 판본 ID" aria-label="점수화 대상 모델 판본 ID"/>
         </label>
-        <label>조회된 모델 판본
+        <label>MLflow 등록 모델 판본
           <select value={available.includes(modelId) ? modelId : ""}
             aria-label="조회된 모델 판본 선택" onChange={event => {
               setModelId(event.target.value);
@@ -236,7 +239,9 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
               onModelSelected(event.target.value);
             }}>
             <option value="">모델 선택</option>
-            {available.map(id => <option key={id} value={id}>{id}</option>)}
+            {registeredModels.map(item => <option key={item.name + item.version} value={item.model_id}>
+              {item.name} · v{item.version}
+            </option>)}
           </select>
         </label>
       </div>
@@ -249,8 +254,6 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
         }}>모델 판본 조회</button>
       {modelId.trim() !== loadedModelId && <p className="hint">
         모델 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
-      {models.nextCursor && <button className="secondary"
-        onClick={() => void models.loadMore().catch(e => setError(formatError(e)))}>이전 모델 더 보기</button>}
       {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
         modelId.trim() === loadedModelId &&
         <p className="hint">선택 모델: {model.algorithm} · {model.id} · 입력 Feature {model.features.length}개</p>}
