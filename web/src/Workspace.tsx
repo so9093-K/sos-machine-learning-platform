@@ -22,7 +22,6 @@ import { useWorkspaceNavigation, pipelineRunSelectionContext, type WorkspaceTab 
 import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
-import { PlatformAreaPreview } from "./PlatformAreaPreview";
 import { PipelineWorkspace } from "./PipelineWorkspace";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { MLWorkbench } from "./MLWorkbench";
@@ -486,10 +485,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       </div>}
       {tab === "overview" && <PlatformOverview
         datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
-        jobs={[...jobs, ...discoveryJobs].map(j => ({ id: j.id, status: j.status, created_at: j.created_at }))}
-        onNavigate={setTab} onOpenResource={openResource}
-        onViewMlActivity={() => setTab("ml-jobs")}
-        onViewDataActivity={() => setTab("jobs")}
+        onNavigate={setTab}
+        onOpenPipelineRun={(runId, datasetId) => {
+          setSelected(datasetId);
+          navigateWithContext("pipelines", { datasetId, pipelineRunId: runId });
+        }}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
       {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
         canCreateDataset={canWrite}
@@ -523,9 +523,6 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           pipelineReturn: true, datasetId,
         })}
         onOpenResource={openResource} />}
-      {(tab === "research" || tab === "experience") && <PlatformAreaPreview area={tab}
-        onNavigate={setTab} onOpenModel={id => openResource("model", id)}
-        onStartScoring={startScoring} canRun={canRun} />}
       {context.pipelineReturn &&
         (["understanding", "preview", "profile", "preparation", "jobs"] as Tab[]).includes(tab) &&
         <section className="pipeline-return" role="status">
