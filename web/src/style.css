@@ -297,7 +297,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .data-sidebar .section-title { padding-top:8px; }
 .data-sidebar .dataset-nav { overflow-y:auto; }
 
-/* Overview는 추정된 전역 지표 대신 실제 진입과 조회된 활동을 보여준다. */
+/* 사용 가능한 기능을 먼저 제공하고 이전 Pipeline 실행 문맥을 보존한다. */
 .platform-home { display:grid; gap:25px; min-width:0; }
 .platform-intro { padding:28px 30px; border-radius:12px; background:var(--sos-panel);
   border:1px solid var(--sos-border); }
@@ -305,6 +305,16 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .platform-intro p { color:var(--sos-muted); font-size:13px; line-height:1.7; max-width:750px; }
 .platform-section-title { font-size:17px; margin-bottom:14px; }
 .platform-destinations { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+/* 사용자 진입 기능은 단순 링크가 아니라 목적·제약·실행 동작을 갖춘 카드다. */
+.platform-destinations>.platform-destination.panel {
+  display:flex; flex-direction:column; align-items:flex-start; gap:12px;
+  min-width:0; padding:24px;
+}
+.platform-destinations>.platform-destination.panel h4 { font-size:18px; margin:0; }
+.platform-destinations>.platform-destination.panel p {
+  color:var(--sos-muted); font-size:13px; line-height:1.75; margin:0;
+}
+.platform-destinations>.platform-destination.panel button { margin-top:auto; }
 button.platform-destination.ghost { text-align:left; width:100%; display:grid; gap:11px;
   min-height:114px; padding:20px; border:1px solid var(--sos-border);
   border-radius:12px; background:var(--sos-panel); color:var(--sos-text); }
@@ -407,7 +417,7 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 }
 
 
-/* Workspace: 실제 활동을 우선하고 기능 진입은 작은 보조 영역으로 둔다. */
+/* 독립 ML·운영 기능의 고급 접근을 유지한다. */
 .platform-quick-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 .platform-quick-actions .platform-destination { min-height:0; }
 .platform-dataset-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:20px; }
@@ -500,6 +510,12 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .pipeline-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
 .pipeline-facts>div { background:var(--sos-raised); border:1px solid var(--sos-border);
   border-radius:10px; padding:16px; }
+.pipeline-capabilities .pipeline-facts>div { display:flex; flex-direction:column; gap:8px; }
+.pipeline-capabilities .pipeline-facts button { align-self:flex-start; margin-top:auto; }
+.pipeline-capabilities .pipeline-facts small { color:var(--sos-muted); font-size:12px; }
+.pipeline-capabilities>.hint { margin-top:14px; }
+.pipeline-prepare .pipeline-input-guide[aria-label="준비된 분석 예제"] button { margin-top:10px; }
+.pipeline-model-usage .ml-scoring-panel { margin-top:16px; }
 .pipeline-facts strong,.pipeline-input-guide strong { font-size:13px; }
 .pipeline-facts p,.pipeline-input-guide p { font-size:13px; color:var(--sos-muted);
   line-height:1.7; margin-top:8px; }

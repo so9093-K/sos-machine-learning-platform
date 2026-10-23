@@ -268,3 +268,30 @@ def test_cancel_with_missing_submitted_job_fails_instead_of_hiding_loss():
     failed = pipeline_runs.get_run(store, run["id"])
     assert failed["status"] == "Failed"
     assert failed["error_code"] == "SOS-JOB-FAILED"
+
+
+def test_first_pipeline_example_matches_registered_input_contract(monkeypatch):
+    """사용자가 선택하는 IF 예제는 실제 Pipeline 검사와 시간 분할을 통과한다."""
+    import io
+
+    from sos_platform.examples import _EXAMPLES, list_examples
+
+    item = next(x for x in list_examples() if x["id"] == "activity-anomaly-if")
+    assert item["row_count"] == 240
+    assert "ts" in item["columns"]
+    csv_data = _EXAMPLES["activity-anomaly-if"]["content"]
+    source = pl.read_csv(io.BytesIO(csv_data), infer_schema_length=None).lazy()
+
+    @contextmanager
+    def pinned(_store, _dataset):
+        yield source
+
+    monkeypatch.setattr(pipeline_reference, "pinned_scan_dataset", pinned)
+    dataset = {"id": "selected-if-example", "version": item["version"]}
+    check = pipeline_reference.inspect_dataset(None, dataset)
+    assert check["ready"] is True
+    assert check["feature_count"] == 44
+    checked_full = pipeline_reference.inspect_dataset(None, dataset, full=True)
+    assert checked_full["ready"] is True, checked_full["issues"]
+    assert min(checked_full["plan"]["partition_sizes"].values()) > 0
+    assert sum(checked_full["plan"]["partition_sizes"].values()) == item["row_count"]

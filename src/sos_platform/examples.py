@@ -51,8 +51,49 @@ def _data_quality() -> bytes:
     return _csv(["row_id", "batch", "measurement", "quality", "line"], rows)
 
 
+def _activity_anomaly_if() -> bytes:
+    """첫 등록형 IF Pipeline의 실제 입력 계약을 충족하는 재현 가능한 합성 데이터.
+
+    원본 보안 이벤트나 학습 품질을 보증하는 자료가 아니다. 서로 다른 시간대와
+    인위적인 값 변화를 포함하여 학습·보정·Test의 실행 경로를 경험하게 한다.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from .pipeline_reference import FEATURES
+
+    rows: list[list[object]] = []
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for tick in range(240):
+        observed = start + timedelta(minutes=tick)
+        outlier = tick in (204, 216, 228)
+        values: list[object] = []
+        for index, feature in enumerate(FEATURES):
+            if feature.startswith("ratio_"):
+                value = round(min(0.99, 0.07 + ((tick * 3 + index * 7) % 42) / 100
+                                  + (0.42 if outlier else 0.0)), 5)
+            elif feature.startswith(("cnt_", "uniq_")):
+                value = (tick * (index % 4 + 1) + index * 3) % 17 + 1
+                if outlier:
+                    value += 90 + index
+            else:
+                value = round(1.0 + (index + 1) * 0.4
+                              + ((tick * 7 + index * 11) % 37) / 12
+                              + (110.0 + index if outlier else 0.0), 5)
+            values.append(value)
+        rows.append([observed.isoformat(), *values])
+    return _csv(["ts", *FEATURES], rows)
+
+
 # 샘플은 서버 시작 시 DB에 등록하지 않는다. 사용자가 선택할 때 같은 Dataset API를 사용한다.
 _EXAMPLES = {
+    "activity-anomaly-if": {
+        "name": "example-activity-anomaly-if.csv",
+        "title": "활동 이상 탐지 Pipeline 예제",
+        "description": "IF Pipeline이 요구하는 44개 활동 Feature와 UTC 시각을 가진 합성 데이터입니다.",
+        "columns": ["ts", "io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create", "cnt_proc_exec"],
+        "content": _activity_anomaly_if(),
+        "guide": "등록형 활동 이상 탐지 Pipeline에서 입력을 검사하고 실행해 보세요. 실제 침해 사건이나 탐지 정확도를 검증하는 데이터가 아닙니다.",
+    },
     "machine-sensors": {
         "name": "example-machine-sensors.csv",
         "title": "설비 센서 시계열",

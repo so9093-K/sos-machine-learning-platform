@@ -169,7 +169,16 @@ try {
     onSelectDataset: () => {}, onSelectRun: () => {},
     canRun: true, canCancel: true, onNavigate: () => {}, onOpenResource: () => {},
   };
-  const emptyJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, props));
+  // 비어 있는 첫 진입에서도 제공 기능과 실행 가능한 예제를 발견할 수 있어야 한다.
+  const emptyJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
+    ...props, hasPipelineExample: true, canCreateDataset: true,
+    onUseExample: async () => ({ id: "example", name: "example", version: "v1", kind: "file" }),
+  }));
+  assert.match(emptyJourney, /이 분석에서 사용할 수 있는 기능/);
+  assert.match(emptyJourney, /예제 데이터 선택하고 입력 확인/);
+  assert.match(emptyJourney, /Training/);
+  assert.match(emptyJourney, /Calibration/);
+  assert.match(emptyJourney, /Test/);
   assert.match(emptyJourney, /내 데이터로 시작하기/);
   assert.match(emptyJourney, /분석 Run 선택/);
   assert.match(emptyJourney, /새 분석 시작/);
@@ -184,11 +193,30 @@ try {
   }));
   assert.match(selectedJourney, /<option value="dataset-1" selected=""/);
   assert.match(selectedJourney, /입력 조건 확인/);
+  // 장기 비전 Preview 주소는 홈으로 이동하되 기존 ML 결과 URL은 보존한다.
+  assert.equal(routeAt("/research", "").tab, "overview");
+  assert.equal(routeAt("/model-experience", "").tab, "overview");
+  assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
+  assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
+  const { PlatformOverview } = await vite.ssrLoadModule("/src/PlatformOverview.tsx");
+  const home = renderToStaticMarkup(React.createElement(PlatformOverview, {
+    datasets: [], onNavigate: () => {}, onOpenDataset: () => {},
+    onOpenPipelineRun: () => {},
+  }));
+  assert.match(home, /무엇을 시작할까요/);
+  assert.match(home, /시간 기반 활동 이상 탐지/);
+  assert.doesNotMatch(home, /최근 ML 실행/);
+  const { PipelineModelUsage } = await vite.ssrLoadModule("/src/PipelineModelUsage.tsx");
+  const useModel = renderToStaticMarkup(React.createElement(PipelineModelUsage, {
+    modelId: "model-v1", datasets: [], canRun: true, canCancel: true, onOpenResource: () => {},
+  }));
+  assert.match(useModel, /생성한 모델을 다른 데이터에 적용하기/);
   const deepLinkedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, initialRunId: "previous-run",
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
   assert.match(deepLinkedJourney, /현재 Run/);
+  assert.match(deepLinkedJourney, /aria-label="분석 이용 단계"/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
   const completedRun = {
     id: "run-demo", definition_id: "activity-anomaly-if", status: "Succeeded",

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
-  | "research" | "pipelines" | "ml" | "training" | "scoring" | "policies"
-  | "evaluations" | "explanations" | "experience"
+  | "pipelines" | "ml" | "training" | "scoring" | "policies"
+  | "evaluations" | "explanations"
   | "jobs" | "ml-jobs" | "storage" | "audit";
 export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
 export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
@@ -96,10 +96,9 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
 const paths: Record<WorkspaceTab, string> = {
   overview: "/", understanding: "/data", preview: "/data/query",
   profile: "/data/profile", preparation: "/data/prepare",
-  research: "/research", pipelines: "/pipelines", ml: "/models", training: "/training",
+  pipelines: "/pipelines", ml: "/models", training: "/training",
   scoring: "/scoring", policies: "/policies",
   evaluations: "/evaluations", explanations: "/explanations",
-  experience: "/model-experience",
   jobs: "/activity/jobs", "ml-jobs": "/activity/ml", storage: "/operations/storage", audit: "/operations/audit",
 };
 const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }> = {
@@ -142,6 +141,10 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
       }
     }
   }
+  // 미구현 설계 Preview의 과거 주소는 작동 중인 홈 기능으로 안내한다.
+  if (pathname === "/research" || pathname === "/model-experience") {
+    return { tab: "overview", resource: null, context: {} };
+  }
   const tab = (Object.keys(paths) as WorkspaceTab[]).find(key => paths[key] === pathname);
   return { tab: tab ?? "overview", resource: null,
     context: contextAt(tab ?? "overview", search) };
@@ -178,6 +181,10 @@ export function useWorkspaceNavigation() {
     () => routeAt(window.location.pathname, window.location.search));
   const current = useRef(route);
   useEffect(() => {
+    if (window.location.pathname === "/research" ||
+        window.location.pathname === "/model-experience") {
+      window.history.replaceState(null, "", "/");
+    }
     const sync = () => {
       current.current = routeAt(window.location.pathname, window.location.search);
       setRoute(current.current);
@@ -236,17 +243,14 @@ export function useWorkspaceNavigation() {
     navigate, navigateWithContext, selectContext, openResource };
 }
 
-type NavItem = { tab: WorkspaceTab; label: string; concept?: boolean };
+type NavItem = { tab: WorkspaceTab; label: string };
 const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
-  { title: "WORKSPACE", items: [{ tab: "overview", label: "개요" }] },
-  { title: "DATA", items: [
+  { title: "WORKSPACE", items: [
+    { tab: "overview", label: "홈" },
     { tab: "understanding", label: "데이터 탐색" },
-    { tab: "preparation", label: "데이터 준비" },
+    { tab: "pipelines", label: "활동 이상 탐지" },
   ] },
-  { title: "RESEARCH", items: [{ tab: "research", label: "연구·실험", concept: true }] },
-  { title: "PIPELINES", items: [{ tab: "pipelines", label: "등록형 분석 Pipeline" }] },
-  { title: "MODELS", items: [{ tab: "ml", label: "모델과 실행" }] },
-  { title: "MODEL EXPERIENCE", items: [{ tab: "experience", label: "모델 활용", concept: true }] },
+  { title: "DATA TOOLS", items: [{ tab: "preparation", label: "데이터 준비" }] },
   { title: "ACTIVITY & OPERATIONS", items: [
     { tab: "jobs", label: "작업 이력" },
     { tab: "storage", label: "저장소 상태" },
@@ -312,7 +316,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
           event.preventDefault();
           onNavigate(item.tab);
         }}>
-        <span>{item.label}</span>{item.concept && <small>설계</small>}
+        <span>{item.label}</span>
       </a>)}
     </div>)}
   </nav>;

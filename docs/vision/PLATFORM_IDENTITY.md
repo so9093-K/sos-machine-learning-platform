@@ -6,6 +6,14 @@
 
 ![외부 연구에서 SOS 실행·연구·운영·모델 사용 경험과 피드백까지 연결하는 장기 제품 비전](references/15-research-to-model-experience.png)
 
+## 비전의 장기 가치
+
+![AI/ML 플랫폼 비전의 추상화 — 성과의 연속성, 기술과 지식의 진화, 공통 기반, 사용자 가치](references/18-vision-value-abstraction.png)
+
+![통합 비전 선언 — AI의 가능성을 지속 가능한 가치로](references/19-unified-vision-statement.png)
+
+두 그림은 연구·개발·활용·운영의 성과와 근거를 축적하고 다음 활동에 연결하는 **장기 지향점의 개념적 표현**이다. 성과의 연속성은 모든 산출물의 영구 보존이나 모든 모델의 재사용을 보장한다는 뜻이 아니다. 결과의 유효성·조건·한계를 검증하며 새로운 연구와 실제 활용, 지속적인 개선에 필요한 근거를 이어 간다는 의미다.
+
 ## 1. 제품 정체성
 
 ![Research Platform · ML Execution Platform · ML Service Platform](references/02-platform-pillars.png)

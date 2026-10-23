@@ -1,95 +1,115 @@
-import { MLActivityPanel } from "./MLActivityPanel";
-import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
+/** 홈은 백엔드 Job 분류 대신 지금 이용 가능한 제품 기능을 제공한다. */
+import { useEffect, useState } from "react";
+import { formatError, request } from "./api";
+import type { WorkspaceTab } from "./PlatformNavigation";
+import type { PipelineRun } from "./types";
 
 type DatasetLink = { id: string; name: string; kind: string };
-type Activity = { id: string; status: string; created_at: string };
 type Props = {
   datasets: DatasetLink[];
-  jobs: Activity[];
   onNavigate: (tab: WorkspaceTab) => void;
-  onOpenDataset: (datasetId: string) => void;
-  onOpenResource: (kind: MLResourceKind, id: string) => void;
-  onViewMlActivity: () => void;
-  onViewDataActivity: () => void;
+  onOpenDataset: (id: string) => void;
+  onOpenPipelineRun: (runId: string, datasetId: string) => void;
 };
 
-/** 조회 가능한 활동·리소스로 작업을 이어서 진행하게 하며 임의의 전체 집계를 만들지 않는다. */
-export function PlatformOverview({ datasets, jobs, onNavigate, onOpenDataset, onOpenResource,
-  onViewMlActivity, onViewDataActivity }: Props) {
-  const recentData = [...jobs].sort((a, b) =>
+export function PlatformOverview({ datasets, onNavigate, onOpenDataset, onOpenPipelineRun }: Props) {
+  const [runs, setRuns] = useState<PipelineRun[]>([]);
+  const [runError, setRunError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setRunError("");
+    void request<PipelineRun[]>("/api/pipeline-runs")
+      .then(data => { if (active) setRuns(data); })
+      .catch(error => { if (active) setRunError(formatError(error)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [retry]);
+  // 조회 실패·재시도 중에는 이전 목록을 현재 결과처럼 보이지 않는다.
+  const recent = loading || runError ? [] : [...runs].sort((a, b) =>
     b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)).slice(0, 4);
+  const datasetName = (id: string) => datasets.find(item => item.id === id)?.name ??
+    "현재 Dataset 목록 밖의 데이터";
   return <div className="platform-home">
     <section className="platform-intro">
-      <span className="eyebrow">EXPLORE · EXPERIMENT · UNDERSTAND · EVOLVE</span>
-      <h2>작업을 이어서 시작하세요</h2>
-      <p>데이터를 이해하고, 기존 모델과 실행 결과를 다시 찾고, 필요할 때 새 작업을 시작합니다.
-        정해진 파이프라인을 순서대로 진행할 필요는 없습니다.</p>
+      <span className="eyebrow">SOS · EXPLORE · EXPERIMENT · UNDERSTAND · EVOLVE</span>
+      <h2>무엇을 시작할까요?</h2>
+      <p>현재 사용할 수 있는 데이터를 살펴보거나 준비된 활동 이상 탐지 분석을 이용할 수 있습니다.
+        각 기능은 독립적으로 시작할 수 있습니다.</p>
     </section>
-    <section aria-label="최근 활동">
-      <h3 className="platform-section-title">최근 활동과 결과</h3>
-      <div className="platform-overview-grid">
-        <MLActivityPanel compact onNavigate={onNavigate} onOpenResource={onOpenResource}
-          onViewAll={onViewMlActivity}/>
-        <section className="panel" aria-labelledby="recent-data-heading">
-          <div className="panel-head"><div>
-            <h3 id="recent-data-heading">최근 데이터 작업</h3>
-            <p>현재 조회된 데이터·탐색 Job의 범위에서 표시합니다.</p>
-          </div><button className="secondary" onClick={onViewDataActivity}>작업 이력 →</button></div>
-          {recentData.length === 0 ? <p className="muted">조회된 데이터 작업이 없습니다.</p>
-            : <div className="platform-compact-list">{recentData.map(job =>
-              <button key={job.id} className="platform-list-link ghost" onClick={onViewDataActivity}>
-                <span className="platform-resource-name">Job {job.id.slice(0, 12)}</span>
-                <span className={`status ${job.status.toLowerCase()}`}>{job.status}</span>
-              </button>)}</div>}
-        </section>
+    <section aria-labelledby="available-work-heading">
+      <h3 className="platform-section-title" id="available-work-heading">지금 이용할 수 있는 기능</h3>
+      <div className="platform-destinations">
+        <article className="panel platform-destination">
+          <span className="eyebrow">DATA EXPLORER</span>
+          <h4>데이터 탐색</h4>
+          <p>Dataset을 등록하고 구조·분포·품질을 확인하며 제한된 EDA를 이용합니다.
+            분석 Pipeline을 실행하지 않고도 사용할 수 있습니다.</p>
+          <button type="button" onClick={() => onNavigate("understanding")}>
+            데이터 탐색 시작 →
+          </button>
+        </article>
+        <article className="panel platform-destination">
+          <span className="eyebrow">PIPELINE APPLICATION</span>
+          <h4>시간 기반 활동 이상 탐지</h4>
+          <p>준비된 Isolation Forest 분석으로 데이터 입력·학습·Calibration·Test와
+            결과 및 모델 사용을 한 작업 공간에서 이용합니다.</p>
+          <p className="hint">호환 데이터를 사용하거나 Pipeline 전용 합성 예제를 선택할 수 있습니다.</p>
+          <button type="button" onClick={() => onNavigate("pipelines")}>
+            활동 이상 탐지 사용하기 →
+          </button>
+        </article>
       </div>
     </section>
-    <section className="panel" aria-labelledby="known-datasets-heading">
+    <section className="panel" aria-labelledby="resume-pipeline-heading">
       <div className="panel-head"><div>
-        <h3 id="known-datasets-heading">Dataset</h3>
-        <p>현재 조회된 Dataset 목록입니다. 선택하면 데이터 이해 화면으로 이동합니다.</p>
-      </div><button className="secondary" onClick={() => onNavigate("understanding")}>데이터 탐색 →</button></div>
-      {datasets.length === 0
-        ? <p className="muted">조회된 Dataset이 없습니다. 데이터 탐색에서 등록하거나 연결할 수 있습니다.</p>
-        : <div className="platform-compact-list platform-dataset-list">
-          {datasets.slice(0, 5).map(dataset => <button className="platform-list-link ghost"
-            key={dataset.id} onClick={() => onOpenDataset(dataset.id)}>
-            <span className="platform-resource-name">{dataset.name}</span><small>{dataset.kind}</small>
+        <h3 id="resume-pipeline-heading">이어서 이용할 분석</h3>
+        <p>실제로 실행했던 Pipeline을 데이터와 결과 문맥으로 다시 엽니다.</p>
+      </div>
+        <button className="secondary" type="button" disabled={loading}
+          onClick={() => setRetry(n => n + 1)}>다시 조회</button>
+      </div>
+      {loading && <p role="status">이전 분석을 확인하는 중입니다.</p>}
+      {runError && <p role="alert">이전 분석을 조회하지 못했습니다: {runError}</p>}
+      {!loading && !runError && recent.length === 0 &&
+        <p className="muted">아직 실행한 분석이 없습니다. 위에서 활동 이상 탐지를 시작할 수 있습니다.</p>}
+      {recent.length > 0 && <div className="platform-compact-list">
+        {recent.map(run => <button type="button" key={run.id}
+          className="platform-list-link ghost"
+          onClick={() => onOpenPipelineRun(run.id, run.dataset_id)}>
+          <span className="platform-resource-name">
+            활동 이상 탐지 · {datasetName(run.dataset_id)}
+          </span>
+          <small>{new Date(run.created_at).toLocaleString("ko-KR")}</small>
+          <span className={`status ${run.status.toLowerCase()}`}>{run.status}</span>
+        </button>)}
+      </div>}
+    </section>
+    <section className="panel" aria-labelledby="continue-data-heading">
+      <div className="panel-head"><div>
+        <h3 id="continue-data-heading">다시 살펴볼 데이터</h3>
+        <p>이미 등록한 Dataset을 탐색하거나 분석에 활용할 수 있습니다.</p>
+      </div><button className="secondary" type="button"
+        onClick={() => onNavigate("preparation")}>독립 데이터 준비 →</button></div>
+      {datasets.length === 0 ? <p className="muted">
+        현재 조회한 Dataset이 없습니다. 데이터 탐색에서 파일을 등록하거나 예제를 선택하세요.</p> :
+        <div className="platform-compact-list">
+          {datasets.slice(0, 5).map(dataset => <button key={dataset.id} type="button"
+            className="platform-list-link ghost" onClick={() => onOpenDataset(dataset.id)}>
+            <span className="platform-resource-name">{dataset.name}</span>
+            <small>{dataset.kind} · 탐색하기 →</small>
           </button>)}
         </div>}
     </section>
-    <section aria-labelledby="new-work-heading">
-      <h3 className="platform-section-title" id="new-work-heading">새 작업 시작</h3>
-      <div className="platform-quick-actions">
-        <button className="platform-destination ghost" onClick={() => onNavigate("pipelines")}>
-          <strong>등록된 분석 Pipeline 사용하기 <span aria-hidden="true">↗</span></strong>
-          <span>분석 목적과 필요한 데이터를 확인하고, 준비·실행·결과까지 안내받습니다.</span>
-        </button>
-        <button className="platform-destination ghost" onClick={() => onNavigate("understanding")}>
-          <strong>데이터 이해하기 <span aria-hidden="true">↗</span></strong>
-          <span>기존 Dataset에서 구조·분포·품질을 탐색합니다.</span>
-        </button>
-        <button className="platform-destination ghost" onClick={() => onNavigate("preparation")}>
-          <strong>데이터 준비하기 <span aria-hidden="true">↗</span></strong>
-          <span>탐색을 거치지 않고도 변환을 시작할 수 있습니다.</span>
-        </button>
-        <button className="platform-destination ghost" onClick={() => onNavigate("ml")}>
-          <strong>모델과 결과 <span aria-hidden="true">↗</span></strong>
-          <span>모델 판본을 발견하고 학습·평가 활동에 접근합니다.</span>
-        </button>
-        <button className="platform-destination ghost" onClick={() => onNavigate("scoring")}>
-          <strong>기존 모델 사용하기 <span aria-hidden="true">↗</span></strong>
-          <span>새 학습 없이 모델의 Scoring을 요청합니다.</span>
-        </button>
-      </div>
-    </section>
-    <section className="platform-outlook" aria-labelledby="future-experience-heading">
-      <h3 id="future-experience-heading">확장할 경험</h3>
-      <p>연구·실험과 모델 활용은 독립적인 제품 경험입니다. 목표 화면은 고려하되,
-        현재 구현되지 않은 Experiment 관리와 온라인 Serving은 동작하는 기능으로 표시하지 않습니다.</p>
+    <section className="platform-outlook">
+      <h3>독립 ML 기능과 운영</h3>
+      <p>모델·Job·불변 결과는 API에서 독립적으로 사용할 수 있습니다. 필요한 경우
+        기존 상세 주소로 접근하거나 고급 실행·운영 화면에서 조회할 수 있습니다.</p>
       <div className="platform-outlook-actions">
-        <button className="secondary" onClick={() => onNavigate("research")}>연구 경험 살펴보기 →</button>
-        <button className="secondary" onClick={() => onNavigate("experience")}>모델 활용 경험 살펴보기 →</button>
+        <button className="secondary" type="button" onClick={() => onNavigate("ml")}>독립 ML 실행·모델 →</button>
+        <button className="secondary" type="button" onClick={() => onNavigate("jobs")}>작업 이력 →</button>
       </div>
     </section>
   </div>;

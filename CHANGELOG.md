@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- 웹 홈을 실행 가능한 Data Explorer·활동 이상 탐지 Pipeline의 진입점과 이전 Pipeline 재개 중심으로 변경하고, 미구현 Research / Model Experience Preview 메뉴·컴포넌트를 제거했습니다. 모델·학습·Scoring·정책·평가·설명의 독립 API 및 결과 직접 주소는 유지합니다.
+- 첫 IF Pipeline용 44개 Feature·UTC 시각의 재현 가능한 합성 Dataset을 사용자가 명시적으로 등록·검사할 수 있게 했습니다. Training·Calibration·Test의 실행 전 발견성, 완료 후 결과 접근, 생성 모델의 별도 Dataset Scoring을 Pipeline 안에서 연결했습니다. 학습·Scoring 실행은 동일 작업이 아니며 예제는 실제 이상 사건의 근거가 아닙니다.
+- 실제 브라우저와 API·Worker·저장소의 사용자 흐름을 확인하는 격리형 Compose 통합 검증을 PR CI에 추가했습니다.
+
 - 첫 IF Pipeline의 분석 Run·Dataset 판본을 상단에 표시하고, 완료 Run의 Training·Calibration·Test를 넓은 화면에서 선택해 검토할 수 있게 했습니다. 이전 Run 선택 시 해당 결과로 이동하고, Test 후보 목록·상세·Feature 민감도 수치를 같은 작업 공간에서 확인할 수 있습니다. 분석 영역과 후보 번호는 Run URL에 보존되어 독립 ML 판본 확인 후에도 복원되며, Dataset 참조만 보정할 때에도 선택을 유지합니다. 기존 설명 Job 조회·재시도·권한 기반 취소 요청, Catalog·이전 Run 목록 조회 오류 복구도 개선했습니다. 원본 관측 시각·ID가 보존되지 않은 첫 IF 결과는 추적 가능하다고 오인시키지 않습니다.
 
 - 첫 IF Pipeline의 완료 Run에서 Model·Calibration·Test·Policy·Evaluation 판본과 시간 분할·Feature 서명을 교차 검증하고, 학습 설정·실제 점수 분포·보정 임계값·Test 판정 근거를 분석할 수 있게 했습니다. 실행 후 결과를 먼저 표시하며 불변 ML 판본을 열었다가 원래 Run으로 돌아올 수 있습니다.
