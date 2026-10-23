@@ -201,13 +201,22 @@ def _advance_one_run(store, run_id: str) -> bool:
     if run["cancel_requested"]:
         if job_id:
             job = store.get_job(job_id)
-            if job and job["status"] in ("Queued", "Running") and not job["cancel_requested"]:
+            if job is None:
+                _update_run(store, run["id"], status="Failed", error_code="SOS-JOB-FAILED")
+                return True
+            if job["status"] == "Failed":
+                # 취소 요청이 실제로 실패한 Attempt의 원인을 덮지 않는다.
+                _update_run(
+                    store, run["id"], status="Failed", error_code=job.get("error_code")
+                )
+                return True
+            if job["status"] in ("Queued", "Running") and not job["cancel_requested"]:
                 store.request_cancel(
                     job_id, actor_id=run["owner_actor"],
                     actor_type=run["owner_actor_type"],
                 )
                 return True
-            if job and job["status"] in ("Queued", "Running"):
+            if job["status"] in ("Queued", "Running"):
                 return False
         _update_run(store, run["id"], status="Cancelled")
         return True

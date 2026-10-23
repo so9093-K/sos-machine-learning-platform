@@ -234,3 +234,37 @@ def test_pipeline_cancellation_preserves_human_and_service_actor_types():
         assert store.cancel_audit == [(job_id, owner, actor_type)]
         assert pipeline_runs.advance_run(store)
         assert pipeline_runs.get_run(store, run["id"])["status"] == "Cancelled"
+
+
+def test_cancel_after_failed_stage_keeps_actual_failure_reason():
+    store = FakeStore()
+    run = pipeline_runs.create_run(
+        store, {"id": "failed-stage", "version": "v1"}, "owner-failed",
+        {"ready": True, "plan": None}, None,
+    )
+    assert pipeline_runs.advance_run(store)
+    job_id = pipeline_runs.get_run(store, run["id"])["job_ids"]["preflight"]
+    store.jobs[job_id]["status"] = "Failed"
+    store.jobs[job_id]["error_code"] = "SOS-ML-INPUT-INVALID"
+    pipeline_runs.cancel_run(store, run["id"])
+    assert pipeline_runs.advance_run(store)
+    failed = pipeline_runs.get_run(store, run["id"])
+    assert failed["status"] == "Failed"
+    assert failed["error_code"] == "SOS-ML-INPUT-INVALID"
+    assert store.cancel_audit == []
+
+
+def test_cancel_with_missing_submitted_job_fails_instead_of_hiding_loss():
+    store = FakeStore()
+    run = pipeline_runs.create_run(
+        store, {"id": "lost-stage", "version": "v1"}, "owner-lost",
+        {"ready": True, "plan": None}, None,
+    )
+    assert pipeline_runs.advance_run(store)
+    job_id = pipeline_runs.get_run(store, run["id"])["job_ids"]["preflight"]
+    del store.jobs[job_id]
+    pipeline_runs.cancel_run(store, run["id"])
+    assert pipeline_runs.advance_run(store)
+    failed = pipeline_runs.get_run(store, run["id"])
+    assert failed["status"] == "Failed"
+    assert failed["error_code"] == "SOS-JOB-FAILED"
