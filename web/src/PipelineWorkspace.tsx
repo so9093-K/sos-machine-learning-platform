@@ -107,14 +107,21 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
   }
   async function start() {
     if (!datasetId || checked?.dataset_id !== datasetId || !checked.ready || busy || !canRun) return;
+    const previousRunId = selectedRunId.current;
     setBusy(true); setError("");
     try {
       const next = await submitJob<Run>(`/api/pipelines/${PIPELINE}/runs`, { dataset_id: datasetId });
-      selectRun(next.id);
-      setRun(next);
+      // 제출 중 다른 Run을 선택했다면 늦은 응답으로 사용자의 화면을 전환하지 않는다.
+      if (selectedRunId.current === previousRunId) {
+        selectRun(next.id);
+        setRun(next);
+      }
       void request<Run[]>("/api/pipeline-runs").then(setHistory).catch(() => {});
-    } catch (e) { setError(formatError(e)); }
-    finally { setBusy(false); }
+    } catch (e) {
+      if (selectedRunId.current === previousRunId) setError(formatError(e));
+    } finally {
+      if (selectedRunId.current === previousRunId) setBusy(false);
+    }
   }
   async function cancel() {
     if (!run || terminal.has(run.status) || busy || !canCancel) return;
