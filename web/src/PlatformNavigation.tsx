@@ -7,6 +7,30 @@ export type WorkspaceTab =
   | "jobs" | "ml-jobs" | "storage" | "audit";
 export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
 export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
+export type MLNavigationContext = { datasetId?: string; modelId?: string; scoringId?: string };
+type WorkspaceRoute = {
+  tab: WorkspaceTab; resource: ResourceRoute; context: MLNavigationContext;
+};
+
+function isDecisionTab(tab: WorkspaceTab): boolean {
+  return tab === "policies" || tab === "evaluations" || tab === "explanations";
+}
+
+function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
+  const params = new URLSearchParams(search);
+  if (tab === "training") return { datasetId: params.get("dataset") ?? "" };
+  if (tab === "scoring") return { modelId: params.get("model") ?? "" };
+  if (isDecisionTab(tab)) return { scoringId: params.get("scoring") ?? "" };
+  return {};
+}
+
+function contextPath(tab: WorkspaceTab, context: MLNavigationContext): string {
+  const params = new URLSearchParams();
+  if (tab === "training" && context.datasetId) params.set("dataset", context.datasetId);
+  if (tab === "scoring" && context.modelId) params.set("model", context.modelId);
+  if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
+  return paths[tab] + (params.size ? "?" + params.toString() : "");
+}
 
 const paths: Record<WorkspaceTab, string> = {
   overview: "/", understanding: "/data", preview: "/data/query",
@@ -27,49 +51,71 @@ const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }>
 export function resourcePath(kind: MLResourceKind, id: string): string {
   return `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
 }
-function routeAt(pathname: string): { tab: WorkspaceTab; resource: ResourceRoute } {
+function routeAt(pathname: string, search: string): WorkspaceRoute {
   for (const [kind, config] of Object.entries(resourcePaths) as
       Array<[MLResourceKind, { base: string; tab: WorkspaceTab }]>) {
     if (pathname.startsWith(config.base + "/")) {
       const id = pathname.slice(config.base.length + 1);
       if (id && !id.includes("/")) {
-        try { return { tab: config.tab, resource: { kind, id: decodeURIComponent(id) } }; }
+        try { return { tab: config.tab, resource: { kind, id: decodeURIComponent(id) }, context: {} }; }
         catch { break; }
       }
     }
   }
   const tab = (Object.keys(paths) as WorkspaceTab[]).find(key => paths[key] === pathname);
-  return { tab: tab ?? "overview", resource: null };
+  return { tab: tab ?? "overview", resource: null,
+    context: contextAt(tab ?? "overview", search) };
 }
 
 /** 탭과 불변 결과 주소를 같은 탐색 상태로 유지한다. */
 export function useWorkspaceNavigation() {
-  const [route, setRoute] = useState(() => routeAt(window.location.pathname));
+  const [route, setRoute] = useState(
+    () => routeAt(window.location.pathname, window.location.search));
   const current = useRef(route);
   useEffect(() => {
     const sync = () => {
-      current.current = routeAt(window.location.pathname);
+      current.current = routeAt(window.location.pathname, window.location.search);
       setRoute(current.current);
       requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
     };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
-  const update = useCallback((next: { tab: WorkspaceTab; resource: ResourceRoute }, path: string) => {
-    if (window.location.pathname !== path) window.history.pushState(null, "", path);
+  const update = useCallback((next: WorkspaceRoute, path: string, replace = false) => {
+    if (window.location.pathname + window.location.search !== path) {
+      if (replace) window.history.replaceState(null, "", path);
+      else window.history.pushState(null, "", path);
+    }
     current.current = next;
     setRoute(next);
-    requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
+    if (!replace) requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
   }, []);
+  const navigateWithContext = useCallback((tab: WorkspaceTab, context: MLNavigationContext) => {
+    const next = contextAt(tab, contextPath(tab, context).split("?")[1] ?? "");
+    update({ tab, resource: null, context: next }, contextPath(tab, next));
+  }, [update]);
   const navigate = useCallback((target: WorkspaceTab | ((previous: WorkspaceTab) => WorkspaceTab)) => {
-    const tab = typeof target === "function" ? target(current.current.tab) : target;
-    update({ tab, resource: null }, paths[tab]);
+    const previous = current.current;
+    const tab = typeof target === "function" ? target(previous.tab) : target;
+    // 같은 Scoring Result의 정책·평가·설명을 이동할 때만 선택을 전달한다.
+    const context = isDecisionTab(tab) && isDecisionTab(previous.tab)
+      ? { scoringId: previous.context.scoringId } : {};
+    update({ tab, resource: null, context }, contextPath(tab, context));
+  }, [update]);
+  const selectContext = useCallback((context: MLNavigationContext) => {
+    const previous = current.current;
+    if (previous.resource) return;
+    const path = contextPath(previous.tab, context);
+    const parsed = contextAt(previous.tab, path.split("?")[1] ?? "");
+    update({ ...previous, context: parsed }, path, true);
   }, [update]);
   const openResource = useCallback((kind: MLResourceKind, id: string) => {
     if (!id) return;
-    update({ tab: resourcePaths[kind].tab, resource: { kind, id } }, resourcePath(kind, id));
+    update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context: {} },
+      resourcePath(kind, id));
   }, [update]);
-  return { tab: route.tab, resource: route.resource, navigate, openResource };
+  return { tab: route.tab, resource: route.resource, context: route.context,
+    navigate, navigateWithContext, selectContext, openResource };
 }
 
 type NavItem = { tab: WorkspaceTab; label: string; concept?: boolean };
