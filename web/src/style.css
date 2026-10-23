@@ -623,7 +623,7 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .pipeline-consumer h3[tabindex="-1"],.pipeline-consumer h4[tabindex="-1"],
 .pipeline-consumer h5[tabindex="-1"] { scroll-margin-top:24px; }
 .pipeline-consumer [tabindex="-1"]:focus { outline:2px solid var(--sos-accent); outline-offset:4px; }
-@media(max-width:1050px) {
+@media(max-width:1280px) {
   .pipeline-context-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .pipeline-candidate-workspace { grid-template-columns:minmax(0,1fr); }
 }

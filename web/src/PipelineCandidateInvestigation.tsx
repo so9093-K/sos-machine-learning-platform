@@ -76,6 +76,7 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
   const [retry, setRetry] = useState(0);
   const [lookupRetry, setLookupRetry] = useState(0);
   const [previousLookup, setPreviousLookup] = useState<"loading" | "ready" | "error">("loading");
+  const [olderJobsExist, setOlderJobsExist] = useState(false);
   const submitted = useRef(false);
   useEffect(() => {
     let active = true;
@@ -86,9 +87,11 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
         if (!active || submitted.current) return;
         const previous = matchingExplanationJob(page.items, scoringResultId, candidate.row_index);
         if (!previous) {
+          setOlderJobsExist(Boolean(page.next_cursor));
           setPreviousLookup("ready");
           return;
         }
+        setOlderJobsExist(false);
         return request<MLExplanationJob>(
           "/api/ml/explanations/jobs/" + encodeURIComponent(previous.id)
         ).then(restored => {
@@ -173,6 +176,10 @@ export function PipelineCandidateInvestigation({ candidate, scoringResultId, can
         {busy ? "설명 Job 제출 중…" : job ? "새 설명 Job으로 다시 계산 →" :
           "이 후보의 점수 민감도 계산 →"}
       </button>}
+    {!job && previousLookup === "ready" && olderJobsExist && <p className="hint">
+      최근 100건의 설명 작업에서는 같은 후보를 찾지 못했습니다.
+      더 오래된 설명 결과는 독립 설명 작업 이력에서 확인할 수 있습니다.
+    </p>}
     {job && previousLookup === "ready" && <p className="hint">
       이 후보에 연결된 설명 Job을 조회했습니다. 다른 후보를 살펴본 뒤에도 다시 확인할 수 있습니다.
     </p>}
