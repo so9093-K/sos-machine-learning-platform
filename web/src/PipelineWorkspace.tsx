@@ -174,6 +174,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     });
   }
   function selectRun(id: string) {
+    if (id && id === selectedRunId.current && run?.id === id) {
+      moveFocusTo(run.status === "Succeeded"
+        ? "pipeline-analysis-first-heading" : "pipeline-current-run-heading");
+      return;
+    }
     const runDatasetId = history.find(item => item.id === id)?.dataset_id ??
       (run?.id === id ? run.dataset_id : datasetId);
     selectedRunId.current = id;
@@ -365,7 +370,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </div>
       </div>
       <PipelineAnalysis run={run} onOpenResource={onOpenResource}
-        initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection} />
+        initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection}
+        onInvestigateCandidates={() => moveFocusTo("pipeline-candidates-heading")} />
       <div className="pipeline-actions">
         <button type="button" onClick={() =>
           moveFocusTo("pipeline-candidates-heading")}>이상 후보 상세 검토 →</button>

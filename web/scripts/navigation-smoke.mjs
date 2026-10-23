@@ -275,6 +275,11 @@ try {
   assert.match(calibrationReport, /0.5%/);
   assert.match(calibrationReport, /Calibration 점수 구간별 전체 관측 수/);
   const testReport = reportFor("test");
+  const testWithCandidates = renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
+    run: completedRun, evidence: resultEvidence, initialSection: "test",
+    onInvestigateCandidates: () => {}, onOpenResource: () => {},
+  }));
+  assert.match(testWithCandidates, /검토할 이상 후보 살펴보기/);
   assert.match(testReport, /Test — 적용 후 무엇이 달라졌는가/);
   assert.match(testReport, /15%/);
   assert.match(testReport, /Test 점수 구간별 전체 관측 수/);

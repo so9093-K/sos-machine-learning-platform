@@ -196,10 +196,11 @@ export const PIPELINE_ANALYSIS_SECTIONS: Array<{ id: PipelineAnalysisSection; la
   { id: "test", label: "Test", description: "후보와 평가 결과" },
 ];
 export function PipelineEvidenceView({ evidence, run, onOpenResource,
-  initialSection = "overview", onSectionChange }: {
+  initialSection = "overview", onSectionChange, onInvestigateCandidates }: {
   evidence: Evidence; run: PipelineRun; onOpenResource: OpenResult;
   initialSection?: PipelineAnalysisSection;
   onSectionChange?: (section: PipelineAnalysisSection) => void;
+  onInvestigateCandidates?: () => void;
 }) {
   const [section, setSection] = useState<PipelineAnalysisSection>(initialSection);
   useEffect(() => { setSection(initialSection); }, [initialSection]);
@@ -299,6 +300,9 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
         <p className="hint">Calibration에서 정한 정책을 별도 Test 시간 구간에 적용합니다.
           검토 후보는 실제 이상 사건이 아니며, 레이블이 없는 결과에는 정확도·Precision·Recall을 부여하지 않습니다.</p>
         <div className="pipeline-actions">
+          {onInvestigateCandidates && <button type="button" onClick={onInvestigateCandidates}>
+            검토할 이상 후보 살펴보기 →
+          </button>}
           <button type="button" className="secondary" onClick={() =>
             onOpenResource("scoring", test.id)}>Test 점수 결과 →</button>
           <button type="button" className="secondary" onClick={() =>
@@ -310,10 +314,13 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
 }
 
 /** URL Run이 변경되면 이전 응답을 폐기하며, 어떤 결과도 섞지 않는다. */
-export function PipelineAnalysis({ run, onOpenResource, initialSection, onSectionChange }: {
+export function PipelineAnalysis({
+  run, onOpenResource, initialSection, onSectionChange, onInvestigateCandidates,
+}: {
   run: PipelineRun; onOpenResource: OpenResult;
   initialSection?: PipelineAnalysisSection;
   onSectionChange?: (section: PipelineAnalysisSection) => void;
+  onInvestigateCandidates?: () => void;
 }) {
   const modelId = resultRef(run, "training", "model_revision_id");
   const calibrationId = resultRef(run, "calibration", "scoring_result_id");
@@ -370,5 +377,6 @@ export function PipelineAnalysis({ run, onOpenResource, initialSection, onSectio
   if (!current?.evidence) return <p role="status">모델·Calibration·Test의 불변 분석 근거를 불러오는 중입니다.</p>;
   return <PipelineEvidenceView evidence={current.evidence} run={run}
     onOpenResource={onOpenResource} initialSection={initialSection}
-    onSectionChange={onSectionChange} />;
+    onSectionChange={onSectionChange}
+    onInvestigateCandidates={onInvestigateCandidates} />;
 }
