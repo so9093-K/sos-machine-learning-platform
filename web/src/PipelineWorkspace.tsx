@@ -77,10 +77,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, ha
   }, [datasetId]);
   useEffect(() => {
     // 직접 Run URL은 서버가 반환한 원본 Dataset을 기준으로 연결한다.
-    if (run && run.id === runId && datasetId !== run.dataset_id) {
+    // Dataset을 새로 선택해 URL에서 Run을 지운 경우, 이전 Run으로 되돌리지 않는다.
+    if (run && initialRunId && run.id === initialRunId &&
+        run.id === runId && datasetId !== run.dataset_id) {
       onSelectRun(run.id, run.dataset_id);
     }
-  }, [run?.id, run?.dataset_id, runId, datasetId, onSelectRun]);
+  }, [run?.id, run?.dataset_id, initialRunId, runId, datasetId, onSelectRun]);
   useEffect(() => {
     if (!runId) { setRun(null); return; }
     let active = true;
