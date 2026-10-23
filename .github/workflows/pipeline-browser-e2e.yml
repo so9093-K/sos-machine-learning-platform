@@ -3,7 +3,7 @@ name: Pipeline Browser E2E
 on:
   # 전체 API·Worker·S3 검사는 매 커밋이 아니라 관련 PR의 리뷰 진입에 실시한다.
   pull_request:
-    types: [ready_for_review, labeled]
+    types: [opened, ready_for_review, labeled]
     paths:
       - 'src/sos_platform/**'
       - 'web/src/**'
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   pipeline-browser-e2e:
-    if: github.event_name == 'workflow_dispatch' || github.event.action == 'ready_for_review' || github.event.label.name == 'run-pipeline-e2e'
+    if: github.event_name == 'workflow_dispatch' || github.event.action == 'ready_for_review' || (github.event.action == 'opened' && !github.event.pull_request.draft) || github.event.label.name == 'run-pipeline-e2e'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
