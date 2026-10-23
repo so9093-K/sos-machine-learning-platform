@@ -472,3 +472,90 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .ml-activity-details pre { padding:12px; border-radius:8px; max-height:300px; overflow:auto;
   font-size:11px; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--sos-sidebar); }
 .ml-activity-details p { font-size:12px; margin:10px 0; line-height:1.6; }
+
+/* 첫 Reference Pipeline: 기능 메뉴가 아닌 하나의 이용 여정을 먼저 보여준다. */
+.pipeline-consumer { gap:18px; }
+.pipeline-hero { display:grid; gap:6px; }
+.pipeline-hero-foot { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.pipeline-hero-foot span { padding:9px 12px; border-radius:9px; background:var(--sos-raised);
+  color:var(--sos-text); font-size:12px; }
+.pipeline-journey { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px;
+  padding:0; margin:0; }
+.pipeline-journey-item { display:grid; grid-template-columns:auto 1fr; gap:2px 10px;
+  border:1px solid var(--sos-border); border-radius:12px; padding:16px;
+  background:var(--sos-panel); }
+.pipeline-journey-item span { grid-row:span 2; display:grid; place-items:center; align-self:start;
+  width:30px; height:30px; background:var(--sos-raised); border-radius:8px;
+  color:var(--sos-accent); font-size:12px; font-weight:700; }
+.pipeline-journey-item strong { font-size:13px; }
+.pipeline-journey-item small { font-size:12px; color:var(--sos-muted); line-height:1.5; }
+.pipeline-section-heading { display:flex; justify-content:space-between; gap:18px;
+  align-items:flex-start; flex-wrap:wrap; margin-bottom:20px; }
+.pipeline-section-heading h3 { font-size:21px; margin:7px 0 9px; letter-spacing:-.02em; }
+.pipeline-section-heading p { color:var(--sos-muted); font-size:13px; line-height:1.65;
+  max-width:720px; }
+.pipeline-section-heading .chip { align-self:flex-start; }
+.pipeline-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.pipeline-facts>div { background:var(--sos-raised); border:1px solid var(--sos-border);
+  border-radius:10px; padding:16px; }
+.pipeline-facts strong,.pipeline-input-guide strong { font-size:13px; }
+.pipeline-facts p,.pipeline-input-guide p { font-size:13px; color:var(--sos-muted);
+  line-height:1.7; margin-top:8px; }
+.pipeline-scope { margin:15px 0; font-size:12px; line-height:1.7;
+  color:var(--sos-muted); }
+.pipeline-evidence,.pipeline-history { margin-top:18px; border-top:1px solid var(--sos-border);
+  padding-top:14px; font-size:13px; line-height:1.7; }
+.pipeline-evidence summary,.pipeline-history summary,.pipeline-candidates summary {
+  cursor:pointer; color:var(--sos-accent); }
+.pipeline-evidence summary:focus-visible,.pipeline-history summary:focus-visible,
+.pipeline-candidates summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:3px; }
+.pipeline-evidence ul { padding-left:20px; margin:12px 0; color:var(--sos-muted); }
+.pipeline-feature-list { line-height:1.9; overflow-wrap:anywhere; }
+.pipeline-input-guide,.pipeline-next-step { background:var(--sos-raised);
+  border:1px solid var(--sos-border); border-radius:11px; padding:16px;
+  margin:12px 0; font-size:13px; line-height:1.7; }
+.pipeline-input-guide code,.pipeline-run-identity code { font-size:12px; overflow-wrap:anywhere; }
+.pipeline-next-step p { margin-top:8px; color:var(--sos-muted); }
+.pipeline-prepare .form-row label { min-width:min(100%,330px); max-width:100%; flex:1; }
+.pipeline-actions { display:flex; gap:9px; flex-wrap:wrap; align-items:center;
+  margin-top:18px; }
+.pipeline-readiness-blocked,.pipeline-readiness-ready { border-radius:11px;
+  border:1px solid var(--sos-border); padding:18px; margin-top:17px;
+  font-size:13px; line-height:1.7; }
+.pipeline-readiness-blocked { background:var(--sos-danger-bg); }
+.pipeline-readiness-ready { background:var(--sos-success-bg); }
+.pipeline-readiness-blocked p,.pipeline-readiness-ready p { margin:8px 0;
+  line-height:1.7; }
+.pipeline-readiness-blocked ul { padding-left:20px; }
+.pipeline-readiness-ready button { margin-top:9px; }
+.pipeline-run-identity { display:grid; gap:8px; margin:14px 0; padding:14px;
+  background:var(--sos-raised); border-radius:10px; font-size:12px;
+  overflow-wrap:anywhere; }
+.pipeline-run-identity strong { display:inline-block; min-width:80px; }
+.pipeline-result-overview { margin:20px 0; border-top:1px solid var(--sos-border); padding-top:20px; }
+.pipeline-result-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px; margin-top:12px; }
+.pipeline-result-metrics>div { min-width:0; border:1px solid var(--sos-border);
+  background:var(--sos-raised); border-radius:10px; padding:15px; }
+.pipeline-result-metrics span { display:block; font-size:12px; color:var(--sos-muted); }
+.pipeline-result-metrics strong { display:block; margin-top:8px; font-size:21px;
+  overflow-wrap:anywhere; }
+.pipeline-candidates { display:grid; gap:10px; margin-top:19px; }
+.pipeline-candidates p { color:var(--sos-muted); line-height:1.7; font-size:13px; }
+.pipeline-candidates pre { max-width:450px; max-height:220px; overflow:auto;
+  white-space:pre-wrap; overflow-wrap:anywhere; }
+.pipeline-history .ml-resource-list { padding-top:11px; }
+.pipeline-return { border:1px solid var(--sos-accent); border-radius:12px;
+  padding:16px 18px; display:flex; justify-content:space-between; align-items:center;
+  flex-wrap:wrap; gap:14px; background:var(--sos-accent-bg); }
+.pipeline-return p { font-size:12px; line-height:1.65; color:var(--sos-muted);
+  margin-top:5px; max-width:660px; }
+@media(max-width:1050px) {
+  .pipeline-journey { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .pipeline-facts { grid-template-columns:1fr; }
+}
+@media(max-width:620px) {
+  .pipeline-journey,.pipeline-result-metrics { grid-template-columns:1fr; }
+  .pipeline-hero-foot { flex-direction:column; }
+  .pipeline-actions button { width:100%; }
+}
