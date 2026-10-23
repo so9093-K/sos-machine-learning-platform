@@ -27,7 +27,8 @@ export function PlatformOverview({ datasets, onNavigate, onOpenDataset, onOpenPi
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [retry]);
-  const recent = [...runs].sort((a, b) =>
+  // 조회 실패·재시도 중에는 이전 목록을 현재 결과처럼 보이지 않는다.
+  const recent = loading || runError ? [] : [...runs].sort((a, b) =>
     b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)).slice(0, 4);
   const datasetName = (id: string) => datasets.find(item => item.id === id)?.name ??
     "현재 Dataset 목록 밖의 데이터";
