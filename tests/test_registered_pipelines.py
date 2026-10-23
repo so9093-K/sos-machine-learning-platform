@@ -39,6 +39,9 @@ class FakeStore:
     def _assert_worker_ownership(self):
         pass
 
+    def get_model_revision(self, model_id):
+        return {"id": model_id, "registry_version": "1"}
+
     def get_job(self, job_id):
         return self.jobs.get(job_id)
 

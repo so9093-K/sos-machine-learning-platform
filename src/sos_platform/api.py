@@ -40,6 +40,7 @@ from .observability import emit
 from .mlflow_config import MLflowSettings
 from .mlflow_errors import MLflowDeliveryError
 from .mlflow_read import read_experiments, read_runs, read_model_versions
+from .mlflow_registry import verify_registered_version
 from .mlflow_tracking import MLflowClient
 from .pagination import decode_cursor, page_from_rows
 from .processing import bounded_feature_preview
@@ -566,6 +567,12 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         if model is None:
             raise HTTPException(status_code=404, detail="Model Revision not found")
         check_ownership(actor, model["owner_actor"], "model", model["id"])
+        if not model.get("registry_version"):
+            raise HTTPException(status_code=409, detail="Model Registry registration is pending")
+        try:
+            verify_registered_version(_management_client(), model)
+        except MLflowDeliveryError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         require_job_submission_key(idempotency_key)
         return store.create_job(
             kind="ml_score",

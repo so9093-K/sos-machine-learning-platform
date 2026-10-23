@@ -57,6 +57,25 @@ def _versions(client, name: str):
         seen.add(token)
 
 
+def verify_registered_version(client, model: dict) -> None:
+    """실행 제출에서 Registry가 가리키는 판본과 내부 불변 바이트를 대조한다."""
+    name = model.get("registry_model")
+    version = model.get("registry_version")
+    if name != registered_model_name(model) or not isinstance(version, str):
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
+    entry = client.get("model-versions/get", {"name": name, "version": version}).get(
+        "model_version"
+    )
+    if not isinstance(entry, dict) or (
+        entry.get("version") != version or entry.get("name") != name
+        or entry.get("source") != model.get("location")
+        or _tags(entry).get("sos.job_id") != model.get("job_id")
+        or _tags(entry).get("sos.sha256") != model.get("sha256")
+        or entry.get("status") != "READY"
+    ):
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
+
+
 def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
     """한 학습 Job의 단일 Registry 판본을 검색 후 생성한다.
 
