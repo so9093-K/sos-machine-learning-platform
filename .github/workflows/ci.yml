@@ -86,9 +86,9 @@ jobs:
               for i, token in enumerate(tokens)
           }
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as handle:
-              handle.write("SOS_AUTH_TOKEN_HASHES=" + json.dumps(mapping, separators=(",", ":")) + "\\n")
+              handle.write("SOS_AUTH_TOKEN_HASHES=" + json.dumps(mapping, separators=(",", ":")) + "\n")
               for i, token in enumerate(tokens):
-                  handle.write(f"SOS_E2E_TOKEN_{'AB'[i]}={token}\\n")
+                  handle.write(f"SOS_E2E_TOKEN_{'AB'[i]}={token}\n")
           PY
       - name: Start isolated platform
         run: docker compose --profile app up --build -d --wait
