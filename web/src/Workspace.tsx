@@ -335,7 +335,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     const data = await jsonPost<Dataset>("/api/examples/activity-anomaly-if/use", {});
     setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
     showExamples.current = false;
-    setSelected(data.id);
+    // 선택 반영은 Pipeline 작업 공간에서 요청의 최신성 확인 후 수행한다.
     return data;
   }
   async function openJobDataset(datasetId: string) {
