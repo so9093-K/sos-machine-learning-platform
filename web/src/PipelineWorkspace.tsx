@@ -18,9 +18,10 @@ const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 const count = (value: number) => value.toLocaleString("ko-KR");
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets, onLoadMoreDatasets, canRun, canCancel, onNavigate, onOpenResource }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, canRun, canCancel, onNavigate, onOpenResource }: {
   datasets: Dataset[]; initialDatasetId: string; hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
+  onSelectDataset: (datasetId: string) => void;
   canRun: boolean; canCancel: boolean;
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
@@ -153,7 +154,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
       </details>}
       <div className="form-row">
         <label>내 Dataset
-          <select value={datasetId} onChange={e => setDatasetId(e.target.value)}>
+          <select value={datasetId} onChange={e => {
+            setDatasetId(e.target.value);
+            onSelectDataset(e.target.value);
+          }}>
             <option value="">Dataset 선택</option>
             {datasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
@@ -186,7 +190,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
     <section className="panel">
       <h3>내 Pipeline 실행</h3>
       {run ? <>
-        <p>Run {run.id} · <strong>{run.status}</strong>
+        <p>Run {run.id} · Dataset {datasets.find(item => item.id === run.dataset_id)?.name ?? run.dataset_id} · <strong>{run.status}</strong>
           {run.cancel_requested ? " · 취소 요청됨" : ""}
           {run.error_code ? " · 오류 코드 " + run.error_code : ""}</p>
         <p className="hint">실행은 서버 Worker에서 진행됩니다. 화면을 닫아도 Run을 다시 조회할 수 있습니다. 표시할 근거 없는 완료율은 추정하지 않습니다.</p>
@@ -234,7 +238,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
       <div className="ml-resource-list">
         {history.map(item => <button className="platform-list-link ghost" key={item.id}
           onClick={() => selectRun(item.id)}>
-          {item.id.slice(0, 12)} · {item.status} · {new Date(item.created_at).toLocaleString("ko-KR")}
+          {datasets.find(data => data.id === item.dataset_id)?.name ?? item.dataset_id.slice(0, 12)} · {item.status} · {new Date(item.created_at).toLocaleString("ko-KR")}
         </button>)}
         {history.length === 0 && <p className="muted">조회된 Pipeline Run이 없습니다.</p>}
       </div>
