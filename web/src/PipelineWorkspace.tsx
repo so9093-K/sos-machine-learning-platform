@@ -205,23 +205,29 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   }
   async function startExample() {
     if (!onUseExample || !hasPipelineExample || !canCreateDataset || exampleBusy || busy) return;
+    const selectionRevision = datasetSelectionRevision.current;
+    const previousRunId = selectedRunId.current;
     setExampleBusy(true);
     setError("");
     try {
-      // 예제의 등록과 Pipeline 실행은 별도 사용자 행동이다.
+      // 등록 중 Dataset·Run을 바꿨다면 오래된 응답으로 사용자의 선택을 덮지 않는다.
       const dataset = await onUseExample();
+      if (selectionRevision !== datasetSelectionRevision.current ||
+          previousRunId !== selectedRunId.current) return;
       selectedDatasetId.current = dataset.id;
       const revision = ++datasetSelectionRevision.current;
       setDatasetId(dataset.id);
       setChecked(null);
       onSelectDataset(dataset.id);
+      // 예제의 등록과 Pipeline 실행은 별도 사용자 행동이다.
       const inspection = await request<Check>(
         `/api/pipelines/${PIPELINE}/check?dataset_id=${encodeURIComponent(dataset.id)}`
       );
       if (revision === datasetSelectionRevision.current &&
           selectedDatasetId.current === dataset.id) setChecked(inspection);
     } catch (reason) {
-      setError(formatError(reason));
+      if (selectionRevision === datasetSelectionRevision.current &&
+          previousRunId === selectedRunId.current) setError(formatError(reason));
     } finally {
       setExampleBusy(false);
     }
