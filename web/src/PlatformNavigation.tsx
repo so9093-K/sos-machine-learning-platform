@@ -161,12 +161,15 @@ export function isModelsArea(tab: WorkspaceTab): boolean {
 }
 
 /** 전역 내비게이션이 아니라 모델 리소스 문맥 안에서 독립 기능을 탐색한다. */
-export function ModelAreaNavigation({ active, onNavigate }: {
+export function ModelAreaNavigation({ active, context, onNavigate }: {
   active: WorkspaceTab;
+  context: MLNavigationContext;
   onNavigate: (tab: WorkspaceTab) => void;
 }) {
   return <nav className="model-area-nav" aria-label="모델 관련 화면">
-    {modelTabs.map(item => <a key={item.tab} href={paths[item.tab]}
+    {modelTabs.map(item => <a key={item.tab}
+      href={contextPath(item.tab, nextNavigationContext(
+        { tab: active, resource: null, context }, item.tab))}
       aria-current={active === item.tab ? "page" : undefined}
       className="model-area-link"
       onClick={event => {

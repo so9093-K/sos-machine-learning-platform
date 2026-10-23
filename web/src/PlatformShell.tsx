@@ -1,7 +1,8 @@
 import { useEffect, type ReactNode } from "react";
 import type { Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
-import { PlatformNavigation, ModelAreaNavigation, isModelsArea, type WorkspaceTab } from "./PlatformNavigation";
+import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
+  type WorkspaceTab, type MLNavigationContext } from "./PlatformNavigation";
 
 const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: "WORKSPACE", title: "Workspace Overview", description: "Data · Research · Models · Operations" },
@@ -26,9 +27,10 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
 
 /** 모든 페이지에 공통인 탐색·인증 문맥을 업무 화면에서 분리한다. */
 export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfigure,
-  canInspectStorage, canViewAudit, dataSidebar, children }: {
+  canInspectStorage, canViewAudit, modelContext, dataSidebar, children }: {
   actor: Identity;
   section: WorkspaceTab;
+  modelContext: MLNavigationContext;
   onNavigate: (tab: WorkspaceTab) => void;
   onSignOut: () => void;
   canConfigure: boolean;
@@ -64,7 +66,8 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
           </div>
         </div>
       </header>
-      {isModelsArea(section) && <ModelAreaNavigation active={section} onNavigate={onNavigate} />}
+      {isModelsArea(section) && <ModelAreaNavigation active={section}
+        context={modelContext} onNavigate={onNavigate} />}
       {children}
       <footer>SOS · {label.eyebrow}<span>Dataset · Job · Artifact</span></footer>
     </main>
