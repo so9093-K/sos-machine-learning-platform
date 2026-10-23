@@ -36,3 +36,29 @@ jobs:
       - name: Build web TypeScript and Vite
         working-directory: web
         run: npm run build
+
+  api-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Prepare Python
+        run: uv python install 3.12
+      - name: Install Python dependencies
+        run: uv sync --locked --group dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install Web dependencies
+        working-directory: web
+        run: npm ci --no-audit
+      - name: Generate OpenAPI types
+        run: bash scripts/generate_api_types.sh
+      - name: Emit temporary generated types for PR synchronization
+        run: |
+          echo '__SOS_TYPES_BEGIN__'
+          base64 -w 4000 web/src/api.generated.ts
+          echo
+          echo '__SOS_TYPES_END__'
