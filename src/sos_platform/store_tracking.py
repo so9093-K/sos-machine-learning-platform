@@ -8,6 +8,22 @@ from .store_administration import now
 
 
 class TrackingStoreMixin:
+    def save_registry_version(self, model_id: str, name: str, version: str) -> None:
+        """Registry 식별자는 한 번만 확정한다. 다른 버전으로 조용히 바꾸지 않는다."""
+        with self.worker_ownership_connection() as db:
+            row = db.execute(text(
+                "SELECT registry_model,registry_version FROM model_revisions "
+                "WHERE id=:id FOR UPDATE"
+            ), {"id": model_id}).mappings().first()
+            if row is None or (row["registry_version"] is not None and (
+                row["registry_model"] != name or row["registry_version"] != version
+            )):
+                raise ValueError("Registry model binding conflict")
+            db.execute(text(
+                "UPDATE model_revisions SET registry_model=:name,registry_version=:version "
+                "WHERE id=:id"
+            ), {"name": name, "version": version, "id": model_id})
+
     def tracking_status(self, job_id: str) -> dict | None:
         """외부 URI·인증값 없이 전송 상태와 Run ID만 제공한다."""
         with self.connection() as db:

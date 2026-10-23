@@ -10,10 +10,12 @@ import math
 import time
 from collections.abc import Callable
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
+from .mlflow_registry import register_model_version
 
 
 class MLflowDeliveryError(Exception):
@@ -31,6 +33,27 @@ class MLflowClient:
     def __init__(self, settings: MLflowSettings):
         self.settings = settings
         self._opener = build_opener(_NoRedirect())
+
+    def get(self, endpoint: str, params: dict) -> dict:
+        """GET 응답도 POST와 동일하게 리다이렉트·크기·대기 시간을 제한한다."""
+        req = Request(
+            self.settings.endpoint + "/api/2.0/mlflow/" + endpoint + "?" + urlencode(params),
+            headers={"Authorization": f"Bearer {self.settings.token}"} if self.settings.token else {},
+            method="GET",
+        )
+        try:
+            with self._opener.open(req, timeout=self.settings.timeout_seconds) as response:
+                raw = response.read(1_048_577)
+            if len(raw) > 1_048_576:
+                raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+            result = json.loads(raw)
+            if not isinstance(result, dict):
+                raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+            return result
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            raise MLflowDeliveryError("SOS-MLFLOW-UNAVAILABLE") from exc
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID") from exc
 
     def post(self, endpoint: str, payload: dict) -> dict:
         """HTTP 리다이렉트를 거부하고 응답 크기·대기 시간을 제한한다."""
@@ -167,12 +190,19 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
         job = store.get_job(job_id)
         if job is None:
             raise MLflowDeliveryError("SOS-MLFLOW-SOURCE-MISSING")
-        send_to_mlflow(
+        run_id = send_to_mlflow(
             client,
             job,
             known_run_id=export["run_id"],
             remember_run=lambda value: store.save_tracking_run_id(job_id, value),
         )
+        if job["kind"] == "ml_train":
+            model_id = (job.get("result") or {}).get("model_revision_id")
+            model = store.get_model_revision(model_id) if model_id else None
+            if model is None:
+                raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
+            name, version = register_model_version(client, model, run_id)
+            store.save_registry_version(model_id, name, version)
     except MLflowDeliveryError as exc:
         store.finish_tracking_export(job_id, error_code=str(exc))
     except WorkerOwnershipLost:
