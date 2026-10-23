@@ -202,7 +202,10 @@ def _advance_one_run(store, run_id: str) -> bool:
         if job_id:
             job = store.get_job(job_id)
             if job and job["status"] in ("Queued", "Running") and not job["cancel_requested"]:
-                store.request_cancel(job_id, actor_id=run["owner_actor"])
+                store.request_cancel(
+                    job_id, actor_id=run["owner_actor"],
+                    actor_type=run["owner_actor_type"],
+                )
                 return True
             if job and job["status"] in ("Queued", "Running"):
                 return False

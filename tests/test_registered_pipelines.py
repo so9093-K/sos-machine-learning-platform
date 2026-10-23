@@ -27,6 +27,7 @@ class FakeStore:
             ))
         self.jobs = {}
         self.actor_types = {}
+        self.cancel_audit = []
         self.next_job = 0
         self.idempotency = {}
 
@@ -65,7 +66,8 @@ class FakeStore:
         self.actor_types[job_id] = actor_type
         return result
 
-    def request_cancel(self, job_id, *, actor_id):
+    def request_cancel(self, job_id, *, actor_id, actor_type="human"):
+        self.cancel_audit.append((job_id, actor_id, actor_type))
         self.jobs[job_id]["status"] = "Cancelled"
         return self.jobs[job_id]
 
@@ -214,3 +216,21 @@ def test_service_actor_type_is_preserved_for_pipeline_jobs():
     assert pipeline_runs.advance_run(store)
     job_id = pipeline_runs.get_run(store, run["id"])["job_ids"]["preflight"]
     assert store.actor_types[job_id] == "service"
+
+
+def test_pipeline_cancellation_preserves_human_and_service_actor_types():
+    for actor_type in ("human", "service"):
+        store = FakeStore()
+        owner = f"{actor_type}-owner"
+        run = pipeline_runs.create_run(
+            store, {"id": "cancel-data", "version": "v1"}, owner,
+            {"ready": True, "plan": None}, None, actor_type=actor_type,
+        )
+        assert pipeline_runs.advance_run(store)
+        job_id = pipeline_runs.get_run(store, run["id"])["job_ids"]["preflight"]
+        store.jobs[job_id]["status"] = "Running"
+        pipeline_runs.cancel_run(store, run["id"])
+        assert pipeline_runs.advance_run(store)
+        assert store.cancel_audit == [(job_id, owner, actor_type)]
+        assert pipeline_runs.advance_run(store)
+        assert pipeline_runs.get_run(store, run["id"])["status"] == "Cancelled"

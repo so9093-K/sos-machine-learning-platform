@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, formatError, request, submitJob } from "./api";
 import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
@@ -30,6 +30,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
   const [datasetId, setDatasetId] = useState(initialDatasetId);
   const [checked, setChecked] = useState<Check | null>(null);
   const [runId, setRunId] = useState(() => new URLSearchParams(window.location.search).get("run") ?? "");
+  const selectedRunId = useRef(runId);
   const [run, setRun] = useState<Run | null>(null);
   const [history, setHistory] = useState<Run[]>([]);
   const [rows, setRows] = useState<CandidatePage | null>(null);
@@ -58,10 +59,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
     async function refresh() {
       try {
         const next = await request<Run>(`/api/pipeline-runs/${encodeURIComponent(runId)}`);
-        if (active) setRun(next);
-        if (active && !terminal.has(next.status)) handle = setTimeout(() => void refresh(), 2400);
+        if (active && selectedRunId.current === runId) setRun(next);
+        if (active && selectedRunId.current === runId && !terminal.has(next.status)) {
+          handle = setTimeout(() => void refresh(), 2400);
+        }
       } catch (e) {
-        if (active) {
+        if (active && selectedRunId.current === runId) {
           setError(formatError(e));
           // 권한 거부·존재하지 않는 Run에는 반복 요청하지 않는다.
           const permanent = e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 429;
@@ -76,12 +79,13 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
     if (run?.status !== "Succeeded") return;
     let active = true;
     void request<CandidatePage>(`/api/pipeline-runs/${encodeURIComponent(run.id)}/candidates?limit=25`)
-      .then(page => { if (active) setRows(page); })
-      .catch(e => { if (active) setError(formatError(e)); });
+      .then(page => { if (active && selectedRunId.current === run.id) setRows(page); })
+      .catch(e => { if (active && selectedRunId.current === run.id) setError(formatError(e)); });
     return () => { active = false; };
   }, [run?.id, run?.status]);
   function selectRun(id: string) {
-    setRunId(id); setRows(null); setError("");
+    selectedRunId.current = id;
+    setRunId(id); setRun(null); setRows(null); setError(""); setBusy(false);
     window.history.replaceState(null, "", "/pipelines?run=" + encodeURIComponent(id));
   }
   async function loadMoreDatasets() {
@@ -114,25 +118,38 @@ export function PipelineWorkspace({ datasets, initialDatasetId, hasMoreDatasets,
   }
   async function cancel() {
     if (!run || terminal.has(run.status) || busy || !canCancel) return;
+    const requestedRunId = run.id;
     setBusy(true); setError("");
     try {
-      setRun(await request<Run>(
-        `/api/pipeline-runs/${encodeURIComponent(run.id)}/cancel`,
+      const updated = await request<Run>(
+        `/api/pipeline-runs/${encodeURIComponent(requestedRunId)}/cancel`,
         { method: "POST" },
-      ));
-    } catch (e) { setError(formatError(e)); }
-    finally { setBusy(false); }
+      );
+      if (selectedRunId.current === requestedRunId) setRun(updated);
+    } catch (e) {
+      if (selectedRunId.current === requestedRunId) setError(formatError(e));
+    } finally {
+      if (selectedRunId.current === requestedRunId) setBusy(false);
+    }
   }
   async function more() {
     if (!run || !rows?.next_cursor || busy) return;
+    const requestedRunId = run.id;
+    const resultId = rows.result_id;
+    const cursor = rows.next_cursor;
     setBusy(true); setError("");
     try {
       const next = await request<CandidatePage>(
-        `/api/pipeline-runs/${encodeURIComponent(run.id)}/candidates?limit=25&cursor=${encodeURIComponent(rows.next_cursor)}`
+        `/api/pipeline-runs/${encodeURIComponent(requestedRunId)}/candidates?limit=25&cursor=${encodeURIComponent(cursor)}`
       );
-      setRows(old => old ? { ...next, items: [...old.items, ...next.items] } : next);
-    } catch (e) { setError(formatError(e)); }
-    finally { setBusy(false); }
+      setRows(old => selectedRunId.current === requestedRunId &&
+        old?.result_id === resultId && next.result_id === resultId
+        ? { ...next, items: [...old.items, ...next.items] } : old);
+    } catch (e) {
+      if (selectedRunId.current === requestedRunId) setError(formatError(e));
+    } finally {
+      if (selectedRunId.current === requestedRunId) setBusy(false);
+    }
   }
   const selected = datasets.find(item => item.id === datasetId);
   const currentCheck = checked?.dataset_id === datasetId ? checked : null;
