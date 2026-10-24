@@ -373,6 +373,12 @@ def test_pipeline_candidate_evidence_and_legacy_result(monkeypatch, tmp_path):
     selected = api_pipelines._candidate_rows(store, run, 1, None, row_index=2)
     assert selected["items"][0]["row_index"] == 2
     assert selected["next_cursor"] is None
+    assert api_pipelines._candidate_rows(store, run, 1, None, row_index=0)["items"] == []
+    from fastapi import HTTPException
+    import pytest
+    with pytest.raises(HTTPException) as invalid:
+        api_pipelines._candidate_rows(store, run, 1, first["next_cursor"], row_index=2)
+    assert invalid.value.status_code == 422
 
     base.drop(["observed_at", "observation_id"]).write_parquet(parquet)
     previous = api_pipelines._candidate_rows(store, run, 1, None)

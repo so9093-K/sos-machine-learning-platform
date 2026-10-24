@@ -142,6 +142,8 @@ def _encode_cursor(rank: tuple[float, int]) -> str:
 
 
 def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None, row_index: int | None = None) -> dict:
+    if row_index is not None and cursor is not None:
+        raise HTTPException(status_code=422, detail="Candidate row lookup cannot use a page cursor")
     by_stage = {entry["name"]: entry["job"] for entry in run["stages"]}
     score_id = by_stage["test"]["result"]["scoring_result_id"]
     policy_id = by_stage["policy"]["result"]["policy_revision_id"]
