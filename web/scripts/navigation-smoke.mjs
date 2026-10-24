@@ -233,7 +233,7 @@ try {
       ],
     } },
   }));
-  assert.match(shapPreview, /모델 이상 점수에 대한 SHAP 기여도/);
+  assert.match(shapPreview, /점수 변화에 기여한 주요 Feature 1개 \(SHAP\)/);
   assert.match(shapPreview, /Feature 기여도 합/);
   assert.match(shapPreview, /주요 Feature 1개/);
   assert.match(shapPreview, /양수: 이상 점수를 높이는 방향/);
