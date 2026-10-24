@@ -190,10 +190,10 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
 /** 불변 결과의 실제 의미와 출처를 확인한 뒤 단계별 분석 근거를 제공한다. */
 export type PipelineAnalysisSection = "overview" | "training" | "calibration" | "test";
 export const PIPELINE_ANALYSIS_SECTIONS: Array<{ id: PipelineAnalysisSection; label: string; description: string }> = [
-  { id: "overview", label: "전체 개요", description: "구간 간 점수 비교" },
-  { id: "training", label: "Training", description: "학습과 모델 근거" },
-  { id: "calibration", label: "Calibration", description: "판정 기준 검토" },
-  { id: "test", label: "Test", description: "후보와 평가 결과" },
+  { id: "overview", label: "결과 한눈에", description: "학습과 탐지 분포" },
+  { id: "training", label: "학습 결과", description: "학습 데이터와 점수" },
+  { id: "calibration", label: "판정 기준", description: "검토 기준의 근거" },
+  { id: "test", label: "이상 탐지", description: "다른 구간의 후보" },
 ];
 export function PipelineEvidenceView({ evidence, run, onOpenResource,
   initialSection = "overview", onSectionChange, onInvestigateCandidates }: {
@@ -216,9 +216,8 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
     <div className="pipeline-section-heading">
       <div>
         <span className="eyebrow">ANALYSIS · 실행 근거와 결과 검토</span>
-        <h4>이번 Run의 분석 결과</h4>
-        <p>학습한 모델, Calibration에서 정한 기준, Test에 적용한 결과를
-          같은 Dataset 판본의 근거로 연결해 확인합니다.</p>
+        <h4>모델은 무엇을 학습했고, 무엇을 다르게 보았을까요?</h4>
+        <p>실제 학습 데이터와 다른 시간 구간의 점수를 비교하고, 두드러진 관측치의 근거를 살펴봅니다.</p>
       </div>
     </div>
     <nav className="pipeline-analysis-nav" aria-label="이 Run의 분석 근거 탐색">
@@ -234,7 +233,20 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
     {section === "overview" && <section className="pipeline-analysis-overview" aria-label="점수 요약 비교">
       <p className="hint">동일한 Run의 Train·Calibration·Test 점수 범위를 비교합니다.
         실제 구간별 점수 분포와 근거는 각 분석 영역에서 확인하세요.</p>
+      <div className="pipeline-lab-summary">
+        <div><span>모델 학습 관측치</span><strong>{format(trainRows)}건</strong></div>
+        <div><span>이상 후보의 판정 기준</span><strong>{format(policy.threshold)}</strong></div>
+        <div><span>새 시간 구간의 후보</span><strong>{format(metric(decision, "predicted_anomalies"))}건</strong></div>
+      </div>
       <ScoreRangeChart evidence={evidence} />
+      <div className="pipeline-lab-distributions">
+        <section><h5>학습 데이터 점수 분포</h5>
+          <ScoreHistogram summary={train} title="Training" /></section>
+        <section><h5>기준을 정한 데이터의 분포</h5>
+          <ScoreHistogram summary={cal} title="Calibration" threshold={policy.threshold} /></section>
+        <section><h5>다른 시간 구간의 점수 분포</h5>
+          <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} /></section>
+      </div>
     </section>}
     <div className="pipeline-analysis-phases">
       {section === "training" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-training-evidence">
