@@ -627,7 +627,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           setCandidateScoreRange(range);
           moveFocusTo("pipeline-candidates-heading");
         }} />
-    </section>
+    </section>}
     {hasActiveAnalysis && <section className="panel pipeline-results"
       aria-label={run?.status === "Succeeded" ? "이상 후보 탐구 및 실행 근거" : undefined}
       aria-labelledby={run?.status === "Succeeded" ? undefined : "pipeline-run-heading"}>
