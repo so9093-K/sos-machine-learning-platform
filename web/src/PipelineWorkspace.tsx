@@ -742,3 +742,4 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       </details>
     </section>
   </div>;
+}
