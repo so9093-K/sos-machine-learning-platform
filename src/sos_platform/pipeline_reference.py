@@ -8,6 +8,7 @@ import polars as pl
 
 from .datasets import pinned_scan_dataset
 from .ml_input import NUMERIC
+from .ml_observation_identity import validate_observation_identity
 from .ml_temporal_split import select_temporal_partition
 
 PIPELINE_ID = "activity-anomaly-if"
@@ -79,8 +80,13 @@ def inspect_dataset(store, dataset: dict, *, full: bool = False) -> dict:
             isinstance(schema["ts"], pl.Datetime) and schema["ts"].time_zone
         ):
             issues.append("ts는 명시적 시간대가 있는 문자열 또는 Datetime이어야 합니다.")
+        identity_column = "sos_observation_id" if "sos_observation_id" in schema else None
+        if identity_column and schema[identity_column] != pl.String:
+            issues.append("sos_observation_id는 UUIDv4 문자열이어야 합니다.")
         if not issues and full:
             try:
+                if identity_column:
+                    validate_observation_identity(source, column=identity_column)
                 event = _event_time(source)
                 milliseconds = event.dt.epoch("ms")
                 stats = source.select(
@@ -100,6 +106,7 @@ def inspect_dataset(store, dataset: dict, *, full: bool = False) -> dict:
                     )
                     plan = {
                         "timestamp_column": "ts",
+                        "observation_id_column": identity_column,
                         "train_end": train_end.isoformat(),
                         "calibration_end": calibration_end.isoformat(),
                         "partition_sizes": {
@@ -108,8 +115,12 @@ def inspect_dataset(store, dataset: dict, *, full: bool = False) -> dict:
                             "test": evidence["test_rows"],
                         },
                     }
-            except (ValueError, pl.exceptions.PolarsError, OverflowError):
-                issues.append("시간 분할이 불가능합니다. ts의 UTC 오프셋·유효값·기간별 행을 확인하세요.")
+            except (ValueError, pl.exceptions.PolarsError, OverflowError) as exc:
+                issues.append(
+                    "관측치 ID가 유효하지 않습니다. 중복·형식·결측값을 확인하세요."
+                    if identity_column and "Observation identity" in str(exc)
+                    else "시간 분할이 불가능합니다. ts의 UTC 오프셋·유효값·기간별 행을 확인하세요."
+                )
     return {
         "pipeline_id": PIPELINE_ID, "pipeline_version": PIPELINE_VERSION,
         "dataset_id": dataset["id"], "dataset_version": dataset["version"],

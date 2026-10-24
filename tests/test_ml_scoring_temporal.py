@@ -105,8 +105,31 @@ def test_time_scoped_calibration_test_results_are_disjoint(scoring_env, tmp_path
     assert test_rows["row_index"].to_list() == [0, 1]
     assert cal_rows["anomaly_score"].to_list() == pytest.approx([0.004, 0.005, 0.006])
     assert test_rows["anomaly_score"].to_list() == pytest.approx([0.007, 0.008])
+    assert test_rows["observed_at"].to_list() == [
+        "2026-01-01T07:00:00Z", "2026-01-01T08:00:00Z"
+    ]
     assert scorer.batch_lengths == [3, 2]
     assert not any(p.name.startswith("ml-score-") for p in tmp_path.iterdir())
+
+
+def test_scoped_score_retains_uuid4_identity_with_time(scoring_env, tmp_path):
+    """서로 다른 입력 범위를 점수화해도 식별자·시각·Feature 행 위치를 보존한다."""
+    from uuid import UUID
+    store, _, dataset, _, frames = scoring_env
+    identities = [str(UUID(int=(1 << 76) | (2 << 62) | i, version=4)) for i in range(9)]
+    frames[0] = frames[0].with_columns(
+        pl.Series("sos_observation_id", identities)
+    )
+    requested = spec("test")
+    requested["observation_id_column"] = "sos_observation_id"
+    path = tmp_path / "identified-test.parquet"
+    ml_scoring.run_dataset_scoring(store, dataset, requested, path)
+    result = pl.read_parquet(path)
+    assert result["observation_id"].to_list() == identities[7:]
+    assert result["observed_at"].to_list() == [
+        "2026-01-01T07:00:00Z", "2026-01-01T08:00:00Z"
+    ]
+    assert result["features"].struct.field("count").to_list() == [7.0, 8.0]
 
 
 def test_scoring_requires_same_dataset_revision_and_boundaries(scoring_env, tmp_path):

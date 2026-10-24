@@ -96,6 +96,8 @@ class PipelineCandidateOut(BaseModel):
     row_index: int
     anomaly_score: float
     features: dict[str, float | int | None]
+    observed_at: str | None = None
+    observation_id: str | None = None
 
 
 class PipelineCandidatesOut(BaseModel):
@@ -176,22 +178,30 @@ def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None) -> 
         has_more = len(selected) > limit
         page = selected[:limit]
         selected_ids = {idx for _, idx in page}
-        feature_map: dict[int, dict] = {}
+        # 기존 불변 결과에는 신규 관측 정보가 없으므로 선택적으로 읽는다.
+        columns = ["row_index", "features"]
+        for extra in ("observed_at", "observation_id"):
+            if extra in reader.schema_arrow.names:
+                columns.append(extra)
+        detail_map: dict[int, dict] = {}
         if selected_ids:
-            for batch in reader.iter_batches(
-                batch_size=4096, columns=["row_index", "features"]
-            ):
+            for batch in reader.iter_batches(batch_size=4096, columns=columns):
                 indices = batch.column(0).to_pylist()
-                values = batch.column(1)
                 for position, idx in enumerate(indices):
                     if idx in selected_ids:
-                        feature_map[int(idx)] = values[position].as_py()
-                if len(feature_map) == len(selected_ids):
+                        detail_map[int(idx)] = {
+                            "features": batch.column(1)[position].as_py(),
+                            **{name: batch.column(offset)[position].as_py()
+                               for offset, name in enumerate(columns[2:], start=2)},
+                        }
+                if len(detail_map) == len(selected_ids):
                     break
     return {
         "items": [
             {"row_index": idx, "anomaly_score": -rank,
-             "features": feature_map.get(idx, {})}
+             "features": detail_map.get(idx, {}).get("features", {}),
+             "observed_at": detail_map.get(idx, {}).get("observed_at"),
+             "observation_id": detail_map.get(idx, {}).get("observation_id")}
             for rank, idx in page
         ],
         "threshold": threshold,
