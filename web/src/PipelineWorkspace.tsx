@@ -365,7 +365,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       );
       setRows(old => selectedRunId.current === requestedRunId &&
         old?.result_id === resultId && next.result_id === resultId
-        ? { ...next, items: [...old.items, ...next.items] } : old);
+        ? { ...next, items: [
+            ...old.items,
+            ...next.items.filter(item => !old.items.some(existing => existing.row_index === item.row_index)),
+          ] } : old);
     } catch (e) {
       if (selectedRunId.current === requestedRunId) setError(formatError(e));
     } finally {
