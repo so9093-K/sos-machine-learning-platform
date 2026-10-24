@@ -96,6 +96,8 @@ class PipelineCandidateOut(BaseModel):
     row_index: int
     anomaly_score: float
     features: dict[str, float | int | None]
+    observed_at: str | None = None
+    observation_id: str | None = None
 
 
 class PipelineCandidatesOut(BaseModel):
@@ -139,7 +141,7 @@ def _encode_cursor(rank: tuple[float, int]) -> str:
     ).decode("ascii").rstrip("=")
 
 
-def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None) -> dict:
+def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None, row_index: int | None = None) -> dict:
     by_stage = {entry["name"]: entry["job"] for entry in run["stages"]}
     score_id = by_stage["test"]["result"]["scoring_result_id"]
     policy_id = by_stage["policy"]["result"]["policy_revision_id"]
@@ -167,31 +169,41 @@ def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None) -> 
                 for index, score in zip(indices, scores, strict=True):
                     if not math.isfinite(score) or score < threshold:
                         continue
+                    if row_index is not None and int(index) != row_index:
+                        continue
                     rank = (-float(score), int(index))
                     if after is None or rank > after:
                         yield rank
 
         # 원본 점수 파일은 불변이므로 동일 cursor로 결과 순서가 바뀌지 않는다.
-        selected = heapq.nsmallest(limit + 1, eligible())
-        has_more = len(selected) > limit
+        selected = heapq.nsmallest(1 if row_index is not None else limit + 1, eligible())
+        has_more = row_index is None and len(selected) > limit
         page = selected[:limit]
         selected_ids = {idx for _, idx in page}
-        feature_map: dict[int, dict] = {}
+        # 기존 불변 결과에는 신규 관측 정보가 없으므로 선택적으로 읽는다.
+        columns = ["row_index", "features"]
+        for extra in ("observed_at", "observation_id"):
+            if extra in reader.schema_arrow.names:
+                columns.append(extra)
+        detail_map: dict[int, dict] = {}
         if selected_ids:
-            for batch in reader.iter_batches(
-                batch_size=4096, columns=["row_index", "features"]
-            ):
+            for batch in reader.iter_batches(batch_size=4096, columns=columns):
                 indices = batch.column(0).to_pylist()
-                values = batch.column(1)
                 for position, idx in enumerate(indices):
                     if idx in selected_ids:
-                        feature_map[int(idx)] = values[position].as_py()
-                if len(feature_map) == len(selected_ids):
+                        detail_map[int(idx)] = {
+                            "features": batch.column(1)[position].as_py(),
+                            **{name: batch.column(offset)[position].as_py()
+                               for offset, name in enumerate(columns[2:], start=2)},
+                        }
+                if len(detail_map) == len(selected_ids):
                     break
     return {
         "items": [
             {"row_index": idx, "anomaly_score": -rank,
-             "features": feature_map.get(idx, {})}
+             "features": detail_map.get(idx, {}).get("features", {}),
+             "observed_at": detail_map.get(idx, {}).get("observed_at"),
+             "observation_id": detail_map.get(idx, {}).get("observation_id")}
             for rank, idx in page
         ],
         "threshold": threshold,
@@ -268,11 +280,12 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
     def pipeline_candidates(
         run_id: str, limit: int = Query(default=25, ge=1, le=100),
         cursor: str | None = Query(default=None, max_length=160),
+        row_index: int | None = Query(default=None, ge=0),
         actor: Actor = READ_JOB,
     ):
         run = _visible(actor, get_run(store, run_id))
         if run["status"] != "Succeeded":
             raise HTTPException(status_code=409, detail="Pipeline run is not completed")
-        return _candidate_rows(store, run, limit, cursor)
+        return _candidate_rows(store, run, limit, cursor, row_index=row_index)
 
     return router

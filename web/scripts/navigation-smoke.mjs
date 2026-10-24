@@ -204,6 +204,20 @@ try {
   const { PipelineAnalysis, PipelineEvidenceView, validatePipelineEvidence } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
   const { PipelineCandidateInvestigation, SensitivityChart, matchingExplanationJob } =
     await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
+  const candidateWithContext = renderToStaticMarkup(
+    React.createElement(PipelineCandidateInvestigation, {
+      candidate: {
+        row_index: 8, anomaly_score: 0.85, features: { ratio_outbound_traffic: 0.9 },
+        observed_at: "2026-01-01T02:00:00Z",
+        observation_id: "18c4be49-18c4-4f32-9894-8c3bfabbd008",
+      },
+      scoringResultId: "score-1", modelRevisionId: "model-1",
+      canRun: false, canCancel: false, onOpenResource: () => {},
+    })
+  );
+  assert.match(candidateWithContext, /2026-01-01T02:00:00Z/);
+  assert.match(candidateWithContext, /Train 참조 중앙값/);
+  assert.match(candidateWithContext, /실제 사건을 확정하지 않습니다/);
   // 인접 점수 구간의 경계값은 한 구간에만 속해야 한다.
   const scoreItems = [
     { row_index: 1, anomaly_score: 0.1, features: {} },

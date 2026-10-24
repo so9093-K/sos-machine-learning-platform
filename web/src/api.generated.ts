@@ -2601,6 +2601,10 @@ export interface components {
             features: {
                 [key: string]: number | null;
             };
+            /** Observation Id */
+            observation_id?: string | null;
+            /** Observed At */
+            observed_at?: string | null;
             /** Row Index */
             row_index: number;
         };
@@ -5060,6 +5064,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string | null;
+                row_index?: number | null;
             };
             header?: never;
             path: {

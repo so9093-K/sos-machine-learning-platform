@@ -146,7 +146,8 @@ def _stage_job_spec(store, run: dict, stage: str) -> tuple[str, dict]:
         return "ml_score", {
             "model_revision_id": model_id,
             "model_owner_actor": owner, "dataset_version": dataset_version,
-            "label_column": None, "observation_id_column": None,
+            "label_column": None,
+            "observation_id_column": plan.get("observation_id_column"),
             "temporal_scope": {
                 **time_scope, "partition": "calibration" if stage == "calibration" else "test"
             },

@@ -8,6 +8,7 @@ import polars as pl
 
 from .datasets import pinned_scan_dataset
 from .ml_input import NUMERIC
+from .ml_observation_identity import validate_observation_identity
 from .ml_temporal_split import select_temporal_partition
 
 PIPELINE_ID = "activity-anomaly-if"
@@ -34,6 +35,7 @@ def definition() -> dict:
             "등록된 Feature 이름과 숫자형 자료형이 일치하는 Dataset만 지원합니다.",
             "시간 컬럼 ts는 명시적 UTC 오프셋이 있는 RFC3339 텍스트 또는 timezone-aware Timestamp여야 합니다.",
             "이상 후보는 실제 이상 사건이나 탐지 정확도의 증명이 아닙니다.",
+            "sos_observation_id가 있으면 고정 Dataset 내 유효한 UUIDv4를 요구합니다. 시각은 고유 ID가 아닙니다.",
             "모델은 각 사용자의 Dataset으로 새로 학습하며 타인의 모델·데이터를 공유하지 않습니다.",
             "임계값은 SOS의 선형 보간 분위수와 경계 포함 판정(>=)을 사용하며, 외부 참조 스크립트와 후보 수가 다를 수 있습니다.",
         ],
@@ -79,8 +81,13 @@ def inspect_dataset(store, dataset: dict, *, full: bool = False) -> dict:
             isinstance(schema["ts"], pl.Datetime) and schema["ts"].time_zone
         ):
             issues.append("ts는 명시적 시간대가 있는 문자열 또는 Datetime이어야 합니다.")
+        identity_column = "sos_observation_id" if "sos_observation_id" in schema else None
+        if identity_column and schema[identity_column] != pl.String:
+            issues.append("sos_observation_id는 UUIDv4 문자열이어야 합니다.")
         if not issues and full:
             try:
+                if identity_column:
+                    validate_observation_identity(source, column=identity_column)
                 event = _event_time(source)
                 milliseconds = event.dt.epoch("ms")
                 stats = source.select(
@@ -100,6 +107,7 @@ def inspect_dataset(store, dataset: dict, *, full: bool = False) -> dict:
                     )
                     plan = {
                         "timestamp_column": "ts",
+                        "observation_id_column": identity_column,
                         "train_end": train_end.isoformat(),
                         "calibration_end": calibration_end.isoformat(),
                         "partition_sizes": {
@@ -108,8 +116,12 @@ def inspect_dataset(store, dataset: dict, *, full: bool = False) -> dict:
                             "test": evidence["test_rows"],
                         },
                     }
-            except (ValueError, pl.exceptions.PolarsError, OverflowError):
-                issues.append("시간 분할이 불가능합니다. ts의 UTC 오프셋·유효값·기간별 행을 확인하세요.")
+            except (ValueError, pl.exceptions.PolarsError, OverflowError) as exc:
+                issues.append(
+                    "관측치 ID가 유효하지 않습니다. 중복·형식·결측값을 확인하세요."
+                    if identity_column and "Observation identity" in str(exc)
+                    else "시간 분할이 불가능합니다. ts의 UTC 오프셋·유효값·기간별 행을 확인하세요."
+                )
     return {
         "pipeline_id": PIPELINE_ID, "pipeline_version": PIPELINE_VERSION,
         "dataset_id": dataset["id"], "dataset_version": dataset["version"],
