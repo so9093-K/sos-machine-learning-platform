@@ -68,6 +68,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [rows, setRows] = useState<CandidatePage | null>(null);
   const [candidateError, setCandidateError] = useState("");
   const [candidateReload, setCandidateReload] = useState(0);
+  const [candidateScoreRange, setCandidateScoreRange] = useState<{ lower: number; upper: number } | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(initialCandidateRowIndex ?? null);
   const [busy, setBusy] = useState(false);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
@@ -104,6 +105,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       setRunId(initialRunId);
       setRun(null);
       setRows(null);
+      setCandidateScoreRange(null);
       // URL의 Run과 선택 후보는 하나의 탐색 상태다. 이전 Run의 행만 지운 채
       // 이미 URL에 있는 새 Run의 후보 선택을 잃어버리지 않는다.
       setSelectedCandidate(initialCandidateRowIndex ?? null);
@@ -197,7 +199,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       (run?.id === id ? run.dataset_id : datasetId);
     selectedRunId.current = id;
     pendingRunFocus.current = id || null;
-    setRunId(id); setRun(null); setRows(null); setSelectedCandidate(null); setError(""); setBusy(false);
+    setRunId(id); setRun(null); setRows(null); setSelectedCandidate(null); setError(""); setBusy(false); setCandidateScoreRange(null);
     setCandidateError("");
     setRunLoadError("");
     onSelectRun(id, runDatasetId);
@@ -338,7 +340,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const completed = run?.stages ?? [];
   const trainingJob = completed.find(item => item.name === "training")?.job;
   const registrationPending = isRegistrationPending(run);
-  const activeCandidate = rows?.items.find(item => item.row_index === selectedCandidate);
+  const shownCandidates = (rows?.items ?? []).filter(item =>
+    !candidateScoreRange || (item.anomaly_score >= candidateScoreRange.lower &&
+      item.anomaly_score <= candidateScoreRange.upper));
+  const activeCandidate = shownCandidates.find(item => item.row_index === selectedCandidate);
   const activeDataset = run ? datasets.find(item => item.id === run.dataset_id) : null;
   const modelRevisionId = resultId(completed.find(item => item.name === "training")?.job, "model_revision_id");
   const testScoringId = resultId(completed.find(item => item.name === "test")?.job, "scoring_result_id");
@@ -569,7 +574,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       </div>
       <PipelineAnalysis run={run} onOpenResource={onOpenResource}
         initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection}
-        onInvestigateCandidates={() => moveFocusTo("pipeline-candidates-heading")} />
+        onInvestigateCandidates={() => moveFocusTo("pipeline-candidates-heading")}
+        onSelectTestScoreRange={(lower, upper) => {
+          setCandidateScoreRange({ lower, upper });
+          moveFocusTo("pipeline-candidates-heading");
+        }} />
       <div className="pipeline-actions">
         <button type="button" onClick={() =>
           moveFocusTo("pipeline-candidates-heading")}>이상 후보 상세 검토 →</button>
@@ -632,8 +641,19 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </div>}
         {run.status === "Succeeded" && <section className="pipeline-candidates" aria-labelledby="pipeline-candidates-heading">
           <h4 id="pipeline-candidates-heading" tabIndex={-1}>이상 후보 탐구</h4>
-          <p>보정 구간에서 정한 점수 경계 이상인 Test 결과를 순서대로 표시합니다.
-            결과의 행 번호는 Scoring 내부 번호이며 원본 관측치 식별자가 아닙니다.</p>
+          <p>학습에서 정한 검토 기준을 넘은 관측치를 점수 순으로 살펴봅니다.
+            행 번호는 원본 활동 ID가 아닌 분석 결과 내부 번호입니다.</p>
+          <div className="pipeline-actions">
+            <button type="button" className="secondary" onClick={() =>
+              onNavigate("understanding", run.dataset_id)}>분석에 사용한 데이터 살펴보기 →</button>
+          </div>
+          {candidateScoreRange && <div className="pipeline-next-step" role="status">
+            <strong>선택한 점수 범위: {candidateScoreRange.lower.toPrecision(4)} ~ {candidateScoreRange.upper.toPrecision(4)}</strong>
+            <p>현재 불러온 후보만 이 범위로 좁혀 보여줍니다. 실제 판정 기준이나 전체 후보 수는 바뀌지 않습니다.</p>
+            <button type="button" className="secondary" onClick={() => setCandidateScoreRange(null)}>
+              점수 필터 해제
+            </button>
+          </div>}
           {!rows && candidateError && <div className="pipeline-readiness-blocked" role="alert">
             <strong>후보 조회에 실패했습니다.</strong>
             <p>{candidateError}</p>
@@ -648,13 +668,16 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           {rows && <>
             {rows.items.length === 0 && <p>현재 조회에서 이상 후보가 없습니다.</p>}
             {rows.items.length > 0 && <p className="pipeline-result-count">
-              점수 순으로 현재 불러온 후보 {count(rows.items.length)}건 · 전체 후보 수는 위 Test 분석에서 확인
+              현재 불러온 {count(rows.items.length)}건 중 표시 {count(shownCandidates.length)}건 · 전체 후보 수는 위 분석 결과에서 확인
             </p>}
+            {rows.items.length > 0 && shownCandidates.length === 0 &&
+              <p className="hint">현재 불러온 후보에서 이 점수 구간과 일치하는 항목이 없습니다.
+                필터를 해제하거나 다음 후보를 불러와 확인하세요.</p>}
             {rows.items.length > 0 && <div className="pipeline-candidate-workspace">
               <div className="pipeline-candidate-list">
                 <div className="table-scroll"><table>
               <thead><tr><th>결과 행 번호</th><th>이상 점수</th><th>선택·확인</th></tr></thead>
-              <tbody>{rows.items.map(item => <tr key={item.row_index}
+              <tbody>{shownCandidates.map(item => <tr key={item.row_index}
                 className={selectedCandidate === item.row_index ? "pipeline-candidate-selected" : ""}>
                 <td>{count(item.row_index)}</td>
                 <td>{item.anomaly_score.toPrecision(6)}</td>

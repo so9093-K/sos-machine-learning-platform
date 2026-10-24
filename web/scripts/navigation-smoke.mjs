@@ -339,6 +339,12 @@ try {
   const trainingReport = reportFor("training");
   assert.match(trainingReport, /Training — 무엇을 학습했는가/);
   assert.match(trainingReport, /Training 점수 구간별 전체 관측 수/);
+  const interactiveOverview = renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
+    run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
+    onSelectTestScoreRange: () => {},
+  }));
+  assert.match(interactiveOverview, /이 구간 후보 보기/);
+  assert.match(interactiveOverview, /후보 탐색/);
   const calibrationReport = reportFor("calibration");
   assert.match(calibrationReport, /Calibration — 기준은 어떻게 정했는가/);
   assert.match(calibrationReport, /0.5%/);
