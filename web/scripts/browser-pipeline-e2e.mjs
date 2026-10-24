@@ -26,15 +26,12 @@ let socket = null;
 let nextId = 0;
 const waiting = new Map();
 
-async function until(predicate, label, timeoutMs = 30000, failFast = false) {
+async function until(predicate, label, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
     try { if (await predicate()) return; }
-    catch (error) {
-      if (failFast) throw error;
-      last = error;
-    }
+    catch (error) { last = error; }
     await sleep(600);
   }
   throw new Error(`시간 초과: ${label}${last ? " · " + last.message : ""}`);
@@ -120,6 +117,7 @@ try {
 
   await until(() => hasText("입력 구조 확인 완료"), "예제 입력 적합성 확인", 60000);
   assert(await buttonClick("이 데이터로 분석 실행하기"), "Pipeline 실행 제출 실패");
+  let terminalPipeline = null;
   await until(async () => {
     const state = await evaluate(`(() => ({
       status: document.querySelector(".pipeline-context-facts strong")?.textContent?.trim() ?? "",
@@ -127,10 +125,15 @@ try {
       complete: Boolean(document.getElementById("pipeline-analysis-first-heading")),
     }))()`);
     if (/\b(Failed|Cancelled)\b/.test(state.status)) {
-      throw new Error(`Pipeline ${state.status}${state.error ? " · " + state.error : ""}`);
+      terminalPipeline = state;
+      return true;
     }
     return state.complete;
-  }, "Pipeline Worker 학습·보정·Test 완료", 420000, true);
+  }, "Pipeline Worker 학습·보정·Test 완료", 420000);
+  if (terminalPipeline) {
+    throw new Error(`Pipeline ${terminalPipeline.status}${
+      terminalPipeline.error ? " · " + terminalPipeline.error : ""}`);
+  }
   await until(() => hasText("생성한 모델을 다른 데이터에 적용하기"),
     "생성 모델 활용 영역", 60000);
   for (const [i, title] of [

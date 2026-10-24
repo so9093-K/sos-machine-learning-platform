@@ -19,7 +19,7 @@ export function MLTrackingStatus({ jobId }: Props) {
         const next = await request<MLflowExportStatus>(
           `/api/ml/tracking/jobs/${encodeURIComponent(jobId)}`,
         );
-        if (active) setStatus(next);
+        if (active) { setStatus(next); setError(""); }
         if (active && !TERMINAL.has(next.state)) timer = setTimeout(() => void poll(), 5000);
       } catch (exc) {
         if (active) {
