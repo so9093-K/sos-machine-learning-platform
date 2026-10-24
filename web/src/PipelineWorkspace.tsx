@@ -692,10 +692,19 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
               </div>
               <div className="pipeline-candidate-detail">
                 {selectedCandidate !== null && !activeCandidate && <div className="pipeline-next-step" role="status">
-                  <strong>선택했던 후보 #{count(selectedCandidate)}를 찾는 중입니다.</strong>
-                  <p>선택한 후보는 현재 불러온 점수 순위 범위에 없습니다.
-                    {rows.next_cursor ? " 다음 후보를 불러오면 계속 확인할 수 있습니다." :
-                    " 이 Run에서 해당 후보를 찾지 못했습니다."}</p>
+                  {candidateScoreRange && rows.items.some(item => item.row_index === selectedCandidate)
+                    ? <>
+                      <strong>선택한 후보가 현재 점수 필터 밖에 있습니다.</strong>
+                      <p>필터를 해제하면 선택했던 후보를 다시 확인할 수 있습니다.</p>
+                      <button type="button" className="secondary" onClick={() =>
+                        setCandidateScoreRange(null)}>점수 필터 해제</button>
+                    </>
+                    : <>
+                      <strong>선택했던 후보 #{count(selectedCandidate)}를 찾는 중입니다.</strong>
+                      <p>선택한 후보는 현재 불러온 점수 순위 범위에 없습니다.
+                        {rows.next_cursor ? " 다음 후보를 불러오면 계속 확인할 수 있습니다." :
+                          " 이 분석에서 해당 후보를 찾지 못했습니다."}</p>
+                    </>}
                 </div>}
                 {activeCandidate ? <PipelineCandidateInvestigation
                   key={run.id + ":" + rows.result_id + ":" + activeCandidate.row_index}
@@ -751,16 +760,20 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     <section className="panel pipeline-history-panel" aria-label="이전 학습 결과">
       <details className="pipeline-history" open={!hasActiveAnalysis}>
         <summary id="pipeline-history-heading" tabIndex={-1}>이전 학습 결과 ({count(history.length)}건 조회됨)</summary>
+        {historyError && <div className="pipeline-readiness-blocked" role="alert">
+          <p>이전 학습 결과 조회에 실패했습니다: {historyError}</p>
+          <button type="button" className="secondary" onClick={() =>
+            setListReload(n => n + 1)}>이전 결과 다시 조회</button>
+        </div>}
         <div className="ml-resource-list">
           {history.map(item => <button type="button" className="platform-list-link ghost" key={item.id}
             onClick={() => selectRun(item.id)}>
             {datasets.find(data => data.id === item.dataset_id)?.name ?? item.dataset_id.slice(0, 12)}
             {" · "}{item.status}{" · "}{new Date(item.created_at).toLocaleString("ko-KR")}
           </button>)}
-          {history.length === 0 && <p className="muted">{
-            historyError ? "Run 목록을 확인하지 못했습니다. 상단에서 다시 조회하세요." :
-              "이전 학습 결과가 없습니다. 새 분석을 실행할 수 있습니다."
-          }</p>}
+          {history.length === 0 && !historyError && <p className="muted">
+            이전 학습 결과가 없습니다. 예제로 모델을 학습해 볼 수 있습니다.
+          </p>}
         </div>
       </details>
     </section>
