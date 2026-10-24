@@ -260,6 +260,13 @@ def _advance_one_run(store, run_id: str) -> bool:
             _update_run(store, run["id"], status="Failed", error_code="SOS-ML-MODEL-INVALID")
             return True
         if not model.get("registry_version"):
+            # 관리 서버가 애초에 설정되지 않은 실행은 영원히 기다리지 않는다.
+            if store.tracking_status(job_id) is None:
+                _update_run(
+                    store, run["id"], status="Failed",
+                    error_code="SOS-MLFLOW-NOT-CONFIGURED",
+                )
+                return True
             return False
     if stage == "preflight":
         result = job.get("result") or {}
