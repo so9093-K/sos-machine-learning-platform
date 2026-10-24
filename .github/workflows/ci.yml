@@ -21,6 +21,12 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - name: Prepare Python
         run: uv python install 3.12
+      - name: Resolve SHAP dependency lock (temporary review probe)
+        run: |
+          uv lock
+          echo SHAP_UV_LOCK_PATCH_BEGIN
+          git diff -- uv.lock
+          echo SHAP_UV_LOCK_PATCH_END
       - name: Install development dependencies
         run: uv sync --locked --group dev
       - name: Run configured product validation
