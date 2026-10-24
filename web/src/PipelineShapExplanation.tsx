@@ -211,10 +211,9 @@ export function PipelineShapExplanation({
       <button type="button" className="secondary" onClick={() => setLookupRetry(n => n + 1)}>
         작업 이력 다시 조회</button>
     </div>}
-    {canRun && (!job || terminal.has(job.status)) &&
-      <button type="button" className={result ? "secondary pipeline-shap-recalculate" : ""}
-        disabled={busy || lookup !== "ready"} onClick={() => void submit()}>
-        {busy ? "SHAP 분석 요청 중…" : result ? "SHAP 다시 계산" :
+    {canRun && !result && (!job || terminal.has(job.status)) &&
+      <button type="button" disabled={busy || lookup !== "ready"} onClick={() => void submit()}>
+        {busy ? "SHAP 분석 요청 중…" :
           job ? "SHAP 다시 계산 →" : "SHAP 기여도 계산 →"}
       </button>}
     {!job && lookup === "ready" && olderJobsExist && <p className="hint">
@@ -246,6 +245,10 @@ export function PipelineShapExplanation({
     {result && <><ShapContributionChart result={result} />
       <button type="button" className="secondary"
         onClick={() => onOpenResource("explanation", result.id)}>SHAP 결과 판본 보기 →</button>
+      {canRun && <button type="button" className="secondary pipeline-shap-recalculate"
+        disabled={busy || lookup !== "ready"} onClick={() => void submit()}>
+        {busy ? "SHAP 분석 요청 중…" : "SHAP 다시 계산"}
+      </button>}
     </>}
   </div>;
 }

@@ -456,7 +456,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     </section>}
     {error && <div className="alert error" role="alert">{error}
       <button className="ghost" onClick={() => setError("")}>닫기</button></div>}
-    <details className="pipeline-advanced" open={Boolean(datasetId && !runId && !exampleBusy)}>
+    {!hasActiveAnalysis && <details className="pipeline-advanced" open={Boolean(datasetId && !exampleBusy)}>
       <summary>내 데이터로 학습하거나 분석 방법 자세히 보기</summary>
     <section className="panel pipeline-start" aria-labelledby="pipeline-start-title">
       <div className="pipeline-section-heading">
@@ -584,7 +584,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         {!canRun && <p>현재 계정은 Job 제출 권한이 없습니다.</p>}
       </div>}
     </section>
-    </details>
+    </details>}
 
     {hasActiveAnalysis && <section className="panel pipeline-run-context" aria-labelledby="pipeline-current-run-heading">
       <div className="pipeline-run-context-header">
@@ -735,7 +735,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                     </option>)}
                   </select>
                 </label>
-                <details className="pipeline-candidate-table" key={selectedCandidate ?? "none"}>
+                <details className="pipeline-candidate-table">
                   <summary>조회한 후보의 전체 점수 목록 보기</summary>
                 <div className="table-scroll"><table>
               <thead><tr><th>결과 행 번호</th><th>이상 점수</th><th>선택·확인</th></tr></thead>
@@ -749,9 +749,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                 </button></td>
               </tr>)}</tbody>
                 </table></div>
-                {rows.next_cursor && <button type="button" className="secondary" disabled={busy}
-                  onClick={() => void more()}>다음 후보 25건 보기</button>}
                 </details>
+                {rows.next_cursor && <button type="button" className="secondary"
+                  disabled={busy} onClick={() => void more()}>다음 후보 25건 불러오기</button>}
               </div>
               <div className="pipeline-candidate-detail">
                 {selectedCandidate !== null && !activeCandidate && <div className="pipeline-next-step" role="status">

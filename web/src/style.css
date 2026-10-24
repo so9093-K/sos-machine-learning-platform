@@ -708,7 +708,7 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .pipeline-candidate-table { border:1px solid var(--sos-border); border-radius:9px; padding:12px; }
 .pipeline-candidate-table > summary { cursor:pointer; font-weight:600; }
 .pipeline-candidate-table .table-scroll { max-height:340px; margin-top:12px; }
-.pipeline-candidate-table > button { margin-top:12px; }
+.pipeline-candidate-list > button { justify-self:start; }
 .pipeline-candidate-detail { width:100%; }
 .pipeline-candidate-detail .pipeline-candidate-inspection { padding:clamp(16px,2.5vw,26px); }
 .pipeline-candidate-observation { grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); }
@@ -718,7 +718,7 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .pipeline-feature-details .table-scroll { margin-top:10px; }
 .pipeline-shap-explanation { display:grid; gap:12px; min-width:0; padding-top:14px; border-top:1px solid var(--sos-border); }
 .pipeline-shap-explanation > button { justify-self:start; }
-.pipeline-shap-recalculate { order:5; }
+.pipeline-shap-recalculate { margin-top:4px; }
 .pipeline-shap-job-status { color:var(--sos-muted); }
 .pipeline-shap-result { display:grid; gap:12px; min-width:0; }
 .pipeline-shap-result .chart,

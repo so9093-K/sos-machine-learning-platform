@@ -51,20 +51,31 @@ export function DataChart({ option, ariaLabel, onDataClick }: {
         textStyle: { color: text },
       },
     });
-    // 기존 차트 옵션은 유지하고, 공통 임계선에만 테마 대비를 적용한다.
-    const themedSeries = Array.isArray(option.series) ? option.series.map(series => {
-      if (!series || typeof series !== "object" || !("markLine" in series)) return series;
-      const current = series.markLine as {
-        lineStyle?: Record<string, unknown>;
-      } | undefined;
-      if (!current) return series;
-      return { ...series, markLine: {
-        ...current,
-        lineStyle: { color: CHART_COLORS.threshold, width: 2, type: "dashed",
-          ...current.lineStyle },
-      } };
-    }) : option.series;
-    chart.setOption({ ...option, series: themedSeries });
+    // 개별 차트와 ECharts media의 baseOption 모두 동일한 기준선 대비를 적용한다.
+    // Calibration 임계값과 SHAP의 0 기준선은 의미가 달라 색상도 구분한다.
+    const themedSeries = (series: echarts.EChartsCoreOption["series"]) =>
+      Array.isArray(series) ? series.map(item => {
+        if (!item || typeof item !== "object" || !("markLine" in item)) return item;
+        const line = item.markLine as {
+          data?: Array<{ xAxis?: number; yAxis?: number }>;
+          lineStyle?: Record<string, unknown>;
+        } | undefined;
+        if (!line) return item;
+        const zeroBaseline = line.data?.some(entry => entry.xAxis === 0 || entry.yAxis === 0);
+        return { ...item, markLine: { ...line, lineStyle: {
+          color: zeroBaseline ? border : CHART_COLORS.threshold,
+          width: zeroBaseline ? 1.5 : 2, type: "dashed",
+          ...line.lineStyle,
+        } } };
+      }) : series;
+    if (option.baseOption && typeof option.baseOption === "object") {
+      const base = option.baseOption as echarts.EChartsCoreOption;
+      chart.setOption({
+        ...option, baseOption: { ...base, series: themedSeries(base.series) },
+      });
+    } else {
+      chart.setOption({ ...option, series: themedSeries(option.series) });
+    }
     chart.on("click", params => {
       if (typeof params.dataIndex === "number" && Number.isInteger(params.dataIndex)) {
         clickHandler.current?.(params.dataIndex);
