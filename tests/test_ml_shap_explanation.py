@@ -67,7 +67,7 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
 
     from sos_platform import ml_explanation
     monkeypatch.setattr(ml_explanation, "_verified_scoring_row", lambda *_: {
-        "anomaly_score": 1.0,
+        "anomaly_score": 3.0,
         "features": {"a": 2.0, "b": 1.0, "c": 1.5},
     })
     monkeypatch.setattr(ml_explanation, "load_trusted_isolation_forest",
@@ -87,4 +87,4 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
     assert original["additive_attribution"] is False
     assert shap["method"] == "permutation_shap_median_v1"
     assert shap["additive_attribution"] is True
-    assert shap["score"] == original["score"] == 1.0
+    assert shap["score"] == original["score"] == 3.0

@@ -217,7 +217,7 @@ try {
   );
   assert.match(candidateWithContext, /2026-01-01T02:00:00Z/);
   assert.match(candidateWithContext, /Train 참조 중앙값/);
-  assert.match(candidateWithContext, /SHAP 기여도 계산/);
+  assert.match(candidateWithContext, /모델 판단 근거 자세히 보기 \(SHAP\)/);
   const { ShapContributionChart } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
   const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
