@@ -158,7 +158,36 @@ try {
     "/pipelines?dataset=dataset-from-data");
 
   // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
-  const { PipelineWorkspace } = await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
+  const { PipelineWorkspace, isRegistrationPending } =
+    await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
+  // Training Job 성공만으로 Run 전체가 성공한 것처럼 표시하지 않는다.
+  const pendingRun = {
+    status: "Running", current_stage: "training",
+    stages: [{ name: "training", job: { status: "Succeeded" } }],
+  };
+  assert.equal(isRegistrationPending(pendingRun), true);
+  assert.equal(isRegistrationPending({
+    ...pendingRun, stages: [{ name: "training", job: { status: "Running" } }],
+  }), false);
+  assert.equal(isRegistrationPending({ ...pendingRun, current_stage: "calibration" }), false);
+  assert.equal(isRegistrationPending({ ...pendingRun, status: "Succeeded" }), false);
+  assert.equal(isRegistrationPending(null), false);
+
+  const { MLTrackingDetails } = await vite.ssrLoadModule("/src/MLTrackingStatus.tsx");
+  // Retry는 학습 실패가 아니며, 등록 오류 코드를 소비자가 확인할 수 있어야 한다.
+  const retryTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
+    status: { state: "Retry", attempts: 2, last_error_code: "SOS-MLFLOW-HTTP-503" },
+    error: "",
+  }));
+  assert.match(retryTracking, /MLflow 기록·등록 재시도 대기 · 시도 2회/);
+  assert.match(retryTracking, /SOS-MLFLOW-HTTP-503/);
+  assert.match(retryTracking, /SOS Job 결과는 바뀌지 않으며/);
+  const recoveredTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
+    status: { state: "Succeeded", run_id: "mlflow-run-1" }, error: "",
+  }));
+  assert.match(recoveredTracking, /MLflow 기록 완료 · Run ID mlflow-run-1/);
+  assert.doesNotMatch(recoveredTracking, /role="alert"|SOS-MLFLOW-HTTP-503/);
+
   const { PipelineAnalysis, PipelineEvidenceView, validatePipelineEvidence } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
   const { PipelineCandidateInvestigation, SensitivityChart, matchingExplanationJob } =
     await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");

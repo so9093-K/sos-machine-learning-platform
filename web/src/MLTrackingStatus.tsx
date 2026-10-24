@@ -19,7 +19,7 @@ export function MLTrackingStatus({ jobId }: Props) {
         const next = await request<MLflowExportStatus>(
           `/api/ml/tracking/jobs/${encodeURIComponent(jobId)}`,
         );
-        if (active) setStatus(next);
+        if (active) { setStatus(next); setError(""); }
         if (active && !TERMINAL.has(next.state)) timer = setTimeout(() => void poll(), 5000);
       } catch (exc) {
         if (active) {
@@ -32,6 +32,13 @@ export function MLTrackingStatus({ jobId }: Props) {
     return () => { active = false; if (timer) clearTimeout(timer); };
   }, [jobId]);
 
+  return <MLTrackingDetails status={status} error={error} />;
+}
+
+/** 조회 결과의 대기·재시도·완료와 통신 오류를 분리해 표시한다. */
+export function MLTrackingDetails({ status, error }: {
+  status: MLflowExportStatus | null; error: string;
+}) {
   return <div className="steps" aria-label="MLflow 추적 상태">
     <strong>MLflow 실행 기록</strong>
     {status && <p role="status">

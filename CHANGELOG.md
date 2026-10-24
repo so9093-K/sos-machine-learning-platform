@@ -2,11 +2,12 @@
 
 ## Unreleased
 
+- 첫 IF Pipeline에서 학습 완료 후 MLflow Registry 등록·재시도 대기를 실행 중 학습과 구분해 안내하고, 일시적인 상태 조회 오류가 복구된 뒤 이전 오류를 남기지 않도록 수정했습니다.
+
 - MLflow Experiment·Run·Model Registry를 관리 정본으로 연결하고, SOS 웹에서 소유 모델 판본 및 Run 조회·비교를 제공합니다. 모델 등록 완료와 Job 성공을 구별하며, Scoring 제출 전에 Registry 버전·아티팩트 메타데이터를 대조합니다. 로컬 개발 Compose에 MLflow를 추가했습니다.
 
 - 웹 홈을 실행 가능한 Data Explorer·활동 이상 탐지 Pipeline의 진입점과 이전 Pipeline 재개 중심으로 변경하고, 미구현 Research / Model Experience Preview 메뉴·컴포넌트를 제거했습니다. 모델·학습·Scoring·정책·평가·설명의 독립 API 및 결과 직접 주소는 유지합니다.
 - 첫 IF Pipeline용 44개 Feature·UTC 시각의 재현 가능한 합성 Dataset을 사용자가 명시적으로 등록·검사할 수 있게 했습니다. Training·Calibration·Test의 실행 전 발견성, 완료 후 결과 접근, 생성 모델의 별도 Dataset Scoring을 Pipeline 안에서 연결했습니다. 학습·Scoring 실행은 동일 작업이 아니며 예제는 실제 이상 사건의 근거가 아닙니다.
-- 실제 브라우저와 API·Worker·저장소의 사용자 흐름을 확인하는 격리형 Compose 통합 검증을 PR CI에 추가했습니다.
 
 - 첫 IF Pipeline의 분석 Run·Dataset 판본을 상단에 표시하고, 완료 Run의 Training·Calibration·Test를 넓은 화면에서 선택해 검토할 수 있게 했습니다. 이전 Run 선택 시 해당 결과로 이동하고, Test 후보 목록·상세·Feature 민감도 수치를 같은 작업 공간에서 확인할 수 있습니다. 분석 영역과 후보 번호는 Run URL에 보존되어 독립 ML 판본 확인 후에도 복원되며, Dataset 참조만 보정할 때에도 선택을 유지합니다. 기존 설명 Job 조회·재시도·권한 기반 취소 요청, Catalog·이전 Run 목록 조회 오류 복구도 개선했습니다. 원본 관측 시각·ID가 보존되지 않은 첫 IF 결과는 추적 가능하다고 오인시키지 않습니다.
 
@@ -49,7 +50,7 @@
 
 - Dataset 기반 Isolation Forest 비동기 학습과 불변 모델 판본, 독립 Scoring·Decision Policy·Evaluation·Explanation 결과 및 이력 조회, 학습 설정 비교를 추가했습니다. 학습 점수와 독립 평가 결과는 구별하며, 평가 지표의 데이터 선택 한계를 표시합니다.
 
-- API·Worker 공통 Python 이미지, Web 개발 이미지와 Docker Compose 단일 구성(`app` 프로필)을 추가했습니다. 공개 `make up`은 컨테이너 실행으로 통합하고, 호스트 실행기와 로그 릴레이를 제거하고 브라우저 E2E도 고유 Compose 프로젝트에서 실행합니다. Token 인증을 요구하고 데이터 볼륨은 보존합니다.
+- API·Worker 공통 Python 이미지, Web 개발 이미지와 Docker Compose 단일 구성(`app` 프로필)을 추가했습니다. 공개 `make up`은 컨테이너 실행으로 통합하고, 호스트 실행기와 로그 릴레이를 제거했습니다. Token 인증을 요구하고 데이터 볼륨은 보존합니다.
 
 - `make up`은 개발 기본값을 유지하고 API를 직접 실행할 때는 인증 모드를 명시해야 합니다. 실행 서버는 `sos_platform.api:create_app --factory`를 사용해 앱 import와 기동을 구별하며, OpenAPI 생성과 테스트 수집이 전역 인증 모드를 설정하지 않도록 분리했습니다. 기존 API가 실행 중인 상태에서 인증 모드·토큰 목록이 바뀌면 `make up`은 불일치를 알리고 `make restart`를 안내합니다. 기존 Token RBAC·Dataset/Job 소유권과 API 계약은 유지합니다.
 
