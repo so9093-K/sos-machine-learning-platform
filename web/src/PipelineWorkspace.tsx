@@ -701,6 +701,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                 {activeCandidate ? <PipelineCandidateInvestigation
                   key={run.id + ":" + rows.result_id + ":" + activeCandidate.row_index}
                   candidate={activeCandidate} scoringResultId={rows.result_id}
+                  modelRevisionId={modelRevisionId}
                   canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />
                   : selectedCandidate === null ? <div className="pipeline-next-step" role="status">
                     <strong>검토할 후보를 선택하세요.</strong>
