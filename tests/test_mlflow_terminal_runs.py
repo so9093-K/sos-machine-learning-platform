@@ -25,7 +25,10 @@ def test_failed_training_is_recorded_without_fake_success_metrics():
     job = {
         "id": "job-1", "kind": "ml_train", "status": "Failed",
         "dataset_id": "dataset-1", "owner_actor": "alice",
-        "spec": {"params": {"n_estimators": 10}, "experiment_title": "ablation"},
+        "spec": {
+            "params": {"n_estimators": 10}, "experiment_title": "ablation",
+            "dataset_version": "sha256-dataset-v1",
+        },
         "result": None,
     }
     remembered = []
@@ -37,6 +40,9 @@ def test_failed_training_is_recorded_without_fake_success_metrics():
     assert updates == [{"run_id": "run-1", "status": "FAILED"}]
     metrics = [payload for name, payload in client.requests if name == "runs/log-batch"]
     assert metrics[0]["metrics"] == []
+    logged_params = {item["key"]: item["value"] for item in metrics[0]["params"]}
+    assert logged_params["sos.dataset_version"] == "sha256-dataset-v1"
+    assert logged_params["sos.job_kind"] == "ml_train"
 
 
 def test_cancelled_job_is_not_reported_as_finished_success():
