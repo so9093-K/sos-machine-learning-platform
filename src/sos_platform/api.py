@@ -31,7 +31,7 @@ from .discovery import overview as discovery_overview
 from .discovery import preview as discovery_preview
 from .discovery import profile as discovery_profile
 from .discovery import query_dataset
-from .errors import ERRORS, PlatformError
+from .errors import ERRORS, PlatformError, RuntimeConfigurationError
 from .examples import list_examples, use_example
 from .file_formats import upload_options_from_mime
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
@@ -855,7 +855,12 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         return status or {"job_id": job_id, "state": "Disabled"}
 
     def _management_client() -> MLflowClient:
-        settings = MLflowSettings.from_env()
+        try:
+            settings = MLflowSettings.from_env()
+        except RuntimeConfigurationError as exc:
+            raise HTTPException(
+                status_code=503, detail="MLflow management configuration is invalid"
+            ) from exc
         if settings is None:
             raise HTTPException(status_code=503, detail="MLflow management is unavailable")
         return MLflowClient(settings)
