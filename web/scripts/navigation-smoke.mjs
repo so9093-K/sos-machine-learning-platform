@@ -341,7 +341,7 @@ try {
     run: completedRun, evidence: resultEvidence, initialSection, onOpenResource: () => {},
   }));
   const report = reportFor("overview");
-  assert.match(report, /이 Run의 분석 근거 탐색/);
+  assert.match(report, /현재 분석 근거 탐색/);
   assert.match(report, /aria-pressed="true"/);
   assert.match(report, /실제 최소·평균·최대 이상 점수/);
   assert.match(report, /Training 점수 구간별 전체 관측 수/);

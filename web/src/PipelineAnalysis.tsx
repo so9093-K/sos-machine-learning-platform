@@ -238,7 +238,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
         <p>실제 학습 데이터와 다른 시간 구간의 점수를 비교하고, 두드러진 관측치의 근거를 살펴봅니다.</p>
       </div>
     </div>
-    <nav className="pipeline-analysis-nav" aria-label="이 Run의 분석 근거 탐색">
+    <nav className="pipeline-analysis-nav" aria-label="현재 분석 근거 탐색">
       {PIPELINE_ANALYSIS_SECTIONS.map(item => <button key={item.id} type="button"
         className={section === item.id ? "pipeline-analysis-nav-item active" : "pipeline-analysis-nav-item"}
         aria-pressed={section === item.id} onClick={() => {
@@ -386,7 +386,7 @@ export function PipelineAnalysis({
   }
   const current = state?.key === key ? state : null;
   if (current?.error) return <section className="pipeline-readiness-blocked" role="alert">
-    <strong>이번 Run의 통합 분석 근거를 완전히 검증하지 못했습니다.</strong>
+    <strong>현재 분석의 근거를 완전히 검증하지 못했습니다.</strong>
     <p>{current.error}</p>
     <p>일부 결과 판본을 조회할 수 없거나 참조가 일치하지 않습니다.
       이 상태에서는 전체 분석 보고서를 완성된 결과로 표시하지 않습니다.

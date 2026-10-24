@@ -608,7 +608,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <button type="button" onClick={() =>
           moveFocusTo("pipeline-candidates-heading")}>이상 후보 상세 검토 →</button>
         <button type="button" className="secondary" onClick={() =>
-          selectRun("")}>다른 Dataset으로 새 분석 →</button>
+          selectRun("")}>새 모델 학습하기 →</button>
       </div>
     </section>}
     {hasActiveAnalysis && <section className="panel pipeline-results" aria-labelledby="pipeline-run-heading">
@@ -627,14 +627,14 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <p>{runLoadError}</p>
           <div className="pipeline-actions">
             <button type="button" className="secondary" onClick={() =>
-              setRunReload(n => n + 1)}>이 Run 다시 조회하기</button>
+              setRunReload(n => n + 1)}>이 분석 다시 조회하기</button>
             <button type="button" className="secondary" disabled={exampleBusy} onClick={() => selectRun("")}>
               새 분석 준비하기 →
             </button>
           </div>
         </>}
         {!runId && <p>위에서 Dataset을 선택하고 입력 구조를 확인한 뒤 명시적으로 실행하거나,
-          아래의 이전 Run을 열어 보세요.</p>}
+          아래의 이전 학습 결과를 열어 보세요.</p>}
       </div>}
       {run && <>
         {run.error_code && <p className="pipeline-run-failure-code" role="alert">
@@ -642,7 +642,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         {run.status === "Failed" && <div className="pipeline-readiness-blocked" role="alert">
           <strong>분석이 완료되지 않았습니다.</strong>
           <p>위 오류 코드와 단계별 근거를 확인하세요. 입력 조건 문제라면 Dataset 내용을 확인하고,
-            다른 Dataset이나 수정된 판본으로 다시 검사해 새 Run을 제출할 수 있습니다.</p>
+            다른 Dataset이나 수정된 판본으로 다시 검사해 새 분석을 시작할 수 있습니다.</p>
           <button type="button" className="secondary" onClick={() => onNavigate("understanding", datasetId)}>
             Dataset 확인 →
           </button>
