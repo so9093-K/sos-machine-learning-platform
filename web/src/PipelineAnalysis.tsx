@@ -119,8 +119,9 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
   const option = {
     aria: { enabled: true },
     tooltip: { trigger: "item" },
-    grid: { left: 60, right: 38, top: 26, bottom: 55 },
+    grid: { left: 58, right: 28, top: 32, bottom: 57 },
     xAxis: { type: "value" as const, name: "이상 점수",
+      axisLabel: { formatter: (value: number) => value.toFixed(3) },
       min: threshold === undefined ? edges[0] : Math.min(edges[0], threshold),
       max: threshold === undefined ? edges[edges.length - 1]
         : Math.max(edges[edges.length - 1], threshold) },
@@ -130,7 +131,7 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
       data: counts.map((n, i) => [(edges[i] + edges[i + 1]) / 2, n]),
       ...(threshold === undefined ? {} : { markLine: {
         silent: true, symbol: "none",
-        label: { formatter: "Calibration 기준", position: "insideEndTop" as const },
+        label: { show: false },
         data: [{ xAxis: threshold }],
       } }),
     }],
@@ -146,6 +147,9 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
           });
         }
       } : undefined} />
+    {threshold !== undefined && <p className="pipeline-threshold-note">
+      Calibration 임계값 <strong>{threshold.toPrecision(6)}</strong> · 점선은 기준 점수입니다.
+    </p>}
     {onSelectRange && <p className="hint">그래프 막대나 아래 집계 표에서 점수 구간을 선택하면
       현재 불러온 이상 후보를 해당 범위로 좁혀볼 수 있습니다.</p>}
     <p className="hint">{title}의 실제 점수를 전체 조회해 집계한 {counts.length}개 고정 폭 구간입니다.
@@ -183,7 +187,8 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
     legend: { data: labels, bottom: 0 },
     grid: { left: 72, right: 35, top: 36, bottom: 75 },
     xAxis: { type: "category" as const, data: ["Train", "Calibration", "Test"] },
-    yAxis: { type: "value" as const, scale: true, name: "이상 점수" },
+    yAxis: { type: "value" as const, scale: true, name: "이상 점수",
+      axisLabel: { formatter: (value: number) => value.toFixed(3) } },
     series: keys.map((key, i) => ({
       type: "scatter" as const,
       name: labels[i],
@@ -191,13 +196,15 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
       data: summaries.map(s => metric(s, key)),
       ...(i === 1 ? { markLine: {
         silent: true, symbol: "none",
-        label: { formatter: "Calibration 경계", position: "insideEndTop" as const },
+        label: { show: false },
         data: [{ yAxis: evidence.policy.threshold }],
       } } : {}),
     })),
   };
   return <div className="pipeline-score-chart">
     <DataChart option={option} ariaLabel="Train, Calibration, Test의 실제 최소·평균·최대 이상 점수와 Calibration 임계값 비교" />
+    <p className="pipeline-threshold-note">Calibration 임계값
+      <strong>{evidence.policy.threshold.toPrecision(6)}</strong> · 점선은 Test에 적용한 기준입니다.</p>
     <p className="hint">위 비교 그래프는 세 구간의 최솟값·평균·최댓값만 표현합니다.
       전체 점수 분포는 아래의 단계별 히스토그램에서 확인할 수 있습니다.
       표시된 임계값은 Calibration에서 정해 Test에 적용한 기준입니다.</p>
@@ -231,13 +238,6 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
   const calibrationRows = run.input_plan?.partition_sizes.calibration;
   const testRows = run.input_plan?.partition_sizes.test;
   return <div className="pipeline-analysis-report" aria-label="Pipeline 결과 분석">
-    <div className="pipeline-section-heading">
-      <div>
-        <span className="eyebrow">ANALYSIS · 실행 근거와 결과 검토</span>
-        <h4>모델은 무엇을 학습했고, 무엇을 다르게 보았을까요?</h4>
-        <p>실제 학습 데이터와 다른 시간 구간의 점수를 비교하고, 두드러진 관측치의 근거를 살펴봅니다.</p>
-      </div>
-    </div>
     <nav className="pipeline-analysis-nav" aria-label="현재 분석 근거 탐색">
       {PIPELINE_ANALYSIS_SECTIONS.map(item => <button key={item.id} type="button"
         className={section === item.id ? "pipeline-analysis-nav-item active" : "pipeline-analysis-nav-item"}
@@ -256,7 +256,14 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
         <div><span>이상 후보의 판정 기준</span><strong>{format(policy.threshold)}</strong></div>
         <div><span>새 시간 구간의 후보</span><strong>{format(metric(decision, "predicted_anomalies"))}건</strong></div>
       </div>
+      {onInvestigateCandidates && <div className="pipeline-overview-next">
+        <button type="button" onClick={onInvestigateCandidates}>
+          검토 후보 {format(metric(decision, "predicted_anomalies"))}건 살펴보기 →
+        </button>
+      </div>}
       <ScoreRangeChart evidence={evidence} />
+      <details className="pipeline-distribution-details">
+        <summary>Train·Calibration·Test의 전체 점수 분포 자세히 비교</summary>
       <div className="pipeline-lab-distributions">
         <section><h5>학습 데이터 점수 분포</h5>
           <ScoreHistogram summary={train} title="Training" /></section>
@@ -265,6 +272,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
         <section><h5>다른 시간 구간의 점수 분포</h5>
           <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} onSelectRange={onSelectTestScoreRange} /></section>
       </div>
+      </details>
     </section>}
     <div className="pipeline-analysis-phases">
       {section === "training" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-training-evidence">

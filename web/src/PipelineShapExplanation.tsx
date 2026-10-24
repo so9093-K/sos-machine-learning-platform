@@ -1,6 +1,6 @@
 /** 기존 독립 설명 Job을 SHAP 방법으로 요청하고 해당 결과를 탐구한다. */
 import { useEffect, useRef, useState } from "react";
-import { DataChart } from "./DataChart";
+import { CHART_COLORS, DataChart } from "./DataChart";
 import { formatError, request, submitJob } from "./api";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary } from "./types";
@@ -42,29 +42,41 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
     Math.abs(b.shap_value) - Math.abs(a.shap_value));
   const key = (value: unknown) => typeof value === "number" && Number.isFinite(value)
     ? value.toLocaleString("ko-KR", { maximumFractionDigits: 7 }) : "미정의";
-  const top = contributions.slice(0, 12).reverse();
+  const top = contributions.slice(0, 8).reverse();
   const option = {
-    aria: { enabled: true },
-    tooltip: { trigger: "axis" },
-    grid: { left: "26%", right: "10%", top: 16, bottom: 40 },
-    xAxis: { type: "value" as const, name: "SHAP 점수 기여도" },
-    yAxis: { type: "category" as const,
-      data: top.map(x => x.feature),
-      axisLabel: { width: 132, overflow: "truncate" as const } },
-    series: [{ type: "bar" as const, name: "기준 점수 대비 기여",
-      data: top.map(x => x.shap_value) }],
+    baseOption: {
+      aria: { enabled: true },
+      tooltip: { trigger: "axis" },
+      grid: { left: 240, right: 45, top: 20, bottom: 44 },
+      xAxis: { type: "value" as const, name: "점수 기여", nameGap: 24,
+        axisLabel: { formatter: (value: number) => value.toFixed(3) } },
+      yAxis: { type: "category" as const,
+        data: top.map(x => x.feature),
+        axisLabel: { width: 210, overflow: "truncate" as const, fontSize: 12 } },
+      series: [{ type: "bar" as const, name: "기준 점수 대비 기여",
+        data: top.map(x => x.shap_value),
+        itemStyle: { color: (params: { value: number }) =>
+          params.value >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative },
+        markLine: { silent: true, symbol: "none", label: { show: false },
+          data: [{ xAxis: 0 }] } }],
+    },
+    media: [{ query: { maxWidth: 620 }, option: {
+      grid: { left: 153, right: 20, top: 20, bottom: 52 },
+      yAxis: { axisLabel: { width: 127, overflow: "truncate" as const, fontSize: 11 } },
+    } }],
   };
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
-    <h6>모델 이상 점수에 대한 SHAP 기여도</h6>
+    <h6>점수 변화에 기여한 주요 Feature {top.length}개 (SHAP)</h6>
     <p>기준 점수 <strong>{key(baseline)}</strong> +
       Feature 기여도 합 <strong>{key(shapSum)}</strong> =
       이상 점수 <strong>{key(score)}</strong></p>
     <p className="hint">계산 결과의 재구성 오차 {key(residual)} ·
       저장된 모델 점수와 가법적 설명 결과를 검증했습니다.</p>
-    <DataChart option={option} ariaLabel="실제 SOS 이상 점수 기준 Feature별 Permutation SHAP 기여도" />
-    <p className="hint">양수는 단일 기준값 대비 모델 이상 점수를 높이는 방향, 음수는 낮추는 방향입니다.
-      기준은 Train Feature 중앙값으로 구성한 합성 관측치 1행입니다.
-      전체 Train 분포나 실제 사건의 원인·확률을 뜻하지 않습니다.</p>
+    <p className="pipeline-shap-legend"><span className="pipeline-shap-positive">양수: 이상 점수를 높이는 방향</span>
+      <span className="pipeline-shap-negative">음수: 이상 점수를 낮추는 방향</span></p>
+    <DataChart option={option} ariaLabel="실제 SOS 이상 점수 기준 주요 8개 Feature의 양수·음수 Permutation SHAP 기여도" />
+    <p className="hint">Train Feature 중앙값으로 구성한 합성 관측치 한 행을 기준으로 합니다.
+      실제 이상 사건의 원인이나 확률을 의미하지 않습니다.</p>
     <details><summary>전체 SHAP 값과 계산 근거</summary>
       <p>방법: Permutation SHAP · 출력: -score_samples · 배경 행 {key(output.baseline_row_count)}개 ·
         순열 반복 {key(output.permutation_rounds)}회 · Seed {key(output.sampling_seed)} ·
@@ -199,16 +211,22 @@ export function PipelineShapExplanation({
       <button type="button" className="secondary" onClick={() => setLookupRetry(n => n + 1)}>
         작업 이력 다시 조회</button>
     </div>}
-    {canRun && (!job || terminal.has(job.status)) && <button type="button"
-      disabled={busy || lookup !== "ready"} onClick={() => void submit()}>
-      {busy ? "SHAP 분석 요청 중…" : job ? "SHAP 다시 계산 →" : "SHAP 기여도 계산 →"}
-    </button>}
+    {canRun && !result && (!job || terminal.has(job.status)) &&
+      <button type="button" disabled={busy || lookup !== "ready"} onClick={() => void submit()}>
+        {busy ? "SHAP 분석 요청 중…" :
+          job ? "SHAP 다시 계산 →" : "SHAP 기여도 계산 →"}
+      </button>}
     {!job && lookup === "ready" && olderJobsExist && <p className="hint">
       최근 100건에 기존 SHAP 작업이 없습니다. 오래된 결과는 독립 설명 작업 이력에서 확인하세요.
     </p>}
     {!canRun && <p className="hint">현재 계정은 설명 Job을 제출할 권한이 없습니다.</p>}
-    {job && <p role="status">SHAP 작업: {job.status}
-      {job.cancel_requested ? " · 취소 요청됨" : ""}{job.error_code ? " · 오류 " + job.error_code : ""}
+    {job && <p role="status" className="pipeline-shap-job-status">
+      {job.status === "Succeeded" ? "SHAP 분석 완료" :
+        job.status === "Running" ? "SHAP 분석 중" :
+        job.status === "Queued" ? "SHAP 분석 대기 중" :
+        job.status === "Cancelled" ? "SHAP 분석 취소됨" : "SHAP 분석 실패"}
+      {job.cancel_requested ? " · 취소 요청됨" : ""}
+      {job.error_code ? " · 오류 " + job.error_code : ""}
     </p>}
     {job && !terminal.has(job.status) && canCancel && <button type="button"
       className="secondary" disabled={busy || job.cancel_requested} onClick={() => void cancel()}>
@@ -227,6 +245,10 @@ export function PipelineShapExplanation({
     {result && <><ShapContributionChart result={result} />
       <button type="button" className="secondary"
         onClick={() => onOpenResource("explanation", result.id)}>SHAP 결과 판본 보기 →</button>
+      {canRun && <button type="button" className="secondary pipeline-shap-recalculate"
+        disabled={busy || lookup !== "ready"} onClick={() => void submit()}>
+        {busy ? "SHAP 분석 요청 중…" : "SHAP 다시 계산"}
+      </button>}
     </>}
   </div>;
 }
