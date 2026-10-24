@@ -222,7 +222,7 @@ export function PipelineShapExplanation({
         job.status === "Cancelled" ? "SHAP 분석 취소됨" : "SHAP 분석 실패"}
       {job.cancel_requested ? " · 취소 요청됨" : ""}
       {job.error_code ? " · 오류 " + job.error_code : ""}
-    </p>
+    </p>}
     {job && !terminal.has(job.status) && canCancel && <button type="button"
       className="secondary" disabled={busy || job.cancel_requested} onClick={() => void cancel()}>
       {job.cancel_requested ? "취소 처리 중" : "SHAP 계산 취소 요청"}
