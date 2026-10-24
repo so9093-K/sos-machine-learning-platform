@@ -22,6 +22,12 @@ const stageLabel: Record<string,string> = {
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 const count = (value: number) => value.toLocaleString("ko-KR");
 
+/** Pipeline과 Training Job의 상태가 모두 일치할 때에만 Registry 대기로 본다. */
+export function isRegistrationPending(run: Run | null): boolean {
+  return run?.status === "Running" && run.current_stage === "training" &&
+    (run.stages ?? []).some(stage => stage.name === "training" && stage.job?.status === "Succeeded");
+}
+
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
 export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, examplesLoading, onUseExample }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
@@ -319,8 +325,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const current = catalog.find(item => item.id === PIPELINE);
   const completed = run?.stages ?? [];
   const trainingJob = completed.find(item => item.name === "training")?.job;
-  const registrationPending = run?.status === "Running" && run.current_stage === "training" &&
-    trainingJob?.status === "Succeeded";
+  const registrationPending = isRegistrationPending(run);
   const activeCandidate = rows?.items.find(item => item.row_index === selectedCandidate);
   const activeDataset = run ? datasets.find(item => item.id === run.dataset_id) : null;
   const modelRevisionId = resultId(completed.find(item => item.name === "training")?.job, "model_revision_id");
