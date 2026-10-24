@@ -94,9 +94,11 @@ export function validatePipelineEvidence(run: PipelineRun, evidence: Evidence): 
 }
 
 /** 저장된 고정 폭 구간 빈도만 표시하며 행 표본을 임의로 확대하지 않는다. */
+export type PipelineScoreRange = { lower: number; upper: number; includeUpper: boolean };
+
 function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
   summary: Record<string, unknown>; title: string; threshold?: number;
-  onSelectRange?: (lower: number, upper: number) => void;
+  onSelectRange?: (range: PipelineScoreRange) => void;
 }) {
   const raw = summary.histogram;
   const hist = raw && typeof raw === "object" ? raw as Record<string, unknown> : null;
@@ -137,7 +139,12 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
     <DataChart option={option} ariaLabel={title + " 점수 구간별 전체 관측 수" +
       (threshold === undefined ? "" : " 및 Calibration 임계값")}
       onDataClick={onSelectRange ? index => {
-        if (index >= 0 && index < counts.length) onSelectRange(edges[index], edges[index + 1]);
+        if (index >= 0 && index < counts.length) {
+          onSelectRange({
+            lower: edges[index], upper: edges[index + 1],
+            includeUpper: index === counts.length - 1,
+          });
+        }
       } : undefined} />
     <p className="hint">{title}의 실제 점수를 전체 조회해 집계한 {counts.length}개 고정 폭 구간입니다.
       {hist?.constant_scores ? "모든 점수가 같아 그래프 표시 범위만 확장했습니다. " : ""}
@@ -150,7 +157,9 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
           <td>{edges[i].toPrecision(8)}</td><td>{edges[i + 1].toPrecision(8)}</td>
           <td>{Number(n).toLocaleString("ko-KR")}</td>
           {onSelectRange && <td><button type="button" className="secondary"
-            onClick={() => onSelectRange(edges[i], edges[i + 1])}>이 구간 후보 보기</button></td>}
+            onClick={() => onSelectRange({
+              lower: edges[i], upper: edges[i + 1], includeUpper: i === counts.length - 1,
+            })}>이 구간 후보 보기</button></td>}
         </tr>)}</tbody>
       </table></div>
     </details>
@@ -207,7 +216,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
   initialSection?: PipelineAnalysisSection;
   onSectionChange?: (section: PipelineAnalysisSection) => void;
   onInvestigateCandidates?: () => void;
-  onSelectTestScoreRange?: (lower: number, upper: number) => void;
+  onSelectTestScoreRange?: (range: PipelineScoreRange) => void;
 }) {
   const [section, setSection] = useState<PipelineAnalysisSection>(initialSection);
   useEffect(() => { setSection(initialSection); }, [initialSection]);
@@ -341,7 +350,7 @@ export function PipelineAnalysis({
   initialSection?: PipelineAnalysisSection;
   onSectionChange?: (section: PipelineAnalysisSection) => void;
   onInvestigateCandidates?: () => void;
-  onSelectTestScoreRange?: (lower: number, upper: number) => void;
+  onSelectTestScoreRange?: (range: PipelineScoreRange) => void;
 }) {
   const modelId = resultRef(run, "training", "model_revision_id");
   const calibrationId = resultRef(run, "calibration", "scoring_result_id");

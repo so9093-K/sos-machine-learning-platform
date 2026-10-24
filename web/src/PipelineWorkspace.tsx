@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, formatError, request, submitJob } from "./api";
 import { PipelineAnalysis } from "./PipelineAnalysis";
-import type { PipelineAnalysisSection } from "./PipelineAnalysis";
+import type { PipelineAnalysisSection, PipelineScoreRange } from "./PipelineAnalysis";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import { PipelineModelUsage } from "./PipelineModelUsage";
 import { MLTrackingStatus } from "./MLTrackingStatus";
@@ -26,6 +26,16 @@ const count = (value: number) => value.toLocaleString("ko-KR");
 export function isRegistrationPending(run: Run | null): boolean {
   return run?.status === "Running" && run.current_stage === "training" &&
     (run.stages ?? []).some(stage => stage.name === "training" && stage.job?.status === "Succeeded");
+}
+
+/** 마지막 히스토그램 구간만 오른쪽 경계를 포함한다. */
+export function filterCandidatesByScoreRange(
+  candidates: CandidatePage["items"], range: PipelineScoreRange | null,
+): CandidatePage["items"] {
+  if (!range) return candidates;
+  return candidates.filter(item => item.anomaly_score >= range.lower &&
+    (item.anomaly_score < range.upper ||
+      (range.includeUpper && item.anomaly_score === range.upper)));
 }
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
@@ -68,7 +78,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [rows, setRows] = useState<CandidatePage | null>(null);
   const [candidateError, setCandidateError] = useState("");
   const [candidateReload, setCandidateReload] = useState(0);
-  const [candidateScoreRange, setCandidateScoreRange] = useState<{ lower: number; upper: number } | null>(null);
+  const [candidateScoreRange, setCandidateScoreRange] = useState<PipelineScoreRange | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(initialCandidateRowIndex ?? null);
   const [busy, setBusy] = useState(false);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
@@ -353,9 +363,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const completed = run?.stages ?? [];
   const trainingJob = completed.find(item => item.name === "training")?.job;
   const registrationPending = isRegistrationPending(run);
-  const shownCandidates = (rows?.items ?? []).filter(item =>
-    !candidateScoreRange || (item.anomaly_score >= candidateScoreRange.lower &&
-      item.anomaly_score <= candidateScoreRange.upper));
+  const shownCandidates = filterCandidatesByScoreRange(rows?.items ?? [], candidateScoreRange);
   const activeCandidate = shownCandidates.find(item => item.row_index === selectedCandidate);
   const activeDataset = run ? datasets.find(item => item.id === run.dataset_id) : null;
   const modelRevisionId = resultId(completed.find(item => item.name === "training")?.job, "model_revision_id");
@@ -588,8 +596,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       <PipelineAnalysis run={run} onOpenResource={onOpenResource}
         initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection}
         onInvestigateCandidates={() => moveFocusTo("pipeline-candidates-heading")}
-        onSelectTestScoreRange={(lower, upper) => {
-          setCandidateScoreRange({ lower, upper });
+        onSelectTestScoreRange={range => {
+          setCandidateScoreRange(range);
           moveFocusTo("pipeline-candidates-heading");
         }} />
       <div className="pipeline-actions">

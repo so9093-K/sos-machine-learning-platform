@@ -158,7 +158,7 @@ try {
     "/pipelines?dataset=dataset-from-data");
 
   // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
-  const { PipelineWorkspace, isRegistrationPending } =
+  const { PipelineWorkspace, isRegistrationPending, filterCandidatesByScoreRange } =
     await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
   // Training Job 성공만으로 Run 전체가 성공한 것처럼 표시하지 않는다.
   const pendingRun = {
@@ -191,6 +191,17 @@ try {
   const { PipelineAnalysis, PipelineEvidenceView, validatePipelineEvidence } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
   const { PipelineCandidateInvestigation, SensitivityChart, matchingExplanationJob } =
     await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
+  // 인접 점수 구간의 경계값은 한 구간에만 속해야 한다.
+  const scoreItems = [
+    { row_index: 1, anomaly_score: 0.1, features: {} },
+    { row_index: 2, anomaly_score: 0.2, features: {} },
+    { row_index: 3, anomaly_score: 0.3, features: {} },
+  ];
+  assert.deepEqual(filterCandidatesByScoreRange(scoreItems,
+    { lower: 0.1, upper: 0.2, includeUpper: false }).map(x => x.row_index), [1]);
+  assert.deepEqual(filterCandidatesByScoreRange(scoreItems,
+    { lower: 0.2, upper: 0.3, includeUpper: true }).map(x => x.row_index), [2, 3]);
+  assert.deepEqual(filterCandidatesByScoreRange(scoreItems, null).map(x => x.row_index), [1, 2, 3]);
   const props = {
     datasets: [], initialDatasetId: "", initialRunId: "",
     hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
@@ -218,7 +229,7 @@ try {
   const withoutPermission = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, hasPipelineExample: true, canCreateDataset: false, canRun: false,
   }));
-  assert.match(withoutPermission, /<button type="button" disabled=""[^>]*>예제로 모델 학습 시작/);
+  assert.match(withoutPermission, /<button[^>]*disabled=""[^>]*>예제로 모델 학습 시작/);
   assert.match(withoutPermission, /Dataset 생성 권한이 필요합니다/);
   assert.match(withoutPermission, /작업 실행 권한이 필요합니다/);
   const withoutExample = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
