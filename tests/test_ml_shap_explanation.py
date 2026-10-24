@@ -42,6 +42,33 @@ def test_permutation_shap_reconstructs_actual_sos_score():
     assert first["additive_attribution"] is True
 
 
+
+def test_permutation_shap_reconstructs_real_isolation_forest_score():
+    """설명 모델이 선형 함수가 아니라 실제 SOS IF 점수인 경우도 검증한다."""
+    from sos_platform.ml_isolation_forest import (
+        IsolationForestConfig, train_isolation_forest,
+    )
+
+    rng = np.random.default_rng(24)
+    training = rng.normal(size=(70, 44))
+    model = train_isolation_forest(
+        training, IsolationForestConfig(n_estimators=24, random_state=42)
+    )
+    values = training[54].copy()
+    values[0] += 4.0
+    reference = np.median(training, axis=0).tolist()
+    score = model.score_anomalies(values.reshape(1, -1))[0]
+    result = _permutation_shap_result(
+        {"id": "scoring"}, {"id": "model", "features": [f"f{i}" for i in range(44)]},
+        4, values, reference, score, model,
+    )
+    assert len(result["feature_contributions"]) == 44
+    assert result["baseline_score"] == pytest.approx(
+        model.score_anomalies(np.asarray(reference).reshape(1, 44))[0], abs=1e-7
+    )
+    assert result["reconstructed_score"] == pytest.approx(score, abs=1e-7)
+    assert abs(result["additivity_residual"]) < 1e-7
+
 def test_permutation_shap_includes_missing_value_preprocessing():
     runtime = _LinearRuntime()
     row = np.asarray([float("nan"), 2.0, 2.0])
