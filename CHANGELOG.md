@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 첫 IF Pipeline에서 학습 완료 후 MLflow Registry 등록·재시도 대기를 실행 중 학습과 구분해 안내하고, 일시적인 상태 조회 오류가 복구된 뒤 이전 오류를 남기지 않도록 수정했습니다.
+
 - MLflow Experiment·Run·Model Registry를 관리 정본으로 연결하고, SOS 웹에서 소유 모델 판본 및 Run 조회·비교를 제공합니다. 모델 등록 완료와 Job 성공을 구별하며, Scoring 제출 전에 Registry 버전·아티팩트 메타데이터를 대조합니다. 로컬 개발 Compose에 MLflow를 추가했습니다.
 
 - 웹 홈을 실행 가능한 Data Explorer·활동 이상 탐지 Pipeline의 진입점과 이전 Pipeline 재개 중심으로 변경하고, 미구현 Research / Model Experience Preview 메뉴·컴포넌트를 제거했습니다. 모델·학습·Scoring·정책·평가·설명의 독립 API 및 결과 직접 주소는 유지합니다.
