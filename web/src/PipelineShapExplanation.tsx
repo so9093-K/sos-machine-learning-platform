@@ -44,20 +44,26 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
     ? value.toLocaleString("ko-KR", { maximumFractionDigits: 7 }) : "미정의";
   const top = contributions.slice(0, 8).reverse();
   const option = {
-    aria: { enabled: true },
-    tooltip: { trigger: "axis" },
-    grid: { left: 240, right: 45, top: 20, bottom: 44 },
-    xAxis: { type: "value" as const, name: "점수 기여", nameGap: 24,
-      axisLabel: { formatter: (value: number) => value.toFixed(3) } },
-    yAxis: { type: "category" as const,
-      data: top.map(x => x.feature),
-      axisLabel: { width: 210, overflow: "truncate" as const, fontSize: 12 } },
-    series: [{ type: "bar" as const, name: "기준 점수 대비 기여",
-      data: top.map(x => x.shap_value),
-      itemStyle: { color: (params: { value: number }) =>
-        params.value >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative },
-      markLine: { silent: true, symbol: "none", label: { show: false },
-        data: [{ xAxis: 0 }] } }],
+    baseOption: {
+      aria: { enabled: true },
+      tooltip: { trigger: "axis" },
+      grid: { left: 240, right: 45, top: 20, bottom: 44 },
+      xAxis: { type: "value" as const, name: "점수 기여", nameGap: 24,
+        axisLabel: { formatter: (value: number) => value.toFixed(3) } },
+      yAxis: { type: "category" as const,
+        data: top.map(x => x.feature),
+        axisLabel: { width: 210, overflow: "truncate" as const, fontSize: 12 } },
+      series: [{ type: "bar" as const, name: "기준 점수 대비 기여",
+        data: top.map(x => x.shap_value),
+        itemStyle: { color: (params: { value: number }) =>
+          params.value >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative },
+        markLine: { silent: true, symbol: "none", label: { show: false },
+          data: [{ xAxis: 0 }] } }],
+    },
+    media: [{ query: { maxWidth: 620 }, option: {
+      grid: { left: 153, right: 20, top: 20, bottom: 52 },
+      yAxis: { axisLabel: { width: 127, overflow: "truncate" as const, fontSize: 11 } },
+    } }],
   };
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
     <h6>모델 이상 점수에 대한 SHAP 기여도</h6>
