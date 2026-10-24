@@ -129,3 +129,18 @@ def test_mlflow_empty_page_token_is_end_of_results():
     assert _page_token({}) is None
     assert _page_token({"next_page_token": ""}) is None
     assert _page_token({"next_page_token": "opaque-cursor"}) == "opaque-cursor"
+
+
+def test_missing_experiment_returns_not_found_instead_of_management_outage():
+    from sos_platform.mlflow_errors import MLflowDeliveryError
+    import pytest
+
+    class NotFoundClient(ResearchClient):
+        def get(self, endpoint, params):
+            if endpoint == "experiments/get":
+                raise MLflowDeliveryError("SOS-MLFLOW-HTTP-404-experiments_get")
+            return super().get(endpoint, params)
+
+    with pytest.raises(MLflowDeliveryError, match="EXPERIMENT-NOT-FOUND"):
+        read_runs(NotFoundClient(), SimpleNamespace(get_job=lambda _: None), "alice",
+                  experiment_id="999")

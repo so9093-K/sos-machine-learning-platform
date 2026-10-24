@@ -52,7 +52,14 @@ def _actor_experiment_id(client, actor_id: str, experiment_id: str | None) -> st
     if experiment_id is None:
         default = find_experiment(client, actor_id)
         return default.get("experiment_id") if default else None
-    experiment = client.get("experiments/get", {"experiment_id": experiment_id}).get("experiment")
+    try:
+        experiment = client.get(
+            "experiments/get", {"experiment_id": experiment_id}
+        ).get("experiment")
+    except MLflowDeliveryError as exc:
+        if str(exc) == "SOS-MLFLOW-HTTP-404-experiments_get":
+            raise MLflowDeliveryError("SOS-MLFLOW-EXPERIMENT-NOT-FOUND") from exc
+        raise
     if not isinstance(experiment, dict) or (
         experiment.get("experiment_id") != experiment_id or not isinstance(experiment.get("name"), str)
         or not experiment["name"].startswith(experiment_prefix(actor_id) + "-")
