@@ -214,6 +214,18 @@ try {
   assert.match(emptyJourney, /이전 학습 결과/);
   assert.doesNotMatch(emptyJourney, /pipeline-journey-item/);
   assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행하기/);
+  // 예제 학습은 권한이 없으면 시도할 수 없고, 화면 렌더만으로 실행되지 않는다.
+  const withoutPermission = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
+    ...props, hasPipelineExample: true, canCreateDataset: false, canRun: false,
+  }));
+  assert.match(withoutPermission, /<button type="button" disabled=""[^>]*>예제로 모델 학습 시작/);
+  assert.match(withoutPermission, /Dataset 생성 권한이 필요합니다/);
+  assert.match(withoutPermission, /작업 실행 권한이 필요합니다/);
+  const withoutExample = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
+    ...props, hasPipelineExample: false, examplesLoading: false, canCreateDataset: true,
+  }));
+  assert.match(withoutExample, /예제를 찾지 못했습니다/);
+  assert.match(withoutExample, /disabled=""/);
   const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, datasets: [{ id: "dataset-1", name: "활동 데이터", version: "revision-1", kind: "file" }],
     initialDatasetId: "dataset-1",

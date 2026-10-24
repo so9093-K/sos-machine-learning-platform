@@ -668,3 +668,7 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .pipeline-lab-distributions > section { min-width:0; }
 @media (max-width:1100px) { .pipeline-lab-distributions { grid-template-columns:1fr; } }
 @media (max-width:780px) { .pipeline-lab-entry,.pipeline-lab-summary { grid-template-columns:1fr; } .pipeline-lab-return { flex-direction:column; align-items:flex-start; } }
+
+.pipeline-more { margin-top:16px; }
+.pipeline-history-panel { margin-top:16px; }
+.pipeline-history-panel > details > summary { cursor:pointer; }

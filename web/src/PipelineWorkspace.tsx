@@ -397,13 +397,13 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <h3 id="pipeline-start-title">{current?.name ?? "시간 기반 활동 이상 탐지"}</h3>
           <p>{current?.description ?? "등록된 분석 방법의 정의를 불러오고 있습니다."}</p>
         </div>
-        <span className="chip">등록형 Reference · {current ? "이용 가능" :
+        <span className="chip">분석 방법 · {current ? "이용 가능" :
           catalogError ? "정의 조회 실패" : "조회 중"}</span>
       </div>
       {catalogError && <div className="pipeline-readiness-blocked" role="alert">
-        등록된 Pipeline의 지원 조건을 조회하지 못했습니다: {catalogError}
+        분석 방법의 지원 조건을 조회하지 못했습니다: {catalogError}
         <button type="button" className="secondary" onClick={() =>
-          setListReload(n => n + 1)}>Pipeline 정의 다시 조회</button>
+          setListReload(n => n + 1)}>분석 방법 다시 조회</button>
       </div>}
       <div className="pipeline-facts">
         <div><strong>어떤 데이터?</strong><p>사용자·호스트 활동을 시간 창으로 집계한 Feature 데이터</p></div>
