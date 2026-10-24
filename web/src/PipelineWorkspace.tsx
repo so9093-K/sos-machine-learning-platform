@@ -80,6 +80,13 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [rows, setRows] = useState<CandidatePage | null>(null);
   const [candidateError, setCandidateError] = useState("");
   const [candidateLookupError, setCandidateLookupError] = useState("");
+  const [candidateLookupStatus, setCandidateLookupStatus] =
+    useState<"idle" | "loading" | "missing" | "error">("idle");
+  const [candidateLookupRetry, setCandidateLookupRetry] = useState(0);
+  // 직접 지정된 한 건은 점수 순위·커서 페이지에 섞지 않는다.
+  const [directCandidate, setDirectCandidate] = useState<{
+    runId: string; resultId: string; item: CandidatePage["items"][number];
+  } | null>(null);
   const [candidateReload, setCandidateReload] = useState(0);
   const [candidateScoreRange, setCandidateScoreRange] = useState<PipelineScoreRange | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(initialCandidateRowIndex ?? null);
@@ -114,6 +121,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       setRunId(initialRunId);
       setRun(null);
       setRows(null);
+      setDirectCandidate(null);
+      setCandidateLookupStatus("idle");
+      setCandidateLookupError("");
       setCandidateScoreRange(null);
       // URL의 Run과 선택 후보는 하나의 탐색 상태다. 이전 Run의 행만 지운 채
       // 이미 URL에 있는 새 Run의 후보 선택을 잃어버리지 않는다.
@@ -181,23 +191,37 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   }, [run?.id, run?.status, candidateReload]);
   useEffect(() => {
     if (run?.status !== "Succeeded" || !rows || selectedCandidate === null ||
-        rows.items.some(item => item.row_index === selectedCandidate)) return;
+        rows.items.some(item => item.row_index === selectedCandidate) ||
+        (directCandidate?.runId === run.id && directCandidate.resultId === rows.result_id &&
+          directCandidate.item.row_index === selectedCandidate)) return;
     let active = true;
     setCandidateLookupError("");
+    setCandidateLookupStatus("loading");
+    const requestedIndex = selectedCandidate;
+    const requestedRun = run.id;
+    const requestedResult = rows.result_id;
     void request<CandidatePage>(
-      `/api/pipeline-runs/${encodeURIComponent(run.id)}/candidates?limit=1&row_index=${selectedCandidate}`
+      `/api/pipeline-runs/${encodeURIComponent(requestedRun)}/candidates?limit=1&row_index=${requestedIndex}`
     ).then(page => {
-      if (!active || selectedRunId.current !== run.id || page.result_id !== rows.result_id) return;
+      if (!active || selectedRunId.current !== requestedRun ||
+          page.result_id !== requestedResult) return;
       if (page.items.length === 0) {
-        setCandidateLookupError("이 번호는 현재 분석에서 검토 대상인 이상 후보가 아닙니다.");
+        setCandidateLookupStatus("missing");
+      } else if (page.items[0].row_index !== requestedIndex) {
+        setCandidateLookupStatus("error");
+        setCandidateLookupError("조회 결과의 후보 번호가 요청한 값과 일치하지 않습니다.");
       } else {
-        setRows(previous => previous?.result_id === page.result_id &&
-          !previous.items.some(item => item.row_index === page.items[0].row_index)
-          ? { ...previous, items: [...previous.items, ...page.items] } : previous);
+        setDirectCandidate({ runId: requestedRun, resultId: requestedResult, item: page.items[0] });
+        setCandidateLookupStatus("idle");
       }
-    }).catch(reason => { if (active) setCandidateLookupError(formatError(reason)); });
+    }).catch(reason => {
+      if (active) {
+        setCandidateLookupStatus("error");
+        setCandidateLookupError(formatError(reason));
+      }
+    });
     return () => { active = false; };
-  }, [run?.id, run?.status, rows?.result_id, selectedCandidate]);
+  }, [run?.id, run?.status, rows?.result_id, selectedCandidate, candidateLookupRetry]);
   useEffect(() => {
     if (!run || pendingRunFocus.current !== run.id) return;
     pendingRunFocus.current = null;
@@ -212,6 +236,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   }
   function selectCandidateRow(rowIndex: number) {
     setSelectedCandidate(rowIndex);
+    setCandidateLookupStatus("idle");
     setCandidateLookupError("");
     onSelectCandidate(rowIndex);
     requestAnimationFrame(() => {
@@ -238,6 +263,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     setRunId(id); setRun(null); setRows(null); setSelectedCandidate(null); setError(""); setBusy(false); setCandidateScoreRange(null);
     setCandidateError("");
     setCandidateLookupError("");
+    setCandidateLookupStatus("idle");
+    setDirectCandidate(null);
     setRunLoadError("");
     onSelectRun(id, runDatasetId);
     // 선택한 Run의 조회가 완료되면 분석 결과로 이동한다. 먼저 과거 Run으로 이동하지 않는다.
@@ -382,7 +409,15 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const trainingJob = completed.find(item => item.name === "training")?.job;
   const registrationPending = isRegistrationPending(run);
   const shownCandidates = filterCandidatesByScoreRange(rows?.items ?? [], candidateScoreRange);
-  const activeCandidate = shownCandidates.find(item => item.row_index === selectedCandidate);
+  const selectedInPage = rows?.items.find(item => item.row_index === selectedCandidate);
+  const selectedFromUrl = directCandidate?.runId === run?.id &&
+    directCandidate?.resultId === rows?.result_id &&
+    directCandidate?.item.row_index === selectedCandidate
+    ? directCandidate.item : null;
+  const fetchedSelected = selectedInPage ?? selectedFromUrl;
+  const activeCandidate = fetchedSelected &&
+    filterCandidatesByScoreRange([fetchedSelected], candidateScoreRange).length
+    ? fetchedSelected : null;
   const activeDataset = run ? datasets.find(item => item.id === run.dataset_id) : null;
   const modelRevisionId = resultId(completed.find(item => item.name === "training")?.job, "model_revision_id");
   const testScoringId = resultId(completed.find(item => item.name === "test")?.job, "scoring_result_id");
@@ -690,7 +725,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
             {rows.items.length > 0 && shownCandidates.length === 0 &&
               <p className="hint">현재 불러온 후보에서 이 점수 구간과 일치하는 항목이 없습니다.
                 필터를 해제하거나 다음 후보를 불러와 확인하세요.</p>}
-            {rows.items.length > 0 && <div className="pipeline-candidate-workspace">
+            {(rows.items.length > 0 || selectedCandidate !== null) && <div className="pipeline-candidate-workspace">
               <div className="pipeline-candidate-list">
                 <div className="table-scroll"><table>
               <thead><tr><th>결과 행 번호</th><th>이상 점수</th><th>선택·확인</th></tr></thead>
@@ -709,18 +744,30 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
               </div>
               <div className="pipeline-candidate-detail">
                 {selectedCandidate !== null && !activeCandidate && <div className="pipeline-next-step" role="status">
-                  {candidateScoreRange && rows.items.some(item => item.row_index === selectedCandidate)
+                  {candidateScoreRange && fetchedSelected
                     ? <>
                       <strong>선택한 후보가 현재 점수 필터 밖에 있습니다.</strong>
                       <p>필터를 해제하면 선택했던 후보를 다시 확인할 수 있습니다.</p>
                       <button type="button" className="secondary" onClick={() =>
                         setCandidateScoreRange(null)}>점수 필터 해제</button>
                     </>
-                    : <>
-                      <strong>선택했던 후보 #{count(selectedCandidate)}를 찾는 중입니다.</strong>
-                      <p>{candidateLookupError || "분석 결과에서 해당 후보의 관측 근거를 직접 조회하고 있습니다."}</p>
+                    : candidateLookupStatus === "missing" ? <>
+                      <strong>선택한 후보를 찾지 못했습니다.</strong>
+                      <p>이 결과 행 번호는 현재 분석의 이상 후보에 포함되지 않습니다.
+                        다른 후보를 선택하거나 결과 주소를 확인하세요.</p>
+                    </> : candidateLookupStatus === "error" ? <>
+                      <strong>선택한 후보를 조회하지 못했습니다.</strong>
+                      <p role="alert">{candidateLookupError}</p>
+                      <button type="button" className="secondary" onClick={() =>
+                        setCandidateLookupRetry(n => n + 1)}>이 후보 다시 조회</button>
+                    </> : <>
+                      <strong>선택했던 후보 #{count(selectedCandidate)}를 불러오는 중입니다.</strong>
+                      <p>해당 후보의 관측 근거를 직접 조회합니다.</p>
                     </>}
                 </div>}
+                {activeCandidate && selectedFromUrl && !selectedInPage && <p className="hint">
+                  결과 주소에서 직접 연 후보입니다. 왼쪽 목록은 조회한 점수 순위대로 유지됩니다.
+                </p>}
                 {activeCandidate ? <PipelineCandidateInvestigation
                   key={run.id + ":" + rows.result_id + ":" + activeCandidate.row_index}
                   candidate={activeCandidate} scoringResultId={rows.result_id}
