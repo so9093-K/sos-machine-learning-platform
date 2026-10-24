@@ -2070,6 +2070,12 @@ export interface components {
         };
         /** MLExplanationRequest */
         MLExplanationRequest: {
+            /**
+             * Method
+             * @default median_reference_feature_replacement
+             * @enum {string}
+             */
+            method: "median_reference_feature_replacement" | "permutation_shap_median_v1";
             /** Row Index */
             row_index: number;
             /** Scoring Result Id */
