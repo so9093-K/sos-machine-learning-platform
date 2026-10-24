@@ -94,8 +94,9 @@ export function validatePipelineEvidence(run: PipelineRun, evidence: Evidence): 
 }
 
 /** 저장된 고정 폭 구간 빈도만 표시하며 행 표본을 임의로 확대하지 않는다. */
-function ScoreHistogram({ summary, title, threshold }: {
+function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
   summary: Record<string, unknown>; title: string; threshold?: number;
+  onSelectRange?: (lower: number, upper: number) => void;
 }) {
   const raw = summary.histogram;
   const hist = raw && typeof raw === "object" ? raw as Record<string, unknown> : null;
@@ -134,17 +135,22 @@ function ScoreHistogram({ summary, title, threshold }: {
   };
   return <div className="pipeline-score-chart">
     <DataChart option={option} ariaLabel={title + " 점수 구간별 전체 관측 수" +
-      (threshold === undefined ? "" : " 및 Calibration 임계값")} />
+      (threshold === undefined ? "" : " 및 Calibration 임계값")}
+      onDataClick={onSelectRange ? index => {
+        if (index >= 0 && index < counts.length) onSelectRange(edges[index], edges[index + 1]);
+      } : undefined} />
     <p className="hint">{title}의 실제 점수를 전체 조회해 집계한 {counts.length}개 고정 폭 구간입니다.
       {hist?.constant_scores ? "모든 점수가 같아 그래프 표시 범위만 확장했습니다. " : ""}
       임계값 경계에 걸친 단일 막대는 후보 수를 의미하지 않습니다.</p>
     <details>
       <summary>{title} 구간별 관측 수 확인</summary>
       <div className="table-scroll"><table>
-        <thead><tr><th>점수 시작 (포함)</th><th>점수 끝 (마지막 구간 포함)</th><th>행 수</th></tr></thead>
+        <thead><tr><th>점수 시작 (포함)</th><th>점수 끝 (마지막 구간 포함)</th><th>행 수</th>{onSelectRange && <th>후보 탐색</th>}</tr></thead>
         <tbody>{counts.map((n, i) => <tr key={i}>
           <td>{edges[i].toPrecision(8)}</td><td>{edges[i + 1].toPrecision(8)}</td>
           <td>{Number(n).toLocaleString("ko-KR")}</td>
+          {onSelectRange && <td><button type="button" className="secondary"
+            onClick={() => onSelectRange(edges[i], edges[i + 1])}>이 구간 후보 보기</button></td>}
         </tr>)}</tbody>
       </table></div>
     </details>
@@ -196,11 +202,12 @@ export const PIPELINE_ANALYSIS_SECTIONS: Array<{ id: PipelineAnalysisSection; la
   { id: "test", label: "이상 탐지", description: "다른 구간의 후보" },
 ];
 export function PipelineEvidenceView({ evidence, run, onOpenResource,
-  initialSection = "overview", onSectionChange, onInvestigateCandidates }: {
+  initialSection = "overview", onSectionChange, onInvestigateCandidates, onSelectTestScoreRange }: {
   evidence: Evidence; run: PipelineRun; onOpenResource: OpenResult;
   initialSection?: PipelineAnalysisSection;
   onSectionChange?: (section: PipelineAnalysisSection) => void;
   onInvestigateCandidates?: () => void;
+  onSelectTestScoreRange?: (lower: number, upper: number) => void;
 }) {
   const [section, setSection] = useState<PipelineAnalysisSection>(initialSection);
   useEffect(() => { setSection(initialSection); }, [initialSection]);
@@ -245,7 +252,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
         <section><h5>기준을 정한 데이터의 분포</h5>
           <ScoreHistogram summary={cal} title="Calibration" threshold={policy.threshold} /></section>
         <section><h5>다른 시간 구간의 점수 분포</h5>
-          <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} /></section>
+          <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} onSelectRange={onSelectTestScoreRange} /></section>
       </div>
     </section>}
     <div className="pipeline-analysis-phases">
@@ -308,7 +315,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
             decision.temporal_nonoverlap_confirmed === true ? "비중복 확인" : "근거 미확인"
           }</dd></div>
         </dl>
-        <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} />
+        <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} onSelectRange={onSelectTestScoreRange} />
         <p className="hint">Calibration에서 정한 정책을 별도 Test 시간 구간에 적용합니다.
           검토 후보는 실제 이상 사건이 아니며, 레이블이 없는 결과에는 정확도·Precision·Recall을 부여하지 않습니다.</p>
         <div className="pipeline-actions">
@@ -328,11 +335,13 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
 /** URL Run이 변경되면 이전 응답을 폐기하며, 어떤 결과도 섞지 않는다. */
 export function PipelineAnalysis({
   run, onOpenResource, initialSection, onSectionChange, onInvestigateCandidates,
+  onSelectTestScoreRange,
 }: {
   run: PipelineRun; onOpenResource: OpenResult;
   initialSection?: PipelineAnalysisSection;
   onSectionChange?: (section: PipelineAnalysisSection) => void;
   onInvestigateCandidates?: () => void;
+  onSelectTestScoreRange?: (lower: number, upper: number) => void;
 }) {
   const modelId = resultRef(run, "training", "model_revision_id");
   const calibrationId = resultRef(run, "calibration", "scoring_result_id");
@@ -390,5 +399,6 @@ export function PipelineAnalysis({
   return <PipelineEvidenceView evidence={current.evidence} run={run}
     onOpenResource={onOpenResource} initialSection={initialSection}
     onSectionChange={onSectionChange}
-    onInvestigateCandidates={onInvestigateCandidates} />;
+    onInvestigateCandidates={onInvestigateCandidates}
+    onSelectTestScoreRange={onSelectTestScoreRange} />;
 }
