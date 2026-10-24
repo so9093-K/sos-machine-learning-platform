@@ -301,6 +301,7 @@ def test_first_pipeline_example_matches_registered_input_contract(monkeypatch):
     assert checked_full["ready"] is True, checked_full["issues"]
     assert min(checked_full["plan"]["partition_sizes"].values()) > 0
     assert sum(checked_full["plan"]["partition_sizes"].values()) == item["row_count"]
+    assert checked_full["plan"]["observation_id_column"] == "sos_observation_id"
 
 
 
@@ -322,3 +323,58 @@ def test_pipeline_stops_when_mlflow_registration_was_never_enabled():
     failed = pipeline_runs.get_run(store, run["id"])
     assert failed["status"] == "Failed"
     assert failed["error_code"] == "SOS-MLFLOW-NOT-CONFIGURED"
+
+
+def test_pipeline_candidate_evidence_and_legacy_result(monkeypatch, tmp_path):
+    """같은 결과 행의 시각·ID를 읽고, 기존 결과의 미존재 근거는 생성하지 않는다."""
+    from types import SimpleNamespace
+
+    from sos_platform import api_pipelines
+
+    parquet = tmp_path / "candidate.parquet"
+    base = pl.DataFrame({
+        "row_index": [0, 1, 2],
+        "anomaly_score": [0.2, 0.9, 0.8],
+        "features": [{"activity": 2.0}, {"activity": 9.0}, {"activity": 8.0}],
+        "observed_at": [
+            "2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z", "2026-01-01T02:00:00Z"
+        ],
+        "observation_id": [
+            "18c4be49-18c4-4f32-9894-8c3bfabbd001",
+            "18c4be49-18c4-4f32-9894-8c3bfabbd002",
+            "18c4be49-18c4-4f32-9894-8c3bfabbd003",
+        ],
+    })
+    base.write_parquet(parquet)
+
+    @contextmanager
+    def cached(_store, _entry):
+        yield parquet
+
+    monkeypatch.setattr(api_pipelines, "cached_dataset_file", cached)
+    store = SimpleNamespace(
+        get_scoring_result=lambda _id: {"owner_actor": "owner", "sha256": "digest", "location": "mock"},
+        get_decision_policy_revision=lambda _id: {"owner_actor": "owner", "threshold": 0.7},
+    )
+    run = {
+        "owner_actor": "owner",
+        "stages": [
+            {"name": "test", "job": {"result": {"scoring_result_id": "scoring"}}},
+            {"name": "policy", "job": {"result": {"policy_revision_id": "policy"}}},
+        ],
+    }
+    first = api_pipelines._candidate_rows(store, run, 1, None)
+    assert first["items"][0] == {
+        "row_index": 1, "anomaly_score": 0.9, "features": {"activity": 9.0},
+        "observed_at": "2026-01-01T01:00:00Z",
+        "observation_id": "18c4be49-18c4-4f32-9894-8c3bfabbd002",
+    }
+    assert first["next_cursor"] is not None
+    selected = api_pipelines._candidate_rows(store, run, 1, None, row_index=2)
+    assert selected["items"][0]["row_index"] == 2
+    assert selected["next_cursor"] is None
+
+    base.drop(["observed_at", "observation_id"]).write_parquet(parquet)
+    previous = api_pipelines._candidate_rows(store, run, 1, None)
+    assert previous["items"][0]["observed_at"] is None
+    assert previous["items"][0]["observation_id"] is None
