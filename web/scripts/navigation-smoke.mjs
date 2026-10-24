@@ -338,6 +338,8 @@ try {
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
   assert.doesNotMatch(deepLinkedJourney, /예제로 모델 학습 시작/);
+  assert.doesNotMatch(deepLinkedJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
+  assert.match(deepLinkedJourney, /새 모델 학습하기/);
   assert.match(deepLinkedJourney, /선택한 실행/);
   assert.doesNotMatch(deepLinkedJourney, /aria-label="분석 이용 단계"/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
