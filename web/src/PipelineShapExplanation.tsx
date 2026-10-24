@@ -4,7 +4,6 @@ import { DataChart } from "./DataChart";
 import { formatError, request, submitJob } from "./api";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary } from "./types";
-import { matchingExplanationJob } from "./PipelineCandidateInvestigation";
 
 const METHOD = "permutation_shap_median_v1";
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -69,6 +68,7 @@ export function PipelineShapExplanation({ candidate, scoringResultId, canRun, ca
   const [result, setResult] = useState<ExplanationResult | null>(null);
   const [lookup, setLookup] = useState<"loading" | "ready" | "error">("loading");
   const [lookupRetry, setLookupRetry] = useState(0);
+  const [olderJobsExist, setOlderJobsExist] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -80,8 +80,13 @@ export function PipelineShapExplanation({ candidate, scoringResultId, canRun, ca
     void request<JobPage>("/api/ml/explanations/jobs?limit=100")
       .then(page => {
         if (!active || submitted.current) return;
-        const prior = matchingExplanationJob(page.items, scoringResultId, candidate.row_index, METHOD);
-        if (!prior) { setLookup("ready"); return; }
+        const prior = page.items.filter(item =>
+          item.spec.scoring_result_id === scoringResultId &&
+          item.spec.row_index === candidate.row_index &&
+          item.spec.method === METHOD
+        ).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+        if (!prior) { setOlderJobsExist(Boolean(page.next_cursor)); setLookup("ready"); return; }
+        setOlderJobsExist(false);
         return request<MLExplanationJob>("/api/ml/explanations/jobs/" + encodeURIComponent(prior.id))
           .then(next => {
             if (!active || submitted.current) return;
@@ -162,6 +167,9 @@ export function PipelineShapExplanation({ candidate, scoringResultId, canRun, ca
       disabled={busy || lookup !== "ready"} onClick={() => void submit()}>
       {busy ? "SHAP 분석 요청 중…" : job ? "SHAP 다시 계산 →" : "SHAP 기여도 계산 →"}
     </button>}
+    {!job && lookup === "ready" && olderJobsExist && <p className="hint">
+      최근 100건에 기존 SHAP 작업이 없습니다. 오래된 결과는 독립 설명 작업 이력에서 확인하세요.
+    </p>}
     {!canRun && <p className="hint">현재 계정은 설명 Job을 제출할 권한이 없습니다.</p>}
     {job && <p role="status">SHAP 작업: {job.status}
       {job.cancel_requested ? " · 취소 요청됨" : ""}{job.error_code ? " · 오류 " + job.error_code : ""}

@@ -217,6 +217,21 @@ try {
   );
   assert.match(candidateWithContext, /2026-01-01T02:00:00Z/);
   assert.match(candidateWithContext, /Train 참조 중앙값/);
+  assert.match(candidateWithContext, /SHAP 기여도 계산/);
+  const { ShapContributionChart } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
+  const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
+    result: { output: {
+      method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
+      baseline_row_count: 1, permutation_rounds: 3, sampling_seed: 42,
+      shap_version: "0.50.0",
+      feature_contributions: [
+        { feature: "outbound_traffic", shap_value: 0.2, actual_value: 4,
+          reference_median: 1, missing_imputed: false },
+      ],
+    } },
+  }));
+  assert.match(shapPreview, /모델 이상 점수에 대한 SHAP 기여도/);
+  assert.match(shapPreview, /전체 SHAP 값과 계산 근거/);
   assert.match(candidateWithContext, /실제 사건을 확정하지 않습니다/);
   // 인접 점수 구간의 경계값은 한 구간에만 속해야 한다.
   const scoreItems = [
