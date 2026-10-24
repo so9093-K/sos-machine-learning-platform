@@ -73,6 +73,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [error, setError] = useState("");
   const [exampleBusy, setExampleBusy] = useState(false);
+  const [examplePhase, setExamplePhase] = useState<"registering" | "checking" | "submitting" | null>(null);
   useEffect(() => {
     let active = true;
     // Run 이력이 일시적으로 실패해도 Pipeline Catalog 자체는 이용할 수 있다.
@@ -186,13 +187,13 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       document.getElementById("pipeline-candidate-detail-heading")?.focus();
     });
   }
-  function selectRun(id: string) {
+  function selectRun(id: string, linkedDatasetId?: string) {
     if (id && id === selectedRunId.current && run?.id === id) {
       moveFocusTo(run.status === "Succeeded"
         ? "pipeline-analysis-first-heading" : "pipeline-current-run-heading");
       return;
     }
-    const runDatasetId = history.find(item => item.id === id)?.dataset_id ??
+    const runDatasetId = linkedDatasetId ?? history.find(item => item.id === id)?.dataset_id ??
       (run?.id === id ? run.dataset_id : datasetId);
     selectedRunId.current = id;
     pendingRunFocus.current = id || null;
@@ -210,37 +211,48 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     catch (e) { setError(formatError(e)); }
     finally { setLoadingDatasets(false); }
   }
+  /** 예제 등록·입력 검사·학습 제출을 한 번의 명시적 사용자 행동에 연결한다. */
   async function startExample() {
-    if (!onUseExample || !hasPipelineExample || !canCreateDataset || exampleBusy || busy) return;
-    const selectionRevision = datasetSelectionRevision.current;
-    let expectedRevision = selectionRevision;
-    const previousRunId = selectedRunId.current;
-    setExampleBusy(true);
-    setError("");
+    if (!onUseExample || !hasPipelineExample || !canCreateDataset || !canRun ||
+        exampleBusy || busy) return;
+    const previousRevision = datasetSelectionRevision.current;
+    const previousRun = selectedRunId.current;
+    setExampleBusy(true); setExamplePhase("registering"); setError("");
     try {
-      // 등록 중 Dataset·Run을 바꿨다면 오래된 응답으로 사용자의 선택을 덮지 않는다.
       const dataset = await onUseExample();
-      if (selectionRevision !== datasetSelectionRevision.current ||
-          previousRunId !== selectedRunId.current) return;
+      if (previousRevision !== datasetSelectionRevision.current ||
+          previousRun !== selectedRunId.current) return;
       selectedDatasetId.current = dataset.id;
       const revision = ++datasetSelectionRevision.current;
-      expectedRevision = revision;
-      setDatasetId(dataset.id);
-      setChecked(null);
+      setDatasetId(dataset.id); setChecked(null);
       onSelectDataset(dataset.id);
-      // 예제의 등록과 Pipeline 실행은 별도 사용자 행동이다.
+      setExamplePhase("checking");
       const inspection = await request<Check>(
         `/api/pipelines/${PIPELINE}/check?dataset_id=${encodeURIComponent(dataset.id)}`
       );
-      if (revision === datasetSelectionRevision.current &&
-          selectedDatasetId.current === dataset.id) setChecked(inspection);
-    } catch (reason) {
-      if (expectedRevision === datasetSelectionRevision.current &&
-          (expectedRevision !== selectionRevision || previousRunId === selectedRunId.current)) {
-        setError(formatError(reason));
+      if (revision !== datasetSelectionRevision.current ||
+          selectedDatasetId.current !== dataset.id ||
+          previousRun !== selectedRunId.current) return;
+      setChecked(inspection);
+      if (!inspection.ready) {
+        setError("예제 입력 조건을 통과하지 못했습니다: " + inspection.issues.join(" · "));
+        return;
       }
+      setExamplePhase("submitting");
+      const next = await submitJob<Run>(
+        `/api/pipelines/${PIPELINE}/runs`, { dataset_id: dataset.id }
+      );
+      if (revision === datasetSelectionRevision.current &&
+          selectedDatasetId.current === dataset.id &&
+          previousRun === selectedRunId.current) {
+        selectRun(next.id, dataset.id);
+        setRun(next);
+      }
+      void request<Run[]>("/api/pipeline-runs").then(setHistory).catch(() => {});
+    } catch (e) {
+      if (previousRun === selectedRunId.current) setError(formatError(e));
     } finally {
-      setExampleBusy(false);
+      setExampleBusy(false); setExamplePhase(null);
     }
   }
   async function inspect() {
@@ -333,68 +345,52 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const evaluationId = resultId(completed.find(item => item.name === "evaluation")?.job, "evaluation_revision_id");
   const inputReady = Boolean(currentCheck?.ready);
   const activeStage = run?.current_stage ? stageLabel[run.current_stage] ?? run.current_stage : null;
-  const currentJourneyStep = run ? run.status === "Succeeded" ? 4 : 3 :
-    inputReady ? 3 : datasetId ? 2 : 1;
+  const hasActiveAnalysis = Boolean(runId);
   return <div className="platform-home pipeline-consumer">
     <section className="platform-intro pipeline-hero">
-      <span className="eyebrow">PIPELINE EXPERIENCE · 설계된 분석 이용</span>
-      <h2>시간 기반 활동 이상 탐지</h2>
-      <p>등록된 방법으로 내 활동 데이터를 분석해 이상 점수와 검토 후보를 확인합니다.
-        모델과 단계별 설정은 이미 설계돼 있으므로, 사용할 Dataset과 실행 여부에 집중하세요.</p>
-      <div className="pipeline-hero-foot">
-        <span>현재 제공: 준비된 Feature Dataset을 이용하는 분석</span>
-        <span>결과: 이상 점수 · 후보 목록 · 실행 근거</span>
-      </div>
-      <div className="pipeline-actions">
-        <button type="button" onClick={() =>
-          document.getElementById(run?.status === "Succeeded"
-            ? "pipeline-analysis-first-heading" : "pipeline-prepare-title")?.scrollIntoView({ block: "start" })}>
-          {run?.status === "Succeeded" ? "이번 Run의 분석 결과 보기 →" : "내 데이터로 분석 시작하기 →"}
+      <span className="eyebrow">모델 실험실 · 활동 이상 탐지</span>
+      <h2>활동 이상 탐지</h2>
+      <p>활동 데이터로 모델을 학습하고, 실제 학습 결과와 탐지된 이상 후보를
+        비교하며 Isolation Forest의 동작을 탐구합니다.</p>
+      {!hasActiveAnalysis && <div className="pipeline-lab-entry">
+        <div className="pipeline-lab-primary">
+          <strong>예제로 모델 학습하기</strong>
+          <p>240개 합성 관측치로 모델을 학습하고, 다른 시간 구간의 점수와 이상 후보를
+            분석합니다. 실제 이상 사건이나 탐지 정확도를 보증하는 데이터가 아닙니다.</p>
+          <button type="button" disabled={examplesLoading || !hasPipelineExample ||
+            !canCreateDataset || !canRun || exampleBusy || busy}
+            onClick={() => void startExample()}>
+            {examplePhase === "registering" ? "예제 데이터 준비 중…" :
+              examplePhase === "checking" ? "학습 입력 확인 중…" :
+              examplePhase === "submitting" ? "학습 요청 중…" : "예제로 모델 학습 시작 →"}
+          </button>
+          <small>예제 등록과 입력 검사 후 학습·보정·테스트 분석을 제출합니다.</small>
+          {examplePhase && <p role="status">{
+            examplePhase === "registering" ? "합성 학습 데이터를 준비합니다." :
+            examplePhase === "checking" ? "학습 입력을 확인합니다." : "학습을 요청하고 있습니다."
+          }</p>}
+          {!canCreateDataset && <p className="hint">Dataset 생성 권한이 필요합니다.</p>}
+          {!canRun && <p className="hint">작업 실행 권한이 필요합니다.</p>}
+          {!examplesLoading && !hasPipelineExample && <p className="hint">예제를 찾지 못했습니다.</p>}
+        </div>
+        <div className="pipeline-lab-secondary">
+          <strong>이전에 학습한 결과가 있나요?</strong>
+          <p>이전 학습 결과를 열어 점수 분포와 후보를 다시 살펴봅니다.</p>
+          <button type="button" className="secondary" onClick={() =>
+            moveFocusTo("pipeline-history-heading")}>이전 결과 보기 →</button>
+        </div>
+      </div>}
+      {hasActiveAnalysis && <div className="pipeline-lab-return">
+        <span>현재 학습 과정과 분석 결과를 확인하고 있습니다.</span>
+        <button type="button" className="secondary" onClick={() => selectRun("")}>
+          새 모델 학습하기 →
         </button>
-      </div>
-    </section>
-
-    <div className="pipeline-journey" aria-label="분석 이용 단계" role="group">
-      {[
-        { name: "분석 이해", detail: "목적·입력·결과" },
-        { name: "데이터 준비", detail: "등록·선택·확인" },
-        { name: "실행", detail: "상태·취소·복구" },
-        { name: "결과 활용", detail: "후보·상세 근거" },
-      ].map((step, index) => <div key={step.name}
-        className={"pipeline-journey-item" + (currentJourneyStep === index + 1 ? " active" : "")}
-        aria-current={currentJourneyStep === index + 1 ? "step" : undefined}>
-        <span>{String(index + 1).padStart(2, "0")}</span>
-        <strong>{step.name}</strong>
-        <small>{step.detail}</small>
-      </div>)}
-    </div>
-    <section className="panel pipeline-capabilities" aria-labelledby="pipeline-capabilities-title">
-      <div className="pipeline-section-heading"><div>
-        <span className="eyebrow">제공되는 기능</span>
-        <h3 id="pipeline-capabilities-title">이 분석에서 사용할 수 있는 기능</h3>
-        <p>학습·보정·테스트는 준비된 방법으로 수행됩니다. 실행한 뒤 각 결과를 같은 화면에서 직접 확인할 수 있습니다.</p>
-      </div></div>
-      <div className="pipeline-facts">
-        {([
-          { id: "training", name: "Training", description: "학습 모델과 실제 학습 점수 분포" },
-          { id: "calibration", name: "Calibration", description: "점수 분포와 적용된 판정 경계" },
-          { id: "test", name: "Test", description: "독립 시간 구간의 점수·검토 후보" },
-        ] as const).map(item => <div key={item.id}>
-          <strong>{item.name}</strong>
-          <p>{item.description}</p>
-          {run?.status === "Succeeded" ? <button type="button" className="secondary"
-            onClick={() => {
-              onSelectAnalysisSection(item.id);
-              moveFocusTo("pipeline-analysis-first-heading");
-            }}>결과 살펴보기 →</button> :
-            <small>{run ? "분석 완료 후 이용 가능" : "분석을 실행하면 결과가 여기에 연결됩니다"}</small>}
-        </div>)}
-      </div>
-      <p className="hint">완료된 모델은 다른 호환 데이터에 다시 적용할 수도 있습니다. 새 학습과 별개의 Scoring 실행입니다.</p>
+      </div>}
     </section>
     {error && <div className="alert error" role="alert">{error}
       <button className="ghost" onClick={() => setError("")}>닫기</button></div>}
-
+    <details className="pipeline-advanced" open={Boolean(datasetId && !runId)}>
+      <summary>내 데이터로 학습하거나 분석 방법 자세히 보기</summary>
     <section className="panel pipeline-start" aria-labelledby="pipeline-start-title">
       <div className="pipeline-section-heading">
         <div><span className="eyebrow">01 · 분석 이해</span>
@@ -448,18 +444,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           직접 지원되는 변환 기능을 이용해 준비할 수 있습니다. 다만 기존 변환 도구가 필요한 Feature를
           모두 만들어준다는 의미는 아닙니다.</p>
       </div>
-      {(examplesLoading || hasPipelineExample) && <div className="pipeline-input-guide" aria-label="준비된 분석 예제">
-        <strong>처음 사용한다면: 실행 가능한 합성 예제</strong>
-        <p>44개 활동 Feature와 UTC 시간이 준비된 합성 데이터로 전체 분석을 경험할 수 있습니다.
-          실제 침해 사건이나 탐지 정확도를 검증하는 자료는 아닙니다.</p>
-        {examplesLoading ? <p role="status">예제를 확인하는 중입니다.</p> :
-          <button type="button" disabled={!canCreateDataset || exampleBusy || busy}
-            onClick={() => void startExample()}>
-            {exampleBusy ? "예제 등록·검사 중…" : "예제 데이터 선택하고 입력 확인 →"}
-          </button>}
-        {!canCreateDataset && !examplesLoading &&
-          <p className="hint">예제를 등록하려면 Dataset 생성 권한이 필요합니다.</p>}
-      </div>}
       <div className="form-row">
         <label>분석할 Dataset
           <select aria-label="Pipeline 분석 Dataset" value={datasetId} onChange={e => {
@@ -533,8 +517,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         {!canRun && <p>현재 계정은 Job 제출 권한이 없습니다.</p>}
       </div>}
     </section>
+    </details>
 
-    <section className="panel pipeline-run-context" aria-labelledby="pipeline-current-run-heading">
+    {hasActiveAnalysis && <section className="panel pipeline-run-context" aria-labelledby="pipeline-current-run-heading">
       <div className="pipeline-run-context-header">
         <div>
           <span className="eyebrow">분석 작업 공간 · Run 선택</span>
@@ -567,20 +552,19 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         }{run.cancel_requested ? " · 취소 요청됨" : ""}</strong></div>
         <div><span>Dataset</span><strong>{activeDataset?.name ?? run.dataset_id}</strong></div>
         <div><span>Dataset 판본</span><code title={run.dataset_version}>{run.dataset_version}</code></div>
-        <div><span>Run</span><code title={run.id}>{run.id}</code></div>
+        <details><summary>기술 식별자</summary><code title={run.id}>{run.id}</code></details>
       </div>}
       {runId && runLoadError && <p className="pipeline-context-error" role="alert">
         마지막 Run 조회 실패: {runLoadError} · 아래에서 다시 조회할 수 있습니다.
       </p>}
-    </section>
+    </section>}
     {run?.status === "Succeeded" && <section className="panel pipeline-results-priority"
       aria-labelledby="pipeline-analysis-first-heading">
       <div className="pipeline-section-heading">
         <div>
-          <span className="eyebrow">이번 Pipeline Run · 분석과 결과</span>
-          <h3 id="pipeline-analysis-first-heading" tabIndex={-1}>학습부터 Test까지 살펴보기</h3>
-          <p>Train·Calibration·Test의 실제 점수 분포와 판정 근거를 먼저 확인한 뒤,
-            관심 있는 Test 후보를 더 자세히 검토하세요.</p>
+          <span className="eyebrow">학습 결과 · 이상 탐지</span>
+          <h3 id="pipeline-analysis-first-heading" tabIndex={-1}>학습한 모델과 이상 탐지 결과</h3>
+          <p>학습 분포와 판정 기준, 다른 시간 구간의 이상 후보를 연결해 탐구합니다.</p>
         </div>
       </div>
       <PipelineAnalysis run={run} onOpenResource={onOpenResource}
@@ -638,10 +622,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         {!terminal.has(run.status) && <div className="pipeline-next-step" role="status">
           <strong>{run.cancel_requested ? "취소 요청을 처리하고 있습니다." :
             run.status === "Queued" ? "분석 실행을 기다리고 있습니다." :
-            registrationPending ? "모델 학습 완료 · MLflow 등록 확인 중" :
+            registrationPending ? "모델 학습 완료 · 결과 분석 준비 중" :
             activeStage ? activeStage + " 단계 진행 중" : "실행 대기 또는 단계 전환 중"}</strong>
           {registrationPending ? <>
-            <p>학습 결과는 확정됐습니다. 모델 Registry 판본이 등록되면 다음 단계로 진행합니다.</p>
+            <p>학습은 완료됐습니다. 결과 등록 확인 후 다른 시간 구간을 분석합니다.</p>
             {trainingJob && <MLTrackingStatus key={trainingJob.id} jobId={trainingJob.id} />}
           </> : <p>서버 Worker에서 실제 Job 상태를 확인합니다. 완료 시간을 추정한 진행률로 표현하지 않습니다.</p>}
           {canCancel && <button type="button" className="secondary"
@@ -650,7 +634,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           </button>}
         </div>}
         {run.status === "Succeeded" && <section className="pipeline-candidates" aria-labelledby="pipeline-candidates-heading">
-          <h4 id="pipeline-candidates-heading" tabIndex={-1}>Test 이상 후보 살펴보기</h4>
+          <h4 id="pipeline-candidates-heading" tabIndex={-1}>이상 후보 탐구</h4>
           <p>보정 구간에서 정한 점수 경계 이상인 Test 결과를 순서대로 표시합니다.
             결과의 행 번호는 Scoring 내부 번호이며 원본 관측치 식별자가 아닙니다.</p>
           {!rows && candidateError && <div className="pipeline-readiness-blocked" role="alert">
@@ -738,7 +722,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </details>
       </>}
       <details className="pipeline-history">
-        <summary>이전 Pipeline Run 목록 ({count(history.length)}건 조회됨)</summary>
+        <summary id="pipeline-history-heading" tabIndex={-1}>이전 학습 결과 ({count(history.length)}건 조회됨)</summary>
         <div className="ml-resource-list">
           {history.map(item => <button type="button" className="platform-list-link ghost" key={item.id}
             onClick={() => selectRun(item.id)}>
