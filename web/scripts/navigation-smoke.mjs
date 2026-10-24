@@ -156,6 +156,19 @@ try {
     routeAt("/data", "?from=pipeline"), "ml"), {});
   assert.equal(contextPath("pipelines", { datasetId: "dataset-from-data" }),
     "/pipelines?dataset=dataset-from-data");
+  assert.equal(routeAt("/activity/pipelines", "").tab, "pipeline-jobs");
+  const exploredFromRun = {
+    pipelineReturn: true, datasetId: "dataset-from-run",
+    pipelineRunId: "run-1", candidateRowIndex: 8, pipelineAnalysisSection: "test",
+  };
+  assert.equal(contextPath("understanding", exploredFromRun),
+    "/data?from=pipeline&dataset=dataset-from-run&run=run-1&candidate=8&section=test");
+  const exploredPath = contextPath("understanding", exploredFromRun);
+  const preparedContext = nextNavigationContext(
+    routeAt("/data", exploredPath.slice(exploredPath.indexOf("?"))), "preparation");
+  assert.deepEqual(preparedContext, exploredFromRun);
+  assert.equal(contextPath("pipelines", preparedContext),
+    "/pipelines?dataset=dataset-from-run&run=run-1&candidate=8&section=test");
 
   // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
   const { PipelineWorkspace, isRegistrationPending, filterCandidatesByScoreRange } =
@@ -218,11 +231,11 @@ try {
   assert.match(emptyJourney, /240개 합성 관측치/);
   assert.match(emptyJourney, /학습·보정·테스트 분석을 제출합니다/);
   assert.match(emptyJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
-  assert.match(emptyJourney, /이전 학습 결과/);
-  assert.match(emptyJourney, /이전에 학습한 결과가 있나요/);
+  assert.doesNotMatch(emptyJourney, /이전 학습 결과/);
+  assert.doesNotMatch(emptyJourney, /이전에 학습한 결과가 있나요/);
   assert.doesNotMatch(emptyJourney, /분석 이용 단계/);
   assert.match(emptyJourney, /자동 생성하는 단계는 현재 등록되어 있지 않습니다/);
-  assert.match(emptyJourney, /이전 학습 결과/);
+  assert.doesNotMatch(emptyJourney, /다른 분석 결과 선택/);
   assert.doesNotMatch(emptyJourney, /pipeline-journey-item/);
   assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행하기/);
   // 예제 학습은 권한이 없으면 시도할 수 없고, 화면 렌더만으로 실행되지 않는다.
@@ -256,6 +269,18 @@ try {
   assert.match(home, /무엇을 시작할까요/);
   assert.match(home, /활동 이상 탐지/);
   assert.doesNotMatch(home, /최근 ML 실행/);
+  const { PipelineHistoryPanel } = await vite.ssrLoadModule("/src/PipelineHistoryPanel.tsx");
+  const historyPanel = renderToStaticMarkup(React.createElement(PipelineHistoryPanel, {
+    datasets: [], onOpenRun: () => {}, onStart: () => {},
+  }));
+  assert.match(historyPanel, /활동 이상 탐지 분석 이력/);
+  const { ActivityWorkspace } = await vite.ssrLoadModule("/src/ActivityWorkspace.tsx");
+  const activity = renderToStaticMarkup(React.createElement(ActivityWorkspace, {
+    active: "pipeline", onChange: () => {}, onNavigate: () => {},
+    onOpenResource: () => {}, onOpenPipelineRun: () => {}, datasets: [], canCancel: false,
+  }));
+  assert.match(activity, /모델 실험실 분석/);
+  assert.match(activity, /활동 이상 탐지 분석 이력/);
   const { PipelineModelUsage } = await vite.ssrLoadModule("/src/PipelineModelUsage.tsx");
   const useModel = renderToStaticMarkup(React.createElement(PipelineModelUsage, {
     modelId: "model-v1", datasets: [], canRun: true, canCancel: true, onOpenResource: () => {},

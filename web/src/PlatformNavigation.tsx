@@ -172,11 +172,14 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
   if (["understanding", "preparation", "preview", "profile", "jobs"].includes(tab) &&
       ["understanding", "preparation", "preview", "profile", "jobs"].includes(previous.tab)) {
     return { pipelineReturn: previous.context.pipelineReturn,
-      ...(previous.context.pipelineReturn ? {
-        datasetId: previous.context.datasetId,
+      ...(previous.context.pipelineReturn && previous.context.datasetId
+        ? { datasetId: previous.context.datasetId } : {}),
+      ...(previous.context.pipelineReturn && previous.context.pipelineRunId ? {
         pipelineRunId: previous.context.pipelineRunId,
-        candidateRowIndex: previous.context.candidateRowIndex,
-        pipelineAnalysisSection: previous.context.pipelineAnalysisSection,
+        ...(previous.context.candidateRowIndex !== undefined
+          ? { candidateRowIndex: previous.context.candidateRowIndex } : {}),
+        ...(previous.context.pipelineAnalysisSection
+          ? { pipelineAnalysisSection: previous.context.pipelineAnalysisSection } : {}),
       } : {}) };
   }
   if (isDecisionTab(tab) && isDecisionTab(previous.tab)) {
