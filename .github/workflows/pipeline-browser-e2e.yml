@@ -57,6 +57,44 @@ jobs:
         run: docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app up --build -d --wait
       - name: Verify complete browser Pipeline consumer journey
         run: node web/scripts/browser-pipeline-e2e.mjs
+      - name: Verify real trained IF model is bound to MLflow Registry
+        run: |
+          docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app exec -T worker python - <<'PY'
+          import os
+          from pathlib import Path
+          from sqlalchemy import text
+          from sos_platform.store import Store
+          from sos_platform.mlflow_config import MLflowSettings
+          from sos_platform.mlflow_tracking import MLflowClient
+          from sos_platform.mlflow_registry import verify_registered_version
+          from sos_platform.mlflow_read import read_experiments, read_runs, read_model_versions
+
+          store = Store(Path(os.environ["SOS_HOME"]))
+          with store.connection() as db:
+              model_id = db.execute(
+                  text("SELECT id FROM model_revisions WHERE owner_actor=:owner "
+                       "ORDER BY created_at DESC LIMIT 1"),
+                  {"owner": "e2e-operator"},
+              ).scalar_one()
+          model = store.get_model_revision(model_id)
+          assert model is not None and model["registry_model"] and model["registry_version"]
+          tracking = store.tracking_status(model["job_id"])
+          assert tracking is not None and tracking["state"] == "Succeeded"
+          assert tracking["run_id"]
+          settings = MLflowSettings.from_env()
+          assert settings is not None
+          client = MLflowClient(settings)
+          verify_registered_version(client, model)
+          # 기존 브라우저 E2E가 만든 데이터를 관리 조회 API가 실제로 찾을 수 있는지 확인한다.
+          experiments = read_experiments(client, "e2e-operator")["items"]
+          assert any(item["name"] == "기본 실험" for item in experiments)
+          chosen = next(item for item in experiments if item["name"] == "기본 실험")
+          runs = read_runs(client, store, "e2e-operator", experiment_id=chosen["id"])["items"]
+          assert any(item["job_id"] == model["job_id"] for item in runs)
+          models = read_model_versions(client, store, "e2e-operator")["items"]
+          assert any(item["model_id"] == model_id for item in models)
+          print("실제 IF 학습 → MLflow Experiment 검색·Run·Registry 판본·아티팩트 검증: 통과")
+          PY
       - name: Upload screenshot when browser test fails
         if: failure()
         uses: actions/upload-artifact@v4
@@ -66,7 +104,7 @@ jobs:
           if-no-files-found: ignore
       - name: Diagnose isolated integration failures
         if: failure()
-        run: docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app logs --tail 100 api worker web
+        run: docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app logs --tail 100 api worker web mlflow
       - name: Remove only this test's isolated project and volumes
         if: always()
         run: |

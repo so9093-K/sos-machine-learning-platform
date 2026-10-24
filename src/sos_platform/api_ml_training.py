@@ -57,6 +57,7 @@ def training_router(
             dataset_id=dataset["id"],
             spec={
                 "algorithm": "isolation_forest",
+                "experiment_title": body.experiment_title.strip(),
                 "dataset_version": dataset["version"],
                 "features": body.features,
                 "params": body.params.model_dump(),
@@ -117,6 +118,7 @@ def training_router(
             dataset_id=dataset["id"],
             spec={
                 "algorithm": source["spec"]["algorithm"],
+                "experiment_title": source["spec"].get("experiment_title", "기본 실험"),
                 "dataset_version": source["spec"]["dataset_version"],
                 "features": source["spec"]["features"],
                 "params": params,

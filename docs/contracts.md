@@ -29,7 +29,7 @@
 - **레이블과 평가:** 비지도 학습이라는 사실과 평가 레이블의 존재 여부를 구별한다. 레이블 없는 결과에 정답 기반 정확도·Precision·Recall을 붙이지 않는다. 레이블이 불충분한 경우 근거 수준과 미정의 지표를 구별한다. 정책이 없더라도 레이블이 있으면 순위 지표만 평가할 수 있으며, 이를 무레이블 평가로 표시하지 않는다. 같은 Scoring Result의 점수로 산정한 분위수 임계값은 별도 보정·검증 집합에 근거한 독립 성능을 뜻하지 않는다.
 - **학습 입력과 실행 자원:** `all`은 선택한 Train 범위의 모든 행, `sample`은 명시적으로 선택한 행 수를 의미하며 실제 데이터 저장 방식이나 Worker의 RSS/임시 디스크 예산과 혼동하지 않는다. 물리적으로 수용할 수 없을 때는 실행 실패를 정확히 보고하지만, 임의의 사전 행 수 상한에 맞추려고 입력을 조용히 줄이거나 비슷한 데이터 규모에 특화하지 않는다.
 - **단계 재사용:** 이미 계산된 모델 점수를 다른 Threshold Policy에 적용하거나 설명을 별도로 생성할 때 불필요하게 다시 학습하지 않는다. 실제 재사용 가능 범위는 입력·모델·방법·Runtime 계약으로 판단한다.
-- **외부 Tracking:** MLflow 등 외부 추적 결과는 Job/Attempt 및 필수 Evaluation의 SOS 정본을 대체하지 않는다. 연결 상태와 외부 식별자는 별도로 관리한다.
+- **MLflow 관리 정본:** Experiment·Run·Registered Model·Model Version의 관리 정본은 MLflow다. SOS의 Model Revision은 관리 Registry가 아닌 Job/Attempt·Dataset·아티팩트 SHA·Feature·Runtime의 불변 실행 참조이며 MLflow 고정 버전을 연결한다. 등록되지 않은 신규 모델은 Scoring에 사용할 수 없다. Job/Attempt와 Evaluation의 결과 의미는 MLflow가 대체하지 않는다.
 
 ## ML 기능별 책임과 공통화 경계
 

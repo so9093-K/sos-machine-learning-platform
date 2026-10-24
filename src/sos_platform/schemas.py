@@ -224,6 +224,46 @@ class MLPolicyRequest(BaseModel):
         return self
 
 
+class MLflowExperimentOut(BaseModel):
+    id: str
+    name: str
+
+
+class MLflowExperimentPageOut(BaseModel):
+    items: list[MLflowExperimentOut]
+    next_page_token: str | None = None
+
+
+class MLflowRunOut(BaseModel):
+    id: str
+    job_id: str
+    job_kind: str
+    status: str | None = None
+    start_time: int | None = None
+    params: dict[str, str]
+    metrics: dict[str, float]
+
+
+class MLflowRunPageOut(BaseModel):
+    items: list[MLflowRunOut]
+    next_page_token: str | None = None
+
+
+class MLflowModelVersionOut(BaseModel):
+    name: str
+    version: str
+    model_id: str
+    run_id: str | None = None
+    status: str
+    job_id: str
+    aliases: list[str] = Field(default_factory=list)
+
+
+class MLflowModelVersionPageOut(BaseModel):
+    items: list[MLflowModelVersionOut]
+    next_page_token: str | None = None
+
+
 class MLflowExportStatusOut(BaseModel):
     job_id: str
     state: Literal["Disabled", "Pending", "Sending", "Retry", "Succeeded"]
@@ -367,6 +407,7 @@ class MLForkRequest(BaseModel):
 
 class MLTrainRequest(BaseModel):
     dataset_id: str
+    experiment_title: str = Field(default="기본 실험", min_length=1, max_length=80)
     features: list[str] = Field(min_length=1)
     params: IsolationForestParameters = Field(default_factory=IsolationForestParameters)
     training_input: MLTrainingInputPolicy = Field(default_factory=MLTrainingInputPolicy)
@@ -375,6 +416,8 @@ class MLTrainRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_features(self):
+        if not self.experiment_title.strip():
+            raise ValueError("Experiment title must not be blank")
         if len(set(self.features)) != len(self.features):
             raise ValueError("Features must be distinct")
         if any(not name or len(name) > 256 for name in self.features):

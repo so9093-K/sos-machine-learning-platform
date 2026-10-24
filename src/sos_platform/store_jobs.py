@@ -578,7 +578,7 @@ class JobStoreMixin:
                 )
                 result = {**(result or {}), "explanation_result_id": item["id"]}
             if (
-                status == "Succeeded"
+                status in ("Succeeded", "Failed", "Cancelled")
                 and row["kind"] == "profile"
                 and json.loads(row["spec"]).get("mode") == "understanding"
                 and result is not None

@@ -112,15 +112,14 @@ try {
   const trainingForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
     datasets: [{ id: "data-v1", name: "Example Dataset", kind: "file" }],
     initialDatasetId: "data-v1", onDatasetSelected: () => {},
-    canTrain: false, canCancel: false, view: "training",
-    onViewChange: () => {}, onOpenModel: () => {},
+    canTrain: false, canCancel: false, onOpenModel: () => {},
   }));
   assert.match(trainingForm, /<option value="data-v1" selected=""/);
 
   const pagedDatasetForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
     datasets: [], initialDatasetId: "data-not-on-first-page",
     onDatasetSelected: () => {}, canTrain: false, canCancel: false,
-    view: "training", onViewChange: () => {}, onOpenModel: () => {},
+    onOpenModel: () => {},
   }));
   assert.match(pagedDatasetForm, /현재 목록 외 Dataset/);
   assert.match(pagedDatasetForm, /<option value="data-not-on-first-page" selected=""/);

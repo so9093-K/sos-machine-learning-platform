@@ -35,6 +35,7 @@ make doctor   # 설정·준비 상태 진단
 - Web UI: `http://localhost:9601`
 - API: `http://localhost:9602`
 - API Reference: `http://localhost:9602/docs`
+- 로컬 MLflow 운영자 관리 UI: `http://localhost:9606`
 
 Web UI의 인증 화면에 앞에서 보관한 Bearer Token을 입력한다. 토큰은 브라우저 메모리에만 보관되므로 다시 접속하면 재인증이 필요하다. 접속 주소와 실행 구성은 [Compose](../compose.yaml) 및 [Makefile](../Makefile)을 따른다.
 
@@ -80,15 +81,12 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 호스트에서 현재 구성된 Python 검증을 실행하려면 프로젝트의 Python 환경과 uv를 준비하고 `make validate`를 사용한다. 이 명령은 [Testing & CI](testing.md)의 현재 Python Suite를 실행하며 **전체 제품의 검증 완료를 뜻하지 않는다.**
 
-## 선택적 MLflow Tracking
+## MLflow 실험·모델 관리
 
-외부 MLflow Tracking을 사용하지 않으면 설정할 필요가 없다. 사용하려면 별도 Tracking 서버와 기존 Experiment ID를 준비한 후 `.env`에 연결 정보를 설정하고 Worker를 재시작한다.
+로컬 Compose는 MLflow 관리 서버를 실행합니다. SOS 웹의 **모델 판본**에서 등록된 모델과 Run 비교를 확인할 수 있습니다. Experiment·Run·Registered Model/Version은 MLflow가 관리하고, SOS는 Dataset·Job/Attempt·Scoring·Evaluation 및 불변 모델 실행 근거를 소유합니다.
 
-```bash
-SOS_MLFLOW_TRACKING_URI=https://tracking.example.org
-SOS_MLFLOW_EXPERIMENT_ID=17
-# 인증이 필요한 경우에만 주석을 해제해 설정하고 Git에 커밋하지 않는다.
-# SOS_MLFLOW_TOKEN=<외부 서버에서 발급한 토큰>
-```
+학습 성공과 MLflow Registry 등록 성공은 구별합니다. 관리 연결이 실패하면 학습 성공은 유지되지만 새 모델의 Scoring 및 Pipeline 후속 단계는 Registry 등록을 기다립니다. 기존 `SOS_MLFLOW_EXPERIMENT_ID`는 사용하지 않습니다. 독립 학습에서 입력한 연구 Experiment 이름으로 MLflow 내 Actor별 연구 묶음을 만들며, Pipeline처럼 연구 이름을 지정하지 않은 실행은 기본 실험에 기록합니다.
 
-MLflow는 선택적 외부 추적이며 SOS의 Job·Model Revision 상태를 대체하지 않는다. API 필드·응답 형식은 [API Reference](http://localhost:9602/docs), 문서별 책임은 [문서 안내](README.md)를 따른다.
+외부 MLflow 서버를 사용하는 경우 `SOS_MLFLOW_TRACKING_URI`를 변경하고 필요한 인증은 `SOS_MLFLOW_TOKEN`에 설정할 수 있습니다. 기본 MLflow UI는 로컬 운영자 도구이며 사용자별 격리를 제공하지 않으므로 **외부 네트워크에 공개하지 마세요**. SOS API는 Actor별로 실행과 모델의 실제 소유권을 재검증합니다.
+
+개발 데이터 초기화는 해당 Compose 프로젝트/볼륨이 재생성 가능한 개발 자산임을 확인한 범위에서만 수행합니다.

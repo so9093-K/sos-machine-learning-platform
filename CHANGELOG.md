@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- MLflow Experiment·Run·Model Registry를 관리 정본으로 연결하고, SOS 웹에서 소유 모델 판본 및 Run 조회·비교를 제공합니다. 모델 등록 완료와 Job 성공을 구별하며, Scoring 제출 전에 Registry 버전·아티팩트 메타데이터를 대조합니다. 로컬 개발 Compose에 MLflow를 추가했습니다.
+
 - 웹 홈을 실행 가능한 Data Explorer·활동 이상 탐지 Pipeline의 진입점과 이전 Pipeline 재개 중심으로 변경하고, 미구현 Research / Model Experience Preview 메뉴·컴포넌트를 제거했습니다. 모델·학습·Scoring·정책·평가·설명의 독립 API 및 결과 직접 주소는 유지합니다.
 - 첫 IF Pipeline용 44개 Feature·UTC 시각의 재현 가능한 합성 Dataset을 사용자가 명시적으로 등록·검사할 수 있게 했습니다. Training·Calibration·Test의 실행 전 발견성, 완료 후 결과 접근, 생성 모델의 별도 Dataset Scoring을 Pipeline 안에서 연결했습니다. 학습·Scoring 실행은 동일 작업이 아니며 예제는 실제 이상 사건의 근거가 아닙니다.
 - 실제 브라우저와 API·Worker·저장소의 사용자 흐름을 확인하는 격리형 Compose 통합 검증을 PR CI에 추가했습니다.

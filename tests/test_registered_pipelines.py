@@ -39,6 +39,12 @@ class FakeStore:
     def _assert_worker_ownership(self):
         pass
 
+    def get_model_revision(self, model_id):
+        return {"id": model_id, "registry_version": "1"}
+
+    def tracking_status(self, job_id):
+        return {"state": "Succeeded"}
+
     def get_job(self, job_id):
         return self.jobs.get(job_id)
 
@@ -295,3 +301,24 @@ def test_first_pipeline_example_matches_registered_input_contract(monkeypatch):
     assert checked_full["ready"] is True, checked_full["issues"]
     assert min(checked_full["plan"]["partition_sizes"].values()) > 0
     assert sum(checked_full["plan"]["partition_sizes"].values()) == item["row_count"]
+
+
+
+def test_pipeline_stops_when_mlflow_registration_was_never_enabled():
+    """학습은 성공했지만 등록 대상이 없다면 무한 대기하지 않는다."""
+    store = FakeStore()
+    run = pipeline_runs.create_run(
+        store, {"id": "dataset-mlflow-missing", "version": "v1"},
+        "operator", {"ready": True, "plan": None}, None,
+    )
+    # preflight 생성 → 결과 기록 → training 생성까지만 전진한다.
+    for _ in range(3):
+        assert pipeline_runs.advance_run(store)
+    result = pipeline_runs.get_run(store, run["id"])
+    assert result["job_ids"].get("training")
+    store.get_model_revision = lambda _: {"id": "model-1", "registry_version": None}
+    store.tracking_status = lambda _: None
+    assert pipeline_runs.advance_run(store)
+    failed = pipeline_runs.get_run(store, run["id"])
+    assert failed["status"] == "Failed"
+    assert failed["error_code"] == "SOS-MLFLOW-NOT-CONFIGURED"

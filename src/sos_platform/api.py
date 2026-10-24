@@ -31,12 +31,17 @@ from .discovery import overview as discovery_overview
 from .discovery import preview as discovery_preview
 from .discovery import profile as discovery_profile
 from .discovery import query_dataset
-from .errors import ERRORS, PlatformError
+from .errors import ERRORS, PlatformError, RuntimeConfigurationError
 from .examples import list_examples, use_example
 from .file_formats import upload_options_from_mime
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .object_store import ObjectStore
 from .observability import emit
+from .mlflow_config import MLflowSettings
+from .mlflow_errors import MLflowDeliveryError
+from .mlflow_read import read_experiments, read_runs, read_model_versions
+from .mlflow_registry import verify_registered_version
+from .mlflow_tracking import MLflowClient
 from .pagination import decode_cursor, page_from_rows
 from .processing import bounded_feature_preview
 from .reconciler import inspect_iceberg_references, inspect_page
@@ -71,6 +76,9 @@ from .schemas import (
     MLExplanationJobPageOut,
     MLExplanationRequest,
     MLflowExportStatusOut,
+    MLflowExperimentPageOut,
+    MLflowRunPageOut,
+    MLflowModelVersionPageOut,
     MLPolicyJobOut,
     MLPolicyJobPageOut,
     MLPolicyRequest,
@@ -562,6 +570,12 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         if model is None:
             raise HTTPException(status_code=404, detail="Model Revision not found")
         check_ownership(actor, model["owner_actor"], "model", model["id"])
+        if not model.get("registry_version"):
+            raise HTTPException(status_code=409, detail="Model Registry registration is pending")
+        try:
+            verify_registered_version(_management_client(), model)
+        except MLflowDeliveryError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         require_job_submission_key(idempotency_key)
         return store.create_job(
             kind="ml_score",
@@ -839,6 +853,53 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             raise HTTPException(status_code=404, detail="ML Job not found")
         status = store.tracking_status(job_id)
         return status or {"job_id": job_id, "state": "Disabled"}
+
+    def _management_client() -> MLflowClient:
+        try:
+            settings = MLflowSettings.from_env()
+        except RuntimeConfigurationError as exc:
+            raise HTTPException(
+                status_code=503, detail="MLflow management configuration is invalid"
+            ) from exc
+        if settings is None:
+            raise HTTPException(status_code=503, detail="MLflow management is unavailable")
+        return MLflowClient(settings)
+
+    @app.get("/api/ml/experiments", response_model=MLflowExperimentPageOut)
+    def list_ml_experiments(
+        page_token: str | None = Query(default=None, max_length=2048),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        try:
+            return read_experiments(_management_client(), actor.id, page_token=page_token)
+        except MLflowDeliveryError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.get("/api/ml/experiments/runs", response_model=MLflowRunPageOut)
+    def list_ml_runs(
+        experiment_id: str | None = Query(default=None, pattern=r"^[0-9]+$"),
+        page_token: str | None = Query(default=None, max_length=2048),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        try:
+            return read_runs(
+                _management_client(), store, actor.id,
+                experiment_id=experiment_id, page_token=page_token,
+            )
+        except MLflowDeliveryError as exc:
+            if str(exc) == "SOS-MLFLOW-EXPERIMENT-NOT-FOUND":
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.get("/api/ml/registry/models", response_model=MLflowModelVersionPageOut)
+    def list_registered_models(
+        page_token: str | None = Query(default=None, max_length=2048),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        try:
+            return read_model_versions(_management_client(), store, actor.id, page_token=page_token)
+        except MLflowDeliveryError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @app.get("/api/ml/models/{revision_id}", response_model=ModelRevisionOut)
     def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):

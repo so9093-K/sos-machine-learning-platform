@@ -251,6 +251,23 @@ def _advance_one_run(store, run_id: str) -> bool:
         _update_run(store, run["id"], status=job["status"],
                     error_code=job.get("error_code"))
         return True
+    if stage == "training":
+        # 학습 성공과 모델 Registry 등록 완료는 서로 다른 사건이다.
+        # 등록이 확정되기 전에는 Calibration/Scoring으로 전진하지 않는다.
+        model_id = (job.get("result") or {}).get("model_revision_id")
+        model = store.get_model_revision(model_id) if model_id else None
+        if model is None:
+            _update_run(store, run["id"], status="Failed", error_code="SOS-ML-MODEL-INVALID")
+            return True
+        if not model.get("registry_version"):
+            # 관리 서버가 애초에 설정되지 않은 실행은 영원히 기다리지 않는다.
+            if store.tracking_status(job_id) is None:
+                _update_run(
+                    store, run["id"], status="Failed",
+                    error_code="SOS-MLFLOW-NOT-CONFIGURED",
+                )
+                return True
+            return False
     if stage == "preflight":
         result = job.get("result") or {}
         plan = result.get("plan") if isinstance(result, dict) else None

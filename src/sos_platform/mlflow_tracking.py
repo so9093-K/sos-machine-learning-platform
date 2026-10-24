@@ -1,23 +1,27 @@
-"""MLflow REST Tracking 어댑터: 선택적이고 재시도 가능한 외부 투영.
+"""MLflow 연구 기록 및 Registry 관리 어댑터.
 
-MLflow 서버를 SOS의 모델/Job 정본으로 사용하지 않는다. 모델 바이트,
-원시 Feature, 개인 데이터, 토큰은 외부로 전송하지 않는다.
+모델 자산 이름·버전은 MLflow에서 관리한다. SOS 실행·무결성 근거는
+SOS가 소유하며 모델 바이트, 원시 Feature, 비밀정보는 전송하지 않는다.
 """
 
 import hashlib
 import json
+import logging
 import math
 import time
 from collections.abc import Callable
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
+from .mlflow_errors import MLflowDeliveryError
+from .mlflow_experiments import DEFAULT_EXPERIMENT, ensure_experiment
+from .mlflow_registry import register_model_version, verify_registered_version
 
 
-class MLflowDeliveryError(Exception):
-    """외부 전송 실패의 원문이나 원격 응답을 노출하지 않는다."""
+logger = logging.getLogger(__name__)
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -31,6 +35,31 @@ class MLflowClient:
     def __init__(self, settings: MLflowSettings):
         self.settings = settings
         self._opener = build_opener(_NoRedirect())
+
+    def get(self, endpoint: str, params: dict) -> dict:
+        """GET 응답도 POST와 동일하게 리다이렉트·크기·대기 시간을 제한한다."""
+        req = Request(
+            self.settings.endpoint + "/api/2.0/mlflow/" + endpoint + "?" + urlencode(params),
+            headers={"Authorization": f"Bearer {self.settings.token}"} if self.settings.token else {},
+            method="GET",
+        )
+        try:
+            with self._opener.open(req, timeout=self.settings.timeout_seconds) as response:
+                raw = response.read(1_048_577)
+            if len(raw) > 1_048_576:
+                raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+            result = json.loads(raw)
+            if not isinstance(result, dict):
+                raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+            return result
+        except HTTPError as exc:
+            # 원격 응답 본문·URL·토큰은 기록하지 않고 명시적 API 경계만 식별한다.
+            code = endpoint.replace("/", "_")
+            raise MLflowDeliveryError(f"SOS-MLFLOW-HTTP-{exc.code}-{code}") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            raise MLflowDeliveryError("SOS-MLFLOW-UNAVAILABLE") from exc
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID") from exc
 
     def post(self, endpoint: str, payload: dict) -> dict:
         """HTTP 리다이렉트를 거부하고 응답 크기·대기 시간을 제한한다."""
@@ -53,7 +82,11 @@ class MLflowClient:
             if not isinstance(parsed, dict):
                 raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
             return parsed
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        except HTTPError as exc:
+            # 원격 응답 본문·URL·토큰은 기록하지 않고 명시적 API 경계만 식별한다.
+            code = endpoint.replace("/", "_")
+            raise MLflowDeliveryError(f"SOS-MLFLOW-HTTP-{exc.code}-{code}") from exc
+        except (URLError, TimeoutError, OSError) as exc:
             raise MLflowDeliveryError("SOS-MLFLOW-UNAVAILABLE") from exc
         except (UnicodeDecodeError, ValueError) as exc:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID") from exc
@@ -79,23 +112,50 @@ def _numeric_metrics(job: dict) -> list[dict]:
     ]
 
 
+def _job_experiment_title(store, job: dict) -> str:
+    """같은 Actor의 원본 학습으로 거슬러 올라가 연구 묶음을 연결한다."""
+    if job["kind"] == "ml_train":
+        return job["spec"].get("experiment_title") or DEFAULT_EXPERIMENT
+    spec = job.get("spec") or {}
+    model_id = spec.get("model_revision_id")
+    if job["kind"] in ("ml_policy", "ml_evaluate", "ml_explain"):
+        score_id = spec.get("scoring_result_id")
+        score = store.get_scoring_result(score_id) if score_id else None
+        model_id = score.get("model_revision_id") if score else None
+    if not model_id:
+        return DEFAULT_EXPERIMENT
+    model = store.get_model_revision(model_id)
+    training_job = store.get_job(model["job_id"]) if model else None
+    if (
+        not training_job or training_job.get("kind") != "ml_train"
+        or training_job.get("owner_actor") != job.get("owner_actor")
+    ):
+        return DEFAULT_EXPERIMENT
+    return training_job["spec"].get("experiment_title") or DEFAULT_EXPERIMENT
+
+
 def send_to_mlflow(
     client: MLflowClient,
     job: dict,
     *,
     known_run_id: str | None,
     remember_run: Callable[[str], None],
+    experiment_title: str | None = None,
 ) -> str:
     """Sos Job ID를 외부 Run 검색 키로 사용해 중단 후 재전송한다.
 
     응답이 소실된 신규 Run 생성은 전송 전 검색으로 최대한 복구하나,
     MLflow 서버의 비원자적 search/create 때문에 완전한 exactly-once는 보장하지 않는다.
     """
-    if job["status"] != "Succeeded" or not job["kind"].startswith("ml_"):
-        raise ValueError("Only successful ML jobs can be tracked")
-    experiment = client.settings.experiment_id
+    if job["status"] not in ("Succeeded", "Failed", "Cancelled") or not job["kind"].startswith("ml_"):
+        raise ValueError("Only terminal ML jobs can be tracked")
     run_id = known_run_id
     if run_id is None:
+        experiment = ensure_experiment(
+            client, job["owner_actor"], experiment_title or (
+                job.get("spec", {}).get("experiment_title") or DEFAULT_EXPERIMENT
+            )
+        )
         # 입력 Job ID는 SOS가 발급한 UUID이며 SQL/검색 필터의 사용자 문자열이 아니다.
         found = client.post(
             "runs/search",
@@ -128,7 +188,15 @@ def send_to_mlflow(
         if not isinstance(run_id, str) or not run_id or len(run_id) > 128:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
         remember_run(run_id)
-    params = []
+    # Run 비교에는 모델 설정뿐 아니라 사용한 Dataset 판본이 필요하다.
+    # 값은 SOS가 이미 확정한 실행 메타데이터에서만 가져온다.
+    params = [
+        {"key": "sos.dataset_id", "value": job["dataset_id"]},
+        {"key": "sos.job_kind", "value": job["kind"]},
+    ]
+    dataset_version = job["spec"].get("dataset_version")
+    if isinstance(dataset_version, str) and dataset_version:
+        params.append({"key": "sos.dataset_version", "value": dataset_version})
     if job["kind"] == "ml_train":
         # 모델 설정은 공개 가능한 필드만 전송한다. 향후 Adapter 확장으로
         # 비밀값·경로·사용자 입력이 추가돼도 자동으로 외부에 유출되지 않는다.
@@ -145,13 +213,18 @@ def send_to_mlflow(
             "tags": [{"key": "sos.source", "value": "sos-platform"}],
         },
     )
-    client.post("runs/update", {"run_id": run_id, "status": "FINISHED"})
+    client.post("runs/update", {
+        "run_id": run_id,
+        "status": {
+            "Succeeded": "FINISHED", "Failed": "FAILED", "Cancelled": "KILLED",
+        }[job["status"]],
+    })
     return run_id
 
 
 def _destination_fingerprint(settings: MLflowSettings) -> str:
-    """인증정보를 제외한 Tracking 서버와 Experiment의 연결 지문."""
-    identity = f"{settings.endpoint}\0{settings.experiment_id}".encode()
+    """인증정보를 제외한 Tracking 서버·Experiment 정책의 연결 지문."""
+    identity = f"{settings.endpoint}\0owner-experiment-v1".encode()
     return hashlib.sha256(identity).hexdigest()
 
 
@@ -167,20 +240,38 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
         job = store.get_job(job_id)
         if job is None:
             raise MLflowDeliveryError("SOS-MLFLOW-SOURCE-MISSING")
-        send_to_mlflow(
+        run_id = send_to_mlflow(
             client,
             job,
             known_run_id=export["run_id"],
             remember_run=lambda value: store.save_tracking_run_id(job_id, value),
+            experiment_title=_job_experiment_title(store, job),
         )
+        if job["kind"] == "ml_train" and job["status"] == "Succeeded":
+            model_id = (job.get("result") or {}).get("model_revision_id")
+            model = store.get_model_revision(model_id) if model_id else None
+            if model is None:
+                raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
+            name, version = register_model_version(client, model, run_id)
+            # Registry가 실제 READY 상태인지 검증한 뒤에만 SOS 실행 경로를 연다.
+            # 생성 직후 비동기 PENDING이면 전송을 Retry로 남기며 학습 결과는 유지한다.
+            verify_registered_version(
+                client, {**model, "registry_model": name, "registry_version": version}
+            )
+            store.save_registry_version(model_id, name, version)
     except MLflowDeliveryError as exc:
         store.finish_tracking_export(job_id, error_code=str(exc))
     except WorkerOwnershipLost:
         # DB 세션 잠금을 잃으면 새 Worker의 복구 판단에 맡긴다.
         raise
-    except Exception:
-        # 외부 전송 장애로 ML Job 상태를 변경하거나 자격 증명을 기록하지 않는다.
-        store.finish_tracking_export(job_id, error_code="SOS-MLFLOW-UNAVAILABLE")
+    except Exception as exc:
+        # 프로그래밍 오류를 외부 서버 장애로 숨기지 않는다. 예외 메시지는
+        # 원격 URI·비밀정보를 포함할 수 있어 로그에 기록하지 않는다.
+        logger.error(
+            "MLflow 등록 내부 오류: job=%s exception=%s",
+            job_id, type(exc).__name__,
+        )
+        store.finish_tracking_export(job_id, error_code="SOS-MLFLOW-INTERNAL")
     else:
         store.finish_tracking_export(job_id)
     return True
