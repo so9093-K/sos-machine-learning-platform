@@ -604,8 +604,13 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           runLoadError ? "마지막 확인: " + statusLabel[run.status] : statusLabel[run.status]
         }{run.cancel_requested ? " · 취소 요청됨" : ""}</strong></div>
         <div><span>Dataset</span><strong>{activeDataset?.name ?? run.dataset_id}</strong></div>
-        <div><span>Dataset 판본</span><code title={run.dataset_version}>{run.dataset_version}</code></div>
-        <details><summary>기술 식별자</summary><code title={run.id}>{run.id}</code></details>
+        <details className="pipeline-context-technical">
+          <summary>판본·기술 식별자</summary>
+          <dl>
+            <div><dt>Dataset 판본</dt><dd><code title={run.dataset_version}>{run.dataset_version}</code></dd></div>
+            <div><dt>실행 ID</dt><dd><code title={run.id}>{run.id}</code></dd></div>
+          </dl>
+        </details>
       </div>}
       {runId && runLoadError && <p className="pipeline-context-error" role="alert">
         마지막 Run 조회 실패: {runLoadError} · 아래에서 다시 조회할 수 있습니다.

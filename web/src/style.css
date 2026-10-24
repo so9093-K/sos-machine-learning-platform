@@ -632,8 +632,13 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .pipeline-run-context-header h3 { font-size:19px; margin:6px 0; }
 .pipeline-run-context-header p { color:var(--sos-muted); line-height:1.6; font-size:12px; }
 .pipeline-run-context-header label { display:grid; gap:7px; color:var(--sos-muted); min-width:min(100%,300px); font-size:12px; }
-.pipeline-context-facts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.pipeline-context-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
 .pipeline-context-facts>div { display:grid; gap:7px; min-width:0; padding:12px; background:var(--sos-raised); border-radius:9px; }
+.pipeline-context-technical { min-width:0; padding:12px; background:var(--sos-raised); border-radius:9px; }
+.pipeline-context-technical summary { cursor:pointer; font-size:12px; font-weight:600; }
+.pipeline-context-technical dl { display:grid; gap:9px; margin:12px 0 0; }
+.pipeline-context-technical dt { font-size:11px; color:var(--sos-muted); }
+.pipeline-context-technical dd { margin:4px 0 0; overflow-wrap:anywhere; }
 .pipeline-context-facts span { color:var(--sos-muted); font-size:11px; }
 .pipeline-context-facts strong,.pipeline-context-facts code { overflow-wrap:anywhere; font-size:12px; }
 .pipeline-context-error,.pipeline-run-failure-code { color:var(--sos-danger); font-size:12px; }
