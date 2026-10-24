@@ -79,6 +79,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [runReload, setRunReload] = useState(0);
   const [rows, setRows] = useState<CandidatePage | null>(null);
   const [candidateError, setCandidateError] = useState("");
+  const [candidateLookupError, setCandidateLookupError] = useState("");
   const [candidateReload, setCandidateReload] = useState(0);
   const [candidateScoreRange, setCandidateScoreRange] = useState<PipelineScoreRange | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(initialCandidateRowIndex ?? null);
@@ -179,6 +180,25 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     return () => { active = false; };
   }, [run?.id, run?.status, candidateReload]);
   useEffect(() => {
+    if (run?.status !== "Succeeded" || !rows || selectedCandidate === null ||
+        rows.items.some(item => item.row_index === selectedCandidate)) return;
+    let active = true;
+    setCandidateLookupError("");
+    void request<CandidatePage>(
+      `/api/pipeline-runs/${encodeURIComponent(run.id)}/candidates?limit=1&row_index=${selectedCandidate}`
+    ).then(page => {
+      if (!active || selectedRunId.current !== run.id || page.result_id !== rows.result_id) return;
+      if (page.items.length === 0) {
+        setCandidateLookupError("이 번호는 현재 분석에서 검토 대상인 이상 후보가 아닙니다.");
+      } else {
+        setRows(previous => previous?.result_id === page.result_id &&
+          !previous.items.some(item => item.row_index === page.items[0].row_index)
+          ? { ...previous, items: [...previous.items, ...page.items] } : previous);
+      }
+    }).catch(reason => { if (active) setCandidateLookupError(formatError(reason)); });
+    return () => { active = false; };
+  }, [run?.id, run?.status, rows?.result_id, selectedCandidate]);
+  useEffect(() => {
     if (!run || pendingRunFocus.current !== run.id) return;
     pendingRunFocus.current = null;
     moveFocusTo(run.status === "Succeeded" ? "pipeline-analysis-first-heading" : "pipeline-current-run-heading");
@@ -192,6 +212,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   }
   function selectCandidateRow(rowIndex: number) {
     setSelectedCandidate(rowIndex);
+    setCandidateLookupError("");
     onSelectCandidate(rowIndex);
     requestAnimationFrame(() => {
       document.getElementById("pipeline-candidate-detail-heading")?.focus();
@@ -216,6 +237,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     pendingRunFocus.current = id || null;
     setRunId(id); setRun(null); setRows(null); setSelectedCandidate(null); setError(""); setBusy(false); setCandidateScoreRange(null);
     setCandidateError("");
+    setCandidateLookupError("");
     setRunLoadError("");
     onSelectRun(id, runDatasetId);
     // 선택한 Run의 조회가 완료되면 분석 결과로 이동한다. 먼저 과거 Run으로 이동하지 않는다.
@@ -693,9 +715,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                     </>
                     : <>
                       <strong>선택했던 후보 #{count(selectedCandidate)}를 찾는 중입니다.</strong>
-                      <p>선택한 후보는 현재 불러온 점수 순위 범위에 없습니다.
-                        {rows.next_cursor ? " 다음 후보를 불러오면 계속 확인할 수 있습니다." :
-                          " 이 분석에서 해당 후보를 찾지 못했습니다."}</p>
+                      <p>{candidateLookupError || "분석 결과에서 해당 후보의 관측 근거를 직접 조회하고 있습니다."}</p>
                     </>}
                 </div>}
                 {activeCandidate ? <PipelineCandidateInvestigation
