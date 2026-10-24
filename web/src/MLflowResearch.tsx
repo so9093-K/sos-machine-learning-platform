@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request } from "./api";
 import type {
   MLflowExperiment, MLflowExperimentPage, MLflowModelVersion,
@@ -30,6 +30,9 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  // 연구 선택·새로고침 이후 도착한 이전 페이지가 현재 목록을 오염시키지 않는다.
+  const activeSelection = useRef({ experimentId, revision });
+  activeSelection.current = { experimentId, revision };
 
   useEffect(() => {
     let active = true;
@@ -65,20 +68,27 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
     const cursor = kind === "experiments" ? experimentCursor :
       kind === "models" ? modelCursor : runCursor;
     if (!cursor) return;
+    const selection = { experimentId, revision };
     setLoadingMore(true); setError("");
     try {
       if (kind === "experiments") {
         const page = await request<MLflowExperimentPage>(url("/api/ml/experiments", { page_token: cursor }));
+        if (activeSelection.current.revision !== selection.revision) return;
         setExperiments(old => [...old, ...page.items]);
         setExperimentCursor(page.next_page_token ?? null);
       } else if (kind === "models") {
         const page = await request<MLflowModelVersionPage>(url("/api/ml/registry/models", { page_token: cursor }));
+        if (activeSelection.current.revision !== selection.revision) return;
         setModels(old => [...old, ...page.items]);
         setModelCursor(page.next_page_token ?? null);
       } else {
         const page = await request<MLflowRunPage>(url("/api/ml/experiments/runs", {
           experiment_id: experimentId, page_token: cursor,
         }));
+        if (
+          activeSelection.current.revision !== selection.revision ||
+          activeSelection.current.experimentId !== selection.experimentId
+        ) return;
         setRuns(old => [...old, ...page.items]);
         setRunCursor(page.next_page_token ?? null);
       }
