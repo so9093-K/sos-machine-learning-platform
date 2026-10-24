@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
+import { contextPath } from "./PlatformNavigation";
 import type { Dataset, PipelineRun } from "./types";
 
 /** 새로운 학습의 시작 화면과 분리된 모델 실험실 분석 이력. */
@@ -28,7 +29,7 @@ export function PipelineHistoryPanel({ datasets, onOpenRun, onStart }: {
     Failed: "실패", Cancelled: "취소됨",
   })[status] ?? status;
   const datasetName = (id: string) =>
-    datasets.find(dataset => dataset.id === id)?.name ?? "현재 목록 밖의 Dataset";
+    datasets.find(dataset => dataset.id === id)?.name ?? `목록 밖의 데이터 · ${id.slice(0, 12)}`;
   return <section className="panel" aria-labelledby="pipeline-activity-heading">
     <div className="panel-head"><div>
       <h3 id="pipeline-activity-heading">활동 이상 탐지 분석 이력</h3>
@@ -47,11 +48,18 @@ export function PipelineHistoryPanel({ datasets, onOpenRun, onStart }: {
       <button type="button" onClick={onStart}>활동 이상 탐지 학습 시작 →</button>
     </div>}
     {!loading && !error && runs.length > 0 && <div className="ml-resource-list">
-      {runs.map(run => <button type="button" key={run.id}
-        className="platform-list-link ghost" onClick={() => onOpenRun(run.id, run.dataset_id)}>
+      {runs.map(run => <a key={run.id}
+        className="platform-list-link ghost"
+        href={contextPath("pipelines", { datasetId: run.dataset_id, pipelineRunId: run.id })}
+        onClick={event => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey ||
+              event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          onOpenRun(run.id, run.dataset_id);
+        }}>
         <strong>활동 이상 탐지 · {datasetName(run.dataset_id)}</strong>
         <span>{new Date(run.created_at).toLocaleString("ko-KR")} · {statusName(run.status)}</span>
-      </button>)}
+      </a>)}
     </div>}
   </section>;
 }
