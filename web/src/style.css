@@ -18,6 +18,7 @@
   --sos-neutral: #9c938e;
   --sos-chart-bar: var(--sos-accent);
   --sos-chart-line: var(--sos-success);
+  --sos-chart-third: #cbb2f7;
   --sos-chart-label: #e0d8d0;
   --sos-chart-grid: #625d58;
   --sos-chart-grid-strong: #a69c93;

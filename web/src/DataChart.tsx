@@ -13,6 +13,7 @@ export const CHART_COLORS = {
   get grid() { return themeColor("--sos-border"); },
   get bar() { return themeColor("--sos-chart-bar"); },
   get line() { return themeColor("--sos-chart-line"); },
+  get third() { return themeColor("--sos-chart-third"); },
   get positive() { return themeColor("--sos-chart-positive"); },
   get negative() { return themeColor("--sos-chart-negative"); },
   get threshold() { return themeColor("--sos-chart-threshold"); },
@@ -41,7 +42,7 @@ export function DataChart({ option, ariaLabel, onDataClick }: {
       splitLine: { lineStyle: { color: grid } },
     };
     const chart = echarts.init(ref.current, {
-      color: [CHART_COLORS.bar, CHART_COLORS.line, CHART_COLORS.positive],
+      color: [CHART_COLORS.bar, CHART_COLORS.line, CHART_COLORS.third],
       textStyle: { color: text },
       categoryAxis: axis,
       valueAxis: axis,
@@ -83,7 +84,17 @@ export function DataChart({ option, ariaLabel, onDataClick }: {
     });
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(ref.current);
-    return () => { observer.disconnect(); chart.dispose(); };
+    // 접힌 상세에 미리 생성된 차트는 펼친 직후 실제 레이아웃으로 다시 계산한다.
+    const parentDetails = ref.current.closest("details");
+    const resizeOnToggle = () => {
+      if (parentDetails?.open) requestAnimationFrame(() => chart.resize());
+    };
+    parentDetails?.addEventListener("toggle", resizeOnToggle);
+    return () => {
+      parentDetails?.removeEventListener("toggle", resizeOnToggle);
+      observer.disconnect();
+      chart.dispose();
+    };
   }, [option]);
   return <div ref={ref} className="chart" role="img" aria-label={ariaLabel} />;
 }
