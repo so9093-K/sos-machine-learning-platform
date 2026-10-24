@@ -1,6 +1,6 @@
 """실패한 연구 Job도 MLflow에서 이유를 추적할 수 있고 모델 버전은 생성하지 않는다."""
 
-from sos_platform.mlflow_tracking import send_to_mlflow
+from sos_platform.mlflow_tracking import _job_experiment_title, send_to_mlflow
 
 
 class Client:
@@ -54,3 +54,34 @@ def test_cancelled_job_is_not_reported_as_finished_success():
     }
     send_to_mlflow(client, job, known_run_id=None, remember_run=lambda _: None)
     assert [payload["status"] for name, payload in client.requests if name == "runs/update"] == ["KILLED"]
+
+
+def test_linked_ml_jobs_share_the_source_training_experiment():
+    """Run 비교에서 연구가 실행 단계마다 기본 Experiment로 분산되지 않는다."""
+    from types import SimpleNamespace
+
+    training = {
+        "kind": "ml_train", "owner_actor": "alice",
+        "spec": {"experiment_title": "feature-ablation"},
+    }
+    store = SimpleNamespace(
+        get_model_revision=lambda model_id: (
+            {"job_id": "train-1"} if model_id == "model-1" else None
+        ),
+        get_job=lambda job_id: training if job_id == "train-1" else None,
+        get_scoring_result=lambda result_id: (
+            {"model_revision_id": "model-1"} if result_id == "score-1" else None
+        ),
+    )
+    for kind, spec in [
+        ("ml_score", {"model_revision_id": "model-1"}),
+        ("ml_policy", {"scoring_result_id": "score-1"}),
+        ("ml_evaluate", {"scoring_result_id": "score-1"}),
+        ("ml_explain", {"scoring_result_id": "score-1"}),
+    ]:
+        assert _job_experiment_title(
+            store, {"kind": kind, "owner_actor": "alice", "spec": spec}
+        ) == "feature-ablation"
+        assert _job_experiment_title(
+            store, {"kind": kind, "owner_actor": "bob", "spec": spec}
+        ) == "기본 실험"
