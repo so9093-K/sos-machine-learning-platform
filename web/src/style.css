@@ -650,23 +650,23 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 
 /* 모델 실험실: 연구 출발점과 실제 결과 분포를 공간적으로 연결한다. */
 .pipeline-lab-entry { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr); gap:16px; margin-top:22px; }
-.pipeline-lab-entry > div { display:flex; flex-direction:column; align-items:flex-start; gap:11px; border:1px solid var(--line,#353a44); border-radius:14px; padding:22px; background:rgba(255,255,255,.03); }
+.pipeline-lab-entry > div { display:flex; flex-direction:column; align-items:flex-start; gap:11px; border:1px solid var(--sos-border); border-radius:14px; padding:22px; background:var(--sos-raised); }
 .pipeline-lab-entry strong { font-size:1.1rem; }
 .pipeline-lab-entry p { margin:0; }
 .pipeline-lab-entry button { margin-top:auto; }
-.pipeline-lab-entry small { color:var(--muted,#a1a7b2); }
-.pipeline-lab-primary { background:rgba(90,153,230,.08) !important; }
+.pipeline-lab-entry small { color:var(--sos-muted); }
+.pipeline-lab-primary { background:var(--sos-accent-bg) !important; }
 .pipeline-lab-return { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:15px; }
-.pipeline-advanced { border:1px solid var(--line,#353a44); border-radius:12px; padding:14px; }
+.pipeline-advanced { border:1px solid var(--sos-border); border-radius:12px; padding:14px; }
 .pipeline-advanced > summary { cursor:pointer; font-weight:600; }
 .pipeline-advanced > .panel { margin-top:16px; }
 .pipeline-lab-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:18px 0; }
-.pipeline-lab-summary > div { display:flex; flex-direction:column; gap:7px; padding:16px; border:1px solid var(--line,#353a44); border-radius:10px; }
-.pipeline-lab-summary span { color:var(--muted,#a1a7b2); font-size:.86rem; }
+.pipeline-lab-summary > div { display:flex; flex-direction:column; gap:7px; padding:16px; border:1px solid var(--sos-border); border-radius:10px; }
+.pipeline-lab-summary span { color:var(--sos-muted); font-size:.86rem; }
 .pipeline-lab-summary strong { font-size:1.35rem; }
-.pipeline-lab-distributions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.pipeline-lab-distributions { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:16px; }
 .pipeline-lab-distributions > section { min-width:0; }
-@media (max-width:1100px) { .pipeline-lab-distributions { grid-template-columns:1fr; } }
+
 @media (max-width:780px) { .pipeline-lab-entry,.pipeline-lab-summary { grid-template-columns:1fr; } .pipeline-lab-return { flex-direction:column; align-items:flex-start; } }
 
 .pipeline-more { margin-top:16px; }

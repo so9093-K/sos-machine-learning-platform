@@ -20,6 +20,10 @@ const stageLabel: Record<string,string> = {
   policy: "판정 기준 생성", test: "Test 점수화", evaluation: "정책 적용 평가",
 };
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
+const statusLabel: Record<Run["status"], string> = {
+  Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
+  Failed: "실패", Cancelled: "취소됨",
+};
 const count = (value: number) => value.toLocaleString("ko-KR");
 
 /** Pipeline과 Training Job의 상태가 모두 일치할 때에만 Registry 대기로 본다. */
@@ -562,7 +566,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </div>
         <label>다른 분석 결과 선택
           <select aria-label="다른 분석 결과 선택" value={runId} disabled={exampleBusy} onChange={event => selectRun(event.target.value)}>
-            <option value="">새 분석 시작</option>
+            <option value="">새 모델 학습하기</option>
             {runId && !history.some(item => item.id === runId) &&
               <option value={runId}>현재 분석 · {runId.slice(0, 16)}</option>}
             {history.map(item => <option key={item.id} value={item.id}>{
@@ -574,7 +578,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       </div>
       {run && <div className="pipeline-context-facts">
         <div><span>실행 상태</span><strong>{
-          runLoadError ? "마지막 확인: " + run.status : run.status
+          runLoadError ? "마지막 확인: " + statusLabel[run.status] : statusLabel[run.status]
         }{run.cancel_requested ? " · 취소 요청됨" : ""}</strong></div>
         <div><span>Dataset</span><strong>{activeDataset?.name ?? run.dataset_id}</strong></div>
         <div><span>Dataset 판본</span><code title={run.dataset_version}>{run.dataset_version}</code></div>
@@ -614,7 +618,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <p>{run ? "선택한 실행의 현재 상태와 결과를 확인하세요. 나중에도 같은 분석을 다시 열 수 있습니다." :
             "Dataset 검사와 실행을 마치면, 이 자리에서 결과 요약·후보·실행 근거를 확인할 수 있습니다."}</p>
         </div>
-        {run && <span className="chip">{run.status}{run.cancel_requested ? " · 취소 요청됨" : ""}</span>}
+        {run && <span className="chip">{statusLabel[run.status]}{run.cancel_requested ? " · 취소 요청됨" : ""}</span>}
       </div>
       {!run && <div className="pipeline-next-step" role={runLoadError ? "alert" : "status"}>
         <strong>{runId ? runLoadError ? "선택한 실행을 조회하지 못했습니다." :
@@ -790,7 +794,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           {history.map(item => <button type="button" className="platform-list-link ghost" key={item.id}
             disabled={exampleBusy} onClick={() => selectRun(item.id)}>
             {datasets.find(data => data.id === item.dataset_id)?.name ?? item.dataset_id.slice(0, 12)}
-            {" · "}{item.status}{" · "}{new Date(item.created_at).toLocaleString("ko-KR")}
+            {" · "}{statusLabel[item.status]}{" · "}{new Date(item.created_at).toLocaleString("ko-KR")}
           </button>)}
           {history.length === 0 && !historyError && <p className="muted">
             이전 학습 결과가 없습니다. 예제로 모델을 학습해 볼 수 있습니다.

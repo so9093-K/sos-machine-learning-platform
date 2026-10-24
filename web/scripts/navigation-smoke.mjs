@@ -356,6 +356,7 @@ try {
   }));
   assert.match(interactiveOverview, /이 구간 후보 보기/);
   assert.match(interactiveOverview, /후보 탐색/);
+  assert.match(interactiveOverview, /그래프 막대나 아래 집계 표에서 점수 구간을 선택/);
   const calibrationReport = reportFor("calibration");
   assert.match(calibrationReport, /Calibration — 기준은 어떻게 정했는가/);
   assert.match(calibrationReport, /0.5%/);

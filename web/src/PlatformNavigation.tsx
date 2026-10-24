@@ -249,7 +249,7 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
     { tab: "overview", label: "홈" },
     { tab: "understanding", label: "데이터 탐색" },
   ] },
-  { title: "모델 실험실", items: [{ tab: "pipelines", label: "↳ 활동 이상 탐지" }] },
+  { title: "모델 실험실", items: [{ tab: "pipelines", label: "활동 이상 탐지" }] },
   { title: "DATA TOOLS", items: [{ tab: "preparation", label: "데이터 준비" }] },
   { title: "ACTIVITY & OPERATIONS", items: [
     { tab: "jobs", label: "작업 이력" },

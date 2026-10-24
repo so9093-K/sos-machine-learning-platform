@@ -114,7 +114,7 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
     edges.every((x, i) => i === 0 || x > edges[i - 1]);
   if (!valid) return <p className="hint">{hist
     ? "저장된 점수 분포 집계의 경계·건수가 검증되지 않아 그래프를 표시하지 않습니다."
-    : "이 Run에는 전체 점수 분포 집계가 저장돼 있지 않습니다."}
+    : "이 분석에는 전체 점수 분포 집계가 저장돼 있지 않습니다."}
     기존 최솟값·평균·최댓값 근거는 위 비교 그래프에서 확인할 수 있습니다.</p>;
   const option = {
     aria: { enabled: true },
@@ -146,6 +146,8 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
           });
         }
       } : undefined} />
+    {onSelectRange && <p className="hint">그래프 막대나 아래 집계 표에서 점수 구간을 선택하면
+      현재 불러온 이상 후보를 해당 범위로 좁혀볼 수 있습니다.</p>}
     <p className="hint">{title}의 실제 점수를 전체 조회해 집계한 {counts.length}개 고정 폭 구간입니다.
       {hist?.constant_scores ? "모든 점수가 같아 그래프 표시 범위만 확장했습니다. " : ""}
       임계값 경계에 걸친 단일 막대는 후보 수를 의미하지 않습니다.</p>
