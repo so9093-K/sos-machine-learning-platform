@@ -6,6 +6,7 @@ SOS가 소유하며 모델 바이트, 원시 Feature, 비밀정보는 전송하�
 
 import hashlib
 import json
+import logging
 import math
 import time
 from collections.abc import Callable
@@ -18,6 +19,9 @@ from .mlflow_config import MLflowSettings
 from .mlflow_errors import MLflowDeliveryError
 from .mlflow_experiments import ensure_experiment
 from .mlflow_registry import register_model_version, verify_registered_version
+
+
+logger = logging.getLogger(__name__)
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -226,9 +230,14 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
     except WorkerOwnershipLost:
         # DB 세션 잠금을 잃으면 새 Worker의 복구 판단에 맡긴다.
         raise
-    except Exception:
-        # 외부 전송 장애로 ML Job 상태를 변경하거나 자격 증명을 기록하지 않는다.
-        store.finish_tracking_export(job_id, error_code="SOS-MLFLOW-UNAVAILABLE")
+    except Exception as exc:
+        # 프로그래밍 오류를 외부 서버 장애로 숨기지 않는다. 예외 메시지는
+        # 원격 URI·비밀정보를 포함할 수 있어 로그에 기록하지 않는다.
+        logger.error(
+            "MLflow 등록 내부 오류: job=%s exception=%s",
+            job_id, type(exc).__name__,
+        )
+        store.finish_tracking_export(job_id, error_code="SOS-MLFLOW-INTERNAL")
     else:
         store.finish_tracking_export(job_id)
     return True
