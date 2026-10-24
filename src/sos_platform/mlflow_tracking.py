@@ -163,7 +163,15 @@ def send_to_mlflow(
         if not isinstance(run_id, str) or not run_id or len(run_id) > 128:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
         remember_run(run_id)
-    params = []
+    # Run 비교에는 모델 설정뿐 아니라 사용한 Dataset 판본이 필요하다.
+    # 값은 SOS가 이미 확정한 실행 메타데이터에서만 가져온다.
+    params = [
+        {"key": "sos.dataset_id", "value": job["dataset_id"]},
+        {"key": "sos.job_kind", "value": job["kind"]},
+    ]
+    dataset_version = job["spec"].get("dataset_version")
+    if isinstance(dataset_version, str) and dataset_version:
+        params.append({"key": "sos.dataset_version", "value": dataset_version})
     if job["kind"] == "ml_train":
         # 모델 설정은 공개 가능한 필드만 전송한다. 향후 Adapter 확장으로
         # 비밀값·경로·사용자 입력이 추가돼도 자동으로 외부에 유출되지 않는다.
