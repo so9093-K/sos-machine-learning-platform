@@ -238,13 +238,6 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
   const calibrationRows = run.input_plan?.partition_sizes.calibration;
   const testRows = run.input_plan?.partition_sizes.test;
   return <div className="pipeline-analysis-report" aria-label="Pipeline 결과 분석">
-    <div className="pipeline-section-heading">
-      <div>
-        <span className="eyebrow">ANALYSIS · 실행 근거와 결과 검토</span>
-        <h4>모델은 무엇을 학습했고, 무엇을 다르게 보았을까요?</h4>
-        <p>실제 학습 데이터와 다른 시간 구간의 점수를 비교하고, 두드러진 관측치의 근거를 살펴봅니다.</p>
-      </div>
-    </div>
     <nav className="pipeline-analysis-nav" aria-label="현재 분석 근거 탐색">
       {PIPELINE_ANALYSIS_SECTIONS.map(item => <button key={item.id} type="button"
         className={section === item.id ? "pipeline-analysis-nav-item active" : "pipeline-analysis-nav-item"}

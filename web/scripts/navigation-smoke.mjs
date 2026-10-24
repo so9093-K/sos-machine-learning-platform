@@ -217,6 +217,7 @@ try {
   );
   assert.match(candidateWithContext, /2026-01-01T02:00:00Z/);
   assert.match(candidateWithContext, /Train 참조 중앙값/);
+  assert.match(candidateWithContext, /전체 1개 Feature 관측값/);
   assert.match(candidateWithContext, /모델 판단 근거 자세히 보기 \(SHAP\)/);
   const { ShapContributionChart } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
   const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
@@ -234,6 +235,8 @@ try {
   }));
   assert.match(shapPreview, /모델 이상 점수에 대한 SHAP 기여도/);
   assert.match(shapPreview, /Feature 기여도 합/);
+  assert.match(shapPreview, /주요 Feature 1개/);
+  assert.match(shapPreview, /양수: 이상 점수를 높이는 방향/);
   const unverifiedShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
       method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
@@ -334,6 +337,7 @@ try {
     ...props, initialRunId: "previous-run",
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
+  assert.doesNotMatch(deepLinkedJourney, /예제로 모델 학습 시작/);
   assert.match(deepLinkedJourney, /선택한 실행/);
   assert.doesNotMatch(deepLinkedJourney, /aria-label="분석 이용 단계"/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
@@ -421,8 +425,10 @@ try {
   assert.match(trainingReport, /Training 점수 구간별 전체 관측 수/);
   const interactiveOverview = renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
     run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
-    onSelectTestScoreRange: () => {},
+    onSelectTestScoreRange: () => {}, onInvestigateCandidates: () => {},
   }));
+  assert.match(interactiveOverview, /검토 후보 .*건 살펴보기/);
+  assert.match(interactiveOverview, /전체 점수 분포 자세히 비교/);
   assert.match(interactiveOverview, /이 구간 후보 보기/);
   assert.match(interactiveOverview, /후보 탐색/);
   assert.match(interactiveOverview, /그래프 막대나 아래 집계 표에서 점수 구간을 선택/);

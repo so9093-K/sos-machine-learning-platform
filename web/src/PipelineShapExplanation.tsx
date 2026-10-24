@@ -66,7 +66,7 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
     } }],
   };
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
-    <h6>모델 이상 점수에 대한 SHAP 기여도</h6>
+    <h6>점수 변화에 기여한 주요 Feature {top.length}개 (SHAP)</h6>
     <p>기준 점수 <strong>{key(baseline)}</strong> +
       Feature 기여도 합 <strong>{key(shapSum)}</strong> =
       이상 점수 <strong>{key(score)}</strong></p>
