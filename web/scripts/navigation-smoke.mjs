@@ -222,6 +222,8 @@ try {
   const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
       method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
+      reconstructed_score: 0.5, additivity_residual: 0,
+      additive_attribution: true, model_output: "negative_sklearn_score_samples",
       baseline_row_count: 1, permutation_rounds: 3, sampling_seed: 42,
       shap_version: "0.50.0",
       feature_contributions: [
@@ -231,6 +233,19 @@ try {
     } },
   }));
   assert.match(shapPreview, /모델 이상 점수에 대한 SHAP 기여도/);
+  assert.match(shapPreview, /Feature 기여도 합/);
+  const unverifiedShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
+    result: { output: {
+      method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
+      reconstructed_score: 0.5, additivity_residual: 0,
+      additive_attribution: true, model_output: "negative_sklearn_score_samples",
+      baseline_row_count: 1,
+      feature_contributions: [{ feature: "outbound_traffic", shap_value: -0.9,
+        actual_value: 4, reference_median: 1, missing_imputed: false }],
+    } },
+  }));
+  assert.match(unverifiedShap, /검증에 실패했습니다/);
+  assert.doesNotMatch(unverifiedShap, /실제 SOS 이상 점수 기준 Feature별/);
   assert.match(shapPreview, /전체 SHAP 값과 계산 근거/);
   assert.match(candidateWithContext, /실제 사건을 확정하지 않습니다/);
   // 인접 점수 구간의 경계값은 한 구간에만 속해야 한다.

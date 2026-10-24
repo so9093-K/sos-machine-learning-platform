@@ -15,12 +15,31 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
   const output = result.output;
   const values = Array.isArray(output.feature_contributions)
     ? output.feature_contributions as Contribution[] : [];
-  const contributions = values.filter(item => typeof item.feature === "string" &&
-    typeof item.shap_value === "number" && Number.isFinite(item.shap_value))
-    .sort((a, b) => Math.abs(b.shap_value) - Math.abs(a.shap_value));
-  if (output.method !== METHOD || !contributions.length) {
-    return <p role="alert">SHAP 기여도 결과의 형식을 확인할 수 없습니다.</p>;
+  const numeric = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value);
+  const baseline = output.baseline_score;
+  const score = output.score;
+  const reconstructed = output.reconstructed_score;
+  const residual = output.additivity_residual;
+  const allValid = values.length > 0 && values.every(item =>
+    typeof item.feature === "string" && item.feature.length > 0 &&
+    numeric(item.shap_value) && numeric(item.reference_median) &&
+    (item.actual_value === null || numeric(item.actual_value)));
+  const shapSum = allValid ? values.reduce((sum, item) => sum + item.shap_value, 0) : NaN;
+  const tolerance = 1e-7;
+  const isValid = output.method === METHOD && output.additive_attribution === true &&
+    output.model_output === "negative_sklearn_score_samples" &&
+    output.baseline_row_count === 1 && allValid &&
+    numeric(baseline) && numeric(score) && numeric(reconstructed) && numeric(residual) &&
+    Math.abs(baseline + shapSum - score) <= tolerance &&
+    Math.abs(reconstructed - score) <= tolerance &&
+    Math.abs(residual - (score - reconstructed)) <= tolerance;
+  if (!isValid) {
+    return <p role="alert">SHAP 설명 근거의 점수·기여도 검증에 실패했습니다.
+      이 결과의 차트는 표시하지 않습니다. 설명 결과 판본을 확인하세요.</p>;
   }
+  const contributions = [...values].sort((a, b) =>
+    Math.abs(b.shap_value) - Math.abs(a.shap_value));
   const key = (value: unknown) => typeof value === "number" && Number.isFinite(value)
     ? value.toLocaleString("ko-KR", { maximumFractionDigits: 7 }) : "미정의";
   const top = contributions.slice(0, 12).reverse();
@@ -37,8 +56,11 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
   };
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
     <h6>모델 이상 점수에 대한 SHAP 기여도</h6>
-    <p>기준 점수 <strong>{key(output.baseline_score)}</strong> +
-      기여도 합 = 실제 이상 점수 <strong>{key(output.score)}</strong></p>
+    <p>기준 점수 <strong>{key(baseline)}</strong> +
+      Feature 기여도 합 <strong>{key(shapSum)}</strong> =
+      이상 점수 <strong>{key(score)}</strong></p>
+    <p className="hint">계산 결과의 재구성 오차 {key(residual)} ·
+      저장된 모델 점수와 가법적 설명 결과를 검증했습니다.</p>
     <DataChart option={option} ariaLabel="실제 SOS 이상 점수 기준 Feature별 Permutation SHAP 기여도" />
     <p className="hint">양수는 단일 기준값 대비 모델 이상 점수를 높이는 방향, 음수는 낮추는 방향입니다.
       기준은 Train Feature 중앙값으로 구성한 합성 관측치 1행입니다.
@@ -72,6 +94,7 @@ export function PipelineShapExplanation({ candidate, scoringResultId, canRun, ca
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const [resultLoading, setResultLoading] = useState(false);
   const submitted = useRef(false);
 
   useEffect(() => {
@@ -117,6 +140,7 @@ export function PipelineShapExplanation({ candidate, scoringResultId, canRun, ca
     const id = job.result?.explanation_result_id;
     if (typeof id !== "string") { setError("완료된 SHAP 설명 결과를 찾지 못했습니다."); return; }
     let active = true;
+    setResultLoading(true);
     void request<ExplanationResult>("/api/ml/explanations/" + encodeURIComponent(id))
       .then(next => {
         if (!active) return;
@@ -124,7 +148,8 @@ export function PipelineShapExplanation({ candidate, scoringResultId, canRun, ca
             next.row_index !== candidate.row_index || next.method !== METHOD) {
           setError("SHAP 결과가 선택한 관측치와 일치하지 않습니다.");
         } else { setResult(next); setError(""); }
-      }).catch(reason => { if (active) setError(formatError(reason)); });
+      }).catch(reason => { if (active) setError(formatError(reason)); })
+      .finally(() => { if (active) setResultLoading(false); });
     return () => { active = false; };
   }, [job?.id, job?.status, job?.result?.explanation_result_id,
     scoringResultId, candidate.row_index, retry]);
@@ -137,7 +162,10 @@ export function PipelineShapExplanation({ candidate, scoringResultId, canRun, ca
       setJob(await submitJob<MLExplanationJob>("/api/ml/explanations/jobs", {
         scoring_result_id: scoringResultId, row_index: candidate.row_index, method: METHOD,
       }));
-    } catch (e) { setError(formatError(e)); }
+    } catch (e) {
+      submitted.current = false;
+      setError("SHAP 계산 요청에 실패했습니다: " + formatError(e));
+    }
     finally { setBusy(false); }
   }
 
@@ -178,8 +206,14 @@ export function PipelineShapExplanation({ candidate, scoringResultId, canRun, ca
       className="secondary" disabled={busy || job.cancel_requested} onClick={() => void cancel()}>
       {job.cancel_requested ? "취소 처리 중" : "SHAP 계산 취소 요청"}
     </button>}
-    {error && <div role="alert">{error} <button type="button" className="secondary"
-      onClick={() => { setError(""); setRetry(n => n + 1); }}>결과 다시 조회</button></div>}
+    {job?.status === "Succeeded" && !result && !error && resultLoading &&
+      <p role="status">SHAP 계산이 완료됐습니다. 결과 판본을 불러오는 중입니다.</p>}
+    {error && <div role="alert">
+      <p>{error}</p>
+      {job && <button type="button" className="secondary"
+        onClick={() => { setError(""); setRetry(n => n + 1); }}>설명 결과 다시 조회</button>}
+      {!job && <p className="hint">위의 ‘SHAP 기여도 계산’으로 다시 요청할 수 있습니다.</p>}
+    </div>}
     {job?.status === "Failed" && <p role="alert">SHAP 계산이 실패했습니다. 작업 이력에서 오류를 확인하세요.</p>}
     {job?.status === "Cancelled" && <p>SHAP 계산이 취소됐습니다.</p>}
     {result && <><ShapContributionChart result={result} />
