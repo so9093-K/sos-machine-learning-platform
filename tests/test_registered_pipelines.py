@@ -311,7 +311,8 @@ def test_pipeline_stops_when_mlflow_registration_was_never_enabled():
         store, {"id": "dataset-mlflow-missing", "version": "v1"},
         "operator", {"ready": True, "plan": None}, None,
     )
-    for _ in range(6):
+    # preflight 생성 → 결과 기록 → training 생성까지만 전진한다.
+    for _ in range(3):
         assert pipeline_runs.advance_run(store)
     result = pipeline_runs.get_run(store, run["id"])
     assert result["job_ids"].get("training")
