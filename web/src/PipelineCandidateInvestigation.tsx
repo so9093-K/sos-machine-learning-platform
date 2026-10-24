@@ -4,15 +4,18 @@ import { formatError, request, submitJob } from "./api";
 import { DataChart } from "./DataChart";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { MLExplanationJob, MLExplanationJobSummary, ExplanationResult, PipelineCandidates, ModelRevision } from "./types";
+import { PipelineShapExplanation } from "./PipelineShapExplanation";
 
 type Candidate = PipelineCandidates["items"][number];
 type ExplanationJobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
 
 export function matchingExplanationJob(
   jobs: MLExplanationJobSummary[], scoringResultId: string, rowIndex: number,
+  method = "median_reference_feature_replacement",
 ): MLExplanationJobSummary | undefined {
   return jobs.filter(item => item.spec.scoring_result_id === scoringResultId &&
-    item.spec.row_index === rowIndex)
+    item.spec.row_index === rowIndex &&
+    (item.spec.method ?? "median_reference_feature_replacement") === method)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
 }
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -219,6 +222,9 @@ export function PipelineCandidateInvestigation({
             : modelError ? "조회 오류"
             : !modelRevisionId ? "판본 없음" : !model ? "조회 중" : "근거 없음"}</td></tr>)}</tbody>
     </table></div>
+    <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
+      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
+      onOpenResource={onOpenResource} />
     {previousLookup === "loading" && <p role="status">
       이 후보의 기존 설명 작업을 확인하고 있습니다.
     </p>}

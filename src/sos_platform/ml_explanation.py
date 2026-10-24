@@ -1,10 +1,11 @@
-"""Isolation Forest 실제 이상 점수의 개별 입력 민감도 설명.
+"""Isolation Forest의 점수 민감도와 선택적 Permutation SHAP 설명.
 
-Feature를 학습 데이터의 참조 중앙값으로 치환할 때 변화하는 점수를 기록한다.
-SHAP 값·가법적 기여도·이상 원인 또는 인과효과를 주장하지 않는다.
+선택한 모델·Scoring의 실제 점수 함수를 설명하며 결과의 방법별 의미를 구별한다.
 """
 
 import math
+
+from importlib.metadata import version
 
 import numpy as np
 
@@ -13,7 +14,21 @@ from .ml_runtime import load_trusted_isolation_forest
 
 
 def explain_scored_row(store, spec: dict) -> dict:
-    """보존된 Scoring Result의 한 행을 모델 학습 참조 중앙값으로 비교한다."""
+    """보존된 점수 결과의 한 행을 명시적으로 선택한 방법으로 설명한다.
+
+    Args:
+        store: 검증된 모델/Scoring 판본 및 아티팩트 접근자.
+        spec: 설명 대상, 소유자, 결과 행 번호와 설명 method.
+
+    Returns:
+        dict: 불변 설명 결과로 게시할 방법별 실제 계산 근거.
+
+    Raises:
+        ValueError: 입력·판본·결과 불일치 또는 SHAP 설명 검증 실패.
+    """
+    method = spec.get("method", "median_reference_feature_replacement")
+    if method not in ("median_reference_feature_replacement", "permutation_shap_median_v1"):
+        raise ValueError("Unsupported explanation method")
     scoring = store.get_scoring_result(spec["scoring_result_id"])
     if scoring is None or scoring["owner_actor"] != spec["source_owner_actor"]:
         raise ValueError("Scoring Result is unavailable")
@@ -35,30 +50,35 @@ def explain_scored_row(store, spec: dict) -> dict:
     recomputed = model_runtime.score_anomalies(original.reshape(1, -1))[0]
     if not math.isclose(saved_score, recomputed, rel_tol=1e-9, abs_tol=1e-10):
         raise ValueError("Scoring Result and model output disagree")
-    changed = np.tile(original, (len(names), 1))
-    changed[np.arange(len(names)), np.arange(len(names))] = reference
-    adjusted_scores = model_runtime.score_anomalies(changed)
-    items = [
-        {
-            "feature": name,
-            "actual_value": None if np.isnan(original[index]) else float(original[index]),
-            "missing_imputed": bool(np.isnan(original[index])),
-            "reference_median": float(reference[index]),
-            "score_if_replaced": float(adjusted_scores[index]),
-            "anomaly_score_delta": float(saved_score - adjusted_scores[index]),
+    if method == "permutation_shap_median_v1":
+        result = _permutation_shap_result(
+            scoring, model, selected, original, reference, saved_score, model_runtime
+        )
+    else:
+        changed = np.tile(original, (len(names), 1))
+        changed[np.arange(len(names)), np.arange(len(names))] = reference
+        adjusted_scores = model_runtime.score_anomalies(changed)
+        items = [
+            {
+                "feature": name,
+                "actual_value": None if np.isnan(original[index]) else float(original[index]),
+                "missing_imputed": bool(np.isnan(original[index])),
+                "reference_median": float(reference[index]),
+                "score_if_replaced": float(adjusted_scores[index]),
+                "anomaly_score_delta": float(saved_score - adjusted_scores[index]),
+            }
+            for index, name in enumerate(names)
+        ]
+        result = {
+            "scoring_result_id": scoring["id"],
+            "model_revision_id": model["id"],
+            "row_index": selected,
+            "method": "median_reference_feature_replacement",
+            "score": saved_score,
+            "feature_sensitivities": items,
+            "baseline_source": "model_training_feature_medians",
+            "additive_attribution": False,
         }
-        for index, name in enumerate(names)
-    ]
-    result = {
-        "scoring_result_id": scoring["id"],
-        "model_revision_id": model["id"],
-        "row_index": selected,
-        "method": "median_reference_feature_replacement",
-        "score": saved_score,
-        "feature_sensitivities": items,
-        "baseline_source": "model_training_feature_medians",
-        "additive_attribution": False,
-    }
     identity = scoring.get("score_summary", {}).get("observation_identity")
     if identity is not None:
         if (
@@ -75,3 +95,73 @@ def explain_scored_row(store, spec: dict) -> dict:
             "observation_id": item["observation_id"],
         }
     return result
+
+
+def _permutation_shap_result(
+    scoring: dict, model: dict, row_index: int, original: np.ndarray,
+    reference: list[float], saved_score: float, model_runtime,
+) -> dict:
+    """고정 Train 중앙값 기준에서 실제 SOS 점수의 Permutation SHAP 값을 계산한다.
+
+    SHAP masker의 단일 합성 배경 행과 Seed/평가 횟수를 고정한다.
+    이 배경은 Train의 실제 관측 행 또는 전체 Train 분포를 대표하지 않는다.
+    """
+    import shap
+
+    n_features = len(model["features"])
+    if not 1 <= n_features <= 64:
+        raise ValueError("Permutation SHAP supports between 1 and 64 features")
+    # 신뢰된 모델 어댑터의 결측치 전처리와 점수 방향을 그대로 따른다.
+    background = np.asarray(reference, dtype=np.float64).reshape(1, n_features)
+    def score_fn(matrix: np.ndarray) -> np.ndarray:
+        return np.asarray(model_runtime.score_anomalies(matrix), dtype=np.float64)
+
+    seed = 42
+    rounds = 3
+    evaluations = rounds * (2 * n_features + 1)
+    explainer = shap.PermutationExplainer(score_fn, background, seed=seed)
+    explanation = explainer(original.reshape(1, n_features), max_evals=evaluations)
+    values = np.asarray(explanation.values, dtype=np.float64)
+    base = np.asarray(explanation.base_values, dtype=np.float64)
+    if values.shape != (1, n_features) or base.size != 1:
+        raise ValueError("Unexpected Permutation SHAP output shape")
+    contributions = values[0]
+    baseline_score = float(base.reshape(-1)[0])
+    reconstructed_score = float(baseline_score + math.fsum(contributions.tolist()))
+    if not np.isfinite(contributions).all() or not math.isfinite(baseline_score):
+        raise ValueError("Non-finite Permutation SHAP explanation")
+    residual = saved_score - reconstructed_score
+    if not math.isclose(saved_score, reconstructed_score, abs_tol=1e-7, rel_tol=1e-7):
+        raise ValueError("Permutation SHAP does not reconstruct SOS anomaly score")
+    return {
+        "scoring_result_id": scoring["id"],
+        "model_revision_id": model["id"],
+        "row_index": row_index,
+        "method": "permutation_shap_median_v1",
+        "score": saved_score,
+        "baseline_score": baseline_score,
+        "reconstructed_score": reconstructed_score,
+        "additivity_residual": residual,
+        "model_output": "negative_sklearn_score_samples",
+        "baseline_source": "model_training_feature_medians_single_synthetic_row",
+        "baseline_row_count": 1,
+        "sampling_seed": seed,
+        "permutation_rounds": rounds,
+        "max_evals": evaluations,
+        "shap_version": version("shap"),
+        "additive_attribution": True,
+        "feature_contributions": [
+            {
+                "feature": name,
+                "actual_value": None if np.isnan(original[index]) else float(original[index]),
+                "missing_imputed": bool(np.isnan(original[index])),
+                "reference_median": float(reference[index]),
+                "shap_value": float(contributions[index]),
+            }
+            for index, name in enumerate(model["features"])
+        ],
+        "limitations": (
+            "Feature contributions explain the SOS score relative to one synthetic "
+            "training-median reference, not anomaly causes or incident probability."
+        ),
+    }
