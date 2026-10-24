@@ -263,7 +263,14 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
         <div><span>이상 후보의 판정 기준</span><strong>{format(policy.threshold)}</strong></div>
         <div><span>새 시간 구간의 후보</span><strong>{format(metric(decision, "predicted_anomalies"))}건</strong></div>
       </div>
+      {onInvestigateCandidates && <div className="pipeline-overview-next">
+        <button type="button" onClick={onInvestigateCandidates}>
+          검토 후보 {format(metric(decision, "predicted_anomalies"))}건 살펴보기 →
+        </button>
+      </div>}
       <ScoreRangeChart evidence={evidence} />
+      <details className="pipeline-distribution-details">
+        <summary>Train·Calibration·Test의 전체 점수 분포 자세히 비교</summary>
       <div className="pipeline-lab-distributions">
         <section><h5>학습 데이터 점수 분포</h5>
           <ScoreHistogram summary={train} title="Training" /></section>
@@ -272,6 +279,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
         <section><h5>다른 시간 구간의 점수 분포</h5>
           <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} onSelectRange={onSelectTestScoreRange} /></section>
       </div>
+      </details>
     </section>}
     <div className="pipeline-analysis-phases">
       {section === "training" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-training-evidence">
