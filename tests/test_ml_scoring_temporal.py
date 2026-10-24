@@ -132,6 +132,23 @@ def test_scoped_score_retains_uuid4_identity_with_time(scoring_env, tmp_path):
     assert result["features"].struct.field("count").to_list() == [7.0, 8.0]
 
 
+def test_time_scoped_datetime_source_preserves_observation_time(scoring_env, tmp_path):
+    """타임존이 있는 Datetime 원본도 Scoring 행에 UTC 오프셋을 명확히 보존한다."""
+    store, _, dataset, _, frames = scoring_env
+    frames[0] = frames[0].with_columns(
+        pl.col("ts").str.to_datetime(time_zone="UTC").alias("ts")
+    )
+    path = tmp_path / "datetime-test.parquet"
+    result = ml_scoring.run_dataset_scoring(store, dataset, spec("test"), path)
+    assert result["row_count"] == 2
+    times = pl.read_parquet(path)["observed_at"].to_list()
+    assert all(isinstance(value, str) and value.endswith("+00:00") for value in times)
+    assert [datetime.fromisoformat(value) for value in times] == [
+        datetime(2026, 1, 1, 7, tzinfo=timezone.utc),
+        datetime(2026, 1, 1, 8, tzinfo=timezone.utc),
+    ]
+
+
 def test_scoring_requires_same_dataset_revision_and_boundaries(scoring_env, tmp_path):
     store, model, dataset, _, _ = scoring_env
     with pytest.raises(ValueError, match="training Dataset revision"):

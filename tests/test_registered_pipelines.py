@@ -86,6 +86,10 @@ def test_pipeline_run_advances_to_test_evaluation():
     assert first["status"] == "Queued"
     same = pipeline_runs.create_run(store, dataset, "owner-a", inspection, "key-12345678")
     assert same["id"] == first["id"]
+    # Preflight가 기록한 선택적 관측치 ID 계약이 후속 두 Scoring에 전달돼야 한다.
+    assert pipeline_runs.advance_run(store)
+    preflight_id = pipeline_runs.get_run(store, first["id"])["job_ids"]["preflight"]
+    store.jobs[preflight_id]["result"]["plan"]["observation_id_column"] = "sos_observation_id"
     for _ in range(18):
         if pipeline_runs.get_run(store, first["id"])["status"] == "Succeeded":
             break
@@ -97,6 +101,8 @@ def test_pipeline_run_advances_to_test_evaluation():
     assert finished["input_plan"]["partition_sizes"]["test"] == 3
     assert list(finished["job_ids"]) == list(pipeline_reference.STAGES)
     assert store.jobs[finished["job_ids"]["test"]]["spec"]["temporal_scope"]["partition"] == "test"
+    assert store.jobs[finished["job_ids"]["test"]]["spec"]["observation_id_column"] == "sos_observation_id"
+    assert store.jobs[finished["job_ids"]["calibration"]]["spec"]["observation_id_column"] == "sos_observation_id"
     assert store.jobs[finished["job_ids"]["evaluation"]]["spec"]["policy_revision_id"] == "policy-1"
 
 
