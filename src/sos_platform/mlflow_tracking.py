@@ -17,7 +17,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
 from .mlflow_errors import MLflowDeliveryError
-from .mlflow_experiments import ensure_experiment
+from .mlflow_experiments import DEFAULT_EXPERIMENT, ensure_experiment
 from .mlflow_registry import register_model_version, verify_registered_version
 
 
@@ -112,12 +112,35 @@ def _numeric_metrics(job: dict) -> list[dict]:
     ]
 
 
+def _job_experiment_title(store, job: dict) -> str:
+    """같은 Actor의 원본 학습으로 거슬러 올라가 연구 묶음을 연결한다."""
+    if job["kind"] == "ml_train":
+        return job["spec"].get("experiment_title") or DEFAULT_EXPERIMENT
+    spec = job.get("spec") or {}
+    model_id = spec.get("model_revision_id")
+    if job["kind"] in ("ml_policy", "ml_evaluate", "ml_explain"):
+        score_id = spec.get("scoring_result_id")
+        score = store.get_scoring_result(score_id) if score_id else None
+        model_id = score.get("model_revision_id") if score else None
+    if not model_id:
+        return DEFAULT_EXPERIMENT
+    model = store.get_model_revision(model_id)
+    training_job = store.get_job(model["job_id"]) if model else None
+    if (
+        not training_job or training_job.get("kind") != "ml_train"
+        or training_job.get("owner_actor") != job.get("owner_actor")
+    ):
+        return DEFAULT_EXPERIMENT
+    return training_job["spec"].get("experiment_title") or DEFAULT_EXPERIMENT
+
+
 def send_to_mlflow(
     client: MLflowClient,
     job: dict,
     *,
     known_run_id: str | None,
     remember_run: Callable[[str], None],
+    experiment_title: str | None = None,
 ) -> str:
     """Sos Job ID를 외부 Run 검색 키로 사용해 중단 후 재전송한다.
 
@@ -129,7 +152,9 @@ def send_to_mlflow(
     run_id = known_run_id
     if run_id is None:
         experiment = ensure_experiment(
-            client, job["owner_actor"], job.get("spec", {}).get("experiment_title") or "기본 실험"
+            client, job["owner_actor"], experiment_title or (
+                job.get("spec", {}).get("experiment_title") or DEFAULT_EXPERIMENT
+            )
         )
         # 입력 Job ID는 SOS가 발급한 UUID이며 SQL/검색 필터의 사용자 문자열이 아니다.
         found = client.post(
@@ -220,6 +245,7 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
             job,
             known_run_id=export["run_id"],
             remember_run=lambda value: store.save_tracking_run_id(job_id, value),
+            experiment_title=_job_experiment_title(store, job),
         )
         if job["kind"] == "ml_train" and job["status"] == "Succeeded":
             model_id = (job.get("result") or {}).get("model_revision_id")
