@@ -204,9 +204,8 @@ try {
   }));
   assert.match(emptyJourney, /예제로 모델 학습하기/);
   assert.match(emptyJourney, /예제로 모델 학습 시작/);
-  assert.match(emptyJourney, /Training/);
-  assert.match(emptyJourney, /Calibration/);
-  assert.match(emptyJourney, /Test/);
+  assert.match(emptyJourney, /240개 합성 관측치/);
+  assert.match(emptyJourney, /학습·보정·테스트 분석을 제출합니다/);
   assert.match(emptyJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
   assert.match(emptyJourney, /이전 학습 결과/);
   assert.match(emptyJourney, /이전에 학습한 결과가 있나요/);
