@@ -4,7 +4,7 @@ export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
   | "pipelines" | "ml" | "training" | "scoring" | "policies"
   | "evaluations" | "explanations"
-  | "jobs" | "ml-jobs" | "storage" | "audit";
+  | "jobs" | "ml-jobs" | "pipeline-jobs" | "storage" | "audit";
 export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
 export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
 export type MLNavigationContext = {
@@ -49,7 +49,12 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   if (tab === "understanding" || tab === "preparation" || tab === "preview" ||
       tab === "profile" || tab === "jobs") {
     const pipelineReturn = params.get("from") === "pipeline";
-    return { pipelineReturn, datasetId: pipelineReturn ? params.get("dataset") ?? "" : "" };
+    return { pipelineReturn, datasetId: pipelineReturn ? params.get("dataset") ?? "" : "",
+      ...(pipelineReturn && params.get("run") ? {
+        pipelineRunId: params.get("run")!,
+        ...(candidateRowAt(params) !== undefined ? { candidateRowIndex: candidateRowAt(params) } : {}),
+        ...(analysisSectionAt(params) ? { pipelineAnalysisSection: analysisSectionAt(params) } : {}),
+      } : {}) };
   }
   if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "" };
   if (tab === "scoring") return { modelId: params.get("model") ?? "" };
@@ -84,6 +89,11 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
         tab === "profile" || tab === "jobs") && context.pipelineReturn) {
     params.set("from", "pipeline");
     if (context.datasetId) params.set("dataset", context.datasetId);
+    if (context.pipelineRunId) {
+      params.set("run", context.pipelineRunId);
+      if (context.candidateRowIndex !== undefined) params.set("candidate", String(context.candidateRowIndex));
+      if (context.pipelineAnalysisSection) params.set("section", context.pipelineAnalysisSection);
+    }
   }
   if ((tab === "training" || tab === "ml") && context.datasetId) {
     params.set("dataset", context.datasetId);
@@ -99,7 +109,7 @@ const paths: Record<WorkspaceTab, string> = {
   pipelines: "/pipelines", ml: "/models", training: "/training",
   scoring: "/scoring", policies: "/policies",
   evaluations: "/evaluations", explanations: "/explanations",
-  jobs: "/activity/jobs", "ml-jobs": "/activity/ml", storage: "/operations/storage", audit: "/operations/audit",
+  jobs: "/activity/jobs", "ml-jobs": "/activity/ml", "pipeline-jobs": "/activity/pipelines", storage: "/operations/storage", audit: "/operations/audit",
 };
 const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }> = {
   model: { base: "/models", tab: "ml" },
@@ -163,7 +173,14 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
       ["understanding", "preparation", "preview", "profile", "jobs"].includes(previous.tab)) {
     return { pipelineReturn: previous.context.pipelineReturn,
       ...(previous.context.pipelineReturn && previous.context.datasetId
-        ? { datasetId: previous.context.datasetId } : {}) };
+        ? { datasetId: previous.context.datasetId } : {}),
+      ...(previous.context.pipelineReturn && previous.context.pipelineRunId ? {
+        pipelineRunId: previous.context.pipelineRunId,
+        ...(previous.context.candidateRowIndex !== undefined
+          ? { candidateRowIndex: previous.context.candidateRowIndex } : {}),
+        ...(previous.context.pipelineAnalysisSection
+          ? { pipelineAnalysisSection: previous.context.pipelineAnalysisSection } : {}),
+      } : {}) };
   }
   if (isDecisionTab(tab) && isDecisionTab(previous.tab)) {
     return { scoringId: previous.context.scoringId };
@@ -303,7 +320,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
   const isCurrent = (tab: WorkspaceTab) =>
     tab === "understanding" ? ["understanding", "preview", "profile"].includes(active)
       : tab === "ml" ? isModelsArea(active)
-      : tab === "jobs" ? ["jobs", "ml-jobs"].includes(active) : active === tab;
+      : tab === "jobs" ? ["jobs", "ml-jobs", "pipeline-jobs"].includes(active) : active === tab;
   return <nav className="global-nav platform-nav" aria-label="플랫폼 메뉴">
     {groups.map(group => <div className="platform-nav-group" key={group.title}>
       <span className="section-title">{group.title}</span>

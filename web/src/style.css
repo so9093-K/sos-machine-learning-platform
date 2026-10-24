@@ -324,10 +324,11 @@ button.platform-destination.ghost:hover { border-color:var(--sos-accent); backgr
 .platform-overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .platform-overview-grid .panel { min-width:0; padding:22px; }
 .platform-compact-list { display:grid; gap:1px; }
-button.platform-list-link.ghost { min-width:0; width:100%; display:flex; justify-content:space-between;
+:is(button, a).platform-list-link.ghost { min-width:0; width:100%; display:flex; justify-content:space-between;
   align-items:center; gap:12px; text-align:left; border-bottom:1px solid var(--sos-border);
-  padding:12px 4px; border-radius:0; color:var(--sos-text); font-size:13px; }
-button.platform-list-link.ghost:hover { color:var(--sos-accent); }
+  padding:12px 4px; border-radius:0; color:var(--sos-text); font-size:13px; text-decoration:none; flex-wrap:wrap; }
+:is(button, a).platform-list-link.ghost:hover { color:var(--sos-accent); }
+a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .platform-resource-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .platform-list-link small { color:var(--sos-muted); flex-shrink:0; }
 .platform-outlook { border-top:1px solid var(--sos-border); padding-top:20px; }
@@ -672,3 +673,7 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .pipeline-more { margin-top:16px; }
 .pipeline-history-panel { margin-top:16px; }
 .pipeline-history-panel > details > summary { cursor:pointer; }
+
+/* 새 학습을 주 행동으로 유지하고 이력 조회는 작업 이력에서 제공한다. */
+.pipeline-lab-entry { grid-template-columns:minmax(0,1fr); max-width:690px; }
+.pipeline-lab-primary { width:100%; }

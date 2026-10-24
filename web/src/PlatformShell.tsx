@@ -19,6 +19,7 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
   explanations: { eyebrow: "EXPLANATION", title: "점수 설명", description: "관측 결과 · 국소 민감도" },
   jobs: { eyebrow: "ACTIVITY & JOBS", title: "작업 이력", description: "Data · Exploration · ML 실행 현황" },
   "ml-jobs": { eyebrow: "ACTIVITY & JOBS", title: "ML 작업 이력", description: "학습 · Scoring · 정책 · 평가 · 설명" },
+  "pipeline-jobs": { eyebrow: "ACTIVITY & JOBS", title: "모델 실험실 분석 이력", description: "이전에 수행한 모델 학습과 이상 탐지 결과" },
   storage: { eyebrow: "PLATFORM OPERATIONS", title: "저장소 상태", description: "Storage · Health" },
   audit: { eyebrow: "PLATFORM OPERATIONS", title: "보안 감사", description: "Identity · Audit" },
 };

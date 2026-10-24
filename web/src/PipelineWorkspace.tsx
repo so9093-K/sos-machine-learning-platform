@@ -63,7 +63,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
 }) {
   const [catalog, setCatalog] = useState<Definition[]>([]);
   const [catalogError, setCatalogError] = useState("");
-  const [historyError, setHistoryError] = useState("");
   const [listReload, setListReload] = useState(0);
   const [datasetId, setDatasetId] = useState(initialDatasetId);
   const selectedDatasetId = useRef(initialDatasetId);
@@ -78,7 +77,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const run = loadedRun?.id === runId && loadedRun.id === initialRunId ? loadedRun : null;
   const [runLoadError, setRunLoadError] = useState("");
   const [runReload, setRunReload] = useState(0);
-  const [history, setHistory] = useState<Run[]>([]);
   const [rows, setRows] = useState<CandidatePage | null>(null);
   const [candidateError, setCandidateError] = useState("");
   const [candidateReload, setCandidateReload] = useState(0);
@@ -93,18 +91,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [examplePhase, setExamplePhase] = useState<"registering" | "checking" | "submitting" | null>(null);
   useEffect(() => {
     let active = true;
-    // Run 이력이 일시적으로 실패해도 Pipeline Catalog 자체는 이용할 수 있다.
-    setCatalogError(""); setHistoryError("");
+    setCatalogError("");
     void request<Definition[]>("/api/pipelines")
       .then(definitions => {
         if (active) { setCatalog(definitions); setCatalogError(""); }
       })
       .catch(e => { if (active) setCatalogError(formatError(e)); });
-    void request<Run[]>("/api/pipeline-runs")
-      .then(runs => {
-        if (active) { setHistory(runs); setHistoryError(""); }
-      })
-      .catch(e => { if (active) setHistoryError(formatError(e)); });
     return () => { active = false; };
   }, [listReload]);
   useEffect(() => {
@@ -213,7 +205,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       return;
     }
     const runDatasetId = !id ? "" : linkedDatasetId ??
-      history.find(item => item.id === id)?.dataset_id ??
       (run?.id === id ? run.dataset_id : datasetId);
     if (!id && selectedDatasetId.current) {
       selectedDatasetId.current = "";
@@ -276,7 +267,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         selectRun(next.id, dataset.id);
         setRun(next);
       }
-      void request<Run[]>("/api/pipeline-runs").then(setHistory).catch(() => {});
     } catch (e) {
       if (previousRun === selectedRunId.current) setError(formatError(e));
     } finally {
@@ -317,7 +307,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         selectRun(next.id);
         setRun(next);
       }
-      void request<Run[]>("/api/pipeline-runs").then(setHistory).catch(() => {});
     } catch (e) {
       if (selectedRunId.current === previousRunId &&
           datasetSelectionRevision.current === revision) setError(formatError(e));
@@ -402,12 +391,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           {!canCreateDataset && <p className="hint">Dataset 생성 권한이 필요합니다.</p>}
           {!canRun && <p className="hint">작업 실행 권한이 필요합니다.</p>}
           {!examplesLoading && !hasPipelineExample && <p className="hint">예제를 찾지 못했습니다.</p>}
-        </div>
-        <div className="pipeline-lab-secondary">
-          <strong>이전에 학습한 결과가 있나요?</strong>
-          <p>이전 학습 결과를 열어 점수 분포와 후보를 다시 살펴봅니다.</p>
-          <button type="button" className="secondary" onClick={() =>
-            moveFocusTo("pipeline-history-heading")}>이전 결과 보기 →</button>
         </div>
       </div>}
       {hasActiveAnalysis && <div className="pipeline-lab-return">
@@ -556,25 +539,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <h3 id="pipeline-current-run-heading" tabIndex={-1}>{
             run ? "현재 분석" : runId ? "분석 기록을 불러오는 중" : "분석 결과"
           }</h3>
-          <p>{run ? "실행에 고정된 Dataset 판본과 상태를 확인합니다." :
-            "이전에 수행한 분석을 열거나 새로운 분석을 실행하세요."}</p>
-          {historyError && <p className="pipeline-context-error" role="alert">
-            이전 Run 목록 조회 실패: {historyError}
-            <button type="button" className="secondary" onClick={() =>
-              setListReload(n => n + 1)}>목록 다시 조회</button>
-          </p>}
+          <p>{run ? "학습에 사용한 데이터와 현재 상태를 확인합니다." :
+            "선택한 학습 결과를 불러오고 있습니다."}</p>
         </div>
-        <label>다른 분석 결과 선택
-          <select aria-label="다른 분석 결과 선택" value={runId} disabled={exampleBusy} onChange={event => selectRun(event.target.value)}>
-            <option value="">새 모델 학습하기</option>
-            {runId && !history.some(item => item.id === runId) &&
-              <option value={runId}>현재 분석 · {runId.slice(0, 16)}</option>}
-            {history.map(item => <option key={item.id} value={item.id}>{
-              datasets.find(dataset => dataset.id === item.dataset_id)?.name ??
-                item.dataset_id.slice(0, 14)
-            } · {item.status} · {new Date(item.created_at).toLocaleDateString("ko-KR")}</option>)}
-          </select>
-        </label>
       </div>
       {run && <div className="pipeline-context-facts">
         <div><span>실행 상태</span><strong>{
@@ -782,25 +749,5 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <PipelineModelUsage modelId={modelRevisionId} datasets={datasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />
       </details>}
-    <section className="panel pipeline-history-panel" aria-label="이전 학습 결과">
-      <details className="pipeline-history" open={!hasActiveAnalysis}>
-        <summary id="pipeline-history-heading" tabIndex={-1}>이전 학습 결과 ({count(history.length)}건 조회됨)</summary>
-        {historyError && <div className="pipeline-readiness-blocked" role="alert">
-          <p>이전 학습 결과 조회에 실패했습니다: {historyError}</p>
-          <button type="button" className="secondary" onClick={() =>
-            setListReload(n => n + 1)}>이전 결과 다시 조회</button>
-        </div>}
-        <div className="ml-resource-list">
-          {history.map(item => <button type="button" className="platform-list-link ghost" key={item.id}
-            disabled={exampleBusy} onClick={() => selectRun(item.id)}>
-            {datasets.find(data => data.id === item.dataset_id)?.name ?? item.dataset_id.slice(0, 12)}
-            {" · "}{statusLabel[item.status]}{" · "}{new Date(item.created_at).toLocaleString("ko-KR")}
-          </button>)}
-          {history.length === 0 && !historyError && <p className="muted">
-            이전 학습 결과가 없습니다. 예제로 모델을 학습해 볼 수 있습니다.
-          </p>}
-        </div>
-      </details>
-    </section>
   </div>;
 }
