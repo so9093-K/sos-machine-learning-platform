@@ -66,10 +66,8 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
         MLExplanationRequest(scoring_result_id="s", row_index=0, method="unsupported")
 
     from sos_platform import ml_explanation
-    monkeypatch.setattr(ml_explanation, "_verified_scoring_row", lambda *_: {
-        "anomaly_score": 3.0,
-        "features": {"a": 2.0, "b": 1.0, "c": 1.5},
-    })
+    row = {"anomaly_score": 3.0, "features": {"a": 2.0, "b": 1.0, "c": 1.5}}
+    monkeypatch.setattr(ml_explanation, "_verified_scoring_row", lambda *_: row)
     monkeypatch.setattr(ml_explanation, "load_trusted_isolation_forest",
                         lambda *_: _LinearRuntime())
     scoring = {"id": "s", "owner_actor": "owner", "model_revision_id": "m",
@@ -88,3 +86,16 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
     assert shap["method"] == "permutation_shap_median_v1"
     assert shap["additive_attribution"] is True
     assert shap["score"] == original["score"] == 3.0
+    scoring["dataset_id"] = "dataset"
+    scoring["dataset_version"] = "v1"
+    scoring["score_summary"] = {"observation_identity": {
+        "kind": "opaque_uuid4", "dataset_id": "dataset", "dataset_version": "v1",
+        "source_column": "sos_observation_id",
+    }}
+    row["observation_id"] = "18c4be49-18c4-4f32-9894-8c3bfabbd008"
+    linked = explain_scored_row(store, {**base, "method": "permutation_shap_median_v1"})
+    assert linked["source_observation"] == {
+        "dataset_id": "dataset", "dataset_version": "v1",
+        "id_column": "sos_observation_id",
+        "observation_id": row["observation_id"],
+    }

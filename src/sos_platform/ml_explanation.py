@@ -51,33 +51,34 @@ def explain_scored_row(store, spec: dict) -> dict:
     if not math.isclose(saved_score, recomputed, rel_tol=1e-9, abs_tol=1e-10):
         raise ValueError("Scoring Result and model output disagree")
     if method == "permutation_shap_median_v1":
-        return _permutation_shap_result(
+        result = _permutation_shap_result(
             scoring, model, selected, original, reference, saved_score, model_runtime
         )
-    changed = np.tile(original, (len(names), 1))
-    changed[np.arange(len(names)), np.arange(len(names))] = reference
-    adjusted_scores = model_runtime.score_anomalies(changed)
-    items = [
-        {
-            "feature": name,
-            "actual_value": None if np.isnan(original[index]) else float(original[index]),
-            "missing_imputed": bool(np.isnan(original[index])),
-            "reference_median": float(reference[index]),
-            "score_if_replaced": float(adjusted_scores[index]),
-            "anomaly_score_delta": float(saved_score - adjusted_scores[index]),
+    else:
+        changed = np.tile(original, (len(names), 1))
+        changed[np.arange(len(names)), np.arange(len(names))] = reference
+        adjusted_scores = model_runtime.score_anomalies(changed)
+        items = [
+            {
+                "feature": name,
+                "actual_value": None if np.isnan(original[index]) else float(original[index]),
+                "missing_imputed": bool(np.isnan(original[index])),
+                "reference_median": float(reference[index]),
+                "score_if_replaced": float(adjusted_scores[index]),
+                "anomaly_score_delta": float(saved_score - adjusted_scores[index]),
+            }
+            for index, name in enumerate(names)
+        ]
+        result = {
+            "scoring_result_id": scoring["id"],
+            "model_revision_id": model["id"],
+            "row_index": selected,
+            "method": "median_reference_feature_replacement",
+            "score": saved_score,
+            "feature_sensitivities": items,
+            "baseline_source": "model_training_feature_medians",
+            "additive_attribution": False,
         }
-        for index, name in enumerate(names)
-    ]
-    result = {
-        "scoring_result_id": scoring["id"],
-        "model_revision_id": model["id"],
-        "row_index": selected,
-        "method": "median_reference_feature_replacement",
-        "score": saved_score,
-        "feature_sensitivities": items,
-        "baseline_source": "model_training_feature_medians",
-        "additive_attribution": False,
-    }
     identity = scoring.get("score_summary", {}).get("observation_identity")
     if identity is not None:
         if (
