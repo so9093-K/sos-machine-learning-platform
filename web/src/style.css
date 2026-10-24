@@ -672,3 +672,7 @@ button.platform-list-link.ghost:hover { color:var(--sos-accent); }
 .pipeline-more { margin-top:16px; }
 .pipeline-history-panel { margin-top:16px; }
 .pipeline-history-panel > details > summary { cursor:pointer; }
+
+/* 새 학습을 주 행동으로 유지하고 이력 조회는 작업 이력에서 제공한다. */
+.pipeline-lab-entry { grid-template-columns:minmax(0,1fr); max-width:690px; }
+.pipeline-lab-primary { width:100%; }

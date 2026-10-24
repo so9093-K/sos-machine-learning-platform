@@ -190,6 +190,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     const target = tab === "preparation" ? "preparation" : "understanding";
     if (context.pipelineReturn) navigateWithContext(target, {
       pipelineReturn: true, datasetId: data.id,
+      pipelineRunId: context.pipelineRunId, candidateRowIndex: context.candidateRowIndex,
+      pipelineAnalysisSection: context.pipelineAnalysisSection,
     });
     else setTab(target);
     const revision = feedbackRevision.current;
@@ -208,6 +210,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   async function showSubmittedJob(job: Job, message: string) {
     if (context.pipelineReturn) navigateWithContext("jobs", {
       pipelineReturn: true, datasetId: selected,
+      pipelineRunId: context.pipelineRunId, candidateRowIndex: context.candidateRowIndex,
+      pipelineAnalysisSection: context.pipelineAnalysisSection,
     });
     else setTab("jobs");
     try {
@@ -348,6 +352,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       setSelected(item.id);
       if (context.pipelineReturn) navigateWithContext("preview", {
         pipelineReturn: true, datasetId: item.id,
+      pipelineRunId: context.pipelineRunId, candidateRowIndex: context.candidateRowIndex,
+      pipelineAnalysisSection: context.pipelineAnalysisSection,
       });
       else setTab("preview");
     });
@@ -450,7 +456,11 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
             showExamples.current = true;
             setSelected("");
             const target = tab === "preparation" ? "preparation" : "preview";
-            if (context.pipelineReturn) navigateWithContext(target, { pipelineReturn: true });
+            if (context.pipelineReturn) navigateWithContext(target, {
+              pipelineReturn: true, pipelineRunId: context.pipelineRunId,
+              candidateRowIndex: context.candidateRowIndex,
+              pipelineAnalysisSection: context.pipelineAnalysisSection,
+            });
             else setTab(target);
           }}
           onChoose={id => {
@@ -459,6 +469,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               ? tab : "understanding";
             if (context.pipelineReturn) navigateWithContext(target, {
               pipelineReturn: true, datasetId: id,
+      pipelineRunId: context.pipelineRunId, candidateRowIndex: context.candidateRowIndex,
+      pipelineAnalysisSection: context.pipelineAnalysisSection,
             });
             else setTab(target);
           }}
@@ -522,21 +534,28 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         canRun={canRun} canCancel={canCancel}
         onNavigate={(tab, datasetId) => navigateWithContext(tab, {
           pipelineReturn: true, datasetId,
+          pipelineRunId: context.pipelineRunId,
+          candidateRowIndex: context.candidateRowIndex,
+          pipelineAnalysisSection: context.pipelineAnalysisSection,
         })}
         onOpenResource={openResource} />}
       {context.pipelineReturn &&
         (["understanding", "preview", "profile", "preparation", "jobs"] as Tab[]).includes(tab) &&
         <section className="pipeline-return" role="status">
-          <div><strong>등록된 분석을 준비하는 중입니다</strong>
-            {tab === "jobs"
-              ? <p>준비 Job이 완료되면 출력 Dataset을 열고 입력 조건을 확인하세요.
-                  기존 Dataset으로도 언제든 분석 화면에 돌아갈 수 있습니다.</p>
-              : <p>Dataset을 등록하거나 내용을 확인한 뒤 이전 분석으로 돌아가 입력 조건을 검사하세요.
-                  44개 활동 Feature가 없다면 현재 등록형 분석은 자동 생성할 수 없습니다.</p>}
+          <div><strong>{context.pipelineRunId ? "모델 실험실의 결과를 확인하고 있습니다" :
+            "모델 학습을 위한 데이터를 준비하고 있습니다"}</strong>
+            <p>{context.pipelineRunId
+              ? "분석한 데이터를 살펴본 뒤 같은 결과와 선택했던 후보로 돌아갈 수 있습니다."
+              : "데이터를 확인한 뒤 모델 실험실에서 학습을 시작할 수 있습니다."}</p>
           </div>
           <button className="secondary" type="button"
-            onClick={() => navigateWithContext("pipelines", { datasetId: selected })}>
-            {selected ? "이 Dataset으로 분석 계속하기 →" : "분석 화면으로 돌아가기 →"}
+            onClick={() => navigateWithContext("pipelines", context.pipelineRunId ? {
+              datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
+              candidateRowIndex: context.candidateRowIndex,
+              pipelineAnalysisSection: context.pipelineAnalysisSection,
+            } : { datasetId: selected })}>
+            {context.pipelineRunId ? "살펴보던 분석 결과로 돌아가기 →" :
+              selected ? "이 Dataset으로 모델 학습하기 →" : "모델 실험실로 돌아가기 →"}
           </button>
         </section>}
       {!dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="empty">
@@ -751,10 +770,15 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           onOpenResource={openResource} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
-      {(tab === "jobs" || tab === "ml-jobs") && <ActivityWorkspace
-        active={tab === "ml-jobs" ? "ml" : "data"}
-        onChange={view => setTab(view === "ml" ? "ml-jobs" : "jobs")}
-        onNavigate={setTab} onOpenResource={openResource} canCancel={canCancel}>
+      {(tab === "jobs" || tab === "ml-jobs" || tab === "pipeline-jobs") && <ActivityWorkspace
+        active={tab === "ml-jobs" ? "ml" : tab === "pipeline-jobs" ? "pipeline" : "data"}
+        onChange={view => setTab(view === "ml" ? "ml-jobs" : view === "pipeline" ? "pipeline-jobs" : "jobs")}
+        onNavigate={setTab} onOpenResource={openResource} datasets={datasets}
+        onOpenPipelineRun={(runId, datasetId) => {
+          setSelected(datasetId);
+          navigateWithContext("pipelines", { datasetId, pipelineRunId: runId });
+        }}
+        canCancel={canCancel}>
         {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
           b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))}
           datasets={datasets} busy={busy} canCancel={canCancel}
