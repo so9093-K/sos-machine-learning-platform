@@ -52,13 +52,12 @@ export function PlatformOverview({ datasets, onNavigate, onOpenDataset, onOpenPi
           </button>
         </article>
         <article className="panel platform-destination">
-          <span className="eyebrow">PIPELINE APPLICATION</span>
-          <h4>시간 기반 활동 이상 탐지</h4>
-          <p>준비된 Isolation Forest 분석으로 데이터 입력·학습·Calibration·Test와
-            결과 및 모델 사용을 한 작업 공간에서 이용합니다.</p>
-          <p className="hint">호환 데이터를 사용하거나 Pipeline 전용 합성 예제를 선택할 수 있습니다.</p>
+          <span className="eyebrow">모델 실험실</span>
+          <h4>활동 이상 탐지</h4>
+          <p>준비된 예제로 모델 학습을 시작하고, 실제 학습 결과와 이상 후보를 탐구합니다.</p>
+          <p className="hint">모델을 이해한 뒤 다른 데이터에 적용할 수도 있습니다.</p>
           <button type="button" onClick={() => onNavigate("pipelines")}>
-            활동 이상 탐지 사용하기 →
+            모델 학습해 보기 →
           </button>
         </article>
       </div>

@@ -15,15 +15,23 @@ export const CHART_COLORS = {
   get line() { return themeColor("--sos-chart-line"); },
 };
 
-export function DataChart({ option, ariaLabel }: {
+export function DataChart({ option, ariaLabel, onDataClick }: {
   option: echarts.EChartsCoreOption;
   ariaLabel: string;
+  onDataClick?: (dataIndex: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const clickHandler = useRef(onDataClick);
+  clickHandler.current = onDataClick;
   useEffect(() => {
     if (!ref.current) return;
     const chart = echarts.init(ref.current);
     chart.setOption(option);
+    chart.on("click", params => {
+      if (typeof params.dataIndex === "number" && Number.isInteger(params.dataIndex)) {
+        clickHandler.current?.(params.dataIndex);
+      }
+    });
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(ref.current);
     return () => { observer.disconnect(); chart.dispose(); };

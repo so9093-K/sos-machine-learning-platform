@@ -94,8 +94,11 @@ export function validatePipelineEvidence(run: PipelineRun, evidence: Evidence): 
 }
 
 /** 저장된 고정 폭 구간 빈도만 표시하며 행 표본을 임의로 확대하지 않는다. */
-function ScoreHistogram({ summary, title, threshold }: {
+export type PipelineScoreRange = { lower: number; upper: number; includeUpper: boolean };
+
+function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
   summary: Record<string, unknown>; title: string; threshold?: number;
+  onSelectRange?: (range: PipelineScoreRange) => void;
 }) {
   const raw = summary.histogram;
   const hist = raw && typeof raw === "object" ? raw as Record<string, unknown> : null;
@@ -111,7 +114,7 @@ function ScoreHistogram({ summary, title, threshold }: {
     edges.every((x, i) => i === 0 || x > edges[i - 1]);
   if (!valid) return <p className="hint">{hist
     ? "저장된 점수 분포 집계의 경계·건수가 검증되지 않아 그래프를 표시하지 않습니다."
-    : "이 Run에는 전체 점수 분포 집계가 저장돼 있지 않습니다."}
+    : "이 분석에는 전체 점수 분포 집계가 저장돼 있지 않습니다."}
     기존 최솟값·평균·최댓값 근거는 위 비교 그래프에서 확인할 수 있습니다.</p>;
   const option = {
     aria: { enabled: true },
@@ -134,17 +137,31 @@ function ScoreHistogram({ summary, title, threshold }: {
   };
   return <div className="pipeline-score-chart">
     <DataChart option={option} ariaLabel={title + " 점수 구간별 전체 관측 수" +
-      (threshold === undefined ? "" : " 및 Calibration 임계값")} />
+      (threshold === undefined ? "" : " 및 Calibration 임계값")}
+      onDataClick={onSelectRange ? index => {
+        if (index >= 0 && index < counts.length) {
+          onSelectRange({
+            lower: edges[index], upper: edges[index + 1],
+            includeUpper: index === counts.length - 1,
+          });
+        }
+      } : undefined} />
+    {onSelectRange && <p className="hint">그래프 막대나 아래 집계 표에서 점수 구간을 선택하면
+      현재 불러온 이상 후보를 해당 범위로 좁혀볼 수 있습니다.</p>}
     <p className="hint">{title}의 실제 점수를 전체 조회해 집계한 {counts.length}개 고정 폭 구간입니다.
       {hist?.constant_scores ? "모든 점수가 같아 그래프 표시 범위만 확장했습니다. " : ""}
       임계값 경계에 걸친 단일 막대는 후보 수를 의미하지 않습니다.</p>
     <details>
       <summary>{title} 구간별 관측 수 확인</summary>
       <div className="table-scroll"><table>
-        <thead><tr><th>점수 시작 (포함)</th><th>점수 끝 (마지막 구간 포함)</th><th>행 수</th></tr></thead>
+        <thead><tr><th>점수 시작 (포함)</th><th>점수 끝 (마지막 구간 포함)</th><th>행 수</th>{onSelectRange && <th>후보 탐색</th>}</tr></thead>
         <tbody>{counts.map((n, i) => <tr key={i}>
           <td>{edges[i].toPrecision(8)}</td><td>{edges[i + 1].toPrecision(8)}</td>
           <td>{Number(n).toLocaleString("ko-KR")}</td>
+          {onSelectRange && <td><button type="button" className="secondary"
+            onClick={() => onSelectRange({
+              lower: edges[i], upper: edges[i + 1], includeUpper: i === counts.length - 1,
+            })}>이 구간 후보 보기</button></td>}
         </tr>)}</tbody>
       </table></div>
     </details>
@@ -190,17 +207,18 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
 /** 불변 결과의 실제 의미와 출처를 확인한 뒤 단계별 분석 근거를 제공한다. */
 export type PipelineAnalysisSection = "overview" | "training" | "calibration" | "test";
 export const PIPELINE_ANALYSIS_SECTIONS: Array<{ id: PipelineAnalysisSection; label: string; description: string }> = [
-  { id: "overview", label: "전체 개요", description: "구간 간 점수 비교" },
-  { id: "training", label: "Training", description: "학습과 모델 근거" },
-  { id: "calibration", label: "Calibration", description: "판정 기준 검토" },
-  { id: "test", label: "Test", description: "후보와 평가 결과" },
+  { id: "overview", label: "결과 한눈에", description: "학습과 탐지 분포" },
+  { id: "training", label: "학습 결과", description: "학습 데이터와 점수" },
+  { id: "calibration", label: "판정 기준", description: "검토 기준의 근거" },
+  { id: "test", label: "이상 탐지", description: "다른 구간의 후보" },
 ];
 export function PipelineEvidenceView({ evidence, run, onOpenResource,
-  initialSection = "overview", onSectionChange, onInvestigateCandidates }: {
+  initialSection = "overview", onSectionChange, onInvestigateCandidates, onSelectTestScoreRange }: {
   evidence: Evidence; run: PipelineRun; onOpenResource: OpenResult;
   initialSection?: PipelineAnalysisSection;
   onSectionChange?: (section: PipelineAnalysisSection) => void;
   onInvestigateCandidates?: () => void;
+  onSelectTestScoreRange?: (range: PipelineScoreRange) => void;
 }) {
   const [section, setSection] = useState<PipelineAnalysisSection>(initialSection);
   useEffect(() => { setSection(initialSection); }, [initialSection]);
@@ -216,12 +234,11 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
     <div className="pipeline-section-heading">
       <div>
         <span className="eyebrow">ANALYSIS · 실행 근거와 결과 검토</span>
-        <h4>이번 Run의 분석 결과</h4>
-        <p>학습한 모델, Calibration에서 정한 기준, Test에 적용한 결과를
-          같은 Dataset 판본의 근거로 연결해 확인합니다.</p>
+        <h4>모델은 무엇을 학습했고, 무엇을 다르게 보았을까요?</h4>
+        <p>실제 학습 데이터와 다른 시간 구간의 점수를 비교하고, 두드러진 관측치의 근거를 살펴봅니다.</p>
       </div>
     </div>
-    <nav className="pipeline-analysis-nav" aria-label="이 Run의 분석 근거 탐색">
+    <nav className="pipeline-analysis-nav" aria-label="현재 분석 근거 탐색">
       {PIPELINE_ANALYSIS_SECTIONS.map(item => <button key={item.id} type="button"
         className={section === item.id ? "pipeline-analysis-nav-item active" : "pipeline-analysis-nav-item"}
         aria-pressed={section === item.id} onClick={() => {
@@ -234,7 +251,20 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
     {section === "overview" && <section className="pipeline-analysis-overview" aria-label="점수 요약 비교">
       <p className="hint">동일한 Run의 Train·Calibration·Test 점수 범위를 비교합니다.
         실제 구간별 점수 분포와 근거는 각 분석 영역에서 확인하세요.</p>
+      <div className="pipeline-lab-summary">
+        <div><span>모델 학습 관측치</span><strong>{format(trainRows)}건</strong></div>
+        <div><span>이상 후보의 판정 기준</span><strong>{format(policy.threshold)}</strong></div>
+        <div><span>새 시간 구간의 후보</span><strong>{format(metric(decision, "predicted_anomalies"))}건</strong></div>
+      </div>
       <ScoreRangeChart evidence={evidence} />
+      <div className="pipeline-lab-distributions">
+        <section><h5>학습 데이터 점수 분포</h5>
+          <ScoreHistogram summary={train} title="Training" /></section>
+        <section><h5>기준을 정한 데이터의 분포</h5>
+          <ScoreHistogram summary={cal} title="Calibration" threshold={policy.threshold} /></section>
+        <section><h5>다른 시간 구간의 점수 분포</h5>
+          <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} onSelectRange={onSelectTestScoreRange} /></section>
+      </div>
     </section>}
     <div className="pipeline-analysis-phases">
       {section === "training" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-training-evidence">
@@ -296,7 +326,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
             decision.temporal_nonoverlap_confirmed === true ? "비중복 확인" : "근거 미확인"
           }</dd></div>
         </dl>
-        <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} />
+        <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} onSelectRange={onSelectTestScoreRange} />
         <p className="hint">Calibration에서 정한 정책을 별도 Test 시간 구간에 적용합니다.
           검토 후보는 실제 이상 사건이 아니며, 레이블이 없는 결과에는 정확도·Precision·Recall을 부여하지 않습니다.</p>
         <div className="pipeline-actions">
@@ -316,11 +346,13 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
 /** URL Run이 변경되면 이전 응답을 폐기하며, 어떤 결과도 섞지 않는다. */
 export function PipelineAnalysis({
   run, onOpenResource, initialSection, onSectionChange, onInvestigateCandidates,
+  onSelectTestScoreRange,
 }: {
   run: PipelineRun; onOpenResource: OpenResult;
   initialSection?: PipelineAnalysisSection;
   onSectionChange?: (section: PipelineAnalysisSection) => void;
   onInvestigateCandidates?: () => void;
+  onSelectTestScoreRange?: (range: PipelineScoreRange) => void;
 }) {
   const modelId = resultRef(run, "training", "model_revision_id");
   const calibrationId = resultRef(run, "calibration", "scoring_result_id");
@@ -354,7 +386,7 @@ export function PipelineAnalysis({
   }
   const current = state?.key === key ? state : null;
   if (current?.error) return <section className="pipeline-readiness-blocked" role="alert">
-    <strong>이번 Run의 통합 분석 근거를 완전히 검증하지 못했습니다.</strong>
+    <strong>현재 분석의 근거를 완전히 검증하지 못했습니다.</strong>
     <p>{current.error}</p>
     <p>일부 결과 판본을 조회할 수 없거나 참조가 일치하지 않습니다.
       이 상태에서는 전체 분석 보고서를 완성된 결과로 표시하지 않습니다.
@@ -378,5 +410,6 @@ export function PipelineAnalysis({
   return <PipelineEvidenceView evidence={current.evidence} run={run}
     onOpenResource={onOpenResource} initialSection={initialSection}
     onSectionChange={onSectionChange}
-    onInvestigateCandidates={onInvestigateCandidates} />;
+    onInvestigateCandidates={onInvestigateCandidates}
+    onSelectTestScoreRange={onSelectTestScoreRange} />;
 }

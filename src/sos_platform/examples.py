@@ -88,11 +88,11 @@ def _activity_anomaly_if() -> bytes:
 _EXAMPLES = {
     "activity-anomaly-if": {
         "name": "example-activity-anomaly-if.csv",
-        "title": "활동 이상 탐지 Pipeline 예제",
+        "title": "활동 이상 탐지 학습 예제",
         "description": "IF Pipeline이 요구하는 44개 활동 Feature와 UTC 시각을 가진 합성 데이터입니다.",
         "columns": ["ts", "io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create", "cnt_proc_exec"],
         "content": _activity_anomaly_if(),
-        "guide": "등록형 활동 이상 탐지 Pipeline에서 입력을 검사하고 실행해 보세요. 실제 침해 사건이나 탐지 정확도를 검증하는 데이터가 아닙니다.",
+        "guide": "모델 실험실에서 모델을 학습하고 점수와 이상 후보를 살펴보세요. 실제 침해 사건이나 탐지 정확도를 검증하는 데이터가 아닙니다.",
     },
     "machine-sensors": {
         "name": "example-machine-sensors.csv",

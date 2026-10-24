@@ -158,7 +158,7 @@ try {
     "/pipelines?dataset=dataset-from-data");
 
   // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
-  const { PipelineWorkspace, isRegistrationPending } =
+  const { PipelineWorkspace, isRegistrationPending, filterCandidatesByScoreRange } =
     await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
   // Training Job 성공만으로 Run 전체가 성공한 것처럼 표시하지 않는다.
   const pendingRun = {
@@ -191,6 +191,17 @@ try {
   const { PipelineAnalysis, PipelineEvidenceView, validatePipelineEvidence } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
   const { PipelineCandidateInvestigation, SensitivityChart, matchingExplanationJob } =
     await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
+  // 인접 점수 구간의 경계값은 한 구간에만 속해야 한다.
+  const scoreItems = [
+    { row_index: 1, anomaly_score: 0.1, features: {} },
+    { row_index: 2, anomaly_score: 0.2, features: {} },
+    { row_index: 3, anomaly_score: 0.3, features: {} },
+  ];
+  assert.deepEqual(filterCandidatesByScoreRange(scoreItems,
+    { lower: 0.1, upper: 0.2, includeUpper: false }).map(x => x.row_index), [1]);
+  assert.deepEqual(filterCandidatesByScoreRange(scoreItems,
+    { lower: 0.2, upper: 0.3, includeUpper: true }).map(x => x.row_index), [2, 3]);
+  assert.deepEqual(filterCandidatesByScoreRange(scoreItems, null).map(x => x.row_index), [1, 2, 3]);
   const props = {
     datasets: [], initialDatasetId: "", initialRunId: "",
     hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
@@ -202,19 +213,30 @@ try {
     ...props, hasPipelineExample: true, canCreateDataset: true,
     onUseExample: async () => ({ id: "example", name: "example", version: "v1", kind: "file" }),
   }));
-  assert.match(emptyJourney, /이 분석에서 사용할 수 있는 기능/);
-  assert.match(emptyJourney, /예제 데이터 선택하고 입력 확인/);
-  assert.match(emptyJourney, /Training/);
-  assert.match(emptyJourney, /Calibration/);
-  assert.match(emptyJourney, /Test/);
-  assert.match(emptyJourney, /내 데이터로 시작하기/);
-  assert.match(emptyJourney, /분석 Run 선택/);
-  assert.match(emptyJourney, /새 분석 시작/);
-  assert.match(emptyJourney, /다음 행동: Dataset을 선택하세요/);
+  assert.match(emptyJourney, /예제로 모델 학습하기/);
+  assert.match(emptyJourney, /예제로 모델 학습 시작/);
+  assert.match(emptyJourney, /240개 합성 관측치/);
+  assert.match(emptyJourney, /학습·보정·테스트 분석을 제출합니다/);
+  assert.match(emptyJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
+  assert.match(emptyJourney, /이전 학습 결과/);
+  assert.match(emptyJourney, /이전에 학습한 결과가 있나요/);
+  assert.doesNotMatch(emptyJourney, /분석 이용 단계/);
   assert.match(emptyJourney, /자동 생성하는 단계는 현재 등록되어 있지 않습니다/);
-  assert.match(emptyJourney, /아직 선택된 실행이 없습니다/);
-  assert.match(emptyJourney, /class="pipeline-journey-item active" aria-current="step"/);
+  assert.match(emptyJourney, /이전 학습 결과/);
+  assert.doesNotMatch(emptyJourney, /pipeline-journey-item/);
   assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행하기/);
+  // 예제 학습은 권한이 없으면 시도할 수 없고, 화면 렌더만으로 실행되지 않는다.
+  const withoutPermission = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
+    ...props, hasPipelineExample: true, canCreateDataset: false, canRun: false,
+  }));
+  assert.match(withoutPermission, /<button[^>]*disabled=""[^>]*>예제로 모델 학습 시작/);
+  assert.match(withoutPermission, /Dataset 생성 권한이 필요합니다/);
+  assert.match(withoutPermission, /작업 실행 권한이 필요합니다/);
+  const withoutExample = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
+    ...props, hasPipelineExample: false, examplesLoading: false, canCreateDataset: true,
+  }));
+  assert.match(withoutExample, /예제를 찾지 못했습니다/);
+  assert.match(withoutExample, /disabled=""/);
   const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, datasets: [{ id: "dataset-1", name: "활동 데이터", version: "revision-1", kind: "file" }],
     initialDatasetId: "dataset-1",
@@ -232,7 +254,7 @@ try {
     onOpenPipelineRun: () => {},
   }));
   assert.match(home, /무엇을 시작할까요/);
-  assert.match(home, /시간 기반 활동 이상 탐지/);
+  assert.match(home, /활동 이상 탐지/);
   assert.doesNotMatch(home, /최근 ML 실행/);
   const { PipelineModelUsage } = await vite.ssrLoadModule("/src/PipelineModelUsage.tsx");
   const useModel = renderToStaticMarkup(React.createElement(PipelineModelUsage, {
@@ -243,8 +265,8 @@ try {
     ...props, initialRunId: "previous-run",
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
-  assert.match(deepLinkedJourney, /현재 Run/);
-  assert.match(deepLinkedJourney, /aria-label="분석 이용 단계"/);
+  assert.match(deepLinkedJourney, /선택한 실행/);
+  assert.doesNotMatch(deepLinkedJourney, /aria-label="분석 이용 단계"/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
   const completedRun = {
     id: "run-demo", definition_id: "activity-anomaly-if", status: "Succeeded",
@@ -319,13 +341,22 @@ try {
     run: completedRun, evidence: resultEvidence, initialSection, onOpenResource: () => {},
   }));
   const report = reportFor("overview");
-  assert.match(report, /이 Run의 분석 근거 탐색/);
+  assert.match(report, /현재 분석 근거 탐색/);
   assert.match(report, /aria-pressed="true"/);
   assert.match(report, /실제 최소·평균·최대 이상 점수/);
-  assert.doesNotMatch(report, /Training 점수 구간별 전체 관측 수/);
+  assert.match(report, /Training 점수 구간별 전체 관측 수/);
+  assert.match(report, /Calibration 점수 구간별 전체 관측 수/);
+  assert.match(report, /Test 점수 구간별 전체 관측 수/);
   const trainingReport = reportFor("training");
   assert.match(trainingReport, /Training — 무엇을 학습했는가/);
   assert.match(trainingReport, /Training 점수 구간별 전체 관측 수/);
+  const interactiveOverview = renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
+    run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
+    onSelectTestScoreRange: () => {},
+  }));
+  assert.match(interactiveOverview, /이 구간 후보 보기/);
+  assert.match(interactiveOverview, /후보 탐색/);
+  assert.match(interactiveOverview, /그래프 막대나 아래 집계 표에서 점수 구간을 선택/);
   const calibrationReport = reportFor("calibration");
   assert.match(calibrationReport, /Calibration — 기준은 어떻게 정했는가/);
   assert.match(calibrationReport, /0.5%/);
