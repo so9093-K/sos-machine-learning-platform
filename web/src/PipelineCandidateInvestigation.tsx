@@ -223,7 +223,8 @@ export function PipelineCandidateInvestigation({
             : !modelRevisionId ? "판본 없음" : !model ? "조회 중" : "근거 없음"}</td></tr>)}</tbody>
     </table></div>
     <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
-      canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />
+      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
+      onOpenResource={onOpenResource} />
     {previousLookup === "loading" && <p role="status">
       이 후보의 기존 설명 작업을 확인하고 있습니다.
     </p>}

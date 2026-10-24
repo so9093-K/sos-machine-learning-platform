@@ -80,9 +80,11 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
   </section>;
 }
 
-export function PipelineShapExplanation({ candidate, scoringResultId, canRun, canCancel, onOpenResource }: {
-  candidate: { row_index: number };
-  scoringResultId: string;
+export function PipelineShapExplanation({
+  candidate, scoringResultId, modelRevisionId, canRun, canCancel, onOpenResource,
+}: {
+  candidate: { row_index: number; anomaly_score: number };
+  scoringResultId: string; modelRevisionId: string | null;
   canRun: boolean; canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
@@ -144,15 +146,21 @@ export function PipelineShapExplanation({ candidate, scoringResultId, canRun, ca
     void request<ExplanationResult>("/api/ml/explanations/" + encodeURIComponent(id))
       .then(next => {
         if (!active) return;
+        const explainedScore = next.output.score;
         if (next.scoring_result_id !== scoringResultId ||
-            next.row_index !== candidate.row_index || next.method !== METHOD) {
-          setError("SHAP 결과가 선택한 관측치와 일치하지 않습니다.");
+            next.row_index !== candidate.row_index || next.method !== METHOD ||
+            (modelRevisionId !== null && next.model_revision_id !== modelRevisionId) ||
+            typeof explainedScore !== "number" || !Number.isFinite(explainedScore) ||
+            Math.abs(explainedScore - candidate.anomaly_score) >
+              1e-10 + 1e-9 * Math.abs(candidate.anomaly_score)) {
+          setResult(null);
+          setError("SHAP 설명 판본의 모델·관측치·이상 점수가 현재 후보와 일치하지 않습니다.");
         } else { setResult(next); setError(""); }
       }).catch(reason => { if (active) setError(formatError(reason)); })
       .finally(() => { if (active) setResultLoading(false); });
     return () => { active = false; };
   }, [job?.id, job?.status, job?.result?.explanation_result_id,
-    scoringResultId, candidate.row_index, retry]);
+    scoringResultId, candidate.row_index, candidate.anomaly_score, modelRevisionId, retry]);
 
   async function submit() {
     if (!canRun || busy || lookup !== "ready" || (job && !terminal.has(job.status))) return;
