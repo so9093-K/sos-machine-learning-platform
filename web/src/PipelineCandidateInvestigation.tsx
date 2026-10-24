@@ -5,10 +5,7 @@ import { DataChart } from "./DataChart";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { MLExplanationJob, MLExplanationJobSummary, ExplanationResult, PipelineCandidates, ModelRevision } from "./types";
 
-type Candidate = PipelineCandidates["items"][number] & {
-  observed_at?: string | null;
-  observation_id?: string | null;
-};
+type Candidate = PipelineCandidates["items"][number];
 type ExplanationJobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
 
 export function matchingExplanationJob(
