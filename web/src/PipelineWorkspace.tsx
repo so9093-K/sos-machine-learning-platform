@@ -4,6 +4,7 @@ import { PipelineAnalysis } from "./PipelineAnalysis";
 import type { PipelineAnalysisSection } from "./PipelineAnalysis";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import { PipelineModelUsage } from "./PipelineModelUsage";
+import { MLTrackingStatus } from "./MLTrackingStatus";
 import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
@@ -317,6 +318,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const currentCheck = checked?.dataset_id === datasetId ? checked : null;
   const current = catalog.find(item => item.id === PIPELINE);
   const completed = run?.stages ?? [];
+  const trainingJob = completed.find(item => item.name === "training")?.job;
+  const registrationPending = run?.status === "Running" && run.current_stage === "training" &&
+    trainingJob?.status === "Succeeded";
   const activeCandidate = rows?.items.find(item => item.row_index === selectedCandidate);
   const activeDataset = run ? datasets.find(item => item.id === run.dataset_id) : null;
   const modelRevisionId = resultId(completed.find(item => item.name === "training")?.job, "model_revision_id");
@@ -629,8 +633,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         {!terminal.has(run.status) && <div className="pipeline-next-step" role="status">
           <strong>{run.cancel_requested ? "취소 요청을 처리하고 있습니다." :
             run.status === "Queued" ? "분석 실행을 기다리고 있습니다." :
+            registrationPending ? "모델 학습 완료 · MLflow 등록 확인 중" :
             activeStage ? activeStage + " 단계 진행 중" : "실행 대기 또는 단계 전환 중"}</strong>
-          <p>서버 Worker에서 실제 Job 상태를 확인합니다. 완료 시간을 추정한 진행률로 표현하지 않습니다.</p>
+          {registrationPending ? <>
+            <p>학습 결과는 확정됐습니다. 모델 Registry 판본이 등록되면 다음 단계로 진행합니다.</p>
+            {trainingJob && <MLTrackingStatus key={trainingJob.id} jobId={trainingJob.id} />}
+          </> : <p>서버 Worker에서 실제 Job 상태를 확인합니다. 완료 시간을 추정한 진행률로 표현하지 않습니다.</p>}
           {canCancel && <button type="button" className="secondary"
             disabled={busy || run.cancel_requested} onClick={() => void cancel()}>
             Pipeline 취소 요청

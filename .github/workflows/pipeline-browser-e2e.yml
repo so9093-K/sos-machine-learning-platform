@@ -57,44 +57,29 @@ jobs:
         run: docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app up --build -d --wait
       - name: Verify complete browser Pipeline consumer journey
         run: node web/scripts/browser-pipeline-e2e.mjs
-      - name: Verify real trained IF model is bound to MLflow Registry
+      - name: Verify MLflow management through SOS API
         run: |
-          docker compose --env-file "$SOS_E2E_ENV_FILE" --profile app exec -T worker python - <<'PY'
-          import os
-          from pathlib import Path
-          from sqlalchemy import text
-          from sos_platform.store import Store
-          from sos_platform.mlflow_config import MLflowSettings
-          from sos_platform.mlflow_tracking import MLflowClient
-          from sos_platform.mlflow_registry import verify_registered_version
-          from sos_platform.mlflow_read import read_experiments, read_runs, read_model_versions
+          node --input-type=module - <<'JS'
+          import assert from "node:assert/strict";
 
-          store = Store(Path(os.environ["SOS_HOME"]))
-          with store.connection() as db:
-              model_id = db.execute(
-                  text("SELECT id FROM model_revisions WHERE owner_actor=:owner "
-                       "ORDER BY created_at DESC LIMIT 1"),
-                  {"owner": "e2e-operator"},
-              ).scalar_one()
-          model = store.get_model_revision(model_id)
-          assert model is not None and model["registry_model"] and model["registry_version"]
-          tracking = store.tracking_status(model["job_id"])
-          assert tracking is not None and tracking["state"] == "Succeeded"
-          assert tracking["run_id"]
-          settings = MLflowSettings.from_env()
-          assert settings is not None
-          client = MLflowClient(settings)
-          verify_registered_version(client, model)
-          # 기존 브라우저 E2E가 만든 데이터를 관리 조회 API가 실제로 찾을 수 있는지 확인한다.
-          experiments = read_experiments(client, "e2e-operator")["items"]
-          assert any(item["name"] == "기본 실험" for item in experiments)
-          chosen = next(item for item in experiments if item["name"] == "기본 실험")
-          runs = read_runs(client, store, "e2e-operator", experiment_id=chosen["id"])["items"]
-          assert any(item["job_id"] == model["job_id"] for item in runs)
-          models = read_model_versions(client, store, "e2e-operator")["items"]
-          assert any(item["model_id"] == model_id for item in models)
-          print("실제 IF 학습 → MLflow Experiment 검색·Run·Registry 판본·아티팩트 검증: 통과")
-          PY
+          const get = async path => {
+            const response = await fetch(`http://127.0.0.1:9602${path}`, {
+              headers: { Authorization: `Bearer ${process.env.SOS_E2E_TOKEN}` },
+            });
+            assert.equal(response.status, 200, `${path}: HTTP ${response.status} ${await response.text()}`);
+            return response.json();
+          };
+          const experiments = (await get("/api/ml/experiments")).items;
+          const experiment = experiments.find(item => item.name === "기본 실험");
+          assert(experiment, "연구 Experiment가 MLflow에 없습니다.");
+          const models = (await get("/api/ml/registry/models")).items;
+          const model = models.find(item => item.status === "READY" && item.run_id);
+          assert(model, "실제 학습 모델의 READY Registry 판본이 없습니다.");
+          const runs = (await get(`/api/ml/experiments/runs?experiment_id=${encodeURIComponent(experiment.id)}`)).items;
+          assert(runs.some(run => run.id === model.run_id && run.job_id === model.job_id),
+            "MLflow Run과 Registry 판본의 학습 Job 연결이 일치하지 않습니다.");
+          console.log("SOS 관리 API → MLflow Experiment·Run·READY Registry 판본 연결: 통과");
+          JS
       - name: Upload screenshot when browser test fails
         if: failure()
         uses: actions/upload-artifact@v4
