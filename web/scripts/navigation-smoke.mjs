@@ -202,7 +202,7 @@ try {
     ...props, hasPipelineExample: true, canCreateDataset: true,
     onUseExample: async () => ({ id: "example", name: "example", version: "v1", kind: "file" }),
   }));
-  assert.match(emptyJourney, /예제 데이터로 모델 학습하기/);
+  assert.match(emptyJourney, /예제로 모델 학습하기/);
   assert.match(emptyJourney, /예제로 모델 학습 시작/);
   assert.match(emptyJourney, /Training/);
   assert.match(emptyJourney, /Calibration/);
@@ -210,9 +210,9 @@ try {
   assert.match(emptyJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
   assert.match(emptyJourney, /이전 학습 결과/);
   assert.match(emptyJourney, /이전에 학습한 결과가 있나요/);
-  assert.doesNotMatch(emptyJourney, /다음 행동: Dataset을 선택하세요/);
+  assert.doesNotMatch(emptyJourney, /분석 이용 단계/);
   assert.match(emptyJourney, /자동 생성하는 단계는 현재 등록되어 있지 않습니다/);
-  assert.match(emptyJourney, /아직 선택된 실행이 없습니다/);
+  assert.match(emptyJourney, /이전 학습 결과/);
   assert.doesNotMatch(emptyJourney, /pipeline-journey-item/);
   assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행하기/);
   const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
@@ -243,7 +243,7 @@ try {
     ...props, initialRunId: "previous-run",
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
-  assert.match(deepLinkedJourney, /현재 Run/);
+  assert.match(deepLinkedJourney, /선택한 실행/);
   assert.doesNotMatch(deepLinkedJourney, /aria-label="분석 이용 단계"/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
   const completedRun = {

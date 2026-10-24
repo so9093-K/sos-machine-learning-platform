@@ -522,9 +522,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     {hasActiveAnalysis && <section className="panel pipeline-run-context" aria-labelledby="pipeline-current-run-heading">
       <div className="pipeline-run-context-header">
         <div>
-          <span className="eyebrow">분석 작업 공간 · Run 선택</span>
+          <span className="eyebrow">학습 · 결과 탐구</span>
           <h3 id="pipeline-current-run-heading" tabIndex={-1}>{
-            run ? "선택한 분석 Run" : runId ? "선택한 Run을 확인하는 중" : "새 분석 또는 이전 Run"
+            run ? "현재 분석" : runId ? "분석 기록을 불러오는 중" : "분석 결과"
           }</h3>
           <p>{run ? "실행에 고정된 Dataset 판본과 상태를 확인합니다." :
             "이전에 수행한 분석을 열거나 새로운 분석을 실행하세요."}</p>
@@ -534,11 +534,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
               setListReload(n => n + 1)}>목록 다시 조회</button>
           </p>}
         </div>
-        <label>분석 Run 선택
+        <label>다른 분석 결과 선택
           <select aria-label="분석 Run 선택" value={runId} onChange={event => selectRun(event.target.value)}>
             <option value="">새 분석 시작</option>
             {runId && !history.some(item => item.id === runId) &&
-              <option value={runId}>현재 Run · {runId.slice(0, 16)}</option>}
+              <option value={runId}>현재 분석 · {runId.slice(0, 16)}</option>}
             {history.map(item => <option key={item.id} value={item.id}>{
               datasets.find(dataset => dataset.id === item.dataset_id)?.name ??
                 item.dataset_id.slice(0, 14)
@@ -577,14 +577,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           selectRun("")}>다른 Dataset으로 새 분석 →</button>
       </div>
     </section>}
-    {run?.status === "Succeeded" && modelRevisionId &&
-      <PipelineModelUsage modelId={modelRevisionId} datasets={datasets}
-        canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
-    <section className="panel pipeline-results" aria-labelledby="pipeline-run-heading">
+    {hasActiveAnalysis && <section className="panel pipeline-results" aria-labelledby="pipeline-run-heading">
       <div className="pipeline-section-heading">
-        <div><span className="eyebrow">03 · 실행부터 결과까지</span>
-          <h3 id="pipeline-run-heading">{run ? "내 분석 실행" : "실행 후에는 이렇게 확인합니다"}</h3>
-          <p>{run ? "선택한 실행의 현재 상태와 결과를 확인하세요. 화면을 떠나도 같은 Run을 다시 열 수 있습니다." :
+        <div><span className="eyebrow">학습 과정 · 이상 후보 탐구</span>
+          <h3 id="pipeline-run-heading">{run ? "학습 진행과 이상 후보" : "학습 결과"}</h3>
+          <p>{run ? "선택한 실행의 현재 상태와 결과를 확인하세요. 나중에도 같은 분석을 다시 열 수 있습니다." :
             "Dataset 검사와 실행을 마치면, 이 자리에서 결과 요약·후보·실행 근거를 확인할 수 있습니다."}</p>
         </div>
         {run && <span className="chip">{run.status}{run.cancel_requested ? " · 취소 요청됨" : ""}</span>}
@@ -721,7 +718,15 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           </div>
         </details>
       </>}
-      <details className="pipeline-history">
+    </section>}
+    {run?.status === "Succeeded" && modelRevisionId &&
+      <details className="pipeline-advanced pipeline-more">
+        <summary>학습 모델을 다른 데이터에 적용해 보기</summary>
+        <PipelineModelUsage modelId={modelRevisionId} datasets={datasets}
+          canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />
+      </details>}
+    <section className="panel pipeline-history-panel" aria-label="이전 학습 결과">
+      <details className="pipeline-history" open={!hasActiveAnalysis}>
         <summary id="pipeline-history-heading" tabIndex={-1}>이전 학습 결과 ({count(history.length)}건 조회됨)</summary>
         <div className="ml-resource-list">
           {history.map(item => <button type="button" className="platform-list-link ghost" key={item.id}
@@ -731,10 +736,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           </button>)}
           {history.length === 0 && <p className="muted">{
             historyError ? "Run 목록을 확인하지 못했습니다. 상단에서 다시 조회하세요." :
-              "조회된 Run이 없습니다. 새 분석을 실행할 수 있습니다."
+              "이전 학습 결과가 없습니다. 새 분석을 실행할 수 있습니다."
           }</p>}
         </div>
       </details>
     </section>
   </div>;
-}
