@@ -677,3 +677,10 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 /* 새 학습을 주 행동으로 유지하고 이력 조회는 작업 이력에서 제공한다. */
 .pipeline-lab-entry { grid-template-columns:minmax(0,1fr); max-width:690px; }
 .pipeline-lab-primary { width:100%; }
+
+/* 관측치의 실제 근거를 선택 후보와 한 공간에서 확인한다. */
+.pipeline-candidate-observation { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+.pipeline-candidate-observation > div { min-width:0; overflow-wrap:anywhere; }
+.pipeline-candidate-observation dt { color:var(--sos-muted); font-size:.82rem; }
+.pipeline-candidate-observation dd { margin:4px 0; font-weight:600; }
+.pipeline-candidate-comparison { max-height:420px; overflow:auto; }

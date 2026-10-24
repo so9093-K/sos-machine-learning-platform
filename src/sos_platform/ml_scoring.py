@@ -195,10 +195,13 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
         or identity_column == label
     ):
         raise ValueError("Observation identity column must be separate from ML features and label")
+    temporal = spec.get("temporal_scope")
+    timestamp_column = temporal["timestamp_column"] if temporal else None
     fields = [
         *features,
         *([label] if label else []),
         *([identity_column] if identity_column else []),
+        *([timestamp_column] if timestamp_column and timestamp_column not in features else []),
     ]
     scope_evidence = None
     pending.parent.mkdir(parents=True, exist_ok=True)
@@ -269,6 +272,12 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                         result = result.with_columns(
                             frame[identity_column].alias("observation_id")
                         )
+                    if timestamp_column is not None:
+                        # 시간 분할에서 검증한 원본 행의 시각을 같은 배치·위치에 고정한다.
+                        timestamp = frame[timestamp_column]
+                        if isinstance(schema[timestamp_column], pl.Datetime):
+                            timestamp = timestamp.dt.strftime("%+")
+                        result = result.with_columns(timestamp.alias("observed_at"))
                     if label is not None:
                         if frame[label].null_count():
                             raise ValueError("Labeled scoring requires complete binary labels")

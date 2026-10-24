@@ -3,6 +3,7 @@
 import csv
 import hashlib
 import io
+from uuid import UUID
 
 from .datasets import save_upload
 from .store import Store
@@ -80,8 +81,11 @@ def _activity_anomaly_if() -> bytes:
                               + ((tick * 7 + index * 11) % 37) / 12
                               + (110.0 + index if outlier else 0.0), 5)
             values.append(value)
-        rows.append([observed.isoformat(), *values])
-    return _csv(["ts", *FEATURES], rows)
+        # 예제에서만 고정된 비식별 UUIDv4를 생성한다. 일반 사용자 데이터를 추정하지 않는다.
+        digest = hashlib.sha256(f"sos-if-example-row:{tick}".encode()).digest()
+        identity = str(UUID(bytes=digest[:16], version=4))
+        rows.append([observed.isoformat(), identity, *values])
+    return _csv(["ts", "sos_observation_id", *FEATURES], rows)
 
 
 # 샘플은 서버 시작 시 DB에 등록하지 않는다. 사용자가 선택할 때 같은 Dataset API를 사용한다.
@@ -89,8 +93,8 @@ _EXAMPLES = {
     "activity-anomaly-if": {
         "name": "example-activity-anomaly-if.csv",
         "title": "활동 이상 탐지 학습 예제",
-        "description": "IF Pipeline이 요구하는 44개 활동 Feature와 UTC 시각을 가진 합성 데이터입니다.",
-        "columns": ["ts", "io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create", "cnt_proc_exec"],
+        "description": "44개 활동 Feature·UTC 시각·재현 가능한 비식별 관측치 ID를 포함한 합성 예제입니다.",
+        "columns": ["ts", "sos_observation_id", "io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create", "cnt_proc_exec"],
         "content": _activity_anomaly_if(),
         "guide": "모델 실험실에서 모델을 학습하고 점수와 이상 후보를 살펴보세요. 실제 침해 사건이나 탐지 정확도를 검증하는 데이터가 아닙니다.",
     },
