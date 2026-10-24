@@ -276,6 +276,9 @@ class MLflowExportStatusOut(BaseModel):
 class MLExplanationRequest(BaseModel):
     scoring_result_id: str
     row_index: int = Field(strict=True, ge=0, le=2**63 - 1)
+    method: Literal[
+        "median_reference_feature_replacement", "permutation_shap_median_v1"
+    ] = "median_reference_feature_replacement"
 
 
 class ExplanationResultOut(BaseModel):

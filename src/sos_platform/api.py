@@ -803,6 +803,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
                 "scoring_result_id": score["id"],
                 "source_owner_actor": score["owner_actor"],
                 "row_index": body.row_index,
+                "method": body.method,
             },
             request_id=request.state.request_id,
             owner_actor=actor.id,

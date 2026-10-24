@@ -17,6 +17,7 @@ dependencies = [
   "pyiceberg[sql-postgres]>=0.10,<1",
   "pytz==2026.2",
   "scikit-learn>=1.7,<2",
+  "shap>=0.50,<0.51",
   "sqlalchemy>=2.0,<3",
   "psycopg2-binary>=2.9,<3",
   "alembic>=1.16,<2",
