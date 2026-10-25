@@ -52,7 +52,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
       setHistory(old => append
         ? [...old, ...matching.filter(item => !old.some(existing => existing.id === item.id))]
         : matching);
-      setHistoryCursor(page.next_cursor);
+      setHistoryCursor(page.next_cursor ?? null);
       setHistoryLoaded(true);
     } catch (cause) { setHistoryError(formatError(cause)); }
     finally { historyFetching.current = false; setHistoryLoading(false); }
