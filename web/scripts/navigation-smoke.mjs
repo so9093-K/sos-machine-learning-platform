@@ -119,6 +119,19 @@ try {
   assert.deepEqual(routeAt("/scoring/results/score%2Fone",
     "?from=model-lab&model=model%2Fa").context,
     { modelLabReturn: true, modelId: "model/a" });
+  const labDecision = contextPath("policies", {
+    scoringId: "score one", modelLabReturn: true, modelId: "model/a",
+  });
+  assert.equal(labDecision,
+    "/policies?scoring=score+one&from=model-lab&model=model%2Fa");
+  const labDecisionRoute = routeAt("/policies",
+    "?scoring=score+one&from=model-lab&model=model%2Fa");
+  assert.deepEqual(labDecisionRoute.context, {
+    scoringId: "score one", modelLabReturn: true, modelId: "model/a",
+  });
+  assert.equal(contextPath("explanations", nextNavigationContext(
+    labDecisionRoute, "explanations")),
+    "/explanations?scoring=score+one&from=model-lab&model=model%2Fa");
   assert.deepEqual(routeAt("/models/model-one",
     "?from=model-lab&model=model%2Fa").context,
     { modelLabReturn: true, modelId: "model/a" });

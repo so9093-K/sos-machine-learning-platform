@@ -67,7 +67,11 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   }
   if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "" };
   if (tab === "scoring") return { modelId: params.get("model") ?? "" };
-  if (isDecisionTab(tab)) return { scoringId: params.get("scoring") ?? "" };
+  if (isDecisionTab(tab)) return {
+    scoringId: params.get("scoring") ?? "",
+    ...(params.get("from") === "model-lab" && params.get("model")
+      ? { modelLabReturn: true, modelId: params.get("model")! } : {}),
+  };
   return {};
 }
 
@@ -113,6 +117,10 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
   }
   if (tab === "scoring" && context.modelId) params.set("model", context.modelId);
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
+  if (isDecisionTab(tab) && context.modelLabReturn && context.modelId) {
+    params.set("from", "model-lab");
+    params.set("model", context.modelId);
+  }
   return paths[tab] + (params.size ? "?" + params.toString() : "");
 }
 
@@ -201,7 +209,11 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
       } : {}) };
   }
   if (isDecisionTab(tab) && isDecisionTab(previous.tab)) {
-    return { scoringId: previous.context.scoringId };
+    return {
+      scoringId: previous.context.scoringId,
+      ...(previous.context.modelLabReturn && previous.context.modelId
+        ? { modelLabReturn: true, modelId: previous.context.modelId } : {}),
+    };
   }
   if ((tab === "training" || tab === "ml") &&
       (previous.tab === "training" || previous.tab === "ml")) {
@@ -267,7 +279,7 @@ export function useWorkspaceNavigation() {
     const fromPipeline = (previous.tab === "pipelines" || previous.resource !== null)
       && previous.context.pipelineReturn !== false;
     const fromLabUse = (previous.tab === "pipelines" && previous.context.pipelineView === "use") ||
-      (previous.resource !== null && previous.context.modelLabReturn === true);
+      previous.context.modelLabReturn === true;
     const context: MLNavigationContext = fromPipeline && previous.context.pipelineRunId
       ? { pipelineReturn: true, pipelineRunId: previous.context.pipelineRunId,
           datasetId: previous.context.datasetId,

@@ -79,7 +79,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   function startDecision(view: DecisionView, scoringId: string) {
     navigateWithContext(
       view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
-      { scoringId },
+      { scoringId, ...(context.modelLabReturn && context.modelId
+        ? { modelLabReturn: true, modelId: context.modelId } : {}) },
     );
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
@@ -788,7 +789,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               pipelineAnalysisSection: context.pipelineAnalysisSection,
             })}>원래 Pipeline Run으로 돌아가기 →</button>
         </section>}
-      {resource && context.modelLabReturn && context.modelId &&
+      {(resource || (["policies", "evaluations", "explanations"] as Tab[]).includes(tab)) &&
+        context.modelLabReturn && context.modelId &&
         <section className="pipeline-return" role="status">
           <div><strong>활동 이상 탐지에서 열린 결과입니다.</strong>
             <p>선택한 모델과 데이터에 적용한 결과를 살펴본 뒤 모델 사용 화면으로 돌아갈 수 있습니다.</p>
