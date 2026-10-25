@@ -388,6 +388,19 @@ try {
   assert.equal(routeAt("/model-experience", "").tab, "overview");
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
+  const { ModelLabPlayground, exampleValues } = await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
+  const exampleModel = {
+    id: "model-test", features: ["cnt_proc_exec", "cnt_file_del"],
+    runtime: { feature_reference_medians: [12, 2] },
+  };
+  assert.deepEqual(exampleValues(exampleModel), { cnt_proc_exec: "12", cnt_file_del: "2" });
+  assert.equal(exampleValues({ ...exampleModel, runtime: {} }), null);
+  const playgroundHtml = renderToStaticMarkup(React.createElement(ModelLabPlayground, {
+    model: exampleModel, canRun: true, canCancel: true, onDataset: () => {},
+  }));
+  assert.match(playgroundHtml, /프로세스 실행 횟수/);
+  assert.match(playgroundHtml, /실제 이상 점수 계산하기/);
+  assert.match(playgroundHtml, /입력값과 결과가 권한이 적용되는 Job 이력에 보존/);
   const { ModelLabUse, isActivityModelCompatible } =
     await vite.ssrLoadModule("/src/ModelLabUse.tsx");
   assert.equal(isActivityModelCompatible(
