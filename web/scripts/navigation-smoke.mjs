@@ -15,7 +15,7 @@ const vite = await createServer({
 
 try {
   const { routeAt, contextPath, nextNavigationContext, resourcePath,
-    pipelineRunSelectionContext, ModelAreaNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
+    pipelineRunSelectionContext, ModelAreaNavigation, PlatformNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
   const { modelLabLabels, modelLabTree } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
   const grouped = modelLabTree([
@@ -34,6 +34,12 @@ try {
   assert.deepEqual(modelLabLabels({
     learning_type: "semi_supervised", task_type: "anomaly_detection", topic: "new_topic",
   }), ["semi_supervised", "이상 탐지", "new_topic"]);
+  const catalogPendingMenu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
+    active: "pipelines", canInspectStorage: false, canViewAudit: false,
+    onNavigate: () => {},
+  }));
+  assert.match(catalogPendingMenu, /활동 이상 탐지 화면 열기/);
+  assert.match(catalogPendingMenu, /href="\/pipelines"/);
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
   assert.equal(first.tab, "evaluations");
@@ -298,6 +304,7 @@ try {
   assert.match(emptyJourney, /비지도 학습/);
   assert.match(emptyJourney, /이상 탐지/);
   assert.match(emptyJourney, /예제 구성 살펴보기/);
+  assert.match(emptyJourney, /id="model-lab-example-preview"[^>]*hidden/);
   assert.doesNotMatch(emptyJourney, /id="pipeline-example-start"/);
   assert.match(emptyJourney, /활동 Feature/);
   assert.match(emptyJourney, /실제 모델 결과나 시간별 분석 값이 아닙니다/);

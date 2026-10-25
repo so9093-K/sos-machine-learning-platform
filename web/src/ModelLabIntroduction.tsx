@@ -6,7 +6,7 @@ import type { Example, PipelineDefinition } from "./types";
 type Phase = "registering" | "checking" | "submitting" | null;
 
 export function ModelLabIntroduction({ definition, example, examplesLoading,
-  exampleBusy, examplePhase, canCreateDataset, canRun, onStartExample, onOwnData }: {
+  exampleBusy, examplePhase, canCreateDataset, canRun, catalogError, onRetryCatalog, onStartExample, onOwnData }: {
   definition: PipelineDefinition | null;
   example?: Example;
   examplesLoading: boolean;
@@ -14,6 +14,8 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
   examplePhase: Phase;
   canCreateDataset: boolean;
   canRun: boolean;
+  catalogError: string;
+  onRetryCatalog: () => void;
   onStartExample: () => void;
   onOwnData: () => void;
 }) {
@@ -31,7 +33,7 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
     <div className="model-lab-intro-header">
       <div>
         <span className="eyebrow">주제 알아보기</span>
-        <h2 id="model-lab-topic-heading">활동 이상 탐지</h2>
+        <h2 id="model-lab-topic-heading">평소와 다른 활동을 어떻게 찾을까요?</h2>
         <p>시간 구간별 사용자·호스트 활동의 패턴을 살펴보고, 상대적으로 특이한
           관측치를 찾아 모델의 판단 근거를 탐구합니다.</p>
       </div>
@@ -81,7 +83,7 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
         <h3>예제로 알아보기</h3>
         <p>합성 데이터의 구성과 분석 결과의 의미를 확인한 다음 모델 학습을 선택합니다.</p>
         <button type="button" className="secondary" aria-expanded={showExample}
-          aria-controls="model-lab-example-preview"
+          disabled={exampleBusy} aria-controls="model-lab-example-preview"
           onClick={() => setShowExample(open => !open)}>
           {showExample ? "예제 설명 접기" : "예제 구성 살펴보기 →"}
         </button>
@@ -95,8 +97,9 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
         </button>
       </div>
     </div>
-    {showExample && <section id="model-lab-example-preview" className="model-lab-example-preview"
-      aria-label="예제 데이터 및 실행 내용">
+    <div id="model-lab-example-preview" className="model-lab-example-preview-region"
+      hidden={!showExample}>
+    {showExample && <section className="model-lab-example-preview" aria-label="예제 데이터 및 실행 내용">
       <h3>학습 예제 확인</h3>
       {examplesLoading && <p role="status">예제 정보를 불러오고 있습니다.</p>}
       {!examplesLoading && !example && <p role="alert">예제를 찾지 못했습니다. 목록 조회 후 다시 확인하세요.</p>}
@@ -116,8 +119,15 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
         <p className="model-lab-example-caution">이 데이터는 합성 예제입니다.
           실제 침해 사건이나 탐지 정확도를 증명하지 않습니다. 설명을 보는 동안 Dataset이나 Job은 생성되지 않습니다.</p>
       </>}
+      {!definition && <div className="model-lab-example-catalog-notice" role={catalogError ? "alert" : "status"}>
+        <p>{catalogError ? "분석 방법을 확인하지 못했습니다. 새 학습 실행 전에 다시 조회하세요." :
+          "분석 방법과 입력 계약을 확인하는 중입니다."}</p>
+        {catalogError && <button type="button" className="secondary" onClick={onRetryCatalog}>
+          분석 방법 다시 조회
+        </button>}
+      </div>}
       <button id="pipeline-example-start" type="button"
-        disabled={!example || examplesLoading || !canCreateDataset || !canRun || exampleBusy}
+        disabled={!definition || !example || examplesLoading || !canCreateDataset || !canRun || exampleBusy}
         onClick={onStartExample}>
         {examplePhase === "registering" ? "예제 데이터 준비 중…" :
          examplePhase === "checking" ? "학습 입력 확인 중…" :
@@ -130,5 +140,6 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
       {!canCreateDataset && <p className="hint">Dataset 생성 권한이 필요합니다.</p>}
       {!canRun && <p className="hint">작업 실행 권한이 필요합니다.</p>}
     </section>}
+    </div>
   </section>;
 }

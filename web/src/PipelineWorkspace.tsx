@@ -294,7 +294,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   }
   /** 예제 등록·입력 검사·학습 제출을 한 번의 명시적 사용자 행동에 연결한다. */
   async function startExample() {
-    if (!onUseExample || !hasPipelineExample || !canCreateDataset || !canRun ||
+    if (!catalog.some(item => item.id === PIPELINE) ||
+        !onUseExample || !hasPipelineExample || !canCreateDataset || !canRun ||
         exampleSubmitting.current || busy) return;
     exampleSubmitting.current = true;
     const previousRevision = datasetSelectionRevision.current;
@@ -443,6 +444,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   return <div className="platform-home pipeline-consumer">
     {!hasActiveAnalysis && <ModelLabIntroduction definition={current ?? null}
       example={example} examplesLoading={Boolean(examplesLoading)}
+      catalogError={catalogError} onRetryCatalog={() => setListReload(n => n + 1)}
       exampleBusy={exampleBusy || busy} examplePhase={examplePhase}
       canCreateDataset={Boolean(canCreateDataset)} canRun={canRun}
       onStartExample={() => void startExample()}

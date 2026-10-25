@@ -360,6 +360,16 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
           <span>모델 실험실 목록을 불러오지 못했습니다.</span>
           <button type="button" className="ghost" onClick={() => setCatalogReload(n => n + 1)}>다시 조회</button>
         </div>}
+        {(catalogLoading || catalogError) && <a
+          href={paths.pipelines} className="workspace-link model-lab-topic-link"
+          aria-current={active === "pipelines" ? "page" : undefined}
+          onClick={event => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            onNavigate("pipelines");
+          }}>
+          <span className="model-lab-tree-name">활동 이상 탐지 화면 열기</span>
+        </a>}
         {topics.map(learning => {
           const learningKey = "learning:" + learning.id;
           return <div className="model-lab-tree-group" key={learning.id}>
