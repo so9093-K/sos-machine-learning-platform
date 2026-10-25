@@ -27,6 +27,8 @@ def test_playground_feature_order_and_input_validation():
         ordered_playground_input(model, {"a": 1, "b": 2, "secret": 3})
     with pytest.raises(ValueError, match="numeric"):
         ordered_playground_input(model, {"a": True, "b": 2})
+    with pytest.raises(ValueError, match="must be an integer"):
+        ordered_playground_input(model, {"a": 1.5, "b": 2.4})
     with pytest.raises(ValueError, match="finite"):
         ordered_playground_input(model, {"a": math.inf, "b": 2})
     with pytest.raises(ValueError, match="exact float64"):

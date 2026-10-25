@@ -20,6 +20,7 @@ def ordered_playground_input(model: dict, values: dict) -> list[float]:
         raise ValueError("Playground Model Feature dtypes are missing")
     for index, name in enumerate(features):
         value = values[name]
+        dtype = expected_dtypes[index]
         if value is None:
             if not allows_missing:
                 raise ValueError("This model does not support missing values")
@@ -30,6 +31,10 @@ def ordered_playground_input(model: dict, values: dict) -> list[float]:
             raise ValueError("Playground integer exceeds exact float64 range")
         elif not math.isfinite(value):
             raise ValueError("Non-finite Playground value")
+        elif dtype.startswith(("Int", "UInt")) and (
+            not float(value).is_integer() or (dtype.startswith("UInt") and value < 0)
+        ):
+            raise ValueError("Integer Playground Feature must be an integer")
         else:
             ordered.append(float(value))
     return ordered

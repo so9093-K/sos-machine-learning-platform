@@ -25,7 +25,8 @@ async function compatiblePage(page: MLflowModelVersionPage, definition: Pipeline
   return {
     items: checked.filter((result): result is PromiseFulfilledResult<RegisteredActivityModel> =>
       result.status === "fulfilled").map(result => result.value)
-      .filter(({ revision }) => isActivityModelCompatible(revision, definition)),
+      .filter(({ revision }) => isActivityModelCompatible(revision, definition))
+      .sort((a, b) => Date.parse(b.revision.created_at) - Date.parse(a.revision.created_at)),
     failed: checked.filter(result => result.status === "rejected").length,
   };
 }
@@ -144,7 +145,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         <summary>모델 판본 변경</summary>
         <div className="model-lab-model-list">
           {models.map(({ revision, version }) => <button key={revision.id} type="button"
-            className="model-lab-model-choice" aria-pressed={selectedModelId === revision.id}
+            className="surface-button model-lab-model-choice" aria-pressed={selectedModelId === revision.id}
             onClick={() => onSelectModel(revision.id)}>
             <span><strong>Isolation Forest · v{version.version}</strong>
               <small>학습 {new Date(revision.created_at).toLocaleString("ko-KR")}</small>

@@ -31,6 +31,7 @@ export type MLTrainingJobSummary = components["schemas"]["MLTrainingJobSummaryOu
 export type MLTrainingJobPage = components["schemas"]["MLTrainingJobPageOut"];
 export type ModelRevision = components["schemas"]["ModelRevisionOut"];
 
+export type MLPlaygroundJob = components["schemas"]["MLPlaygroundJobOut"];
 export type MLScoringJob = components["schemas"]["MLScoringJobOut"];
 export type MLScoringJobSummary = components["schemas"]["MLScoringJobSummaryOut"];
 export type MLScoringJobPage = components["schemas"]["MLScoringJobPageOut"];

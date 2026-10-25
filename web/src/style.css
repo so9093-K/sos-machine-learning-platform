@@ -63,7 +63,7 @@ header p,.dataset-hero p{color:var(--sos-muted);font-size:13px}
 .hero-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 input,select{background:var(--sos-field);border:1px solid var(--sos-border);border-radius:8px;padding:11px;color:var(--sos-text);min-width:0}
 input:focus,select:focus,button:focus-visible{outline:2px solid var(--sos-accent);outline-offset:2px}
-button:not(.dataset):not(.tab):not(.ghost){background:var(--sos-accent);border:1px solid var(--sos-accent);padding:10px 15px;color:var(--sos-sidebar);border-radius:9px;font-weight:700;font-size:12px}
+button:not(.dataset):not(.tab):not(.ghost):not(.surface-button){background:var(--sos-accent);border:1px solid var(--sos-accent);padding:10px 15px;color:var(--sos-sidebar);border-radius:9px;font-weight:700;font-size:12px}
 button.secondary:not(.dataset):not(.tab):not(.ghost){background:var(--sos-raised);border-color:var(--sos-border);color:var(--sos-text)}
 button.ghost{padding:8px;color:var(--sos-muted);background:transparent;border-radius:6px}
 .tabbar{display:flex;gap:24px;border-bottom:1px solid var(--sos-border);margin:28px 0 18px;overflow:auto}
@@ -859,12 +859,12 @@ button.ghost.model-lab-back { justify-self:start; padding-left:0; }
 
 .activity-feature-original { display:block; color:var(--sos-muted); font-weight:400; font-size:11px; margin-top:3px; overflow-wrap:anywhere; }
 
-/* 모델 선택 카드는 CTA 버튼이 아니다. 전역 버튼 우선순위를 명시적으로 벗어난다. */
-button.model-lab-model-choice:not(.dataset):not(.tab):not(.ghost) {
+/* 중립적인 선택 표면은 기본 CTA 버튼과 분리해 다른 리소스 목록에도 재사용한다. */
+button.surface-button {
   background:var(--sos-raised); color:var(--sos-text); border:1px solid var(--sos-border);
-  text-align:left; padding:14px; font-weight:500;
+  padding:14px; text-align:left; font-weight:500; border-radius:10px;
 }
-button.model-lab-model-choice[aria-pressed="true"]:not(.dataset):not(.tab):not(.ghost) {
+button.surface-button[aria-pressed="true"] {
   border-color:var(--sos-accent); background:var(--sos-accent-bg);
   box-shadow:inset 3px 0 var(--sos-accent);
 }

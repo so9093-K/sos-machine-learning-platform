@@ -2,16 +2,22 @@
 import { useEffect, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
-import type { Job, ModelRevision } from "./types";
+import type { MLPlaygroundJob, ModelRevision } from "./types";
 
-type InputMode = "example" | "edit" | "dataset";
-const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
+ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 export function exampleValues(model: ModelRevision): Record<string, string> | null {
   const medians = model.runtime?.feature_reference_medians;
-  if (!Array.isArray(medians) || medians.length !== model.features.length ||
+  const dtypes = model.runtime?.feature_dtypes;
+  if (!Array.isArray(medians) || !Array.isArray(dtypes) ||
+      medians.length !== model.features.length || dtypes.length !== model.features.length ||
       !medians.every(value => typeof value === "number" && Number.isFinite(value))) return null;
-  return Object.fromEntries(model.features.map((name, i) => [name, String(medians[i])]));
+  return Object.fromEntries(model.features.map((name, i) => {
+    const dtype = String(dtypes[i]);
+    const value = dtype.startsWith("Int") || dtype.startsWith("UInt")
+      ? Math.round(medians[i] as number) : medians[i];
+    return [name, String(Math.max(dtype.startsWith("UInt") ? 0 : -Infinity, value))];
+  }));
 }
 
 export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
@@ -22,7 +28,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   const [fields, setFields] = useState<Record<string, string>>(() =>
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
   const [expanded, setExpanded] = useState(false);
-  const [job, setJob] = useState<Job | null>(null);
+  const [job, setJob] = useState<MLPlaygroundJob | null>(null);
   const [lastScore, setLastScore] = useState<number | null>(null);
   const [previousScore, setPreviousScore] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -35,7 +41,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
       try {
-        const next = await request<Job>("/api/ml/playground/jobs/" + encodeURIComponent(job.id));
+        const next = await request<MLPlaygroundJob>("/api/ml/playground/jobs/" + encodeURIComponent(job.id));
         if (alive) {
           setJob(next);
           const value = next.result?.anomaly_score;
@@ -66,7 +72,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     setSending(true); setError("");
     setPreviousScore(lastScore); setLastScore(null); setJob(null);
     try {
-      const created = await submitJob<Job>("/api/ml/playground/jobs", {
+      const created = await submitJob<MLPlaygroundJob>("/api/ml/playground/jobs", {
         model_revision_id: model.id,
         features: Object.fromEntries(input.map(item => [item.name, item.value])),
       });
@@ -77,7 +83,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   async function cancel() {
     if (!job || TERMINAL.has(job.status) || !canCancel) return;
     try {
-      setJob(await request<Job>("/api/ml/playground/jobs/" + encodeURIComponent(job.id) + "/cancel",
+      setJob(await request<MLPlaygroundJob>("/api/ml/playground/jobs/" + encodeURIComponent(job.id) + "/cancel",
         { method: "POST" }));
     } catch (cause) { setError(formatError(cause)); }
   }
@@ -104,8 +110,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
       <button type="button" aria-pressed={mode === "edit"} className="secondary"
         onClick={() => setMode("edit")}>직접 수정해보기</button>
     </div>
-    {reference ? <p className="hint">입력값은 이 모델의 학습 Feature 중앙값에서 가져온 기준 벡터입니다.
-      실제 한 관측치나 정상 활동의 판정값을 뜻하지 않습니다.</p>
+    {reference ? <p className="hint">입력값은 이 모델의 학습 Feature 중앙값을 바탕으로 구성했습니다.
+      정수 Feature는 정수로 조정했으며, 실제 관측치나 정상 활동의 판정값이 아닙니다.</p>
       : <p className="hint" role="status">이 모델 판본에는 초기 입력 기준값이 없어 자동으로 채우지 않았습니다.
         직접 수정 모드에서 모든 필수 Feature 값을 입력해 주세요.</p>}
     <div className="model-lab-input-grid">{shortNames.map(featureField)}</div>
