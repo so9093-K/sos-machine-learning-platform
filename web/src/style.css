@@ -741,10 +741,21 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
   .pipeline-candidate-detail .pipeline-shap-result .chart { height:370px; }
 }
 
-/* 현재 지원되는 분석 주제의 분류를 경로로 보이고, 불필요한 중간 페이지는 만들지 않는다. */
-.model-lab-nav-classification { display:flex; flex-wrap:wrap; column-gap:10px; row-gap:3px;
-  padding:2px 12px 5px 12px; color:var(--sos-muted); font-size:11px; }
-.model-lab-nav-classification span { white-space:nowrap; }
+/* 독립 Catalog 분류 정보를 탐색용 폴더로 표시한다. 폴더는 실행 화면이 아니다. */
+.model-lab-tree { display:grid; gap:3px; padding:0 2px 4px; min-width:0; }
+.model-lab-tree-group { min-width:0; }
+.model-lab-tree-children { padding-left:12px; margin-left:8px; border-left:1px solid var(--sos-border); min-width:0; }
+.model-lab-tree-toggle, .model-lab-topic-link { display:flex; align-items:center; gap:6px;
+  width:100%; min-width:0; text-align:left; border-radius:8px; font-size:12px; }
+button.ghost.model-lab-tree-toggle { padding:9px 5px; color:var(--sos-text); }
+.model-lab-tree-toggle:hover { background:var(--sos-raised); }
+.model-lab-tree-toggle svg, .model-lab-topic-link svg { flex-shrink:0; }
+.model-lab-tree-caret { width:10px; flex-shrink:0; color:var(--sos-muted); }
+.model-lab-tree-name { min-width:0; overflow-wrap:anywhere; font-weight:650; }
+.model-lab-tree-toggle small, .model-lab-topic-link small { color:var(--sos-muted); flex-shrink:0; font-size:10px; }
+.global-nav a.workspace-link.model-lab-topic-link { width:100%; gap:7px; padding:10px 7px; }
+.model-lab-topic-link[aria-current="page"] { box-shadow:inset 3px 0 var(--sos-accent); background:var(--sos-accent-bg); }
+.model-lab-tree-feedback { display:grid; gap:5px; padding:8px; font-size:12px; color:var(--sos-muted); }
 .model-lab-topic-trail { display:flex; flex-wrap:wrap; gap:4px; font-size:12px;
   color:var(--sos-muted); margin-bottom:10px; }
 #pipeline-model-try { margin-top:14px; scroll-margin-top:18px; }
