@@ -527,6 +527,10 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
           onBack={() => navigateWithContext("pipelines", {})}
           onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
+      {tab === "pipelines" && !context.pipelineRunId && (
+        context.pipelineView === "learn" || Boolean(context.datasetId)) &&
+        <button type="button" className="ghost model-lab-back"
+          onClick={() => navigateWithContext("pipelines", {})}>← 활동 이상 탐지 소개로</button>}
       {tab === "pipelines" && (Boolean(context.pipelineRunId) ||
         context.pipelineView === "learn" ||
         (Boolean(context.datasetId) && context.pipelineView !== "use")) &&
