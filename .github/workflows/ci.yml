@@ -41,6 +41,16 @@ jobs:
       - name: Validate ML navigation context
         working-directory: web
         run: npm run test:navigation
+      - uses: astral-sh/setup-uv@v7
+      - name: Generate API types for PR (temporary)
+        run: |
+          uv python install 3.12
+          uv sync --locked
+          bash scripts/generate_api_types.sh
+          echo "SOS_GENERATED_TYPES_BEGIN"
+          base64 -w 128 web/src/api.generated.ts
+          echo
+          echo "SOS_GENERATED_TYPES_END"
       - name: Build web TypeScript and Vite
         working-directory: web
         run: npm run build
