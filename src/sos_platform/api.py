@@ -143,7 +143,7 @@ curl -H "Authorization: Bearer <TOKEN>" http://localhost:9602/api/v2/auth/me
 현재 지원되는 등록형 모델 실험 주제는 활동 이상 탐지(Isolation Forest)입니다.
 온라인 Serving, 임의 사용자 코드 실행 및 범용 모델 플러그인은 이 API의 현재 지원 범위가 아닙니다.
 
-공개 계약은 [OpenAPI JSON](/openapi.json)이며, 오류 응답에는 분류·코드·요청 ID가 포함됩니다.
+공개 계약은 [OpenAPI JSON](/openapi.json)입니다. 일반적인 API 오류는 분류·코드·요청 ID를 포함한 구조화된 응답을 사용합니다. `/api/ready`의 503은 준비되지 않은 서비스를 나타내는 상태 응답입니다.
 """
 
 OPENAPI_TAGS = [
@@ -169,11 +169,20 @@ OPENAPI_TAGS = [
 
 # Scalar의 탐색용 확장. API 기능 분류 자체는 표준 OpenAPI tags에 남는다.
 OPENAPI_TAG_GROUPS = [
-    {"name": "Platform", "tags": ["System","Identity"]},
-    {"name": "Data", "tags": ["Datasets","Data Exploration","Data Preparation","Iceberg"]},
-    {"name": "Research & ML", "tags": ["Experiments","Training","Models","Scoring","Decision Policies","Evaluations","Explanations"]},
-    {"name": "Pipelines", "tags": ["Pipeline Catalog","Pipeline Runs"]},
-    {"name": "Operations", "tags": ["Jobs","Storage","Audit & Diagnostics"]},
+    {"name": "Platform", "tags": ["System", "Identity"]},
+    {
+        "name": "Data",
+        "tags": ["Datasets", "Data Exploration", "Data Preparation", "Iceberg"],
+    },
+    {
+        "name": "Research & ML",
+        "tags": [
+            "Experiments", "Training", "Models", "Scoring",
+            "Decision Policies", "Evaluations", "Explanations",
+        ],
+    },
+    {"name": "Pipelines", "tags": ["Pipeline Catalog", "Pipeline Runs"]},
+    {"name": "Operations", "tags": ["Jobs", "Storage", "Audit & Diagnostics"]},
 ]
 
 def create_app(home: Path | None = None, *, identity: IdentitySettings | None = None) -> FastAPI:
