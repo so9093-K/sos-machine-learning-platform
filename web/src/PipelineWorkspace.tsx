@@ -4,9 +4,9 @@ import { PipelineAnalysis } from "./PipelineAnalysis";
 import type { PipelineAnalysisSection, PipelineScoreRange } from "./PipelineAnalysis";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import { PipelineModelUsage } from "./PipelineModelUsage";
-import { modelLabLabels } from "./ModelLabTaxonomy";
+import { ModelLabIntroduction } from "./ModelLabIntroduction";
 import { MLTrackingStatus } from "./MLTrackingStatus";
-import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
+import type { Dataset, Example, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 
@@ -44,7 +44,7 @@ export function filterCandidatesByScoreRange(
 }
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, examplesLoading, onUseExample }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, onUseExample }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
   initialCandidateRowIndex?: number;
   initialAnalysisSection?: PipelineAnalysisSection;
@@ -57,6 +57,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   canRun: boolean; canCancel: boolean;
   canCreateDataset?: boolean;
   hasPipelineExample?: boolean;
+  example?: Example;
   examplesLoading?: boolean;
   onUseExample?: () => Promise<Dataset>;
   onNavigate: (tab: WorkspaceTab, datasetId: string) => void;
@@ -97,6 +98,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [error, setError] = useState("");
   const [exampleBusy, setExampleBusy] = useState(false);
+  const ownDataDetails = useRef<HTMLDetailsElement>(null);
   // React 렌더 전 연속 클릭도 단일 제출로 취급한다.
   const exampleSubmitting = useRef(false);
   const [examplePhase, setExamplePhase] = useState<"registering" | "checking" | "submitting" | null>(null);
@@ -437,41 +439,21 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const activeStage = run?.current_stage ? stageLabel[run.current_stage] ?? run.current_stage : null;
   const hasActiveAnalysis = Boolean(runId);
   return <div className="platform-home pipeline-consumer">
-    {!hasActiveAnalysis && <section className="platform-intro pipeline-hero">
-      <div className="model-lab-topic-trail" aria-label="모델 실험실 주제 분류">
-        {modelLabLabels(current ?? { learning_type: "unsupervised",
-          task_type: "anomaly_detection", topic: "activity_anomaly" }).map((label, index) =>
-          <span key={label}>{index > 0 && <span aria-hidden="true"> / </span>}{label}</span>)}
-      </div>
-      <h2>활동 이상 탐지</h2>
-      <p>활동 데이터로 모델을 학습하고, 실제 학습 결과와 탐지된 이상 후보를
-        비교하며 Isolation Forest의 동작을 탐구합니다.</p>
-      <div className="pipeline-lab-entry">
-        <div className="pipeline-lab-primary">
-          <strong>예제로 모델 학습하기</strong>
-          <p>240개 합성 관측치로 모델을 학습하고, 다른 시간 구간의 점수와 이상 후보를
-            분석합니다. 실제 이상 사건이나 탐지 정확도를 보증하는 데이터가 아닙니다.</p>
-          <button id="pipeline-example-start" type="button" disabled={examplesLoading || !hasPipelineExample ||
-            !canCreateDataset || !canRun || exampleBusy || busy}
-            onClick={() => void startExample()}>
-            {examplePhase === "registering" ? "예제 데이터 준비 중…" :
-              examplePhase === "checking" ? "학습 입력 확인 중…" :
-              examplePhase === "submitting" ? "학습 요청 중…" : "예제로 모델 학습 시작 →"}
-          </button>
-          <small>예제 등록과 입력 검사 후 학습·보정·테스트 분석을 제출합니다.</small>
-          {examplePhase && <p role="status">{
-            examplePhase === "registering" ? "합성 학습 데이터를 준비합니다." :
-            examplePhase === "checking" ? "학습 입력을 확인합니다." : "학습을 요청하고 있습니다."
-          }</p>}
-          {!canCreateDataset && <p className="hint">Dataset 생성 권한이 필요합니다.</p>}
-          {!canRun && <p className="hint">작업 실행 권한이 필요합니다.</p>}
-          {!examplesLoading && !hasPipelineExample && <p className="hint">예제를 찾지 못했습니다.</p>}
-        </div>
-      </div>
-    </section>}
+    {!hasActiveAnalysis && <ModelLabIntroduction definition={current}
+      example={example} examplesLoading={Boolean(examplesLoading)}
+      exampleBusy={exampleBusy || busy} examplePhase={examplePhase}
+      canCreateDataset={Boolean(canCreateDataset)} canRun={canRun}
+      onStartExample={() => void startExample()}
+      onOwnData={() => {
+        if (ownDataDetails.current) {
+          ownDataDetails.current.open = true;
+          ownDataDetails.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }} />}
     {error && <div className="alert error" role="alert">{error}
       <button className="ghost" onClick={() => setError("")}>닫기</button></div>}
-    {!hasActiveAnalysis && <details className="pipeline-advanced" open={Boolean(datasetId && !exampleBusy)}>
+    {!hasActiveAnalysis && <details ref={ownDataDetails} className="pipeline-advanced"
+      defaultOpen={Boolean(initialDatasetId)}>
       <summary>내 데이터로 학습하거나 분석 방법 자세히 보기</summary>
     <section className="panel pipeline-start" aria-labelledby="pipeline-start-title">
       <div className="pipeline-section-heading">

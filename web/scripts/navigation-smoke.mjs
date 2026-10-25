@@ -17,7 +17,16 @@ try {
   const { routeAt, contextPath, nextNavigationContext, resourcePath,
     pipelineRunSelectionContext, ModelAreaNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
-  const { modelLabLabels } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
+  const { modelLabLabels, modelLabTree } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
+  const grouped = modelLabTree([
+    { id: "a", name: "활동 이상 탐지", learning_type: "unsupervised",
+      task_type: "anomaly_detection", topic: "activity_anomaly" },
+    { id: "b", name: "지도 학습 이상 탐지", learning_type: "supervised",
+      task_type: "anomaly_detection", topic: "other_anomaly" },
+  ]);
+  assert.equal(grouped.length, 2);
+  assert.deepEqual(grouped.map(group => group.tasks[0].id), ["anomaly_detection", "anomaly_detection"]);
+  assert.equal(grouped.flatMap(group => group.tasks.flatMap(task => task.topics)).length, 2);
   assert.deepEqual(modelLabLabels({
     learning_type: "unsupervised", task_type: "anomaly_detection", topic: "activity_anomaly",
   }),
@@ -279,15 +288,19 @@ try {
   // 비어 있는 첫 진입에서도 제공 기능과 실행 가능한 예제를 발견할 수 있어야 한다.
   const emptyJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, hasPipelineExample: true, canCreateDataset: true,
+    example: { id: "activity-anomaly-if", row_count: 240, columns: ["ts", "io_bytes_per_sec"],
+      description: "44개 활동 Feature가 있는 합성 데이터", title: "활동 이상 탐지 예제",
+      guide: "입력과 점수를 확인합니다", version: "v1" },
     onUseExample: async () => ({ id: "example", name: "example", version: "v1", kind: "file" }),
   }));
-  assert.match(emptyJourney, /예제로 모델 학습하기/);
+  assert.match(emptyJourney, /예제로 알아보기/);
   assert.match(emptyJourney, /모델 실험실 주제 분류/);
   assert.match(emptyJourney, /비지도 학습/);
   assert.match(emptyJourney, /이상 탐지/);
-  assert.match(emptyJourney, /예제로 모델 학습 시작/);
-  assert.match(emptyJourney, /240개 합성 관측치/);
-  assert.match(emptyJourney, /학습·보정·테스트 분석을 제출합니다/);
+  assert.match(emptyJourney, /예제 구성 살펴보기/);
+  assert.doesNotMatch(emptyJourney, /id="pipeline-example-start"/);
+  assert.match(emptyJourney, /활동 Feature/);
+  assert.match(emptyJourney, /실제 모델 결과나 시간별 분석 값이 아닙니다/);
   assert.match(emptyJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
   assert.doesNotMatch(emptyJourney, /이전 학습 결과/);
   assert.doesNotMatch(emptyJourney, /이전에 학습한 결과가 있나요/);
@@ -300,14 +313,13 @@ try {
   const withoutPermission = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, hasPipelineExample: true, canCreateDataset: false, canRun: false,
   }));
-  assert.match(withoutPermission, /<button[^>]*disabled=""[^>]*>예제로 모델 학습 시작/);
-  assert.match(withoutPermission, /Dataset 생성 권한이 필요합니다/);
-  assert.match(withoutPermission, /작업 실행 권한이 필요합니다/);
+  assert.doesNotMatch(withoutPermission, /id="pipeline-example-start"/);
+  assert.match(withoutPermission, /예제 구성 살펴보기/);
   const withoutExample = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, hasPipelineExample: false, examplesLoading: false, canCreateDataset: true,
   }));
-  assert.match(withoutExample, /예제를 찾지 못했습니다/);
-  assert.match(withoutExample, /disabled=""/);
+  assert.match(withoutExample, /예제 구성 살펴보기/);
+  assert.doesNotMatch(withoutExample, /id="pipeline-example-start"/);
   const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, datasets: [{ id: "dataset-1", name: "활동 데이터", version: "revision-1", kind: "file" }],
     initialDatasetId: "dataset-1",
