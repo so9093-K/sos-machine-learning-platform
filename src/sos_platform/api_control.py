@@ -13,6 +13,8 @@ from .schemas import (
     InstanceSettingsOut,
     InstanceSettingsUpdate,
     JobDiagnosticsOut,
+    HealthOut,
+    ReadyOut,
 )
 from .security import ACTIONS, Actor, IdentitySettings, current_actor, require
 from .store import Store
@@ -31,6 +33,7 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
         tags=["System"],
         summary="API 프로세스 상태 확인",
         description="프로세스가 HTTP에 응답하는지만 확인합니다. 저장소와 Worker의 준비 상태는 Ready API로 확인하세요.",
+        response_model=HealthOut,
     )
     def health():
         """프로세스 자체가 HTTP 응답을 제공하는지 확인한다."""
@@ -41,6 +44,8 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
         tags=["System"],
         summary="필수 서비스 준비 상태 확인",
         description="데이터베이스·객체 저장소·Worker를 확인하며 하나라도 준비되지 않으면 503을 반환합니다.",
+        response_model=ReadyOut,
+        responses={503: {"model": ReadyOut, "description": "필수 서비스가 준비되지 않음"}},
     )
     def ready():
         """실제 필수 저장소와 실행기가 준비됐을 때만 200을 반환한다."""

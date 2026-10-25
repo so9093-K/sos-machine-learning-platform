@@ -333,7 +333,6 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             openapi_url=app.openapi_url,
             title=app.title,
             agent=AgentScalarConfig(disabled=True),
-            show_developer_tools="never",
             telemetry=False,
         )
 
