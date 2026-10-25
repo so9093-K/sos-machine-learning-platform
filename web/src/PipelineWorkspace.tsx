@@ -597,7 +597,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           </button>}
           <button type="button" className="secondary" disabled={exampleBusy}
             onClick={() => selectRun("")}>새 모델 학습</button>
-        </div>}
+        </div>
       </div>
       <PipelineAnalysis run={run} onOpenResource={onOpenResource}
         initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection}
