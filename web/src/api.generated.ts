@@ -687,7 +687,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Playground 실행 이력 조회 */
+        get: operations["list_playground_jobs_api_ml_playground_jobs_get"];
         put?: never;
         /**
          * 단일 관측치 모델 점수화 작업 제출
@@ -1685,7 +1686,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -1968,7 +1969,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -1981,7 +1982,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import";
+            kind: "profile" | "transform" | "iceberg_import" | "ml_playground";
             latest_attempt: components["schemas"]["AttemptOut"] | null;
             /** Request Id */
             request_id?: string | null;
@@ -2062,7 +2063,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -2163,7 +2164,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -2261,6 +2262,57 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** MLPlaygroundJobPageOut */
+        MLPlaygroundJobPageOut: {
+            /** Items */
+            items: components["schemas"]["MLPlaygroundJobSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** MLPlaygroundJobSummaryOut */
+        MLPlaygroundJobSummaryOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string | null;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_playground";
+            latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
         /**
          * MLPlaygroundRequest
          * @description Dataset 없이 명시한 소량 관측치. Job 입력으로 감사·보존된다.
@@ -2332,7 +2384,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -2440,7 +2492,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -2627,7 +2679,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -4661,6 +4713,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_playground_jobs_api_ml_playground_jobs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPlaygroundJobPageOut"];
                 };
             };
             /** @description Structured API error */
