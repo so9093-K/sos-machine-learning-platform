@@ -12,6 +12,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    text,
 )
 
 metadata = MetaData()
@@ -48,7 +49,7 @@ jobs = Table(
     metadata,
     Column("id", String(36), primary_key=True),
     Column("kind", String(32), nullable=False),
-    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
+    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=True),
     Column("spec", Text, nullable=False),
     Column("status", String(32), nullable=False),
     Column("cancel_requested", Boolean, nullable=False, default=False),
@@ -65,6 +66,13 @@ jobs = Table(
     Index("ix_jobs_created_at_id", "created_at", "id"),
     Index("ix_jobs_dataset_created_id", "dataset_id", "created_at", "id"),
     Index("ix_jobs_request_id", "request_id"),
+)
+
+Index(
+    "ix_jobs_playground_model_actor_created",
+    text("((spec::jsonb ->> 'model_revision_id'))"),
+    jobs.c.owner_actor, jobs.c.created_at.desc(), jobs.c.id.desc(),
+    postgresql_where=text("kind = 'ml_playground'"),
 )
 
 attempts = Table(

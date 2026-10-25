@@ -22,7 +22,7 @@ class JobStoreMixin:
         self,
         *,
         kind: str,
-        dataset_id: str,
+        dataset_id: str | None,
         spec: dict,
         owner_actor: str | None = None,
         actor_type: str = "human",
@@ -31,6 +31,8 @@ class JobStoreMixin:
         reserve_iceberg_table: str | None = None,
     ) -> dict:
         """중복 제출을 PostgreSQL 유일성 제약과 같은 트랜잭션으로 처리한다."""
+        if dataset_id is None and kind != "ml_playground":
+            raise ValueError("Only Playground Jobs may omit a Dataset")
         if idempotency_key is not None and owner_actor is None:
             raise ValueError("Idempotent Job requires an actor")
         if reserve_iceberg_table is not None and (kind != "iceberg_import" or not owner_actor):
@@ -196,12 +198,15 @@ class JobStoreMixin:
         before: dict | None = None,
         actor_id: str | None = None,
         kind: str | None = None,
+        model_revision_id: str | None = None,
         exclude_kind: str | None = None,
         exclude_ml_train: bool = False,
     ) -> list[dict]:
         """목록은 종류별 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
         if not 1 <= limit <= 101:
             raise InvalidRequestError("Job query limit is out of range")
+        if model_revision_id is not None and kind != "ml_playground":
+            raise InvalidRequestError("Model-filtered Job history requires Playground kind")
         filters = []
         if before:
             filters.append("(created_at, id) < (:created_at, :id)")
@@ -209,11 +214,15 @@ class JobStoreMixin:
             filters.append("owner_actor=:actor_id")
         if kind is not None:
             filters.append("kind=:kind")
+        if model_revision_id is not None:
+            # 모델 필터를 DB 페이지네이션 이전에 적용한다. 후처리 필터는
+            # 다른 모델 실행에 밀려 있는 이력을 '없음'으로 잘못 보여준다.
+            filters.append("(spec::jsonb ->> 'model_revision_id')=:model_revision_id")
         if exclude_kind is not None:
             filters.append("kind!=:exclude_kind")
         if exclude_ml_train:
             filters.append(
-                "kind NOT IN ('ml_pipeline_preflight','ml_train','ml_score','ml_policy','ml_evaluate','ml_explain')"
+                "kind NOT IN ('ml_pipeline_preflight','ml_train','ml_score','ml_playground','ml_policy','ml_evaluate','ml_explain')"
             )
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(
@@ -223,6 +232,7 @@ class JobStoreMixin:
             "limit": limit,
             "actor_id": actor_id,
             "kind": kind,
+            "model_revision_id": model_revision_id,
             "exclude_kind": exclude_kind,
             **(before or {}),
         }

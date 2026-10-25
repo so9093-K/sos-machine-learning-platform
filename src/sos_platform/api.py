@@ -87,6 +87,9 @@ from .schemas import (
     MLScoringJobOut,
     MLScoringJobPageOut,
     MLScoringRequest,
+    MLPlaygroundRequest,
+    MLPlaygroundJobOut,
+    MLPlaygroundJobPageOut,
     ModelRevisionOut,
     PreviewOut,
     ProblemOut,
@@ -772,6 +775,94 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             require_submission_key=require_job_submission_key,
         )
     )
+
+    @app.post(
+        "/api/ml/playground/jobs",
+        tags=["Scoring"],
+        summary="단일 관측치 모델 점수화 작업 제출",
+        description="Dataset 등록 없이 입력값을 Worker에서 계산합니다. 입력 Feature는 Job 이력에 보존됩니다.",
+        status_code=202,
+        response_model=MLPlaygroundJobOut,
+    )
+    def create_playground_job(
+        body: MLPlaygroundRequest,
+        request: Request,
+        actor: Actor = CREATE_JOB_DEP,
+        idempotency_key: str | None = Header(
+            default=None, alias="Idempotency-Key", min_length=8, max_length=128,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ):
+        from .ml_playground import ordered_playground_input
+        model = store.get_model_revision(body.model_revision_id)
+        if model is None:
+            raise HTTPException(status_code=404, detail="Model Revision not found")
+        check_ownership(actor, model["owner_actor"], "model", model["id"])
+        if not model.get("registry_version"):
+            raise HTTPException(status_code=409, detail="Model Registry registration is pending")
+        try:
+            verify_registered_version(_management_client(), model)
+        except MLflowDeliveryError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        try:
+            ordered_playground_input(model, body.features)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_playground", dataset_id=None,
+            spec={
+                "model_revision_id": model["id"],
+                "model_owner_actor": model["owner_actor"],
+                "features": body.features,
+            },
+            request_id=request.state.request_id,
+            owner_actor=actor.id, actor_type=actor.kind,
+            idempotency_key=idempotency_key,
+        )
+
+    @app.get(
+        "/api/ml/playground/jobs",
+        tags=["Scoring"],
+        summary="Playground 실행 이력 조회",
+        response_model=MLPlaygroundJobPageOut,
+    )
+    def list_playground_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        model_revision_id: str | None = Query(default=None, min_length=36, max_length=36),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Job"),
+            actor_id=None if actor.privileged else actor.id,
+            kind="ml_playground",
+            model_revision_id=model_revision_id,
+        )
+        return page_from_rows(rows, limit)
+
+    @app.get(
+        "/api/ml/playground/jobs/{job_id}", tags=["Scoring"],
+        summary="단일 관측치 점수화 Job 상태·결과 조회",
+        response_model=MLPlaygroundJobOut,
+    )
+    def get_playground_job(job_id: str, actor: Actor = READ_JOB_DEP):
+        job = existing_job(job_id, actor)
+        if job["kind"] != "ml_playground":
+            raise HTTPException(status_code=404, detail="Playground Job not found")
+        return job
+
+    @app.post(
+        "/api/ml/playground/jobs/{job_id}/cancel", tags=["Scoring"],
+        summary="Playground 점수화 취소 요청",
+        response_model=MLPlaygroundJobOut,
+    )
+    def cancel_playground_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        job = existing_job(job_id, actor)
+        if job["kind"] != "ml_playground":
+            raise HTTPException(status_code=404, detail="Playground Job not found")
+        return store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
 
     @app.post(
         "/api/ml/scoring/jobs",

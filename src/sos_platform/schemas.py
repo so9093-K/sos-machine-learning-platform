@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StrictFloat, StrictInt, field_validator, model_validator
 
 
 class Step(BaseModel):
@@ -369,6 +369,13 @@ class MLScoringTemporalScope(MLTemporalSplitSpec):
     partition: Literal["calibration", "test"]
 
 
+class MLPlaygroundRequest(BaseModel):
+    """Dataset 없이 명시한 소량 관측치. Job 입력으로 감사·보존된다."""
+
+    model_revision_id: str
+    features: dict[str, StrictFloat | StrictInt | None] = Field(min_length=1, max_length=256)
+
+
 class MLScoringRequest(BaseModel):
     model_revision_id: str
     dataset_id: str
@@ -697,8 +704,8 @@ class AttemptOut(BaseModel):
 
 class JobOut(BaseModel):
     id: str
-    kind: Literal["profile", "transform", "iceberg_import"]
-    dataset_id: str
+    kind: Literal["profile", "transform", "iceberg_import", "ml_playground"]
+    dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
     cancel_requested: bool
@@ -729,6 +736,10 @@ class MLScoringJobOut(JobOut):
     kind: Literal["ml_score"]
 
 
+class MLPlaygroundJobOut(JobOut):
+    kind: Literal["ml_playground"]
+
+
 class MLTrainingJobOut(JobOut):
     """기존 Job 응답의 enum 확장 없이 ML 실행 상태를 제공한다."""
 
@@ -746,8 +757,8 @@ class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: Literal["profile", "transform", "iceberg_import"]
-    dataset_id: str
+    kind: Literal["profile", "transform", "iceberg_import", "ml_playground"]
+    dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
     cancel_requested: bool
@@ -787,6 +798,15 @@ class MLEvaluationJobSummaryOut(JobSummaryOut):
 
 class MLEvaluationJobPageOut(BaseModel):
     items: list[MLEvaluationJobSummaryOut]
+    next_cursor: str | None = None
+
+
+class MLPlaygroundJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_playground"]
+
+
+class MLPlaygroundJobPageOut(BaseModel):
+    items: list[MLPlaygroundJobSummaryOut]
     next_cursor: str | None = None
 
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Model Playground에서 단일 관측치를 실제 등록 모델로 점수화하는 Worker Job 계약을 추가했습니다. 사용자 입력의 Job 이력 보존과 기존 Dataset Scoring의 경계를 구분합니다.
+
 - 모델 실험실 활동 이상 탐지 주제 홈에서 개념 일러스트레이션과 모델 사용·학습의 독립 진입을 제공하고, 기존 직접 Run 링크와 결과 기능을 유지했습니다.
 
 - Scalar API Reference의 브라우저 JavaScript를 고정된 버전으로 빌드·제공하고 기본 외부 폰트를 비활성화하여 문서 화면의 필수 CDN 의존성을 제거했습니다.

@@ -33,6 +33,7 @@ from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_r
 from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
 from .ml_explanation import explain_scored_row
 from .ml_scoring import cleanup_scoring_stage, run_dataset_scoring, scoring_stage_bytes
+from .ml_playground import run_playground_scoring
 from .ml_training import train_dataset
 from .ml_training_staging import (
     cleanup_training_stage,
@@ -88,10 +89,13 @@ def _perform(
         store = Store(home, database_url=database_url)
         # 부모 Worker의 논리적 메모리 예약 안에서 실행되는 자식이다.
         store._execution_memory_reserved = True
-        dataset = store.get_dataset(job["dataset_id"])
-        if dataset is None:
+        dataset = store.get_dataset(job["dataset_id"]) if job["dataset_id"] else None
+        if dataset is None and job["kind"] != "ml_playground":
             raise ValueError("Input dataset is missing")
-        if job["kind"] == "profile":
+        if job["kind"] == "ml_playground":
+            stage = "processing"
+            result = run_playground_scoring(store, job["spec"])
+        elif job["kind"] == "profile":
             stage = "processing"
             if job["spec"].get("mode") == "understanding":
                 result = build_understanding(
@@ -173,7 +177,7 @@ def _perform(
     except Exception as exc:
         code = (
             "SOS-ML-INPUT-INVALID"
-            if job["kind"] in ("ml_pipeline_preflight", "ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain")
+            if job["kind"] in ("ml_pipeline_preflight", "ml_train", "ml_score", "ml_playground", "ml_policy", "ml_evaluate", "ml_explain")
             and isinstance(exc, ValueError)
             else "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
