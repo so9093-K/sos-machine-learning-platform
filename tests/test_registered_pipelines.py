@@ -7,6 +7,7 @@ import polars as pl
 from sqlalchemy import create_engine, text
 
 from sos_platform import pipeline_reference, pipeline_runs
+from sos_platform.api_pipelines import PipelineDefinitionOut
 
 
 class FakeStore:
@@ -280,6 +281,15 @@ def test_cancel_with_missing_submitted_job_fails_instead_of_hiding_loss():
     failed = pipeline_runs.get_run(store, run["id"])
     assert failed["status"] == "Failed"
     assert failed["error_code"] == "SOS-JOB-FAILED"
+
+
+def test_pipeline_catalog_classifies_training_task_and_topic_independently():
+    """학습 유형·분석 과제·적용 주제를 API 계약에서 독립적으로 제공한다."""
+    item = PipelineDefinitionOut.model_validate(pipeline_reference.definition())
+    assert item.learning_type == "unsupervised"
+    assert item.task_type == "anomaly_detection"
+    assert item.topic == "activity_anomaly"
+    assert item.algorithm == "isolation_forest"
 
 
 def test_first_pipeline_example_matches_registered_input_contract(monkeypatch):

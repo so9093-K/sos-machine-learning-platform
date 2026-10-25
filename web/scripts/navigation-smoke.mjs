@@ -17,6 +17,13 @@ try {
   const { routeAt, contextPath, nextNavigationContext, resourcePath,
     pipelineRunSelectionContext, ModelAreaNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
+  const { ACTIVITY_ANOMALY_TOPIC, modelLabLabels } =
+    await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
+  assert.deepEqual(modelLabLabels(ACTIVITY_ANOMALY_TOPIC),
+    ["비지도 학습", "이상 탐지", "활동 이상 탐지"]);
+  assert.deepEqual(modelLabLabels({
+    learning_type: "semi_supervised", task_type: "anomaly_detection", topic: "new_topic",
+  }), ["semi_supervised", "이상 탐지", "new_topic"]);
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
   assert.equal(first.tab, "evaluations");
@@ -274,6 +281,9 @@ try {
     onUseExample: async () => ({ id: "example", name: "example", version: "v1", kind: "file" }),
   }));
   assert.match(emptyJourney, /예제로 모델 학습하기/);
+  assert.match(emptyJourney, /모델 실험실 주제 분류/);
+  assert.match(emptyJourney, /비지도 학습/);
+  assert.match(emptyJourney, /이상 탐지/);
   assert.match(emptyJourney, /예제로 모델 학습 시작/);
   assert.match(emptyJourney, /240개 합성 관측치/);
   assert.match(emptyJourney, /학습·보정·테스트 분석을 제출합니다/);
@@ -332,11 +342,12 @@ try {
   const useModel = renderToStaticMarkup(React.createElement(PipelineModelUsage, {
     modelId: "model-v1", datasets: [], canRun: true, canCancel: true, onOpenResource: () => {},
   }));
-  assert.match(useModel, /생성한 모델을 다른 데이터에 적용하기/);
+  assert.match(useModel, /학습한 모델 사용해보기/);
   const deepLinkedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, initialRunId: "previous-run",
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
+  assert.doesNotMatch(deepLinkedJourney, /비지도 학습/);
   assert.doesNotMatch(deepLinkedJourney, /예제로 모델 학습 시작/);
   assert.doesNotMatch(deepLinkedJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
   assert.match(deepLinkedJourney, /새 모델 학습하기/);
