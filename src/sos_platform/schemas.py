@@ -369,6 +369,13 @@ class MLScoringTemporalScope(MLTemporalSplitSpec):
     partition: Literal["calibration", "test"]
 
 
+class MLPlaygroundRequest(BaseModel):
+    """Dataset 없이 명시한 소량 관측치. Job 입력으로 감사·보존된다."""
+
+    model_revision_id: str
+    features: dict[str, float | int | None] = Field(min_length=1, max_length=256)
+
+
 class MLScoringRequest(BaseModel):
     model_revision_id: str
     dataset_id: str
@@ -697,8 +704,8 @@ class AttemptOut(BaseModel):
 
 class JobOut(BaseModel):
     id: str
-    kind: Literal["profile", "transform", "iceberg_import"]
-    dataset_id: str
+    kind: Literal["profile", "transform", "iceberg_import", "ml_playground"]
+    dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
     cancel_requested: bool
@@ -727,6 +734,10 @@ class MLEvaluationJobOut(JobOut):
 
 class MLScoringJobOut(JobOut):
     kind: Literal["ml_score"]
+
+
+class MLPlaygroundJobOut(JobOut):
+    kind: Literal["ml_playground"]
 
 
 class MLTrainingJobOut(JobOut):

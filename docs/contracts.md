@@ -32,6 +32,8 @@
 - **단계 재사용:** 이미 계산된 모델 점수를 다른 Threshold Policy에 적용하거나 설명을 별도로 생성할 때 불필요하게 다시 학습하지 않는다. 실제 재사용 가능 범위는 입력·모델·방법·Runtime 계약으로 판단한다.
 - **MLflow 관리 정본:** Experiment·Run·Registered Model·Model Version의 관리 정본은 MLflow다. SOS의 Model Revision은 관리 Registry가 아닌 Job/Attempt·Dataset·아티팩트 SHA·Feature·Runtime의 불변 실행 참조이며 MLflow 고정 버전을 연결한다. 등록되지 않은 신규 모델은 Scoring에 사용할 수 없다. Job/Attempt와 Evaluation의 결과 의미는 MLflow가 대체하지 않는다.
 
+Dataset 없는 단일 관측치 Playground Job은 입력 Feature와 실제 모델 점수를 Job 명세·결과로 보존한다. 배치 Scoring Result 또는 독립 평가를 생성하지 않으며, 모델 판본·Actor 권한·Registry·입력 서명·Runtime을 동일하게 검증한다. Playground의 Job 이력 보존은 일시적인 UI 입력과 별개이며 API 소비자에게 명시되어야 한다.
+
 ## ML 기능별 책임과 공통화 경계
 
 ![Data & Feature, Training/Execution, Scoring/Prediction, Evaluation, Decision Policy, Explanation의 역할과 공통화 범위를 비교한 표](references/ml-capability-responsibility-boundaries.png)
