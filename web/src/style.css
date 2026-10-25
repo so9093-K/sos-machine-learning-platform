@@ -898,3 +898,12 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-input-error { color:var(--sos-danger); font-size:12px; }
 @media(max-width:780px) {.model-lab-input-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }}
 @media(max-width:520px) {.model-lab-input-grid {grid-template-columns:1fr;} .model-lab-version-picker {width:100%;}}
+
+/* Playground 이력은 기술적 Job 목록이 아닌 체험 복구의 보조 경로다. */
+.model-lab-playground-history { border-top:1px solid var(--sos-border); padding-top:13px; }
+.model-lab-playground-history summary { cursor:pointer; color:var(--sos-accent); font-size:13px; }
+.model-lab-history-body { display:grid; gap:11px; justify-items:start; margin-top:13px; }
+.model-lab-history-list { display:grid; width:100%; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.model-lab-history-list button.surface-button { display:flex; justify-content:space-between; gap:12px; align-items:center; min-width:0; }
+.model-lab-history-list button.surface-button span { overflow-wrap:anywhere; }
+@media(max-width:700px) { .model-lab-history-list { grid-template-columns:1fr; } }
