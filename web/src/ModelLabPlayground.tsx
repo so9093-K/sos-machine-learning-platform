@@ -107,6 +107,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
       try {
         const next = await request<MLPlaygroundJob>("/api/ml/playground/jobs/" + encodeURIComponent(job.id));
         if (alive) {
+          setError("");
           setJob(next);
           const value = next.result?.anomaly_score;
           if (next.status === "Succeeded") {
@@ -139,12 +140,15 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     if (!canRun || running || invalid.length || submitting.current) return;
     submitting.current = true;
     setSending(true); setError("");
-    setPreviousScore(lastScore); setLastScore(null); setJob(null);
+    const comparisonScore = lastScore;
     try {
       const created = await submitJob<MLPlaygroundJob>("/api/ml/playground/jobs", {
         model_revision_id: model.id,
         features: Object.fromEntries(input.map(item => [item.name, item.value])),
       });
+      // 제출이 실패한 경우에는 이전 결과와 비교 문맥을 잃지 않는다.
+      setPreviousScore(comparisonScore);
+      setLastScore(null);
       setJob(created);
       // 동일 멱등 키 재제출 시 이미 성공한 Job이 응답할 수 있다.
       // 완료 응답을 Polling 전용 경로에만 기대하면 점수가 사라진다.
