@@ -856,3 +856,5 @@ button.ghost.model-lab-back { justify-self:start; padding-left:0; }
 .model-lab-use-footer { border-top:1px solid var(--sos-border); padding-top:12px; }
 @media(max-width:700px) { .model-lab-model-list { grid-template-columns:1fr; }
   .model-lab-use-heading { align-items:flex-start; flex-direction:column; } }
+
+.activity-feature-original { display:block; color:var(--sos-muted); font-weight:400; font-size:11px; margin-top:3px; overflow-wrap:anywhere; }

@@ -1,6 +1,7 @@
 /** 기존 독립 설명 Job을 SHAP 방법으로 요청하고 해당 결과를 탐구한다. */
 import { useEffect, useRef, useState } from "react";
 import { CHART_COLORS, DataChart } from "./DataChart";
+import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { formatError, request, submitJob } from "./api";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary } from "./types";
@@ -51,7 +52,7 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
       xAxis: { type: "value" as const, name: "점수 기여", nameGap: 24,
         axisLabel: { formatter: (value: number) => value.toFixed(3) } },
       yAxis: { type: "category" as const,
-        data: top.map(x => x.feature),
+        data: top.map(x => activityFeatureLabel(x.feature)),
         axisLabel: { width: 210, overflow: "truncate" as const, fontSize: 12 } },
       series: [{ type: "bar" as const, name: "기준 점수 대비 기여",
         data: top.map(x => x.shap_value),
@@ -84,7 +85,9 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
       <div className="table-scroll"><table>
         <thead><tr><th>Feature</th><th>관측값</th><th>Train 중앙값</th><th>점수 기여</th></tr></thead>
         <tbody>{contributions.map(item => <tr key={item.feature}>
-          <th>{item.feature}</th><td>{item.missing_imputed ? "결측 대체" : key(item.actual_value)}</td>
+          <th>{activityFeatureLabel(item.feature)}
+            {activityFeatureLabel(item.feature) !== item.feature &&
+              <small className="activity-feature-original">{item.feature}</small>}</th><td>{item.missing_imputed ? "결측 대체" : key(item.actual_value)}</td>
           <td>{key(item.reference_median)}</td><td>{key(item.shap_value)}</td>
         </tr>)}</tbody>
       </table></div>

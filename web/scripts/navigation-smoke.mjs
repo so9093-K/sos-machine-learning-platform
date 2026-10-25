@@ -17,6 +17,9 @@ try {
   const { routeAt, contextPath, nextNavigationContext, resourcePath,
     pipelineRunSelectionContext, ModelAreaNavigation, PlatformNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
+  const { activityFeatureLabel } = await vite.ssrLoadModule("/src/ActivityFeatureLabels.ts");
+  assert.equal(activityFeatureLabel("cnt_proc_exec"), "프로세스 실행 횟수");
+  assert.equal(activityFeatureLabel("unknown_custom"), "unknown_custom");
   const { modelLabLabels, modelLabTree } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
   const grouped = modelLabTree([
     { id: "a", name: "활동 이상 탐지", learning_type: "unsupervised",
