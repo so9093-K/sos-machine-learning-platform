@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
-import type { MLPlaygroundJob, ModelRevision } from "./types";
+import type { MLPlaygroundJob, MLPlaygroundJobPage, MLPlaygroundJobSummary, ModelRevision } from "./types";
 
- const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
+const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 export function exampleValues(model: ModelRevision): Record<string, string> | null {
   const medians = model.runtime?.feature_reference_medians;
@@ -35,8 +35,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   const [sending, setSending] = useState(false);
   const submitting = useRef(false);
   const historyFetching = useRef(false);
-  const [history, setHistory] = useState<Array<Pick<MLPlaygroundJob,
-    "id" | "status" | "spec" | "result" | "created_at">>>([]);
+  const [history, setHistory] = useState<MLPlaygroundJobSummary[]>([]);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -48,8 +47,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     setHistoryLoading(true); setHistoryError("");
     try {
       const cursor = append && historyCursor ? "?cursor=" + encodeURIComponent(historyCursor) : "";
-      const page = await request<{ items: typeof history; next_cursor: string | null }>(
-        "/api/ml/playground/jobs" + cursor);
+      const page = await request<MLPlaygroundJobPage>("/api/ml/playground/jobs" + cursor);
       const matching = page.items.filter(item => item.spec.model_revision_id === model.id);
       setHistory(old => append
         ? [...old, ...matching.filter(item => !old.some(existing => existing.id === item.id))]
