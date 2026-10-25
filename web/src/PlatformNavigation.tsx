@@ -338,8 +338,8 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
       <span className="section-title">{group.title}</span>
       {group.title === "모델 실험실" && supportedTopic &&
         <div className="model-lab-nav-classification" aria-label="활동 이상 탐지 분류">
-          <span>{modelLabLabels(supportedTopic)[0]}</span>
-          <span>{modelLabLabels(supportedTopic)[1]}</span>
+          <span>학습 유형: {modelLabLabels(supportedTopic)[0]}</span>
+          <span>분석 과제: {modelLabLabels(supportedTopic)[1]}</span>
         </div>}
       {group.items.filter(item =>
         (item.tab !== "storage" || canInspectStorage) && (item.tab !== "audit" || canViewAudit)
@@ -350,7 +350,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
           event.preventDefault();
           onNavigate(item.tab);
         }}>
-        <span>{item.label}</span>
+        <span>{item.tab === "pipelines" && supportedTopic ? supportedTopic.name : item.label}</span>
       </a>)}
     </div>)}
   </nav>;
