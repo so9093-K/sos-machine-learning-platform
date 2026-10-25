@@ -812,7 +812,7 @@ button.ghost.pipeline-candidate-top-item[aria-pressed="true"] {
 .model-lab-home-copy p { font-size:14px; line-height:1.85; color:var(--sos-muted); }
 .model-lab-home-visual { min-width:0; display:grid; gap:9px; }
 .model-lab-home-chart { display:block; width:100%; height:auto; color:var(--sos-text); }
-.model-lab-home-visual-foot { display:flex; flex-wrap:wrap; gap:16px; font-size:11px; color:var(--sos-muted); }
+.model-lab-home-visual-foot { display:flex; flex-wrap:wrap; gap:16px; font-size:12px; color:var(--sos-muted); }
 .model-lab-home-visual-foot span { display:inline-flex; gap:7px; align-items:center; }
 .model-lab-chart-key { display:inline-block; width:12px; height:3px; border-radius:5px; }
 .model-lab-chart-key.normal { background:#7FB6E4; }

@@ -121,11 +121,16 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         </button>
       </div>}
     {!loading && !error && models.length === 0 && <div className="model-lab-no-models">
-      <h3>{nextPage || lookupFailures ? "현재 조회한 모델 중 호환되는 모델이 없습니다" :
-        "아직 사용할 수 있는 활동 이상 탐지 모델이 없습니다"}</h3>
-      <p>처음 시작한다면 예제 데이터로 모델을 한 번 학습해 보세요.
-        학습 후 등록이 완료되면 여기에서 해당 모델을 선택할 수 있습니다.</p>
-      <button type="button" onClick={onLearn}>예제로 모델 학습하기 →</button>
+      <h3>{nextPage || lookupFailures
+        ? "호환되는 모델을 아직 찾지 못했습니다"
+        : "아직 사용할 수 있는 활동 이상 탐지 모델이 없습니다"}</h3>
+      <p>{nextPage
+        ? "등록된 모델 판본이 더 있습니다. 다음 페이지를 확인하면 사용할 모델이 나올 수 있습니다."
+        : lookupFailures
+          ? "일부 모델 정보를 확인하지 못해 사용 가능한 모델이 없는지 판단할 수 없습니다. 다시 조회해 주세요."
+          : "처음 시작한다면 예제 데이터로 모델을 학습해 보세요. 등록이 끝나면 여기서 사용할 수 있습니다."}</p>
+      {!nextPage && !lookupFailures &&
+        <button type="button" onClick={onLearn}>예제로 모델 학습하기 →</button>}
     </div>}
     {models.length > 0 && <div className="model-lab-registered-list">
       <h3>사용 가능한 모델 판본</h3>
