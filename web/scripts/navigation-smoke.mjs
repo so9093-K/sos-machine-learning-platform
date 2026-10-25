@@ -391,7 +391,7 @@ try {
   const { ModelLabPlayground, exampleValues } = await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
   const exampleModel = {
     id: "model-test", features: ["cnt_proc_exec", "cnt_file_del"],
-    runtime: { feature_reference_medians: [12, 2] },
+    runtime: { feature_reference_medians: [12, 2], feature_dtypes: ["Int64", "Int64"] },
   };
   assert.deepEqual(exampleValues(exampleModel), { cnt_proc_exec: "12", cnt_file_del: "2" });
   assert.equal(exampleValues({ ...exampleModel, runtime: {} }), null);
