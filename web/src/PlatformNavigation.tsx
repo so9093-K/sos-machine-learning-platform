@@ -322,14 +322,16 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
 }) {
   const [catalog, setCatalog] = useState<PipelineDefinition[]>([]);
   const [catalogError, setCatalogError] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogReload, setCatalogReload] = useState(0);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   useEffect(() => {
     let active = true;
-    setCatalogError(false);
+    setCatalogError(false); setCatalogLoading(true);
     void request<PipelineDefinition[]>("/api/pipelines")
       .then(items => { if (active) setCatalog(items); })
-      .catch(() => { if (active) { setCatalog([]); setCatalogError(true); } });
+      .catch(() => { if (active) { setCatalog([]); setCatalogError(true); } })
+      .finally(() => { if (active) setCatalogLoading(false); });
     return () => { active = false; };
   }, [catalogReload]);
   // 현재 웹에서 실행할 수 있는 등록 Pipeline만 연결한다. 미구현 주제 링크를 생성하지 않는다.
@@ -343,8 +345,17 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
       : tab === "jobs" ? ["jobs", "ml-jobs", "pipeline-jobs"].includes(active) : active === tab;
   return <nav className="global-nav platform-nav" aria-label="플랫폼 메뉴">
     {groups.map(group => <div className="platform-nav-group" key={group.title}>
-      <span className="section-title">{group.title}</span>
+      <span className={group.title === "모델 실험실" ? "section-title model-lab-tree-title" : "section-title"}>
+        {group.title === "모델 실험실" && <svg viewBox="0 0 20 20" width="15" height="15"
+          fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+          <path d="M7 2h6M9 2v6l-5 7a2 2 0 0 0 1.7 3h8.6a2 2 0 0 0 1.7-3l-5-7V2M7 13h6"/>
+        </svg>}
+        {group.title}
+      </span>
       {group.title === "모델 실험실" ? <div className="model-lab-tree" aria-label="등록된 분석 주제">
+        {catalogLoading && <p className="model-lab-tree-feedback" role="status">주제 목록을 불러오는 중입니다.</p>}
+        {!catalogLoading && !catalogError && topics.length === 0 &&
+          <p className="model-lab-tree-feedback">현재 사용 가능한 주제가 없습니다.</p>}
         {catalogError && <div className="model-lab-tree-feedback" role="status">
           <span>모델 실험실 목록을 불러오지 못했습니다.</span>
           <button type="button" className="ghost" onClick={() => setCatalogReload(n => n + 1)}>다시 조회</button>

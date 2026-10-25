@@ -661,14 +661,7 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
   .pipeline-run-context-header label { width:100%; }
 }
 
-/* 모델 실험실: 연구 출발점과 실제 결과 분포를 공간적으로 연결한다. */
-.pipeline-lab-entry { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr); gap:16px; margin-top:22px; }
-.pipeline-lab-entry > div { display:flex; flex-direction:column; align-items:flex-start; gap:11px; border:1px solid var(--sos-border); border-radius:14px; padding:22px; background:var(--sos-raised); }
-.pipeline-lab-entry strong { font-size:1.1rem; }
-.pipeline-lab-entry p { margin:0; }
-.pipeline-lab-entry button { margin-top:auto; }
-.pipeline-lab-entry small { color:var(--sos-muted); }
-.pipeline-lab-primary { background:var(--sos-accent-bg) !important; }
+/* 모델 실험실: 결과 영역의 카드와 실행 근거. */
 .pipeline-lab-return { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:15px; }
 .pipeline-advanced { border:1px solid var(--sos-border); border-radius:12px; padding:14px; }
 .pipeline-advanced > summary { cursor:pointer; font-weight:600; }
@@ -680,15 +673,11 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .pipeline-lab-distributions { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:16px; }
 .pipeline-lab-distributions > section { min-width:0; }
 
-@media (max-width:780px) { .pipeline-lab-entry,.pipeline-lab-summary { grid-template-columns:1fr; } .pipeline-lab-return { flex-direction:column; align-items:flex-start; } }
+@media (max-width:780px) { .pipeline-lab-summary { grid-template-columns:1fr; } .pipeline-lab-return { flex-direction:column; align-items:flex-start; } }
 
 .pipeline-more { margin-top:16px; }
 .pipeline-history-panel { margin-top:16px; }
 .pipeline-history-panel > details > summary { cursor:pointer; }
-
-/* 새 학습을 주 행동으로 유지하고 이력 조회는 작업 이력에서 제공한다. */
-.pipeline-lab-entry { grid-template-columns:minmax(0,1fr); max-width:690px; }
-.pipeline-lab-primary { width:100%; }
 
 /* 관측치의 실제 근거를 선택 후보와 한 공간에서 확인한다. */
 .pipeline-candidate-observation { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
@@ -834,3 +823,8 @@ button.ghost.pipeline-candidate-top-item[aria-pressed="true"] {
   .pipeline-candidate-top-list { grid-template-columns:1fr; }
   .pipeline-result-guide { align-items:flex-start; flex-direction:column; }
 }
+
+/* 사이드바에서도 제목과 주제가 좁은 폭에서 구분되어 읽힌다. */
+.model-lab-tree-title { display:flex; align-items:center; gap:7px; }
+.model-lab-tree-feedback { font-size:12px; color:var(--sos-muted); line-height:1.55; }
+@media(max-width:850px) { .model-lab-tree { width:100%; } }
