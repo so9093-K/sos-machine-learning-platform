@@ -521,6 +521,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
       {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
         <ModelLabUse key="activity-anomaly" datasets={datasets}
+          selectedModelId={context.modelId ?? ""}
+          onSelectModel={modelId => selectContext({ pipelineView: "use", modelId })}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
           onBack={() => navigateWithContext("pipelines", {})}

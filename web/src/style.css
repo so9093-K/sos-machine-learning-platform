@@ -831,3 +831,28 @@ button.ghost.pipeline-candidate-top-item[aria-pressed="true"] {
   .model-lab-home-choices { grid-template-columns:1fr; }
   .model-lab-home-lead,.model-lab-choice { padding:17px; }
 }
+
+/* 기존 Registry Scoring을 모델 실험실의 독립된 사용 경험으로 연결한다. */
+.model-lab-use { display:grid; gap:18px; }
+button.ghost.model-lab-back { justify-self:start; padding-left:0; }
+.model-lab-use-heading { display:flex; justify-content:space-between; align-items:end; gap:18px; flex-wrap:wrap; }
+.model-lab-use-heading > div { display:grid; gap:7px; }
+.model-lab-use-heading h2 { margin:0; font-size:clamp(22px,2vw,28px); }
+.model-lab-use-heading p { font-size:13px; color:var(--sos-muted); line-height:1.6; }
+.model-lab-no-models { border:1px solid var(--sos-border); border-radius:12px;
+  background:var(--sos-raised); padding:28px; display:grid; justify-items:start; gap:13px; }
+.model-lab-no-models h3 { font-size:18px; }
+.model-lab-no-models p { color:var(--sos-muted); font-size:13px; line-height:1.7; max-width:620px; }
+.model-lab-registered-list { display:grid; gap:13px; }
+.model-lab-registered-list h3 { font-size:17px; }
+.model-lab-model-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.model-lab-model-choice { display:flex; gap:14px; justify-content:space-between; align-items:center;
+  min-width:0; padding:16px; text-align:left; border-radius:10px; background:var(--sos-raised);
+  color:var(--sos-text); border:1px solid var(--sos-border); cursor:pointer; }
+.model-lab-model-choice[aria-pressed="true"],.model-lab-model-choice:hover {
+  border-color:var(--sos-accent); background:var(--sos-accent-bg); }
+.model-lab-model-choice > span:first-child { display:grid; gap:6px; }
+.model-lab-model-choice small { color:var(--sos-muted); font-size:11px; }
+.model-lab-use-footer { border-top:1px solid var(--sos-border); padding-top:12px; }
+@media(max-width:700px) { .model-lab-model-list { grid-template-columns:1fr; }
+  .model-lab-use-heading { align-items:flex-start; flex-direction:column; } }

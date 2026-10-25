@@ -61,6 +61,10 @@ try {
   assert.equal(contextPath("pipelines", { pipelineView: "use" }), "/pipelines?view=use");
   assert.equal(routeAt("/pipelines", "?view=learn").context.pipelineView, "learn");
   assert.equal(routeAt("/pipelines", "?view=use").context.pipelineView, "use");
+  assert.equal(contextPath("pipelines", { pipelineView: "use", modelId: "model one" }),
+    "/pipelines?view=use&model=model+one");
+  assert.equal(routeAt("/pipelines", "?view=use&model=model-one").context.modelId, "model-one");
+  assert.equal(routeAt("/pipelines", "?view=learn&model=model-one").context.modelId, undefined);
   assert.equal(routeAt("/pipelines", "?view=unexpected").context.pipelineView, undefined);
   assert.equal(routeAt("/pipelines", "?run=run-1&view=use").context.pipelineView, undefined);
   assert.equal(contextPath("scoring", { modelId: "name + / ?" }),
@@ -357,6 +361,24 @@ try {
   assert.equal(routeAt("/model-experience", "").tab, "overview");
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
+  const { ModelLabUse, isActivityModelCompatible } =
+    await vite.ssrLoadModule("/src/ModelLabUse.tsx");
+  assert.equal(isActivityModelCompatible(
+    { algorithm: "isolation_forest", features: ["a", "b"] },
+    { algorithm: "isolation_forest", required_features: ["a", "b"] }), true);
+  assert.equal(isActivityModelCompatible(
+    { algorithm: "isolation_forest", features: ["b", "a"] },
+    { algorithm: "isolation_forest", required_features: ["a", "b"] }), false);
+  assert.equal(isActivityModelCompatible(
+    { algorithm: "other", features: ["a", "b"] },
+    { algorithm: "isolation_forest", required_features: ["a", "b"] }), false);
+  const pendingUse = renderToStaticMarkup(React.createElement(ModelLabUse, {
+    datasets: [], hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
+    canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
+    onOpenResource: () => {}, onBack: () => {}, onLearn: () => {},
+  }));
+  assert.match(pendingUse, /학습된 모델 사용해보기/);
+  assert.match(pendingUse, /사용 가능한 모델을 확인하는 중/);
   const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
   const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {
     onUse: () => {}, onLearn: () => {},

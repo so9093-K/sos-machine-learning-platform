@@ -46,6 +46,8 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
       pipelineRunId: runId,
       ...(!runId && (params.get("view") === "learn" || params.get("view") === "use")
         ? { pipelineView: params.get("view") as "learn" | "use" } : {}),
+      ...(!runId && params.get("view") === "use" && params.get("model")
+        ? { modelId: params.get("model")! } : {}),
       ...(runId && candidateRowAt(params) !== undefined
         ? { candidateRowIndex: candidateRowAt(params) } : {}),
       ...(runId && analysisSectionAt(params) !== undefined
@@ -87,6 +89,8 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
   if (tab === "pipelines") {
     if (context.datasetId) params.set("dataset", context.datasetId);
     if (!context.pipelineRunId && context.pipelineView) params.set("view", context.pipelineView);
+    if (!context.pipelineRunId && context.pipelineView === "use" && context.modelId)
+      params.set("model", context.modelId);
     if (context.pipelineRunId) params.set("run", context.pipelineRunId);
     if (context.pipelineRunId && context.candidateRowIndex !== undefined)
       params.set("candidate", String(context.candidateRowIndex));
