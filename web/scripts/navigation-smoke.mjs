@@ -17,6 +17,9 @@ try {
   const { routeAt, contextPath, nextNavigationContext, resourcePath,
     pipelineRunSelectionContext, ModelAreaNavigation, PlatformNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
+  const { activityFeatureLabel } = await vite.ssrLoadModule("/src/ActivityFeatureLabels.ts");
+  assert.equal(activityFeatureLabel("cnt_proc_exec"), "프로세스 실행 횟수");
+  assert.equal(activityFeatureLabel("unknown_custom"), "unknown_custom");
   const { modelLabLabels, modelLabTree } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
   const grouped = modelLabTree([
     { id: "a", name: "활동 이상 탐지", learning_type: "unsupervised",
@@ -57,6 +60,16 @@ try {
     "/models", "?dataset=data-v1"), "training")), "/training?dataset=data-v1");
 
   assert.equal(routeAt("/scoring", "?model=model-v1").context.modelId, "model-v1");
+  assert.equal(contextPath("pipelines", { pipelineView: "learn" }), "/pipelines?view=learn");
+  assert.equal(contextPath("pipelines", { pipelineView: "use" }), "/pipelines?view=use");
+  assert.equal(routeAt("/pipelines", "?view=learn").context.pipelineView, "learn");
+  assert.equal(routeAt("/pipelines", "?view=use").context.pipelineView, "use");
+  assert.equal(contextPath("pipelines", { pipelineView: "use", modelId: "model one" }),
+    "/pipelines?view=use&model=model+one");
+  assert.equal(routeAt("/pipelines", "?view=use&model=model-one").context.modelId, "model-one");
+  assert.equal(routeAt("/pipelines", "?view=learn&model=model-one").context.modelId, undefined);
+  assert.equal(routeAt("/pipelines", "?view=unexpected").context.pipelineView, undefined);
+  assert.equal(routeAt("/pipelines", "?run=run-1&view=use").context.pipelineView, undefined);
   assert.equal(contextPath("scoring", { modelId: "name + / ?" }),
     "/scoring?model=name+%2B+%2F+%3F");
   assert.equal(routeAt("/policies", "").context.scoringId, "");
@@ -98,7 +111,31 @@ try {
     pipelineRunSelectionContext(preselectedRun, "other-run", "other-dataset")),
     "/pipelines?dataset=other-dataset&run=other-run");
   assert.equal(contextPath("pipelines", pipelineRunSelectionContext(preselectedRun, "", "")),
-    "/pipelines");
+    "/pipelines?view=learn");
+  const fromModelLab = resourcePath("scoring", "score/one", {
+    modelLabReturn: true, modelId: "model/a",
+  });
+  assert.equal(fromModelLab, "/scoring/results/score%2Fone?from=model-lab&model=model%2Fa");
+  assert.deepEqual(routeAt("/scoring/results/score%2Fone",
+    "?from=model-lab&model=model%2Fa").context,
+    { modelLabReturn: true, modelId: "model/a" });
+  const labDecision = contextPath("policies", {
+    scoringId: "score one", modelLabReturn: true, modelId: "model/a",
+  });
+  assert.equal(labDecision,
+    "/policies?scoring=score+one&from=model-lab&model=model%2Fa");
+  const labDecisionRoute = routeAt("/policies",
+    "?scoring=score+one&from=model-lab&model=model%2Fa");
+  assert.deepEqual(labDecisionRoute.context, {
+    scoringId: "score one", modelLabReturn: true, modelId: "model/a",
+  });
+  assert.equal(contextPath("explanations", nextNavigationContext(
+    labDecisionRoute, "explanations")),
+    "/explanations?scoring=score+one&from=model-lab&model=model%2Fa");
+  assert.deepEqual(routeAt("/models/model-one",
+    "?from=model-lab&model=model%2Fa").context,
+    { modelLabReturn: true, modelId: "model/a" });
+  assert.deepEqual(routeAt("/scoring/results/score-one", "?from=model-lab").context, {});
   assert.equal(resourcePath("policy", "policy-1", {
     pipelineReturn: true, pipelineRunId: "run-1",
     pipelineAnalysisSection: "calibration", candidateRowIndex: 8,
@@ -351,6 +388,32 @@ try {
   assert.equal(routeAt("/model-experience", "").tab, "overview");
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
+  const { ModelLabUse, isActivityModelCompatible } =
+    await vite.ssrLoadModule("/src/ModelLabUse.tsx");
+  assert.equal(isActivityModelCompatible(
+    { algorithm: "isolation_forest", features: ["a", "b"] },
+    { algorithm: "isolation_forest", required_features: ["a", "b"] }), true);
+  assert.equal(isActivityModelCompatible(
+    { algorithm: "isolation_forest", features: ["b", "a"] },
+    { algorithm: "isolation_forest", required_features: ["a", "b"] }), false);
+  assert.equal(isActivityModelCompatible(
+    { algorithm: "other", features: ["a", "b"] },
+    { algorithm: "isolation_forest", required_features: ["a", "b"] }), false);
+  const pendingUse = renderToStaticMarkup(React.createElement(ModelLabUse, {
+    datasets: [], hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
+    canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
+    onOpenResource: () => {}, onBack: () => {}, onLearn: () => {},
+  }));
+  assert.match(pendingUse, /학습된 모델 사용해보기/);
+  assert.match(pendingUse, /사용 가능한 모델을 확인하는 중/);
+  const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
+  const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {
+    onUse: () => {}, onLearn: () => {},
+  }));
+  assert.match(labHome, /모델 사용해보기/);
+  assert.match(labHome, /모델 학습해보기/);
+  assert.match(labHome, /시간대별 활동 패턴/);
+  assert.doesNotMatch(labHome, /이해를 돕는 개념도|실제 결과가 아닙니다/);
   const { PlatformOverview } = await vite.ssrLoadModule("/src/PlatformOverview.tsx");
   const home = renderToStaticMarkup(React.createElement(PlatformOverview, {
     datasets: [], onNavigate: () => {}, onOpenDataset: () => {},

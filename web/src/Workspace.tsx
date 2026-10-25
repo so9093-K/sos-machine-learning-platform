@@ -23,6 +23,8 @@ import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
 import { PipelineWorkspace } from "./PipelineWorkspace";
+import { ModelLabHome } from "./ModelLabHome";
+import { ModelLabUse } from "./ModelLabUse";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { MLWorkbench } from "./MLWorkbench";
 import { MLflowResearch } from "./MLflowResearch";
@@ -77,7 +79,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   function startDecision(view: DecisionView, scoringId: string) {
     navigateWithContext(
       view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
-      { scoringId },
+      { scoringId, ...(context.modelLabReturn && context.modelId
+        ? { modelLabReturn: true, modelId: context.modelId } : {}) },
     );
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
@@ -513,7 +516,26 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           navigateWithContext("pipelines", { datasetId, pipelineRunId: runId });
         }}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
-      {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
+      {tab === "pipelines" && !context.pipelineRunId && !context.datasetId &&
+        !context.pipelineView && <ModelLabHome
+          onUse={() => navigateWithContext("pipelines", { pipelineView: "use" })}
+          onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
+      {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
+        <ModelLabUse key="activity-anomaly" datasets={datasets}
+          selectedModelId={context.modelId ?? ""}
+          onSelectModel={modelId => selectContext({ pipelineView: "use", modelId })}
+          hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
+          canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
+          onBack={() => navigateWithContext("pipelines", {})}
+          onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
+      {tab === "pipelines" && !context.pipelineRunId && (
+        context.pipelineView === "learn" || Boolean(context.datasetId)) &&
+        <button type="button" className="ghost model-lab-back"
+          onClick={() => navigateWithContext("pipelines", {})}>← 활동 이상 탐지 소개로</button>}
+      {tab === "pipelines" && (Boolean(context.pipelineRunId) ||
+        context.pipelineView === "learn" ||
+        (Boolean(context.datasetId) && context.pipelineView !== "use")) &&
+        <PipelineWorkspace datasets={datasets}
         canCreateDataset={canWrite}
         hasPipelineExample={examples.some(item => item.id === "activity-anomaly-if")}
         example={examples.find(item => item.id === "activity-anomaly-if")}
@@ -529,7 +551,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onLoadMoreDatasets={loadMoreDatasets}
         onSelectDataset={id => {
           setSelected(id);
-          navigateWithContext("pipelines", { datasetId: id });
+          navigateWithContext("pipelines", { datasetId: id, pipelineView: "learn" });
         }}
         onSelectRun={(id, datasetId) => {
           setSelected(datasetId);
@@ -766,6 +788,17 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               candidateRowIndex: context.candidateRowIndex,
               pipelineAnalysisSection: context.pipelineAnalysisSection,
             })}>원래 Pipeline Run으로 돌아가기 →</button>
+        </section>}
+      {(resource || (["policies", "evaluations", "explanations"] as Tab[]).includes(tab)) &&
+        context.modelLabReturn && context.modelId &&
+        <section className="pipeline-return" role="status">
+          <div><strong>활동 이상 탐지에서 열린 결과입니다.</strong>
+            <p>선택한 모델과 데이터에 적용한 결과를 살펴본 뒤 모델 사용 화면으로 돌아갈 수 있습니다.</p>
+          </div>
+          <button type="button" className="secondary"
+            onClick={() => navigateWithContext("pipelines", {
+              pipelineView: "use", modelId: context.modelId,
+            })}>모델 사용 화면으로 돌아가기 →</button>
         </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}

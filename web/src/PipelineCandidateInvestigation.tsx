@@ -5,6 +5,7 @@ import { DataChart } from "./DataChart";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { MLExplanationJob, MLExplanationJobSummary, ExplanationResult, PipelineCandidates, ModelRevision } from "./types";
 import { PipelineShapExplanation } from "./PipelineShapExplanation";
+import { activityFeatureLabel } from "./ActivityFeatureLabels";
 
 type Candidate = PipelineCandidates["items"][number];
 type ExplanationJobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
@@ -42,7 +43,7 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
     grid: { left: "24%", right: "8%", top: 18, bottom: 32 },
     xAxis: { type: "value" as const, name: "점수 변화" },
     yAxis: { type: "category" as const,
-      data: ranked.map(x => String(x.feature)).reverse(),
+      data: ranked.map(x => activityFeatureLabel(String(x.feature))).reverse(),
       axisLabel: { width: 120, overflow: "truncate" as const } },
     series: [{ type: "bar" as const, name: "기준값 치환 시 점수 변화",
       data: ranked.map(x => numeric(x.anomaly_score_delta)).reverse() }],
@@ -57,7 +58,9 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
         <thead><tr><th>Feature</th><th>관측값</th><th>Train 참조 중앙값</th>
           <th>치환 시 점수</th><th>원래 점수와의 차이</th></tr></thead>
         <tbody>{entries.map((item, i) => <tr key={String(item.feature) + ":" + i}>
-          <th>{String(item.feature)}</th>
+          <th>{activityFeatureLabel(String(item.feature))}
+            {activityFeatureLabel(String(item.feature)) !== String(item.feature) &&
+              <small className="activity-feature-original">{String(item.feature)}</small>}</th>
           <td>{item.missing_imputed ? "결측값 대체" : format(item.actual_value)}</td>
           <td>{format(item.reference_median)}</td>
           <td>{format(item.score_if_replaced)}</td>
@@ -221,7 +224,9 @@ export function PipelineCandidateInvestigation({
     <div className="table-scroll pipeline-candidate-comparison"><table>
       <thead><tr><th>Feature</th><th>관측값</th><th>Train 참조 중앙값</th></tr></thead>
       <tbody>{Object.entries(candidate.features).map(([name, value]) =>
-        <tr key={name}><th>{name}</th><td>{format(value)}</td>
+        <tr key={name}><th>{activityFeatureLabel(name)}
+          {activityFeatureLabel(name) !== name &&
+            <small className="activity-feature-original">{name}</small>}</th><td>{format(value)}</td>
           <td>{referenceMap?.has(name) ? format(referenceMap.get(name))
             : modelError ? "조회 오류"
             : !modelRevisionId ? "판본 없음" : !model ? "조회 중" : "근거 없음"}</td></tr>)}</tbody>
