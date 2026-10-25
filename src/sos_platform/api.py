@@ -260,7 +260,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
 
     app.include_router(control_router(store, identity))
     app.include_router(pipeline_router(store, identity_mode=identity.mode))
-    app.include_router(scoring_observations_router(store))
+    app.include_router(scoring_observations_router(store, check_ownership))
 
     @app.get("/api/storage/policy", response_model=StoragePolicyOut)
     def storage_policy(actor: Actor = INSPECT_DEP):

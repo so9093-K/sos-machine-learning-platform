@@ -28,7 +28,9 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     void request<ScoringObservations>(
       "/api/ml/scoring/results/" + encodeURIComponent(result.id) + "/observations?limit=25",
     ).then(page => {
-      if (active && page.result_id === result.id) setLoaded(page);
+      if (!active) return;
+      if (page.result_id !== result.id) throw new Error("조회 결과 판본이 일치하지 않습니다.");
+      setLoaded(page);
     }).catch(e => { if (active) setError(formatError(e)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

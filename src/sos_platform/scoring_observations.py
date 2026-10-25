@@ -1,4 +1,5 @@
 """불변 Scoring Result의 점수순 관측치를 Pipeline과 독립적으로 조회한다."""
+from collections.abc import Callable
 import base64
 import binascii
 import heapq
@@ -10,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from .cache import cached_dataset_file
-from .security import Actor, require, resource_allowed
+from .security import Actor, require
 from .store import Store
 
 
@@ -107,6 +108,8 @@ def ranked_scoring_rows(
                         }
                 if len(detail_map) == len(selected_ids):
                     break
+        if len(detail_map) != len(selected_ids):
+            raise ValueError("Scoring artifact is missing selected observation rows")
     return {
         "items": [
             {"row_index": idx, "anomaly_score": -rank,
@@ -120,7 +123,10 @@ def ranked_scoring_rows(
     }
 
 
-def scoring_observations_router(store: Store) -> APIRouter:
+def scoring_observations_router(
+    store: Store,
+    check_ownership: Callable[[Actor, str | None, str, str], None],
+) -> APIRouter:
     router = APIRouter()
 
     @router.get(
@@ -137,7 +143,7 @@ def scoring_observations_router(store: Store) -> APIRouter:
         scoring = store.get_scoring_result(result_id)
         if scoring is None:
             raise HTTPException(status_code=404, detail="Scoring Result not found")
-        resource_allowed(actor, scoring["owner_actor"])
+        check_ownership(actor, scoring["owner_actor"], "scoring_result", result_id)
         return ranked_scoring_rows(store, scoring, limit, cursor, row_index=row_index)
 
     return router
