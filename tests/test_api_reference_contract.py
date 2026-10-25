@@ -64,6 +64,8 @@ def test_status_responses_and_token_permissions(tmp_path, monkeypatch):
     assert docs.status_code == 200
     assert "text/html" in docs.headers["content-type"]
     assert "/openapi.json" in docs.text
+    # 문서의 핵심 스크립트는 외부 CDN이 아닌 자체 자산을 가리켜야 한다.
+    assert "/docs/assets/scalar.js" in docs.text
 
     # 외부 저장소·Worker를 호출하지 않고 Ready의 두 가지 HTTP 계약만 확인한다.
     monkeypatch.setattr(Store, "initialize", lambda self: None)

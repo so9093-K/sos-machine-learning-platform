@@ -37,6 +37,12 @@ make doctor   # 설정·준비 상태 진단
 - API Reference: `http://localhost:9602/docs`
 - 로컬 MLflow 운영자 관리 UI: `http://localhost:9606`
 
+API Reference의 Scalar JavaScript는 Docker 이미지 빌드에 함께 포함되므로 실행 시 외부 CDN을 사용하지 않는다.
+호스트에서 Python API를 직접 실행할 경우 Node.js 24와 npm으로
+`bash scripts/build_scalar_assets.sh`를 먼저 실행한다. 이 명령은 잠금 파일로
+공식 Scalar 번들을 설치하고 고정 SHA-256을 확인한 뒤 Python 패키지 내부에 복사한다.
+번들을 갱신할 때에는 의존성과 해시를 함께 검증해야 한다.
+
 Web UI의 인증 화면에 앞에서 보관한 Bearer Token을 입력한다. 토큰은 브라우저 메모리에만 보관되므로 다시 접속하면 재인증이 필요하다. 접속 주소와 실행 구성은 [Compose](../compose.yaml) 및 [Makefile](../Makefile)을 따른다.
 
 ## 첫 Dataset 탐색

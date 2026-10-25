@@ -18,3 +18,5 @@ web/playwright-report/
 
 .sos-test/
 
+# Generated from the pinned Scalar npm package
+src/sos_platform/static/scalar.js
