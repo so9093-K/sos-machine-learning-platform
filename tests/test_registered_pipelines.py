@@ -345,7 +345,7 @@ def test_pipeline_candidate_evidence_and_legacy_result(monkeypatch, tmp_path):
     """같은 결과 행의 시각·ID를 읽고, 기존 결과의 미존재 근거는 생성하지 않는다."""
     from types import SimpleNamespace
 
-    from sos_platform import api_pipelines
+    from sos_platform import api_pipelines, scoring_observations
 
     parquet = tmp_path / "candidate.parquet"
     base = pl.DataFrame({
@@ -367,9 +367,9 @@ def test_pipeline_candidate_evidence_and_legacy_result(monkeypatch, tmp_path):
     def cached(_store, _entry):
         yield parquet
 
-    monkeypatch.setattr(api_pipelines, "cached_dataset_file", cached)
+    monkeypatch.setattr(scoring_observations, "cached_dataset_file", cached)
     store = SimpleNamespace(
-        get_scoring_result=lambda _id: {"owner_actor": "owner", "sha256": "digest", "location": "mock"},
+        get_scoring_result=lambda _id: {"id": "scoring", "owner_actor": "owner", "sha256": "digest", "location": "mock"},
         get_decision_policy_revision=lambda _id: {"owner_actor": "owner", "threshold": 0.7},
     )
     run = {
