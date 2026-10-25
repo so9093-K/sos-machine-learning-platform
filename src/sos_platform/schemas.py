@@ -757,8 +757,8 @@ class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: Literal["profile", "transform", "iceberg_import"]
-    dataset_id: str
+    kind: Literal["profile", "transform", "iceberg_import", "ml_playground"]
+    dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
     cancel_requested: bool
@@ -798,6 +798,15 @@ class MLEvaluationJobSummaryOut(JobSummaryOut):
 
 class MLEvaluationJobPageOut(BaseModel):
     items: list[MLEvaluationJobSummaryOut]
+    next_cursor: str | None = None
+
+
+class MLPlaygroundJobSummaryOut(JobSummaryOut):
+    kind: Literal["ml_playground"]
+
+
+class MLPlaygroundJobPageOut(BaseModel):
+    items: list[MLPlaygroundJobSummaryOut]
     next_cursor: str | None = None
 
 

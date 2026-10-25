@@ -89,6 +89,7 @@ from .schemas import (
     MLScoringRequest,
     MLPlaygroundRequest,
     MLPlaygroundJobOut,
+    MLPlaygroundJobPageOut,
     ModelRevisionOut,
     PreviewOut,
     ProblemOut,
@@ -819,6 +820,25 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             owner_actor=actor.id, actor_type=actor.kind,
             idempotency_key=idempotency_key,
         )
+
+    @app.get(
+        "/api/ml/playground/jobs",
+        tags=["Scoring"],
+        summary="Playground 실행 이력 조회",
+        response_model=MLPlaygroundJobPageOut,
+    )
+    def list_playground_jobs(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB_DEP,
+    ):
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Job"),
+            actor_id=None if actor.privileged else actor.id,
+            kind="ml_playground",
+        )
+        return page_from_rows(rows, limit)
 
     @app.get(
         "/api/ml/playground/jobs/{job_id}", tags=["Scoring"],
