@@ -12,6 +12,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [visited, setVisited] = useState(false);
   const [loaded, setLoaded] = useState<ScoringObservations | null>(null);
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,7 +22,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const pendingMore = useRef(false);
 
   useEffect(() => {
-    if (!expanded) return;
+    if (!visited) return;
     let active = true;
     setLoaded(null); setSelectedRow(null); setLoading(true); setError("");
     void request<ScoringObservations>(
@@ -31,7 +32,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     }).catch(e => { if (active) setError(formatError(e)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [expanded, result.id, retry]);
+  }, [visited, result.id, retry]);
 
   async function more() {
     if (!loaded?.next_cursor || pendingMore.current) return;
@@ -57,11 +58,11 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
         별도 정책을 적용하지 않은 순위입니다.</p>
     </div>
       <button type="button" className="secondary" aria-expanded={expanded}
-        onClick={() => setExpanded(value => !value)}>
+        onClick={() => { setVisited(true); setExpanded(value => !value); }}>
         {expanded ? "점수 관측치 접기" : "상위 점수 관측치 살펴보기 →"}
       </button>
     </div>
-    {expanded && <div>
+    {visited && <div hidden={!expanded}>
       {loading && <p role="status">불변 점수 결과에서 관측치를 읽고 있습니다.</p>}
       {error && <div role="alert" className="pipeline-readiness-blocked">
         <p>{error}</p>
