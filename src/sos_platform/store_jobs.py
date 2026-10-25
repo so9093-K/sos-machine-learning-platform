@@ -22,7 +22,7 @@ class JobStoreMixin:
         self,
         *,
         kind: str,
-        dataset_id: str,
+        dataset_id: str | None,
         spec: dict,
         owner_actor: str | None = None,
         actor_type: str = "human",
@@ -31,6 +31,8 @@ class JobStoreMixin:
         reserve_iceberg_table: str | None = None,
     ) -> dict:
         """중복 제출을 PostgreSQL 유일성 제약과 같은 트랜잭션으로 처리한다."""
+        if dataset_id is None and kind != "ml_playground":
+            raise ValueError("Only Playground Jobs may omit a Dataset")
         if idempotency_key is not None and owner_actor is None:
             raise ValueError("Idempotent Job requires an actor")
         if reserve_iceberg_table is not None and (kind != "iceberg_import" or not owner_actor):
@@ -213,7 +215,7 @@ class JobStoreMixin:
             filters.append("kind!=:exclude_kind")
         if exclude_ml_train:
             filters.append(
-                "kind NOT IN ('ml_pipeline_preflight','ml_train','ml_score','ml_policy','ml_evaluate','ml_explain')"
+                "kind NOT IN ('ml_pipeline_preflight','ml_train','ml_score','ml_playground','ml_policy','ml_evaluate','ml_explain')"
             )
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(
