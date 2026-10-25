@@ -72,7 +72,7 @@ Index(
     "ix_jobs_playground_model_actor_created",
     text("((spec::jsonb ->> 'model_revision_id'))"),
     jobs.c.owner_actor, jobs.c.created_at.desc(), jobs.c.id.desc(),
-    postgresql_where=Text("kind = 'ml_playground'"),
+    postgresql_where=text("kind = 'ml_playground'"),
 )
 
 attempts = Table(
