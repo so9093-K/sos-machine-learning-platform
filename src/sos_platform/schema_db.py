@@ -67,6 +67,13 @@ jobs = Table(
     Index("ix_jobs_request_id", "request_id"),
 )
 
+Index(
+    "ix_jobs_playground_model_actor_created",
+    Text("((spec::jsonb ->> 'model_revision_id'))"),
+    jobs.c.owner_actor, jobs.c.created_at.desc(), jobs.c.id.desc(),
+    postgresql_where=Text("kind = 'ml_playground'"),
+)
+
 attempts = Table(
     "attempts",
     metadata,

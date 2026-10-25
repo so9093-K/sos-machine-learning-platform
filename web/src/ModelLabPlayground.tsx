@@ -24,7 +24,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   model: ModelRevision; canRun: boolean; canCancel: boolean; onDataset: () => void;
 }) {
   const reference = exampleValues(model);
-  const [mode, setMode] = useState<"example" | "edit">("example");
+  const [mode, setMode] = useState<"example" | "edit">(reference ? "example" : "edit");
   const [fields, setFields] = useState<Record<string, string>>(() =>
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
   const [expanded, setExpanded] = useState(false);
@@ -46,12 +46,12 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     historyFetching.current = true;
     setHistoryLoading(true); setHistoryError("");
     try {
-      const cursor = append && historyCursor ? "?cursor=" + encodeURIComponent(historyCursor) : "";
-      const page = await request<MLPlaygroundJobPage>("/api/ml/playground/jobs" + cursor);
-      const matching = page.items.filter(item => item.spec.model_revision_id === model.id);
+      const params = new URLSearchParams({ model_revision_id: model.id });
+      if (append && historyCursor) params.set("cursor", historyCursor);
+      const page = await request<MLPlaygroundJobPage>("/api/ml/playground/jobs?" + params);
       setHistory(old => append
-        ? [...old, ...matching.filter(item => !old.some(existing => existing.id === item.id))]
-        : matching);
+        ? [...old, ...page.items.filter(item => !old.some(existing => existing.id === item.id))]
+        : page.items);
       setHistoryCursor(page.next_cursor ?? null);
       setHistoryLoaded(true);
     } catch (cause) { setHistoryError(formatError(cause)); }
@@ -151,6 +151,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     </div>
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
       <button type="button" aria-pressed={mode === "example"} className="secondary"
+        disabled={!reference}
         onClick={() => { setMode("example"); if (reference) setFields(reference); }}>
         기준값으로 체험
       </button>

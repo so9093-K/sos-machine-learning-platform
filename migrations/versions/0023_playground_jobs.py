@@ -15,6 +15,11 @@ depends_on = None
 
 def upgrade() -> None:
     op.alter_column("jobs", "dataset_id", existing_type=sa.String(length=36), nullable=True)
+    op.execute(
+        "CREATE INDEX ix_jobs_playground_model_actor_created "
+        "ON jobs ((spec::jsonb ->> 'model_revision_id'), owner_actor, "
+        "created_at DESC, id DESC) WHERE kind = 'ml_playground'"
+    )
 
 
 def downgrade() -> None:
@@ -27,4 +32,5 @@ def downgrade() -> None:
             "Dataset 없는 Playground Job 이력이 남아 있습니다. "
             "이력을 명시적으로 정리하기 전에는 스키마를 되돌릴 수 없습니다."
         )
+    op.drop_index("ix_jobs_playground_model_actor_created", table_name="jobs")
     op.alter_column("jobs", "dataset_id", existing_type=sa.String(length=36), nullable=False)

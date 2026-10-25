@@ -830,6 +830,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def list_playground_jobs(
         limit: int = Query(default=20, ge=1, le=100),
         cursor: str | None = Query(default=None, max_length=512),
+        model_revision_id: str | None = Query(default=None, min_length=36, max_length=36),
         actor: Actor = READ_JOB_DEP,
     ):
         rows = store.jobs(
@@ -837,6 +838,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             before=decode_cursor(cursor, "Job"),
             actor_id=None if actor.privileged else actor.id,
             kind="ml_playground",
+            model_revision_id=model_revision_id,
         )
         return page_from_rows(rows, limit)
 

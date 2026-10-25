@@ -97,3 +97,5 @@ Dataset Understanding은 Dataset 자체가 아니라 특정 원본 판본과 프
 ## Actor·보존 참조 계약
 
 인증 제공자가 달라져도 검증된 Actor·Action·Resource에 대한 접근 판단 의미는 유지한다. 기존 데이터의 소유자가 기록되지 않았다고 해서 최초 접근자가 자동 소유자가 되지 않는다. Iceberg Dataset의 Snapshot ID는 읽을 판본을 식별하며, 실제 보존 상태는 Catalog에서 Tag 참조와 만료 정책을 재확인해야 한다. 보존되지 않은 과거 Snapshot은 사용 가능과 보존 보장을 혼동하지 않는다. 자세한 운영 결정은 [ADR 0003](adr/0003-snapshot-identity-audit.md)을 따른다.
+
+Playground 실행 이력의 모델 판본 필터는 DB에서 Job 페이지네이션 전에 적용한다. Actor 권한에 따른 실행 이력 가시성은 유지하며, 다른 모델의 실행 때문에 현재 모델의 이력을 누락했다고 표시하지 않는다.
