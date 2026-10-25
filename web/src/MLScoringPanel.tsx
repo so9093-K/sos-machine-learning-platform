@@ -8,6 +8,8 @@ import type {
 type Props = {
   model: ModelRevision;
   datasets: Dataset[];
+  hasMoreDatasets?: boolean;
+  onLoadMoreDatasets?: () => Promise<void>;
   canRun: boolean;
   canCancel: boolean;
   onOpenResult: (id: string) => void;
@@ -16,8 +18,11 @@ type Props = {
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 /** 학습된 모델을 다른 Dataset에 적용하는 독립 Scoring 경험. */
-export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResult }: Props) {
+export function MLScoringPanel({
+  model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult,
+}: Props) {
   const [datasetId, setDatasetId] = useState("");
+  const [loadingMoreDatasets, setLoadingMoreDatasets] = useState(false);
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [labelColumn, setLabelColumn] = useState("");
   const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -174,6 +179,14 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
         </select>
       </label>
     </div>
+    {hasMoreDatasets && onLoadMoreDatasets && <button type="button" className="secondary"
+      disabled={loadingMoreDatasets} onClick={() => {
+        setLoadingMoreDatasets(true);
+        void onLoadMoreDatasets().catch(e => setError(formatError(e)))
+          .finally(() => setLoadingMoreDatasets(false));
+      }}>
+      {loadingMoreDatasets ? "Dataset 불러오는 중…" : "다른 Dataset 더 찾아보기"}
+    </button>}
     {columnStatus === "loading" && <p role="status">Dataset의 입력 컬럼을 확인하는 중입니다.</p>}
     {columnStatus === "error" && <p role="alert">입력 컬럼을 조회하지 못했습니다: {columnError}</p>}
     {checkedColumns && missingFeatures.length > 0 &&

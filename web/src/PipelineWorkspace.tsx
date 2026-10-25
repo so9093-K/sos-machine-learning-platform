@@ -651,8 +651,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         }} />
       {modelRevisionId && <div id="pipeline-model-try" hidden={!showModelUsage}>
         {showModelUsage && <PipelineModelUsage key={modelRevisionId} modelId={modelRevisionId}
-          datasets={datasets} canRun={canRun} canCancel={canCancel}
-          onOpenResource={onOpenResource} />}
+          datasets={datasets} hasMoreDatasets={hasMoreDatasets}
+          onLoadMoreDatasets={onLoadMoreDatasets}
+          canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
       </div>}
     </section>}
     {hasActiveAnalysis && <section className="panel pipeline-results"

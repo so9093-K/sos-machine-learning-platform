@@ -5,9 +5,13 @@ import { MLScoringPanel } from "./MLScoringPanel";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { Dataset, ModelRevision } from "./types";
 
-export function PipelineModelUsage({ modelId, datasets, canRun, canCancel, onOpenResource }: {
+export function PipelineModelUsage({
+  modelId, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResource,
+}: {
   modelId: string;
   datasets: Dataset[];
+  hasMoreDatasets?: boolean;
+  onLoadMoreDatasets?: () => Promise<void>;
   canRun: boolean;
   canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
@@ -45,7 +49,9 @@ export function PipelineModelUsage({ modelId, datasets, canRun, canCancel, onOpe
       </button>
     </div>}
     {current?.model && <MLScoringPanel key={modelId} model={current.model}
-      datasets={datasets} canRun={canRun} canCancel={canCancel}
+      datasets={datasets} hasMoreDatasets={hasMoreDatasets}
+      onLoadMoreDatasets={onLoadMoreDatasets}
+      canRun={canRun} canCancel={canCancel}
       onOpenResult={id => onOpenResource("scoring", id)} />}
   </section>;
 }
