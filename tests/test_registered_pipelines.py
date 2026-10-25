@@ -7,6 +7,7 @@ import polars as pl
 from sqlalchemy import create_engine, text
 
 from sos_platform import pipeline_reference, pipeline_runs
+from sos_platform.api_pipelines import PipelineDefinitionOut
 
 
 class FakeStore:
@@ -282,6 +283,15 @@ def test_cancel_with_missing_submitted_job_fails_instead_of_hiding_loss():
     assert failed["error_code"] == "SOS-JOB-FAILED"
 
 
+def test_pipeline_catalog_classifies_training_task_and_topic_independently():
+    """학습 유형·분석 과제·적용 주제를 API 계약에서 독립적으로 제공한다."""
+    item = PipelineDefinitionOut.model_validate(pipeline_reference.definition())
+    assert item.learning_type == "unsupervised"
+    assert item.task_type == "anomaly_detection"
+    assert item.topic == "activity_anomaly"
+    assert item.algorithm == "isolation_forest"
+
+
 def test_first_pipeline_example_matches_registered_input_contract(monkeypatch):
     """사용자가 선택하는 IF 예제는 실제 Pipeline 검사와 시간 분할을 통과한다."""
     import io
@@ -335,7 +345,7 @@ def test_pipeline_candidate_evidence_and_legacy_result(monkeypatch, tmp_path):
     """같은 결과 행의 시각·ID를 읽고, 기존 결과의 미존재 근거는 생성하지 않는다."""
     from types import SimpleNamespace
 
-    from sos_platform import api_pipelines
+    from sos_platform import api_pipelines, scoring_observations
 
     parquet = tmp_path / "candidate.parquet"
     base = pl.DataFrame({
@@ -357,9 +367,9 @@ def test_pipeline_candidate_evidence_and_legacy_result(monkeypatch, tmp_path):
     def cached(_store, _entry):
         yield parquet
 
-    monkeypatch.setattr(api_pipelines, "cached_dataset_file", cached)
+    monkeypatch.setattr(scoring_observations, "cached_dataset_file", cached)
     store = SimpleNamespace(
-        get_scoring_result=lambda _id: {"owner_actor": "owner", "sha256": "digest", "location": "mock"},
+        get_scoring_result=lambda _id: {"id": "scoring", "owner_actor": "owner", "sha256": "digest", "location": "mock"},
         get_decision_policy_revision=lambda _id: {"owner_actor": "owner", "threshold": 0.7},
     )
     run = {

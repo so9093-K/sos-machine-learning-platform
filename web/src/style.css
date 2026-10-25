@@ -740,3 +740,22 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
   .pipeline-shap-result .chart,
   .pipeline-candidate-detail .pipeline-shap-result .chart { height:370px; }
 }
+
+/* 현재 지원되는 분석 주제의 분류를 경로로 보이고, 불필요한 중간 페이지는 만들지 않는다. */
+.model-lab-nav-classification { display:flex; flex-wrap:wrap; column-gap:10px; row-gap:3px;
+  padding:2px 12px 5px 12px; color:var(--sos-muted); font-size:11px; }
+.model-lab-nav-classification span { white-space:nowrap; }
+.model-lab-topic-trail { display:flex; flex-wrap:wrap; gap:4px; font-size:12px;
+  color:var(--sos-muted); margin-bottom:10px; }
+#pipeline-model-try { margin-top:14px; scroll-margin-top:18px; }
+#pipeline-model-try .pipeline-model-usage { margin:0; }
+.pipeline-candidate-quickstart { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.pipeline-candidate-quickstart .hint { margin:0; max-width:550px; }
+
+/* 학습 결과에서 모델 사용을 즉시 발견할 수 있도록 버튼을 결과 제목에 둔다. */
+.pipeline-results-priority > .pipeline-section-heading { align-items:center; gap:12px; }
+.pipeline-results-priority > .pipeline-section-heading > button { flex-shrink:0; }
+#pipeline-model-try[hidden] { display:none; }
+@media(max-width:620px) {
+  .pipeline-results-priority > .pipeline-section-heading > button { width:100%; }
+}

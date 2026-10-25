@@ -744,8 +744,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           canTrain={canRun} canCancel={canCancel} />}
       {resource && context.pipelineReturn && context.pipelineRunId &&
         <section className="pipeline-return" role="status">
-          <div><strong>이 Pipeline Run에서 열린 분석 결과입니다.</strong>
-            <p>불변 모델·점수·판정·평가 근거를 확인한 뒤 동일한 Run 분석으로 돌아갈 수 있습니다.</p>
+          <div><strong>모델 실험실에서 열린 결과입니다.</strong>
+            <p>원래 Pipeline의 분석 결과와 별도로 생성한 모델·점수 결과를 구분해 확인할 수 있습니다.</p>
           </div>
           <button type="button" className="secondary" onClick={() =>
             navigateWithContext("pipelines", {
@@ -756,6 +756,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
+        canRun={canRun} canCancel={canCancel}
         onScoring={startScoring} onDecision={startDecision} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
         datasets={datasets} preferredModelId={context.modelId ?? ""}

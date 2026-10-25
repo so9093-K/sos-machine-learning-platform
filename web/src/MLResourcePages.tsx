@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { MLScoringPanel } from "./MLScoringPanel";
+import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
 import { MLDecisionPanel, type DecisionView } from "./MLDecisionPanel";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type {
@@ -27,10 +28,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /** 불변 ID로 직접 조회하므로 목록 첫 페이지나 이전 학습 화면을 요구하지 않는다. */
-export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecision }: {
+export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecision, canRun, canCancel }: {
   kind: MLResourceKind; id: string; onOpenResource: OpenResource;
   onScoring: (modelId: string) => void;
   onDecision: (kind: ResultKind, scoringId: string) => void;
+  canRun: boolean; canCancel: boolean;
 }) {
   const endpoints: Record<MLResourceKind, string> = {
     model: "/api/ml/models", scoring: "/api/ml/scoring/results",
@@ -116,6 +118,8 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
             </button>)}
         </div>
         <p className="hint">해당 Scoring Result를 고정한 상태로 정책·평가·설명 작업을 독립 실행할 수 있습니다.</p>
+        <ScoringObservationExplorer key={r.id} result={r} canRun={canRun}
+          canCancel={canCancel} onOpenResource={onOpenResource} />
       </>;
     })()}
     {kind === "policy" && (() => {

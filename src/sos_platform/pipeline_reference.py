@@ -23,6 +23,9 @@ def definition() -> dict:
         "id": PIPELINE_ID,
         "version": PIPELINE_VERSION,
         "name": "활동 이상 탐지",
+        "learning_type": "unsupervised",
+        "task_type": "anomaly_detection",
+        "topic": "activity_anomaly",
         "description": "호환되는 사용자·호스트 활동 Feature 데이터로 새 Isolation Forest 모델을 학습하고, "
                        "Calibration 정책을 별도 Test 구간에 적용합니다.",
         "algorithm": "isolation_forest",

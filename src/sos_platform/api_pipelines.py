@@ -1,16 +1,9 @@
 """신뢰된 등록형 Pipeline의 API-first 진입점."""
-import base64
-import binascii
-import heapq
-import json
-import math
-
-import pyarrow.parquet as pq
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Literal
 
-from .cache import cached_dataset_file
+from .scoring_observations import ranked_scoring_rows
 from .pipeline_reference import PIPELINE_ID, definition, inspect_dataset
 from .pipeline_runs import cancel_run, create_run, get_run, list_runs
 from .security import Actor, require, resource_allowed
@@ -27,6 +20,9 @@ class PipelineDefinitionOut(BaseModel):
     version: str
     name: str
     description: str
+    learning_type: str
+    task_type: str
+    topic: str
     algorithm: str
     required_time_column: str
     required_features: list[str]
@@ -118,100 +114,20 @@ def _visible(actor: Actor, item: dict | None) -> dict:
     return item
 
 
-def _cursor(value: str | None) -> tuple[float, int] | None:
-    if value is None:
-        return None
-    if len(value) > 160:
-        raise HTTPException(status_code=422, detail="Invalid cursor")
-    try:
-        item = json.loads(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)))
-        if not isinstance(item, list) or len(item) != 2:
-            raise ValueError
-        score, index = item
-        if type(score) not in (float, int) or not math.isfinite(score) or type(index) is not int or index < 0:
-            raise ValueError
-        return (float(score), index)
-    except (ValueError, TypeError, json.JSONDecodeError, binascii.Error):
-        raise HTTPException(status_code=422, detail="Invalid cursor") from None
-
-
-def _encode_cursor(rank: tuple[float, int]) -> str:
-    return base64.urlsafe_b64encode(
-        json.dumps(rank, separators=(",", ":")).encode("ascii")
-    ).decode("ascii").rstrip("=")
-
 
 def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None, row_index: int | None = None) -> dict:
-    if row_index is not None and cursor is not None:
-        raise HTTPException(status_code=422, detail="Candidate row lookup cannot use a page cursor")
     by_stage = {entry["name"]: entry["job"] for entry in run["stages"]}
     score_id = by_stage["test"]["result"]["scoring_result_id"]
     policy_id = by_stage["policy"]["result"]["policy_revision_id"]
     scoring = store.get_scoring_result(score_id)
     policy = store.get_decision_policy_revision(policy_id)
-    if not scoring or not policy or scoring["owner_actor"] != run["owner_actor"] or policy["owner_actor"] != run["owner_actor"]:
+    if (not scoring or not policy or scoring["owner_actor"] != run["owner_actor"]
+            or policy["owner_actor"] != run["owner_actor"]):
         raise HTTPException(status_code=404, detail="Pipeline result unavailable")
-    threshold = policy["threshold"]
-    after = _cursor(cursor)
-    # 이미 검증된 불변 S3 결과를 SOS의 기존 캐시·공유 읽기 Lease로 재사용한다.
-    # 새 캐시 구현 없이 다운로드 중복과 조회 중 축출 경합을 방지한다.
-    cache_entry = {
-        "kind": "file", "version": scoring["sha256"],
-        "location": scoring["location"],
-    }
-    with cached_dataset_file(store, cache_entry) as path:
-        reader = pq.ParquetFile(path)
-
-        def eligible():
-            for batch in reader.iter_batches(
-                batch_size=8192, columns=["row_index", "anomaly_score"]
-            ):
-                indices = batch.column(0).to_pylist()
-                scores = batch.column(1).to_pylist()
-                for index, score in zip(indices, scores, strict=True):
-                    if not math.isfinite(score) or score < threshold:
-                        continue
-                    if row_index is not None and int(index) != row_index:
-                        continue
-                    rank = (-float(score), int(index))
-                    if after is None or rank > after:
-                        yield rank
-
-        # 원본 점수 파일은 불변이므로 동일 cursor로 결과 순서가 바뀌지 않는다.
-        selected = heapq.nsmallest(1 if row_index is not None else limit + 1, eligible())
-        has_more = row_index is None and len(selected) > limit
-        page = selected[:limit]
-        selected_ids = {idx for _, idx in page}
-        # 기존 불변 결과에는 신규 관측 정보가 없으므로 선택적으로 읽는다.
-        columns = ["row_index", "features"]
-        for extra in ("observed_at", "observation_id"):
-            if extra in reader.schema_arrow.names:
-                columns.append(extra)
-        detail_map: dict[int, dict] = {}
-        if selected_ids:
-            for batch in reader.iter_batches(batch_size=4096, columns=columns):
-                indices = batch.column(0).to_pylist()
-                for position, idx in enumerate(indices):
-                    if idx in selected_ids:
-                        detail_map[int(idx)] = {
-                            "features": batch.column(1)[position].as_py(),
-                            **{name: batch.column(offset)[position].as_py()
-                               for offset, name in enumerate(columns[2:], start=2)},
-                        }
-                if len(detail_map) == len(selected_ids):
-                    break
-    return {
-        "items": [
-            {"row_index": idx, "anomaly_score": -rank,
-             "features": detail_map.get(idx, {}).get("features", {}),
-             "observed_at": detail_map.get(idx, {}).get("observed_at"),
-             "observation_id": detail_map.get(idx, {}).get("observation_id")}
-            for rank, idx in page
-        ],
-        "threshold": threshold,
-        "next_cursor": _encode_cursor(page[-1]) if has_more and page else None,
-        "result_id": score_id,
-    }
+    page = ranked_scoring_rows(
+        store, scoring, limit, cursor, row_index=row_index, min_score=policy["threshold"],
+    )
+    return {**page, "threshold": policy["threshold"]}
 
 
 def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:

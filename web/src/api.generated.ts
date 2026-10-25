@@ -811,6 +811,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/scoring/results/{result_id}/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Scoring Observations */
+        get: operations["list_scoring_observations_api_ml_scoring_results__result_id__observations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/tracking/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -2653,6 +2670,8 @@ export interface components {
             id: string;
             /** Label Requirement */
             label_requirement: string;
+            /** Learning Type */
+            learning_type: string;
             /** Limitations */
             limitations: string[];
             /** Model Reuse */
@@ -2665,6 +2684,10 @@ export interface components {
             required_time_column: string;
             /** Stages */
             stages: string[];
+            /** Task Type */
+            task_type: string;
+            /** Topic */
+            topic: string;
             /** Version */
             version: string;
         };
@@ -2805,6 +2828,30 @@ export interface components {
             sample_limit: number | null;
             /** Sampled */
             sampled: boolean;
+        };
+        /** ScoringObservationOut */
+        ScoringObservationOut: {
+            /** Anomaly Score */
+            anomaly_score: number;
+            /** Features */
+            features: {
+                [key: string]: number | null;
+            };
+            /** Observation Id */
+            observation_id?: string | null;
+            /** Observed At */
+            observed_at?: string | null;
+            /** Row Index */
+            row_index: number;
+        };
+        /** ScoringObservationsOut */
+        ScoringObservationsOut: {
+            /** Items */
+            items: components["schemas"]["ScoringObservationOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Result Id */
+            result_id: string;
         };
         /** ScoringResultOut */
         ScoringResultOut: {
@@ -4764,6 +4811,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScoringResultOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_scoring_observations_api_ml_scoring_results__result_id__observations_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                row_index?: number | null;
+            };
+            header?: never;
+            path: {
+                result_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoringObservationsOut"];
                 };
             };
             /** @description Structured API error */

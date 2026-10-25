@@ -8,6 +8,8 @@ import type {
 type Props = {
   model: ModelRevision;
   datasets: Dataset[];
+  hasMoreDatasets?: boolean;
+  onLoadMoreDatasets?: () => Promise<void>;
   canRun: boolean;
   canCancel: boolean;
   onOpenResult: (id: string) => void;
@@ -16,10 +18,16 @@ type Props = {
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 /** 학습된 모델을 다른 Dataset에 적용하는 독립 Scoring 경험. */
-export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResult }: Props) {
+export function MLScoringPanel({
+  model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult,
+}: Props) {
   const [datasetId, setDatasetId] = useState("");
+  const [loadingMoreDatasets, setLoadingMoreDatasets] = useState(false);
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [labelColumn, setLabelColumn] = useState("");
+  const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [columnsDatasetId, setColumnsDatasetId] = useState("");
+  const [columnError, setColumnError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
   const [result, setResult] = useState<ScoringResult | null>(null);
@@ -36,11 +44,20 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
   useEffect(() => {
     let alive = true;
     setColumns([]);
+    setColumnsDatasetId("");
     setLabelColumn("");
+    setColumnError("");
+    setColumnStatus(datasetId ? "loading" : "idle");
     if (datasetId) {
       void request<DatasetColumns>(`/api/datasets/${encodeURIComponent(datasetId)}/columns`)
-        .then(data => { if (alive) setColumns(data.columns); })
-        .catch(e => { if (alive) setError(formatError(e)); });
+        .then(data => {
+          if (alive) {
+            setColumns(data.columns); setColumnsDatasetId(datasetId); setColumnStatus("ready");
+          }
+        })
+        .catch(e => {
+          if (alive) { setColumnError(formatError(e)); setColumnStatus("error"); }
+        });
     }
     return () => { alive = false; };
   }, [datasetId]);
@@ -82,8 +99,12 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
     return () => { alive = false; };
   }, [selectedJob?.status, selectedJob?.result?.scoring_result_id]);
 
+  const checkedColumns = columnStatus === "ready" && columnsDatasetId === datasetId;
+  const missingFeatures = checkedColumns
+    ? model.features.filter(feature => !columns.some(col => col.name === feature)) : [];
+  const inputReady = datasetId !== "" && checkedColumns && missingFeatures.length === 0;
   async function create() {
-    if (submitted || !canRun || !datasetId) return;
+    if (submitted || !canRun || !inputReady) return;
     setSubmitted(true);
     setError("");
     try {
@@ -133,14 +154,18 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
 
   return <section className="panel" aria-label="독립 이상 점수 계산">
     <div className="panel-head"><div>
-      <h4>선택한 Dataset의 이상 점수 계산</h4>
-      <p>모델을 재학습하지 않고 불변 Scoring Result를 생성합니다.</p>
+      <h4>어떤 데이터에 모델을 적용할까요?</h4>
+      <p>선택한 Dataset에 학습 모델을 적용해 불변 Scoring Result를 생성합니다.</p>
     </div></div>
     {error && <p role="alert">{error}</p>}
     <div className="form-row">
-      <label>Scoring Dataset
-        <select aria-label="Scoring Dataset" value={datasetId}
-          onChange={e => setDatasetId(e.target.value)}>
+      <label>모델에 적용할 Dataset
+        <select aria-label="모델에 적용할 Dataset" value={datasetId}
+          onChange={e => {
+            setDatasetId(e.target.value);
+            setColumnStatus("idle"); setColumnsDatasetId("");
+            setColumns([]); setLabelColumn("");
+          }}>
           <option value="">Dataset 선택</option>
           {datasets.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
         </select>
@@ -154,10 +179,36 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
         </select>
       </label>
     </div>
-    <p className="hint">Feature 이름·순서·dtype는 학습 모델과 일치해야 합니다. 행별 점수는 확률이 아닙니다. 0/1 정답 레이블을 지정한 경우에만 순위 평가 지표를 제공합니다.</p>
-    <button disabled={!canRun || submitted || !datasetId} onClick={() => void create()}>
-      {submitted ? "Scoring 제출 중…" : "Scoring Job 제출"}
+    {hasMoreDatasets && onLoadMoreDatasets && <button type="button" className="secondary"
+      disabled={loadingMoreDatasets} onClick={() => {
+        setLoadingMoreDatasets(true);
+        void onLoadMoreDatasets().catch(e => setError(formatError(e)))
+          .finally(() => setLoadingMoreDatasets(false));
+      }}>
+      {loadingMoreDatasets ? "Dataset 불러오는 중…" : "다른 Dataset 더 찾아보기"}
+    </button>}
+    {columnStatus === "loading" && <p role="status">Dataset의 입력 컬럼을 확인하는 중입니다.</p>}
+    {columnStatus === "error" && <p role="alert">입력 컬럼을 조회하지 못했습니다: {columnError}</p>}
+    {checkedColumns && missingFeatures.length > 0 &&
+      <div role="alert" className="pipeline-readiness-blocked">
+        <strong>필수 Feature {missingFeatures.length}개가 없습니다.</strong>
+        <p>{missingFeatures.slice(0, 6).join(", ")}
+          {missingFeatures.length > 6 ? " 외 " + (missingFeatures.length - 6) + "개" : ""}</p>
+        <p>학습 모델과 호환되는 Dataset을 선택하세요.</p>
+      </div>}
+    {checkedColumns && missingFeatures.length === 0 && <p role="status">
+      필수 Feature {model.features.length}개 이름을 확인했습니다. 자료형과 결측 조건은 실행 시에도 검증합니다.
+    </p>}
+    <p className="hint">학습 모델의 Feature 이름·자료형이 맞아야 합니다. 이상 점수는 사건 확률이 아닙니다.
+      정답 레이블을 지정한 경우에만 지원되는 순위 지표를 계산합니다.</p>
+    {datasetId === model.dataset_id && <p className="hint">
+      학습 시 사용한 Dataset과 ID가 같습니다. Dataset 판본을 확인하세요.
+      동일 학습 판본에 적용한 점수는 독립적인 Test 성능이 아닙니다.
+    </p>}
+    <button disabled={!canRun || submitted || !inputReady} onClick={() => void create()}>
+      {submitted ? "점수 계산 요청 중…" : "이 Dataset으로 모델 사용하기 →"}
     </button>
+    <details className="pipeline-scoring-history"><summary>이 모델의 이전 점수 계산 보기</summary>
     <div className="steps">
       <strong>이 모델의 Scoring 이력</strong>
       {available.map(item => <button key={item.id} className="secondary"
@@ -170,8 +221,14 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
         이전 Scoring 더 보기
       </button>}
     </div>
+    </details>
     {selectedJob && <div className="result">
-      <h4>Scoring Job · {selectedJob.status}</h4>
+      <h4>모델 점수 계산 · {({
+        Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
+        Failed: "실패", Cancelled: "취소됨",
+      } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>
+      <p className="hint">대상 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
+        "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>
       {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
         !selectedJob.cancel_requested &&
         <button className="secondary" onClick={() => void cancel()}>Scoring 취소 요청</button>}
@@ -179,7 +236,7 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
         <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
       {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error_code}</p>}
       {result && <div>
-        <p>Scoring Result · {result.id}</p>
+        <p>새로운 점수 결과가 저장됐습니다. 원래 학습·Test 결과는 변경되지 않습니다.</p>
         <div className="cards">
           <div className="stat"><span>점수화된 행</span><strong>{result.row_count}</strong></div>
           <div className="stat"><span>평균 이상 점수</span>
@@ -193,7 +250,7 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
         {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&
           <p className="hint">학습에 사용한 동일 Dataset 판본을 점수화했습니다. 이 결과의 순위·판정 지표는 독립 검증 데이터의 성능이 아닙니다.</p>}
         <button type="button" className="secondary" onClick={() => onOpenResult(result.id)}>
-          Scoring Result 상세·정책·평가·설명 보기 →
+          점수 결과와 판단 근거 살펴보기 →
         </button>
       </div>}
     </div>}
