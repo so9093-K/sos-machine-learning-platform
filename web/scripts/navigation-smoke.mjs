@@ -324,6 +324,15 @@ try {
   assert.match(unavailableExample, /예제 목록을 불러오지 못했습니다/);
   assert.match(unavailableExample, /예제 다시 조회/);
   assert.match(unavailableExample, /id="pipeline-example-start"[^>]*disabled=""/);
+  const readyExample = renderToStaticMarkup(React.createElement(ModelLabIntroduction, {
+    definition: { required_features: ["f1"], required_time_column: "ts" },
+    example: { title: "예제", row_count: 240 },
+    examplesLoading: false, exampleBusy: false, examplePhase: null,
+    canCreateDataset: true, canRun: true, catalogError: "",
+    onRetryCatalog: () => {}, onStartExample: () => {}, onOwnData: () => {},
+  }));
+  assert.match(readyExample, /id="pipeline-example-start"[^>]*>예제로 모델 학습 시작/);
+  assert.doesNotMatch(readyExample, /id="pipeline-example-start"[^>]*disabled=""/);
   const { ExampleGallery } = await vite.ssrLoadModule("/src/ExampleGallery.tsx");
   const failedGallery = renderToStaticMarkup(React.createElement(ExampleGallery, {
     examples: [], busy: false, loading: false, canUse: true,
