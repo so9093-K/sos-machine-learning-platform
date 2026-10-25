@@ -108,7 +108,7 @@ try {
     pipelineRunSelectionContext(preselectedRun, "other-run", "other-dataset")),
     "/pipelines?dataset=other-dataset&run=other-run");
   assert.equal(contextPath("pipelines", pipelineRunSelectionContext(preselectedRun, "", "")),
-    "/pipelines");
+    "/pipelines?view=learn");
   assert.equal(resourcePath("policy", "policy-1", {
     pipelineReturn: true, pipelineRunId: "run-1",
     pipelineAnalysisSection: "calibration", candidateRowIndex: 8,
