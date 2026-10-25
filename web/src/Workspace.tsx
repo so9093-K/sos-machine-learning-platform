@@ -507,6 +507,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
       {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
         canCreateDataset={canWrite}
         hasPipelineExample={examples.some(item => item.id === "activity-anomaly-if")}
+        example={examples.find(item => item.id === "activity-anomaly-if")}
         examplesLoading={examplesLoading}
         onUseExample={usePipelineExample}
         initialDatasetId={context.datasetId ?? ""}

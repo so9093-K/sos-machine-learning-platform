@@ -4,9 +4,9 @@ import { PipelineAnalysis } from "./PipelineAnalysis";
 import type { PipelineAnalysisSection, PipelineScoreRange } from "./PipelineAnalysis";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import { PipelineModelUsage } from "./PipelineModelUsage";
-import { modelLabLabels } from "./ModelLabTaxonomy";
+import { ModelLabIntroduction } from "./ModelLabIntroduction";
 import { MLTrackingStatus } from "./MLTrackingStatus";
-import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
+import type { Dataset, Example, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 
@@ -44,7 +44,7 @@ export function filterCandidatesByScoreRange(
 }
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, examplesLoading, onUseExample }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, onUseExample }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
   initialCandidateRowIndex?: number;
   initialAnalysisSection?: PipelineAnalysisSection;
@@ -57,6 +57,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   canRun: boolean; canCancel: boolean;
   canCreateDataset?: boolean;
   hasPipelineExample?: boolean;
+  example?: Example;
   examplesLoading?: boolean;
   onUseExample?: () => Promise<Dataset>;
   onNavigate: (tab: WorkspaceTab, datasetId: string) => void;
@@ -97,6 +98,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [error, setError] = useState("");
   const [exampleBusy, setExampleBusy] = useState(false);
+  const ownDataDetails = useRef<HTMLDetailsElement>(null);
+  const [showOwnData, setShowOwnData] = useState(Boolean(initialDatasetId));
+  useEffect(() => { if (initialDatasetId) setShowOwnData(true); }, [initialDatasetId]);
   // React 렌더 전 연속 클릭도 단일 제출로 취급한다.
   const exampleSubmitting = useRef(false);
   const [examplePhase, setExamplePhase] = useState<"registering" | "checking" | "submitting" | null>(null);
@@ -290,7 +294,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   }
   /** 예제 등록·입력 검사·학습 제출을 한 번의 명시적 사용자 행동에 연결한다. */
   async function startExample() {
-    if (!onUseExample || !hasPipelineExample || !canCreateDataset || !canRun ||
+    if (!catalog.some(item => item.id === PIPELINE) ||
+        !onUseExample || !hasPipelineExample || !canCreateDataset || !canRun ||
         exampleSubmitting.current || busy) return;
     exampleSubmitting.current = true;
     const previousRevision = datasetSelectionRevision.current;
@@ -437,41 +442,23 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const activeStage = run?.current_stage ? stageLabel[run.current_stage] ?? run.current_stage : null;
   const hasActiveAnalysis = Boolean(runId);
   return <div className="platform-home pipeline-consumer">
-    {!hasActiveAnalysis && <section className="platform-intro pipeline-hero">
-      <div className="model-lab-topic-trail" aria-label="모델 실험실 주제 분류">
-        {modelLabLabels(current ?? { learning_type: "unsupervised",
-          task_type: "anomaly_detection", topic: "activity_anomaly" }).map((label, index) =>
-          <span key={label}>{index > 0 && <span aria-hidden="true"> / </span>}{label}</span>)}
-      </div>
-      <h2>활동 이상 탐지</h2>
-      <p>활동 데이터로 모델을 학습하고, 실제 학습 결과와 탐지된 이상 후보를
-        비교하며 Isolation Forest의 동작을 탐구합니다.</p>
-      <div className="pipeline-lab-entry">
-        <div className="pipeline-lab-primary">
-          <strong>예제로 모델 학습하기</strong>
-          <p>240개 합성 관측치로 모델을 학습하고, 다른 시간 구간의 점수와 이상 후보를
-            분석합니다. 실제 이상 사건이나 탐지 정확도를 보증하는 데이터가 아닙니다.</p>
-          <button id="pipeline-example-start" type="button" disabled={examplesLoading || !hasPipelineExample ||
-            !canCreateDataset || !canRun || exampleBusy || busy}
-            onClick={() => void startExample()}>
-            {examplePhase === "registering" ? "예제 데이터 준비 중…" :
-              examplePhase === "checking" ? "학습 입력 확인 중…" :
-              examplePhase === "submitting" ? "학습 요청 중…" : "예제로 모델 학습 시작 →"}
-          </button>
-          <small>예제 등록과 입력 검사 후 학습·보정·테스트 분석을 제출합니다.</small>
-          {examplePhase && <p role="status">{
-            examplePhase === "registering" ? "합성 학습 데이터를 준비합니다." :
-            examplePhase === "checking" ? "학습 입력을 확인합니다." : "학습을 요청하고 있습니다."
-          }</p>}
-          {!canCreateDataset && <p className="hint">Dataset 생성 권한이 필요합니다.</p>}
-          {!canRun && <p className="hint">작업 실행 권한이 필요합니다.</p>}
-          {!examplesLoading && !hasPipelineExample && <p className="hint">예제를 찾지 못했습니다.</p>}
-        </div>
-      </div>
-    </section>}
+    {!hasActiveAnalysis && <ModelLabIntroduction definition={current ?? null}
+      example={example} examplesLoading={Boolean(examplesLoading)}
+      catalogError={catalogError} onRetryCatalog={() => setListReload(n => n + 1)}
+      exampleBusy={exampleBusy || busy} examplePhase={examplePhase}
+      canCreateDataset={Boolean(canCreateDataset)} canRun={canRun}
+      onStartExample={() => void startExample()}
+      onOwnData={() => {
+        if (ownDataDetails.current) {
+          setShowOwnData(true);
+          requestAnimationFrame(() => ownDataDetails.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+        }
+      }} />}
     {error && <div className="alert error" role="alert">{error}
       <button className="ghost" onClick={() => setError("")}>닫기</button></div>}
-    {!hasActiveAnalysis && <details className="pipeline-advanced" open={Boolean(datasetId && !exampleBusy)}>
+    {!hasActiveAnalysis && <details ref={ownDataDetails} className="pipeline-advanced"
+      open={showOwnData}
+      onToggle={event => setShowOwnData(event.currentTarget.open)}>
       <summary>내 데이터로 학습하거나 분석 방법 자세히 보기</summary>
     <section className="panel pipeline-start" aria-labelledby="pipeline-start-title">
       <div className="pipeline-section-heading">
@@ -645,6 +632,15 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           {showModelUsage ? "모델 사용 접기" : "모델 사용해보기 →"}
         </button>}
       </div>
+      <div className="pipeline-result-guide">
+        <div>
+          <strong>어디부터 살펴볼까요?</strong>
+          <p>결과 요약에서 점수 분포를 살펴보고, 판정 기준을 확인한 뒤
+            관심 있는 상위 점수 관측치를 선택할 수 있습니다. 순서는 자유롭게 선택하세요.</p>
+        </div>
+        <button type="button" className="secondary"
+          onClick={() => moveFocusTo("pipeline-candidates-heading")}>이상 후보 직접 탐구하기 →</button>
+      </div>
       <PipelineAnalysis run={run} onOpenResource={onOpenResource}
         initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection}
         onInvestigateCandidates={() => moveFocusTo("pipeline-candidates-heading")}
@@ -750,15 +746,30 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                 필터를 해제하거나 다음 후보를 불러와 확인하세요.</p>}
             {(rows.items.length > 0 || selectedCandidate !== null) && <div className="pipeline-candidate-workspace">
               <div className="pipeline-candidate-list">
-                {selectedCandidate === null && shownCandidates.length > 0 &&
-                  <div className="pipeline-candidate-quickstart">
-                    <button type="button" onClick={() =>
-                      selectCandidateRow(shownCandidates[0].row_index)}>
-                      가장 높은 점수 후보 살펴보기 →
-                    </button>
-                    <p className="hint">현재 불러온 점수순 후보 중 첫 번째입니다.
-                      이상 점수가 실제 사건의 확정을 의미하지는 않습니다.</p>
-                  </div>}
+                {shownCandidates.length > 0 && <div className="pipeline-candidate-top-panel">
+                  <div className="pipeline-candidate-top-heading">
+                    <strong>먼저 살펴볼 상위 후보</strong>
+                    <span>현재 불러온 목록에서 필터를 적용한 후 먼저 표시한 {count(Math.min(3, shownCandidates.length))}건
+                      · 전체 점수 순위가 아니며 실제 사건의 확정도 아닙니다.</span>
+                  </div>
+                  <div className="pipeline-candidate-top-list" aria-label="상위 이상 점수 후보">
+                    {shownCandidates.slice(0, 3).map((item, i) => <button
+                      key={item.row_index} type="button" className="ghost pipeline-candidate-top-item"
+                      aria-pressed={selectedCandidate === item.row_index}
+                      onClick={() => selectCandidateRow(item.row_index)}>
+                      <span className="pipeline-candidate-top-rank">표시 {i+1}</span>
+                      <span className="pipeline-candidate-top-meta">
+                        <strong>결과 행 {count(item.row_index)}</strong>
+                        {item.observed_at && <small>관측 시각 {item.observed_at}</small>}
+                      </span>
+                      <span className="pipeline-candidate-top-score">
+                        <small>이상 점수</small>
+                        <strong>{item.anomaly_score.toPrecision(6)}</strong>
+                      </span>
+                    </button>)}
+                  </div>
+                  <p className="hint">한 후보를 선택하면 아래에서 실제 Feature 값과 설명을 확인할 수 있습니다.</p>
+                </div>}
                 <label className="pipeline-candidate-picker">
                   검토할 이상 후보
                   <select aria-label="검토할 이상 후보 선택"
