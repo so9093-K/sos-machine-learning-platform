@@ -12,6 +12,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    text,
 )
 
 metadata = MetaData()
@@ -69,7 +70,7 @@ jobs = Table(
 
 Index(
     "ix_jobs_playground_model_actor_created",
-    Text("((spec::jsonb ->> 'model_revision_id'))"),
+    text("((spec::jsonb ->> 'model_revision_id'))"),
     jobs.c.owner_actor, jobs.c.created_at.desc(), jobs.c.id.desc(),
     postgresql_where=Text("kind = 'ml_playground'"),
 )
