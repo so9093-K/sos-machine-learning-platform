@@ -68,6 +68,27 @@ class ProblemOut(BaseModel):
     retry_policy: str
 
 
+class HealthOut(BaseModel):
+    """API 프로세스가 HTTP 요청에 응답하는지 나타낸다."""
+
+    status: Literal["ok"]
+
+
+class ReadyServicesOut(BaseModel):
+    """API에서 확인하는 필수 저장소·Worker 준비 상태."""
+
+    database: Literal["ready", "unavailable"]
+    storage: Literal["ready", "unavailable"]
+    worker: Literal["ready", "unavailable"]
+
+
+class ReadyOut(BaseModel):
+    """필수 구성요소에 대한 준비 상태. 실패 시에도 동일한 JSON 구조를 반환한다."""
+
+    status: Literal["ready", "unavailable"]
+    services: ReadyServicesOut
+
+
 class AuthMeOut(BaseModel):
     """인증 신원의 공개 계약. 토큰 내용은 반환하지 않는다."""
 

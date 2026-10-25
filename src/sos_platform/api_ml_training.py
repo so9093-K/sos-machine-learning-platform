@@ -31,7 +31,14 @@ def training_router(
     """Training·Fork·조회·취소를 앱의 기존 공통 검증 규칙에 연결한다."""
     router = APIRouter()
 
-    @router.post("/api/ml/train/jobs", status_code=202, response_model=MLTrainingJobOut)
+    @router.post(
+        "/api/ml/train/jobs",
+        tags=["Training"],
+        summary="Isolation Forest 학습 작업 제출",
+        description="Dataset 판본과 모델 설정을 고정해 비동기 학습을 접수합니다. 202 Accepted는 학습 완료를 의미하지 않습니다.",
+        status_code=202,
+        response_model=MLTrainingJobOut,
+    )
     def create_training_job(
         body: MLTrainRequest,
         request: Request,
@@ -83,6 +90,8 @@ def training_router(
 
     @router.post(
         "/api/ml/train/jobs/{source_job_id}/fork",
+        tags=["Training"],
+        summary="기존 학습 설정으로 새 학습 시작",
         status_code=202,
         response_model=MLTrainingJobOut,
     )
@@ -138,7 +147,12 @@ def training_router(
             idempotency_key=idempotency_key,
         )
 
-    @router.get("/api/ml/train/jobs", response_model=MLTrainingJobPageOut)
+    @router.get(
+        "/api/ml/train/jobs",
+        tags=["Training"],
+        summary="학습 작업 목록 조회",
+        response_model=MLTrainingJobPageOut,
+    )
     def list_ml_training_jobs(
         limit: int = Query(default=20, ge=1, le=100),
         cursor: str | None = Query(default=None, max_length=512),
@@ -152,11 +166,21 @@ def training_router(
         )
         return page_from_rows(rows, limit)
 
-    @router.get("/api/ml/train/jobs/{job_id}", response_model=MLTrainingJobOut)
+    @router.get(
+        "/api/ml/train/jobs/{job_id}",
+        tags=["Training"],
+        summary="학습 작업 상세 조회",
+        response_model=MLTrainingJobOut,
+    )
     def get_ml_training_job(job_id: str, actor: Actor = READ_JOB_DEP):
         return existing_ml_training_job(job_id, actor)
 
-    @router.post("/api/ml/train/jobs/{job_id}/cancel", response_model=MLTrainingJobOut)
+    @router.post(
+        "/api/ml/train/jobs/{job_id}/cancel",
+        tags=["Training"],
+        summary="학습 작업 취소 요청",
+        response_model=MLTrainingJobOut,
+    )
     def cancel_ml_training_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
         existing_ml_training_job(job_id, actor)
         item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)

@@ -13,6 +13,7 @@ import secrets
 from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 ACTIONS = {
     "dataset.read",
@@ -117,7 +118,18 @@ class IdentitySettings:
         )
 
 
-def current_actor(request: Request) -> Actor:
+# 인증 판정은 기존 IdentitySettings가 담당한다. 표준 보안 의존성은 OpenAPI에도 Bearer를
+# 선언하기 위한 것이며, auto_error=False로 기존 401/403 동작을 변경하지 않는다.
+OPENAPI_BEARER = HTTPBearer(
+    auto_error=False,
+    description="Token 모드에서는 Bearer 토큰이 필요합니다. 로컬 development 모드는 토큰 없이 동작합니다.",
+)
+
+
+def current_actor(
+    request: Request,
+    _bearer: HTTPAuthorizationCredentials | None = Depends(OPENAPI_BEARER),
+) -> Actor:
     if request.app.state.identity.mode == "development":
         peer = request.client.host if request.client else ""
         # 프록시가 원격 사용자를 로컬 클라이언트처럼 전달하는 실수를 차단한다.

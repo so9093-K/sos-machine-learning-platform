@@ -12,7 +12,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Dataset Page
+         * Dataset 목록 조회
          * @description Dataset 목록은 키셋 페이지 응답으로 제공한다.
          */
         get: operations["list_dataset_page_api_datasets_get"];
@@ -33,7 +33,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload */
+        /**
+         * 파일 Dataset 등록
+         * @description 원본 데이터 파일을 등록합니다. Dataset Understanding이나 모델 학습은 자동 실행하지 않습니다.
+         */
         post: operations["upload_api_datasets_files_post"];
         delete?: never;
         options?: never;
@@ -50,7 +53,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Connect Table */
+        /** Iceberg Dataset 연결 */
         post: operations["connect_table_api_datasets_iceberg_post"];
         delete?: never;
         options?: never;
@@ -65,7 +68,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Upload Policy */
+        /** Dataset 업로드 제한 조회 */
         get: operations["get_upload_policy_api_datasets_upload_policy_get"];
         put?: never;
         post?: never;
@@ -82,7 +85,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Dataset */
+        /** Dataset 상세 조회 */
         get: operations["dataset_api_datasets__dataset_id__get"];
         put?: never;
         post?: never;
@@ -99,7 +102,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Dataset Columns */
+        /** Dataset 컬럼 정보 조회 */
         get: operations["dataset_columns_api_datasets__dataset_id__columns_get"];
         put?: never;
         post?: never;
@@ -118,7 +121,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Dataset Exploration */
+        /** Dataset 탐색 실행 */
         post: operations["dataset_exploration_api_datasets__dataset_id__explorations_post"];
         delete?: never;
         options?: never;
@@ -133,7 +136,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Dataset Overview */
+        /** Dataset 개요 조회 */
         get: operations["dataset_overview_api_datasets__dataset_id__overview_get"];
         put?: never;
         post?: never;
@@ -150,7 +153,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Dataset Preview */
+        /**
+         * Dataset 데이터 미리보기
+         * @description 일부 행의 미리보기는 전체 Dataset의 대표 표본이나 전체 데이터 통계를 의미하지 않습니다.
+         */
         get: operations["dataset_preview_api_datasets__dataset_id__preview_get"];
         put?: never;
         post?: never;
@@ -167,7 +173,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Dataset Profile */
+        /** Dataset 프로파일 조회 */
         get: operations["dataset_profile_api_datasets__dataset_id__profile_get"];
         put?: never;
         post?: never;
@@ -186,7 +192,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Dataset Query */
+        /** Dataset 조건 조회 */
         post: operations["dataset_query_api_datasets__dataset_id__query_post"];
         delete?: never;
         options?: never;
@@ -202,7 +208,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Dataset Understanding
+         * Dataset 이해 결과 조회
          * @description 원본 등록과 독립적으로 계산된 최신 이해 결과 및 실행 상태를 제공한다.
          */
         get: operations["dataset_understanding_api_datasets__dataset_id__understanding_get"];
@@ -223,7 +229,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Submit Understanding */
+        /** Dataset 이해 작업 제출 */
         post: operations["submit_understanding_api_datasets__dataset_id__understanding_jobs_post"];
         delete?: never;
         options?: never;
@@ -239,7 +245,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Available Examples
+         * 선택 가능한 합성 예제 조회
          * @description 미리 보기 가능한 합성 데이터 예제의 정의를 조회한다.
          */
         get: operations["available_examples_api_examples_get"];
@@ -261,8 +267,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Start Example
-         * @description 예제를 명시적으로 선택했을 때만 일반 Dataset으로 등록한다.
+         * 합성 예제 Dataset 등록 또는 재사용
+         * @description 사용자가 명시적으로 요청한 경우에만 합성 예제를 Dataset으로 등록하거나 동일 판본을 재사용합니다.
          */
         post: operations["start_example_api_examples__example_id__use_post"];
         delete?: never;
@@ -278,10 +284,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Exploration Jobs */
+        /** 데이터 탐색 작업 목록 조회 */
         get: operations["list_exploration_jobs_api_explorations_jobs_get"];
         put?: never;
-        /** Create Exploration Job */
+        /** 데이터 탐색 작업 제출 */
         post: operations["create_exploration_job_api_explorations_jobs_post"];
         delete?: never;
         options?: never;
@@ -296,7 +302,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Exploration Job */
+        /** 데이터 탐색 작업 상세 조회 */
         get: operations["get_exploration_job_api_explorations_jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -315,7 +321,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel Exploration Job */
+        /** 데이터 탐색 작업 취소 요청 */
         post: operations["cancel_exploration_job_api_explorations_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -332,7 +338,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Feature Preview */
+        /** Feature 변환 미리보기 */
         post: operations["feature_preview_api_features_preview_post"];
         delete?: never;
         options?: never;
@@ -348,8 +354,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Health
-         * @description 프로세스 자체가 HTTP 응답을 제공하는지 확인한다.
+         * API 프로세스 상태 확인
+         * @description 프로세스가 HTTP에 응답하는지만 확인합니다. 저장소와 Worker의 준비 상태는 Ready API로 확인하세요.
          */
         get: operations["health_api_health_get"];
         put?: never;
@@ -369,7 +375,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Iceberg Import */
+        /**
+         * Iceberg 적재 작업 제출
+         * @description Iceberg 배치 적재 작업을 접수합니다. 외부 Snapshot 커밋은 일반적인 Job 취소로 되돌릴 수 없습니다.
+         */
         post: operations["iceberg_import_api_iceberg_import_post"];
         delete?: never;
         options?: never;
@@ -384,7 +393,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Snapshots */
+        /** Iceberg 테이블 Snapshot 조회 */
         get: operations["snapshots_api_iceberg__table_name__snapshots_get"];
         put?: never;
         post?: never;
@@ -402,11 +411,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Instance Settings
+         * 인스턴스 설정 조회
          * @description 인증된 클라이언트가 동일한 인스턴스 정보를 받는다.
          */
         get: operations["instance_settings_api_instance_get"];
-        /** Change Instance Settings */
+        /** 인스턴스 표시명 변경 */
         put: operations["change_instance_settings_api_instance_put"];
         post?: never;
         delete?: never;
@@ -422,10 +431,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Jobs */
+        /** 작업 목록 조회 */
         get: operations["list_jobs_api_jobs_get"];
         put?: never;
-        /** Create Job */
+        /**
+         * 작업 제출
+         * @description 멱등성·권한 규칙을 확인한 뒤 비동기 Job을 접수합니다. 완료 여부는 상세 조회에서 확인합니다.
+         */
         post: operations["create_job_api_jobs_post"];
         delete?: never;
         options?: never;
@@ -440,7 +452,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Job */
+        /** 작업 상세 조회 */
         get: operations["get_job_api_jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -459,7 +471,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel */
+        /**
+         * 작업 취소 요청
+         * @description 취소를 요청하며 실제 작업 중단이나 외부 저장소 변경의 롤백을 보장하지 않습니다.
+         */
         post: operations["cancel_api_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -474,10 +489,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Ml Evaluation Jobs */
+        /** 평가 작업 목록 조회 */
         get: operations["list_ml_evaluation_jobs_api_ml_evaluations_jobs_get"];
         put?: never;
-        /** Create Evaluation Job */
+        /**
+         * 평가 작업 제출
+         * @description Scoring·정책·레이블의 실제 근거에 따라 평가를 실행합니다. 레이블 없는 결과에 감독 지표를 만들지 않습니다.
+         */
         post: operations["create_evaluation_job_api_ml_evaluations_jobs_post"];
         delete?: never;
         options?: never;
@@ -492,7 +510,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Evaluation Job */
+        /** 평가 작업 상세 조회 */
         get: operations["get_evaluation_job_api_ml_evaluations_jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -511,7 +529,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel Evaluation Job */
+        /** 평가 작업 취소 요청 */
         post: operations["cancel_evaluation_job_api_ml_evaluations_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -526,7 +544,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Evaluation Revision */
+        /** 평가 결과 판본 조회 */
         get: operations["get_evaluation_revision_api_ml_evaluations__revision_id__get"];
         put?: never;
         post?: never;
@@ -543,7 +561,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Ml Experiments */
+        /** MLflow 실험 목록 조회 */
         get: operations["list_ml_experiments_api_ml_experiments_get"];
         put?: never;
         post?: never;
@@ -560,7 +578,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Ml Runs */
+        /** MLflow 실행 기록 조회 */
         get: operations["list_ml_runs_api_ml_experiments_runs_get"];
         put?: never;
         post?: never;
@@ -577,10 +595,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Ml Explanation Jobs */
+        /** 설명 작업 목록 조회 */
         get: operations["list_ml_explanation_jobs_api_ml_explanations_jobs_get"];
         put?: never;
-        /** Create Explanation Job */
+        /**
+         * 모델 설명 작업 제출
+         * @description 선택한 Scoring 결과의 설명을 계산합니다. Feature 민감도와 SHAP은 실제 이상 사건의 인과 원인이 아닙니다.
+         */
         post: operations["create_explanation_job_api_ml_explanations_jobs_post"];
         delete?: never;
         options?: never;
@@ -595,7 +616,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Explanation Job */
+        /** 모델 설명 작업 상세 조회 */
         get: operations["get_explanation_job_api_ml_explanations_jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -614,7 +635,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel Explanation Job */
+        /** 모델 설명 작업 취소 요청 */
         post: operations["cancel_explanation_job_api_ml_explanations_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -629,7 +650,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Explanation Result */
+        /** 모델 설명 결과 조회 */
         get: operations["get_explanation_result_api_ml_explanations__revision_id__get"];
         put?: never;
         post?: never;
@@ -646,7 +667,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Model Revision */
+        /**
+         * 모델 실행 판본 조회
+         * @description Dataset·Job·Runtime·Feature·아티팩트 근거가 고정된 SOS 모델 실행 참조를 조회합니다.
+         */
         get: operations["get_model_revision_api_ml_models__revision_id__get"];
         put?: never;
         post?: never;
@@ -663,10 +687,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Ml Policy Jobs */
+        /** 판정 정책 작업 목록 조회 */
         get: operations["list_ml_policy_jobs_api_ml_policies_jobs_get"];
         put?: never;
-        /** Create Policy Job */
+        /**
+         * 판정 정책 작업 제출
+         * @description Scoring 결과에 별도의 판정 정책을 생성합니다. 임계값을 바꾸기 위해 모델을 재학습할 필요는 없습니다.
+         */
         post: operations["create_policy_job_api_ml_policies_jobs_post"];
         delete?: never;
         options?: never;
@@ -681,7 +708,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Policy Job */
+        /** 판정 정책 작업 상세 조회 */
         get: operations["get_policy_job_api_ml_policies_jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -700,7 +727,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel Policy Job */
+        /** 판정 정책 작업 취소 요청 */
         post: operations["cancel_policy_job_api_ml_policies_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -715,7 +742,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Policy Revision */
+        /** 판정 정책 판본 조회 */
         get: operations["get_policy_revision_api_ml_policies__revision_id__get"];
         put?: never;
         post?: never;
@@ -732,7 +759,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Registered Models */
+        /**
+         * MLflow 모델 버전 목록 조회
+         * @description MLflow가 관리하는 모델 이름과 Registry 버전을 조회합니다. SOS의 불변 모델 실행 참조와 구분합니다.
+         */
         get: operations["list_registered_models_api_ml_registry_models_get"];
         put?: never;
         post?: never;
@@ -749,10 +779,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Scoring Jobs */
+        /** 점수화 작업 목록 조회 */
         get: operations["list_scoring_jobs_api_ml_scoring_jobs_get"];
         put?: never;
-        /** Create Scoring Job */
+        /**
+         * 모델 점수화 작업 제출
+         * @description 확정된 모델과 Dataset을 사용해 별도의 배치 Scoring Job을 접수합니다. 학습과 독립적인 실행입니다.
+         */
         post: operations["create_scoring_job_api_ml_scoring_jobs_post"];
         delete?: never;
         options?: never;
@@ -767,7 +800,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Scoring Job */
+        /** 점수화 작업 상세 조회 */
         get: operations["get_scoring_job_api_ml_scoring_jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -786,7 +819,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel Scoring Job */
+        /** 점수화 작업 취소 요청 */
         post: operations["cancel_scoring_job_api_ml_scoring_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -801,7 +834,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Scoring Result */
+        /** 점수화 결과 조회 */
         get: operations["get_scoring_result_api_ml_scoring_results__result_id__get"];
         put?: never;
         post?: never;
@@ -818,7 +851,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Scoring Observations */
+        /**
+         * 점수화 결과 관측치 탐색
+         * @description 보존된 점수와 관측 근거를 조회합니다. 결과 행 번호는 원본 이벤트의 고유 식별자가 아닙니다.
+         */
         get: operations["list_scoring_observations_api_ml_scoring_results__result_id__observations_get"];
         put?: never;
         post?: never;
@@ -835,7 +871,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Mlflow Tracking Status */
+        /** MLflow 기록 및 등록 상태 조회 */
         get: operations["get_mlflow_tracking_status_api_ml_tracking_jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -852,10 +888,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Ml Training Jobs */
+        /** 학습 작업 목록 조회 */
         get: operations["list_ml_training_jobs_api_ml_train_jobs_get"];
         put?: never;
-        /** Create Training Job */
+        /**
+         * Isolation Forest 학습 작업 제출
+         * @description Dataset 판본과 모델 설정을 고정해 비동기 학습을 접수합니다. 202 Accepted는 학습 완료를 의미하지 않습니다.
+         */
         post: operations["create_training_job_api_ml_train_jobs_post"];
         delete?: never;
         options?: never;
@@ -870,7 +909,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Ml Training Job */
+        /** 학습 작업 상세 조회 */
         get: operations["get_ml_training_job_api_ml_train_jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -889,7 +928,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel Ml Training Job */
+        /** 학습 작업 취소 요청 */
         post: operations["cancel_ml_training_job_api_ml_train_jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -906,7 +945,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fork Training Job */
+        /** 기존 학습 설정으로 새 학습 시작 */
         post: operations["fork_training_job_api_ml_train_jobs__source_job_id__fork_post"];
         delete?: never;
         options?: never;
@@ -921,7 +960,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Pipeline History */
+        /** Pipeline 실행 이력 조회 */
         get: operations["pipeline_history_api_pipeline_runs_get"];
         put?: never;
         post?: never;
@@ -938,7 +977,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Pipeline Run Detail */
+        /**
+         * Pipeline 실행 상태 조회
+         * @description 진행 상태와 단계별 Job 결과를 조회합니다. 학습 완료와 MLflow 모델 등록 완료는 별도 상태입니다.
+         */
         get: operations["pipeline_run_detail_api_pipeline_runs__run_id__get"];
         put?: never;
         post?: never;
@@ -957,7 +999,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Pipeline Cancel */
+        /** Pipeline 실행 취소 요청 */
         post: operations["pipeline_cancel_api_pipeline_runs__run_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -972,7 +1014,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Pipeline Candidates */
+        /** Pipeline 이상 후보 조회 */
         get: operations["pipeline_candidates_api_pipeline_runs__run_id__candidates_get"];
         put?: never;
         post?: never;
@@ -989,7 +1031,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Pipelines */
+        /** 등록형 Pipeline 목록 조회 */
         get: operations["pipelines_api_pipelines_get"];
         put?: never;
         post?: never;
@@ -1006,7 +1048,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Pipeline Detail */
+        /** Pipeline 정의 조회 */
         get: operations["pipeline_detail_api_pipelines__definition_id__get"];
         put?: never;
         post?: never;
@@ -1023,7 +1065,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Pipeline Check */
+        /** Pipeline 입력 Dataset 검사 */
         get: operations["pipeline_check_api_pipelines__definition_id__check_get"];
         put?: never;
         post?: never;
@@ -1042,7 +1084,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Submit Pipeline */
+        /**
+         * Pipeline 실행 제출
+         * @description 검사된 Dataset으로 등록형 Pipeline 실행을 접수합니다. Token 모드에는 Idempotency-Key가 필요합니다.
+         */
         post: operations["submit_pipeline_api_pipelines__definition_id__runs_post"];
         delete?: never;
         options?: never;
@@ -1058,8 +1103,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Ready
-         * @description 실제 필수 저장소와 실행기가 준비됐을 때만 200을 반환한다.
+         * 필수 서비스 준비 상태 확인
+         * @description 데이터베이스·객체 저장소·Worker를 확인하며 하나라도 준비되지 않으면 503을 반환합니다.
          */
         get: operations["ready_api_ready_get"];
         put?: never;
@@ -1078,7 +1123,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Storage Iceberg References
+         * Iceberg 참조 보존 상태 조회
          * @description 등록된 Dataset이 참조하는 Iceberg Snapshot 존재 여부를 확인한다.
          */
         get: operations["storage_iceberg_references_api_storage_iceberg_references_get"];
@@ -1100,7 +1145,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Retain Iceberg Reference
+         * Iceberg 참조 보존 요청
          * @description 기존 Dataset을 재확인하고 SOS 영구 보존 Tag를 생성한다.
          */
         post: operations["retain_iceberg_reference_api_storage_iceberg_references__dataset_id__retain_post"];
@@ -1118,8 +1163,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Storage Inspection
-         * @description S3 객체를 읽기 전용으로 대조한다. 실제 삭제는 제공하지 않는다.
+         * 저장소 객체 점검 결과 조회
+         * @description 저장소의 객체 상태를 점검합니다. 점검은 실제 객체 삭제를 수행하지 않습니다.
          */
         get: operations["storage_inspection_api_storage_inspection_get"];
         put?: never;
@@ -1138,7 +1183,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Storage Policy
+         * 저장소 보존 정책 조회
          * @description 연결 비밀을 제외한 유효 정책과 출처를 확인한다.
          */
         get: operations["storage_policy_api_storage_policy_get"];
@@ -1158,7 +1203,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Audit Events
+         * 접근 및 변경 감사 기록 조회
          * @description 운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다.
          */
         get: operations["audit_events_api_v2_audit_get"];
@@ -1177,7 +1222,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Auth Me */
+        /**
+         * 현재 신원과 권한 조회
+         * @description 현재 Actor의 역할과 허용된 기능을 조회합니다. Token 모드에서는 Bearer 인증이 필요합니다.
+         */
         get: operations["auth_me_api_v2_auth_me_get"];
         put?: never;
         post?: never;
@@ -1195,7 +1243,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Job Diagnostics
+         * 작업 실패 진단 정보 조회
          * @description 권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다.
          */
         get: operations["job_diagnostics_api_v2_diagnostics_jobs__job_id__get"];
@@ -1693,6 +1741,17 @@ export interface components {
             schema: {
                 [key: string]: string;
             };
+        };
+        /**
+         * HealthOut
+         * @description API 프로세스가 HTTP 요청에 응답하는지 나타낸다.
+         */
+        HealthOut: {
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
         };
         /** IcebergConnect */
         IcebergConnect: {
@@ -2829,6 +2888,39 @@ export interface components {
             /** Sampled */
             sampled: boolean;
         };
+        /**
+         * ReadyOut
+         * @description 필수 구성요소에 대한 준비 상태. 실패 시에도 동일한 JSON 구조를 반환한다.
+         */
+        ReadyOut: {
+            services: components["schemas"]["ReadyServicesOut"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "unavailable";
+        };
+        /**
+         * ReadyServicesOut
+         * @description API에서 확인하는 필수 저장소·Worker 준비 상태.
+         */
+        ReadyServicesOut: {
+            /**
+             * Database
+             * @enum {string}
+             */
+            database: "ready" | "unavailable";
+            /**
+             * Storage
+             * @enum {string}
+             */
+            storage: "ready" | "unavailable";
+            /**
+             * Worker
+             * @enum {string}
+             */
+            worker: "ready" | "unavailable";
+        };
         /** ScoringObservationOut */
         ScoringObservationOut: {
             /** Anomaly Score */
@@ -3788,7 +3880,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HealthOut"];
                 };
             };
             /** @description Structured API error */
@@ -5327,7 +5419,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReadyOut"];
+                };
+            };
+            /** @description 필수 서비스가 준비되지 않음 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadyOut"];
                 };
             };
             /** @description Structured API error */
