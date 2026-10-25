@@ -579,6 +579,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           파일 선택 (CSV·Parquet·TSV·TXT)
         </button>}
         <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
+          error={examplesError} onRetry={() => setExamplesReload(v => v + 1)}
           canUse={canWrite} startLabel={tab === "preparation"
             ? "이 예제로 데이터 준비 시작 →" : undefined}
           onUse={id => void selectExample(id)} />

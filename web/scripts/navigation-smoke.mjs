@@ -324,6 +324,13 @@ try {
   assert.match(unavailableExample, /예제 목록을 불러오지 못했습니다/);
   assert.match(unavailableExample, /예제 다시 조회/);
   assert.match(unavailableExample, /id="pipeline-example-start"[^>]*disabled=""/);
+  const { ExampleGallery } = await vite.ssrLoadModule("/src/ExampleGallery.tsx");
+  const failedGallery = renderToStaticMarkup(React.createElement(ExampleGallery, {
+    examples: [], busy: false, loading: false, canUse: true,
+    error: "temporary failure", onRetry: () => {}, onUse: () => {},
+  }));
+  assert.match(failedGallery, /예제 다시 조회/);
+  assert.doesNotMatch(failedGallery, /현재 제공되는 예제가 없습니다/);
   const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, datasets: [{ id: "dataset-1", name: "활동 데이터", version: "revision-1", kind: "file" }],
     initialDatasetId: "dataset-1",
