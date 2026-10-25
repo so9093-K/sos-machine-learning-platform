@@ -91,6 +91,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       });
       setLookupFailures(previous => previous + checked.failed);
       setNextPage(page.next_page_token ?? null);
+      // 첫 Registry 페이지에 호환 모델이 없던 경우도 시작 지점을 만든다.
+      if (!selectedModelId && checked.items.length) onSelectModel(checked.items[0].revision.id);
     } catch (cause) {
       setError(formatError(cause));
     } finally { setMoreLoading(false); }
@@ -105,7 +107,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       <div>
         <span className="eyebrow">활동 이상 탐지 · 모델 활용</span>
         <h2 id="model-lab-use-heading">학습된 모델 사용해보기</h2>
-        <p>등록된 모델을 선택해 다른 호환 Dataset에 적용하고 이상 점수를 계산합니다.</p>
+        <p>준비된 입력으로 점수를 계산하거나 값을 직접 바꾸고, 필요하면 Dataset 전체에 적용합니다.</p>
       </div>
       <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}
         disabled={loading || moreLoading}>모델 목록 새로고침</button>
@@ -165,10 +167,15 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         <p>URL에서 선택한 모델은 현재 조회된 호환 모델 목록에 없습니다.
           다음 모델 판본을 조회하거나 목록을 새로고침해 주세요.</p>
         <button type="button" className="secondary"
-          onClick={() => onSelectModel("")}>선택 해제</button>
+          onClick={() => onSelectModel(models[0]?.revision.id ?? "")}>
+          {models.length > 0 ? "조회된 모델 사용하기" : "선택 해제"}</button>
       </div>}
     {!loading && !selected && !selectedModelId && models.length > 0 &&
-      <p className="hint">모델 판본을 선택하면 적용할 Dataset을 고를 수 있습니다.</p>}
+      <div className="pipeline-readiness-blocked">
+        <p>사용 가능한 모델이 확인됐습니다. 이 모델로 바로 체험할 수 있습니다.</p>
+        <button type="button" className="secondary"
+          onClick={() => onSelectModel(models[0].revision.id)}>모델 사용하기 →</button>
+      </div>}
     {selected && <>
       <div className="model-lab-usage-tabs" role="group" aria-label="모델 적용 방식">
         <button type="button" className="secondary" aria-pressed={usage === "playground"}
