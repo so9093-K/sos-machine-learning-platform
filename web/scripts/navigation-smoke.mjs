@@ -299,34 +299,47 @@ try {
       guide: "입력과 점수를 확인합니다", version: "v1" },
     onUseExample: async () => ({ id: "example", name: "example", version: "v1", kind: "file" }),
   }));
-  assert.match(emptyJourney, /예제로 알아보기/);
-  assert.match(emptyJourney, /모델 실험실 주제 분류/);
-  assert.match(emptyJourney, /비지도 학습/);
-  assert.match(emptyJourney, /이상 탐지/);
-  assert.match(emptyJourney, /예제 구성 살펴보기/);
-  assert.match(emptyJourney, /id="model-lab-example-preview"[^>]*hidden/);
-  assert.doesNotMatch(emptyJourney, /id="pipeline-example-start"/);
-  assert.match(emptyJourney, /활동 Feature/);
-  assert.match(emptyJourney, /실제 모델 결과나 시간별 분석 값이 아닙니다/);
-  assert.match(emptyJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
-  assert.doesNotMatch(emptyJourney, /이전 학습 결과/);
-  assert.doesNotMatch(emptyJourney, /이전에 학습한 결과가 있나요/);
-  assert.doesNotMatch(emptyJourney, /분석 이용 단계/);
-  assert.match(emptyJourney, /자동 생성하는 단계는 현재 등록되어 있지 않습니다/);
-  assert.doesNotMatch(emptyJourney, /다른 분석 결과 선택/);
-  assert.doesNotMatch(emptyJourney, /pipeline-journey-item/);
+  assert.match(emptyJourney, /예제로 모델 학습 시작/);
+  assert.match(emptyJourney, /id="pipeline-example-start"/);
+  assert.match(emptyJourney, /내 Dataset으로 시작/);
+  assert.doesNotMatch(emptyJourney, /어떤 과정을 경험하나요|이해를 돕는 개념도|예제 구성 살펴보기/);
+  assert.doesNotMatch(emptyJourney, /id="model-lab-example-preview"/);
+  assert.doesNotMatch(emptyJourney, /학습 결과.*이상 후보.*다른 데이터에 적용/);
   assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행하기/);
-  // 예제 학습은 권한이 없으면 시도할 수 없고, 화면 렌더만으로 실행되지 않는다.
   const withoutPermission = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, hasPipelineExample: true, canCreateDataset: false, canRun: false,
   }));
-  assert.doesNotMatch(withoutPermission, /id="pipeline-example-start"/);
-  assert.match(withoutPermission, /예제 구성 살펴보기/);
+  assert.match(withoutPermission, /id="pipeline-example-start"[^>]*disabled=""/);
   const withoutExample = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, hasPipelineExample: false, examplesLoading: false, canCreateDataset: true,
   }));
-  assert.match(withoutExample, /예제 구성 살펴보기/);
-  assert.doesNotMatch(withoutExample, /id="pipeline-example-start"/);
+  assert.match(withoutExample, /id="pipeline-example-start"[^>]*disabled=""/);
+  const { ModelLabIntroduction } = await vite.ssrLoadModule("/src/ModelLabIntroduction.tsx");
+  const unavailableExample = renderToStaticMarkup(React.createElement(ModelLabIntroduction, {
+    definition: null, examplesLoading: false, exampleBusy: false, examplePhase: null,
+    canCreateDataset: true, canRun: true, catalogError: "",
+    examplesError: "temporary failure", onRetryExamples: () => {},
+    onRetryCatalog: () => {}, onStartExample: () => {}, onOwnData: () => {},
+  }));
+  assert.match(unavailableExample, /예제 목록을 불러오지 못했습니다/);
+  assert.match(unavailableExample, /예제 다시 조회/);
+  assert.match(unavailableExample, /id="pipeline-example-start"[^>]*disabled=""/);
+  const readyExample = renderToStaticMarkup(React.createElement(ModelLabIntroduction, {
+    definition: { required_features: ["f1"], required_time_column: "ts" },
+    example: { title: "예제", row_count: 240 },
+    examplesLoading: false, exampleBusy: false, examplePhase: null,
+    canCreateDataset: true, canRun: true, catalogError: "",
+    onRetryCatalog: () => {}, onStartExample: () => {}, onOwnData: () => {},
+  }));
+  assert.match(readyExample, /id="pipeline-example-start"[^>]*>예제로 모델 학습 시작/);
+  assert.doesNotMatch(readyExample, /id="pipeline-example-start"[^>]*disabled=""/);
+  const { ExampleGallery } = await vite.ssrLoadModule("/src/ExampleGallery.tsx");
+  const failedGallery = renderToStaticMarkup(React.createElement(ExampleGallery, {
+    examples: [], busy: false, loading: false, canUse: true,
+    error: "temporary failure", onRetry: () => {}, onUse: () => {},
+  }));
+  assert.match(failedGallery, /예제 다시 조회/);
+  assert.doesNotMatch(failedGallery, /현재 제공되는 예제가 없습니다/);
   const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, datasets: [{ id: "dataset-1", name: "활동 데이터", version: "revision-1", kind: "file" }],
     initialDatasetId: "dataset-1",
@@ -367,6 +380,8 @@ try {
     ...props, initialRunId: "previous-run",
   }));
   assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
+  assert.match(deepLinkedJourney, /aria-labelledby="pipeline-run-heading"/);
+  assert.doesNotMatch(deepLinkedJourney, /pipeline-run-context-header/);
   assert.doesNotMatch(deepLinkedJourney, /비지도 학습/);
   assert.doesNotMatch(deepLinkedJourney, /예제로 모델 학습 시작/);
   assert.doesNotMatch(deepLinkedJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
@@ -460,8 +475,8 @@ try {
     run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
     onSelectTestScoreRange: () => {}, onInvestigateCandidates: () => {},
   }));
-  assert.match(interactiveOverview, /검토 후보 .*건 살펴보기/);
-  assert.match(interactiveOverview, /전체 점수 분포 자세히 비교/);
+  assert.match(interactiveOverview, /이상 후보 확인하기/);
+  assert.match(interactiveOverview, /점수 분포와 판정 기준 자세히 보기/);
   assert.match(interactiveOverview, /이 구간 후보 보기/);
   assert.match(interactiveOverview, /후보 탐색/);
   assert.match(interactiveOverview, /그래프 막대나 아래 집계 표에서 점수 구간을 선택/);

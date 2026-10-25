@@ -249,21 +249,24 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
       </button>)}
     </nav>
     {section === "overview" && <section className="pipeline-analysis-overview" aria-label="점수 요약 비교">
-      <p className="hint">동일한 Run의 Train·Calibration·Test 점수 범위를 비교합니다.
-        실제 구간별 점수 분포와 근거는 각 분석 영역에서 확인하세요.</p>
       <div className="pipeline-lab-summary">
-        <div><span>모델 학습 관측치</span><strong>{format(trainRows)}건</strong></div>
-        <div><span>이상 후보의 판정 기준</span><strong>{format(policy.threshold)}</strong></div>
-        <div><span>새 시간 구간의 후보</span><strong>{format(metric(decision, "predicted_anomalies"))}건</strong></div>
+        <div><span>학습 모델</span><strong>Isolation Forest</strong></div>
+        <div><span>학습 관측치</span><strong>{format(trainRows)}건</strong></div>
+        <div><span>Test 데이터</span><strong>{format(testRows)}건</strong></div>
+        <div><span>검토할 후보</span><strong>{format(metric(decision, "predicted_anomalies"))}건</strong></div>
       </div>
-      {onInvestigateCandidates && <div className="pipeline-overview-next">
-        <button type="button" onClick={onInvestigateCandidates}>
-          검토 후보 {format(metric(decision, "predicted_anomalies"))}건 살펴보기 →
-        </button>
-      </div>}
-      <ScoreRangeChart evidence={evidence} />
+      {metric(decision, "predicted_anomalies") === 0 && <p className="hint">
+        Test 데이터에는 현재 판정 기준을 넘은 후보가 없습니다.</p>}
+      {onInvestigateCandidates && (metric(decision, "predicted_anomalies") ?? 0) > 0 &&
+        <div className="pipeline-overview-next">
+          <button type="button" onClick={onInvestigateCandidates}>
+            이상 후보 확인하기 →
+          </button>
+        </div>}
       <details className="pipeline-distribution-details">
-        <summary>Train·Calibration·Test의 전체 점수 분포 자세히 비교</summary>
+        <summary>점수 분포와 판정 기준 자세히 보기</summary>
+        <p>Calibration에서 결정한 판정 점수 기준: {format(policy.threshold)}</p>
+        <ScoreRangeChart evidence={evidence} />
       <div className="pipeline-lab-distributions">
         <section><h5>학습 데이터 점수 분포</h5>
           <ScoreHistogram summary={train} title="Training" /></section>
