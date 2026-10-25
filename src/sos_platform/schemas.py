@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StrictFloat, StrictInt, field_validator, model_validator
 
 
 class Step(BaseModel):
@@ -373,7 +373,7 @@ class MLPlaygroundRequest(BaseModel):
     """Dataset 없이 명시한 소량 관측치. Job 입력으로 감사·보존된다."""
 
     model_revision_id: str
-    features: dict[str, float | int | None] = Field(min_length=1, max_length=256)
+    features: dict[str, StrictFloat | StrictInt | None] = Field(min_length=1, max_length=256)
 
 
 class MLScoringRequest(BaseModel):

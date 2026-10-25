@@ -48,7 +48,7 @@ jobs = Table(
     metadata,
     Column("id", String(36), primary_key=True),
     Column("kind", String(32), nullable=False),
-    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
+    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=True),
     Column("spec", Text, nullable=False),
     Column("status", String(32), nullable=False),
     Column("cancel_requested", Boolean, nullable=False, default=False),

@@ -97,19 +97,15 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
     {kind === "scoring" && (() => {
       const r = data as ScoringResult;
       return <>
-        <dl className="ml-resource-fields">
-          <Field label="모델 판본"><button className="secondary"
-            onClick={() => onOpenResource("model", r.model_revision_id)}>{r.model_revision_id} ↗</button></Field>
-          <Field label="Dataset 판본">{r.dataset_id} · {r.dataset_version}</Field>
-          <Field label="Feature 서명">{r.feature_names.join(", ")}</Field>
-          <Field label="점수 방향">{r.score_direction}</Field>
-          <Field label="점수화 범위">{r.row_count.toLocaleString("ko-KR")}행</Field>
-          <Field label="정답 레이블">{r.label_column ?? "없음"}</Field>
-          <Field label="Average Precision">{amount(r.ranking_metrics?.average_precision)}</Field>
-          <Field label="ROC-AUC">{amount(r.ranking_metrics?.roc_auc)}</Field>
-        </dl>
-        <p className="hint">점수는 확률이 아니며, 레이블이 없거나 정의되지 않는 지표는 미정의로 표시합니다.
-          학습 Dataset과의 관계만으로 독립 검증을 주장하지 않습니다.</p>
+        <div className="ml-resource-summary">
+          <h4>모델 적용 결과</h4>
+          <p>실제 점수화한 관측치 {r.row_count.toLocaleString("ko-KR")}건
+            · 점수가 높은 관측치부터 확인할 수 있습니다.</p>
+          <p className="hint">점수는 실제 이상 사건의 확률이나 판정이 아닙니다.
+            학습에 사용한 데이터를 다시 점수화한 경우 독립 평가 성능이 아닙니다.</p>
+        </div>
+        <ScoringObservationExplorer key={r.id} result={r} canRun={canRun}
+          canCancel={canCancel} onOpenResource={onOpenResource} />
         <div className="ml-resource-actions">
           {(["policy", "evaluation", "explanation"] as const).map(k =>
             <button key={k} className="secondary"
@@ -117,9 +113,21 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
               {resultConfig[k].title}
             </button>)}
         </div>
-        <p className="hint">해당 Scoring Result를 고정한 상태로 정책·평가·설명 작업을 독립 실행할 수 있습니다.</p>
-        <ScoringObservationExplorer key={r.id} result={r} canRun={canRun}
-          canCancel={canCancel} onOpenResource={onOpenResource} />
+        <details className="ml-resource-evidence">
+          <summary>모델 판본 · 입력 Feature · 평가 지표와 기술 근거</summary>
+          <dl className="ml-resource-fields">
+            <Field label="모델 판본"><button className="secondary"
+              onClick={() => onOpenResource("model", r.model_revision_id)}>{r.model_revision_id} ↗</button></Field>
+            <Field label="Dataset 판본">{r.dataset_id} · {r.dataset_version}</Field>
+            <Field label="Feature 서명">{r.feature_names.join(", ")}</Field>
+            <Field label="점수 방향">{r.score_direction}</Field>
+            <Field label="정답 레이블">{r.label_column ?? "없음"}</Field>
+            {typeof r.ranking_metrics?.average_precision === "number" &&
+              <Field label="Average Precision">{amount(r.ranking_metrics.average_precision)}</Field>}
+            {typeof r.ranking_metrics?.roc_auc === "number" &&
+              <Field label="ROC-AUC">{amount(r.ranking_metrics.roc_auc)}</Field>}
+          </dl>
+        </details>
       </>;
     })()}
     {kind === "policy" && (() => {

@@ -15,7 +15,10 @@ def ordered_playground_input(model: dict, values: dict) -> list[float]:
         raise ValueError("Playground input must exactly match model features")
     allows_missing = model["runtime"].get("artifact_schema") == "if_model_with_preprocessing_v1"
     ordered = []
-    for name in features:
+    expected_dtypes = model["runtime"].get("feature_dtypes")
+    if not isinstance(expected_dtypes, list) or len(expected_dtypes) != len(features):
+        raise ValueError("Playground Model Feature dtypes are missing")
+    for index, name in enumerate(features):
         value = values[name]
         if value is None:
             if not allows_missing:
