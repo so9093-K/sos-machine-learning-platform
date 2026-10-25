@@ -53,7 +53,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const selected = loaded?.items.find(item => item.row_index === selectedRow);
   return <section className="panel scoring-observation-explorer" aria-label="점수 관측치 탐구">
     <div className="pipeline-section-heading"><div>
-      <h4>새 데이터에서 모델이 높게 점수화한 관측치</h4>
+      <h4>이 Scoring 결과의 상위 점수 관측치</h4>
       <p>개별 관측치를 점수 높은 순서로 확인합니다. 점수는 확률이나 판정 결과가 아니며
         별도 정책을 적용하지 않은 순위입니다.</p>
     </div>

@@ -44,4 +44,13 @@ jobs:
       - name: Build web TypeScript and Vite
         working-directory: web
         run: npm run build
+      # PR 리뷰용 일회성 검증. 확인 후 제거한다.
+      - uses: astral-sh/setup-uv@v7
+      - name: Diagnose generated OpenAPI types
+        run: |
+          uv python install 3.12
+          uv sync --locked --group dev
+          bash scripts/generate_api_types.sh
+          git diff -- web/src/api.generated.ts
+          git diff --exit-code -- web/src/api.generated.ts
 
