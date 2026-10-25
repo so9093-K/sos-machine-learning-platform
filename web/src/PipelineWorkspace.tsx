@@ -627,6 +627,15 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           {showModelUsage ? "모델 사용 접기" : "모델 사용해보기 →"}
         </button>}
       </div>
+      <div className="pipeline-result-guide">
+        <div>
+          <strong>어디부터 살펴볼까요?</strong>
+          <p>결과 요약에서 점수 분포를 살펴보고, 판정 기준을 확인한 뒤
+            관심 있는 상위 점수 관측치를 선택할 수 있습니다. 순서는 자유롭게 선택하세요.</p>
+        </div>
+        <button type="button" className="secondary"
+          onClick={() => moveFocusTo("pipeline-candidates-heading")}>이상 후보 직접 탐구하기 →</button>
+      </div>
       <PipelineAnalysis run={run} onOpenResource={onOpenResource}
         initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection}
         onInvestigateCandidates={() => moveFocusTo("pipeline-candidates-heading")}
@@ -732,15 +741,30 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                 필터를 해제하거나 다음 후보를 불러와 확인하세요.</p>}
             {(rows.items.length > 0 || selectedCandidate !== null) && <div className="pipeline-candidate-workspace">
               <div className="pipeline-candidate-list">
-                {selectedCandidate === null && shownCandidates.length > 0 &&
-                  <div className="pipeline-candidate-quickstart">
-                    <button type="button" onClick={() =>
-                      selectCandidateRow(shownCandidates[0].row_index)}>
-                      가장 높은 점수 후보 살펴보기 →
-                    </button>
-                    <p className="hint">현재 불러온 점수순 후보 중 첫 번째입니다.
-                      이상 점수가 실제 사건의 확정을 의미하지는 않습니다.</p>
-                  </div>}
+                {shownCandidates.length > 0 && <div className="pipeline-candidate-top-panel">
+                  <div className="pipeline-candidate-top-heading">
+                    <strong>먼저 살펴볼 상위 후보</strong>
+                    <span>현재 불러온 점수순 후보 중 상위 {count(Math.min(3, shownCandidates.length))}건
+                      · 점수가 사건의 확정을 의미하지는 않습니다.</span>
+                  </div>
+                  <div className="pipeline-candidate-top-list" aria-label="상위 이상 점수 후보">
+                    {shownCandidates.slice(0, 3).map((item, i) => <button
+                      key={item.row_index} type="button" className="ghost pipeline-candidate-top-item"
+                      aria-pressed={selectedCandidate === item.row_index}
+                      onClick={() => selectCandidateRow(item.row_index)}>
+                      <span className="pipeline-candidate-top-rank">#{i+1}</span>
+                      <span className="pipeline-candidate-top-meta">
+                        <strong>결과 행 {count(item.row_index)}</strong>
+                        {item.observed_at && <small>관측 시각 {item.observed_at}</small>}
+                      </span>
+                      <span className="pipeline-candidate-top-score">
+                        <small>이상 점수</small>
+                        <strong>{item.anomaly_score.toPrecision(6)}</strong>
+                      </span>
+                    </button>)}
+                  </div>
+                  <p className="hint">한 후보를 선택하면 아래에서 실제 Feature 값과 설명을 확인할 수 있습니다.</p>
+                </div>}
                 <label className="pipeline-candidate-picker">
                   검토할 이상 후보
                   <select aria-label="검토할 이상 후보 선택"

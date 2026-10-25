@@ -214,10 +214,10 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
 /** 불변 결과의 실제 의미와 출처를 확인한 뒤 단계별 분석 근거를 제공한다. */
 export type PipelineAnalysisSection = "overview" | "training" | "calibration" | "test";
 export const PIPELINE_ANALYSIS_SECTIONS: Array<{ id: PipelineAnalysisSection; label: string; description: string }> = [
-  { id: "overview", label: "결과 한눈에", description: "학습과 탐지 분포" },
-  { id: "training", label: "학습 결과", description: "학습 데이터와 점수" },
+  { id: "overview", label: "결과 요약", description: "학습·탐지 점수 비교" },
+  { id: "training", label: "학습 점수 분포", description: "학습 데이터의 점수" },
   { id: "calibration", label: "판정 기준", description: "검토 기준의 근거" },
-  { id: "test", label: "이상 탐지", description: "다른 구간의 후보" },
+  { id: "test", label: "후보 점수 이해", description: "다른 시간 구간의 점수" },
 ];
 export function PipelineEvidenceView({ evidence, run, onOpenResource,
   initialSection = "overview", onSectionChange, onInvestigateCandidates, onSelectTestScoreRange }: {

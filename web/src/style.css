@@ -805,3 +805,32 @@ button.ghost.model-lab-tree-toggle { padding:9px 5px; color:var(--sos-text); }
   .model-lab-concept-graphic { min-width:440px; }
   .model-lab-entry-card,.model-lab-example-preview { padding:14px; }
 }
+
+/* 실제 조회된 후보의 첫 세 항목을 점수·관측 시각과 함께 선택한다. */
+.pipeline-result-guide { display:flex; align-items:center; justify-content:space-between;
+  gap:16px; margin:0 0 20px; padding:14px 16px; border:1px solid var(--sos-border);
+  border-radius:10px; background:var(--sos-raised); }
+.pipeline-result-guide p { max-width:620px; margin:6px 0 0; line-height:1.6; font-size:12px; color:var(--sos-muted); }
+.pipeline-result-guide button { flex-shrink:0; }
+.pipeline-candidate-top-panel { display:grid; gap:12px; margin:0 0 15px; }
+.pipeline-candidate-top-heading { display:flex; justify-content:space-between; flex-wrap:wrap;
+  align-items:baseline; gap:7px; }
+.pipeline-candidate-top-heading span { color:var(--sos-muted); font-size:12px; }
+.pipeline-candidate-top-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+button.ghost.pipeline-candidate-top-item { display:flex; align-items:flex-start; text-align:left; width:100%;
+  gap:9px; min-width:0; border:1px solid var(--sos-border); background:var(--sos-raised);
+  padding:14px; border-radius:10px; color:var(--sos-text); }
+button.ghost.pipeline-candidate-top-item:hover,
+button.ghost.pipeline-candidate-top-item[aria-pressed="true"] {
+  border-color:var(--sos-accent); background:var(--sos-accent-bg); }
+.pipeline-candidate-top-rank { flex-shrink:0; color:var(--sos-accent); font-weight:750; }
+.pipeline-candidate-top-meta { display:grid; gap:5px; flex:1; min-width:0; }
+.pipeline-candidate-top-meta small,.pipeline-candidate-top-score small { font-size:11px; color:var(--sos-muted); }
+.pipeline-candidate-top-meta strong { font-size:12px; }
+.pipeline-candidate-top-score { display:grid; gap:5px; text-align:right; }
+.pipeline-candidate-top-score strong { font-size:12px; }
+.pipeline-candidate-top-panel .hint { margin:0; }
+@media(max-width:900px) {
+  .pipeline-candidate-top-list { grid-template-columns:1fr; }
+  .pipeline-result-guide { align-items:flex-start; flex-direction:column; }
+}
