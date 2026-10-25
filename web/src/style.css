@@ -749,8 +749,6 @@ button.ghost.model-lab-tree-toggle { padding:9px 5px; color:var(--sos-text); }
   color:var(--sos-muted); margin-bottom:10px; }
 #pipeline-model-try { margin-top:14px; scroll-margin-top:18px; }
 #pipeline-model-try .pipeline-model-usage { margin:0; }
-.pipeline-candidate-quickstart { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
-.pipeline-candidate-quickstart .hint { margin:0; max-width:550px; }
 
 /* 학습 결과에서 모델 사용을 즉시 발견할 수 있도록 버튼을 결과 제목에 둔다. */
 .pipeline-results-priority > .pipeline-section-heading { align-items:center; gap:12px; }
@@ -760,47 +758,7 @@ button.ghost.model-lab-tree-toggle { padding:9px 5px; color:var(--sos-text); }
   .pipeline-results-priority > .pipeline-section-heading > button { width:100%; }
 }
 
-/* 주제 이해, 예제 미리보기와 실제 실행의 구분. 새 Job은 명시적 버튼으로만 시작한다. */
-.model-lab-introduction { display:grid; gap:20px; }
-.model-lab-intro-header { display:flex; justify-content:space-between; align-items:end; gap:20px; flex-wrap:wrap; }
-.model-lab-intro-header > div:first-child { max-width:740px; }
-.model-lab-intro-header h2 { margin:6px 0 10px; }
-.model-lab-intro-header p, .model-lab-concept p, .model-lab-entry-card p,
-.model-lab-example-preview p { line-height:1.7; font-size:13px; color:var(--sos-muted); }
-.model-lab-topic-tags { display:flex; flex-wrap:wrap; gap:6px; }
-.model-lab-topic-tags span { background:var(--sos-raised); border:1px solid var(--sos-border);
-  border-radius:999px; padding:6px 10px; font-size:11px; }
-.model-lab-concept { display:grid; gap:10px; background:var(--sos-raised);
-  border:1px solid var(--sos-border); border-radius:12px; padding:20px; min-width:0; }
-.model-lab-concept-intro { display:grid; gap:7px; }
-.model-lab-concept-graphic { width:100%; max-width:740px; height:auto; color:var(--sos-text); }
-.model-lab-entry-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.model-lab-entry-card { display:flex; flex-direction:column; align-items:flex-start; gap:9px;
-  min-width:0; padding:19px; border:1px solid var(--sos-border); border-radius:12px; background:var(--sos-raised); }
-.model-lab-entry-card h3 { font-size:17px; }
-.model-lab-entry-card button { margin-top:auto; }
-.model-lab-example-preview { display:grid; justify-items:start; gap:12px; background:var(--sos-raised);
-  border:1px solid var(--sos-accent); border-radius:12px; padding:20px; }
-.model-lab-example-preview h3 { font-size:18px; }
-.model-lab-example-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; width:100%; }
-.model-lab-example-facts > div { border:1px solid var(--sos-border); border-radius:9px;
-  background:var(--sos-panel); padding:12px; display:grid; gap:7px; }
-.model-lab-example-facts span, .model-lab-example-footnote { color:var(--sos-muted); font-size:12px; }
-.model-lab-example-facts strong { font-size:16px; }
-.model-lab-example-preview .model-lab-example-caution { color:var(--sos-warning); }
-@media(max-width:760px) {
-  .model-lab-entry-actions,.model-lab-example-facts { grid-template-columns:1fr; }
-  .model-lab-concept { padding:12px; overflow-x:auto; }
-  .model-lab-concept-graphic { min-width:440px; }
-  .model-lab-entry-card,.model-lab-example-preview { padding:14px; }
-}
-
 /* 실제 조회된 후보의 첫 세 항목을 점수·관측 시각과 함께 선택한다. */
-.pipeline-result-guide { display:flex; align-items:center; justify-content:space-between;
-  gap:16px; margin:0 0 20px; padding:14px 16px; border:1px solid var(--sos-border);
-  border-radius:10px; background:var(--sos-raised); }
-.pipeline-result-guide p { max-width:620px; margin:6px 0 0; line-height:1.6; font-size:12px; color:var(--sos-muted); }
-.pipeline-result-guide button { flex-shrink:0; }
 .pipeline-candidate-top-panel { display:grid; gap:12px; margin:0 0 15px; }
 .pipeline-candidate-top-heading { display:flex; justify-content:space-between; flex-wrap:wrap;
   align-items:baseline; gap:7px; }

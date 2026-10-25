@@ -599,6 +599,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
             onClick={() => selectRun("")}>새 모델 학습</button>
         </div>
       </div>
+      {runLoadError && <div className="pipeline-readiness-blocked" role="alert">
+        <strong>실행 상태를 마지막으로 갱신하지 못했습니다.</strong>
+        <p>{runLoadError}</p>
+        <button type="button" className="secondary"
+          onClick={() => setRunReload(value => value + 1)}>실행 상태 다시 확인</button>
+      </div>}
       <PipelineAnalysis run={run} onOpenResource={onOpenResource}
         initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection}
         onInvestigateCandidates={() => moveFocusTo("pipeline-candidates-heading")}
