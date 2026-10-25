@@ -99,6 +99,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [error, setError] = useState("");
   const [exampleBusy, setExampleBusy] = useState(false);
   const ownDataDetails = useRef<HTMLDetailsElement>(null);
+  const [showOwnData, setShowOwnData] = useState(Boolean(initialDatasetId));
   // React 렌더 전 연속 클릭도 단일 제출로 취급한다.
   const exampleSubmitting = useRef(false);
   const [examplePhase, setExamplePhase] = useState<"registering" | "checking" | "submitting" | null>(null);
@@ -439,21 +440,22 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const activeStage = run?.current_stage ? stageLabel[run.current_stage] ?? run.current_stage : null;
   const hasActiveAnalysis = Boolean(runId);
   return <div className="platform-home pipeline-consumer">
-    {!hasActiveAnalysis && <ModelLabIntroduction definition={current}
+    {!hasActiveAnalysis && <ModelLabIntroduction definition={current ?? null}
       example={example} examplesLoading={Boolean(examplesLoading)}
       exampleBusy={exampleBusy || busy} examplePhase={examplePhase}
       canCreateDataset={Boolean(canCreateDataset)} canRun={canRun}
       onStartExample={() => void startExample()}
       onOwnData={() => {
         if (ownDataDetails.current) {
-          ownDataDetails.current.open = true;
-          ownDataDetails.current.scrollIntoView({ behavior: "smooth", block: "start" });
+          setShowOwnData(true);
+          requestAnimationFrame(() => ownDataDetails.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
         }
       }} />}
     {error && <div className="alert error" role="alert">{error}
       <button className="ghost" onClick={() => setError("")}>닫기</button></div>}
     {!hasActiveAnalysis && <details ref={ownDataDetails} className="pipeline-advanced"
-      defaultOpen={Boolean(initialDatasetId)}>
+      open={showOwnData || Boolean(initialDatasetId && !exampleBusy)}
+      onToggle={event => setShowOwnData(event.currentTarget.open)}>
       <summary>내 데이터로 학습하거나 분석 방법 자세히 보기</summary>
     <section className="panel pipeline-start" aria-labelledby="pipeline-start-title">
       <div className="pipeline-section-heading">
