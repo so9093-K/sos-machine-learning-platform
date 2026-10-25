@@ -14,6 +14,7 @@ export type MLNavigationContext = {
   datasetId?: string; modelId?: string; scoringId?: string;
   pipelineRunId?: string; pipelineReturn?: boolean; candidateRowIndex?: number;
   pipelineView?: "learn" | "use";
+  modelLabReturn?: boolean;
   pipelineAnalysisSection?: "overview" | "training" | "calibration" | "test";
 };
 type WorkspaceRoute = {
@@ -132,6 +133,9 @@ const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }>
 };
 export function resourcePath(kind: MLResourceKind, id: string, context: MLNavigationContext = {}): string {
   const path = `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
+  if (context.modelLabReturn && context.modelId && !context.pipelineRunId) {
+    return path + "?" + new URLSearchParams({ from: "model-lab", model: context.modelId });
+  }
   if (!context.pipelineReturn || !context.pipelineRunId) return path;
   const params = new URLSearchParams({ from: "pipeline", run: context.pipelineRunId });
   if (context.datasetId) params.set("dataset", context.datasetId);
@@ -144,6 +148,8 @@ export function resourcePath(kind: MLResourceKind, id: string, context: MLNaviga
 
 function resourceContext(search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
+  if (params.get("from") === "model-lab" && params.get("model"))
+    return { modelLabReturn: true, modelId: params.get("model")! };
   if (params.get("from") !== "pipeline" || !params.get("run")) return {};
   return { pipelineReturn: true, pipelineRunId: params.get("run")!,
     datasetId: params.get("dataset") ?? "",
@@ -260,11 +266,15 @@ export function useWorkspaceNavigation() {
     // Pipeline에서 열었던 결과 판본은 직접 링크·새로고침에서도 원래 Run에 돌아갈 수 있다.
     const fromPipeline = (previous.tab === "pipelines" || previous.resource !== null)
       && previous.context.pipelineReturn !== false;
-    const context = fromPipeline && previous.context.pipelineRunId
+    const fromLabUse = (previous.tab === "pipelines" && previous.context.pipelineView === "use") ||
+      (previous.resource !== null && previous.context.modelLabReturn === true);
+    const context: MLNavigationContext = fromPipeline && previous.context.pipelineRunId
       ? { pipelineReturn: true, pipelineRunId: previous.context.pipelineRunId,
           datasetId: previous.context.datasetId,
           candidateRowIndex: previous.context.candidateRowIndex,
-          pipelineAnalysisSection: previous.context.pipelineAnalysisSection } : {};
+          pipelineAnalysisSection: previous.context.pipelineAnalysisSection }
+      : fromLabUse && previous.context.modelId
+        ? { modelLabReturn: true, modelId: previous.context.modelId } : {};
     update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context },
       resourcePath(kind, id, context));
   }, [update]);

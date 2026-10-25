@@ -112,6 +112,17 @@ try {
     "/pipelines?dataset=other-dataset&run=other-run");
   assert.equal(contextPath("pipelines", pipelineRunSelectionContext(preselectedRun, "", "")),
     "/pipelines?view=learn");
+  const fromModelLab = resourcePath("scoring", "score/one", {
+    modelLabReturn: true, modelId: "model/a",
+  });
+  assert.equal(fromModelLab, "/scoring/results/score%2Fone?from=model-lab&model=model%2Fa");
+  assert.deepEqual(routeAt("/scoring/results/score%2Fone",
+    "?from=model-lab&model=model%2Fa").context,
+    { modelLabReturn: true, modelId: "model/a" });
+  assert.deepEqual(routeAt("/models/model-one",
+    "?from=model-lab&model=model%2Fa").context,
+    { modelLabReturn: true, modelId: "model/a" });
+  assert.deepEqual(routeAt("/scoring/results/score-one", "?from=model-lab").context, {});
   assert.equal(resourcePath("policy", "policy-1", {
     pipelineReturn: true, pipelineRunId: "run-1",
     pipelineAnalysisSection: "calibration", candidateRowIndex: 8,

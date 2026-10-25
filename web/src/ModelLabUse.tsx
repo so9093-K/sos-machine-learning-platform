@@ -106,7 +106,9 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     </header>
     {loading && <p role="status">사용 가능한 모델을 확인하는 중입니다.</p>}
     {error && <div className="pipeline-readiness-blocked" role="alert">
-      <p>모델 목록을 확인하지 못했습니다: {error}</p>
+      <p>{models.length > 0 || nextPage
+        ? "추가 모델 판본을 불러오지 못했습니다: "
+        : "모델 목록을 확인하지 못했습니다: "}{error}</p>
       <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}>
         다시 조회
       </button>
@@ -139,7 +141,15 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     </div>}
     {!loading && nextPage && <button type="button" className="secondary" disabled={moreLoading}
       onClick={() => void loadMore()}>{moreLoading ? "모델 확인 중…" : "다음 모델 판본 조회"}</button>}
-    {!loading && !selected && models.length > 0 && <p className="hint">모델 판본을 선택하면 적용할 Dataset을 고를 수 있습니다.</p>}
+    {!loading && !error && selectedModelId && !selected &&
+      <div className="pipeline-readiness-blocked" role="status">
+        <p>URL에서 선택한 모델은 현재 조회된 호환 모델 목록에 없습니다.
+          다음 모델 판본을 조회하거나 목록을 새로고침해 주세요.</p>
+        <button type="button" className="secondary"
+          onClick={() => onSelectModel("")}>선택 해제</button>
+      </div>}
+    {!loading && !selected && !selectedModelId && models.length > 0 &&
+      <p className="hint">모델 판본을 선택하면 적용할 Dataset을 고를 수 있습니다.</p>}
     {selected && <MLScoringPanel key={selected.revision.id} model={selected.revision}
       datasets={datasets} hasMoreDatasets={hasMoreDatasets}
       onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}

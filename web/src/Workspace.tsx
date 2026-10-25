@@ -788,6 +788,16 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
               pipelineAnalysisSection: context.pipelineAnalysisSection,
             })}>원래 Pipeline Run으로 돌아가기 →</button>
         </section>}
+      {resource && context.modelLabReturn && context.modelId &&
+        <section className="pipeline-return" role="status">
+          <div><strong>활동 이상 탐지에서 열린 결과입니다.</strong>
+            <p>선택한 모델과 데이터에 적용한 결과를 살펴본 뒤 모델 사용 화면으로 돌아갈 수 있습니다.</p>
+          </div>
+          <button type="button" className="secondary"
+            onClick={() => navigateWithContext("pipelines", {
+              pipelineView: "use", modelId: context.modelId,
+            })}>모델 사용 화면으로 돌아가기 →</button>
+        </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         canRun={canRun} canCancel={canCancel}
