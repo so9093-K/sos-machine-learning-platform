@@ -130,7 +130,10 @@ def scoring_observations_router(
     router = APIRouter()
 
     @router.get(
-        "/api/ml/scoring/results/{result_id}/observations", tags=["Scoring"], summary="점수화 결과 관측치 탐색",
+        "/api/ml/scoring/results/{result_id}/observations",
+        tags=["Scoring"],
+        summary="점수화 결과 관측치 탐색",
+        description="보존된 점수와 관측 근거를 조회합니다. 결과 행 번호는 원본 이벤트의 고유 식별자가 아닙니다.",
         response_model=ScoringObservationsOut,
     )
     def list_scoring_observations(

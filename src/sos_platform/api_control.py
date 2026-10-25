@@ -26,12 +26,22 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
     """제어 API의 기존 URL·권한·응답 모델을 변경하지 않고 별도 Router로 등록한다."""
     router = APIRouter()
 
-    @router.get("/api/health", tags=["System"], summary="API 프로세스 상태 확인")
+    @router.get(
+        "/api/health",
+        tags=["System"],
+        summary="API 프로세스 상태 확인",
+        description="프로세스가 HTTP에 응답하는지만 확인합니다. 저장소와 Worker의 준비 상태는 Ready API로 확인하세요.",
+    )
     def health():
         """프로세스 자체가 HTTP 응답을 제공하는지 확인한다."""
         return {"status": "ok"}
 
-    @router.get("/api/ready", tags=["System"], summary="필수 서비스 준비 상태 확인")
+    @router.get(
+        "/api/ready",
+        tags=["System"],
+        summary="필수 서비스 준비 상태 확인",
+        description="데이터베이스·객체 저장소·Worker를 확인하며 하나라도 준비되지 않으면 503을 반환합니다.",
+    )
     def ready():
         """실제 필수 저장소와 실행기가 준비됐을 때만 200을 반환한다."""
         checks = {}
@@ -57,7 +67,13 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
             return JSONResponse(status_code=503, content=result)
         return result
 
-    @router.get("/api/v2/auth/me", tags=["Identity"], summary="현재 신원과 권한 조회", response_model=AuthMeOut)
+    @router.get(
+        "/api/v2/auth/me",
+        tags=["Identity"],
+        summary="현재 신원과 권한 조회",
+        description="현재 Actor의 역할과 허용된 기능을 조회합니다. Token 모드에서는 Bearer 인증이 필요합니다.",
+        response_model=AuthMeOut,
+    )
     def auth_me(actor: Actor = IDENTITY_DEP):
         return {
             "actor_id": actor.id,
@@ -67,14 +83,24 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
             "mode": identity.mode,
         }
 
-    @router.get("/api/instance", tags=["Identity"], summary="인스턴스 설정 조회", response_model=InstanceSettingsOut)
+    @router.get(
+        "/api/instance",
+        tags=["Identity"],
+        summary="인스턴스 설정 조회",
+        response_model=InstanceSettingsOut,
+    )
     def instance_settings(actor: Actor = IDENTITY_DEP):
         """인증된 클라이언트가 동일한 인스턴스 정보를 받는다."""
         return {
             "display_name": store.instance_display_name(),
         }
 
-    @router.put("/api/instance", tags=["Identity"], summary="인스턴스 표시명 변경", response_model=InstanceSettingsOut)
+    @router.put(
+        "/api/instance",
+        tags=["Identity"],
+        summary="인스턴스 표시명 변경",
+        response_model=InstanceSettingsOut,
+    )
     def change_instance_settings(
         body: InstanceSettingsUpdate,
         request: Request,
@@ -88,7 +114,12 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
         )
         return {"display_name": body.display_name}
 
-    @router.get("/api/v2/audit", tags=["Audit & Diagnostics"], summary="접근 및 변경 감사 기록 조회", response_model=list[AuditEventOut])
+    @router.get(
+        "/api/v2/audit",
+        tags=["Audit & Diagnostics"],
+        summary="접근 및 변경 감사 기록 조회",
+        response_model=list[AuditEventOut],
+    )
     def audit_events(
         limit: int = Query(default=50, ge=1, le=100),
         request_id: str | None = Query(default=None, min_length=36, max_length=36),
@@ -98,7 +129,12 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
         """운영자만 요청 ID 또는 Job ID의 과거 변경·거부 이력을 조회한다."""
         return store.audit_events(limit=limit, request_id=request_id, resource_id=job_id)
 
-    @router.get("/api/v2/diagnostics/jobs/{job_id}", tags=["Audit & Diagnostics"], summary="작업 실패 진단 정보 조회", response_model=JobDiagnosticsOut)
+    @router.get(
+        "/api/v2/diagnostics/jobs/{job_id}",
+        tags=["Audit & Diagnostics"],
+        summary="작업 실패 진단 정보 조회",
+        response_model=JobDiagnosticsOut,
+    )
     def job_diagnostics(job_id: str, actor: Actor = AUDIT_DEP):
         """권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다."""
         item = store.get_job(job_id)

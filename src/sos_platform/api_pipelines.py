@@ -133,17 +133,32 @@ def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None, row
 def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
     router = APIRouter()
 
-    @router.get("/api/pipelines", tags=["Pipeline Catalog"], summary="등록형 Pipeline 목록 조회", response_model=list[PipelineDefinitionOut])
+    @router.get(
+        "/api/pipelines",
+        tags=["Pipeline Catalog"],
+        summary="등록형 Pipeline 목록 조회",
+        response_model=list[PipelineDefinitionOut],
+    )
     def pipelines(actor: Actor = READ_DATASET):
         return [definition()]
 
-    @router.get("/api/pipelines/{definition_id}", tags=["Pipeline Catalog"], summary="Pipeline 정의 조회", response_model=PipelineDefinitionOut)
+    @router.get(
+        "/api/pipelines/{definition_id}",
+        tags=["Pipeline Catalog"],
+        summary="Pipeline 정의 조회",
+        response_model=PipelineDefinitionOut,
+    )
     def pipeline_detail(definition_id: str, actor: Actor = READ_DATASET):
         if definition_id != PIPELINE_ID:
             raise HTTPException(status_code=404, detail="Pipeline not found")
         return definition()
 
-    @router.get("/api/pipelines/{definition_id}/check", tags=["Pipeline Catalog"], summary="Pipeline 입력 Dataset 검사", response_model=PipelineCheckOut)
+    @router.get(
+        "/api/pipelines/{definition_id}/check",
+        tags=["Pipeline Catalog"],
+        summary="Pipeline 입력 Dataset 검사",
+        response_model=PipelineCheckOut,
+    )
     def pipeline_check(
         definition_id: str,
         dataset_id: str = Query(min_length=1),
@@ -155,7 +170,14 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         _visible(actor, dataset)
         return inspect_dataset(store, dataset)
 
-    @router.post("/api/pipelines/{definition_id}/runs", tags=["Pipeline Runs"], summary="Pipeline 실행 제출", status_code=202, response_model=PipelineRunOut)
+    @router.post(
+        "/api/pipelines/{definition_id}/runs",
+        tags=["Pipeline Runs"],
+        summary="Pipeline 실행 제출",
+        description="검사된 Dataset으로 등록형 Pipeline 실행을 접수합니다. Token 모드에는 Idempotency-Key가 필요합니다.",
+        status_code=202,
+        response_model=PipelineRunOut,
+    )
     def submit_pipeline(
         definition_id: str,
         body: PipelineStartRequest,
@@ -181,20 +203,41 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    @router.get("/api/pipeline-runs", tags=["Pipeline Runs"], summary="Pipeline 실행 이력 조회", response_model=list[PipelineRunOut])
+    @router.get(
+        "/api/pipeline-runs",
+        tags=["Pipeline Runs"],
+        summary="Pipeline 실행 이력 조회",
+        response_model=list[PipelineRunOut],
+    )
     def pipeline_history(actor: Actor = READ_JOB):
         return list_runs(store, actor_id=None if actor.privileged else actor.id)
 
-    @router.get("/api/pipeline-runs/{run_id}", tags=["Pipeline Runs"], summary="Pipeline 실행 상태 조회", response_model=PipelineRunOut)
+    @router.get(
+        "/api/pipeline-runs/{run_id}",
+        tags=["Pipeline Runs"],
+        summary="Pipeline 실행 상태 조회",
+        description="진행 상태와 단계별 Job 결과를 조회합니다. 학습 완료와 MLflow 모델 등록 완료는 별도 상태입니다.",
+        response_model=PipelineRunOut,
+    )
     def pipeline_run_detail(run_id: str, actor: Actor = READ_JOB):
         return _visible(actor, get_run(store, run_id))
 
-    @router.post("/api/pipeline-runs/{run_id}/cancel", tags=["Pipeline Runs"], summary="Pipeline 실행 취소 요청", response_model=PipelineRunOut)
+    @router.post(
+        "/api/pipeline-runs/{run_id}/cancel",
+        tags=["Pipeline Runs"],
+        summary="Pipeline 실행 취소 요청",
+        response_model=PipelineRunOut,
+    )
     def pipeline_cancel(run_id: str, actor: Actor = CANCEL_JOB):
         _visible(actor, get_run(store, run_id, include_jobs=False))
         return cancel_run(store, run_id)
 
-    @router.get("/api/pipeline-runs/{run_id}/candidates", tags=["Pipeline Runs"], summary="Pipeline 이상 후보 조회", response_model=PipelineCandidatesOut)
+    @router.get(
+        "/api/pipeline-runs/{run_id}/candidates",
+        tags=["Pipeline Runs"],
+        summary="Pipeline 이상 후보 조회",
+        response_model=PipelineCandidatesOut,
+    )
     def pipeline_candidates(
         run_id: str, limit: int = Query(default=25, ge=1, le=100),
         cursor: str | None = Query(default=None, max_length=160),
