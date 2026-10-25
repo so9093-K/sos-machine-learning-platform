@@ -697,7 +697,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
             {rows.items.length === 0 && <p>현재 조회에서 이상 후보가 없습니다.</p>}
             {rows.items.length > 0 && <p className="pipeline-result-count">
               점수순 {count(rows.items.length)}건 조회 · 현재 표시 {count(shownCandidates.length)}건
-            </p>
+            </p>}
             {rows.items.length > 0 && shownCandidates.length === 0 &&
               <p className="hint">현재 불러온 후보에서 이 점수 구간과 일치하는 항목이 없습니다.
                 필터를 해제하거나 다음 후보를 불러와 확인하세요.</p>}
