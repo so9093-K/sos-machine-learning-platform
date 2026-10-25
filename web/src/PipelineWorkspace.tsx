@@ -4,6 +4,7 @@ import { PipelineAnalysis } from "./PipelineAnalysis";
 import type { PipelineAnalysisSection, PipelineScoreRange } from "./PipelineAnalysis";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import { PipelineModelUsage } from "./PipelineModelUsage";
+import { modelLabLabels } from "./ModelLabTaxonomy";
 import { MLTrackingStatus } from "./MLTrackingStatus";
 import type { Dataset, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
@@ -89,6 +90,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   } | null>(null);
   const [candidateReload, setCandidateReload] = useState(0);
   const [candidateScoreRange, setCandidateScoreRange] = useState<PipelineScoreRange | null>(null);
+  const [showModelUsage, setShowModelUsage] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(initialCandidateRowIndex ?? null);
   const [busy, setBusy] = useState(false);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
@@ -125,6 +127,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       setCandidateLookupStatus("idle");
       setCandidateLookupError("");
       setCandidateScoreRange(null);
+      setShowModelUsage(false);
       // URL의 Run과 선택 후보는 하나의 탐색 상태다. 이전 Run의 행만 지운 채
       // 이미 URL에 있는 새 Run의 후보 선택을 잃어버리지 않는다.
       setSelectedCandidate(initialCandidateRowIndex ?? null);
@@ -427,7 +430,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const hasActiveAnalysis = Boolean(runId);
   return <div className="platform-home pipeline-consumer">
     {!hasActiveAnalysis && <section className="platform-intro pipeline-hero">
-      <span className="eyebrow">모델 실험실 · 활동 이상 탐지</span>
+      <div className="model-lab-topic-trail" aria-label="모델 실험실 주제 분류">
+        {modelLabLabels(current ?? { learning_type: "unsupervised",
+          task_type: "anomaly_detection", topic: "activity_anomaly" }).map((label, index) =>
+          <span key={label}>{index > 0 && <span aria-hidden="true"> / </span>}{label}</span>)}
+      </div>
       <h2>활동 이상 탐지</h2>
       <p>활동 데이터로 모델을 학습하고, 실제 학습 결과와 탐지된 이상 후보를
         비교하며 Isolation Forest의 동작을 탐구합니다.</p>
@@ -632,6 +639,21 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           setCandidateScoreRange(range);
           moveFocusTo("pipeline-candidates-heading");
         }} />
+      {modelRevisionId && <div className="pipeline-model-try-entry">
+        <div><strong>학습한 모델을 사용해 볼까요?</strong>
+          <p>다른 Dataset에 적용해 실제 이상 점수를 계산합니다. 새 학습은 필요하지 않습니다.</p>
+        </div>
+        <button type="button" aria-expanded={showModelUsage}
+          aria-controls="pipeline-model-try"
+          onClick={() => setShowModelUsage(value => !value)}>
+          {showModelUsage ? "모델 사용 접기" : "모델 사용해보기 →"}
+        </button>
+      </div>}
+      {modelRevisionId && showModelUsage && <div id="pipeline-model-try">
+        <PipelineModelUsage key={modelRevisionId} modelId={modelRevisionId}
+          datasets={datasets} canRun={canRun} canCancel={canCancel}
+          onOpenResource={onOpenResource} />
+      </div>}
     </section>}
     {hasActiveAnalysis && <section className="panel pipeline-results"
       aria-label={run?.status === "Succeeded" ? "이상 후보 탐구 및 실행 근거" : undefined}
@@ -724,6 +746,15 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                 필터를 해제하거나 다음 후보를 불러와 확인하세요.</p>}
             {(rows.items.length > 0 || selectedCandidate !== null) && <div className="pipeline-candidate-workspace">
               <div className="pipeline-candidate-list">
+                {selectedCandidate === null && shownCandidates.length > 0 &&
+                  <div className="pipeline-candidate-quickstart">
+                    <button type="button" onClick={() =>
+                      selectCandidateRow(shownCandidates[0].row_index)}>
+                      가장 높은 점수 후보 살펴보기 →
+                    </button>
+                    <p className="hint">현재 불러온 점수순 후보 중 첫 번째입니다.
+                      이상 점수가 실제 사건의 확정을 의미하지는 않습니다.</p>
+                  </div>}
                 <label className="pipeline-candidate-picker">
                   검토할 이상 후보
                   <select aria-label="검토할 이상 후보 선택"
@@ -830,11 +861,5 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </details>
       </>}
     </section>}
-    {run?.status === "Succeeded" && modelRevisionId &&
-      <details className="pipeline-advanced pipeline-more">
-        <summary>학습 모델을 다른 데이터에 적용해 보기</summary>
-        <PipelineModelUsage modelId={modelRevisionId} datasets={datasets}
-          canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />
-      </details>}
   </div>;
 }

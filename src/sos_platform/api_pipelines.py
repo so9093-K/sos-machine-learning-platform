@@ -27,6 +27,9 @@ class PipelineDefinitionOut(BaseModel):
     version: str
     name: str
     description: str
+    learning_type: str
+    task_type: str
+    topic: str
     algorithm: str
     required_time_column: str
     required_features: list[str]

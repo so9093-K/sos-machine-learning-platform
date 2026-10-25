@@ -740,3 +740,19 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
   .pipeline-shap-result .chart,
   .pipeline-candidate-detail .pipeline-shap-result .chart { height:370px; }
 }
+
+/* 현재 지원되는 분석 주제의 분류를 경로로 보이고, 불필요한 중간 페이지는 만들지 않는다. */
+.model-lab-nav-classification { display:grid; gap:5px; padding:1px 12px 4px 19px;
+  border-left:2px solid var(--sos-border); margin-left:11px; color:var(--sos-muted); font-size:12px; }
+.model-lab-nav-classification span:last-child { padding-left:12px; }
+.model-lab-topic-trail { display:flex; flex-wrap:wrap; gap:4px; font-size:12px;
+  color:var(--sos-muted); margin-bottom:10px; }
+.pipeline-model-try-entry { display:flex; justify-content:space-between;
+  flex-wrap:wrap; align-items:center; gap:16px; background:var(--sos-raised);
+  border:1px solid var(--sos-border); border-radius:12px; padding:16px; margin-top:20px; }
+.pipeline-model-try-entry p { color:var(--sos-muted); font-size:13px; margin:5px 0 0; }
+#pipeline-model-try { margin-top:14px; scroll-margin-top:18px; }
+#pipeline-model-try .pipeline-model-usage { margin:0; }
+.pipeline-candidate-quickstart { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.pipeline-candidate-quickstart .hint { margin:0; max-width:550px; }
+@media(max-width:620px) { .pipeline-model-try-entry button { width:100%; } }
