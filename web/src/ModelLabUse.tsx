@@ -51,6 +51,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const [lookupFailures, setLookupFailures] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [usage, setUsage] = useState<"playground" | "dataset">("playground");
+  const [datasetVisited, setDatasetVisited] = useState(false);
+  const openDataset = () => { setDatasetVisited(true); setUsage("dataset"); };
 
   useEffect(() => {
     let active = true;
@@ -172,16 +174,18 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         <button type="button" className="secondary" aria-pressed={usage === "playground"}
           onClick={() => setUsage("playground")}>예시·직접 입력</button>
         <button type="button" className="secondary" aria-pressed={usage === "dataset"}
-          onClick={() => setUsage("dataset")}>Dataset 전체 적용</button>
+          onClick={openDataset}>Dataset 전체 적용</button>
       </div>
       <div hidden={usage !== "playground"}>
         <ModelLabPlayground key={selected.revision.id} model={selected.revision}
-          canRun={canRun} canCancel={canCancel} onDataset={() => setUsage("dataset")} />
+          canRun={canRun} canCancel={canCancel} onDataset={openDataset} />
       </div>
-      {usage === "dataset" && <MLScoringPanel key={selected.revision.id} model={selected.revision}
-        datasets={datasets} hasMoreDatasets={hasMoreDatasets}
-        onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
-        onOpenResult={id => onOpenResource("scoring", id)} />}
+      <div hidden={usage !== "dataset"}>
+        {datasetVisited && <MLScoringPanel key={selected.revision.id} model={selected.revision}
+          datasets={datasets} hasMoreDatasets={hasMoreDatasets}
+          onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
+          onOpenResult={id => onOpenResource("scoring", id)} />}
+      </div>
     </>}
     <div className="model-lab-use-footer">
       <button type="button" className="ghost" onClick={onLearn}>새 모델 학습해보기 →</button>
