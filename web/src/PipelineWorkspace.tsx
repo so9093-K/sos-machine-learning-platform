@@ -651,6 +651,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
             </button>
           </div>
         </>}
+        {runId && !runLoadError && <button type="button" className="secondary"
+          disabled={exampleBusy} onClick={() => selectRun("")}>
+          새 모델 학습하기 →
+        </button>}
         {!runId && <p>위에서 Dataset을 선택하고 입력 구조를 확인한 뒤 명시적으로 실행하거나,
           아래의 이전 학습 결과를 열어 보세요.</p>}
       </div>}
