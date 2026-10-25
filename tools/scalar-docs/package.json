@@ -1,0 +1,9 @@
+{
+  "name": "sos-scalar-docs-assets",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Pinned browser bundle for self-hosted SOS API reference",
+  "dependencies": {
+    "@scalar/api-reference": "1.76.0"
+  }
+}

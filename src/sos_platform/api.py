@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from scalar_fastapi import AgentScalarConfig, get_scalar_api_reference
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
@@ -327,11 +328,31 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         check_ownership(actor, item.get("owner_actor"), "job", job_id)
         return item
 
+    @app.get("/docs/assets/scalar.js", include_in_schema=False)
+    def scalar_asset():
+        """빌드에 포함된 Scalar 브라우저 자산을 같은 출처에서 제공한다."""
+        path = Path(__file__).resolve().parent / "static" / "scalar.js"
+        if not path.is_file():
+            raise HTTPException(
+                status_code=503,
+                detail="Scalar 문서 자산이 없습니다. scripts/build_scalar_assets.sh를 실행하세요.",
+            )
+        return FileResponse(path, media_type="application/javascript")
+
     @app.get("/docs", include_in_schema=False)
     def scalar_docs():
         return get_scalar_api_reference(
             openapi_url=app.openapi_url,
             title=app.title,
+            scalar_js_url="/docs/assets/scalar.js",
+            scalar_favicon_url=(
+                "data:image/svg+xml,"
+                "%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E"
+                "%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%23172554'/%3E"
+                "%3Ctext%20x='32'%20y='43'%20text-anchor='middle'%20font-size='28'"
+                "%20font-family='sans-serif'%20fill='white'%3ES%3C/text%3E%3C/svg%3E"
+            ),
+            with_default_fonts=False,
             agent=AgentScalarConfig(disabled=True),
             telemetry=False,
         )

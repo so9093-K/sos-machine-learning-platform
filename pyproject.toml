@@ -34,6 +34,8 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sos_platform"]
+# VCS가 무시하는 빌드 산출물도 wheel에 포함한다.
+artifacts = ["src/sos_platform/static/scalar.js"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "alembic.ini" = "sos_platform/alembic.ini"
