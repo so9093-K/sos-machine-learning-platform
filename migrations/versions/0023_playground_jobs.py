@@ -18,10 +18,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # 데이터 참조가 없는 Job을 가짜 Dataset에 귀속시키지 않는다.
-    op.execute("DELETE FROM job_submissions WHERE job_id IN "
-               "(SELECT id FROM jobs WHERE dataset_id IS NULL)")
-    op.execute("DELETE FROM attempts WHERE job_id IN "
-               "(SELECT id FROM jobs WHERE dataset_id IS NULL)")
-    op.execute("DELETE FROM jobs WHERE dataset_id IS NULL")
+    # 실행·입력 기록을 자동 삭제하거나 가짜 Dataset을 할당하지 않는다.
+    pending = op.get_bind().execute(
+        sa.text("SELECT COUNT(*) FROM jobs WHERE dataset_id IS NULL")
+    ).scalar_one()
+    if pending:
+        raise RuntimeError(
+            "Dataset 없는 Playground Job 이력이 남아 있습니다. "
+            "이력을 명시적으로 정리하기 전에는 스키마를 되돌릴 수 없습니다."
+        )
     op.alter_column("jobs", "dataset_id", existing_type=sa.String(length=36), nullable=False)
