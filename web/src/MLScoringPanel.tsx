@@ -241,10 +241,12 @@ export function MLScoringPanel({
           <div className="stat"><span>점수화된 행</span><strong>{result.row_count}</strong></div>
           <div className="stat"><span>평균 이상 점수</span>
             <strong>{value(result.score_summary.score_mean)}</strong></div>
-          <div className="stat"><span>Average Precision</span>
-            <strong>{value(result.ranking_metrics?.average_precision)}</strong></div>
-          <div className="stat"><span>ROC-AUC</span>
-            <strong>{value(result.ranking_metrics?.roc_auc)}</strong></div>
+          {typeof result.ranking_metrics?.average_precision === "number" &&
+            <div className="stat"><span>Average Precision</span>
+              <strong>{value(result.ranking_metrics.average_precision)}</strong></div>}
+          {typeof result.ranking_metrics?.roc_auc === "number" &&
+            <div className="stat"><span>ROC-AUC</span>
+              <strong>{value(result.ranking_metrics.roc_auc)}</strong></div>}
         </div>
         <p className="hint">모델과 Scoring Dataset의 판본 및 점수 아티팩트가 보존됩니다. 위 지표는 완전한 이진 레이블과 양성·음성 사례가 모두 있을 때만 계산합니다. 임계값 정책과 판정 정확도는 별도 평가 대상입니다.</p>
         {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { MLScoringPanel } from "./MLScoringPanel";
+import { ModelLabPlayground } from "./ModelLabPlayground";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { Dataset, MLflowModelVersion, MLflowModelVersionPage, ModelRevision, PipelineDefinition } from "./types";
 
@@ -48,6 +49,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const [error, setError] = useState("");
   const [lookupFailures, setLookupFailures] = useState(0);
   const [refresh, setRefresh] = useState(0);
+  const [usage, setUsage] = useState<"playground" | "dataset">("playground");
 
   useEffect(() => {
     let active = true;
@@ -63,6 +65,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       if (active) {
         setDefinition(current);
         setModels(checked.items);
+        if (!selectedModelId && checked.items.length) onSelectModel(checked.items[0].revision.id);
         setLookupFailures(checked.failed);
         setNextPage(page.next_page_token ?? null);
       }
@@ -132,20 +135,25 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       {!nextPage && !lookupFailures &&
         <button type="button" onClick={onLearn}>예제로 모델 학습하기 →</button>}
     </div>}
-    {models.length > 0 && <div className="model-lab-registered-list">
-      <h3>사용 가능한 모델 판본</h3>
-      <div className="model-lab-model-list">
-        {models.map(({ revision, version }) => <button key={revision.id} type="button"
-          className="model-lab-model-choice" aria-pressed={selectedModelId === revision.id}
-          onClick={() => onSelectModel(revision.id)}>
-          <span><strong>Isolation Forest · v{version.version}</strong>
-            <small>학습 시각 {new Date(revision.created_at).toLocaleString("ko-KR")}</small>
-            <small>학습 Dataset: {datasets.find(item => item.id === revision.dataset_id)?.name ??
-              "현재 목록에서 조회되지 않은 Dataset"} · 입력 Feature {revision.features.length}개</small>
-          </span>
-          <span>{selectedModelId === revision.id ? "선택됨" : "선택 →"}</span>
-        </button>)}
-      </div>
+    {selected && <div className="model-lab-current-model">
+      <div><span className="eyebrow">현재 선택한 모델</span>
+        <h3>Isolation Forest · v{selected.version.version}</h3>
+        <p>학습 시각 {new Date(selected.revision.created_at).toLocaleString("ko-KR")}
+          · 입력 Feature {selected.revision.features.length}개</p></div>
+      <details className="model-lab-version-picker">
+        <summary>모델 판본 변경</summary>
+        <div className="model-lab-model-list">
+          {models.map(({ revision, version }) => <button key={revision.id} type="button"
+            className="model-lab-model-choice" aria-pressed={selectedModelId === revision.id}
+            onClick={() => onSelectModel(revision.id)}>
+            <span><strong>Isolation Forest · v{version.version}</strong>
+              <small>학습 {new Date(revision.created_at).toLocaleString("ko-KR")}</small>
+              <small>{datasets.find(item => item.id === revision.dataset_id)?.name ??
+                "현재 목록 외의 Dataset"} · Feature {revision.features.length}개</small></span>
+            <span>{selectedModelId === revision.id ? "선택됨" : "선택 →"}</span>
+          </button>)}
+        </div>
+      </details>
     </div>}
     {!loading && nextPage && <button type="button" className="secondary" disabled={moreLoading}
       onClick={() => void loadMore()}>{moreLoading ? "모델 확인 중…" : "다음 모델 판본 조회"}</button>}
@@ -158,10 +166,22 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       </div>}
     {!loading && !selected && !selectedModelId && models.length > 0 &&
       <p className="hint">모델 판본을 선택하면 적용할 Dataset을 고를 수 있습니다.</p>}
-    {selected && <MLScoringPanel key={selected.revision.id} model={selected.revision}
-      datasets={datasets} hasMoreDatasets={hasMoreDatasets}
-      onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
-      onOpenResult={id => onOpenResource("scoring", id)} />}
+    {selected && <>
+      <div className="model-lab-usage-tabs" role="group" aria-label="모델 적용 방식">
+        <button type="button" className="secondary" aria-pressed={usage === "playground"}
+          onClick={() => setUsage("playground")}>예시·직접 입력</button>
+        <button type="button" className="secondary" aria-pressed={usage === "dataset"}
+          onClick={() => setUsage("dataset")}>Dataset 전체 적용</button>
+      </div>
+      <div hidden={usage !== "playground"}>
+        <ModelLabPlayground key={selected.revision.id} model={selected.revision}
+          canRun={canRun} canCancel={canCancel} onDataset={() => setUsage("dataset")} />
+      </div>
+      {usage === "dataset" && <MLScoringPanel key={selected.revision.id} model={selected.revision}
+        datasets={datasets} hasMoreDatasets={hasMoreDatasets}
+        onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
+        onOpenResult={id => onOpenResource("scoring", id)} />}
+    </>}
     <div className="model-lab-use-footer">
       <button type="button" className="ghost" onClick={onLearn}>새 모델 학습해보기 →</button>
     </div>
