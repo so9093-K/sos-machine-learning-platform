@@ -752,10 +752,10 @@ button.ghost.model-lab-tree-toggle { padding:9px 5px; color:var(--sos-text); }
 
 /* 학습 결과에서 모델 사용을 즉시 발견할 수 있도록 버튼을 결과 제목에 둔다. */
 .pipeline-results-priority > .pipeline-section-heading { align-items:center; gap:12px; }
-.pipeline-results-priority > .pipeline-section-heading > button { flex-shrink:0; }
+.pipeline-results-actions > button { flex-shrink:0; }
 #pipeline-model-try[hidden] { display:none; }
 @media(max-width:620px) {
-  .pipeline-results-priority > .pipeline-section-heading > button { width:100%; }
+  .pipeline-results-actions > button { width:100%; }
 }
 
 /* 실제 조회된 후보의 첫 세 항목을 점수·관측 시각과 함께 선택한다. */
@@ -779,16 +779,12 @@ button.ghost.pipeline-candidate-top-item[aria-pressed="true"] {
 .pipeline-candidate-top-panel .hint { margin:0; }
 @media(max-width:900px) {
   .pipeline-candidate-top-list { grid-template-columns:1fr; }
-  .pipeline-result-guide { align-items:flex-start; flex-direction:column; }
 }
 
 /* 사이드바에서도 제목과 주제가 좁은 폭에서 구분되어 읽힌다. */
 .model-lab-tree-title { display:flex; align-items:center; gap:7px; }
 .model-lab-tree-feedback { font-size:12px; color:var(--sos-muted); line-height:1.55; }
 @media(max-width:850px) { .model-lab-tree { width:100%; } }
-
-/* 접힌 예제 설명에도 aria-controls가 참조할 안정적인 DOM 대상이 있다. */
-.model-lab-example-preview-region[hidden] { display:none; }
 
 /* 첫 실행 중심: 핵심 행동과 선택적인 데이터 준비를 분리한다. */
 .pipeline-first-entry { display:grid; gap:16px; padding-block:24px; }
