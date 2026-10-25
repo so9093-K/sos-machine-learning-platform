@@ -70,11 +70,14 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
 
 export function PipelineCandidateInvestigation({
   candidate, scoringResultId, modelRevisionId, canRun, canCancel, onOpenResource,
+  observationMode = false,
 }: {
   candidate: Candidate; scoringResultId: string; modelRevisionId: string | null;
   canRun: boolean; canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
+  observationMode?: boolean;
 }) {
+  const subject = observationMode ? "관측치" : "후보";
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [modelError, setModelError] = useState("");
   const [modelReload, setModelReload] = useState(0);
@@ -191,7 +194,7 @@ export function PipelineCandidateInvestigation({
   }
   return <section className="pipeline-candidate-inspection" aria-label="선택한 후보 분석">
     <h5 id="pipeline-candidate-detail-heading" tabIndex={-1}>
-      선택한 후보 #{candidate.row_index.toLocaleString("ko-KR")}</h5>
+      선택한 {subject} #{candidate.row_index.toLocaleString("ko-KR")}</h5>
     <p>이상 점수 <strong>{format(candidate.anomaly_score)}</strong> · 높을수록 모델이 더 특이하게 본 관측치입니다.</p>
     <dl className="pipeline-candidate-observation">
       <div><dt>관측 시각</dt><dd>{candidate.observed_at ?? "이전 결과에 시각 근거 없음"}</dd></div>
@@ -239,14 +242,14 @@ export function PipelineCandidateInvestigation({
       <button type="button" onClick={() => void start()}
         disabled={busy || previousLookup !== "ready"}>
         {busy ? "설명 Job 제출 중…" : job ? "새 설명 Job으로 다시 계산 →" :
-          "이 후보의 점수 민감도 계산 →"}
+          "이 " + subject + "의 점수 민감도 계산 →"}
       </button>}
     {!job && previousLookup === "ready" && olderJobsExist && <p className="hint">
       최근 100건의 설명 작업에서는 같은 후보를 찾지 못했습니다.
       더 오래된 설명 결과는 독립 설명 작업 이력에서 확인할 수 있습니다.
     </p>}
     {job && previousLookup === "ready" && <p className="hint">
-      이 후보에 연결된 설명 Job을 조회했습니다. 다른 후보를 살펴본 뒤에도 다시 확인할 수 있습니다.
+      이 {subject}에 연결된 설명 Job을 조회했습니다. 다른 후보를 살펴본 뒤에도 다시 확인할 수 있습니다.
     </p>}
     {!canRun && <p className="hint">현재 계정은 설명 Job을 제출할 권한이 없습니다.</p>}
     {job && <p role="status">설명 Job: {job.status}

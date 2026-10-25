@@ -96,7 +96,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           key={result.id + ":" + selected.row_index}
           candidate={selected} scoringResultId={result.id}
           modelRevisionId={result.model_revision_id}
-          canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
+          observationMode canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
       </>}
     </div>}
   </section>;

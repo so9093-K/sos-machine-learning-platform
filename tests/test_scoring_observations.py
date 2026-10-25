@@ -65,3 +65,56 @@ def test_ranked_scoring_row_lookup_and_cursor_conflict(tmp_path, monkeypatch):
     with pytest.raises(HTTPException) as exc:
         scoring_observations.ranked_scoring_rows(None, result, 25, "cursor", row_index=0)
     assert exc.value.status_code == 422
+
+
+def test_scoring_observation_api_respects_actor_and_ownership(tmp_path, monkeypatch):
+    """job.read 권한과 Result 소유권이 모두 확인된 경우에만 행 값을 반환한다."""
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from sos_platform.security import Actor, CURRENT_ACTOR_DEP
+
+    parquet = tmp_path / "visible.parquet"
+    pq.write_table(pa.Table.from_pylist([
+        {"row_index": 0, "anomaly_score": 0.8, "features": {"activity": 7.0}},
+    ]), parquet)
+
+    opened = []
+
+    @contextmanager
+    def cache(*_args):
+        opened.append(True)
+        yield parquet
+
+    monkeypatch.setattr(scoring_observations, "cached_dataset_file", cache)
+    store = SimpleNamespace(get_scoring_result=lambda result_id: {
+        "id": result_id, "owner_actor": "alice", "sha256": "stored", "location": "ignored",
+    } if result_id == "score-1" else None)
+    app = FastAPI()
+    app.include_router(scoring_observations.scoring_observations_router(store))
+    actor = Actor("alice", "human", frozenset({"viewer"}))
+    app.dependency_overrides[CURRENT_ACTOR_DEP.dependency] = lambda: actor
+
+    with TestClient(app) as client:
+        url = "/api/ml/scoring/results/score-1/observations"
+        ok = client.get(url)
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["items"][0]["features"]["activity"] == 7.0
+        assert opened == [True]
+
+        # 읽기 권한이 있는 다른 Actor라도 원본 점수 파일에 접근하면 안 된다.
+        actor = Actor("bob", "human", frozenset({"viewer"}))
+        hidden = client.get(url)
+        assert hidden.status_code == 404
+        assert opened == [True]
+
+        # 관리 권한과 읽기 권한은 별개다.
+        actor = Actor("operator", "human", frozenset({"operator"}))
+        forbidden = client.get(url)
+        assert forbidden.status_code == 403
+        assert opened == [True]
+
+        missing = client.get("/api/ml/scoring/results/not-found/observations")
+        assert missing.status_code == 403
