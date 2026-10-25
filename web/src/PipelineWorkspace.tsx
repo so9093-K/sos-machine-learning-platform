@@ -100,6 +100,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [exampleBusy, setExampleBusy] = useState(false);
   const ownDataDetails = useRef<HTMLDetailsElement>(null);
   const [showOwnData, setShowOwnData] = useState(Boolean(initialDatasetId));
+  useEffect(() => { if (initialDatasetId) setShowOwnData(true); }, [initialDatasetId]);
   // React 렌더 전 연속 클릭도 단일 제출로 취급한다.
   const exampleSubmitting = useRef(false);
   const [examplePhase, setExamplePhase] = useState<"registering" | "checking" | "submitting" | null>(null);
@@ -454,7 +455,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     {error && <div className="alert error" role="alert">{error}
       <button className="ghost" onClick={() => setError("")}>닫기</button></div>}
     {!hasActiveAnalysis && <details ref={ownDataDetails} className="pipeline-advanced"
-      open={showOwnData || Boolean(initialDatasetId && !exampleBusy)}
+      open={showOwnData}
       onToggle={event => setShowOwnData(event.currentTarget.open)}>
       <summary>내 데이터로 학습하거나 분석 방법 자세히 보기</summary>
     <section className="panel pipeline-start" aria-labelledby="pipeline-start-title">
