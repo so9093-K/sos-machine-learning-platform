@@ -5,7 +5,7 @@ type Phase = "registering" | "checking" | "submitting" | null;
 
 export function ModelLabIntroduction({ definition, example, examplesLoading,
   exampleBusy, examplePhase, canCreateDataset, canRun, catalogError, onRetryCatalog,
-  onStartExample, onOwnData }: {
+  examplesError, onRetryExamples, onStartExample, onOwnData }: {
   definition: PipelineDefinition | null;
   example?: Example;
   examplesLoading: boolean;
@@ -15,6 +15,8 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
   canRun: boolean;
   catalogError: string;
   onRetryCatalog: () => void;
+  examplesError?: string;
+  onRetryExamples?: () => void;
   onStartExample: () => void;
   onOwnData: () => void;
 }) {
@@ -49,8 +51,11 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
         <button type="button" className="secondary" onClick={onRetryCatalog}>
           다시 조회</button></> : "분석 방법을 확인하고 있습니다."}
     </div>}
-    {!examplesLoading && !example && <p role="alert" className="pipeline-first-notice">
-      예제를 찾지 못했습니다. 예제 목록을 확인해 주세요.</p>}
+    {!examplesLoading && !example && <div role="alert" className="pipeline-first-notice">
+      <span>{examplesError ? "예제 목록을 불러오지 못했습니다." : "현재 실행할 예제가 없습니다."}</span>
+      {examplesError && onRetryExamples && <button type="button" className="secondary"
+        onClick={onRetryExamples}>예제 다시 조회</button>}
+    </div>}
     {examplesLoading && <p role="status" className="pipeline-first-notice">예제를 확인하고 있습니다.</p>}
     {(!canCreateDataset || !canRun) && <p className="pipeline-first-notice">
       {!canCreateDataset ? "예제 Dataset 등록 권한" : "Job 실행 권한"}이 없어 실행할 수 없습니다.

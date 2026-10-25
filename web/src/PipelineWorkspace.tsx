@@ -44,7 +44,7 @@ export function filterCandidatesByScoreRange(
 }
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, onUseExample }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, examplesError, onRetryExamples, onUseExample }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
   initialCandidateRowIndex?: number;
   initialAnalysisSection?: PipelineAnalysisSection;
@@ -59,6 +59,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   hasPipelineExample?: boolean;
   example?: Example;
   examplesLoading?: boolean;
+  examplesError?: string;
+  onRetryExamples?: () => void;
   onUseExample?: () => Promise<Dataset>;
   onNavigate: (tab: WorkspaceTab, datasetId: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
@@ -103,6 +105,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   useEffect(() => { if (initialDatasetId) setShowOwnData(true); }, [initialDatasetId]);
   // React 렌더 전 연속 클릭도 단일 제출로 취급한다.
   const exampleSubmitting = useRef(false);
+  const ownSubmitting = useRef(false);
   const [examplePhase, setExamplePhase] = useState<"registering" | "checking" | "submitting" | null>(null);
   useEffect(() => {
     let active = true;
@@ -296,7 +299,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   async function startExample() {
     if (!catalog.some(item => item.id === PIPELINE) ||
         !onUseExample || !hasPipelineExample || !canCreateDataset || !canRun ||
-        exampleSubmitting.current || busy) return;
+        exampleSubmitting.current || ownSubmitting.current || busy) return;
     exampleSubmitting.current = true;
     const previousRevision = datasetSelectionRevision.current;
     const previousRun = selectedRunId.current;
@@ -318,6 +321,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           previousRun !== selectedRunId.current) return;
       setChecked(inspection);
       if (!inspection.ready) {
+        setShowOwnData(true);
         setError("예제 입력 조건을 통과하지 못했습니다: " + inspection.issues.join(" · "));
         return;
       }
@@ -357,7 +361,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     }
   }
   async function start() {
-    if (!datasetId || checked?.dataset_id !== datasetId || !checked.ready || busy || exampleSubmitting.current || !canRun) return;
+    if (!datasetId || checked?.dataset_id !== datasetId || !checked.ready ||
+        busy || exampleSubmitting.current || ownSubmitting.current || !canRun) return;
+    ownSubmitting.current = true;
     const previousRunId = selectedRunId.current;
     const submittedDatasetId = datasetId;
     const revision = datasetSelectionRevision.current;
@@ -376,6 +382,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       if (selectedRunId.current === previousRunId &&
           datasetSelectionRevision.current === revision) setError(formatError(e));
     } finally {
+      ownSubmitting.current = false;
       if (selectedRunId.current === previousRunId &&
           datasetSelectionRevision.current === revision) setBusy(false);
     }
@@ -444,6 +451,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   return <div className="platform-home pipeline-consumer">
     {!hasActiveAnalysis && <ModelLabIntroduction definition={current ?? null}
       example={example} examplesLoading={Boolean(examplesLoading)}
+      examplesError={examplesError ?? ""} onRetryExamples={onRetryExamples}
       catalogError={catalogError} onRetryCatalog={() => setListReload(n => n + 1)}
       exampleBusy={exampleBusy || busy} examplePhase={examplePhase}
       canCreateDataset={Boolean(canCreateDataset)} canRun={canRun}
@@ -459,7 +467,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     {!hasActiveAnalysis && <details ref={ownDataDetails} className="pipeline-advanced"
       open={showOwnData}
       onToggle={event => setShowOwnData(event.currentTarget.open)}>
-      <summary>내 데이터로 학습하거나 분석 방법 자세히 보기</summary>
+      <summary>내 Dataset으로 모델 학습 준비</summary>
     <section className="panel pipeline-prepare" aria-labelledby="pipeline-prepare-title">
       <div className="pipeline-section-heading">
         <div><span className="eyebrow">내 Dataset으로 실행</span>
@@ -578,9 +586,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           </dl>
         </details>
       </div>}
-      {runId && runLoadError && <p className="pipeline-context-error" role="alert">
-        마지막 Run 조회 실패: {runLoadError} · 아래에서 다시 조회할 수 있습니다.
-      </p>}
+      {run && runLoadError && <div className="pipeline-context-error" role="alert">
+        <p>실행 상태를 다시 확인하지 못했습니다: {runLoadError}</p>
+        <button type="button" className="secondary"
+          onClick={() => setRunReload(value => value + 1)}>실행 상태 다시 조회</button>
+      </div>}
     </section>}
     {run?.status === "Succeeded" && <section className="panel pipeline-results-priority"
       aria-labelledby="pipeline-analysis-first-heading">
@@ -620,8 +630,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       </div>}
     </section>}
     {hasActiveAnalysis && <section className="panel pipeline-results"
-      aria-label={run?.status === "Succeeded" ? "이상 후보 탐구 및 실행 근거" : undefined}
-      aria-labelledby={run?.status === "Succeeded" ? undefined : "pipeline-run-heading"}>
+      aria-label={run?.status === "Succeeded" ? "이상 후보 탐구 및 실행 근거"
+        : run ? "학습 진행 및 실행 근거" : undefined}
+      aria-labelledby={!run ? "pipeline-run-heading" : undefined}>
       {!run && <div className="pipeline-section-heading">
         <div><span className="eyebrow">학습 기록</span>
           <h3 id="pipeline-run-heading">학습 결과를 불러오는 중</h3>
@@ -650,7 +661,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <strong>분석이 완료되지 않았습니다.</strong>
           <p>위 오류 코드와 단계별 근거를 확인하세요. 입력 조건 문제라면 Dataset 내용을 확인하고,
             다른 Dataset이나 수정된 판본으로 다시 검사해 새 분석을 시작할 수 있습니다.</p>
-          <button type="button" className="secondary" onClick={() => onNavigate("understanding", datasetId)}>
+          <button type="button" className="secondary" onClick={() => onNavigate("understanding", run.dataset_id)}>
             Dataset 확인 →
           </button>
         </div>}

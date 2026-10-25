@@ -255,11 +255,14 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
         <div><span>Test 데이터</span><strong>{format(testRows)}건</strong></div>
         <div><span>검토할 후보</span><strong>{format(metric(decision, "predicted_anomalies"))}건</strong></div>
       </div>
-      {onInvestigateCandidates && <div className="pipeline-overview-next">
-        <button type="button" onClick={onInvestigateCandidates}>
-          이상 후보 확인하기 →
-        </button>
-      </div>}
+      {metric(decision, "predicted_anomalies") === 0 && <p className="hint">
+        Test 데이터에는 현재 판정 기준을 넘은 후보가 없습니다.</p>}
+      {onInvestigateCandidates && (metric(decision, "predicted_anomalies") ?? 0) > 0 &&
+        <div className="pipeline-overview-next">
+          <button type="button" onClick={onInvestigateCandidates}>
+            이상 후보 확인하기 →
+          </button>
+        </div>}
       <details className="pipeline-distribution-details">
         <summary>점수 분포와 판정 기준 자세히 보기</summary>
         <p>Calibration에서 결정한 판정 점수 기준: {format(policy.threshold)}</p>

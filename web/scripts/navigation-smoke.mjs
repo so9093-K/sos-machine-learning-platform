@@ -314,6 +314,16 @@ try {
     ...props, hasPipelineExample: false, examplesLoading: false, canCreateDataset: true,
   }));
   assert.match(withoutExample, /id="pipeline-example-start"[^>]*disabled=""/);
+  const { ModelLabIntroduction } = await vite.ssrLoadModule("/src/ModelLabIntroduction.tsx");
+  const unavailableExample = renderToStaticMarkup(React.createElement(ModelLabIntroduction, {
+    definition: null, examplesLoading: false, exampleBusy: false, examplePhase: null,
+    canCreateDataset: true, canRun: true, catalogError: "",
+    examplesError: "temporary failure", onRetryExamples: () => {},
+    onRetryCatalog: () => {}, onStartExample: () => {}, onOwnData: () => {},
+  }));
+  assert.match(unavailableExample, /예제 목록을 불러오지 못했습니다/);
+  assert.match(unavailableExample, /예제 다시 조회/);
+  assert.match(unavailableExample, /id="pipeline-example-start"[^>]*disabled=""/);
   const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, datasets: [{ id: "dataset-1", name: "활동 데이터", version: "revision-1", kind: "file" }],
     initialDatasetId: "dataset-1",

@@ -66,6 +66,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   } = usePagedJobs<ExplorationJobSummary>("/api/explorations/jobs");
   const [examples, setExamples] = useState<Example[]>([]);
   const [examplesLoading, setExamplesLoading] = useState(true);
+  const [examplesError, setExamplesError] = useState("");
+  const [examplesReload, setExamplesReload] = useState(0);
   const [reloadRevision, setReloadRevision] = useState(0);
   const { tab, resource, context, navigate: setTab, navigateWithContext,
     selectContext, openResource } = useWorkspaceNavigation();
@@ -261,10 +263,17 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
     refreshDatasets().catch(e => setError(formatError(e)));
     refreshJobs().catch(e => setError(formatError(e)));
     refreshDiscoveryJobs().catch(e => setError(formatError(e)));
-    request<Example[]>("/api/examples").then(setExamples)
-      .catch(e => setError(formatError(e)))
-      .finally(() => setExamplesLoading(false));
   }, []);
+  useEffect(() => {
+    let active = true;
+    setExamplesLoading(true);
+    setExamplesError("");
+    void request<Example[]>("/api/examples")
+      .then(items => { if (active) setExamples(items); })
+      .catch(e => { if (active) { setExamples([]); setExamplesError(formatError(e)); } })
+      .finally(() => { if (active) setExamplesLoading(false); });
+    return () => { active = false; };
+  }, [examplesReload]);
   useEffect(() => {
     // Dataset 전환과 네트워크 재시도를 구분해 작성 중인 변환을 보존한다.
     setVisualColumn(""); setTimeColumn(""); setShowAllPreviewColumns(false);
@@ -509,6 +518,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         hasPipelineExample={examples.some(item => item.id === "activity-anomaly-if")}
         example={examples.find(item => item.id === "activity-anomaly-if")}
         examplesLoading={examplesLoading}
+        examplesError={examplesError}
+        onRetryExamples={() => setExamplesReload(value => value + 1)}
         onUseExample={usePipelineExample}
         initialDatasetId={context.datasetId ?? ""}
         initialRunId={context.pipelineRunId ?? ""}
