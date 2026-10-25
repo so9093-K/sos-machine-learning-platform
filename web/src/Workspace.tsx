@@ -23,6 +23,8 @@ import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
 import { PipelineWorkspace } from "./PipelineWorkspace";
+import { ModelLabHome } from "./ModelLabHome";
+import { ModelLabUse } from "./ModelLabUse";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { MLWorkbench } from "./MLWorkbench";
 import { MLflowResearch } from "./MLflowResearch";
@@ -513,7 +515,20 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           navigateWithContext("pipelines", { datasetId, pipelineRunId: runId });
         }}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
-      {tab === "pipelines" && <PipelineWorkspace datasets={datasets}
+      {tab === "pipelines" && !context.pipelineRunId && !context.datasetId &&
+        !context.pipelineView && <ModelLabHome
+          onUse={() => navigateWithContext("pipelines", { pipelineView: "use" })}
+          onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
+      {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
+        <ModelLabUse key="activity-anomaly" datasets={datasets}
+          hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
+          canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
+          onBack={() => navigateWithContext("pipelines", {})}
+          onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
+      {tab === "pipelines" && (Boolean(context.pipelineRunId) ||
+        context.pipelineView === "learn" ||
+        (Boolean(context.datasetId) && context.pipelineView !== "use")) &&
+        <PipelineWorkspace datasets={datasets}
         canCreateDataset={canWrite}
         hasPipelineExample={examples.some(item => item.id === "activity-anomaly-if")}
         example={examples.find(item => item.id === "activity-anomaly-if")}
@@ -529,7 +544,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         onLoadMoreDatasets={loadMoreDatasets}
         onSelectDataset={id => {
           setSelected(id);
-          navigateWithContext("pipelines", { datasetId: id });
+          navigateWithContext("pipelines", { datasetId: id, pipelineView: "learn" });
         }}
         onSelectRun={(id, datasetId) => {
           setSelected(datasetId);

@@ -57,6 +57,12 @@ try {
     "/models", "?dataset=data-v1"), "training")), "/training?dataset=data-v1");
 
   assert.equal(routeAt("/scoring", "?model=model-v1").context.modelId, "model-v1");
+  assert.equal(contextPath("pipelines", { pipelineView: "learn" }), "/pipelines?view=learn");
+  assert.equal(contextPath("pipelines", { pipelineView: "use" }), "/pipelines?view=use");
+  assert.equal(routeAt("/pipelines", "?view=learn").context.pipelineView, "learn");
+  assert.equal(routeAt("/pipelines", "?view=use").context.pipelineView, "use");
+  assert.equal(routeAt("/pipelines", "?view=unexpected").context.pipelineView, undefined);
+  assert.equal(routeAt("/pipelines", "?run=run-1&view=use").context.pipelineView, undefined);
   assert.equal(contextPath("scoring", { modelId: "name + / ?" }),
     "/scoring?model=name+%2B+%2F+%3F");
   assert.equal(routeAt("/policies", "").context.scoringId, "");
@@ -351,6 +357,14 @@ try {
   assert.equal(routeAt("/model-experience", "").tab, "overview");
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
+  const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
+  const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {
+    onUse: () => {}, onLearn: () => {},
+  }));
+  assert.match(labHome, /모델 사용해보기/);
+  assert.match(labHome, /모델 학습해보기/);
+  assert.match(labHome, /시간대별 활동 패턴/);
+  assert.doesNotMatch(labHome, /이해를 돕는 개념도|실제 결과가 아닙니다/);
   const { PlatformOverview } = await vite.ssrLoadModule("/src/PlatformOverview.tsx");
   const home = renderToStaticMarkup(React.createElement(PlatformOverview, {
     datasets: [], onNavigate: () => {}, onOpenDataset: () => {},

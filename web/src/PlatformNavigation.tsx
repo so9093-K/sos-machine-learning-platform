@@ -13,6 +13,7 @@ export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
 export type MLNavigationContext = {
   datasetId?: string; modelId?: string; scoringId?: string;
   pipelineRunId?: string; pipelineReturn?: boolean; candidateRowIndex?: number;
+  pipelineView?: "learn" | "use";
   pipelineAnalysisSection?: "overview" | "training" | "calibration" | "test";
 };
 type WorkspaceRoute = {
@@ -43,6 +44,8 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
     return {
       datasetId: params.get("dataset") ?? "",
       pipelineRunId: runId,
+      ...(!runId && (params.get("view") === "learn" || params.get("view") === "use")
+        ? { pipelineView: params.get("view") as "learn" | "use" } : {}),
       ...(runId && candidateRowAt(params) !== undefined
         ? { candidateRowIndex: candidateRowAt(params) } : {}),
       ...(runId && analysisSectionAt(params) !== undefined
@@ -71,6 +74,7 @@ export function pipelineRunSelectionContext(
 ): MLNavigationContext {
   return {
     datasetId, pipelineRunId: runId,
+    ...(!runId ? { pipelineView: "learn" as const } : {}),
     ...(runId && runId === previous.pipelineRunId
       ? { candidateRowIndex: previous.candidateRowIndex,
           pipelineAnalysisSection: previous.pipelineAnalysisSection }
@@ -82,6 +86,7 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
   const params = new URLSearchParams();
   if (tab === "pipelines") {
     if (context.datasetId) params.set("dataset", context.datasetId);
+    if (!context.pipelineRunId && context.pipelineView) params.set("view", context.pipelineView);
     if (context.pipelineRunId) params.set("run", context.pipelineRunId);
     if (context.pipelineRunId && context.candidateRowIndex !== undefined)
       params.set("candidate", String(context.candidateRowIndex));
