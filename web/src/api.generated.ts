@@ -2653,6 +2653,8 @@ export interface components {
             id: string;
             /** Label Requirement */
             label_requirement: string;
+            /** Learning Type */
+            learning_type: string;
             /** Limitations */
             limitations: string[];
             /** Model Reuse */
@@ -2665,6 +2667,10 @@ export interface components {
             required_time_column: string;
             /** Stages */
             stages: string[];
+            /** Task Type */
+            task_type: string;
+            /** Topic */
+            topic: string;
             /** Version */
             version: string;
         };
