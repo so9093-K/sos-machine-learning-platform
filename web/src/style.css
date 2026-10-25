@@ -747,20 +747,15 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .model-lab-nav-classification span:last-child { padding-left:12px; }
 .model-lab-topic-trail { display:flex; flex-wrap:wrap; gap:4px; font-size:12px;
   color:var(--sos-muted); margin-bottom:10px; }
-.pipeline-model-try-entry { display:flex; justify-content:space-between;
-  flex-wrap:wrap; align-items:center; gap:16px; background:var(--sos-raised);
-  border:1px solid var(--sos-border); border-radius:12px; padding:16px; margin-top:20px; }
-.pipeline-model-try-entry p { color:var(--sos-muted); font-size:13px; margin:5px 0 0; }
 #pipeline-model-try { margin-top:14px; scroll-margin-top:18px; }
 #pipeline-model-try .pipeline-model-usage { margin:0; }
 .pipeline-candidate-quickstart { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
 .pipeline-candidate-quickstart .hint { margin:0; max-width:550px; }
-@media(max-width:620px) { .pipeline-model-try-entry button { width:100%; } }
 
 /* 학습 결과에서 모델 사용을 즉시 발견할 수 있도록 버튼을 결과 제목에 둔다. */
-.pipeline-analysis-first > .pipeline-section-heading { align-items:center; gap:12px; }
-.pipeline-analysis-first > .pipeline-section-heading > button { flex-shrink:0; }
+.pipeline-results-priority > .pipeline-section-heading { align-items:center; gap:12px; }
+.pipeline-results-priority > .pipeline-section-heading > button { flex-shrink:0; }
 #pipeline-model-try[hidden] { display:none; }
 @media(max-width:620px) {
-  .pipeline-analysis-first > .pipeline-section-heading > button { width:100%; }
+  .pipeline-results-priority > .pipeline-section-heading > button { width:100%; }
 }

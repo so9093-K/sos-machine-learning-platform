@@ -1,10 +1,4 @@
 /** Pipeline Catalog의 독립 분류 차원을 사용자에게 읽을 수 있게 표시한다. */
-export const ACTIVITY_ANOMALY_TOPIC = {
-  learning_type: "unsupervised",
-  task_type: "anomaly_detection",
-  topic: "activity_anomaly",
-} as const;
-
 const learningTypes: Record<string, string> = { unsupervised: "비지도 학습" };
 const taskTypes: Record<string, string> = { anomaly_detection: "이상 탐지" };
 const topics: Record<string, string> = { activity_anomaly: "활동 이상 탐지" };

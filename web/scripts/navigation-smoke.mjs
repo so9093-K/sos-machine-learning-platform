@@ -17,9 +17,10 @@ try {
   const { routeAt, contextPath, nextNavigationContext, resourcePath,
     pipelineRunSelectionContext, ModelAreaNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
-  const { ACTIVITY_ANOMALY_TOPIC, modelLabLabels } =
-    await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
-  assert.deepEqual(modelLabLabels(ACTIVITY_ANOMALY_TOPIC),
+  const { modelLabLabels } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
+  assert.deepEqual(modelLabLabels({
+    learning_type: "unsupervised", task_type: "anomaly_detection", topic: "activity_anomaly",
+  }),
     ["비지도 학습", "이상 탐지", "활동 이상 탐지"]);
   assert.deepEqual(modelLabLabels({
     learning_type: "semi_supervised", task_type: "anomaly_detection", topic: "new_topic",

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ACTIVITY_ANOMALY_TOPIC, modelLabLabels } from "./ModelLabTaxonomy";
+import { request } from "./api";
+import { modelLabLabels } from "./ModelLabTaxonomy";
+import type { PipelineDefinition } from "./types";
 
 export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
@@ -318,6 +320,15 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
   canInspectStorage: boolean;
   canViewAudit: boolean;
 }) {
+  const [supportedTopic, setSupportedTopic] = useState<PipelineDefinition | null>(null);
+  useEffect(() => {
+    let active = true;
+    void request<PipelineDefinition[]>("/api/pipelines")
+      .then(items => {
+        if (active) setSupportedTopic(items.find(item => item.id === "activity-anomaly-if") ?? null);
+      }).catch(() => { if (active) setSupportedTopic(null); });
+    return () => { active = false; };
+  }, []);
   const isCurrent = (tab: WorkspaceTab) =>
     tab === "understanding" ? ["understanding", "preview", "profile"].includes(active)
       : tab === "ml" ? isModelsArea(active)
@@ -325,11 +336,11 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
   return <nav className="global-nav platform-nav" aria-label="플랫폼 메뉴">
     {groups.map(group => <div className="platform-nav-group" key={group.title}>
       <span className="section-title">{group.title}</span>
-      {group.title === "모델 실험실" && <div className="model-lab-nav-classification"
-        aria-label="활동 이상 탐지 분류">
-        <span>{modelLabLabels(ACTIVITY_ANOMALY_TOPIC)[0]}</span>
-        <span>{modelLabLabels(ACTIVITY_ANOMALY_TOPIC)[1]}</span>
-      </div>}
+      {group.title === "모델 실험실" && supportedTopic &&
+        <div className="model-lab-nav-classification" aria-label="활동 이상 탐지 분류">
+          <span>{modelLabLabels(supportedTopic)[0]}</span>
+          <span>{modelLabLabels(supportedTopic)[1]}</span>
+        </div>}
       {group.items.filter(item =>
         (item.tab !== "storage" || canInspectStorage) && (item.tab !== "audit" || canViewAudit)
       ).map(item => <a key={item.tab} href={paths[item.tab]}

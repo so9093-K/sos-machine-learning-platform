@@ -91,6 +91,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   const [candidateReload, setCandidateReload] = useState(0);
   const [candidateScoreRange, setCandidateScoreRange] = useState<PipelineScoreRange | null>(null);
   const [showModelUsage, setShowModelUsage] = useState(false);
+  const [modelUsageVisited, setModelUsageVisited] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(initialCandidateRowIndex ?? null);
   const [busy, setBusy] = useState(false);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
@@ -128,6 +129,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       setCandidateLookupError("");
       setCandidateScoreRange(null);
       setShowModelUsage(false);
+      setModelUsageVisited(false);
       // URL의 Run과 선택 후보는 하나의 탐색 상태다. 이전 Run의 행만 지운 채
       // 이미 URL에 있는 새 Run의 후보 선택을 잃어버리지 않는다.
       setSelectedCandidate(initialCandidateRowIndex ?? null);
@@ -269,6 +271,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     selectedRunId.current = id;
     pendingRunFocus.current = id || null;
     setRunId(id); setRun(null); setRows(null); setSelectedCandidate(null); setError(""); setBusy(false); setCandidateScoreRange(null);
+    setShowModelUsage(false); setModelUsageVisited(false);
     setCandidateError("");
     setCandidateLookupError("");
     setCandidateLookupStatus("idle");
@@ -638,7 +641,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </div>
         {modelRevisionId && <button type="button" className="secondary"
           aria-controls="pipeline-model-try" aria-expanded={showModelUsage}
-          onClick={() => setShowModelUsage(value => !value)}>
+          onClick={() => { setModelUsageVisited(true); setShowModelUsage(value => !value); }}>
           {showModelUsage ? "모델 사용 접기" : "모델 사용해보기 →"}
         </button>}
       </div>
@@ -650,7 +653,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           moveFocusTo("pipeline-candidates-heading");
         }} />
       {modelRevisionId && <div id="pipeline-model-try" hidden={!showModelUsage}>
-        {showModelUsage && <PipelineModelUsage key={modelRevisionId} modelId={modelRevisionId}
+        {modelUsageVisited && <PipelineModelUsage key={modelRevisionId} modelId={modelRevisionId}
           datasets={datasets} hasMoreDatasets={hasMoreDatasets}
           onLoadMoreDatasets={onLoadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}

@@ -756,6 +756,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
         </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
+        canRun={canRun} canCancel={canCancel}
         onScoring={startScoring} onDecision={startDecision} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
         datasets={datasets} preferredModelId={context.modelId ?? ""}

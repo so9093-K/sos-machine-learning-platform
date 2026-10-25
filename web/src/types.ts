@@ -34,6 +34,7 @@ export type ModelRevision = components["schemas"]["ModelRevisionOut"];
 export type MLScoringJob = components["schemas"]["MLScoringJobOut"];
 export type MLScoringJobSummary = components["schemas"]["MLScoringJobSummaryOut"];
 export type MLScoringJobPage = components["schemas"]["MLScoringJobPageOut"];
+export type ScoringObservations = components["schemas"]["ScoringObservationsOut"];
 export type ScoringResult = components["schemas"]["ScoringResultOut"];
 
 export type MLPolicyJob = components["schemas"]["MLPolicyJobOut"];
