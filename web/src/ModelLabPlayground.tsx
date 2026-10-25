@@ -34,6 +34,55 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const submitting = useRef(false);
+  const historyFetching = useRef(false);
+  const [history, setHistory] = useState<Array<Pick<MLPlaygroundJob,
+    "id" | "status" | "spec" | "result" | "created_at">>>([]);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+
+  async function loadHistory(append: boolean) {
+    if (historyFetching.current || (append && !historyCursor)) return;
+    historyFetching.current = true;
+    setHistoryLoading(true); setHistoryError("");
+    try {
+      const cursor = append && historyCursor ? "?cursor=" + encodeURIComponent(historyCursor) : "";
+      const page = await request<{ items: typeof history; next_cursor: string | null }>(
+        "/api/ml/playground/jobs" + cursor);
+      const matching = page.items.filter(item => item.spec.model_revision_id === model.id);
+      setHistory(old => append
+        ? [...old, ...matching.filter(item => !old.some(existing => existing.id === item.id))]
+        : matching);
+      setHistoryCursor(page.next_cursor);
+      setHistoryLoaded(true);
+    } catch (cause) { setHistoryError(formatError(cause)); }
+    finally { historyFetching.current = false; setHistoryLoading(false); }
+  }
+
+  async function reopenHistory(id: string) {
+    if (running) return;
+    setError("");
+    try {
+      const restored = await request<MLPlaygroundJob>(
+        "/api/ml/playground/jobs/" + encodeURIComponent(id));
+      if (restored.spec.model_revision_id !== model.id)
+        throw new Error("현재 모델과 다른 실행 기록입니다.");
+      setJob(restored);
+      setLastScore(restored.status === "Succeeded" &&
+        typeof restored.result?.anomaly_score === "number"
+          ? restored.result.anomaly_score : null);
+      setPreviousScore(null);
+      const saved = restored.spec.features;
+      if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+        const values = saved as Record<string, unknown>;
+        setFields(Object.fromEntries(model.features.map(name => [
+          name, values[name] == null ? "" : String(values[name]),
+        ])));
+        setMode("edit");
+      }
+    } catch (cause) { setError(formatError(cause)); }
+  }
 
   useEffect(() => {
     if (!job || TERMINAL.has(job.status)) return;
@@ -149,5 +198,31 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
       {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error_code ?? "실행 오류"}</p>}
       <p className="hint">점수가 높을수록 모델에서 이례적인 입력입니다. 확률이나 사건 판정은 아닙니다.</p>
     </div>}
+    <details className="model-lab-playground-history" onToggle={event => {
+      if (event.currentTarget.open && !historyLoaded) void loadHistory(false);
+    }}>
+      <summary>이 모델의 이전 체험 결과 다시 보기</summary>
+      <div className="model-lab-history-body">
+        <p className="hint">이전에 제출한 입력과 실제 Job 결과를 선택해 다시 확인할 수 있습니다.</p>
+        <button type="button" className="secondary" disabled={historyLoading}
+          onClick={() => void loadHistory(false)}>실행 기록 새로고침</button>
+        {historyError && <p role="alert">{historyError}</p>}
+        {historyLoading && <p role="status">실행 기록 조회 중…</p>}
+        {historyLoaded && history.length === 0 && <p className="hint">
+          현재 조회한 실행 기록에는 이 모델의 결과가 없습니다.</p>}
+        <div className="model-lab-history-list">
+          {history.map(item => <button type="button" className="surface-button"
+            key={item.id} disabled={running}
+            aria-pressed={job?.id === item.id} onClick={() => void reopenHistory(item.id)}>
+            <span>{new Date(item.created_at).toLocaleString("ko-KR")} · {item.status}</span>
+            <span>결과 보기 →</span>
+          </button>)}
+        </div>
+        {historyCursor && <button type="button" className="secondary"
+          disabled={historyLoading} onClick={() => void loadHistory(true)}>
+          이전 실행 더 조회하기
+        </button>}
+      </div>
+    </details>
   </section>;
 }
