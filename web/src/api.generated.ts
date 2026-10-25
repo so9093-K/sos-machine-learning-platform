@@ -680,6 +680,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/playground/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 단일 관측치 모델 점수화 작업 제출
+         * @description Dataset 등록 없이 입력값을 Worker에서 계산합니다. 입력 Feature는 Job 이력에 보존됩니다.
+         */
+        post: operations["create_playground_job_api_ml_playground_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/playground/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 단일 관측치 점수화 Job 상태·결과 조회 */
+        get: operations["get_playground_job_api_ml_playground_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/playground/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Playground 점수화 취소 요청 */
+        post: operations["cancel_playground_job_api_ml_playground_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/policies/jobs": {
         parameters: {
             query?: never;
@@ -1578,7 +1632,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -1858,7 +1912,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -1871,7 +1925,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import";
+            kind: "profile" | "transform" | "iceberg_import" | "ml_playground";
             /** Request Id */
             request_id?: string | null;
             /** Result */
@@ -1958,7 +2012,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -2059,7 +2113,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -2164,6 +2218,61 @@ export interface components {
         MLForkRequest: {
             params?: components["schemas"]["IsolationForestParameters"] | null;
         };
+        /** MLPlaygroundJobOut */
+        MLPlaygroundJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string | null;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_playground";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /**
+         * MLPlaygroundRequest
+         * @description Dataset 없이 명시한 소량 관측치. Job 입력으로 감사·보존된다.
+         */
+        MLPlaygroundRequest: {
+            /** Features */
+            features: {
+                [key: string]: number | null;
+            };
+            /** Model Revision Id */
+            model_revision_id: string;
+        };
         /** MLPolicyJobOut */
         MLPolicyJobOut: {
             /** Attempts */
@@ -2173,7 +2282,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -2281,7 +2390,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -2468,7 +2577,7 @@ export interface components {
             /** Created At */
             created_at: string;
             /** Dataset Id */
-            dataset_id: string;
+            dataset_id: string | null;
             /** Error */
             error: string | null;
             /** Error Code */
@@ -4552,6 +4661,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_playground_job_api_ml_playground_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLPlaygroundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPlaygroundJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_playground_job_api_ml_playground_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPlaygroundJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_playground_job_api_ml_playground_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLPlaygroundJobOut"];
                 };
             };
             /** @description Structured API error */
