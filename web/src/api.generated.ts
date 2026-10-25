@@ -4731,6 +4731,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string | null;
+                model_revision_id?: string | null;
             };
             header?: never;
             path?: never;
