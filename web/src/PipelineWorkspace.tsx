@@ -617,12 +617,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       aria-label={run?.status === "Succeeded" ? "이상 후보 탐구 및 실행 근거" : undefined}
       aria-labelledby={run?.status === "Succeeded" ? undefined : "pipeline-run-heading"}>
       {!run && <div className="pipeline-section-heading">
-        <div><span className="eyebrow">학습 과정</span>
-          <h3 id="pipeline-run-heading">{run ? "학습 진행 상태" : "학습 결과"}</h3>
-          <p>{run ? "현재 진행 상황과 다음 행동을 확인하세요." :
-            "선택한 학습 결과를 불러오고 있습니다."}</p>
+        <div><span className="eyebrow">학습 기록</span>
+          <h3 id="pipeline-run-heading">학습 결과를 불러오는 중</h3>
         </div>
-        {run && <span className="chip">{statusLabel[run.status]}{run.cancel_requested ? " · 취소 요청됨" : ""}</span>}
       </div>}
       {!run && <div className="pipeline-next-step" role={runLoadError ? "alert" : "status"}>
         <strong>{runId ? runLoadError ? "선택한 실행을 조회하지 못했습니다." :
