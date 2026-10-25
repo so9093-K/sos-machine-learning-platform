@@ -756,3 +756,11 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .pipeline-candidate-quickstart { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
 .pipeline-candidate-quickstart .hint { margin:0; max-width:550px; }
 @media(max-width:620px) { .pipeline-model-try-entry button { width:100%; } }
+
+/* 학습 결과에서 모델 사용을 즉시 발견할 수 있도록 버튼을 결과 제목에 둔다. */
+.pipeline-analysis-first > .pipeline-section-heading { align-items:center; gap:12px; }
+.pipeline-analysis-first > .pipeline-section-heading > button { flex-shrink:0; }
+#pipeline-model-try[hidden] { display:none; }
+@media(max-width:620px) {
+  .pipeline-analysis-first > .pipeline-section-heading > button { width:100%; }
+}

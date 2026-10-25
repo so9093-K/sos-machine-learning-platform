@@ -21,6 +21,7 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [labelColumn, setLabelColumn] = useState("");
   const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [columnsDatasetId, setColumnsDatasetId] = useState("");
   const [columnError, setColumnError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
@@ -38,13 +39,16 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
   useEffect(() => {
     let alive = true;
     setColumns([]);
+    setColumnsDatasetId("");
     setLabelColumn("");
     setColumnError("");
     setColumnStatus(datasetId ? "loading" : "idle");
     if (datasetId) {
       void request<DatasetColumns>(`/api/datasets/${encodeURIComponent(datasetId)}/columns`)
         .then(data => {
-          if (alive) { setColumns(data.columns); setColumnStatus("ready"); }
+          if (alive) {
+            setColumns(data.columns); setColumnsDatasetId(datasetId); setColumnStatus("ready");
+          }
         })
         .catch(e => {
           if (alive) { setColumnError(formatError(e)); setColumnStatus("error"); }
@@ -90,9 +94,10 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
     return () => { alive = false; };
   }, [selectedJob?.status, selectedJob?.result?.scoring_result_id]);
 
-  const missingFeatures = columnStatus === "ready"
+  const checkedColumns = columnStatus === "ready" && columnsDatasetId === datasetId;
+  const missingFeatures = checkedColumns
     ? model.features.filter(feature => !columns.some(col => col.name === feature)) : [];
-  const inputReady = datasetId !== "" && columnStatus === "ready" && missingFeatures.length === 0;
+  const inputReady = datasetId !== "" && checkedColumns && missingFeatures.length === 0;
   async function create() {
     if (submitted || !canRun || !inputReady) return;
     setSubmitted(true);
@@ -151,7 +156,11 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
     <div className="form-row">
       <label>모델에 적용할 Dataset
         <select aria-label="모델에 적용할 Dataset" value={datasetId}
-          onChange={e => setDatasetId(e.target.value)}>
+          onChange={e => {
+            setDatasetId(e.target.value);
+            setColumnStatus("idle"); setColumnsDatasetId("");
+            setColumns([]); setLabelColumn("");
+          }}>
           <option value="">Dataset 선택</option>
           {datasets.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
         </select>
@@ -167,20 +176,21 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
     </div>
     {columnStatus === "loading" && <p role="status">Dataset의 입력 컬럼을 확인하는 중입니다.</p>}
     {columnStatus === "error" && <p role="alert">입력 컬럼을 조회하지 못했습니다: {columnError}</p>}
-    {columnStatus === "ready" && missingFeatures.length > 0 &&
+    {checkedColumns && missingFeatures.length > 0 &&
       <div role="alert" className="pipeline-readiness-blocked">
         <strong>필수 Feature {missingFeatures.length}개가 없습니다.</strong>
         <p>{missingFeatures.slice(0, 6).join(", ")}
           {missingFeatures.length > 6 ? " 외 " + (missingFeatures.length - 6) + "개" : ""}</p>
         <p>학습 모델과 호환되는 Dataset을 선택하세요.</p>
       </div>}
-    {columnStatus === "ready" && missingFeatures.length === 0 && <p role="status">
+    {checkedColumns && missingFeatures.length === 0 && <p role="status">
       필수 Feature {model.features.length}개 이름을 확인했습니다. 자료형과 결측 조건은 실행 시에도 검증합니다.
     </p>}
     <p className="hint">학습 모델의 Feature 이름·자료형이 맞아야 합니다. 이상 점수는 사건 확률이 아닙니다.
       정답 레이블을 지정한 경우에만 지원되는 순위 지표를 계산합니다.</p>
     {datasetId === model.dataset_id && <p className="hint">
-      이 모델의 학습에 사용한 Dataset입니다. 여기에 적용한 점수는 독립적인 Test 성능이 아닙니다.
+      학습 시 사용한 Dataset과 ID가 같습니다. Dataset 판본을 확인하세요.
+      동일 학습 판본에 적용한 점수는 독립적인 Test 성능이 아닙니다.
     </p>}
     <button disabled={!canRun || submitted || !inputReady} onClick={() => void create()}>
       {submitted ? "점수 계산 요청 중…" : "이 Dataset으로 모델 사용하기 →"}
@@ -204,6 +214,8 @@ export function MLScoringPanel({ model, datasets, canRun, canCancel, onOpenResul
         Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
         Failed: "실패", Cancelled: "취소됨",
       } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>
+      <p className="hint">대상 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
+        "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>
       {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
         !selectedJob.cancel_requested &&
         <button className="secondary" onClick={() => void cancel()}>Scoring 취소 요청</button>}

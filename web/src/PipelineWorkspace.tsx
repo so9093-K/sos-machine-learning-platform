@@ -230,6 +230,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     pendingRunFocus.current = null;
     moveFocusTo(run.status === "Succeeded" ? "pipeline-analysis-first-heading" : "pipeline-current-run-heading");
   }, [run?.id, run?.status]);
+  useEffect(() => {
+    if (showModelUsage && run?.status === "Succeeded") {
+      moveFocusTo("pipeline-model-usage-title");
+    }
+  }, [showModelUsage, run?.id, run?.status]);
   function moveFocusTo(targetId: string) {
     requestAnimationFrame(() => {
       const target = document.getElementById(targetId);
@@ -631,6 +636,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <h3 id="pipeline-analysis-first-heading" tabIndex={-1}>학습한 모델과 이상 탐지 결과</h3>
           <p>학습 분포와 판정 기준, 다른 시간 구간의 이상 후보를 연결해 탐구합니다.</p>
         </div>
+        {modelRevisionId && <button type="button" className="secondary"
+          aria-controls="pipeline-model-try" aria-expanded={showModelUsage}
+          onClick={() => setShowModelUsage(value => !value)}>
+          {showModelUsage ? "모델 사용 접기" : "모델 사용해보기 →"}
+        </button>}
       </div>
       <PipelineAnalysis run={run} onOpenResource={onOpenResource}
         initialSection={initialAnalysisSection} onSectionChange={onSelectAnalysisSection}
@@ -639,20 +649,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           setCandidateScoreRange(range);
           moveFocusTo("pipeline-candidates-heading");
         }} />
-      {modelRevisionId && <div className="pipeline-model-try-entry">
-        <div><strong>학습한 모델을 사용해 볼까요?</strong>
-          <p>다른 Dataset에 적용해 실제 이상 점수를 계산합니다. 새 학습은 필요하지 않습니다.</p>
-        </div>
-        <button type="button" aria-expanded={showModelUsage}
-          aria-controls="pipeline-model-try"
-          onClick={() => setShowModelUsage(value => !value)}>
-          {showModelUsage ? "모델 사용 접기" : "모델 사용해보기 →"}
-        </button>
-      </div>}
-      {modelRevisionId && showModelUsage && <div id="pipeline-model-try">
-        <PipelineModelUsage key={modelRevisionId} modelId={modelRevisionId}
+      {modelRevisionId && <div id="pipeline-model-try" hidden={!showModelUsage}>
+        {showModelUsage && <PipelineModelUsage key={modelRevisionId} modelId={modelRevisionId}
           datasets={datasets} canRun={canRun} canCancel={canCancel}
-          onOpenResource={onOpenResource} />
+          onOpenResource={onOpenResource} />}
       </div>}
     </section>}
     {hasActiveAnalysis && <section className="panel pipeline-results"

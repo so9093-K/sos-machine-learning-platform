@@ -32,7 +32,7 @@ export function PipelineModelUsage({ modelId, datasets, canRun, canCancel, onOpe
   return <section className="panel pipeline-model-usage" aria-labelledby="pipeline-model-usage-title">
     <div className="pipeline-section-heading"><div>
       <span className="eyebrow">모델 실험실 · 모델 체험</span>
-      <h3 id="pipeline-model-usage-title">학습한 모델 사용해보기</h3>
+      <h3 id="pipeline-model-usage-title" tabIndex={-1}>학습한 모델 사용해보기</h3>
       <p>Dataset을 선택하고 기존 모델로 실제 이상 점수를 계산합니다.
         재학습하지 않으며 원래 Test 결과를 변경하지 않습니다.</p>
     </div></div>
