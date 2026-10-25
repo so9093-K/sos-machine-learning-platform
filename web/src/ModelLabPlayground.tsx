@@ -122,9 +122,11 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [job?.id, job?.status]);
 
+  const featureDtypes = Array.isArray(model.runtime.feature_dtypes)
+    ? model.runtime.feature_dtypes as string[] : [];
   const input = model.features.map((name, index) => {
     const raw = fields[name]?.trim() ?? "";
-    const dtype = String(model.runtime.feature_dtypes?.[index] ?? "");
+    const dtype = String(featureDtypes[index] ?? "");
     return { name, value: raw ? Number(raw) : null,
       valid: playgroundNumberValid(raw, dtype) };
   });
@@ -155,7 +157,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   const otherNames = model.features.slice(6);
   const featureField = (name: string) => <label className="model-lab-feature" key={name}>
     <span>{activityFeatureLabel(name)} <small>{name} · {
-      model.runtime.feature_dtypes?.[model.features.indexOf(name)] ?? "자료형 미확인"
+      featureDtypes[model.features.indexOf(name)] ?? "자료형 미확인"
     }</small></span>
     <input type="number" inputMode="decimal" step="any" value={fields[name] ?? ""}
       disabled={mode === "example" || running}
