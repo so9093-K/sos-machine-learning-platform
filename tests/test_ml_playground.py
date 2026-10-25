@@ -29,6 +29,14 @@ def test_playground_feature_order_and_input_validation():
         ordered_playground_input(model, {"a": True, "b": 2})
     with pytest.raises(ValueError, match="must be an integer"):
         ordered_playground_input(model, {"a": 1.5, "b": 2.4})
+    with pytest.raises(ValueError, match="dtype range"):
+        ordered_playground_input({**model, "runtime": {
+            **model["runtime"], "feature_dtypes": ["Float64", "Int8"],
+        }}, {"a": 1.5, "b": 128})
+    with pytest.raises(ValueError, match="dtype range"):
+        ordered_playground_input({**model, "runtime": {
+            **model["runtime"], "feature_dtypes": ["Float32", "Int64"],
+        }}, {"a": 1e39, "b": 2})
     with pytest.raises(ValueError, match="finite"):
         ordered_playground_input(model, {"a": math.inf, "b": 2})
     with pytest.raises(ValueError, match="exact float64"):
@@ -106,3 +114,36 @@ def test_playground_api_request_disallows_coerced_feature_types():
     for value in ("2", True):
         with pytest.raises(ValidationError):
             MLPlaygroundRequest(model_revision_id="m", features={"a": value})
+
+
+
+def test_model_filtered_history_runs_filter_before_pagination():
+    """Job 저장소의 SQL 모델 필터는 LIMIT 앞에서 적용되고 Actor 경계도 유지한다."""
+    from contextlib import nullcontext
+
+    from sos_platform.store import Store
+
+    executed = []
+
+    class EmptyResult:
+        def mappings(self):
+            return self
+
+        def all(self):
+            return []
+
+    class FakeConnection:
+        def execute(self, query, params):
+            executed.append((str(query), params))
+            return EmptyResult()
+
+    fake = SimpleNamespace(connection=lambda: nullcontext(FakeConnection()))
+    assert Store.jobs(fake, kind="ml_playground", actor_id="actor-1",
+                      model_revision_id="model-1", limit=10) == []
+    statement, params = executed[0]
+    assert "spec::jsonb ->> 'model_revision_id'" in statement
+    assert "owner_actor=:actor_id" in statement
+    assert "kind=:kind" in statement
+    assert statement.index("model_revision_id") < statement.index("LIMIT")
+    assert params["model_revision_id"] == "model-1"
+    assert params["actor_id"] == "actor-1"

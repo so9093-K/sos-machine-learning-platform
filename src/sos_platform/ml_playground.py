@@ -21,6 +21,12 @@ def ordered_playground_input(model: dict, values: dict) -> list[float]:
     for index, name in enumerate(features):
         value = values[name]
         dtype = expected_dtypes[index]
+        if dtype not in (
+            "Int8", "Int16", "Int32", "Int64",
+            "UInt8", "UInt16", "UInt32", "UInt64",
+            "Float32", "Float64",
+        ):
+            raise ValueError("Unsupported Playground Feature dtype")
         if value is None:
             if not allows_missing:
                 raise ValueError("This model does not support missing values")
@@ -31,10 +37,17 @@ def ordered_playground_input(model: dict, values: dict) -> list[float]:
             raise ValueError("Playground integer exceeds exact float64 range")
         elif not math.isfinite(value):
             raise ValueError("Non-finite Playground value")
-        elif dtype.startswith(("Int", "UInt")) and (
-            not float(value).is_integer() or (dtype.startswith("UInt") and value < 0)
-        ):
+        elif dtype.startswith(("Int", "UInt")) and not float(value).is_integer():
             raise ValueError("Integer Playground Feature must be an integer")
+        elif dtype.startswith(("Int", "UInt")):
+            bits = int(dtype[4:] if dtype.startswith("UInt") else dtype[3:])
+            minimum = 0 if dtype.startswith("UInt") else -(2 ** (bits - 1))
+            maximum = 2**bits - 1 if dtype.startswith("UInt") else 2 ** (bits - 1) - 1
+            if not minimum <= value <= maximum:
+                raise ValueError("Integer Playground Feature is outside its dtype range")
+            ordered.append(float(value))
+        elif dtype == "Float32" and abs(value) > float(np.finfo(np.float32).max):
+            raise ValueError("Float32 Playground Feature is outside its dtype range")
         else:
             ordered.append(float(value))
     return ordered

@@ -20,6 +20,23 @@ export function exampleValues(model: ModelRevision): Record<string, string> | nu
   }));
 }
 
+export function playgroundNumberValid(raw: string, dtype: string): boolean {
+  if (!raw.trim()) return false;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return false;
+  if (/^U?Int(8|16|32|64)$/.test(dtype)) {
+    if (!Number.isSafeInteger(value)) return false;
+    const bits = Number(dtype.match(/\d+$/)?.[0] ?? "0");
+    const unsigned = dtype.startsWith("UInt");
+    const low = unsigned ? 0 : -(2 ** (bits - 1));
+    const high = Math.min(Number.MAX_SAFE_INTEGER,
+      unsigned ? 2 ** bits - 1 : 2 ** (bits - 1) - 1);
+    return value >= low && value <= high;
+  }
+  if (dtype === "Float32") return Math.abs(value) <= 3.4028234663852886e38;
+  return dtype === "Float64";
+}
+
 export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   model: ModelRevision; canRun: boolean; canCancel: boolean; onDataset: () => void;
 }) {
@@ -105,11 +122,11 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [job?.id, job?.status]);
 
-  const input = model.features.map(name => {
+  const input = model.features.map((name, index) => {
     const raw = fields[name]?.trim() ?? "";
-    if (!raw) return { name, value: null, valid: false };
-    const n = Number(raw);
-    return { name, value: n, valid: Number.isFinite(n) && !/^\s*(?:true|false)\s*$/i.test(raw) };
+    const dtype = String(model.runtime.feature_dtypes?.[index] ?? "");
+    return { name, value: raw ? Number(raw) : null,
+      valid: playgroundNumberValid(raw, dtype) };
   });
   const invalid = input.filter(item => !item.valid);
   const running = sending || Boolean(job && !TERMINAL.has(job.status));
@@ -137,7 +154,9 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   const shortNames = model.features.slice(0, 6);
   const otherNames = model.features.slice(6);
   const featureField = (name: string) => <label className="model-lab-feature" key={name}>
-    <span>{activityFeatureLabel(name)} <small>{name}</small></span>
+    <span>{activityFeatureLabel(name)} <small>{name} · {
+      model.runtime.feature_dtypes?.[model.features.indexOf(name)] ?? "자료형 미확인"
+    }</small></span>
     <input type="number" inputMode="decimal" step="any" value={fields[name] ?? ""}
       disabled={mode === "example" || running}
       onChange={event => setFields(current => ({ ...current, [name]: event.target.value }))}
@@ -170,7 +189,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
       <div className="model-lab-input-grid">{otherNames.map(featureField)}</div>
     </details>}
     {invalid.length > 0 && <p role="alert" className="model-lab-input-error">
-      입력하지 않았거나 숫자로 해석할 수 없는 Feature {invalid.length}개가 있습니다.
+      필수 입력값이나 자료형·정수 범위가 맞지 않는 Feature {invalid.length}개가 있습니다.
+      {invalid.length <= 3 && " 확인: " + invalid.map(item => activityFeatureLabel(item.name)).join(", ")}
     </p>}
     <p className="hint">입력 Feature {model.features.length}개가 실제 모델에 전달됩니다.
       실행을 요청하면 입력값과 결과가 권한이 적용되는 Job 이력에 보존됩니다.</p>
