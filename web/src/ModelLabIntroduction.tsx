@@ -93,7 +93,7 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
         <h3>내 데이터로 실험</h3>
         <p>현재 분석의 필수 Feature와 시간 컬럼을 확인하고, 원하는 Dataset으로 시작합니다.</p>
         <button type="button" className="secondary" onClick={onOwnData}>
-          내 Dataset 입력 확인하기 →
+          내 데이터로 시작하기 →
         </button>
       </div>
     </div>

@@ -749,15 +749,15 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                 {shownCandidates.length > 0 && <div className="pipeline-candidate-top-panel">
                   <div className="pipeline-candidate-top-heading">
                     <strong>먼저 살펴볼 상위 후보</strong>
-                    <span>현재 불러온 점수순 후보 중 상위 {count(Math.min(3, shownCandidates.length))}건
-                      · 점수가 사건의 확정을 의미하지는 않습니다.</span>
+                    <span>현재 불러온 목록에서 필터를 적용한 후 먼저 표시한 {count(Math.min(3, shownCandidates.length))}건
+                      · 전체 점수 순위가 아니며 실제 사건의 확정도 아닙니다.</span>
                   </div>
                   <div className="pipeline-candidate-top-list" aria-label="상위 이상 점수 후보">
                     {shownCandidates.slice(0, 3).map((item, i) => <button
                       key={item.row_index} type="button" className="ghost pipeline-candidate-top-item"
                       aria-pressed={selectedCandidate === item.row_index}
                       onClick={() => selectCandidateRow(item.row_index)}>
-                      <span className="pipeline-candidate-top-rank">#{i+1}</span>
+                      <span className="pipeline-candidate-top-rank">표시 {i+1}</span>
                       <span className="pipeline-candidate-top-meta">
                         <strong>결과 행 {count(item.row_index)}</strong>
                         {item.observed_at && <small>관측 시각 {item.observed_at}</small>}
