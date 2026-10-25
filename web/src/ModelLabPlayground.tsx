@@ -109,8 +109,11 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
         if (alive) {
           setJob(next);
           const value = next.result?.anomaly_score;
-          if (next.status === "Succeeded" && typeof value === "number" && Number.isFinite(value))
-            setLastScore(value);
+          if (next.status === "Succeeded") {
+            if (typeof value === "number" && Number.isFinite(value))
+              setLastScore(value);
+            else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
+          }
         }
       } catch (cause) {
         if (alive) setError("실행 상태 조회 실패: " + formatError(cause));
@@ -143,6 +146,13 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
         features: Object.fromEntries(input.map(item => [item.name, item.value])),
       });
       setJob(created);
+      // 동일 멱등 키 재제출 시 이미 성공한 Job이 응답할 수 있다.
+      // 완료 응답을 Polling 전용 경로에만 기대하면 점수가 사라진다.
+      if (created.status === "Succeeded") {
+        const score = created.result?.anomaly_score;
+        if (typeof score === "number" && Number.isFinite(score)) setLastScore(score);
+        else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
+      }
     } catch (cause) { setError(formatError(cause)); }
     finally { submitting.current = false; setSending(false); }
   }

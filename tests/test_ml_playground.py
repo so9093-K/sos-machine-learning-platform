@@ -147,3 +147,21 @@ def test_model_filtered_history_runs_filter_before_pagination():
     assert statement.index("model_revision_id") < statement.index("LIMIT")
     assert params["model_revision_id"] == "model-1"
     assert params["actor_id"] == "actor-1"
+
+
+
+def test_playground_model_history_index_matches_migration_predicate():
+    """모델별 이력 조회용 부분 인덱스가 PostgreSQL 정본 메타데이터에 포함된다."""
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy.schema import CreateIndex
+
+    from sos_platform.schema_db import jobs
+
+    item = next(
+        index for index in jobs.indexes
+        if index.name == "ix_jobs_playground_model_actor_created"
+    )
+    definition = str(CreateIndex(item).compile(dialect=postgresql.dialect()))
+    assert "spec::jsonb ->> 'model_revision_id'" in definition
+    assert "WHERE kind = 'ml_playground'" in definition
+    assert "created_at DESC" in definition

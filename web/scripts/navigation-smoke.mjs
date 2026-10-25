@@ -395,6 +395,20 @@ try {
   };
   assert.deepEqual(exampleValues(exampleModel), { cnt_proc_exec: "12", cnt_file_del: "2" });
   assert.equal(exampleValues({ ...exampleModel, runtime: {} }), null);
+  const { playgroundNumberValid } = await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
+  assert.ok(playgroundNumberValid("12", "Int64"));
+  assert.ok(!playgroundNumberValid("12.3", "Int64"));
+  assert.ok(!playgroundNumberValid("128", "Int8"));
+  assert.ok(!playgroundNumberValid("-1", "UInt8"));
+  assert.ok(!playgroundNumberValid("1e39", "Float32"));
+  assert.ok(playgroundNumberValid("1.75", "Float32"));
+  const manualHtml = renderToStaticMarkup(React.createElement(ModelLabPlayground, {
+    model: { ...exampleModel, runtime: { feature_dtypes: ["Int64", "Int64"] } },
+    canRun: true, canCancel: false, onDataset: () => {},
+  }));
+  assert.match(manualHtml, /직접 수정해보기/);
+  assert.match(manualHtml, /기준값으로 체험/);
+  assert.match(manualHtml, /이 모델 판본에는 초기 입력 기준값이 없어/);
   const playgroundHtml = renderToStaticMarkup(React.createElement(ModelLabPlayground, {
     model: exampleModel, canRun: true, canCancel: true, onDataset: () => {},
   }));
