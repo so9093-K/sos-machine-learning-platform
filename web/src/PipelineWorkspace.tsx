@@ -562,7 +562,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     </section>
     </details>}
 
-    {hasActiveAnalysis && run?.status !== "Succeeded" && <section className="panel pipeline-run-context" aria-labelledby="pipeline-current-run-heading">
+    {hasActiveAnalysis && run && run.status !== "Succeeded" && <section className="panel pipeline-run-context" aria-labelledby="pipeline-current-run-heading">
       <div className="pipeline-run-context-header">
         <div>
           <span className="eyebrow">학습 · 결과 탐구</span>
