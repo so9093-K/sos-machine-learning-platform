@@ -138,8 +138,11 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         {models.map(({ revision, version }) => <button key={revision.id} type="button"
           className="model-lab-model-choice" aria-pressed={selectedModelId === revision.id}
           onClick={() => onSelectModel(revision.id)}>
-          <span><strong>Isolation Forest</strong>
-            <small>학습일 {revision.created_at.slice(0, 10)} · MLflow v{version.version}</small></span>
+          <span><strong>Isolation Forest · v{version.version}</strong>
+            <small>학습 시각 {new Date(revision.created_at).toLocaleString("ko-KR")}</small>
+            <small>학습 Dataset: {datasets.find(item => item.id === revision.dataset_id)?.name ??
+              "현재 목록에서 조회되지 않은 Dataset"} · 입력 Feature {revision.features.length}개</small>
+          </span>
           <span>{selectedModelId === revision.id ? "선택됨" : "선택 →"}</span>
         </button>)}
       </div>
