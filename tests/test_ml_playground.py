@@ -68,3 +68,41 @@ def test_playground_actual_adapter_and_no_dataset(monkeypatch, tmp_path):
     }
     with pytest.raises(ValueError, match="unavailable"):
         run_playground_scoring(store, {**spec, "model_owner_actor": "wrong-actor"})
+
+
+def test_playground_score_matches_trained_isolation_forest(monkeypatch, tmp_path):
+    """동일 모델을 통한 Playground 계산과 기존 모델 어댑터의 점수가 일치한다."""
+    import numpy as np
+    from sklearn.ensemble import IsolationForest
+    from sos_platform.ml_isolation_forest import IsolationForestConfig, TrainedIsolationForest
+
+    train = np.array([[1.0, 2.0], [2.0, 5.0], [3.0, 8.0], [50.0, 100.0]])
+    estimator = IsolationForest(n_estimators=12, random_state=42).fit(train)
+    adapter = TrainedIsolationForest(
+        estimator, IsolationForestConfig(n_estimators=12), n_features=2,
+    )
+    monkeypatch.setattr(
+        "sos_platform.ml_playground.load_trusted_isolation_forest",
+        lambda model, scratch: adapter,
+    )
+    model = _model(legacy=True)
+    store = SimpleNamespace(get_model_revision=lambda _: model, home=tmp_path)
+    values = {"b": 5, "a": 2.0}
+    result = run_playground_scoring(store, {
+        "model_revision_id": model["id"], "model_owner_actor": model["owner_actor"],
+        "features": values,
+    })
+    assert result["anomaly_score"] == adapter.score_anomalies(
+        np.array([[2.0, 5.0]])
+    )[0]
+
+
+def test_playground_api_request_disallows_coerced_feature_types():
+    """API 앞단에서 Boolean이나 숫자 문자열을 임의로 수치화하지 않는다."""
+    from pydantic import ValidationError
+    from sos_platform.schemas import MLPlaygroundRequest
+
+    assert MLPlaygroundRequest(model_revision_id="m", features={"a": 2}).features == {"a": 2}
+    for value in ("2", True):
+        with pytest.raises(ValidationError):
+            MLPlaygroundRequest(model_revision_id="m", features={"a": value})
