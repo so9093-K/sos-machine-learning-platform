@@ -7,6 +7,7 @@ from .mlflow_errors import MLflowDeliveryError
 from .mlflow_tracking import MLflowClient
 from .mlflow_registry import registered_model_name
 from .mlflow_config import MLflowSettings
+from .errors import RuntimeConfigurationError
 from .object_store import ObjectStore
 from .security import Actor, require
 from .store import Store
@@ -136,12 +137,19 @@ def model_deletion_router(store: Store) -> APIRouter:
     ):
         if not confirm:
             raise HTTPException(status_code=422,detail="Deletion requires explicit confirmation")
+        # 설정 오류로 삭제 의도만 Deleting에 남기지 않도록 먼저 확인한다.
+        try:
+            settings = MLflowSettings.from_env()
+        except RuntimeConfigurationError as exc:
+            raise HTTPException(status_code=503, detail="MLflow configuration is invalid") from exc
+        if settings is None:
+            raise HTTPException(status_code=503, detail="MLflow management is unavailable")
         row=begin_delete(store,revision_id,actor)
         if row["lifecycle_state"]=="Deleted":
             return {"model_id":revision_id,"state":"Deleted"}
         # SOS는 실제 Registry와 S3 객체가 삭제되기 전까지 Deleting을 유지한다.
         try:
-            client=MLflowClient(MLflowSettings.from_env())
+            client=MLflowClient(settings)
             try:
                 client.delete("model-versions/delete", {
                     "name":row["registry_model"],"version":row["registry_version"],
