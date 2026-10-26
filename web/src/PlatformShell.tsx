@@ -65,9 +65,13 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
       {localOperatorHost && (canInspectStorage || canViewAudit) && <div className="operator-tools">
         <span className="eyebrow">로컬 운영 도구</span>
         <a href="http://localhost:9607" target="_blank" rel="noopener noreferrer">
-          Dagster Workflow · 실행 기록 ↗
+          Dagster · Workflow Run/실행 로그 ↗
         </a>
-        <small>현재 PC에서만 접속할 수 있습니다. SOS 로그인과 별도인 관리자용 UI입니다.</small>
+        <a href="http://localhost:9606" target="_blank" rel="noopener noreferrer">
+          MLflow · 연구 Run/모델 Registry ↗
+        </a>
+        <small>운영자용 별도 관리 UI입니다. 같은 PC에서만 접속할 수 있으며
+          SOS 로그인 권한이 이 도구에 적용되는 것은 아닙니다.</small>
       </div>}
       <div className="sidebar-bottom">
         <a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a>
