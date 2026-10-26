@@ -47,11 +47,18 @@ export function MLTrackingDetails({ status, error }: {
         : status.state === "Succeeded"
           ? `MLflow 기록 완료 · Run ID ${status.run_id ?? "미확인"}`
           : status.state === "Retry"
-            ? `MLflow 기록·등록 재시도 대기 · 시도 ${status.attempts}회`
-            : status.state === "Sending" ? "외부 전송 중" : "MLflow 기록 대기"}
+            ? `MLflow 기록·모델 등록 실패 · 자동 재시도 대기 (시도 ${status.attempts}회)`
+            : status.state === "Sending" ? "MLflow 기록·등록 전송 중" : "MLflow 기록 대기"}
     </p>}
     {status?.last_error_code && status.state === "Retry" &&
-      <p className="hint">MLflow 연동 오류 코드: {status.last_error_code}. 플랫폼 Job 결과는 바뀌지 않으며 학습 모델은 등록 전 사용할 수 없습니다.</p>}
+      <div className="pipeline-readiness-blocked" role="alert">
+        <strong>모델이 아직 Registry에 등록되지 않았습니다.</strong>
+        <p>오류 코드: {status.last_error_code}</p>
+        <p>{status.last_error_code === "SOS-MLFLOW-HTTP-404-registered-models_get"
+          ? "등록할 모델 이름을 조회하는 과정에서 MLflow가 404를 반환했습니다. 첫 등록 순서 또는 Registry 상태를 운영자가 확인해야 합니다."
+          : "MLflow 등록 서버·모델 판본·응답 상태를 운영자가 확인해야 합니다."}
+          {" "}학습 결과는 유지됩니다. 같은 학습을 새로 제출해 해결하려 하지 마세요.</p>
+      </div>}
     {error && <p role="alert">{error}</p>}
   </div>;
 }
