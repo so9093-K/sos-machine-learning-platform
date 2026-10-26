@@ -102,6 +102,14 @@ try {
     "/scoring/results/result-a?from=model-lab&model=model-a&group=anomaly-team");
   assert.equal(routeAt("/scoring/results/result-a",
     "?from=model-lab&model=model-a&group=anomaly-team").context.modelGroupKey, "anomaly-team");
+  const groupedDecision = contextPath("policies", {
+    scoringId: "score-a", modelLabReturn: true, modelId: "model-a",
+    modelGroupKey: "anomaly-team",
+  });
+  assert.equal(groupedDecision,
+    "/policies?scoring=score-a&from=model-lab&model=model-a&group=anomaly-team");
+  assert.equal(routeAt("/policies", "?scoring=score-a&from=model-lab&model=model-a&group=anomaly-team")
+    .context.modelGroupKey, "anomaly-team");
 
   assert.equal(routeAt("/pipelines", "?view=learn&model=model-one").context.modelId, undefined);
   assert.equal(routeAt("/pipelines", "?view=unexpected").context.pipelineView, undefined);
