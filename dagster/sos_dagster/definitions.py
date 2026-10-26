@@ -94,7 +94,7 @@ def preflight(context: OpExecutionContext) -> dict:
         key in plan for key in ("timestamp_column", "train_end", "calibration_end")
     ):
         raise Failure("Preflight가 유효한 시간 분할 계획을 반환하지 않았습니다.")
-    return {"plan": plan, "model_id": None, "job_ids": {"preflight": result["id"]}}
+    return {"plan": plan}
 
 
 @op
@@ -140,9 +140,7 @@ def training(context: OpExecutionContext, state: dict) -> dict:
             "registry_version": str(model["registry_version"]),
         },
     ))
-    return {**state, "model_id": model_id, "job_ids": {
-        **state["job_ids"], "training": result["id"],
-    }}
+    return {**state, "model_id": model_id}
 
 
 @op
@@ -158,8 +156,7 @@ def calibration(context: OpExecutionContext, state: dict) -> dict:
         "observation_id_column": state["plan"].get("observation_id_column"),
         "temporal_scope": {**scope, "partition": "calibration"},
     }, "ml_score")
-    return {**state, "calibration_id": result["result"]["scoring_result_id"],
-            "job_ids": {**state["job_ids"], "calibration": result["id"]}}
+    return {**state, "calibration_id": result["result"]["scoring_result_id"]}
 
 
 @op
@@ -170,8 +167,7 @@ def policy(context: OpExecutionContext, state: dict) -> dict:
         "mode": "quantile", "alert_fraction": 0.005,
         "threshold": None, "source_owner_actor": row["owner_actor"],
     }, "ml_policy")
-    return {**state, "policy_id": result["result"]["policy_revision_id"],
-            "job_ids": {**state["job_ids"], "policy": result["id"]}}
+    return {**state, "policy_id": result["result"]["policy_revision_id"]}
 
 
 @op
@@ -193,8 +189,7 @@ def test(context: OpExecutionContext, state: dict) -> dict:
         metadata={"scoring_result_id": score_id,
                   "model_revision_id": state["model_id"]},
     ))
-    return {**state, "test_id": score_id,
-            "job_ids": {**state["job_ids"], "test": result["id"]}}
+    return {**state, "test_id": score_id}
 
 
 @op
@@ -214,7 +209,7 @@ def evaluation(context: OpExecutionContext, state: dict) -> dict:
             "scoring_result_id": state["test_id"],
         },
     ))
-    return {**state, "job_ids": {**state["job_ids"], "evaluation": result["id"]}}
+    return None
 
 
 @job(executor_def=in_process_executor, tags={"sos/workflow": PIPELINE_ID})
