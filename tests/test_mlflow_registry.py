@@ -114,3 +114,45 @@ def test_archived_model_group_rejects_new_version(model):
     client.models[0]["tags"] = [{"key": "sos.archived", "value": "true"}]
     with pytest.raises(MLflowDeliveryError, match="ARCHIVED"):
         register_model_version(client, {**model, "job_id": "job-2"}, "run-2")
+
+
+def test_fresh_registry_model_is_created_without_getting_missing_name(model):
+    """실제 MLflow는 존재하지 않는 registered-models/get에 HTTP 404를 응답한다."""
+    class StrictClient(FakeClient):
+        def get(self, endpoint, params):
+            if endpoint == "registered-models/get" and not any(
+                item["name"] == params["name"] for item in self.models
+            ):
+                raise MLflowDeliveryError("SOS-MLFLOW-HTTP-404-registered-models_get")
+            return super().get(endpoint, params)
+
+    client = StrictClient()
+    name, version = register_model_version(client, model, "run-1")
+    assert (name, version) == (registered_model_name(model), "1")
+    assert len(client.models) == 1
+    # 기존 Run을 다시 보내도 새 모델·버전이 만들어지지 않는다.
+    assert register_model_version(client, model, "run-1") == (name, version)
+    assert client.created == 1
+
+
+def test_existing_registry_group_is_checked_for_archive_and_reused(model):
+    client = FakeClient()
+    name = registered_model_name(model)
+    client.models.append({"name": name})
+    assert register_model_version(client, model, "run-1") == (name, "1")
+    assert len(client.models) == 1
+
+
+def test_registry_does_not_recreate_missing_group_with_existing_version(model):
+    client = FakeClient()
+    name = registered_model_name(model)
+    client.versions.append({
+        "name": name, "version": "1", "source": model["location"],
+        "run_id": "run-1", "tags": [
+            {"key": "sos.job_id", "value": model["job_id"]},
+            {"key": "sos.sha256", "value": model["sha256"]},
+        ],
+    })
+    with pytest.raises(MLflowDeliveryError, match="MODEL-MISMATCH"):
+        register_model_version(client, model, "run-1")
+    assert not client.models
