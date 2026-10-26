@@ -22,10 +22,8 @@ from dagster import (
 )
 from sqlalchemy import text
 
-from sos_platform.pipeline_reference import FEATURES, PIPELINE_ID, PIPELINE_VERSION
+from sos_platform.pipeline_reference import FEATURES, PIPELINE_ID, PIPELINE_VERSION, STAGES
 from sos_platform.store import Store
-
-STAGES = ("preflight", "training", "calibration", "policy", "test", "evaluation")
 
 
 def _submission(context: OpExecutionContext, store: Store) -> dict:
