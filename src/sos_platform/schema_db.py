@@ -191,6 +191,7 @@ model_revisions = Table(
     Column("owner_actor", Text),
     Column("created_at", Text, nullable=False),
     Column("registry_key", String(40), nullable=False, default="default"),
+    Column("lifecycle_state", String(16), nullable=False, default="Active"),
     Column("registry_model", Text),
     Column("registry_version", String(32)),
     Index("ix_model_revisions_owner_created", "owner_actor", "created_at"),
