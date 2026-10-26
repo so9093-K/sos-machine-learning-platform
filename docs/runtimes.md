@@ -25,4 +25,6 @@ MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·A
 
 ## 현재 구현의 범위
 
+등록형 Workflow 정의·스케줄·상태의 Dagster OSS Runtime은 별도 Python 이미지와 Code Location·Daemon·Webserver·메타데이터 DB를 사용한다. Dagster가 독립 SOS Worker의 자원 격리·ML 계산·결과 게시 책임을 대신하지 않는다. Dagster Run 실패·취소 후 진행 중인 SOS Job 취소는 Dagster 상태 센서가 요청하며, 실제 중단 확정은 SOS Job/Attempt의 계약이다.
+
 현재 프로젝트의 Python 3.12·잠금 의존성과 Compose 실행 형태는 **개발·배치 환경의 선택**이지 모든 모델 Runtime의 고정 명세가 아니다. 정확한 환경변수·예산 기본값 및 구현 세부사항은 `src/sos_platform/execution_budget.py`, `resource_admission.py`, `cgroup.py`, `worker.py`와 실행 설정이 정본이다. 설치와 설정 방법은 [Getting Started](getting-started.md)를 따른다. 실행 상태·복구는 [Workflows](workflows.md), 저장 결과의 의미는 [Contracts](contracts.md)를 따른다.
