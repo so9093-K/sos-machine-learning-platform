@@ -214,7 +214,7 @@ services:
       PYTHONPATH: /app/dagster
     command: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000", "-m", "sos_dagster.definitions"]
     volumes:
-      - dagster_logs:/var/lib/dagster/logs
+      - dagster_data:/var/lib/dagster
     depends_on:
       init:
         condition: service_completed_successfully
@@ -243,7 +243,7 @@ services:
     ports:
       - "127.0.0.1:${SOS_DAGSTER_PORT:-9607}:3000"
     volumes:
-      - dagster_logs:/var/lib/dagster/logs
+      - dagster_data:/var/lib/dagster
     depends_on:
       dagster-code:
         condition: service_healthy
@@ -270,7 +270,7 @@ services:
       PYTHONPATH: /app/dagster
     command: ["dagster-daemon", "run", "-w", "/app/dagster/workspace.yaml"]
     volumes:
-      - dagster_logs:/var/lib/dagster/logs
+      - dagster_data:/var/lib/dagster
     depends_on:
       dagster-code:
         condition: service_healthy
@@ -286,4 +286,4 @@ volumes:
   worker_state:
   mlflow_data:
   dagster_postgres_data:
-  dagster_logs:
+  dagster_data:
