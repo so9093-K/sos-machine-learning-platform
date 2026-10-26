@@ -63,7 +63,7 @@ def test_dagster_run_status_is_only_workflow_status(monkeypatch):
             FakeStore(), _row(), client=FakeDagster(dagster_status)
         )
         assert result["status"] == expected
-        assert result["job_ids"] == {}
+        assert result["stages"] == []
         assert result["stages"] == []
 
 
@@ -87,7 +87,7 @@ def test_workflow_job_evidence_is_derived_not_replicated(monkeypatch):
     assert result["status"] == "Running"
     assert result["current_stage"] == "calibration"
     assert result["input_plan"]["timestamp_column"] == "ts"
-    assert result["job_ids"] == {"preflight": "preflight-1", "training": "training-1"}
+    assert [s["name"] for s in result["stages"]] == ["preflight", "training"]
 
 
 def test_dagster_graphql_outage_is_reported(monkeypatch):
