@@ -9,6 +9,8 @@ from fastapi.responses import JSONResponse
 from .object_store import ObjectStore
 from .schemas import (
     AuditEventOut,
+    BrandingSettingsOut,
+    BrandingSettingsUpdate,
     AuthMeOut,
     InstanceSettingsOut,
     InstanceSettingsUpdate,
@@ -87,6 +89,35 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
             "capabilities": sorted(action for action in ACTIONS if actor.can(action)),
             "mode": identity.mode,
         }
+
+    @router.get(
+        "/api/branding",
+        tags=["Identity"],
+        summary="공개 제품 브랜드 조회",
+        description="로그인 화면에서도 사용할 수 있는 표시 브랜드명만 반환합니다.",
+        response_model=BrandingSettingsOut,
+    )
+    def branding_settings():
+        return {"brand_name": store.brand_name()}
+
+    @router.put(
+        "/api/branding",
+        tags=["Identity"],
+        summary="제품 브랜드명 변경",
+        response_model=BrandingSettingsOut,
+    )
+    def change_branding_settings(
+        body: BrandingSettingsUpdate,
+        request: Request,
+        actor: Actor = INSTANCE_CONFIG_DEP,
+    ):
+        store.set_brand_name(
+            body.brand_name,
+            actor_id=actor.id,
+            actor_type=actor.kind,
+            request_id=request.state.request_id,
+        )
+        return {"brand_name": body.brand_name}
 
     @router.get(
         "/api/instance",

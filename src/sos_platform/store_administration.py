@@ -81,29 +81,39 @@ class AdministrationStoreMixin:
                 request_id=request_id,
             )
 
-    def instance_display_name(self) -> str:
-        """표시 전용 인스턴스명. 제품 브랜드·실행 환경·권한과 독립적이다."""
+    def _instance_setting(self, key: str, default: str) -> str:
+        """설치 인스턴스의 표시 설정을 한 저장소에서 읽는다."""
         with self.connection() as db:
             return (
                 db.execute(
-                    text("SELECT value FROM instance_settings WHERE key='display_name'")
+                    text("SELECT value FROM instance_settings WHERE key=:key"),
+                    {"key": key},
                 ).scalar_one_or_none()
-                or "Local Workspace"
+                or default
             )
 
-    def set_instance_display_name(
-        self, value: str, *, actor_id: str, actor_type: str, request_id: str | None
+    def instance_display_name(self) -> str:
+        """설치 인스턴스의 표시명. 제품 브랜드와 별개다."""
+        return self._instance_setting("display_name", "Local Workspace")
+
+    def brand_name(self) -> str:
+        """사용자에게 표시하는 제품 브랜드명. 내부 식별자와 별개다."""
+        return self._instance_setting("brand_name", "SOS")
+
+    def _set_instance_setting(
+        self, key: str, value: str, *, actor_id: str, actor_type: str,
+        request_id: str | None,
     ) -> None:
-        """이름 변경과 감사 기록을 같은 트랜잭션에 기록한다."""
+        """표시 설정 변경과 감사 이벤트를 같은 트랜잭션에서 확정한다."""
         with self.connection() as db:
             db.execute(
                 text(
                     "INSERT INTO instance_settings(key,value,updated_at,updated_by) "
-                    "VALUES('display_name',:value,:at,:actor) "
+                    "VALUES(:key,:value,:at,:actor) "
                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value,"
                     "updated_at=excluded.updated_at,updated_by=excluded.updated_by"
                 ),
-                {"value": value, "at": now(), "actor": actor_id},
+                {"key": key, "value": value, "at": now(), "actor": actor_id},
             )
             self._audit(
                 db,
@@ -111,9 +121,25 @@ class AdministrationStoreMixin:
                 actor_type=actor_type,
                 action="instance.configure",
                 resource_type="instance",
-                resource_id="display_name",
+                resource_id=key,
                 request_id=request_id,
             )
+
+    def set_instance_display_name(
+        self, value: str, *, actor_id: str, actor_type: str, request_id: str | None
+    ) -> None:
+        self._set_instance_setting(
+            "display_name", value, actor_id=actor_id, actor_type=actor_type,
+            request_id=request_id,
+        )
+
+    def set_brand_name(
+        self, value: str, *, actor_id: str, actor_type: str, request_id: str | None
+    ) -> None:
+        self._set_instance_setting(
+            "brand_name", value, actor_id=actor_id, actor_type=actor_type,
+            request_id=request_id,
+        )
 
     def audit_events(
         self,
