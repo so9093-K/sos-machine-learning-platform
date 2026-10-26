@@ -53,6 +53,14 @@ def _row():
     }
 
 
+def test_unknown_dagster_run_status_is_reported_as_dependency_error(monkeypatch):
+    monkeypatch.setattr(dagster_workflows, "_job_by_stage", lambda *_: None)
+    with pytest.raises(DagsterUnavailable) as failed:
+        dagster_workflows._run(FakeStore(), _row(), client=FakeDagster("UNKNOWN"))
+    assert failed.value.operation == "run_status"
+    assert failed.value.failure_type == "unexpected_result"
+
+
 def test_dagster_run_status_is_only_workflow_status(monkeypatch):
     monkeypatch.setattr(dagster_workflows, "_job_by_stage", lambda *_: None)
     for dagster_status, expected in [
