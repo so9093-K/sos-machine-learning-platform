@@ -97,6 +97,8 @@ def read_runs(
             item.get("key"): item.get("value")
             for item in data.get("tags", []) if isinstance(item, dict)
         }
+        if tags.get("sos.archived") == "true":
+            continue
         job_id = tags.get("sos.job_id")
         job = store.get_job(job_id) if isinstance(job_id, str) else None
         if not job or job.get("owner_actor") != actor_id:
@@ -144,7 +146,8 @@ def read_model_versions(client, store, actor_id: str, *, page_token: str | None 
         model_id = (job.get("result") or {}).get("model_revision_id")
         model = store.get_model_revision(model_id) if model_id else None
         if (
-            not model or model.get("owner_actor") != actor_id
+            not model or model.get("lifecycle_state", "Active") != "Active"
+            or model.get("owner_actor") != actor_id
             or model.get("registry_model") != name
             or model.get("registry_version") != version.get("version")
             or model.get("sha256") != tags.get("sos.sha256")
