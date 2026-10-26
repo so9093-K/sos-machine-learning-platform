@@ -3,7 +3,7 @@
 공통 FastAPI 애플리케이션의 보안/오류 미들웨어는 그대로 사용한다.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from .object_store import ObjectStore
@@ -97,7 +97,8 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
         description="로그인 화면에서도 사용할 수 있는 표시 브랜드명만 반환합니다.",
         response_model=BrandingSettingsOut,
     )
-    def branding_settings():
+    def branding_settings(response: Response):
+        response.headers["Cache-Control"] = "no-store"
         return {"brand_name": store.brand_name()}
 
     @router.put(

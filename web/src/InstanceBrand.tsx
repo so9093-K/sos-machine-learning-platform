@@ -8,12 +8,13 @@ export type BrandingSettings = components["schemas"]["BrandingSettingsOut"];
 type Props = {
   canEdit: boolean;
   brandName: string;
+  brandReady: boolean;
   brandLoadError: string;
   onBrandChange: (name: string) => void;
   onBrandRetry: () => void;
 };
 
-export function InstanceBrand({ canEdit, brandName, brandLoadError,
+export function InstanceBrand({ canEdit, brandName, brandReady, brandLoadError,
   onBrandChange, onBrandRetry }: Props) {
   const [instance, setInstance] = useState<InstanceSettings | null>(null);
   const [draft, setDraft] = useState("");
@@ -77,7 +78,7 @@ export function InstanceBrand({ canEdit, brandName, brandLoadError,
       <span className="instance-name" aria-live="polite">{
         instance?.display_name ?? (error ? "설정 조회 실패" : "인스턴스 정보 조회 중")
       }</span>
-      {canEdit && !brandEditing && <button type="button"
+      {canEdit && brandReady && !brandEditing && <button type="button"
         className="brand-edit ghost"
         onClick={() => { setBrandDraft(brandName); setBrandError(""); setBrandEditing(true); }}>
         제품명 설정
@@ -85,12 +86,12 @@ export function InstanceBrand({ canEdit, brandName, brandLoadError,
       {brandEditing && <form className="brand-form" onSubmit={event => void saveBrand(event)}>
         <label htmlFor="brand-display-name">제품 브랜드명</label>
         <input id="brand-display-name" value={brandDraft} maxLength={48}
-          onChange={event => setBrandDraft(event.target.value)} autoFocus required />
+          onChange={event => setBrandDraft(event.target.value)} autoFocus required disabled={brandSaving} />
         <div className="brand-form-actions">
           <button type="submit" disabled={brandSaving || !brandDraft.trim()}>
             {brandSaving ? "저장 중" : "저장"}
           </button>
-          <button type="button" className="ghost" onClick={() => {
+          <button type="button" className="ghost" disabled={brandSaving} onClick={() => {
             setBrandEditing(false); setBrandError("");
           }}>취소</button>
         </div>

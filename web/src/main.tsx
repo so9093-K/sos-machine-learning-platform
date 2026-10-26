@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ApiError, request, setAccessToken, formatError } from "./api";
 import { Workspace } from "./Workspace";
@@ -7,8 +7,9 @@ import { AuditPanel } from "./AuditPanel";
 import type { Identity } from "./types";
 import type { components } from "./api.generated";
 
-type BrandingSettings = components["schemas"]["BrandingSettingsOut"];
 import "./style.css";
+
+type BrandingSettings = components["schemas"]["BrandingSettingsOut"];
 
 function App() {
   const [actor, setActor] = useState<Identity | null>(null);
@@ -18,12 +19,26 @@ function App() {
   const [submitting, setSubmitting] = useState(false);
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
   const [brandingError, setBrandingError] = useState("");
+  // 이전 조회 응답이 새로 저장한 제품명을 덮어쓰지 않도록 요청 세대를 추적한다.
+  const brandRequestRevision = useRef(0);
   const brandName = branding?.brand_name ?? "ML Platform";
   function reloadBranding() {
+    const revision = ++brandRequestRevision.current;
     setBrandingError("");
     void request<BrandingSettings>("/api/branding")
-      .then(setBranding)
-      .catch(error => setBrandingError(formatError(error)));
+      .then(value => {
+        if (revision === brandRequestRevision.current) setBranding(value);
+      })
+      .catch(error => {
+        if (revision !== brandRequestRevision.current) return;
+        setBranding(null);
+        setBrandingError(formatError(error));
+      });
+  }
+  function applyBrand(name: string) {
+    ++brandRequestRevision.current;
+    setBranding({ brand_name: name });
+    setBrandingError("");
   }
   async function checkIdentity() {
     setChecking(true); setMessage("");
@@ -85,8 +100,8 @@ function App() {
   const canViewAudit = actor.capabilities.includes("audit.read");
   return <>
     {canViewDataset ? <Workspace actor={actor}
-      brandName={brandName} brandLoadError={brandingError}
-      onBrandChange={name => { setBranding({ brand_name: name }); setBrandingError(""); }}
+      brandName={brandName} brandReady={branding !== null} brandLoadError={brandingError}
+      onBrandChange={applyBrand}
       onBrandRetry={reloadBranding} onSignOut={signOut} /> :
       <main className="main"><h1>{brandName} · 운영 진단</h1>
         {actor.mode !== "development" &&

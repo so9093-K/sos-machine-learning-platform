@@ -75,7 +75,7 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
       저장된 모델 점수와 가법적 설명 결과를 검증했습니다.</p>
     <p className="pipeline-shap-legend"><span className="pipeline-shap-positive">양수: 이상 점수를 높이는 방향</span>
       <span className="pipeline-shap-negative">음수: 이상 점수를 낮추는 방향</span></p>
-    <DataChart option={option} ariaLabel="실제 SOS 이상 점수 기준 주요 8개 Feature의 양수·음수 Permutation SHAP 기여도" />
+    <DataChart option={option} ariaLabel="실제 모델 이상 점수 기준 주요 8개 Feature의 양수·음수 Permutation SHAP 기여도" />
     <p className="hint">Train Feature 중앙값으로 구성한 합성 관측치 한 행을 기준으로 합니다.
       실제 이상 사건의 원인이나 확률을 의미하지 않습니다.</p>
     <details><summary>전체 SHAP 값과 계산 근거</summary>
@@ -206,7 +206,7 @@ export function PipelineShapExplanation({
 
   return <div className="pipeline-shap-explanation">
     <h6>모델 판단 근거 자세히 보기 (SHAP)</h6>
-    <p className="hint">실제 SOS 이상 점수에 대한 선택적 SHAP 분석입니다.
+    <p className="hint">실제 모델 이상 점수에 대한 선택적 SHAP 분석입니다.
       계산은 요청할 때만 수행하며 기존 점수 민감도와는 다른 설명 방법입니다.</p>
     {lookup === "loading" && <p role="status">이 후보의 기존 SHAP 결과를 찾고 있습니다.</p>}
     {lookup === "error" && <div role="alert">

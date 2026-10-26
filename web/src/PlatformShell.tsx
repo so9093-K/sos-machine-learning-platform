@@ -26,7 +26,7 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
 
 /** 모든 페이지에 공통인 탐색·인증 문맥을 업무 화면에서 분리한다. */
 export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfigure,
-  brandName, brandLoadError, onBrandChange, onBrandRetry,
+  brandName, brandReady, brandLoadError, onBrandChange, onBrandRetry,
   canInspectStorage, canViewAudit, modelContext, modelResource, dataSidebar, children }: {
   actor: Identity;
   section: WorkspaceTab;
@@ -36,6 +36,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
   onSignOut: () => void;
   canConfigure: boolean;
   brandName: string;
+  brandReady: boolean;
   brandLoadError: string;
   onBrandChange: (name: string) => void;
   onBrandRetry: () => void;
@@ -46,11 +47,13 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
 }) {
   const label = pageLabels[section];
   const title = section === "overview" ? `${brandName} Workspace` : label.title;
-  useEffect(() => { document.title = `${title} · ${brandName}`; }, [title, brandName]);
+  useEffect(() => {
+    document.title = section === "overview" ? title : `${title} · ${brandName}`;
+  }, [section, title, brandName]);
   return <div className="shell">
     <aside className="sidebar">
       <InstanceBrand canEdit={canConfigure} brandName={brandName}
-        brandLoadError={brandLoadError} onBrandChange={onBrandChange}
+        brandReady={brandReady} brandLoadError={brandLoadError} onBrandChange={onBrandChange}
         onBrandRetry={onBrandRetry} />
       <PlatformNavigation active={section} onNavigate={onNavigate}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit} />
