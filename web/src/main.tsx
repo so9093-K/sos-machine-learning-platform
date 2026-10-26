@@ -86,7 +86,7 @@ function App() {
   return <>
     {canViewDataset ? <Workspace actor={actor}
       brandName={brandName} brandLoadError={brandingError}
-      onBrandChange={name => setBranding({ brand_name: name })}
+      onBrandChange={name => { setBranding({ brand_name: name }); setBrandingError(""); }}
       onBrandRetry={reloadBranding} onSignOut={signOut} /> :
       <main className="main"><h1>{brandName} · 운영 진단</h1>
         {actor.mode !== "development" &&
