@@ -936,3 +936,18 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 @media(max-width:650px) { .scoring-result-summary { grid-template-columns:minmax(0,1fr); }
   .scoring-distribution { padding:12px; }
   .scoring-observation-detail { padding:12px; } }
+
+
+/* 모델 사용: 상세 Registry 선택은 사용자의 기본 입력보다 뒤에 둔다. */
+.model-lab-model-options { padding:12px 16px; border:1px solid var(--sos-border);
+  border-radius:10px; display:grid; gap:12px; }
+.model-lab-model-options > summary { cursor:pointer; font-weight:650; font-size:13px; }
+.model-lab-model-options[open] > summary { margin-bottom:12px; }
+.model-lab-model-options label { display:grid; gap:7px; max-width:360px; }
+.model-lab-model-options button { margin-top:10px; }
+.scoring-file-input { border:1px dashed var(--sos-border); border-radius:12px;
+  padding:18px; display:grid; gap:10px; margin:14px 0; }
+.scoring-file-input label { display:grid; gap:10px; font-weight:650; }
+.scoring-file-input input[type="file"] { display:block; max-width:100%; font-size:13px; }
+.scoring-file-input .hint { margin:0; }
+.scoring-result-complete { display:grid; gap:18px; min-width:0; }
