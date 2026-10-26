@@ -148,6 +148,14 @@ def model_deletion_router(store: Store) -> APIRouter:
             return {"model_id":revision_id,"state":"Deleted"}
         # SOS는 실제 Registry와 S3 객체가 삭제되기 전까지 Deleting을 유지한다.
         try:
+            # 대상 객체와 게시 Attempt가 일치하는지 외부 Registry 변경보다 먼저 검증한다.
+            storage=ObjectStore()
+            key=storage.key(row["location"])
+            expected_key = (
+                f"results/{row['job_id']}/{row['attempt_id']}.model.joblib"
+            )
+            if key != expected_key:
+                raise ValueError("Model artifact does not match its publishing Attempt")
             client=MLflowClient(settings)
             try:
                 client.delete("model-versions/delete", {
@@ -156,13 +164,6 @@ def model_deletion_router(store: Store) -> APIRouter:
             except MLflowDeliveryError as exc:
                 if not str(exc).startswith("SOS-MLFLOW-HTTP-404"):
                     raise
-            storage=ObjectStore()
-            key=storage.key(row["location"])
-            expected_key = (
-                f"results/{row['job_id']}/{row['attempt_id']}.model.joblib"
-            )
-            if key != expected_key:
-                raise ValueError("Model artifact does not match its publishing Attempt")
             storage.permanently_delete(key)
         except (MLflowDeliveryError, ValueError, OSError, RuntimeError, BotoCoreError, ClientError) as exc:
             # 외부 시스템은 공통 트랜잭션이 아니므로 중단된 상태를 실패로 확정하지 않는다.
