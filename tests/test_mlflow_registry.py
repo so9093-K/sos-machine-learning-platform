@@ -181,3 +181,25 @@ def test_registry_does_not_create_on_malformed_exact_search(model, bad_result):
         register_model_version(client, model, "run-1")
     assert client.models == []
     assert client.created == 0
+
+
+@pytest.mark.parametrize("bad_result", [
+    {"model_versions": ""},
+    {"model_versions": {}},
+    {"model_versions": [{"name": "wrong-model", "version": "1"}]},
+    {"model_versions": ["not-a-model-version"]},
+])
+def test_registry_does_not_create_when_existing_versions_cannot_be_verified(model, bad_result):
+    """기존 판본 전수 조회가 깨지면 재시도 중 중복 판본을 생성하지 않는다."""
+    class BrokenVersionSearch(FakeClient):
+        def get(self, endpoint, params):
+            if endpoint == "model-versions/search":
+                assert params["filter"] == f"name = '{registered_model_name(model)}'"
+                return bad_result
+            return super().get(endpoint, params)
+
+    client = BrokenVersionSearch()
+    with pytest.raises(MLflowDeliveryError, match="RESPONSE-INVALID"):
+        register_model_version(client, model, "run-1")
+    assert client.created == 0
+    assert client.models == []
