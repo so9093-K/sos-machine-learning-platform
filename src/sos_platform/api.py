@@ -1342,10 +1342,11 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     )
     def list_registered_models(
         page_token: str | None = Query(default=None, max_length=2048),
+        registry_key: str = Query(default="default", pattern=r"^[a-z][a-z0-9-]{0,39}$"),
         actor: Actor = READ_JOB_DEP,
     ):
         try:
-            return read_model_versions(_management_client(), store, actor.id, page_token=page_token)
+            return read_model_versions(_management_client(), store, actor.id, page_token=page_token, registry_key=registry_key)
         except MLflowDeliveryError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
