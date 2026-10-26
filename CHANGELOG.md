@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 등록형 활동 이상 탐지의 실행 조정을 Dagster OSS Workflow로 전환하고, 기존 자체 Pipeline 단계 전이 엔진·중복 실행 상태를 제거했습니다. Dagster의 Run/Asset Graph 운영 UI와 SOS Job·Result/MLflow 관리 정본의 경계를 구분했습니다.
+
 - Model Playground에서 단일 관측치를 실제 등록 모델로 점수화하는 Worker Job 계약을 추가했습니다. 사용자 입력의 Job 이력 보존과 기존 Dataset Scoring의 경계를 구분합니다.
 
 - 모델 실험실 활동 이상 탐지 주제 홈에서 개념 일러스트레이션과 모델 사용·학습의 독립 진입을 제공하고, 기존 직접 Run 링크와 결과 기능을 유지했습니다.

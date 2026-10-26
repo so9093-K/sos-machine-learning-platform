@@ -18,6 +18,8 @@
 | **Evaluation** | 특정 모델·데이터·지표·평가 조건의 조합으로 얻은 결과 |
 | **Runtime Specification** | 작업을 실행하는 데 필요한 환경 및 호환성 요구 |
 
+등록형 Pipeline의 Workflow 정의·단계 의존성·Run 상태·운영 Lineage는 Dagster OSS가 관리한다. SOS의 Workflow 제출 식별·Actor 권한과 개별 Job/Attempt·불변 결과는 SOS 정본이며, MLflow는 Experiment·Model Registry의 관리 정본이다. 이 세 시스템의 ID·책임을 동일한 상태나 자산으로 취급하지 않는다.
+
 등록형 Pipeline은 Pipeline Creator가 제공하는 신뢰된 Workflow Definition의 사용자 경험이다. 각 실행은 사용자의 Dataset 판본에 고정된 별도 Workflow Run이며, 기존 Job/Attempt·권한·불변 결과를 재사용한다. Pipeline을 이용하지 않는 독립 ML API 실행도 유지한다.
 
 단순한 Job은 반드시 Workflow Definition에 속할 필요가 없다. 실험은 실행 자체가 아니며, Job과 실행 시도도 동일하지 않다. 모델 판본·아티팩트·배포 대상은 서로 다른 생명주기를 가진다.

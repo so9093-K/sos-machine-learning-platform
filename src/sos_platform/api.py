@@ -20,6 +20,7 @@ from .api_ml_training import training_router
 from .api_pipelines import pipeline_router
 from .scoring_observations import scoring_observations_router
 from .config import StoragePolicy
+from .dagster_client import DagsterUnavailable
 from .datasets import (
     connect_iceberg,
     iceberg_snapshots,
@@ -217,6 +218,11 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     )
     app.state.identity = identity
     register_error_handlers(app)
+
+    @app.exception_handler(DagsterUnavailable)
+    async def dagster_unavailable(request: Request, _exc: DagsterUnavailable):
+        return problem_response(request, "SOS-API-DEPENDENCY", 503,
+                                ERRORS["SOS-API-DEPENDENCY"].message)
 
     @app.middleware("http")
     async def security_audit(request: Request, call_next):

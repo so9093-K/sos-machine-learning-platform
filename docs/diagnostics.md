@@ -8,6 +8,8 @@
 - **권한·중요 변경 결정:** PostgreSQL `audit_events`가 트랜잭션과 연결되는 정본이다. 이 기록은 외부 변경 불가능한 감사 저장소를 대체하지 않는다.
 - **기술적 원인·시각:** 구조화된 JSON 로그는 진단 증거다. 로그나 Trace가 없더라도 Job/Attempt 상태는 유지되어야 한다.
 
+- **Workflow 실행·단계 이력:** Dagster OSS Run과 이벤트가 정본이다. SOS는 Actor·Idempotency-Key·Dagster Run ID 연결만 유지하며 SOS Job/Attempt의 실제 계산 완료와 구분한다.
+
 ## 오류 응답과 호환성
 
 API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)과 `code`, `category`, `retry_policy`, `request_id`, `type`, `title`, `status`, `instance`를 제공한다. HTTP 상태와 `X-Request-ID`도 전달한다. `ProblemOut`이 OpenAPI 계약의 정본이며, 통신 타입은 생성된 TypeScript 타입을 사용한다.
@@ -74,3 +76,10 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 - `make logs`는 `docker compose logs --tail 80`로 최근 서비스 로그만 조회한다.
 - Compose의 `json-file` 로그 드라이버는 서비스별 2 MiB × 3개 파일로 회전한다. 이 로그는 시스템 상태·감사·커밋의 정본이 아니며, Token·S3 Key·원본 데이터가 출력되지 않도록 구조화 로그 허용 목록을 적용한다.
 
+
+### Dagster OSS 장애·복구
+
+1. `make status`에서 `dagster-postgres`, `dagster-code`, `dagster-webserver`, `dagster-daemon` 상태를 확인한다.
+2. Dagster Run ID와 SOS Workflow 제출 ID를 대조한다. GraphQL 장애 시 기존 SOS Job·Model·Scoring 결과의 성공을 실패로 변경하지 않는다.
+3. Dagster 실행 접수 응답이 유실되었다면 동일 Actor와 Idempotency-Key로 재요청하고, Dagster Run 태그를 조회한 뒤 중복 실행 여부를 확인한다.
+4. 취소 시 현재 SOS Job의 실제 중단 여부를 조회한다. Dagster 취소 신호만으로 외부 저장소 커밋이 취소됐다고 판단하지 않는다.

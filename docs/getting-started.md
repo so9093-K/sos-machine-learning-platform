@@ -27,7 +27,7 @@ PY
 ## 플랫폼 실행과 접속
 
 ```bash
-make up       # API·Worker·Web·PostgreSQL·객체 저장소 기동 및 Ready 확인
+make up       # API·Worker·Web·Dagster·PostgreSQL·객체 저장소 기동 및 Ready 확인
 make status   # 컨테이너 상태 확인
 make doctor   # 설정·준비 상태 진단
 ```
@@ -36,6 +36,7 @@ make doctor   # 설정·준비 상태 진단
 - API: `http://localhost:9602`
 - API Reference: `http://localhost:9602/docs`
 - 로컬 MLflow 운영자 관리 UI: `http://localhost:9606`
+- Dagster OSS 운영자 UI: `http://localhost:9607` (localhost 전용, 사용자 인증 기능 없음)
 
 API Reference의 Scalar JavaScript는 Docker 이미지 빌드에 함께 포함되므로 실행 시 외부 CDN을 사용하지 않는다.
 호스트에서 Python API를 직접 실행할 경우 Node.js 24와 npm으로
@@ -96,3 +97,9 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 외부 MLflow 서버를 사용하는 경우 `SOS_MLFLOW_TRACKING_URI`를 변경하고 필요한 인증은 `SOS_MLFLOW_TOKEN`에 설정할 수 있습니다. 기본 MLflow UI는 로컬 운영자 도구이며 사용자별 격리를 제공하지 않으므로 **외부 네트워크에 공개하지 마세요**. SOS API는 Actor별로 실행과 모델의 실제 소유권을 재검증합니다.
 
 개발 데이터 초기화는 해당 Compose 프로젝트/볼륨이 재생성 가능한 개발 자산임을 확인한 범위에서만 수행합니다.
+
+## Dagster OSS Workflow 운영
+
+등록형 활동 이상 탐지 Workflow의 실행·단계 의존성과 Asset Graph는 Dagster OSS에서 관리한다. 일반 사용자의 분석 제출·조회·취소는 반드시 SOS API를 경유해야 한다. Dagster UI와 GraphQL을 외부 네트워크에 공개하거나 사용자 권한을 위임해선 안 된다. 기존 독립 ML API 및 Worker의 Job/Attempt·무결성 계약은 유지된다.
+
+Migration 0024는 기존 자체 Pipeline 실행 그룹 테이블을 제거하기 전에 연결된 Job ID와 실행 단계의 관계를 감사 이력에 기록한다. 이전 Pipeline 그룹별 사용자 화면은 종료되지만 실제 Job·Model·Scoring·Evaluation 데이터는 보존된다. 개발 환경이라고 확인되지 않은 볼륨을 무조건 삭제해서는 안 된다.

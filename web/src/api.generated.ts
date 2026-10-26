@@ -2971,12 +2971,6 @@ export interface components {
             /** Id */
             id: string;
             input_plan: components["schemas"]["PipelinePlanOut"] | null;
-            /** Job Ids */
-            job_ids: {
-                [key: string]: string;
-            };
-            /** Stage Index */
-            stage_index: number;
             /** Stages */
             stages?: components["schemas"]["PipelineStageOut"][];
             /**
@@ -2984,8 +2978,6 @@ export interface components {
              * @enum {string}
              */
             status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
-            /** Updated At */
-            updated_at: string;
         };
         /** PipelineStageOut */
         PipelineStageOut: {
