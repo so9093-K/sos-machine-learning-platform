@@ -40,12 +40,13 @@ export function MLScoringPanel({
   const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [error, setError] = useState("");
+  const [historyError, setHistoryError] = useState("");
   const { items: history, nextCursor, refresh, loadMore } =
     usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
 
   useEffect(() => {
     let alive = true;
-    void refresh().catch(e => { if (alive) setError(formatError(e)); });
+    void refresh().catch(e => { if (alive) setHistoryError(formatError(e)); });
     return () => { alive = false; };
   }, []);
 
@@ -82,7 +83,7 @@ export function MLScoringPanel({
         if (alive) {
           setSelectedJob(next);
           if (TERMINAL.has(next.status)) {
-            void refresh().catch(e => { if (alive) setError(formatError(e)); });
+            void refresh().catch(e => { if (alive) setHistoryError(formatError(e)); });
           }
         }
       } catch (e) {
@@ -140,7 +141,7 @@ export function MLScoringPanel({
       });
       setSelectedJob(job);
       setResult(null);
-      void refresh().catch(e => setError(formatError(e)));
+      void refresh().catch(e => setHistoryError(formatError(e)));
     } catch (e) {
       setError(formatError(e));
     } finally {
@@ -247,8 +248,14 @@ export function MLScoringPanel({
     <button disabled={!canRun || submitted || !inputReady} onClick={() => void create()}>
       {submitted ? "점수 계산 요청 중…" : "이 Dataset으로 모델 사용하기 →"}
     </button>
-    <details className="pipeline-scoring-history"><summary>이 모델의 이전 점수 계산 보기</summary>
+    <details className="pipeline-scoring-history" onToggle={event => {
+      if (event.currentTarget.open) {
+        setHistoryError("");
+        void refresh().catch(cause => setHistoryError(formatError(cause)));
+      }
+    }}><summary>이 모델의 이전 점수 계산 보기</summary>
     <div className="steps">
+      {historyError && <p role="alert">이전 점수 계산 이력을 확인하지 못했습니다: {historyError}</p>}
       <strong>이 모델의 Scoring 이력</strong>
       {available.map(item => <button key={item.id} className="secondary"
         onClick={() => void selectHistory(item.id)}>
@@ -256,7 +263,7 @@ export function MLScoringPanel({
       </button>)}
       {available.length === 0 && <p className="hint">현재 조회한 이력에 이 모델의 Scoring Job이 없습니다.</p>}
       {nextCursor && <button className="secondary"
-        onClick={() => void loadMore().catch(e => setError(formatError(e)))}>
+        onClick={() => void loadMore().catch(e => setHistoryError(formatError(e)))}>
         이전 Scoring 더 보기
       </button>}
     </div>
