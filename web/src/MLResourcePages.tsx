@@ -102,13 +102,6 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
     {kind === "scoring" && (() => {
       const r = data as ScoringResult;
       return <>
-        <div className="ml-resource-summary">
-          <h4>모델 적용 결과</h4>
-          <p>실제 점수화한 관측치 {r.row_count.toLocaleString("ko-KR")}건
-            · 점수가 높은 관측치부터 확인할 수 있습니다.</p>
-          <p className="hint">점수는 실제 이상 사건의 확률이나 판정이 아닙니다.
-            학습에 사용한 데이터를 다시 점수화한 경우 독립 평가 성능이 아닙니다.</p>
-        </div>
         <ScoringObservationExplorer key={r.id} result={r} canRun={canRun}
           canCancel={canCancel} onOpenResource={onOpenResource} />
         <div className="ml-resource-actions">
@@ -300,7 +293,8 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
     {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
       modelId.trim() === loadedModelId &&
       <MLScoringPanel key={model.id} model={model} datasets={datasets}
-      canRun={canRun} canCancel={canCancel} onOpenResult={id => onOpenResource("scoring", id)} />}
+      canRun={canRun} canCancel={canCancel} onOpenResult={id => onOpenResource("scoring", id)}
+      onOpenResource={onOpenResource} />}
     <section className="panel">
       <div className="panel-head"><div><h3>전체 Scoring Job 이력</h3>
         <p>이 화면에서 실행하지 않은 기존 Scoring도 찾을 수 있습니다. 현재 조회된 목록 기준입니다.</p></div>
