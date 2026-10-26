@@ -20,6 +20,25 @@ try {
   const { activityFeatureLabel } = await vite.ssrLoadModule("/src/ActivityFeatureLabels.ts");
   assert.equal(activityFeatureLabel("cnt_proc_exec"), "프로세스 실행 횟수");
   assert.equal(activityFeatureLabel("unknown_custom"), "unknown_custom");
+  // 독립 Scoring 결과는 별도 접기·선택 없이 전체 근거를 바로 제공한다.
+  const { ScoringObservationExplorer } =
+    await vite.ssrLoadModule("/src/ScoringObservationExplorer.tsx");
+  const resultView = renderToStaticMarkup(React.createElement(ScoringObservationExplorer, {
+    result: {
+      id: "score-1", model_revision_id: "model-1", row_count: 3,
+      score_summary: {
+        score_min: 0.1, score_max: 0.3, score_mean: 0.2,
+        histogram: { method: "equal_width_exact_v1", score_count: 3,
+          bin_edges: [0.1, 0.2, 0.3], bin_counts: [1, 2] },
+      },
+    },
+    canRun: false, canCancel: false, onOpenResource: () => {},
+  }));
+  assert.match(resultView, /전체 이상 점수 분포/);
+  assert.match(resultView, /분석한 관측값/);
+  assert.match(resultView, /점수가 높은 관측값/);
+  assert.match(resultView, /점수는 확률이나 확정된 이상 사건이 아닙니다/);
+
   const { modelLabLabels, modelLabTree } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
   const grouped = modelLabTree([
     { id: "a", name: "활동 이상 탐지", learning_type: "unsupervised",
