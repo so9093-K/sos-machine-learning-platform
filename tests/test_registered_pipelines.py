@@ -117,3 +117,28 @@ def test_candidate_lookup_never_assumes_missing_stage_evidence():
     with pytest.raises(HTTPException) as error:
         _candidate_rows(FakeStore(), {"stages": [], "owner_actor": "owner-1"}, 25, None)
     assert error.value.status_code == 409
+
+
+def test_registry_not_configured_retains_domain_error(monkeypatch):
+    class UnregisteredStore(FakeStore):
+        def get_model_revision(self, model_id):
+            return {"id": model_id, "registry_version": None}
+
+        def tracking_status(self, job_id):
+            assert job_id == "train-1"
+            return None
+
+    jobs = {
+        "training": {
+            "id": "train-1", "status": "Succeeded", "kind": "ml_train",
+            "cancel_requested": False, "result": {"model_revision_id": "model-1"},
+        },
+    }
+    monkeypatch.setattr(
+        dagster_workflows, "_job_by_stage", lambda store, row, stage: jobs.get(stage)
+    )
+    result = dagster_workflows._run(
+        UnregisteredStore(), _row(), client=FakeDagster("FAILURE")
+    )
+    assert result["status"] == "Failed"
+    assert result["error_code"] == "SOS-MLFLOW-NOT-CONFIGURED"
