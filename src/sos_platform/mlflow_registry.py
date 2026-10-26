@@ -115,12 +115,18 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
     listing = client.get("registered-models/search", {
         "filter": f"name = '{name}'", "max_results": 100,
     })
-    models = listing.get("registered_models") or []
+    models = listing.get("registered_models")
+    if models is None:
+        models = []
     if not isinstance(models, list) or listing.get("next_page_token"):
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-    groups = [entry for entry in models if isinstance(entry, dict) and entry.get("name") == name]
-    if len(groups) > 1:
+    # 정확한 이름으로 검색했는데 다른 자산 또는 잘못된 행이 나오면
+    # 부재로 간주해 새 Model 그룹을 생성하지 않는다.
+    if any(not isinstance(entry, dict) or entry.get("name") != name for entry in models):
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+    if len(models) > 1:
+        raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+    groups = models
     if groups:
         group = client.get("registered-models/get", {"name": name}).get("registered_model")
         if not isinstance(group, dict) or group.get("name") != name:
