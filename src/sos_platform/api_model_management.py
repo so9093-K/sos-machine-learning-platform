@@ -186,4 +186,23 @@ def model_management_router() -> APIRouter:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return {"name": name, "version": version, "archived": body.archived}
 
+
+    @router.delete("/api/ml/registry/groups/{registry_key}", tags=["Models"])
+    def delete_group(registry_key: str, actor: Actor = MANAGE):
+        if registry_key == "default":
+            raise HTTPException(status_code=409, detail="Default model group cannot be deleted")
+        name = _name(actor.id, registry_key)
+        client = _client()
+        try:
+            _get_group(client, name)
+            versions = client.get("model-versions/search", {
+                "filter": f"name = '{name}'", "max_results": 1,
+            }).get("model_versions") or []
+            if versions:
+                raise HTTPException(status_code=409, detail="Delete model versions first")
+            client.post("registered-models/delete", {"name": name})
+        except MLflowDeliveryError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        return {"registry_key": registry_key, "deleted": True}
+
     return router
