@@ -98,6 +98,44 @@ class ObjectStore:
         ]
         return objects, response.get("NextContinuationToken")
 
+    def permanently_delete(self, key: str) -> None:
+        """SOS 전용 모델 객체의 모든 저장 버전을 제거하고 재조회로 확인한다."""
+        if not key.startswith("results/") or not key.endswith(".model.joblib"):
+            raise ValueError("Only SOS model artifacts can be deleted")
+        bucket = self.config.s3_bucket
+        while True:
+            batch = self.client.list_object_versions(
+                Bucket=bucket, Prefix=key, MaxKeys=1000,
+            )
+            refs = [
+                {"Key": key, "VersionId": item["VersionId"]}
+                for kind in ("Versions", "DeleteMarkers")
+                for item in batch.get(kind, [])
+                if item.get("Key") == key
+            ]
+            if not refs:
+                break
+            outcome = self.client.delete_objects(
+                Bucket=bucket, Delete={"Objects": refs, "Quiet": False},
+            )
+            if outcome.get("Errors"):
+                raise RuntimeError("Object versions could not be deleted")
+        # 미버전화 객체 삭제 및 삭제 marker 정리. 반복해 확인해도
+        # Object Lock/권한/저장소 장애가 있으면 상위 삭제 의도를 보존한다.
+        self.client.delete_object(Bucket=bucket, Key=key)
+        remaining = self.client.list_object_versions(Bucket=bucket, Prefix=key, MaxKeys=1000)
+        if any(obj.get("Key") == key
+               for kind in ("Versions", "DeleteMarkers")
+               for obj in remaining.get(kind, [])):
+            raise RuntimeError("Object versions remain after deletion")
+        try:
+            self.client.head_object(Bucket=bucket, Key=key)
+        except ClientError as exc:
+            if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
+                return
+            raise
+        raise RuntimeError("Model artifact remains after deletion")
+
     def location(self, key: str) -> str:
         return f"s3://{self.config.s3_bucket}/{key}"
 
