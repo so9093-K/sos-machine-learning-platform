@@ -51,6 +51,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
 }) {
   const [models, setModels] = useState<RegisteredActivityModel[]>([]);
   const [groups, setGroups] = useState<ModelGroup[]>([]);
+  const [groupError, setGroupError] = useState("");
   const registryKey = selectedGroupKey;
   const [definition, setDefinition] = useState<PipelineDefinition | null>(null);
   const [nextPage, setNextPage] = useState<string | null>(null);
@@ -65,24 +66,25 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
 
   useEffect(() => {
     let active = true;
-    setLoading(true); setError(""); setDefinition(null);
+    setLoading(true); setError(""); setGroupError(""); setGroups([]); setDefinition(null);
     setModels([]); setNextPage(null); setLookupFailures(0);
+    // Registry 모델 조회 API가 소유권·보관 상태를 검증한다.
+    // 모델 그룹 선택지는 보조 정보이므로 그 조회 장애로 유효한 모델 사용을 막지 않는다.
+    void request<ModelGroupPage>("/api/ml/registry/groups")
+      .then(page => { if (active) setGroups(page.items.filter(item => !item.archived)); })
+      .catch(cause => { if (active) setGroupError(formatError(cause)); });
     void Promise.all([
       request<PipelineDefinition[]>("/api/pipelines"),
       request<MLflowModelVersionPage>("/api/ml/registry/models?registry_key=" +
         encodeURIComponent(registryKey)),
-      request<ModelGroupPage>("/api/ml/registry/groups"),
-    ]).then(async ([definitions, page, groupsPage]) => {
+    ]).then(async ([definitions, page]) => {
       const current = definitions.find(item => item.id === "activity-anomaly-if");
       if (!current) throw new Error("활동 이상 탐지 분석 방법을 찾을 수 없습니다.");
       const checked = await compatiblePage(page, current);
       if (active) {
         setDefinition(current);
-        setGroups(groupsPage.items.filter(item => !item.archived));
-        const groupArchived = groupsPage.items.some(item =>
-          item.registry_key === registryKey && item.archived);
-        setModels(groupArchived ? [] : checked.items);
-        if (!groupArchived && !selectedModelId && checked.items.length) onSelectModel(checked.items[0].revision.id);
+        setModels(checked.items);
+        if (!selectedModelId && checked.items.length) onSelectModel(checked.items[0].revision.id);
         setLookupFailures(checked.failed);
         setNextPage(page.next_page_token ?? null);
       }
@@ -128,6 +130,12 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     </header>
     <details className="model-lab-model-options">
       <summary>사용 모델 변경 · 모델 목록 관리</summary>
+      {groupError && <p role="status" className="hint">
+        다른 모델 그룹을 불러오지 못했습니다. 현재 선택한 모델 그룹의 사용 가능 여부는 별도로 확인합니다.
+        <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}>
+          그룹 다시 조회
+        </button>
+      </p>}
       <label>사용할 모델 그룹
         <select value={registryKey} onChange={event => {
           onSelectGroup(event.target.value);
