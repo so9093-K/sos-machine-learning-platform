@@ -58,6 +58,13 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
       <PlatformNavigation active={section} onNavigate={onNavigate}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit} />
       {dataSidebar}
+      {(canInspectStorage || canViewAudit) && <div className="operator-tools">
+        <span className="eyebrow">로컬 운영 도구</span>
+        <a href="http://localhost:9607" target="_blank" rel="noopener noreferrer">
+          Dagster Workflow · 실행 기록 ↗
+        </a>
+        <small>현재 PC에서만 접속할 수 있습니다. SOS 로그인과 별도인 관리자용 UI입니다.</small>
+      </div>}
       <div className="sidebar-bottom">
         <a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a>
       </div>
