@@ -27,10 +27,11 @@ function body(method: string, value: unknown): RequestInit {
   };
 }
 
-export function ModelRegistryManager({ activeKey, onSelect, onChanged }: {
+export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage }: {
   activeKey: string;
   onSelect: (key: string) => void;
   onChanged: () => void;
+  canManage: boolean;
 }) {
   const [groups, setGroups] = useState<ModelGroup[]>([]);
   const [pendingDeletes, setPendingDeletes] = useState<Array<{
@@ -90,7 +91,7 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged }: {
           </option>)}
       </select>
     </label>
-    {current && <div className="steps">
+    {canManage && current && <div className="steps">
       <label>모델 표시 이름
         <input value={editTitle} maxLength={80}
           onChange={e => setEditTitle(e.target.value)} />
@@ -122,7 +123,7 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged }: {
             }}>빈 그룹 삭제</button>}
       </div>
     </div>}
-    {pendingDeletes.length > 0 && <div className="pipeline-readiness-blocked">
+    {canManage && pendingDeletes.length > 0 && <div className="pipeline-readiness-blocked">
       <h4>영구 삭제 완료 대기</h4>
       <p>S3 또는 Registry 작업이 끝나지 않은 모델입니다. 완료 전에는 다시 사용할 수 없습니다.</p>
       {pendingDeletes.map(item => <div key={item.id} className="actions">
@@ -136,7 +137,7 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged }: {
         }}>삭제 재시도</button>
       </div>)}
     </div>}
-    <details>
+    {canManage && <details>
       <summary>새 모델 그룹 만들기</summary>
       <div className="steps">
         <label>모델 키 (영문 소문자·숫자·하이픈)
@@ -161,15 +162,16 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged }: {
             setKey(""); setTitle(""); setDescription("");
           })}>새 모델 만들기</button>
       </div>
-    </details>
+    </details>}
     <p className="hint">새 그룹을 만든 뒤 학습 요청의 registry_key에 해당 키를 지정하면 새 버전이 등록됩니다.</p>
   </section>;
 }
 
-export function ModelVersionManagement({ model, registryKey, onChanged }: {
+export function ModelVersionManagement({ model, registryKey, onChanged, canManage }: {
   model: MLflowModelVersion;
   registryKey: string;
   onChanged: () => void;
+  canManage: boolean;
 }) {
   const [impact, setImpact] = useState<Impact | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -183,6 +185,7 @@ export function ModelVersionManagement({ model, registryKey, onChanged }: {
     finally { setBusy(false); }
   }
 
+  if (!canManage) return null;
   return <div className="model-version-management">
     <button type="button" className="secondary" disabled={busy}
       onClick={() => void mutate(() => request(
