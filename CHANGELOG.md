@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Dagster 등록형 Workflow의 제출 태그 Run 검색에서 지원하지 않는 GraphQL 필터를 수정하고 HTTP·GraphQL 실패 분류를 안전한 진단 이벤트로 남깁니다. 자유 학습의 결측 입력 정책 선택과 Feature 편집 요약·실패 안내를 개선하고, 고정 Feature Pipeline의 입력 조건과 로컬 Dagster 운영 접근·Run 검색 진단을 명확히 했습니다.
+- Dagster 등록형 Workflow의 제출 태그 Run 검색에서 지원하지 않는 GraphQL 필터를 수정하고 HTTP·GraphQL 실패 분류와 비정형 응답 처리를 보강했습니다. 자유 학습의 결측 입력 정책 선택, Dataset 변경 시 이전 Job 분리, Feature 편집 요약·실패 안내를 개선했습니다. 고정 Feature Pipeline의 입력 조건과 로컬 전용 Dagster 운영 접근·Run 검색 진단을 명확히 했습니다.
 
 - 활동 이상 탐지의 등록 모델 사용에서 CSV·Parquet 직접 등록과 입력 확인을 연결하고, 독립 Scoring 완료 시 실제 전체 점수 분포·점수순 관측값·Feature 비교 및 선택적 설명을 같은 화면에 제공합니다. 모델 선택 관리 영역은 보조로 두고 무관한 백그라운드 목록 조회 오류가 다른 화면의 작업 실패처럼 남지 않도록 개선했습니다.
 
