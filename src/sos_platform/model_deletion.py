@@ -1,5 +1,6 @@
 """모델 파일 영구 삭제. Model Revision은 결과 계보의 tombstone으로 보존한다."""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy import text
 
 from .mlflow_errors import MLflowDeliveryError
@@ -153,7 +154,7 @@ def model_deletion_router(store: Store) -> APIRouter:
             if not key.startswith("results/") or not key.endswith(".model.joblib"):
                 raise ValueError("Only SOS-published model artifacts may be deleted")
             storage.permanently_delete(key)
-        except Exception as exc:
+        except (MLflowDeliveryError, ValueError, OSError, RuntimeError, BotoCoreError, ClientError) as exc:
             # 외부 시스템은 공통 트랜잭션이 아니므로 중단된 상태를 실패로 확정하지 않는다.
             # 같은 요청을 다시 보내 삭제를 재개한다. 비밀 정보는 응답에 노출하지 않는다.
             raise HTTPException(status_code=503, detail="Model deletion incomplete; retry") from exc
