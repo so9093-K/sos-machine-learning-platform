@@ -41,6 +41,7 @@ make doctor   # 설정·준비 상태 진단
 - API Reference: `http://localhost:9602/docs`
 - 로컬 MLflow 운영자 관리 UI: `http://localhost:9606`
 - Dagster OSS 운영자 UI: `http://localhost:9607` (localhost 전용, 사용자 인증 기능 없음)
+- Dagster에서 등록형 활동 이상 탐지 실행을 찾을 때는 Code Location `sos`, Job `activity_anomaly_workflow`를 확인하세요.
 - Dagster는 SOS 사용자용 학습 화면이 아니라 **로컬 운영자의 Workflow Run·단계·이벤트 확인 도구**입니다.
   실행과 결과는 SOS 웹에서 확인하며, Dagster 접속은 같은 PC의 브라우저에서만 가능합니다.
   API 컨테이너의 내부 GraphQL 주소는 `http://dagster-webserver:3000/graphql`입니다.
