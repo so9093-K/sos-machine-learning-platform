@@ -2,7 +2,7 @@
 
 SOS는 데이터 이해·가공·학습·평가·추론·관측을 필요한 만큼 독립 실행하거나 조합한다. 모두에게 하나의 선형 파이프라인을 요구하지 않는다.
 
-등록형 Workflow의 정의·단계 의존성·전체 Run 상태는 Dagster OSS가 소유한다. 각 단계는 SOS의 독립 Job을 제출하고 확정 결과를 확인한다. 입력 전체에 대한 Preflight는 별도 Worker Job이며 API의 사전 구조 검사는 실제 학습 성공을 보장하지 않는다. SOS API는 사용자·Dataset·Idempotency-Key와 Dagster Run ID를 연결하되 별도 Pipeline 단계 전이 상태를 관리하지 않는다. 취소 요청은 Dagster Run과 현재 SOS Job에 전달하며 실제 중단 완료와 구별한다.
+등록형 Workflow의 정의·단계 의존성·전체 Run 상태는 Dagster OSS가 소유한다. 각 단계는 SOS의 독립 Job을 제출하고 확정 결과를 확인한다. 입력 전체에 대한 Preflight는 별도 Worker Job이며 API의 사전 구조 검사는 실제 학습 성공을 보장하지 않는다. SOS API는 사용자·Dataset·Idempotency-Key와 Dagster Run ID를 연결하되 별도 Pipeline 단계 전이 상태를 관리하지 않는다. 취소 요청은 Dagster Run과 현재 SOS Job에 전달하며 실제 중단 완료와 구별한다. Dagster UI에서 직접 Run을 종료하거나 Run이 실패한 경우에도 Dagster Run 상태 센서가 남아 있는 SOS Job의 취소를 요청한다. 센서 처리에는 지연이 있을 수 있으며 이미 확정된 결과를 되돌리지 않는다.
 
 ## 실행 단위와 Job 상태
 
@@ -39,4 +39,4 @@ Dataset 등록과 Understanding Profile 계산 역시 독립적인 사건이다.
 
 ![원본 데이터에서 모델 배포까지 이어질 수 있는 대표적인 ML 자산 관계](references/dataset-to-deployment-lifecycle.png)
 
-그림은 자산 간 가능한 참조 관계이지 필수 작업 순서나 현재 구현 완료를 뜻하지 않는다. 모델 등록은 배포와 다르며, 연구자는 저장된 데이터·모델·환경·평가 근거로 실험을 비교하고 재실행할 수 있어야 한다. 스케줄러·큐·DAG 엔진은 이 실행 의미를 구현하는 선택지이고, 사용자의 행동과 오류 안내는 [Experience](experience.md)를 따른다.
+그림은 자산 간 가능한 참조 관계이지 필수 작업 순서나 현재 구현 완료를 뜻하지 않는다. 모델 등록은 배포와 다르며, 연구자는 저장된 데이터·모델·환경·평가 근거로 실험을 비교하고 재실행할 수 있어야 한다. 등록형 Workflow의 오케스트레이터는 Dagster OSS이며, 개별 SOS Job은 독립적으로 유지된다. 사용자의 행동과 오류 안내는 [Experience](experience.md)를 따른다.
