@@ -140,7 +140,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
     <section className="panel">
       <div className="panel-head">
         <div><h3>실험·모델 자산 관리</h3>
-          <p>MLflow가 연구 Experiment·Run·모델 버전을 관리하고 SOS가 모델 실행과 권한을 확인합니다.</p>
+          <p>MLflow가 연구 Experiment·Run·모델 버전을 관리하고 플랫폼이 모델 실행과 권한을 확인합니다.</p>
         </div>
         <div className="actions">
           <button type="button" onClick={onTrain}>새 학습 →</button>
