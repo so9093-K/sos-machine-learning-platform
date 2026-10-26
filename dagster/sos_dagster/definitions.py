@@ -3,6 +3,7 @@
 Dagster는 단계 의존성과 Workflow Run을 소유한다. Job/Attempt와 결과 게시의
 정본은 SOS Store이고 모델 관리의 정본은 MLflow다.
 """
+import os
 import time
 
 from dagster import (
@@ -34,6 +35,8 @@ def _submission(context: OpExecutionContext, store: Store) -> dict:
         ).mappings().one_or_none()
     if row is None or row["definition_id"] != PIPELINE_ID:
         raise Failure("유효한 SOS 분석 제출 기록이 없습니다.")
+    if row["cancel_requested"]:
+        raise Failure("사용자가 취소한 SOS Workflow 제출은 실행할 수 없습니다.")
     dataset = store.get_dataset(row["dataset_id"])
     if dataset is None or dataset["version"] != row["dataset_version"]:
         raise Failure("고정된 입력 Dataset 판본을 확인할 수 없습니다.")
@@ -41,7 +44,7 @@ def _submission(context: OpExecutionContext, store: Store) -> dict:
 
 
 def _job(context: OpExecutionContext, row: dict, stage: str, spec: dict, kind: str) -> dict:
-    store = Store("/var/lib/sos")
+    store = Store(os.environ.get("SOS_HOME", "/var/lib/sos"))
     key = "workflow:" + row["id"] + ":" + stage
     job = store.create_job(
         kind=kind,
@@ -71,7 +74,7 @@ def _job(context: OpExecutionContext, row: dict, stage: str, spec: dict, kind: s
 
 
 def _base_state(context: OpExecutionContext) -> tuple[Store, dict]:
-    store = Store("/var/lib/sos")
+    store = Store(os.environ.get("SOS_HOME", "/var/lib/sos"))
     store.initialize()
     return store, _submission(context, store)
 
