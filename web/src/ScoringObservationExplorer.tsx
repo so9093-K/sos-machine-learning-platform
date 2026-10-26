@@ -127,7 +127,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     {loading && <p role="status">점수가 높은 관측값을 불러오는 중입니다.</p>}
     {error && <div role="alert" className="pipeline-readiness-blocked">
       <strong>관측값 조회를 완료하지 못했습니다.</strong>
-      <p>{error}</p>
+      <details><summary>오류 진단 정보</summary><p>{error}</p></details>
       {!loaded && <button type="button" className="secondary"
         onClick={() => setRetry(n => n + 1)}>관측값 다시 조회</button>}
     </div>}
