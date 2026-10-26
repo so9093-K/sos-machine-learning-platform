@@ -120,9 +120,11 @@ class ObjectStore:
             )
             if outcome.get("Errors"):
                 raise RuntimeError("Object versions could not be deleted")
-        # 미버전화 객체 삭제 및 삭제 marker 정리. 반복해 확인해도
-        # Object Lock/권한/저장소 장애가 있으면 상위 삭제 의도를 보존한다.
-        self.client.delete_object(Bucket=bucket, Key=key)
+        # 버전 관리가 Enabled/Suspended인 버킷에 별도 delete_object를 호출하면
+        # 삭제 marker가 새로 생성되므로 이미 제거한 버전을 다시 늘리게 된다.
+        versioning = self.client.get_bucket_versioning(Bucket=bucket).get("Status")
+        if versioning not in ("Enabled", "Suspended"):
+            self.client.delete_object(Bucket=bucket, Key=key)
         remaining = self.client.list_object_versions(Bucket=bucket, Prefix=key, MaxKeys=1000)
         if any(obj.get("Key") == key
                for kind in ("Versions", "DeleteMarkers")
