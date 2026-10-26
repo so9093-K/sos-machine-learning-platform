@@ -77,7 +77,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         const groupArchived = groupsPage.items.some(item =>
           item.registry_key === registryKey && item.archived);
         setModels(groupArchived ? [] : checked.items);
-        if (!selectedModelId && checked.items.length) onSelectModel(checked.items[0].revision.id);
+        if (!groupArchived && !selectedModelId && checked.items.length) onSelectModel(checked.items[0].revision.id);
         setLookupFailures(checked.failed);
         setNextPage(page.next_page_token ?? null);
       }
