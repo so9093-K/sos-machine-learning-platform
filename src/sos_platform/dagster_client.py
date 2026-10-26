@@ -40,11 +40,11 @@ class DagsterClient:
                 operation=operation, failure_type="http_error",
                 http_status=exc.code,
             ) from exc
-        except (TimeoutError,):
+        except TimeoutError as exc:
             raise DagsterUnavailable(
                 "Dagster 응답이 시간 내에 도착하지 않았습니다.",
                 operation=operation, failure_type="timeout",
-            ) from None
+            ) from exc
         except URLError as exc:
             # urllib은 소켓 타임아웃을 URLError로 감싸기도 한다.
             timeout = isinstance(exc.reason, TimeoutError)
@@ -53,6 +53,12 @@ class DagsterClient:
                 if timeout else "Dagster에 연결하지 못했습니다.",
                 operation=operation,
                 failure_type="timeout" if timeout else "connection",
+            ) from exc
+        except OSError as exc:
+            # 연결 재설정·조기 종료처럼 urllib이 URLError로 감싸지 않은 경우.
+            raise DagsterUnavailable(
+                "Dagster 연결 중 오류가 발생했습니다.",
+                operation=operation, failure_type="connection",
             ) from exc
         except (ValueError, UnicodeError, TypeError) as exc:
             raise DagsterUnavailable(
@@ -89,7 +95,12 @@ class DagsterClient:
         }"""
         result = self._execute(
             query, {"id": submission_id}, operation="run_lookup"
-        ).get("runsOrError") or {}
+        ).get("runsOrError")
+        if not isinstance(result, dict):
+            raise DagsterUnavailable(
+                "Dagster Run 조회 응답의 구조가 올바르지 않습니다.",
+                operation="run_lookup", failure_type="invalid_response",
+            )
         if result.get("__typename") != "Runs":
             raise DagsterUnavailable(
                 "Dagster Run 목록을 확인하지 못했습니다.",
@@ -109,10 +120,20 @@ class DagsterClient:
         if not runs:
             return None
         run = runs[0]
-        if not isinstance(run, dict) or run.get("jobName") != "activity_anomaly_workflow" or not isinstance(run.get("runId"), str):
+        if not isinstance(run, dict):
             raise DagsterUnavailable(
-                "SOS 제출에 연결된 Dagster Job을 확인하지 못했습니다.",
+                "Dagster Run 조회 응답의 구조가 올바르지 않습니다.",
+                operation="run_lookup", failure_type="invalid_response",
+            )
+        if run.get("jobName") != "activity_anomaly_workflow":
+            raise DagsterUnavailable(
+                "SOS 제출에 연결된 Dagster Job이 다릅니다.",
                 operation="run_lookup", failure_type="job_mismatch",
+            )
+        if not isinstance(run.get("runId"), str) or not run["runId"]:
+            raise DagsterUnavailable(
+                "Dagster Run 식별자가 올바르지 않습니다.",
+                operation="run_lookup", failure_type="invalid_response",
             )
         return run["runId"]
 
@@ -137,15 +158,24 @@ class DagsterClient:
         }"""
         result = self._execute(
             mutation, {"id": submission_id}, operation="run_launch"
-        ).get("launchRun") or {}
-        if result.get("__typename") != "LaunchRunSuccess" or not isinstance(
-            (result.get("run") or {}).get("runId"), str
-        ):
+        ).get("launchRun")
+        if not isinstance(result, dict):
+            raise DagsterUnavailable(
+                "Dagster 실행 접수 응답이 올바르지 않습니다.",
+                operation="run_launch", failure_type="invalid_response",
+            )
+        if result.get("__typename") != "LaunchRunSuccess":
             raise DagsterUnavailable(
                 "Dagster 실행을 접수하지 못했습니다.",
                 operation="run_launch", failure_type="unexpected_result",
             )
-        return result["run"]["runId"]
+        run = result.get("run")
+        if not isinstance(run, dict) or not isinstance(run.get("runId"), str) or not run["runId"]:
+            raise DagsterUnavailable(
+                "Dagster 실행 접수 응답에 Run 식별자가 없습니다.",
+                operation="run_launch", failure_type="invalid_response",
+            )
+        return run["runId"]
 
     def status(self, run_id: str) -> str:
         query = """query($id: ID!) {
@@ -156,11 +186,21 @@ class DagsterClient:
         }"""
         result = self._execute(
             query, {"id": run_id}, operation="run_status"
-        ).get("runOrError") or {}
+        ).get("runOrError")
+        if not isinstance(result, dict):
+            raise DagsterUnavailable(
+                "Dagster Run 상태 응답이 올바르지 않습니다.",
+                operation="run_status", failure_type="invalid_response",
+            )
         if result.get("__typename") != "Run":
             raise DagsterUnavailable(
                 "Dagster Run을 조회하지 못했습니다.",
                 operation="run_status", failure_type="unexpected_result",
+            )
+        if not isinstance(result.get("status"), str) or not result["status"]:
+            raise DagsterUnavailable(
+                "Dagster Run 상태를 확인할 수 없습니다.",
+                operation="run_status", failure_type="invalid_response",
             )
         return result["status"]
 
@@ -174,7 +214,12 @@ class DagsterClient:
         }"""
         result = self._execute(
             mutation, {"id": run_id}, operation="run_terminate"
-        ).get("terminateRun") or {}
+        ).get("terminateRun")
+        if not isinstance(result, dict):
+            raise DagsterUnavailable(
+                "Dagster 취소 응답이 올바르지 않습니다.",
+                operation="run_terminate", failure_type="invalid_response",
+            )
         if result.get("__typename") != "TerminateRunSuccess":
             raise DagsterUnavailable(
                 "Dagster 종료 요청을 확인하지 못했습니다.",
