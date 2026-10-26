@@ -300,9 +300,16 @@ try {
     status: { state: "Retry", attempts: 2, last_error_code: "SOS-MLFLOW-HTTP-503" },
     error: "",
   }));
-  assert.match(retryTracking, /MLflow 기록·등록 재시도 대기 · 시도 2회/);
+  assert.match(retryTracking, /MLflow 기록·모델 등록 실패 · 자동 재시도 대기 \(시도 2회\)/);
   assert.match(retryTracking, /SOS-MLFLOW-HTTP-503/);
-  assert.match(retryTracking, /플랫폼 Job 결과는 바뀌지 않으며/);
+  assert.match(retryTracking, /학습 결과는 유지됩니다/);
+  const missingModelTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
+    status: { state: "Retry", attempts: 6,
+      last_error_code: "SOS-MLFLOW-HTTP-404-registered-models_get" },
+    error: "",
+  }));
+  assert.match(missingModelTracking, /첫 등록 순서 또는 Registry 상태/);
+  assert.match(missingModelTracking, /같은 학습을 새로 제출해 해결하려 하지 마세요/);
   const recoveredTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
     status: { state: "Succeeded", run_id: "mlflow-run-1" }, error: "",
   }));
