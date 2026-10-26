@@ -17,7 +17,11 @@ def registered_model_name(model: dict) -> str:
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
     if algorithm != "isolation_forest":
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
-    return "sos-if-" + hashlib.sha256(owner.encode("utf-8")).hexdigest()[:24]
+    registry_key = model.get("registry_key") or "default"
+    if not isinstance(registry_key, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,39}", registry_key):
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
+    base = "sos-if-" + hashlib.sha256(owner.encode("utf-8")).hexdigest()[:24]
+    return base if registry_key == "default" else base + "-" + registry_key
 
 
 def _tags(version: dict) -> dict[str, str]:
