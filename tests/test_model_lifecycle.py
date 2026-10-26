@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sos_platform import model_deletion
 from sos_platform.mlflow_errors import MLflowDeliveryError
 from sos_platform.mlflow_registry import registered_model_name
+from sos_platform.mlflow_tracking import MLflowClient
 from sos_platform.object_store import ObjectStore
 from sos_platform.security import Actor
 
@@ -84,7 +85,7 @@ def test_model_delete_does_not_mark_completed_when_s3_fails(monkeypatch):
     class Registry:
         def __init__(self, *args, **kwargs):
             pass
-        def post(self, *args, **kwargs):
+        def delete(self, *args, **kwargs):
             calls.append("registry")
             return {}
     class Storage:
@@ -104,3 +105,31 @@ def test_model_delete_does_not_mark_completed_when_s3_fails(monkeypatch):
         endpoint("model-id", confirm=True, actor=actor)
     assert error.value.status_code == 503
     assert calls == ["begin", "registry", "s3"]
+
+
+def test_mlflow_management_uses_patch_and_delete_http_methods():
+    class Response:
+        def __init__(self, content):
+            self.content = content
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self, limit):
+            return self.content
+
+    class Opener:
+        def __init__(self):
+            self.methods = []
+        def open(self, request, timeout):
+            self.methods.append(request.get_method())
+            return Response(b"{}" if request.get_method() == "PATCH" else b"")
+
+    client = MLflowClient(SimpleNamespace(
+        endpoint="http://127.0.0.1:5000", token=None, timeout_seconds=1,
+    ))
+    opener = Opener()
+    client._opener = opener
+    assert client.patch("registered-models/update", {"name":"sos-if-test"}) == {}
+    assert client.delete("model-versions/delete", {"name":"sos-if-test", "version":"1"}) == {}
+    assert opener.methods == ["PATCH", "DELETE"]
