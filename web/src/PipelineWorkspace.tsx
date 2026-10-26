@@ -578,7 +578,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <div>
           <span className="eyebrow">학습 · 결과 탐구</span>
           <h3 id="pipeline-current-run-heading" tabIndex={-1}>{
-            run ? "모델 학습 · " + statusLabel[run.status] : "학습 기록을 불러오는 중"
+            run ? registrationPending ? "모델 학습 완료 · MLflow 등록 대기"
+            : "모델 학습 · " + statusLabel[run.status] : "학습 기록을 불러오는 중"
           }</h3>
         </div>
         <button type="button" className="secondary" disabled={exampleBusy}
