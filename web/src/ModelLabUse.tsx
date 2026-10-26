@@ -116,22 +116,26 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     <header className="model-lab-use-heading">
       <div>
         <span className="eyebrow">활동 이상 탐지 · 모델 활용</span>
-        <h2 id="model-lab-use-heading">학습된 모델 사용해보기</h2>
-        <p>준비된 입력으로 점수를 계산하거나 값을 직접 바꾸고, 필요하면 Dataset 전체에 적용합니다.</p>
+        <h2 id="model-lab-use-heading">준비된 모델로 바로 분석하기</h2>
+        <p>한 건의 활동을 체험하거나 Dataset 전체의 이상 점수를 계산합니다.
+          모델 관리 없이 실제 결과부터 확인할 수 있습니다.</p>
       </div>
+    </header>
+    <details className="model-lab-model-options">
+      <summary>사용 모델 변경 · 모델 목록 관리</summary>
+      <label>사용할 모델 그룹
+        <select value={registryKey} onChange={event => {
+          setRegistryKey(event.target.value);
+          onSelectModel("");
+        }}>
+          <option value="default">기본 활동 이상 탐지</option>
+          {groups.filter(g => g.registry_key !== "default").map(g =>
+            <option key={g.registry_key} value={g.registry_key}>{g.title}</option>)}
+        </select>
+      </label>
       <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}
         disabled={loading || moreLoading}>모델 목록 새로고침</button>
-    </header>
-    <label>사용할 모델 그룹
-      <select value={registryKey} onChange={event => {
-        setRegistryKey(event.target.value);
-        onSelectModel("");
-      }}>
-        <option value="default">기본 활동 이상 탐지</option>
-        {groups.filter(g => g.registry_key !== "default").map(g =>
-          <option key={g.registry_key} value={g.registry_key}>{g.title}</option>)}
-      </select>
-    </label>
+    </details>
     {loading && <p role="status">사용 가능한 모델을 확인하는 중입니다.</p>}
     {error && <div className="pipeline-readiness-blocked" role="alert">
       <p>{models.length > 0 || nextPage
@@ -151,7 +155,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     {!loading && !error && models.length === 0 && <div className="model-lab-no-models">
       <h3>{nextPage || lookupFailures
         ? "호환되는 모델을 아직 찾지 못했습니다"
-        : "아직 사용할 수 있는 활동 이상 탐지 모델이 없습니다"}</h3>
+        : "선택한 그룹에 사용할 수 있는 활동 이상 탐지 모델이 없습니다"}</h3>
       <p>{nextPage
         ? "등록된 모델 버전이 더 있습니다. 다음 페이지를 확인하면 사용할 모델이 나올 수 있습니다."
         : lookupFailures
@@ -197,6 +201,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           onClick={() => onSelectModel(models[0].revision.id)}>모델 사용하기 →</button>
       </div>}
     {selected && <>
+      <p className="hint">준비된 모델을 선택했습니다. 아래에서 입력 방식을 선택하면 바로 실행할 수 있습니다.</p>
       <div className="model-lab-usage-tabs" role="group" aria-label="모델 적용 방식">
         <button type="button" className="secondary" aria-pressed={usage === "playground"}
           onClick={() => setUsage("playground")}>예시·직접 입력</button>
