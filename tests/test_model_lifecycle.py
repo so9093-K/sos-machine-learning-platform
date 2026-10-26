@@ -159,3 +159,33 @@ def test_unconfigured_mlflow_does_not_begin_model_deletion(monkeypatch):
     with pytest.raises(HTTPException) as error:
         endpoint("model-id", confirm=True, actor=actor)
     assert error.value.status_code == 503
+
+
+def test_invalid_model_object_key_never_deletes_registry_version(monkeypatch):
+    actor = Actor("researcher-one", "human", frozenset({"researcher"}))
+    model = {
+        "id": "model-id", "job_id": "job", "attempt_id": "attempt",
+        "registry_model": "sos-if-test", "registry_version": "2",
+        "location": "s3://bucket/results/unrelated.model.joblib",
+        "lifecycle_state": "Active",
+    }
+    monkeypatch.setattr(model_deletion, "begin_delete", lambda *_: model)
+    monkeypatch.setattr(model_deletion, "finish_delete", lambda *_: pytest.fail(
+        "Mismatched artifact must not be marked deleted"))
+    monkeypatch.setattr(model_deletion.MLflowSettings, "from_env", lambda: object())
+    class Storage:
+        def key(self, location):
+            return location.split("s3://bucket/", 1)[1]
+        def permanently_delete(self, key):
+            pytest.fail("Wrong artifact must never be deleted")
+    class Registry:
+        def __init__(self, *args, **kwargs):
+            pytest.fail("Registry must not be changed before artifact validation")
+    monkeypatch.setattr(model_deletion, "ObjectStore", Storage)
+    monkeypatch.setattr(model_deletion, "MLflowClient", Registry)
+    router = model_deletion.model_deletion_router(object())
+    endpoint = next(route.endpoint for route in router.routes
+                    if getattr(route, "path", "") == "/api/ml/models/{revision_id}")
+    with pytest.raises(HTTPException) as err:
+        endpoint("model-id", confirm=True, actor=actor)
+    assert err.value.status_code == 503
