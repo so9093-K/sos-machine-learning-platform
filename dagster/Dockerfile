@@ -13,6 +13,7 @@ COPY alembic.ini ./
 COPY dagster/ ./dagster/
 RUN python -m pip install --no-cache-dir . -r dagster/requirements.txt
 RUN groupadd --gid 10001 sos && useradd --uid 10001 --gid sos --create-home sos \
-    && mkdir -p /var/lib/sos && chown -R sos:sos /var/lib/sos /app/dagster
+    && mkdir -p /var/lib/sos /var/lib/dagster/logs /var/lib/dagster/data \
+    && chown -R sos:sos /var/lib/sos /var/lib/dagster /app/dagster
 USER sos
 WORKDIR /app
