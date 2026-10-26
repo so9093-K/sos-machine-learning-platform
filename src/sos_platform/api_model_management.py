@@ -208,6 +208,15 @@ def model_management_router(store: Store) -> APIRouter:
             ), {"actor": actor.id, "key": registry_key}).scalar_one()
             if in_use:
                 raise HTTPException(status_code=409, detail="Model group still has managed versions")
+            # 학습 Job이 아직 Model Revision을 게시하지 않았더라도 같은 그룹을
+            # 삭제하면 전송 Worker가 그룹을 다시 만들 수 있다.
+            pending_training = db.execute(text(
+                "SELECT count(*) FROM jobs WHERE kind='ml_train' "
+                "AND owner_actor=:actor AND status IN ('Queued','Running') "
+                "AND COALESCE(spec::jsonb->>'registry_key','default')=:key"
+            ), {"actor": actor.id, "key": registry_key}).scalar_one()
+            if pending_training:
+                raise HTTPException(status_code=409, detail="Model group has running training jobs")
         client = _client()
         try:
             _get_group(client, name)
