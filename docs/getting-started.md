@@ -41,6 +41,12 @@ make doctor   # 설정·준비 상태 진단
 - API Reference: `http://localhost:9602/docs`
 - 로컬 MLflow 운영자 관리 UI: `http://localhost:9606`
 - Dagster OSS 운영자 UI: `http://localhost:9607` (localhost 전용, 사용자 인증 기능 없음)
+- Dagster는 SOS 사용자용 학습 화면이 아니라 **로컬 운영자의 Workflow Run·단계·이벤트 확인 도구**입니다.
+  실행과 결과는 SOS 웹에서 확인하며, Dagster 접속은 같은 PC의 브라우저에서만 가능합니다.
+  API 컨테이너의 내부 GraphQL 주소는 `http://dagster-webserver:3000/graphql`입니다.
+- `make doctor`는 Dagster Run 검색 계약까지 검사하지 않습니다.
+  별도의 읽기 전용 `make doctor-dagster`는 SOS가 실제 사용하는 제출 태그 Run 검색을 확인합니다.
+  정상적인 미존재 제출 ID는 `None`을 출력합니다.
 
 API Reference의 Scalar JavaScript는 Docker 이미지 빌드에 함께 포함되므로 실행 시 외부 CDN을 사용하지 않는다.
 호스트에서 Python API를 직접 실행할 경우 Node.js 24와 npm으로
