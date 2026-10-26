@@ -76,7 +76,7 @@ Builder / Operator는 모델·실행·평가·배포를 관리하고, Consumer /
 
 ## MLflow 연구 기록·모델 관리의 사용자 경험
 
-SOS 웹에서는 사용자 소유 Experiment·Run·모델 버전을 검색하고 둘의 Params·Metrics를 비교할 수 있어야 한다. 비교 조건이 다른 Run을 동등한 성능으로 오해시키지 않는다. 등록 성공한 고정 모델 버전에서 기존 SOS Scoring·평가 경험으로 이어지고, 등록 대기/오류는 학습 실패와 구분한다. Fork·Reproduce는 Dataset 판본·Feature·Seed·설정을 참조해 새 Job으로 실행한다.
+SOS 웹에서는 사용자 소유 Experiment·Run·모델 그룹과 버전을 검색하고 둘의 Params·Metrics를 비교할 수 있어야 한다. 모델을 새로 만드는 행동, 동일 그룹의 새 버전 생성, 사용할 모델 선택, 이름·설명 수정, 보관/복원, 영구 삭제는 구별한다. 사용자 용어는 모델 선택·모델 버전으로 표기하며 Model Revision은 내부 실행 근거다. 영구 삭제 전 실제 영향을 확인하고 진행 중 실행과 공유 아티팩트가 있으면 차단한다. 삭제된 모델의 과거 평가 결과는 남지만 재사용할 수 없다고 안내한다. 비교 조건이 다른 Run을 동등한 성능으로 오해시키지 않는다. 등록 성공한 고정 모델 버전에서 기존 SOS Scoring·평가 경험으로 이어지고, 등록 대기/오류는 학습 실패와 구분한다. Fork·Reproduce는 Dataset 판본·Feature·Seed·설정을 참조해 새 Job으로 실행한다.
 
 ## 처음 보는 Dataset의 이해
 
