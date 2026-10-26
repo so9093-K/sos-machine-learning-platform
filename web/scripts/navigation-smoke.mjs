@@ -86,6 +86,23 @@ try {
   assert.equal(contextPath("pipelines", { pipelineView: "use", modelId: "model one" }),
     "/pipelines?view=use&model=model+one");
   assert.equal(routeAt("/pipelines", "?view=use&model=model-one").context.modelId, "model-one");
+  // 사용자 정의 모델 그룹의 직접 URL과 결과에서 복귀할 때 모델 선택이 유지된다.
+  const groupedUse = contextPath("pipelines", {
+    pipelineView: "use", modelId: "model-a", modelGroupKey: "anomaly-team",
+  });
+  assert.equal(groupedUse, "/pipelines?view=use&model=model-a&group=anomaly-team");
+  assert.equal(routeAt("/pipelines", "?view=use&model=model-a&group=anomaly-team")
+    .context.modelGroupKey, "anomaly-team");
+  assert.equal(routeAt("/pipelines", "?view=use&model=model-a&group=invalid!")
+    .context.modelGroupKey, undefined);
+  const groupedResource = resourcePath("scoring", "result-a", {
+    modelLabReturn: true, modelId: "model-a", modelGroupKey: "anomaly-team",
+  });
+  assert.equal(groupedResource,
+    "/scoring/results/result-a?from=model-lab&model=model-a&group=anomaly-team");
+  assert.equal(routeAt("/scoring/results/result-a",
+    "?from=model-lab&model=model-a&group=anomaly-team").context.modelGroupKey, "anomaly-team");
+
   assert.equal(routeAt("/pipelines", "?view=learn&model=model-one").context.modelId, undefined);
   assert.equal(routeAt("/pipelines", "?view=unexpected").context.pipelineView, undefined);
   assert.equal(routeAt("/pipelines", "?run=run-1&view=use").context.pipelineView, undefined);
