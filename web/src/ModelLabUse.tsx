@@ -34,7 +34,8 @@ async function compatiblePage(page: MLflowModelVersionPage, definition: Pipeline
 }
 
 export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, canRun, canCancel,
-  selectedModelId, onSelectModel, onOpenResource, onBack, onLearn }: {
+  selectedModelId, onSelectModel, onOpenResource, onBack, onLearn,
+  canUpload, onDatasetRegistered }: {
   datasets: Dataset[];
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
@@ -43,6 +44,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   onSelectModel: (id: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onBack: () => void; onLearn: () => void;
+  canUpload: boolean;
+  onDatasetRegistered: (dataset: Dataset) => void;
 }) {
   const [models, setModels] = useState<RegisteredActivityModel[]>([]);
   const [groups, setGroups] = useState<ModelGroup[]>([]);
@@ -217,7 +220,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           datasets={datasets} hasMoreDatasets={hasMoreDatasets}
           onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
           onOpenResult={id => onOpenResource("scoring", id)}
-          onOpenResource={onOpenResource} />}
+          onOpenResource={onOpenResource}
+          canUpload={canUpload} onDatasetRegistered={onDatasetRegistered} />}
       </div>
     </>}
     <div className="model-lab-use-footer">
