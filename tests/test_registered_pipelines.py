@@ -216,3 +216,35 @@ def test_dagster_graphql_errors_are_distinguished(monkeypatch):
     with pytest.raises(DagsterUnavailable) as failed:
         DagsterClient("http://example.test/graphql").find_by_submission("submission-1")
     assert failed.value.failure_type == "graphql_error"
+
+
+@pytest.mark.parametrize(
+    "operation,payload",
+    [
+        ("find_by_submission", {"runsOrError": {"__typename": "Runs", "results": None}}),
+        ("launch", {"launchRun": {"__typename": "LaunchRunSuccess", "run": "broken"}}),
+        ("status", {"runOrError": {"__typename": "Run", "status": None}}),
+        ("terminate", {"terminateRun": "broken"}),
+    ],
+)
+def test_dagster_malformed_response_has_safe_failure_category(
+    monkeypatch, operation, payload
+):
+    client = DagsterClient("http://example.test/graphql")
+    monkeypatch.setattr(client, "_execute", lambda *args, **kwargs: payload)
+    with pytest.raises(DagsterUnavailable) as failed:
+        getattr(client, operation)("test-id")
+    assert failed.value.failure_type == "invalid_response"
+
+
+def test_dagster_connection_reset_is_dependency_failure(monkeypatch):
+    from sos_platform import dagster_client
+
+    def reset_connection(*args, **kwargs):
+        raise ConnectionResetError("connection closed")
+
+    monkeypatch.setattr(dagster_client, "urlopen", reset_connection)
+    with pytest.raises(DagsterUnavailable) as failed:
+        DagsterClient("http://example.test/graphql").find_by_submission("test-id")
+    assert failed.value.operation == "run_lookup"
+    assert failed.value.failure_type == "connection"
