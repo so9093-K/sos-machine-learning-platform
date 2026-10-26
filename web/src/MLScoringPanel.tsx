@@ -39,6 +39,7 @@ export function MLScoringPanel({
   const [uploadError, setUploadError] = useState("");
   const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number; phase: "transferring" | "registering" } | null>(null);
   const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
+  const [previousJobNotice, setPreviousJobNotice] = useState(false);
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [error, setError] = useState("");
   const [historyError, setHistoryError] = useState("");
@@ -110,6 +111,7 @@ export function MLScoringPanel({
     ? model.features.filter(feature => !columns.some(col => col.name === feature)) : [];
   const inputReady = datasetId !== "" && checkedColumns && missingFeatures.length === 0;
   function chooseDataset(id: string) {
+    if (selectedJob && !TERMINAL.has(selectedJob.status)) setPreviousJobNotice(true);
     setDatasetId(id);
     setColumnStatus("idle");
     setColumnsDatasetId("");
@@ -189,6 +191,13 @@ export function MLScoringPanel({
       <h4>어떤 데이터에 모델을 적용할까요?</h4>
       <p>선택한 Dataset에 학습 모델을 적용해 불변 Scoring Result를 생성합니다.</p>
     </div></div>
+    {previousJobNotice && <div role="status" className="pipeline-readiness-blocked">
+      이전 Dataset에서 시작한 점수 계산 Job은 자동 취소되지 않습니다.
+      완료 여부는 작업 이력에서 확인할 수 있습니다.
+      <button type="button" className="secondary" onClick={() => setPreviousJobNotice(false)}>
+        안내 닫기
+      </button>
+    </div>}
     {error && <div role="alert" className="pipeline-readiness-blocked">
       <strong>모델 점수 계산 또는 상태 확인에 문제가 생겼습니다.</strong>
       <details><summary>요청 오류와 복구 정보</summary><p>{error}</p></details>
