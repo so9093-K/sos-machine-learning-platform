@@ -520,8 +520,12 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onConnectExisting={() => void connectExisting()}
           hasMore={Boolean(nextDatasetCursor)} onLoadMore={() => void loadMoreDatasets()} />}>
       {error && <div role="alert" className="alert error">
-        <strong>선택한 작업의 요청 또는 확인에 문제가 생겼습니다.</strong>
-        <details><summary>오류 진단 정보 및 복구 안내</summary>{error}</details>
+        {error.includes("SOS-") || error.includes("요청 ID:")
+          ? <>
+            <strong>선택한 작업의 요청 또는 확인에 문제가 생겼습니다.</strong>
+            <details><summary>오류 진단 정보 및 복구 안내</summary>{error}</details>
+          </>
+          : <strong>{error}</strong>}
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
       {datasetReadError && ["overview", "understanding", "preview", "profile", "preparation", "pipelines"].includes(tab) &&
         <div role="alert" className="alert error">
