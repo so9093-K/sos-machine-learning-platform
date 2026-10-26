@@ -46,6 +46,7 @@ services:
     environment:
       <<: *sos-storage-env
       SOS_AUTH_MODE: token
+      SOS_DAGSTER_GRAPHQL_URL: http://dagster-webserver:3000/graphql
       SOS_AUTH_TOKEN_HASHES: ${SOS_AUTH_TOKEN_HASHES:-}
       SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-http://mlflow:5000}
       SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
@@ -183,9 +184,106 @@ services:
       retries: 30
 
 
+  dagster-postgres:
+    logging: *sos-logging
+    profiles: [app]
+    image: postgres:17
+    environment:
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: ${SOS_DAGSTER_DB_PASSWORD:-dagster-dev-only}
+      POSTGRES_DB: sos_dagster
+    volumes:
+      - dagster_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dagster -d sos_dagster"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  dagster-code:
+    logging: *sos-logging
+    profiles: [app]
+    image: ${SOS_DAGSTER_IMAGE:-sos-platform-dagster:local}
+    build:
+      context: .
+      dockerfile: dagster/Dockerfile
+    environment:
+      <<: *sos-storage-env
+      SOS_DAGSTER_DB_PASSWORD: ${SOS_DAGSTER_DB_PASSWORD:-dagster-dev-only}
+      PYTHONPATH: /app/dagster
+    command: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000", "-m", "sos_dagster.definitions"]
+    volumes:
+      - dagster_logs:/var/lib/dagster/logs
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      dagster-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "dagster", "api", "grpc-health-check", "-p", "4000"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  dagster-webserver:
+    logging: *sos-logging
+    profiles: [app]
+    image: ${SOS_DAGSTER_IMAGE:-sos-platform-dagster:local}
+    build:
+      context: .
+      dockerfile: dagster/Dockerfile
+    environment:
+      <<: *sos-storage-env
+      SOS_DAGSTER_DB_PASSWORD: ${SOS_DAGSTER_DB_PASSWORD:-dagster-dev-only}
+      PYTHONPATH: /app/dagster
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "/app/dagster/workspace.yaml"]
+    ports:
+      - "127.0.0.1:${SOS_DAGSTER_PORT:-9607}:3000"
+    volumes:
+      - dagster_logs:/var/lib/dagster/logs
+    depends_on:
+      dagster-code:
+        condition: service_healthy
+      dagster-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/server_info',timeout=3).close()"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  dagster-daemon:
+    logging: *sos-logging
+    profiles: [app]
+    image: ${SOS_DAGSTER_IMAGE:-sos-platform-dagster:local}
+    build:
+      context: .
+      dockerfile: dagster/Dockerfile
+    environment:
+      <<: *sos-storage-env
+      SOS_DAGSTER_DB_PASSWORD: ${SOS_DAGSTER_DB_PASSWORD:-dagster-dev-only}
+      PYTHONPATH: /app/dagster
+    command: ["dagster-daemon", "run", "-w", "/app/dagster/workspace.yaml"]
+    volumes:
+      - dagster_logs:/var/lib/dagster/logs
+    depends_on:
+      dagster-code:
+        condition: service_healthy
+      dagster-postgres:
+        condition: service_healthy
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   object_data:
   api_state:
   worker_state:
   mlflow_data:
+  dagster_postgres_data:
+  dagster_logs:
