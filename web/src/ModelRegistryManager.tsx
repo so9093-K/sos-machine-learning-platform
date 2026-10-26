@@ -33,6 +33,9 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged }: {
   onChanged: () => void;
 }) {
   const [groups, setGroups] = useState<ModelGroup[]>([]);
+  const [pendingDeletes, setPendingDeletes] = useState<Array<{
+    id: string; registry_key: string; registry_version: string;
+  }>>([]);
   const [key, setKey] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -44,8 +47,16 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged }: {
   const current = groups.find(g => g.registry_key === activeKey);
   useEffect(() => {
     let active = true;
-    void request<GroupPage>("/api/ml/registry/groups").then(p => {
-      if (active) setGroups(p.items);
+    void Promise.all([
+      request<GroupPage>("/api/ml/registry/groups"),
+      request<{items: Array<{id:string; registry_key:string; registry_version:string}>}>(
+        "/api/ml/models/deletion-pending",
+      ),
+    ]).then(([groupsPage, pendingPage]) => {
+      if (active) {
+        setGroups(groupsPage.items);
+        setPendingDeletes(pendingPage.items);
+      }
     }).catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
   }, [revision]);
@@ -110,6 +121,20 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged }: {
               });
             }}>빈 그룹 삭제</button>}
       </div>
+    </div>}
+    {pendingDeletes.length > 0 && <div className="pipeline-readiness-blocked">
+      <h4>영구 삭제 완료 대기</h4>
+      <p>S3 또는 Registry 작업이 끝나지 않은 모델입니다. 완료 전에는 다시 사용할 수 없습니다.</p>
+      {pendingDeletes.map(item => <div key={item.id} className="actions">
+        <span>{item.registry_key} · v{item.registry_version} · {item.id.slice(0, 8)}</span>
+        <button type="button" disabled={pending} onClick={() => {
+          if (!window.confirm("이 모델의 영구 삭제를 계속 진행하시겠습니까?")) return;
+          void change(() => request(
+            "/api/ml/models/" + encodeURIComponent(item.id) + "?confirm=true",
+            { method: "DELETE" },
+          ));
+        }}>삭제 재시도</button>
+      </div>)}
     </div>}
     <details>
       <summary>새 모델 그룹 만들기</summary>
