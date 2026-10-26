@@ -1,0 +1,23 @@
+storage:
+  postgres:
+    postgres_db:
+      hostname: postgres
+      username:
+        env: SOS_DB_USER
+      password:
+        env: SOS_DB_PASSWORD
+      db_name: sos_dagster
+      port: 5432
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 1
+
+run_launcher:
+  module: dagster.core.launcher
+  class: DefaultRunLauncher
+
+telemetry:
+  enabled: false
