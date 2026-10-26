@@ -481,7 +481,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       <div className="pipeline-section-heading">
         <div><span className="eyebrow">내 Dataset으로 실행</span>
           <h3 id="pipeline-prepare-title" tabIndex={-1}>학습할 Dataset 선택</h3>
-          <p>준비된 활동 Feature가 있는 Dataset을 선택하고 입력 조건을 확인합니다.</p>
+          <p>이 Pipeline은 등록된 {current?.required_features.length ?? 44}개 활동 Feature와
+            <code> ts</code> 시간 컬럼을 고정 입력으로 사용합니다.
+            Dataset에 추가 컬럼이 있어도 되며, Feature를 직접 다시 선택할 필요는 없습니다.</p>
         </div>
         <span className="chip">{!datasetId ? "Dataset 선택 전" :
           currentCheck?.ready ? "입력 구조 확인됨" :
