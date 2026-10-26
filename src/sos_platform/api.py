@@ -222,7 +222,18 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     register_error_handlers(app)
 
     @app.exception_handler(DagsterUnavailable)
-    async def dagster_unavailable(request: Request, _exc: DagsterUnavailable):
+    async def dagster_unavailable(request: Request, exc: DagsterUnavailable):
+        # 실제 실패 종류만 기록한다. GraphQL 응답·사용자 데이터·자격 증명은 남기지 않는다.
+        emit(
+            "dagster.request.failed",
+            service="sos-api",
+            level=logging.ERROR,
+            request_id=request.state.request_id,
+            error_code="SOS-API-DEPENDENCY",
+            operation=exc.operation,
+            failure_type=exc.failure_type,
+            status=str(exc.http_status) if exc.http_status is not None else None,
+        )
         return problem_response(request, "SOS-API-DEPENDENCY", 503,
                                 ERRORS["SOS-API-DEPENDENCY"].message)
 

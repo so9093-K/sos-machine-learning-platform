@@ -37,12 +37,14 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
   const [inputMode, setInputMode] = useState<"all" | "sample">("all");
   const [inputRows, setInputRows] = useState(100000);
   const [inputSeed, setInputSeed] = useState(42);
+  const [missingPolicy, setMissingPolicy] = useState<"reject" | "train_median">("reject");
   const [loadingColumns, setLoadingColumns] = useState(false);
   const [selectedJob, setSelectedJob] = useState<MLTrainingJob | null>(null);
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [previousJobNotice, setPreviousJobNotice] = useState("");
   const currentDataset = useRef(selectedId);
   currentDataset.current = selectedId;
   const selectionRequest = useRef(0);
@@ -106,6 +108,18 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
     return () => { active = false; };
   }, [selectedJob?.status, selectedJob?.result?.model_revision_id]);
 
+  function changeDataset(id: string) {
+    if (id === selectedId) return;
+    setPreviousJobNotice(selectedJob && !TERMINAL.has(selectedJob.status)
+      ? "이전 Dataset의 학습 Job은 계속 실행됩니다. 기존 Job 상태는 ML 작업 이력에서 확인하세요."
+      : "");
+    setSelectedJob(null);
+    setModel(null);
+    setError("");
+    setNotice("");
+    onDatasetSelected(id);
+  }
+
   async function startTraining() {
     if (!canTrain || !selectedId || features.length < 1 || !experimentTitle.trim() ||
         experimentTitle.trim().length > 80 || submitting ||
@@ -113,10 +127,11 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
           !Number.isInteger(inputSeed) || inputSeed < 0 || inputSeed > 4294967295))) return;
     const expectedDataset = selectedId;
     const revision = ++selectionRequest.current;
-    setSubmitting(true); setError(""); setNotice("");
+    setSubmitting(true); setError(""); setNotice(""); setPreviousJobNotice("");
     try {
       const result = await submitJob<MLTrainingJob>("/api/ml/train/jobs", {
         dataset_id: selectedId, features, experiment_title: experimentTitle.trim(),
+        missing_policy: missingPolicy,
         registry_key: registryKey,
         training_input: inputMode === "all" ? { mode: "all" } :
           { mode: "sample", rows: inputRows, seed: inputSeed },
@@ -164,8 +179,13 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
   }
 
   return <div className="job-list">
-    {notice && <section className="alert success" role="status">
+    {notice && (!selectedJob || !TERMINAL.has(selectedJob.status)) && <section className="alert success" role="status">
       {notice}<button type="button" onClick={() => setNotice("")} aria-label="ML 알림 닫기">×</button>
+    </section>}
+    {previousJobNotice && <section className="panel" role="status">
+      <p>{previousJobNotice}</p>
+      <button type="button" className="secondary"
+        onClick={() => setPreviousJobNotice("")}>확인</button>
     </section>}
     {error && <section className="panel" role="alert">
       <strong>ML 작업을 처리하지 못했습니다.</strong> {error}
@@ -174,12 +194,12 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
     <section className="panel">
       <div className="panel-head"><div>
         <h3>Isolation Forest 실험</h3>
-        <p>숫자형 결측 없는 입력으로 비동기 학습합니다. Dataset 판본과 모델 결과는 변경할 수 없습니다.</p>
+        <p>Feature와 입력 정책을 직접 선택하는 독립 실험입니다. Dataset 판본과 모델 결과는 변경할 수 없습니다.</p>
       </div></div>
       <div className="form-row">
         <label>학습 Dataset
           <select aria-label="ML 학습 Dataset" value={selectedId}
-            onChange={event => onDatasetSelected(event.target.value)}>
+            onChange={event => changeDataset(event.target.value)}>
             <option value="">선택하세요</option>
             {selectedId && !datasets.some(item => item.id === selectedId) &&
               <option value={selectedId}>현재 목록 외 Dataset · {selectedId}</option>}
@@ -241,15 +261,30 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
           : "지정한 행 수와 Seed로 전체 Dataset에서 관측을 선택합니다. 같은 입력의 Feature 값과 중복 횟수라면 스캔 순서에 무관하게 같은 표본을 얻습니다. 요청 행 수보다 Dataset이 작거나 예산이 부족하면 실패합니다."}</p>
       </div>
       <div className="steps">
+        <div className="form-row">
+          <label>결측값 처리 정책
+            <select aria-label="학습 결측값 처리 정책" value={missingPolicy}
+              onChange={event => setMissingPolicy(event.target.value as "reject" | "train_median")}>
+              <option value="reject">결측 허용 안 함 (기본값)</option>
+              <option value="train_median">Train 중앙값으로 대체</option>
+            </select>
+          </label>
+        </div>
+        <p className="hint">{missingPolicy === "reject"
+          ? "선택한 Feature에 결측값이 있으면 학습이 실패합니다. 숫자형이라는 이유만으로 결측이 없는 것은 아닙니다."
+          : "학습 데이터에서 계산한 중앙값으로 결측값을 대체합니다. 비유한값 등 다른 잘못된 입력은 그대로 검증합니다."}</p>
         <strong>학습에 사용할 숫자형 Feature ({features.length}개)</strong>
         {!selectedId && <p className="hint">Dataset을 선택하면 입력 스키마를 조회합니다.</p>}
         {loadingColumns && <p role="status" className="hint">스키마를 조회하고 있습니다.</p>}
         {selectedId && !loadingColumns && numericColumns.length === 0 &&
           <p className="hint">사용 가능한 숫자형 Feature가 없습니다. 데이터 준비에서 숫자형 Feature를 생성하세요.</p>}
-        <FeatureSelector key={selectedId} columns={numericColumns} selected={features}
-          disabled={!canTrain} onChange={setFeatures} />
+        {numericColumns.length > 0 && <details className="training-feature-editor">
+          <summary>Feature 선택 편집 · {features.length}개 선택 / {numericColumns.length}개 숫자형 컬럼</summary>
+          <FeatureSelector key={selectedId} columns={numericColumns} selected={features}
+            disabled={!canTrain} onChange={setFeatures} />
+        </details>}
       </div>
-      <p className="hint">숫자형 Feature를 선택하세요. 학습 입력은 위에서 선택한 정책에 따르며, 실행 예산에 맞지 않으면 실패합니다. 결측·비유한값·정밀도 오류는 실패로 처리합니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
+      <p className="hint">사용자가 선택한 숫자형 Feature와 결측 정책을 사용합니다. 숫자형 컬럼이 모델에 의미 있는 입력인지는 별도로 판단해야 합니다. 비유한값·정밀도·실행 예산 문제는 여전히 실패할 수 있습니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
       <div className="actions">
         <button disabled={!canTrain || submitting || !selectedId || features.length === 0 ||
           !experimentTitle.trim() || experimentTitle.trim().length > 80 ||
@@ -267,9 +302,18 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
       </div></div>
       {selectedJob.cancel_requested && selectedJob.status === "Running" &&
         <p className="hint">취소 요청 중입니다. 실제 종료 확인까지 기다립니다.</p>}
-      {selectedJob.status === "Failed" && <p role="alert">
-        {selectedJob.error ?? "학습 실패"} · 오류 코드 {selectedJob.error_code ?? "미확인"}
-      </p>}
+      {selectedJob.status === "Failed" && <div role="alert" className="pipeline-readiness-blocked">
+        <strong>학습에 실패했습니다.</strong>
+        <p>{selectedJob.error ?? "학습 실패"} · 오류 코드 {selectedJob.error_code ?? "미확인"}</p>
+        {selectedJob.error_code === "SOS-ML-INPUT-INVALID" && <p>
+          선택 Feature의 결측·비유한값·자료형과 입력 정책을 확인하세요.
+          결측 거부로 제출한 Job이라면 Train 중앙값 대체 정책을 선택해 새로 학습할 수 있습니다.
+          정확한 오류 항목은 이 코드만으로 확정할 수 없습니다.
+        </p>}
+        {selectedJob.error_code === "SOS-ML-TRAIN-CAPACITY" && <p>
+          입력 범위에서 명시적 부분집합을 선택하거나 실행 자원을 확인하세요.
+        </p>}
+      </div>}
       {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
         !selectedJob.cancel_requested && <button type="button" className="secondary"
           onClick={() => void cancelJob()}>취소 요청</button>}

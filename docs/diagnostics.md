@@ -83,3 +83,5 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 2. Dagster Run ID와 SOS Workflow 제출 ID를 대조한다. GraphQL 장애 시 기존 SOS Job·Model·Scoring 결과의 성공을 실패로 변경하지 않는다.
 3. Dagster 실행 접수 응답이 유실되었다면 동일 Actor와 Idempotency-Key로 재요청하고, Dagster Run 태그를 조회한 뒤 중복 실행 여부를 확인한다.
 4. 취소 시 현재 SOS Job의 실제 중단 여부를 조회한다. Dagster 취소 신호만으로 외부 저장소 커밋이 취소됐다고 판단하지 않는다.
+5. 로컬 운영 UI(`http://localhost:9607`)와 `make doctor-dagster`로 Workflow 및 실제 Run 검색 GraphQL 계약을 구별해 확인한다. 기본 GraphQL `__typename`의 200 응답만으로 조회·제출 성공을 가정하지 않는다.
+6. API 구조화 로그 `dagster.request.failed`의 `request_id`, `operation`, `failure_type`, `status`로 HTTP 스키마 오류·연결 장애·응답 시간 초과를 구분한다. 원문 쿼리·데이터·토큰은 기록하지 않는다.

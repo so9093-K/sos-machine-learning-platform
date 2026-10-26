@@ -1,6 +1,6 @@
 # 로컬 개발 서비스는 compose.yaml의 app 프로필로 실행한다.
 .DEFAULT_GOAL := help
-.PHONY: up down restart status logs doctor validate help
+.PHONY: up down restart status logs doctor doctor-dagster validate help
 
 COMPOSE := docker compose --profile app
 
@@ -24,6 +24,10 @@ doctor:
 	@$(COMPOSE) ps --all
 	@$(COMPOSE) exec -T api python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:9602/api/ready', timeout=5).close()"
 
+# 선택적 진단: 전체 서비스 준비 확인과 구분된 실제 Dagster Run 조회 계약 검사.
+doctor-dagster:
+	@$(COMPOSE) exec -T api python -c "from sos_platform.dagster_client import DagsterClient; result = DagsterClient().find_by_submission('00000000-0000-4000-8000-000000000000'); print('Dagster Run 검색 계약: 정상, 결과:', result)"
+
 validate:
 	@python scripts/validate.py run all
 
@@ -36,4 +40,5 @@ help:
 		'  make status     컨테이너 상태 조회' \
 		'  make logs       API·Worker·Web·Dagster 로그' \
 		'  make doctor     Compose 설정 및 상태 확인' \
+		'  make doctor-dagster  Dagster GraphQL Run 검색 계약(읽기 전용) 확인' \
 		'  make validate   현재 구성된 제품 검증 실행'

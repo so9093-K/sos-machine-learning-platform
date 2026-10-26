@@ -53,6 +53,14 @@ def _row():
     }
 
 
+def test_unknown_dagster_run_status_is_reported_as_dependency_error(monkeypatch):
+    monkeypatch.setattr(dagster_workflows, "_job_by_stage", lambda *_: None)
+    with pytest.raises(DagsterUnavailable) as failed:
+        dagster_workflows._run(FakeStore(), _row(), client=FakeDagster("UNKNOWN"))
+    assert failed.value.operation == "run_status"
+    assert failed.value.failure_type == "unexpected_result"
+
+
 def test_dagster_run_status_is_only_workflow_status(monkeypatch):
     monkeypatch.setattr(dagster_workflows, "_job_by_stage", lambda *_: None)
     for dagster_status, expected in [
@@ -142,3 +150,109 @@ def test_registry_not_configured_retains_domain_error(monkeypatch):
     )
     assert result["status"] == "Failed"
     assert result["error_code"] == "SOS-MLFLOW-NOT-CONFIGURED"
+
+
+def test_dagster_submission_lookup_uses_supported_tag_filter(monkeypatch):
+    """실제 발생한 RunsFilter.jobName HTTP 400 회귀를 직접 잡는다."""
+    import io
+    import json
+    from sos_platform import dagster_client
+
+    def query(req, timeout):
+        payload = json.loads(req.data)
+        source = payload["query"]
+        assert "filter: {tags:" in source
+        assert "filter: {jobName:" not in source
+        assert "results {runId jobName}" in source
+        assert payload["variables"]["id"] == "submission-1"
+        return io.BytesIO(json.dumps({
+            "data": {"runsOrError": {"__typename": "Runs", "results": [
+                {"runId": "dagster-run-1", "jobName": "activity_anomaly_workflow"}
+            ]}}
+        }).encode())
+
+    monkeypatch.setattr(dagster_client, "urlopen", query)
+    assert DagsterClient("http://example.test/graphql").find_by_submission(
+        "submission-1"
+    ) == "dagster-run-1"
+
+
+def test_dagster_submission_lookup_rejects_wrong_job_and_duplicates(monkeypatch):
+    from sos_platform import dagster_client
+
+    client = DagsterClient("http://example.test/graphql")
+    monkeypatch.setattr(client, "_execute", lambda *args, **kwargs: {
+        "runsOrError": {"__typename": "Runs", "results": [
+            {"runId": "other-run", "jobName": "unrelated_job"}
+        ]}
+    })
+    with pytest.raises(DagsterUnavailable) as mismatch:
+        client.find_by_submission("submission-1")
+    assert mismatch.value.failure_type == "job_mismatch"
+    monkeypatch.setattr(client, "_execute", lambda *args, **kwargs: {
+        "runsOrError": {"__typename": "Runs", "results": [
+            {"runId": "one", "jobName": "activity_anomaly_workflow"},
+            {"runId": "two", "jobName": "activity_anomaly_workflow"},
+        ]}
+    })
+    with pytest.raises(DagsterUnavailable) as duplicate:
+        client.find_by_submission("submission-1")
+    assert duplicate.value.failure_type == "duplicate_submission"
+
+
+def test_dagster_graphql_http_400_distinguished_from_connection_outage(monkeypatch):
+    from urllib.error import HTTPError
+    from sos_platform import dagster_client
+
+    def rejected(*args, **kwargs):
+        raise HTTPError("http://example.test/graphql", 400, "Bad Request", {}, None)
+
+    monkeypatch.setattr(dagster_client, "urlopen", rejected)
+    with pytest.raises(DagsterUnavailable) as failed:
+        DagsterClient("http://example.test/graphql").find_by_submission("submission-1")
+    assert failed.value.operation == "run_lookup"
+    assert failed.value.failure_type == "http_error"
+    assert failed.value.http_status == 400
+
+
+def test_dagster_graphql_errors_are_distinguished(monkeypatch):
+    import io
+    from sos_platform import dagster_client
+
+    monkeypatch.setattr(dagster_client, "urlopen", lambda *args, **kwargs:
+                        io.BytesIO(b'{"errors":[{"message":"unknown field"}],"data":null}'))
+    with pytest.raises(DagsterUnavailable) as failed:
+        DagsterClient("http://example.test/graphql").find_by_submission("submission-1")
+    assert failed.value.failure_type == "graphql_error"
+
+
+@pytest.mark.parametrize(
+    "operation,payload",
+    [
+        ("find_by_submission", {"runsOrError": {"__typename": "Runs", "results": None}}),
+        ("launch", {"launchRun": {"__typename": "LaunchRunSuccess", "run": "broken"}}),
+        ("status", {"runOrError": {"__typename": "Run", "status": None}}),
+        ("terminate", {"terminateRun": "broken"}),
+    ],
+)
+def test_dagster_malformed_response_has_safe_failure_category(
+    monkeypatch, operation, payload
+):
+    client = DagsterClient("http://example.test/graphql")
+    monkeypatch.setattr(client, "_execute", lambda *args, **kwargs: payload)
+    with pytest.raises(DagsterUnavailable) as failed:
+        getattr(client, operation)("test-id")
+    assert failed.value.failure_type == "invalid_response"
+
+
+def test_dagster_connection_reset_is_dependency_failure(monkeypatch):
+    from sos_platform import dagster_client
+
+    def reset_connection(*args, **kwargs):
+        raise ConnectionResetError("connection closed")
+
+    monkeypatch.setattr(dagster_client, "urlopen", reset_connection)
+    with pytest.raises(DagsterUnavailable) as failed:
+        DagsterClient("http://example.test/graphql").find_by_submission("test-id")
+    assert failed.value.operation == "run_lookup"
+    assert failed.value.failure_type == "connection"

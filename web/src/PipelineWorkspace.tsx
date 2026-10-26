@@ -462,8 +462,17 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           requestAnimationFrame(() => ownDataDetails.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
         }
       }} />}
-    {error && <div className="alert error" role="alert">{error}
-      <button className="ghost" onClick={() => setError("")}>닫기</button></div>}
+    {error && <div className="alert error" role="alert">
+      {error.includes("SOS-API-DEPENDENCY") ? <>
+        <strong>Workflow 실행 서버에서 요청을 확인하지 못했습니다.</strong>
+        <p>Dataset 구조 검사와는 별개의 오류입니다. 이미 실행이 접수됐을 수 있으니
+          분석 이력과 Dagster Run 상태를 확인한 뒤 다시 제출하세요.</p>
+        <details><summary>오류 진단 정보</summary>{error}</details>
+        <button type="button" className="secondary"
+          onClick={() => onNavigate("pipeline-jobs", datasetId)}>분석 이력 확인 →</button>
+      </> : error}
+      <button className="ghost" onClick={() => setError("")}>닫기</button>
+    </div>}
     {!hasActiveAnalysis && <details ref={ownDataDetails} className="pipeline-advanced"
       open={showOwnData}
       onToggle={event => setShowOwnData(event.currentTarget.open)}>
@@ -472,7 +481,9 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       <div className="pipeline-section-heading">
         <div><span className="eyebrow">내 Dataset으로 실행</span>
           <h3 id="pipeline-prepare-title" tabIndex={-1}>학습할 Dataset 선택</h3>
-          <p>준비된 활동 Feature가 있는 Dataset을 선택하고 입력 조건을 확인합니다.</p>
+          <p>이 Pipeline은 등록된 {current?.required_features.length ?? 44}개 활동 Feature와
+            <code> ts</code> 시간 컬럼을 고정 입력으로 사용합니다.
+            Dataset에 추가 컬럼이 있어도 되며, Feature를 직접 다시 선택할 필요는 없습니다.</p>
         </div>
         <span className="chip">{!datasetId ? "Dataset 선택 전" :
           currentCheck?.ready ? "입력 구조 확인됨" :
