@@ -58,6 +58,13 @@ class JobStoreMixin:
             updated_at=now(),
         )
         with self.connection() as db:
+            if kind in ("ml_score", "ml_playground"):
+                model_id = spec.get("model_revision_id")
+                state = db.execute(text(
+                    "SELECT lifecycle_state FROM model_revisions WHERE id=:id FOR SHARE"
+                ), {"id": model_id}).scalar_one_or_none()
+                if state != "Active":
+                    raise PlatformError("SOS-ML-MODEL-INVALID")
             is_understanding = (
                 kind == "profile"
                 and spec.get("mode") == "understanding"
