@@ -77,13 +77,10 @@ class PipelineRunOut(BaseModel):
     dataset_id: str
     dataset_version: str
     input_plan: PipelinePlanOut | None
-    stage_index: int
-    job_ids: dict[str, str]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
     cancel_requested: bool
     error_code: str | None = None
     created_at: str
-    updated_at: str
     current_stage: str | None
     stages: list[PipelineStageOut] = Field(default_factory=list)
 
