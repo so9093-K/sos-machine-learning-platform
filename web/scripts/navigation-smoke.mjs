@@ -219,6 +219,10 @@ try {
     canTrain: false, canCancel: false, onOpenModel: () => {},
   }));
   assert.match(trainingForm, /<option value="data-v1" selected=""/);
+  assert.match(trainingForm, /학습 결측값 처리 정책/);
+  assert.match(trainingForm, /결측 허용 안 함 \(기본값\)/);
+  assert.match(trainingForm, /Train 중앙값으로 대체/);
+  assert.match(trainingForm, /Feature와 입력 정책을 직접 선택하는 독립 실험/);
 
   const pagedDatasetForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
     datasets: [], initialDatasetId: "data-not-on-first-page",
