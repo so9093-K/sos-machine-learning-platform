@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 목적별 MLflow 모델 그룹 관리, 버전 보관·복원 및 영향 확인이 가능한 모델 파일 영구 삭제를 추가했습니다. 과거 평가·Scoring 참조는 보존하고 삭제된 모델은 새 추론에 사용할 수 없습니다. Dagster Python 환경도 공통 uv.lock의 분리된 그룹으로 고정합니다.
+
 - 등록형 활동 이상 탐지의 실행 조정을 Dagster OSS Workflow로 전환하고, 기존 자체 Pipeline 단계 전이 엔진·중복 실행 상태를 제거했습니다. Dagster의 Run/Asset Graph 운영 UI와 SOS Job·Result/MLflow 관리 정본의 경계를 구분했습니다.
 
 - Model Playground에서 단일 관측치를 실제 등록 모델로 점수화하는 Worker Job 계약을 추가했습니다. 사용자 입력의 Job 이력 보존과 기존 Dataset Scoring의 경계를 구분합니다.
