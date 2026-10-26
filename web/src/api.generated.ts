@@ -681,6 +681,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/models/deletion-pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pending Deletions
+         * @description Registry에서 사라졌더라도 실제 삭제가 끝나지 않은 모델을 재시도할 수 있게 한다.
+         */
+        get: operations["pending_deletions_api_ml_models_deletion_pending_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/models/{revision_id}": {
         parameters: {
             query?: never;
@@ -693,6 +713,24 @@ export interface paths {
          * @description Dataset·Job·Runtime·Feature·아티팩트 근거가 고정된 SOS 모델 실행 참조를 조회합니다.
          */
         get: operations["get_model_revision_api_ml_models__revision_id__get"];
+        put?: never;
+        post?: never;
+        /** Permanently Delete Model */
+        delete: operations["permanently_delete_model_api_ml_models__revision_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/models/{revision_id}/deletion-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Impact */
+        get: operations["impact_api_ml_models__revision_id__deletion_impact_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -826,6 +864,59 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/ml/registry/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Groups */
+        get: operations["groups_api_ml_registry_groups_get"];
+        put?: never;
+        /** Create Group */
+        post: operations["create_group_api_ml_registry_groups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/registry/groups/{registry_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Group */
+        delete: operations["delete_group_api_ml_registry_groups__registry_key__delete"];
+        options?: never;
+        head?: never;
+        /** Update Group */
+        patch: operations["update_group_api_ml_registry_groups__registry_key__patch"];
+        trace?: never;
+    };
+    "/api/ml/registry/groups/{registry_key}/versions/{version}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Archive Version */
+        patch: operations["archive_version_api_ml_registry_groups__registry_key__versions__version__archive_patch"];
         trace?: never;
     };
     "/api/ml/registry/models": {
@@ -2251,10 +2342,12 @@ export interface components {
         };
         /**
          * MLForkRequest
-         * @description 원본 학습 실행의 Feature/판본을 그대로 유지하고 모델 설정만 바꿀 수 있다.
+         * @description 원본 학습을 바탕으로 재학습하고 모델 그룹을 선택한다.
          */
         MLForkRequest: {
             params?: components["schemas"]["IsolationForestParameters"] | null;
+            /** Registry Key */
+            registry_key?: string | null;
         };
         /** MLPlaygroundJobOut */
         MLPlaygroundJobOut: {
@@ -2635,6 +2728,11 @@ export interface components {
              */
             missing_policy: "reject" | "train_median";
             params?: components["schemas"]["IsolationForestParameters"];
+            /**
+             * Registry Key
+             * @default default
+             */
+            registry_key: string;
             temporal_split?: components["schemas"]["MLTemporalSplitSpec"] | null;
             training_input?: components["schemas"]["MLTrainingInputPolicy"];
         };
@@ -2790,6 +2888,11 @@ export interface components {
         MLflowModelVersionOut: {
             /** Aliases */
             aliases?: string[];
+            /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
             /** Job Id */
             job_id: string;
             /** Model Id */
@@ -2838,6 +2941,15 @@ export interface components {
             /** Next Page Token */
             next_page_token?: string | null;
         };
+        /** ModelGroupUpdate */
+        ModelGroupUpdate: {
+            /** Archived */
+            archived?: boolean | null;
+            /** Description */
+            description?: string | null;
+            /** Title */
+            title?: string | null;
+        };
         /** ModelRevisionOut */
         ModelRevisionOut: {
             /** Algorithm */
@@ -2856,6 +2968,12 @@ export interface components {
             id: string;
             /** Job Id */
             job_id: string;
+            /**
+             * Lifecycle State
+             * @default Active
+             * @enum {string}
+             */
+            lifecycle_state: "Active" | "Deleting" | "Deleted";
             /** Location */
             location: string;
             /** Params */
@@ -2872,6 +2990,18 @@ export interface components {
             training_score_summary: {
                 [key: string]: unknown;
             };
+        };
+        /** NewModelGroup */
+        NewModelGroup: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Registry Key */
+            registry_key: string;
+            /** Title */
+            title: string;
         };
         /** PipelineCandidateOut */
         PipelineCandidateOut: {
@@ -3388,6 +3518,11 @@ export interface components {
             max_size_bytes: number;
             /** Supported Extensions */
             supported_extensions: string[];
+        };
+        /** VersionArchiveUpdate */
+        VersionArchiveUpdate: {
+            /** Archived */
+            archived: boolean;
         };
         /** WorkRequest */
         WorkRequest: {
@@ -4786,6 +4921,35 @@ export interface operations {
             };
         };
     };
+    pending_deletions_api_ml_models_deletion_pending_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_model_revision_api_ml_models__revision_id__get: {
         parameters: {
             query?: never;
@@ -4804,6 +4968,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelRevisionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    permanently_delete_model_api_ml_models__revision_id__delete: {
+        parameters: {
+            query?: {
+                confirm?: boolean;
+            };
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    impact_api_ml_models__revision_id__deletion_impact_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Structured API error */
@@ -5107,10 +5335,178 @@ export interface operations {
             };
         };
     };
+    groups_api_ml_registry_groups_get: {
+        parameters: {
+            query?: {
+                page_token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_group_api_ml_registry_groups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewModelGroup"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_group_api_ml_registry_groups__registry_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registry_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    update_group_api_ml_registry_groups__registry_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registry_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelGroupUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    archive_version_api_ml_registry_groups__registry_key__versions__version__archive_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registry_key: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionArchiveUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_registered_models_api_ml_registry_models_get: {
         parameters: {
             query?: {
                 page_token?: string | null;
+                registry_key?: string;
+                include_archived?: boolean;
             };
             header?: never;
             path?: never;
