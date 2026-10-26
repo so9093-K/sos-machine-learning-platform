@@ -131,7 +131,6 @@ tbody tr:hover{background:var(--sos-raised)}
 footer{font-size:12px;color:var(--sos-muted);margin-top:38px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
 @media(max-width:850px){.shell{flex-direction:column}
 .sidebar{width:100%;border-right:0;border-bottom:1px solid var(--sos-border);padding:15px}
-.brand{padding:0 0 14px}
 .sidebar-bottom{display:none}
 nav{flex-direction:row;overflow:auto;max-height:100px}
 .dataset{min-width:150px}
