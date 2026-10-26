@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Literal
+from unicodedata import category
 
 from pydantic import BaseModel, Field, StrictFloat, StrictInt, field_validator, model_validator
 
@@ -113,7 +114,7 @@ class BrandingSettingsUpdate(BaseModel):
     @model_validator(mode="after")
     def validate_name(self) -> "BrandingSettingsUpdate":
         self.brand_name = self.brand_name.strip()
-        if not self.brand_name or any(ord(char) < 32 or ord(char) == 127 for char in self.brand_name):
+        if not self.brand_name or any(category(char) in {"Cc", "Cf", "Cs"} for char in self.brand_name):
             raise ValueError("Invalid brand name")
         return self
 
