@@ -109,6 +109,11 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
             existing.append(version)
     if len(existing) > 1:
         raise MLflowDeliveryError("SOS-MLFLOW-DUPLICATE-MODELS")
+    # 보관된 모델 그룹에는 새 버전을 등록하지 않는다. 버전 보관과
+    # 논리적 그룹 보관은 SOS의 신규 실행 가능성에 동일하게 적용한다.
+    group = client.get("registered-models/get", {"name": name}).get("registered_model")
+    if isinstance(group, dict) and _tags(group).get("sos.archived") == "true":
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-ARCHIVED")
     if existing:
         item = existing[0]
         if (
