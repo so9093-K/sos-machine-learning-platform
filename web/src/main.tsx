@@ -46,7 +46,7 @@ function App() {
       setActor(await request<Identity>("/api/v2/auth/me"));
     } catch (error) {
       setMessage(error instanceof ApiError && error.status === 401
-        ? "인증이 필요합니다. 발급된 액세스 토큰을 입력하세요."
+        ? ""
         : `서비스 연결을 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도하세요. ${formatError(error)}`);
     } finally { setChecking(false); }
   }
@@ -66,7 +66,9 @@ function App() {
       setToken("");
     } catch (error) {
       setAccessToken(null);
-      setMessage(formatError(error));
+      setMessage(error instanceof ApiError && error.status === 401
+        ? "액세스 토큰을 확인하세요. 인증되지 않았으며 토큰은 저장되지 않았습니다."
+        : formatError(error));
     } finally { setSubmitting(false); }
   }
   function signOut() {
@@ -74,25 +76,32 @@ function App() {
     setActor(null);
   }
   if (checking) return <main className="main" role="status">사용자 권한을 확인하고 있습니다.</main>;
-  if (!actor) return <main className="main">
-    <section className="panel" aria-label="인증">
-      <h1>{brandName} 접근 인증</h1>
-      <p>현재 서비스에서 발급받은 Bearer 토큰을 입력하세요.
-        토큰은 브라우저 메모리에만 보관하며, 다시 접속하면 재인증이 필요합니다.</p>
-      <form onSubmit={event => void authenticate(event)}>
-        <label>액세스 토큰 <input type="password" value={token}
+  if (!actor) return <main className="main auth-main">
+    <section className="panel auth-panel" aria-label="인증">
+      <div className="auth-intro">
+        <span className="eyebrow">SOS WORKSPACE</span>
+        <h1>{brandName} 접근 인증</h1>
+        <p>발급받은 액세스 토큰으로 로그인합니다.
+          토큰은 브라우저 메모리에만 보관하며 새로 접속하면 다시 인증해야 합니다.</p>
+      </div>
+      <form className="auth-form" onSubmit={event => void authenticate(event)}>
+        <label htmlFor="sos-access-token">액세스 토큰</label>
+        <input id="sos-access-token" type="password" value={token}
           onChange={event => setToken(event.target.value)} autoComplete="off"
-          aria-label="액세스 토큰" required /></label>
-        <button disabled={submitting || !token}>인증</button>
+          aria-label="액세스 토큰" placeholder="액세스 토큰 입력" required />
+        <button type="submit" disabled={submitting || !token.trim()}>
+          {submitting ? "인증 중…" : "인증하고 시작"}
+        </button>
       </form>
-      {message && <p role="alert">{message}</p>}
-      {brandingError && <p role="alert">브랜드 정보를 불러오지 못했습니다: {brandingError}</p>}
-      {brandingError && <button type="button" className="secondary" onClick={reloadBranding}>
-        브랜드 다시 조회
-      </button>}
-      <button type="button" className="secondary" onClick={() => void checkIdentity()}>
-        연결 다시 확인
-      </button>
+      {message && <p className="auth-message" role="alert">{message}</p>}
+      {brandingError && <div className="auth-message" role="alert">
+        <p>브랜드 정보를 불러오지 못했습니다: {brandingError}</p>
+        <button type="button" className="secondary" onClick={reloadBranding}>
+          브랜드 다시 조회
+        </button>
+      </div>}
+      {message.startsWith("서비스 연결") && <button type="button" className="secondary"
+        onClick={() => void checkIdentity()}>연결 다시 확인</button>}
     </section>
   </main>;
   const canViewDataset = actor.capabilities.includes("dataset.read");

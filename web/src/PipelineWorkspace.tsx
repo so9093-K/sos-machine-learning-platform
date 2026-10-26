@@ -44,7 +44,7 @@ export function filterCandidatesByScoreRange(
 }
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, examplesError, onRetryExamples, onUseExample }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, examplesError, onRetryExamples, onUseExample, canInspectOperations }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
   initialCandidateRowIndex?: number;
   initialAnalysisSection?: PipelineAnalysisSection;
@@ -55,6 +55,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   onSelectCandidate: (rowIndex: number) => void;
   onSelectAnalysisSection: (section: PipelineAnalysisSection) => void;
   canRun: boolean; canCancel: boolean;
+  canInspectOperations?: boolean;
   canCreateDataset?: boolean;
   hasPipelineExample?: boolean;
   example?: Example;
@@ -65,6 +66,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   onNavigate: (tab: WorkspaceTab, datasetId: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
+  const [localOperatorHost, setLocalOperatorHost] = useState(false);
+  useEffect(() => {
+    setLocalOperatorHost(["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
+  }, []);
   const [catalog, setCatalog] = useState<Definition[]>([]);
   const [catalogError, setCatalogError] = useState("");
   const [listReload, setListReload] = useState(0);
@@ -578,7 +583,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <div>
           <span className="eyebrow">학습 · 결과 탐구</span>
           <h3 id="pipeline-current-run-heading" tabIndex={-1}>{
-            run ? "모델 학습 · " + statusLabel[run.status] : "학습 기록을 불러오는 중"
+            run ? registrationPending ? "모델 학습 완료 · 모델 등록 상태 확인"
+            : "모델 학습 · " + statusLabel[run.status] : "학습 기록을 불러오는 중"
           }</h3>
         </div>
         <button type="button" className="secondary" disabled={exampleBusy}
@@ -674,28 +680,50 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           실패 코드: {run.error_code}</p>}
         {run.status === "Failed" && <div className="pipeline-readiness-blocked" role="alert">
           <strong>분석이 완료되지 않았습니다.</strong>
-          <p>위 오류 코드와 단계별 근거를 확인하세요. 입력 조건 문제라면 Dataset 내용을 확인하고,
-            다른 Dataset이나 수정된 판본으로 다시 검사해 새 분석을 시작할 수 있습니다.</p>
+          <p>실패한 단계와 오류 코드를 먼저 확인하세요. 입력 조건의 오류라면 Dataset을 수정할 수 있고,
+            실행 서버·모델 등록 오류라면 운영 상태를 확인해야 합니다. 이미 접수된 실행을 무조건 다시 제출하지 마세요.</p>
           <button type="button" className="secondary" onClick={() => onNavigate("understanding", run.dataset_id)}>
-            Dataset 확인 →
+            입력 Dataset 확인 →
           </button>
         </div>}
         {run.status === "Cancelled" && <p className="pipeline-next-step" role="status">
           실행 취소가 확정되었습니다. 기존 기록은 보존되며 필요하다면 새 Run을 실행할 수 있습니다.
+          {(run.stages ?? []).some(stage => stage.name === "training" && stage.job?.status === "Succeeded") &&
+            " 이미 완료한 학습의 MLflow 등록 요청과 자동 재시도는 별도로 계속될 수 있습니다."}
         </p>}
         {!terminal.has(run.status) && <div className="pipeline-next-step" role="status">
           <strong>{run.cancel_requested ? "취소 요청을 처리하고 있습니다." :
             run.status === "Queued" ? "분석 실행을 기다리고 있습니다." :
-            registrationPending ? "모델 학습 완료 · 결과 분석 준비 중" :
+            registrationPending ? "모델 학습 완료 · 등록 결과 대기 중" :
             activeStage ? activeStage + " 단계 진행 중" : "실행 대기 또는 단계 전환 중"}</strong>
           {registrationPending ? <>
             <p>학습은 완료됐습니다. 결과 등록 확인 후 다른 시간 구간을 분석합니다.</p>
             {trainingJob && <MLTrackingStatus key={trainingJob.id} jobId={trainingJob.id} />}
+            {canInspectOperations && localOperatorHost && <details className="pipeline-operator-links">
+              <summary>운영자용 Run·Registry 상세 확인</summary>
+              <p>Dagster의 Runs에서 Job <code>activity_anomaly_workflow</code>를 확인하고,
+                MLflow의 Run ID 및 Registered Model Version과 대조할 수 있습니다.</p>
+              <div className="actions">
+                <a href="http://localhost:9607" target="_blank" rel="noopener noreferrer">
+                  Dagster Runs 열기 ↗
+                </a>
+                <a href="http://localhost:9606" target="_blank" rel="noopener noreferrer">
+                  MLflow 모델 Registry 열기 ↗
+                </a>
+              </div>
+              <p className="hint">별도 인증이 없는 로컬 운영 UI입니다. SOS의 작업 상태와 권한을 대신하지 않습니다.</p>
+            </details>}
           </> : null}
-          {canCancel && <button type="button" className="secondary"
-            disabled={busy || run.cancel_requested} onClick={() => void cancel()}>
-            Pipeline 취소 요청
-          </button>}
+          {canCancel && <div className="pipeline-cancel-action">
+            {registrationPending && <p className="hint">
+              Pipeline 취소는 남은 Workflow 실행의 중단 요청입니다.
+              이미 완료된 학습 결과와 별도로 접수된 MLflow 등록 재시도는 삭제하거나 취소하지 않습니다.
+            </p>}
+            <button type="button" className="secondary"
+              disabled={busy || run.cancel_requested} onClick={() => void cancel()}>
+              Pipeline 취소 요청
+            </button>
+          </div>}
         </div>}
         {run.status === "Succeeded" && <section className="pipeline-candidates" aria-labelledby="pipeline-candidates-heading">
           <h4 id="pipeline-candidates-heading" tabIndex={-1}>검토할 이상 후보</h4>

@@ -114,3 +114,94 @@ def test_archived_model_group_rejects_new_version(model):
     client.models[0]["tags"] = [{"key": "sos.archived", "value": "true"}]
     with pytest.raises(MLflowDeliveryError, match="ARCHIVED"):
         register_model_version(client, {**model, "job_id": "job-2"}, "run-2")
+
+
+def test_fresh_registry_model_is_created_without_getting_missing_name(model):
+    """실제 MLflow는 존재하지 않는 registered-models/get에 HTTP 404를 응답한다."""
+    class StrictClient(FakeClient):
+        def get(self, endpoint, params):
+            if endpoint == "registered-models/get" and not any(
+                item["name"] == params["name"] for item in self.models
+            ):
+                raise MLflowDeliveryError("SOS-MLFLOW-HTTP-404-registered-models_get")
+            return super().get(endpoint, params)
+
+    client = StrictClient()
+    name, version = register_model_version(client, model, "run-1")
+    assert (name, version) == (registered_model_name(model), "1")
+    assert len(client.models) == 1
+    # 기존 Run을 다시 보내도 새 모델·버전이 만들어지지 않는다.
+    assert register_model_version(client, model, "run-1") == (name, version)
+    assert client.created == 1
+
+
+def test_existing_registry_group_is_checked_for_archive_and_reused(model):
+    client = FakeClient()
+    name = registered_model_name(model)
+    client.models.append({"name": name})
+    assert register_model_version(client, model, "run-1") == (name, "1")
+    assert len(client.models) == 1
+
+
+def test_registry_does_not_recreate_missing_group_with_existing_version(model):
+    client = FakeClient()
+    name = registered_model_name(model)
+    client.versions.append({
+        "name": name, "version": "1", "source": model["location"],
+        "run_id": "run-1", "tags": [
+            {"key": "sos.job_id", "value": model["job_id"]},
+            {"key": "sos.sha256", "value": model["sha256"]},
+        ],
+    })
+    with pytest.raises(MLflowDeliveryError, match="MODEL-MISMATCH"):
+        register_model_version(client, model, "run-1")
+    assert not client.models
+
+
+
+@pytest.mark.parametrize("bad_result", [
+    {"registered_models": None},
+    {"registered_models": ""},
+    {"registered_models": {}},
+    {"registered_models": [{"unexpected": "schema"}]},
+    {"registered_models": [{"name": "another-model"}]},
+    {"registered_models": [{"name": "sos-if-not-ours"}]},
+    {"registered_models": [], "next_page_token": "unchecked-next-page"},
+])
+def test_registry_does_not_create_on_malformed_exact_search(model, bad_result):
+    """불완전하거나 계약과 다른 정확한 이름 조회는 없는 모델로 보지 않는다."""
+    class BrokenRegistrySearch(FakeClient):
+        def get(self, endpoint, params):
+            if endpoint == "registered-models/search":
+                assert params["filter"] == f"name = '{registered_model_name(model)}'"
+                return bad_result
+            return super().get(endpoint, params)
+
+    client = BrokenRegistrySearch()
+    with pytest.raises(MLflowDeliveryError, match="RESPONSE-INVALID"):
+        register_model_version(client, model, "run-1")
+    assert client.models == []
+    assert client.created == 0
+
+
+@pytest.mark.parametrize("bad_result", [
+    {"model_versions": None},
+    {"model_versions": ""},
+    {"model_versions": {}},
+    {"model_versions": [{"name": "wrong-model", "version": "1"}]},
+    {"model_versions": ["not-a-model-version"]},
+])
+def test_registry_does_not_create_when_existing_versions_cannot_be_verified(model, bad_result):
+    """기존 판본 전수 조회가 깨지면 재시도 중 중복 판본을 생성하지 않는다."""
+    class BrokenVersionSearch(FakeClient):
+        def get(self, endpoint, params):
+            if endpoint == "model-versions/search":
+                assert params["filter"] == f"name = '{registered_model_name(model)}'"
+                return bad_result
+            return super().get(endpoint, params)
+
+    client = BrokenVersionSearch()
+    with pytest.raises(MLflowDeliveryError, match="RESPONSE-INVALID"):
+        register_model_version(client, model, "run-1")
+    assert client.created == 0
+    assert client.models == []

@@ -609,6 +609,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         context.pipelineView === "learn" ||
         (Boolean(context.datasetId) && context.pipelineView !== "use")) &&
         <PipelineWorkspace datasets={datasets}
+        canInspectOperations={canInspectStorage || canViewAudit}
         canCreateDataset={canWrite}
         hasPipelineExample={examples.some(item => item.id === "activity-anomaly-if")}
         example={examples.find(item => item.id === "activity-anomaly-if")}

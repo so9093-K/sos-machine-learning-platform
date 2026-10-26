@@ -10,6 +10,7 @@ import logging
 import math
 import time
 from collections.abc import Callable
+from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -101,6 +102,38 @@ class MLflowClient:
         return self.post(endpoint, payload, method="DELETE")
 
 
+def _unix_millis(value: object) -> int | None:
+    """명시적으로 타임존을 가진 SOS 기록 시각만 Unix 밀리초로 변환한다."""
+    try:
+        if isinstance(value, datetime):
+            timestamp = value
+        elif isinstance(value, str):
+            timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        else:
+            return None
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            return None
+        millis = int(timestamp.timestamp() * 1000)
+        return millis if millis > 0 else None
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def _job_event_times(job: dict) -> tuple[int | None, int | None]:
+    """마지막 실제 Attempt의 시작·종료 시각을 우선 사용한다.
+
+    Attempt가 없는 즉시 취소 등은 Job 접수·갱신 시각을 기준으로 기록한다.
+    외부 등록 Retry 당시 현재 시각을 학습 시각으로 가장하지 않는다.
+    """
+    attempts = job.get("attempts") or []
+    attempt = attempts[-1] if isinstance(attempts, list) and attempts and isinstance(attempts[-1], dict) else {}
+    start = _unix_millis(attempt.get("started_at")) or _unix_millis(job.get("created_at"))
+    end = _unix_millis(attempt.get("finished_at")) or _unix_millis(job.get("updated_at"))
+    if start is not None and end is not None and end < start:
+        return start, None
+    return start, end
+
+
 def _numeric_metrics(job: dict) -> list[dict]:
     """수치형·유한한 지표만 내보낸다. 미정의 지표는 생략한다."""
     result = job.get("result") or {}
@@ -113,7 +146,8 @@ def _numeric_metrics(job: dict) -> list[dict]:
     source = result.get(keys.get(job["kind"], ""), {})
     if not isinstance(source, dict):
         return []
-    now_ms = int(time.time() * 1000)
+    _, finished_ms = _job_event_times(job)
+    now_ms = finished_ms or int(time.time() * 1000)
     return [
         {"key": f"sos.{key}", "value": float(value), "timestamp": now_ms, "step": 0}
         for key, value in sorted(source.items())
@@ -181,18 +215,19 @@ def send_to_mlflow(
         if found:
             run_id = found[0].get("info", {}).get("run_id")
         else:
-            created = client.post(
-                "runs/create",
-                {
-                    "experiment_id": experiment,
-                    "run_name": f"sos-{job['kind']}-{job['id'][:8]}",
-                    "tags": [
-                        {"key": "sos.job_id", "value": job["id"]},
-                        {"key": "sos.job_kind", "value": job["kind"]},
-                        {"key": "sos.dataset_id", "value": job["dataset_id"]},
-                    ],
-                },
-            )
+            started_ms, _ = _job_event_times(job)
+            create_payload = {
+                "experiment_id": experiment,
+                "run_name": f"sos-{job['kind']}-{job['id'][:8]}",
+                "tags": [
+                    {"key": "sos.job_id", "value": job["id"]},
+                    {"key": "sos.job_kind", "value": job["kind"]},
+                    {"key": "sos.dataset_id", "value": job["dataset_id"]},
+                ],
+            }
+            if started_ms is not None:
+                create_payload["start_time"] = started_ms
+            created = client.post("runs/create", create_payload)
             run_id = created.get("run", {}).get("info", {}).get("run_id")
         if not isinstance(run_id, str) or not run_id or len(run_id) > 128:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
@@ -222,12 +257,16 @@ def send_to_mlflow(
             "tags": [{"key": "sos.source", "value": "sos-platform"}],
         },
     )
-    client.post("runs/update", {
+    _, finished_ms = _job_event_times(job)
+    update_payload = {
         "run_id": run_id,
         "status": {
             "Succeeded": "FINISHED", "Failed": "FAILED", "Cancelled": "KILLED",
         }[job["status"]],
-    })
+    }
+    if finished_ms is not None:
+        update_payload["end_time"] = finished_ms
+    client.post("runs/update", update_payload)
     return run_id
 
 

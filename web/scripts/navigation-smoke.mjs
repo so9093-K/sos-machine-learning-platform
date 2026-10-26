@@ -223,6 +223,18 @@ try {
   assert.match(trainingForm, /결측 허용 안 함 \(기본값\)/);
   assert.match(trainingForm, /Train 중앙값으로 대체/);
   assert.match(trainingForm, /Feature와 입력 정책을 직접 선택하는 독립 실험/);
+  // 필수 Feature 선택은 초기 숨김 없이 접근할 수 있고, 한 번에 전체 선택을 강요하지 않는다.
+  const { FeatureSelector } = await vite.ssrLoadModule("/src/FeatureSelector.tsx");
+  const emptyFeatureSelection = renderToStaticMarkup(React.createElement(FeatureSelector, {
+    columns: [{ name: "metric_a", dtype: "Float64" }, { name: "metric_b", dtype: "Int64" }],
+    selected: [], disabled: false, onChange: () => {},
+  }));
+  assert.match(emptyFeatureSelection, /학습 Feature 검색/);
+  assert.match(emptyFeatureSelection, /0(?:<!-- -->)?개 선택/);
+  assert.match(emptyFeatureSelection, /2(?:<!-- -->)?개 표시/);
+  assert.match(emptyFeatureSelection, /표시된 항목 선택/);
+  assert.match(emptyFeatureSelection, /metric_a/);
+  assert.match(emptyFeatureSelection, /metric_b/);
 
   const pagedDatasetForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
     datasets: [], initialDatasetId: "data-not-on-first-page",
@@ -300,9 +312,20 @@ try {
     status: { state: "Retry", attempts: 2, last_error_code: "SOS-MLFLOW-HTTP-503" },
     error: "",
   }));
-  assert.match(retryTracking, /MLflow 기록·등록 재시도 대기 · 시도 2회/);
+  assert.match(retryTracking, /MLflow 기록·모델 등록 실패 · 자동 재시도 대기 \(시도 2회\)/);
   assert.match(retryTracking, /SOS-MLFLOW-HTTP-503/);
-  assert.match(retryTracking, /플랫폼 Job 결과는 바뀌지 않으며/);
+  assert.match(retryTracking, /기존 Job 결과는 보존됩니다/);
+  const missingModelTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
+    status: { state: "Retry", attempts: 6,
+      retry_after: "2026-10-26T12:30:00+00:00",
+      run_id: "tracked-run-1",
+      last_error_code: "SOS-MLFLOW-HTTP-404-registered-models_get" },
+    error: "",
+  }));
+  assert.match(missingModelTracking, /신규 모델 생성 순서 또는 Registry 상태/);
+  assert.match(missingModelTracking, /다음 자동 재시도 기준 시각/);
+  assert.match(missingModelTracking, /tracked-run-1/);
+  assert.match(missingModelTracking, /동일 학습을 다시 제출해 해결하려 하지 마세요/);
   const recoveredTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
     status: { state: "Succeeded", run_id: "mlflow-run-1" }, error: "",
   }));

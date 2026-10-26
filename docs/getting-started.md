@@ -39,7 +39,8 @@ make doctor   # 설정·준비 상태 진단
 - Web UI: `http://localhost:9601`
 - API: `http://localhost:9602`
 - API Reference: `http://localhost:9602/docs`
-- 로컬 MLflow 운영자 관리 UI: `http://localhost:9606`
+- 로컬 MLflow 운영자 관리 UI: `http://localhost:9606` (연구 Run·Registered Model/Version 확인, 사용자별 권한 격리 없음)
+- 학습 완료 후 등록 대기 중에는 SOS의 MLflow Run ID·재시도 상태를 확인하고, 로컬 운영자라면 Dagster Runs와 MLflow Registry를 대조한다. Dagster Code Location `Loaded` 또는 MLflow Run `Finished`만으로 전체 Pipeline의 완료를 판단하지 않는다.
 - Dagster OSS 운영자 UI: `http://localhost:9607` (localhost 전용, 사용자 인증 기능 없음)
 - Dagster에서 등록형 활동 이상 탐지 실행을 찾을 때는 Code Location `sos`, Job `activity_anomaly_workflow`를 확인하세요.
 - Dagster는 SOS 사용자용 학습 화면이 아니라 **로컬 운영자의 Workflow Run·단계·이벤트 확인 도구**입니다.

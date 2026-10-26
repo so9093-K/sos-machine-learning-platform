@@ -77,6 +77,17 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 - Compose의 `json-file` 로그 드라이버는 서비스별 2 MiB × 3개 파일로 회전한다. 이 로그는 시스템 상태·감사·커밋의 정본이 아니며, Token·S3 Key·원본 데이터가 출력되지 않도록 구조화 로그 허용 목록을 적용한다.
 
 
+### MLflow Run 시각 및 기록 계약
+
+새 MLflow Run의 `start_time`과 종료된 Run의 `end_time`은 SOS Job의 실제 Attempt 시작·종료 시각을 UTC 기준 Unix 밀리초로 변환해 기록한다. Attempt가 없는 Job은 기록된 Job 접수·갱신 시각을 사용한다. 형식이나 타임존이 불명확한 시각은 임의로 보정하지 않는다. 기존 MLflow Run의 시작 시각은 Outbox 재시도에서 소급 수정하지 않으며 1970년으로 보이는 과거 Run을 일괄 변경하지 않는다.
+
+### MLflow 첫 모델 등록·재시도
+
+1. Pipeline의 Training Job이 `Succeeded`지만 `MLflow 기록·모델 등록 실패`로 대기한다면 학습을 다시 제출하지 않는다. 성공한 모델 아티팩트는 SOS가 유지하며, Registry 등록 완료 전 후속 Pipeline 단계는 진행하지 않는다.
+2. `GET /api/ml/tracking/jobs/{job_id}`의 `state`, `attempts`, `last_error_code`를 조회하고, 필요하면 로컬 운영 UI(`http://localhost:9606`)에서 해당 Registered Model·Version을 확인한다.
+3. `SOS-MLFLOW-HTTP-404-registered-models_get`은 처음 등록하려는 모델이 아직 존재하지 않는 경우에도 발생할 수 있다. MLflow 저장소를 초기화하지 말고 SOS의 Registered Model 조회·생성 순서를 확인한다.
+4. 코드나 연결 문제를 수정한 뒤 기존 전송 Outbox의 `Retry`가 다시 시도하는지 확인한다. 중복 Model Version 등록을 막는 Job ID·SHA 검증은 유지한다.
+
 ### Dagster OSS 장애·복구
 
 1. `make status`에서 `dagster-postgres`, `dagster-code`, `dagster-webserver`, `dagster-daemon` 상태를 확인한다.

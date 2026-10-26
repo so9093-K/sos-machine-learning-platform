@@ -45,14 +45,15 @@ def _versions(client, name: str):
         if token:
             params["page_token"] = token
         result = client.get("model-versions/search", params)
-        versions = result.get("model_versions") or []
+        # MLflow는 빈 반복 필드를 생략할 수 있지만 명시적 null은 잘못된 응답이다.
+        versions = result.get("model_versions", [])
         if not isinstance(versions, list):
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
         for version in versions:
-            if not isinstance(version, dict):
+            if not isinstance(version, dict) or version.get("name") != name:
+                # 정확한 이름 검색 결과가 불완전하면 새 판본을 생성하지 않는다.
                 raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-            if version.get("name") == name:
-                yield version
+            yield version
         token = result.get("next_page_token")
         if not token:
             return
@@ -109,11 +110,35 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
             existing.append(version)
     if len(existing) > 1:
         raise MLflowDeliveryError("SOS-MLFLOW-DUPLICATE-MODELS")
-    # 보관된 모델 그룹에는 새 버전을 등록하지 않는다. 버전 보관과
-    # 논리적 그룹 보관은 SOS의 신규 실행 가능성에 동일하게 적용한다.
-    group = client.get("registered-models/get", {"name": name}).get("registered_model")
-    if isinstance(group, dict) and _tags(group).get("sos.archived") == "true":
-        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-ARCHIVED")
+    # MLflow의 registered-models/get은 미등록 이름에 404를 반환한다.
+    # 먼저 정확한 모델 이름으로 검색하고, 존재하는 그룹만 GET하여 보관을 확인한다.
+    # 첫 학습에서는 GET 404를 기다리지 않고 그룹부터 생성해야 한다.
+    listing = client.get("registered-models/search", {
+        "filter": f"name = '{name}'", "max_results": 100,
+    })
+    models = listing.get("registered_models", [])
+    if not isinstance(models, list) or listing.get("next_page_token"):
+        raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+    # 정확한 이름으로 검색했는데 다른 자산 또는 잘못된 행이 나오면
+    # 부재로 간주해 새 Model 그룹을 생성하지 않는다.
+    if any(not isinstance(entry, dict) or entry.get("name") != name for entry in models):
+        raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+    if len(models) > 1:
+        raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+    if models:
+        group = client.get("registered-models/get", {"name": name}).get("registered_model")
+        if not isinstance(group, dict) or group.get("name") != name:
+            raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+        if _tags(group).get("sos.archived") == "true":
+            raise MLflowDeliveryError("SOS-MLFLOW-MODEL-ARCHIVED")
+    elif existing:
+        # 이미 버전이 있는데 Registry 그룹은 없다는 불일치 상태에서는 재생성 금지.
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
+    else:
+        client.post("registered-models/create", {
+            "name": name,
+            "tags": [{"key": "sos.source", "value": "sos-platform"}],
+        })
     if existing:
         item = existing[0]
         if (
@@ -122,17 +147,6 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
         ):
             raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
     else:
-        # 한 Worker만 등록한다. 이미 같은 이름이 있으면 생성하지 않는다.
-        models = client.get("registered-models/search", {"max_results": 1000}).get(
-            "registered_models", []
-        )
-        if not isinstance(models, list):
-            raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-        if not any(item.get("name") == name for item in models if isinstance(item, dict)):
-            client.post("registered-models/create", {
-                "name": name,
-                "tags": [{"key": "sos.source", "value": "sos-platform"}],
-            })
         result = client.post("model-versions/create", {
             "name": name, "source": source, "run_id": run_id,
             "tags": [
