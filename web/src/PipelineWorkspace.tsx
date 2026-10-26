@@ -44,7 +44,7 @@ export function filterCandidatesByScoreRange(
 }
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, examplesError, onRetryExamples, onUseExample }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, examplesError, onRetryExamples, onUseExample, canInspectOperations }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
   initialCandidateRowIndex?: number;
   initialAnalysisSection?: PipelineAnalysisSection;
@@ -55,6 +55,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   onSelectCandidate: (rowIndex: number) => void;
   onSelectAnalysisSection: (section: PipelineAnalysisSection) => void;
   canRun: boolean; canCancel: boolean;
+  canInspectOperations?: boolean;
   canCreateDataset?: boolean;
   hasPipelineExample?: boolean;
   example?: Example;
@@ -65,6 +66,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   onNavigate: (tab: WorkspaceTab, datasetId: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
+  const [localOperatorHost, setLocalOperatorHost] = useState(false);
+  useEffect(() => {
+    setLocalOperatorHost(["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
+  }, []);
   const [catalog, setCatalog] = useState<Definition[]>([]);
   const [catalogError, setCatalogError] = useState("");
   const [listReload, setListReload] = useState(0);
@@ -692,6 +697,20 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           {registrationPending ? <>
             <p>학습은 완료됐습니다. 결과 등록 확인 후 다른 시간 구간을 분석합니다.</p>
             {trainingJob && <MLTrackingStatus key={trainingJob.id} jobId={trainingJob.id} />}
+            {canInspectOperations && localOperatorHost && <details className="pipeline-operator-links">
+              <summary>운영자용 Run·Registry 상세 확인</summary>
+              <p>Dagster의 Runs에서 Job <code>activity_anomaly_workflow</code>를 확인하고,
+                MLflow의 Run ID 및 Registered Model Version과 대조할 수 있습니다.</p>
+              <div className="actions">
+                <a href="http://localhost:9607" target="_blank" rel="noopener noreferrer">
+                  Dagster Runs 열기 ↗
+                </a>
+                <a href="http://localhost:9606" target="_blank" rel="noopener noreferrer">
+                  MLflow 모델 Registry 열기 ↗
+                </a>
+              </div>
+              <p className="hint">별도 인증이 없는 로컬 운영 UI입니다. SOS의 작업 상태와 권한을 대신하지 않습니다.</p>
+            </details>}
           </> : null}
           {canCancel && <button type="button" className="secondary"
             disabled={busy || run.cancel_requested} onClick={() => void cancel()}>
