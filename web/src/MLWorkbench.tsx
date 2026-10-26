@@ -27,6 +27,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
   const selectedId = initialDatasetId;
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
+  const [featureEditorOpen, setFeatureEditorOpen] = useState(true);
   const [nEstimators, setNEstimators] = useState(100);
   const [experimentTitle, setExperimentTitle] = useState("기본 실험");
   const [registryKey, setRegistryKey] = useState("default");
@@ -66,6 +67,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
     selectionRequest.current += 1;
     setColumns([]);
     setFeatures([]);
+    setFeatureEditorOpen(true);
     setLoadingColumns(false);
     if (!selectedId) return () => { alive = false; };
     setLoadingColumns(true);
@@ -278,14 +280,24 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
         {loadingColumns && <p role="status" className="hint">스키마를 조회하고 있습니다.</p>}
         {selectedId && !loadingColumns && numericColumns.length === 0 &&
           <p className="hint">사용 가능한 숫자형 Feature가 없습니다. 데이터 준비에서 숫자형 Feature를 생성하세요.</p>}
-        {numericColumns.length > 0 && <details className="training-feature-editor">
-          <summary>Feature 선택 편집 · {features.length}개 선택 / {numericColumns.length}개 숫자형 컬럼</summary>
+        {numericColumns.length > 0 && <>
+          {features.length === 0 && <p className="training-feature-guidance" role="status"
+            id="training-feature-guidance">
+            학습하려면 Feature를 1개 이상 선택하세요. 아래 목록을 열어 컬럼을 선택할 수 있습니다.
+            숫자형이라는 이유만으로 모든 컬럼이 학습에 적합한 것은 아닙니다.
+          </p>}
+          <details className="training-feature-editor" open={featureEditorOpen}
+            onToggle={event => setFeatureEditorOpen(event.currentTarget.open)}>
+          <summary>학습 Feature 선택 · {features.length}개 선택 / {numericColumns.length}개 숫자형 컬럼</summary>
           <FeatureSelector key={selectedId} columns={numericColumns} selected={features}
             disabled={!canTrain} onChange={setFeatures} />
-        </details>}
+          </details>
+        </>}
       </div>
       <p className="hint">사용자가 선택한 숫자형 Feature와 결측 정책을 사용합니다. 숫자형 컬럼이 모델에 의미 있는 입력인지는 별도로 판단해야 합니다. 비유한값·정밀도·실행 예산 문제는 여전히 실패할 수 있습니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
       <div className="actions">
+        {selectedId && !loadingColumns && numericColumns.length > 0 && features.length === 0 &&
+          <p className="hint" role="status">학습 Job을 제출하려면 위에서 Feature를 선택해야 합니다.</p>}
         <button disabled={!canTrain || submitting || !selectedId || features.length === 0 ||
           !experimentTitle.trim() || experimentTitle.trim().length > 80 ||
           !Number.isInteger(nEstimators) || nEstimators < 1 || nEstimators > 2000 ||
