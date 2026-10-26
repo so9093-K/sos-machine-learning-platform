@@ -987,3 +987,11 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   .auth-panel { padding:22px 18px; }
   .auth-form button { width:100%; }
 }
+
+/* 등록 대기 중 운영자 보조 근거는 기본 작업 흐름을 가리지 않는다. */
+.pipeline-operator-links { margin-top:12px; border-top:1px solid var(--sos-border); padding-top:12px;
+  min-width:0; }
+.pipeline-operator-links summary { cursor:pointer; font-size:12px; font-weight:650; }
+.pipeline-operator-links p { color:var(--sos-muted); font-size:12px; line-height:1.6; }
+.pipeline-operator-links .actions { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
+.pipeline-operator-links a { font-size:12px; color:var(--sos-accent); overflow-wrap:anywhere; }
