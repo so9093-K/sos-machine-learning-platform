@@ -149,7 +149,7 @@ def model_management_router(store: Store) -> APIRouter:
         try:
             _get_group(client, name)
             if body.description is not None:
-                client.post("registered-models/update", {
+                client.patch("registered-models/update", {
                     "name": name, "description": body.description,
                 })
             if body.title is not None:
