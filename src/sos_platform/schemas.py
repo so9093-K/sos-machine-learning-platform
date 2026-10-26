@@ -271,6 +271,7 @@ class MLflowRunPageOut(BaseModel):
 
 
 class MLflowModelVersionOut(BaseModel):
+    archived: bool = False
     name: str
     version: str
     model_id: str
