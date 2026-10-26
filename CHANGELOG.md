@@ -2,12 +2,9 @@
 
 ## Unreleased
 
-- MLflow Run 생성·종료에 SOS Job/Attempt의 실제 타임존 포함 시각을 Unix 밀리초로 기록하고, 외부 등록 재시도에서도 원래 실행 시각을 유지합니다. 모델 등록 실패의 자동 재시도 기준 시각·연결 Run ID를 표시하며, Pipeline 등록 대기 중 로컬 운영자용 Dagster/MLflow 확인 경로를 제공합니다.
-
-
-- MLflow 최초 Registered Model을 조회하다 404가 반복되는 문제를 수정해 존재 여부 검색 후 신규 모델 그룹을 생성하도록 했습니다. 기존 학습 결과와 자동 등록 재시도·중복 판본 검증은 보존하고, Registry 대기·실패를 실제 학습 진행과 구별해 표시합니다.
-- 액세스 토큰 인증 화면을 좁고 명확한 단일 입력 폼으로 정리해 입력창·인증 버튼·서비스 연결 오류를 구분했습니다.
-
+- MLflow 최초 Registered Model 조회 404를 복구하고, 잘못된 검색 응답을 모델 부재로 처리하지 않으며 중복 모델 버전 생성 방지 정책을 유지합니다.
+- MLflow 신규 Run의 시작·종료 시각을 SOS Job/Attempt 근거에 따라 Unix 밀리초로 기록합니다. 재시도 시 원래 실행 시각을 유지하고, 등록 실패·재시도 시각·Run ID를 명확하게 표시합니다.
+- 토큰 인증 화면과 오류 표현을 정리하고, 로컬 운영자가 Pipeline 등록 대기 중 MLflow·Dagster를 확인할 수 있도록 안내합니다. 인증·권한/존재하지 않는 MLflow Job의 반복 조회도 중단합니다.
 
 - Dagster 등록형 Workflow의 제출 태그 Run 검색에서 지원하지 않는 GraphQL 필터를 수정하고 HTTP·GraphQL 실패 분류와 비정형 응답 처리를 보강했습니다. 자유 학습의 결측 입력 정책 선택, Dataset 변경 시 이전 Job 분리, Feature 편집 요약·실패 안내를 개선했습니다. 고정 Feature Pipeline의 입력 조건과 로컬 전용 Dagster 운영 접근·Run 검색 진단을 명확히 했습니다.
 
