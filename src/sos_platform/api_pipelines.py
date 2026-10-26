@@ -117,6 +117,13 @@ def _visible(actor: Actor, item: dict | None) -> dict:
 
 def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None, row_index: int | None = None) -> dict:
     by_stage = {entry["name"]: entry["job"] for entry in run["stages"]}
+    # Dagster Run의 SUCCESS만으로 SOS 개별 결과 게시가 검증됐다고 간주하지 않는다.
+    for stage, field in (("test", "scoring_result_id"), ("policy", "policy_revision_id")):
+        job = by_stage.get(stage)
+        if not job or job["status"] != "Succeeded" or not isinstance(job.get("result"), dict):
+            raise HTTPException(status_code=409, detail="분석 결과가 아직 확인되지 않았습니다.")
+        if not isinstance(job["result"].get(field), str):
+            raise HTTPException(status_code=409, detail="분석 결과의 판본 참조가 없습니다.")
     score_id = by_stage["test"]["result"]["scoring_result_id"]
     policy_id = by_stage["policy"]["result"]["policy_revision_id"]
     scoring = store.get_scoring_result(score_id)
