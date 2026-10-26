@@ -62,6 +62,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const canWrite = actor.capabilities.includes("dataset.create");
   const canRun = actor.capabilities.includes("job.create");
   const canCancel = actor.capabilities.includes("job.cancel");
+  const canManageModels = actor.capabilities.includes("model.manage");
   const canInspectStorage = actor.capabilities.includes("storage.inspect");
   const canViewAudit = actor.capabilities.includes("audit.read");
   const canConfigure = actor.capabilities.includes("instance.configure");
@@ -778,7 +779,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         </>}
 
       </>}
-      {tab === "ml" && !resource && <MLflowResearch
+      {tab === "ml" && !resource && <MLflowResearch canManage={canManageModels}
         onOpenModel={id => openResource("model", id)}
         onScoreModel={startScoring}
         onTrain={() => setTab("training")} />}
