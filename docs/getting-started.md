@@ -103,3 +103,5 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 등록형 활동 이상 탐지 Workflow의 실행·단계 의존성과 Asset Graph는 Dagster OSS에서 관리한다. 일반 사용자의 분석 제출·조회·취소는 반드시 SOS API를 경유해야 한다. Dagster UI와 GraphQL을 외부 네트워크에 공개하거나 사용자 권한을 위임해선 안 된다. 기존 독립 ML API 및 Worker의 Job/Attempt·무결성 계약은 유지된다.
 
 Migration 0024는 기존 자체 Pipeline 실행 그룹 테이블을 제거하기 전에 연결된 Job ID와 실행 단계의 관계를 감사 이력에 기록한다. 이전 Pipeline 그룹별 사용자 화면은 종료되지만 실제 Job·Model·Scoring·Evaluation 데이터는 보존된다. 개발 환경이라고 확인되지 않은 볼륨을 무조건 삭제해서는 안 된다.
+
+모델 삭제는 SOS 모델 상세와 Registry 관리 화면에서 영향 정보를 확인한 뒤 실행합니다. 삭제한 모델의 MLflow Version과 실제 S3 모델 파일은 제거되며 과거 Job·Scoring·평가 근거는 보존됩니다. 버전 관리·객체 잠금·외부 백업이 있는 저장소는 관리 정책과 실제 삭제 결과를 별도로 확인해야 합니다.
