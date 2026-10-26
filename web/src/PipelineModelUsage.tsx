@@ -52,6 +52,7 @@ export function PipelineModelUsage({
       datasets={datasets} hasMoreDatasets={hasMoreDatasets}
       onLoadMoreDatasets={onLoadMoreDatasets}
       canRun={canRun} canCancel={canCancel}
-      onOpenResult={id => onOpenResource("scoring", id)} />}
+      onOpenResult={id => onOpenResource("scoring", id)}
+       onOpenResource={onOpenResource} />}
   </section>;
 }
