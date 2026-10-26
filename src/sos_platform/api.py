@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from scalar_fastapi import AgentScalarConfig, get_scalar_api_reference
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
@@ -220,8 +220,9 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     register_error_handlers(app)
 
     @app.exception_handler(DagsterUnavailable)
-    async def dagster_unavailable(_request: Request, exc: DagsterUnavailable):
-        return JSONResponse(status_code=503, content={"detail": str(exc)})
+    async def dagster_unavailable(request: Request, _exc: DagsterUnavailable):
+        return problem_response(request, "SOS-API-DEPENDENCY", 503,
+                                ERRORS["SOS-API-DEPENDENCY"].message)
 
     @app.middleware("http")
     async def security_audit(request: Request, call_next):
