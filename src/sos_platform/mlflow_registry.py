@@ -45,9 +45,8 @@ def _versions(client, name: str):
         if token:
             params["page_token"] = token
         result = client.get("model-versions/search", params)
-        versions = result.get("model_versions")
-        if versions is None:
-            versions = []  # MLflow는 빈 반복 필드를 생략할 수 있다.
+        # MLflow는 빈 반복 필드를 생략할 수 있지만 명시적 null은 잘못된 응답이다.
+        versions = result.get("model_versions", [])
         if not isinstance(versions, list):
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
         for version in versions:
@@ -117,9 +116,7 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
     listing = client.get("registered-models/search", {
         "filter": f"name = '{name}'", "max_results": 100,
     })
-    models = listing.get("registered_models")
-    if models is None:
-        models = []
+    models = listing.get("registered_models", [])
     if not isinstance(models, list) or listing.get("next_page_token"):
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
     # 정확한 이름으로 검색했는데 다른 자산 또는 잘못된 행이 나오면
