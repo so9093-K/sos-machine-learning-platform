@@ -125,7 +125,7 @@ def model_deletion_router(store: Store) -> APIRouter:
         try:
             client=MLflowClient(MLflowSettings.from_env())
             try:
-                client.post("model-versions/delete", {
+                client.delete("model-versions/delete", {
                     "name":row["registry_model"],"version":row["registry_version"],
                 })
             except MLflowDeliveryError as exc:
