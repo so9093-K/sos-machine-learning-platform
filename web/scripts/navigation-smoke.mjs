@@ -254,7 +254,7 @@ try {
   }));
   assert.match(retryTracking, /MLflow 기록·등록 재시도 대기 · 시도 2회/);
   assert.match(retryTracking, /SOS-MLFLOW-HTTP-503/);
-  assert.match(retryTracking, /SOS Job 결과는 바뀌지 않으며/);
+  assert.match(retryTracking, /플랫폼 Job 결과는 바뀌지 않으며/);
   const recoveredTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
     status: { state: "Succeeded", run_id: "mlflow-run-1" }, error: "",
   }));
@@ -443,9 +443,12 @@ try {
   assert.doesNotMatch(labHome, /이해를 돕는 개념도|실제 결과가 아닙니다/);
   const { PlatformOverview } = await vite.ssrLoadModule("/src/PlatformOverview.tsx");
   const home = renderToStaticMarkup(React.createElement(PlatformOverview, {
+    brandName: "ACME AI Lab",
     datasets: [], onNavigate: () => {}, onOpenDataset: () => {},
     onOpenPipelineRun: () => {},
   }));
+  assert.match(home, /ACME AI Lab · EXPLORE/);
+  assert.doesNotMatch(home, /SOS · EXPLORE/);
   assert.match(home, /무엇을 시작할까요/);
   assert.match(home, /활동 이상 탐지/);
   assert.doesNotMatch(home, /최근 ML 실행/);

@@ -3,6 +3,7 @@
 import hashlib
 from types import SimpleNamespace
 
+
 from fastapi.testclient import TestClient
 
 from sos_platform import api_control
@@ -47,8 +48,11 @@ def test_openapi_health_ready_and_bearer_contract(tmp_path):
             assert operation.get("summary"), (method, path)
             assert len(operation.get("tags", [])) == 1, (method, path)
             assert operation["tags"][0] in declared_tags
-            if path not in {"/api/health", "/api/ready"}:
-                # 이 API 표면에는 두 개의 공개 상태 엔드포인트만 존재한다.
+            if path in {"/api/health", "/api/ready"} or (
+                path == "/api/branding" and method == "get"
+            ):
+                assert "security" not in operation, (method, path)
+            else:
                 assert operation.get("security") == [{"HTTPBearer": []}], (
                     method, path,
                 )
@@ -99,3 +103,42 @@ def test_status_responses_and_token_permissions(tmp_path, monkeypatch):
     authorized = {"Authorization": f"Bearer {token}"}
     assert token_client.get("/api/v2/auth/me", headers=authorized).status_code == 200
     assert token_client.get("/api/storage/policy", headers=authorized).status_code == 403
+
+
+def test_public_branding_and_admin_edit_contract(tmp_path, monkeypatch):
+    """인증 전 브랜드 조회와 관리자 설정 변경의 경계를 확인한다."""
+    brand = {"name": "SOS"}
+
+    monkeypatch.setattr(Store, "brand_name", lambda self: brand["name"])
+
+    def update_brand(self, value, *, actor_id, actor_type, request_id):
+        assert actor_id == "admin-a"
+        assert actor_type == "human"
+        brand["name"] = value
+
+    monkeypatch.setattr(Store, "set_brand_name", update_brand)
+    viewer_token = "valid-viewer-token-with-enough-entropy"
+    admin_token = "valid-admin-token-with-enough-entropy"
+    subjects = {
+        hashlib.sha256(viewer_token.encode()).hexdigest():
+            Actor("viewer-a", "human", frozenset({"viewer"})),
+        hashlib.sha256(admin_token.encode()).hexdigest():
+            Actor("admin-a", "human", frozenset({"administrator"})),
+    }
+    client = TestClient(create_app(tmp_path, identity=IdentitySettings("token", subjects)))
+    initial = client.get("/api/branding")
+    assert initial.json() == {"brand_name": "SOS"}
+    assert initial.headers["cache-control"] == "no-store"
+    payload = {"brand_name": "연구 플랫폼"}
+    assert client.put("/api/branding", json=payload).status_code == 401
+    viewer = {"Authorization": f"Bearer {viewer_token}"}
+    assert client.put("/api/branding", json=payload, headers=viewer).status_code == 403
+    admin = {"Authorization": f"Bearer {admin_token}"}
+    changed = client.put("/api/branding", json=payload, headers=admin)
+    assert changed.status_code == 200
+    assert changed.json() == payload
+    assert client.get("/api/branding").json() == payload
+    for invalid in ("   ", "A\u007fB", "A\nB", "x" * 49):
+        assert client.put("/api/branding", json={"brand_name": invalid}, headers=admin).status_code == 422
+    assert client.get("/api/branding").json() == payload
+    assert client.get("/api/instance").status_code == 401

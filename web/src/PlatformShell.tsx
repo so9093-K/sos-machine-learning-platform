@@ -5,7 +5,7 @@ import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
   type WorkspaceTab, type MLNavigationContext, type ResourceRoute } from "./PlatformNavigation";
 
 const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; description: string }> = {
-  overview: { eyebrow: "WORKSPACE", title: "SOS Workspace", description: "데이터 탐색 · 활동 이상 탐지 · 이전 분석 이어하기" },
+  overview: { eyebrow: "WORKSPACE", title: "Workspace", description: "데이터 탐색 · 활동 이상 탐지 · 이전 분석 이어하기" },
   understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
@@ -26,6 +26,7 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
 
 /** 모든 페이지에 공통인 탐색·인증 문맥을 업무 화면에서 분리한다. */
 export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfigure,
+  brandName, brandReady, brandLoadError, onBrandChange, onBrandRetry,
   canInspectStorage, canViewAudit, modelContext, modelResource, dataSidebar, children }: {
   actor: Identity;
   section: WorkspaceTab;
@@ -34,16 +35,26 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
   onNavigate: (tab: WorkspaceTab) => void;
   onSignOut: () => void;
   canConfigure: boolean;
+  brandName: string;
+  brandReady: boolean;
+  brandLoadError: string;
+  onBrandChange: (name: string) => void;
+  onBrandRetry: () => void;
   canInspectStorage: boolean;
   canViewAudit: boolean;
   dataSidebar?: ReactNode;
   children: ReactNode;
 }) {
   const label = pageLabels[section];
-  useEffect(() => { document.title = `${label.title} · SOS`; }, [label.title]);
+  const title = section === "overview" ? `${brandName} Workspace` : label.title;
+  useEffect(() => {
+    document.title = section === "overview" ? title : `${title} · ${brandName}`;
+  }, [section, title, brandName]);
   return <div className="shell">
     <aside className="sidebar">
-      <InstanceBrand canEdit={canConfigure} />
+      <InstanceBrand canEdit={canConfigure} brandName={brandName}
+        brandReady={brandReady} brandLoadError={brandLoadError} onBrandChange={onBrandChange}
+        onBrandRetry={onBrandRetry} />
       <PlatformNavigation active={section} onNavigate={onNavigate}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit} />
       {dataSidebar}
@@ -54,7 +65,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
     <main className="main">
       <header className="workspace-header"><div>
         <span className="eyebrow">{label.eyebrow}</span>
-        <h1 id="sos-page-heading" tabIndex={-1}>{label.title}</h1>
+        <h1 id="sos-page-heading" tabIndex={-1}>{title}</h1>
         <p>{label.description}</p>
       </div>
         <div className="header-meta">
@@ -69,7 +80,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
       {isModelsArea(section) && <ModelAreaNavigation active={section}
         context={modelContext} resource={modelResource} onNavigate={onNavigate} />}
       {children}
-      <footer>SOS · {label.eyebrow}<span>Dataset · Job · Artifact</span></footer>
+      <footer>{brandName} · {label.eyebrow}<span>Dataset · Job · Artifact</span></footer>
     </main>
   </div>;
 }

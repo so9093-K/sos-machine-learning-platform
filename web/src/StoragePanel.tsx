@@ -125,7 +125,7 @@ export function StoragePanel() {
       다음 객체 페이지 확인 →
     </button>}
     <div className="panel-head"><div><h4>Iceberg Snapshot 참조</h4>
-      <p>Snapshot을 읽을 수 있는지와 SOS 보존 Tag가 확인됐는지를 구별합니다.</p></div>
+      <p>Snapshot을 읽을 수 있는지와 플랫폼 보존 Tag가 확인됐는지를 구별합니다.</p></div>
       <button className="secondary" disabled={loading} onClick={() => void inspectSnapshots()}>
         Snapshot 검사
       </button></div>

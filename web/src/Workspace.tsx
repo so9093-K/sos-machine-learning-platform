@@ -47,7 +47,16 @@ const mebibytes = (size: number) => (size / (1024 * 1024)).toFixed(2);
 function readableVersion(d: Dataset) {
   return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
 }
-export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: () => void }) {
+export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadError,
+  onBrandChange, onBrandRetry }: {
+  actor: Identity;
+  onSignOut: () => void;
+  brandName: string;
+  brandReady: boolean;
+  brandLoadError: string;
+  onBrandChange: (name: string) => void;
+  onBrandRetry: () => void;
+}) {
   // 표시 제어도 서버 /auth/me의 실제 capability 집합을 사용한다.
   // 역할→권한 매핑의 정본은 Python security.GRANTS다.
   const canWrite = actor.capabilities.includes("dataset.create");
@@ -455,6 +464,8 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
   return <PlatformShell actor={actor} section={tab} modelContext={context}
     modelResource={resource} onNavigate={setTab}
     onSignOut={onSignOut} canConfigure={canConfigure}
+    brandName={brandName} brandReady={brandReady} brandLoadError={brandLoadError}
+    onBrandChange={onBrandChange} onBrandRetry={onBrandRetry}
     canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
     dataSidebar={(["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) &&
         <DataSourceSidebar datasets={datasets} selected={selected} canWrite={canWrite} busy={busy}
@@ -508,7 +519,7 @@ export function Workspace({ actor, onSignOut }: { actor: Identity; onSignOut: ()
           <progress max={uploadProgress.total} value={uploadProgress.loaded}
             aria-label="파일 전송 진행률" />}
       </div>}
-      {tab === "overview" && <PlatformOverview
+      {tab === "overview" && <PlatformOverview brandName={brandName}
         datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
         onNavigate={setTab}
         onOpenPipelineRun={(runId, datasetId) => {

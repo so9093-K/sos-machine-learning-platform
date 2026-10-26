@@ -37,10 +37,6 @@ a{color:var(--sos-accent);text-decoration:none}
 a:hover{text-decoration:underline}
 .shell{display:flex;min-height:100vh}
 .sidebar{width:252px;flex-shrink:0;display:flex;flex-direction:column;padding:24px 16px;border-right:1px solid var(--sos-border);background:var(--sos-sidebar)}
-.brand{display:flex;align-items:center;gap:11px;padding:2px 8px 36px}
-.brandmark{height:38px;width:38px;border-radius:12px;background:var(--sos-accent);display:grid;place-items:center;color:var(--sos-field);font-weight:900;font-size:22px}
-.brand strong{display:block;font-size:14px}
-.brand small{color:var(--sos-muted);font-size:10px;white-space:nowrap}
 .section-title,.eyebrow{font-size:11px;letter-spacing:.1em;font-weight:700;color:var(--sos-muted)}
 .section-title{padding:0 10px 13px}
 .upload{display:flex;align-items:center;justify-content:center;background:var(--sos-accent-bg);border:1px dashed var(--sos-border);color:var(--sos-accent);border-radius:10px;padding:13px 8px;cursor:pointer;font-weight:600;font-size:12px}
@@ -135,7 +131,6 @@ tbody tr:hover{background:var(--sos-raised)}
 footer{font-size:12px;color:var(--sos-muted);margin-top:38px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
 @media(max-width:850px){.shell{flex-direction:column}
 .sidebar{width:100%;border-right:0;border-bottom:1px solid var(--sos-border);padding:15px}
-.brand{padding:0 0 14px}
 .sidebar-bottom{display:none}
 nav{flex-direction:row;overflow:auto;max-height:100px}
 .dataset{min-width:150px}
@@ -213,10 +208,12 @@ body { background:var(--sos-base); color:var(--sos-text); }
 .shell { min-height:100vh; }
 .sidebar { width:270px; padding:23px 17px; gap:3px; }
 .main { padding-top:32px; }
-.brand { align-items:flex-start; gap:13px; padding:2px 5px 25px; }
-.brandmark { flex-shrink:0; background:var(--sos-accent); color:var(--sos-sidebar); }
+.brand { display:flex; align-items:flex-start; gap:13px; padding:2px 5px 25px; }
+.brandmark { flex-shrink:0; width:38px; height:38px; border-radius:12px;
+  display:grid; place-items:center; background:var(--sos-accent);
+  color:var(--sos-sidebar); font-size:22px; font-weight:900; }
 .brand-content { display:grid; gap:5px; min-width:0; width:100%; }
-.brand-content strong { font-size:16px; }
+.brand-content strong { display:block; font-size:16px; overflow-wrap:anywhere; }
 .instance-name { color:var(--sos-muted); font-size:12px; overflow-wrap:anywhere; }
 .brand-edit.ghost { font-size:11px; justify-self:start; padding:2px 0; text-align:left; }
 .brand-form { display:grid; gap:8px; padding-top:5px; }

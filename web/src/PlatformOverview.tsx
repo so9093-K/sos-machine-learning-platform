@@ -6,13 +6,14 @@ import type { PipelineRun } from "./types";
 
 type DatasetLink = { id: string; name: string; kind: string };
 type Props = {
+  brandName: string;
   datasets: DatasetLink[];
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenDataset: (id: string) => void;
   onOpenPipelineRun: (runId: string, datasetId: string) => void;
 };
 
-export function PlatformOverview({ datasets, onNavigate, onOpenDataset, onOpenPipelineRun }: Props) {
+export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDataset, onOpenPipelineRun }: Props) {
   const [runs, setRuns] = useState<PipelineRun[]>([]);
   const [runError, setRunError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -34,7 +35,7 @@ export function PlatformOverview({ datasets, onNavigate, onOpenDataset, onOpenPi
     "현재 Dataset 목록 밖의 데이터";
   return <div className="platform-home">
     <section className="platform-intro">
-      <span className="eyebrow">SOS · EXPLORE · EXPERIMENT · UNDERSTAND · EVOLVE</span>
+      <span className="eyebrow">{brandName} · EXPLORE · EXPERIMENT · UNDERSTAND · EVOLVE</span>
       <h2>무엇을 시작할까요?</h2>
       <p>현재 사용할 수 있는 데이터를 살펴보거나 준비된 활동 이상 탐지 분석을 이용할 수 있습니다.
         각 기능은 독립적으로 시작할 수 있습니다.</p>
