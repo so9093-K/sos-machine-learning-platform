@@ -450,7 +450,7 @@ try {
     canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
     onOpenResource: () => {}, onBack: () => {}, onLearn: () => {},
   }));
-  assert.match(pendingUse, /학습된 모델 사용해보기/);
+  assert.match(pendingUse, /준비된 모델로 바로 분석하기/);
   assert.match(pendingUse, /사용 가능한 모델을 확인하는 중/);
   const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
   const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {
