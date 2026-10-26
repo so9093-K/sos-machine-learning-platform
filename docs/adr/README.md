@@ -25,3 +25,4 @@
 - [0014 — Iceberg 과도기 쓰기 소유권 채택 종료](0014-remove-iceberg-adoption.md) · Accepted
 - [0015 — MLflow 모델·실험 관리 정본 전환](0015-mlflow-management-ownership.md) · Accepted (0012의 관리 책임 제안 대체)
 - [0016 — Dagster OSS Workflow 단일 정본 전환](0016-dagster-orchestration.md) · Accepted (자체 Pipeline 실행기 대체)
+- [0017 — 모델 자산 그룹·보관·영구 삭제 계약](0017-model-lifecycle.md) · Accepted (ADR 0015의 단일 모델 그룹 기준 확장)
