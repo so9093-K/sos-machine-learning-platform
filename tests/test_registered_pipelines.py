@@ -108,7 +108,8 @@ def test_cancelled_submission_without_dagster_run_is_not_queued(monkeypatch):
         FakeStore(), row, client=FakeDagster("STARTED")
     )
     assert result["status"] == "Cancelled"
-    assert result["cancel_requested"] is True
+    # 취소 확정 후에는 더 이상 "취소 요청 중"으로 표시하지 않는다.
+    assert result["cancel_requested"] is False
     assert result["current_stage"] is None
 
 
