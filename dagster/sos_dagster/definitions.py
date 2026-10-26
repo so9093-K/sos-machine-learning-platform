@@ -9,12 +9,16 @@ import time
 from dagster import (
     AssetMaterialization,
     AssetSpec,
+    DagsterRunStatus,
+    DefaultSensorStatus,
     Definitions,
     Failure,
     OpExecutionContext,
+    RunStatusSensorContext,
     in_process_executor,
     job,
     op,
+    run_status_sensor,
 )
 from sqlalchemy import text
 
@@ -220,6 +224,62 @@ def activity_anomaly_workflow():
     evaluation(test(policy(calibration(training(preflight())))))
 
 
+
+def _cancel_orphaned_sos_jobs(context: RunStatusSensorContext) -> None:
+    """Dagster UI의 종료·실패 후에도 독립 SOS Job이 남지 않도록 Dagster가 정리한다.
+
+    성공한 Job·완료된 결과는 수정하지 않는다. Dagster 자체 Run 상태를
+    SOS DB에 복제하지 않고, 정해진 Run 이벤트에만 반응한다.
+    """
+    submission_id = context.dagster_run.tags.get("sos/submission_id")
+    if not submission_id:
+        return
+    store = Store(os.environ.get("SOS_HOME", "/var/lib/sos"))
+    with store.connection() as conn:
+        row = conn.execute(
+            text("SELECT owner_actor,owner_actor_type FROM workflow_submissions WHERE id=:id"),
+            {"id": submission_id},
+        ).mappings().one_or_none()
+    if row is None:
+        return
+    for stage in STAGES:
+        with store.connection() as conn:
+            job_id = conn.execute(text(
+                "SELECT job_id FROM job_submissions "
+                "WHERE actor_id=:actor AND submission_key=:key"
+            ), {
+                "actor": row["owner_actor"],
+                "key": "workflow:" + submission_id + ":" + stage,
+            }).scalar_one_or_none()
+        if not job_id:
+            continue
+        job = store.get_job(job_id)
+        if job and job["status"] in ("Queued", "Running"):
+            # 취소와 Worker의 완료가 경합할 수 있다. 이미 종료된 Job을 덮어쓰지 않는다.
+            store.request_cancel(
+                job_id, actor_id=row["owner_actor"],
+                actor_type=row["owner_actor_type"],
+            )
+
+
+@run_status_sensor(
+    run_status=DagsterRunStatus.CANCELED,
+    monitored_jobs=[activity_anomaly_workflow],
+    default_status=DefaultSensorStatus.RUNNING,
+)
+def cancel_sos_jobs_after_run_cancel(context: RunStatusSensorContext) -> None:
+    _cancel_orphaned_sos_jobs(context)
+
+
+@run_status_sensor(
+    run_status=DagsterRunStatus.FAILURE,
+    monitored_jobs=[activity_anomaly_workflow],
+    default_status=DefaultSensorStatus.RUNNING,
+)
+def cancel_sos_jobs_after_run_failure(context: RunStatusSensorContext) -> None:
+    _cancel_orphaned_sos_jobs(context)
+
+
 raw = AssetSpec("sos_activity_dataset", description="SOS가 관리하는 고정 Dataset 판본")
 model = AssetSpec("sos_activity_model", deps=[raw],
                   description="SOS Model Revision / MLflow Registry의 외부 게시 근거")
@@ -230,5 +290,6 @@ evaluation_asset = AssetSpec("sos_activity_evaluation", deps=[scores],
 
 defs = Definitions(
     jobs=[activity_anomaly_workflow],
+    sensors=[cancel_sos_jobs_after_run_cancel, cancel_sos_jobs_after_run_failure],
     assets=[raw, model, scores, evaluation_asset],
 )
