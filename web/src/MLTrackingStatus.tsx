@@ -39,6 +39,11 @@ export function MLTrackingStatus({ jobId }: Props) {
 export function MLTrackingDetails({ status, error }: {
   status: MLflowExportStatus | null; error: string;
 }) {
+  const retryDate = status?.state === "Retry" && status.retry_after
+    ? new Date(status.retry_after) : null;
+  const retryAt = retryDate && Number.isFinite(retryDate.getTime())
+    ? retryDate.toLocaleString("ko-KR") : null;
+  const registry404 = status?.last_error_code === "SOS-MLFLOW-HTTP-404-registered-models_get";
   return <div className="steps" aria-label="MLflow 추적 상태">
     <strong>MLflow 실행 기록</strong>
     {status && <p role="status">
@@ -50,15 +55,17 @@ export function MLTrackingDetails({ status, error }: {
             ? `MLflow 기록·모델 등록 실패 · 자동 재시도 대기 (시도 ${status.attempts}회)`
             : status.state === "Sending" ? "MLflow 기록·등록 전송 중" : "MLflow 기록 대기"}
     </p>}
-    {status?.last_error_code && status.state === "Retry" &&
-      <div className="pipeline-readiness-blocked" role="alert">
-        <strong>모델이 아직 Registry에 등록되지 않았습니다.</strong>
-        <p>오류 코드: {status.last_error_code}</p>
-        <p>{status.last_error_code === "SOS-MLFLOW-HTTP-404-registered-models_get"
-          ? "등록할 모델 이름을 조회하는 과정에서 MLflow가 404를 반환했습니다. 첫 등록 순서 또는 Registry 상태를 운영자가 확인해야 합니다."
-          : "MLflow 등록 서버·모델 판본·응답 상태를 운영자가 확인해야 합니다."}
-          {" "}학습 결과는 유지됩니다. 같은 학습을 새로 제출해 해결하려 하지 마세요.</p>
-      </div>}
+    {status?.state === "Retry" && <div className="pipeline-readiness-blocked" role="alert">
+      <strong>{registry404 ? "모델 Registry 등록이 완료되지 않았습니다." :
+        "MLflow 기록 또는 모델 등록에 실패했습니다."}</strong>
+      {status.last_error_code && <p>오류 코드: {status.last_error_code}</p>}
+      {retryAt && <p>다음 자동 재시도 기준 시각: {retryAt}</p>}
+      <p>{registry404
+        ? "등록할 모델을 조회하는 과정에서 MLflow가 404를 반환했습니다. 신규 모델 생성 순서 또는 Registry 상태를 운영자가 확인해야 합니다."
+        : "MLflow 전송 또는 모델 Registry 상태를 확인해야 합니다."}
+        {" "}기존 Job 결과는 보존됩니다. 동일 학습을 다시 제출해 해결하려 하지 마세요.</p>
+      {status.run_id && <p className="hint">연결된 MLflow Run ID: <code>{status.run_id}</code></p>}
+    </div>}
     {error && <p role="alert">{error}</p>}
   </div>;
 }
