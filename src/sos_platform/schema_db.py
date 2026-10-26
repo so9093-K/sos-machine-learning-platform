@@ -280,34 +280,23 @@ mlflow_exports = Table(
     Index("ix_mlflow_exports_due", "state", "retry_after"),
 )
 
-pipeline_runs = Table(
-    "pipeline_runs",
+workflow_submissions = Table(
+    "workflow_submissions",
     metadata,
     Column("id", String(36), primary_key=True),
+    Column("actor_id", Text, nullable=False),
+    Column("submission_key", String(128), nullable=False),
+    Column("fingerprint", String(64), nullable=False),
     Column("definition_id", String(96), nullable=False),
     Column("definition_version", String(32), nullable=False),
     Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
     Column("dataset_version", Text, nullable=False),
     Column("owner_actor", Text, nullable=False),
     Column("owner_actor_type", String(16), nullable=False),
-    Column("input_plan", Text, nullable=False),
-    Column("stage_index", Integer, nullable=False),
-    Column("job_ids", Text, nullable=False),
-    Column("status", String(24), nullable=False),
-    Column("cancel_requested", Boolean, nullable=False, default=False),
-    Column("error_code", Text),
+    Column("dagster_run_id", String(36), unique=True),
     Column("created_at", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-    Index("ix_pipeline_run_owner_created", "owner_actor", "created_at"),
-)
-
-pipeline_submissions = Table(
-    "pipeline_submissions",
-    metadata,
-    Column("actor_id", Text, primary_key=True),
-    Column("submission_key", String(128), primary_key=True),
-    Column("fingerprint", String(64), nullable=False),
-    Column("run_id", String(36), ForeignKey("pipeline_runs.id", deferrable=True, initially="DEFERRED"), nullable=False),
+    UniqueConstraint("actor_id", "submission_key", name="uq_workflow_submission_key"),
+    Index("ix_workflow_owner_created", "owner_actor", "created_at"),
 )
 
 audit_events = Table(
