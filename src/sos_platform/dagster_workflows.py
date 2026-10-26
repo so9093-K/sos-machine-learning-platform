@@ -69,7 +69,16 @@ def _run(store, row: dict, *, include_jobs: bool = True, client: DagsterClient |
         job.get("error_code") for job in created.values() if job["status"] == "Failed"
     ), None)
     if statuses[raw_status] == "Failed" and error is None:
-        error = "SOS-JOB-FAILED"
+        training = jobs["training"]
+        if training and training["status"] == "Succeeded":
+            model_id = (training.get("result") or {}).get("model_revision_id")
+            model = store.get_model_revision(model_id) if model_id else None
+            if model is None:
+                error = "SOS-ML-MODEL-INVALID"
+            elif not model.get("registry_version") and store.tracking_status(training["id"]) is None:
+                # 학습 Job은 성공해도 Registry가 구성되지 않으면 후속 Scoring 불가.
+                error = "SOS-MLFLOW-NOT-CONFIGURED"
+        error = error or "SOS-JOB-FAILED"
     return {
         "id": row["id"],
         "definition_id": row["definition_id"],
