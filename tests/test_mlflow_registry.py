@@ -156,3 +156,28 @@ def test_registry_does_not_recreate_missing_group_with_existing_version(model):
     with pytest.raises(MLflowDeliveryError, match="MODEL-MISMATCH"):
         register_model_version(client, model, "run-1")
     assert not client.models
+
+
+
+@pytest.mark.parametrize("bad_result", [
+    {"registered_models": ""},
+    {"registered_models": {}},
+    {"registered_models": [{"unexpected": "schema"}]},
+    {"registered_models": [{"name": "another-model"}]},
+    {"registered_models": [{"name": "sos-if-not-ours"}]},
+    {"registered_models": [], "next_page_token": "unchecked-next-page"},
+])
+def test_registry_does_not_create_on_malformed_exact_search(model, bad_result):
+    """불완전하거나 계약과 다른 정확한 이름 조회는 없는 모델로 보지 않는다."""
+    class BrokenRegistrySearch(FakeClient):
+        def get(self, endpoint, params):
+            if endpoint == "registered-models/search":
+                assert params["filter"] == f"name = '{registered_model_name(model)}'"
+                return bad_result
+            return super().get(endpoint, params)
+
+    client = BrokenRegistrySearch()
+    with pytest.raises(MLflowDeliveryError, match="RESPONSE-INVALID"):
+        register_model_version(client, model, "run-1")
+    assert client.models == []
+    assert client.created == 0
