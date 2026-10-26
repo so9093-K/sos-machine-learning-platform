@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 설치 인스턴스별 제품 브랜드명을 관리자 권한으로 변경하고 로그인·Workspace·탐색·브라우저 제목에서 일관되게 표시합니다. 기존 인스턴스 표시명과 내부 SOS API·데이터·Runtime 식별자는 변경하지 않습니다.
+
 - 등록형 활동 이상 탐지의 실행 조정을 Dagster OSS Workflow로 전환하고, 기존 자체 Pipeline 단계 전이 엔진·중복 실행 상태를 제거했습니다. Dagster의 Run/Asset Graph 운영 UI와 SOS Job·Result/MLflow 관리 정본의 경계를 구분했습니다.
 
 - Model Playground에서 단일 관측치를 실제 등록 모델로 점수화하는 Worker Job 계약을 추가했습니다. 사용자 입력의 Job 이력 보존과 기존 Dataset Scoring의 경계를 구분합니다.

@@ -4,6 +4,27 @@
  */
 
 export interface paths {
+    "/api/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 공개 제품 브랜드 조회
+         * @description 로그인 화면에서도 사용할 수 있는 표시 브랜드명만 반환합니다.
+         */
+        get: operations["branding_settings_api_branding_get"];
+        /** 제품 브랜드명 변경 */
+        put: operations["change_branding_settings_api_branding_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/datasets": {
         parameters: {
             query?: never;
@@ -1389,6 +1410,22 @@ export interface components {
         Body_upload_api_datasets_files_post: {
             /** File */
             file: string;
+        };
+        /**
+         * BrandingSettingsOut
+         * @description 인증 이전에도 노출할 수 있는 제품 표시 브랜드. 기술 식별자와 별개다.
+         */
+        BrandingSettingsOut: {
+            /** Brand Name */
+            brand_name: string;
+        };
+        /**
+         * BrandingSettingsUpdate
+         * @description 관리자만 변경할 수 있는 표시 브랜드.
+         */
+        BrandingSettingsUpdate: {
+            /** Brand Name */
+            brand_name: string;
         };
         /** ColumnProfileOut */
         ColumnProfileOut: {
@@ -3372,6 +3409,68 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    branding_settings_api_branding_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingSettingsOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    change_branding_settings_api_branding_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandingSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingSettingsOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_dataset_page_api_datasets_get: {
         parameters: {
             query?: {
