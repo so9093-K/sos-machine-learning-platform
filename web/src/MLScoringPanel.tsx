@@ -42,6 +42,7 @@ export function MLScoringPanel({
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [error, setError] = useState("");
   const [historyError, setHistoryError] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const { items: history, nextCursor, refresh, loadMore } =
     usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
 
@@ -79,7 +80,7 @@ export function MLScoringPanel({
           setSelectedJob(next);
           setError("");
           if (TERMINAL.has(next.status)) {
-            void refresh().catch(e => { if (alive) setHistoryError(formatError(e)); });
+            if (historyOpen) void refresh().catch(e => { if (alive) setHistoryError(formatError(e)); });
           }
         }
       } catch (e) {
@@ -146,7 +147,7 @@ export function MLScoringPanel({
       });
       setSelectedJob(job);
       setResult(null);
-      void refresh().catch(e => setHistoryError(formatError(e)));
+      if (historyOpen) void refresh().catch(e => setHistoryError(formatError(e)));
     } catch (e) {
       setError(formatError(e));
     } finally {
@@ -261,6 +262,7 @@ export function MLScoringPanel({
       {submitted ? "점수 계산 요청 중…" : "이 Dataset으로 모델 사용하기 →"}
     </button>
     <details className="pipeline-scoring-history" onToggle={event => {
+      setHistoryOpen(event.currentTarget.open);
       if (event.currentTarget.open) {
         setHistoryError("");
         void refresh().catch(cause => setHistoryError(formatError(cause)));
