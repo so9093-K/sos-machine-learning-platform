@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from .mlflow_errors import MLflowDeliveryError
 from .mlflow_tracking import MLflowClient
+from .mlflow_registry import registered_model_name
 from .mlflow_config import MLflowSettings
 from .object_store import ObjectStore
 from .security import Actor, require
@@ -54,7 +55,9 @@ def begin_delete(store: Store, model_id: str, actor: Actor) -> dict:
             tracking = db.execute(text(
                 "SELECT state FROM mlflow_exports WHERE job_id=:id"
             ), {"id":row["job_id"]}).scalar_one_or_none()
-            if tracking != "Succeeded" or not row["registry_version"]:
+            if tracking != "Succeeded" or not row["registry_version"] or not row["registry_model"]:
+                raise HTTPException(status_code=409, detail="Registry publication has not completed")
+            if row["registry_model"] != registered_model_name(dict(row)):
                 raise HTTPException(status_code=409, detail="Registry publication has not completed")
             # 단일 트랜잭션의 행 잠금은 새 사용 요청과 삭제 경합 시 직렬화에 사용한다.
             current = deletion_impact_transaction(db, model_id)
@@ -89,12 +92,13 @@ def deletion_impact_transaction(db, model_id: str) -> dict:
 
 def finish_delete(store: Store, model_id: str, actor: Actor) -> None:
     with store.connection() as db:
-        db.execute(text(
+        updated = db.execute(text(
             "UPDATE model_revisions SET lifecycle_state='Deleted' "
             "WHERE id=:id AND lifecycle_state='Deleting'"
         ), {"id":model_id})
-        store._audit(db,actor_id=actor.id,actor_type=actor.kind,
-            action="model.permanently_deleted",resource_type="model",resource_id=model_id)
+        if updated.rowcount:
+            store._audit(db,actor_id=actor.id,actor_type=actor.kind,
+                action="model.permanently_deleted",resource_type="model",resource_id=model_id)
 
 
 def model_deletion_router(store: Store) -> APIRouter:
@@ -132,7 +136,7 @@ def model_deletion_router(store: Store) -> APIRouter:
             if not key.startswith("results/") or not key.endswith(".model.joblib"):
                 raise ValueError("Only SOS-published model artifacts may be deleted")
             storage.permanently_delete(key)
-        except (MLflowDeliveryError, ValueError, OSError, Exception) as exc:
+        except Exception as exc:
             # 외부 시스템은 공통 트랜잭션이 아니므로 중단된 상태를 실패로 확정하지 않는다.
             # 같은 요청을 다시 보내 삭제를 재개한다. 비밀 정보는 응답에 노출하지 않는다.
             raise HTTPException(status_code=503, detail="Model deletion incomplete; retry") from exc
