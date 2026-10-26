@@ -193,7 +193,7 @@ def test(context: OpExecutionContext, state: dict) -> dict:
 
 
 @op
-def evaluation(context: OpExecutionContext, state: dict) -> dict:
+def evaluation(context: OpExecutionContext, state: dict) -> None:
     _, row = _base_state(context)
     result = _job(context, row, "evaluation", {
         "scoring_result_id": state["test_id"],
