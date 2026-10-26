@@ -904,3 +904,35 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-history-list button.surface-button { display:flex; justify-content:space-between; gap:12px; align-items:center; min-width:0; }
 .model-lab-history-list button.surface-button span { overflow-wrap:anywhere; }
 @media(max-width:700px) { .model-lab-history-list { grid-template-columns:1fr; } }
+
+
+/* 독립 Scoring: 분포와 점수순 관측값을 결과 확인 직후 같은 문맥에서 조사한다. */
+.scoring-observation-explorer { display:grid; gap:18px; min-width:0; }
+.scoring-result-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.scoring-result-summary > div { display:grid; gap:8px; min-width:0; padding:16px;
+  border:1px solid var(--sos-border); background:var(--sos-raised); border-radius:10px; }
+.scoring-result-summary span { color:var(--sos-muted); font-size:12px; }
+.scoring-result-summary strong { font-size:clamp(16px,1.6vw,22px); overflow-wrap:anywhere; }
+.scoring-distribution { border:1px solid var(--sos-border); border-radius:12px;
+  padding:18px; min-width:0; display:grid; gap:8px; }
+.scoring-distribution .chart { height:320px; min-height:280px; }
+.scoring-distribution .hint { margin:0; }
+.scoring-observation-workspace { display:grid; grid-template-columns:minmax(265px,.8fr) minmax(0,1.2fr);
+  gap:16px; align-items:start; min-width:0; }
+.scoring-observation-list { display:grid; gap:8px; min-width:0; max-height:710px; overflow:auto; }
+button.scoring-observation-choice { display:flex; gap:10px; justify-content:space-between;
+  align-items:center; min-width:0; width:100%; }
+.scoring-observation-rank { flex-shrink:0; font-size:12px; color:var(--sos-muted); }
+.scoring-observation-identity { display:grid; gap:5px; min-width:0; flex:1; overflow-wrap:anywhere; }
+.scoring-observation-identity strong { font-size:12px; }
+.scoring-observation-identity small,.scoring-observation-score small { font-size:11px; color:var(--sos-muted); }
+.scoring-observation-score { display:grid; gap:5px; text-align:right; flex-shrink:0; }
+.scoring-observation-score strong { font-size:13px; }
+.scoring-observation-detail { min-width:0; border:1px solid var(--sos-border); border-radius:12px;
+  padding:clamp(14px,2vw,24px); }
+.scoring-observation-detail .pipeline-candidate-inspection { padding:0; margin:0; }
+@media(max-width:1080px) { .scoring-observation-workspace { grid-template-columns:minmax(0,1fr); }
+  .scoring-observation-list { max-height:440px; } }
+@media(max-width:650px) { .scoring-result-summary { grid-template-columns:minmax(0,1fr); }
+  .scoring-distribution { padding:12px; }
+  .scoring-observation-detail { padding:12px; } }
