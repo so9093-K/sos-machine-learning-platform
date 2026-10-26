@@ -1,0 +1,28 @@
+name: One-time Dagster lock refresh
+on:
+  push:
+    branches: [feat/model-lifecycle-management]
+permissions:
+  contents: write
+jobs:
+  refresh-lock:
+    if: contains(github.event.head_commit.message, '[dagster-lock-once]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.2"
+      - name: Resolve project and Dagster dependencies once
+        run: uv lock --python 3.12
+      - name: Commit generated uv.lock to PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          if ! git diff --cached --quiet; then
+            git commit -m "build(dagster): commit resolved shared uv.lock"
+            git push origin HEAD:feat/model-lifecycle-management
+          fi
