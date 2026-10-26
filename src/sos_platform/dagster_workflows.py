@@ -37,10 +37,12 @@ def _run(store, row: dict, *, include_jobs: bool = True, client: DagsterClient |
     if not run_id:
         # 이전 실행 접수의 네트워크 응답 유실을 복구할 수 있게 연결을 조회한다.
         run_id = client.find_by_submission(row["id"])
-    raw_status = client.status(run_id) if run_id else "NOT_STARTED"
+    raw_status = client.status(run_id) if run_id else (
+        "CANCELED" if row.get("cancel_requested") else "NOT_STARTED"
+    )
     statuses = {
         "NOT_STARTED": "Queued", "QUEUED": "Queued",
-        "STARTING": "Running", "STARTED": "Running",
+        "STARTING": "Running", "STARTED": "Running", "MANAGED": "Running",
         "CANCELING": "Running", "SUCCESS": "Succeeded",
         "FAILURE": "Failed", "CANCELED": "Cancelled",
     }
@@ -51,7 +53,7 @@ def _run(store, row: dict, *, include_jobs: bool = True, client: DagsterClient |
     preflight = jobs["preflight"]
     plan = (preflight.get("result") or {}).get("plan") if preflight else None
     current = None
-    if statuses[raw_status] in ("Queued", "Running"):
+    if statuses[raw_status] in ("Queued", "Running") and not row.get("cancel_requested"):
         for stage in STAGES:
             job = jobs[stage]
             if not job or job["status"] != "Succeeded":
@@ -79,7 +81,7 @@ def _run(store, row: dict, *, include_jobs: bool = True, client: DagsterClient |
         "stage_index": len(created),
         "job_ids": {name: job["id"] for name, job in created.items()},
         "status": statuses[raw_status],
-        "cancel_requested": raw_status == "CANCELING",
+        "cancel_requested": bool(row.get("cancel_requested")) or raw_status == "CANCELING",
         "error_code": error,
         "created_at": row["created_at"],
         "updated_at": row["created_at"],
@@ -140,10 +142,15 @@ def create_run(store, dataset: dict, owner_actor: str, inspection: dict,
             "SELECT dagster_run_id FROM workflow_submissions WHERE id=:id FOR UPDATE"
         ), {"id": submission_id}).scalar_one()
         if not run_id:
-            run_id = client.find_by_submission(submission_id) or client.launch(submission_id)
-            db.execute(text(
-                "UPDATE workflow_submissions SET dagster_run_id=:run WHERE id=:id"
-            ), {"run": run_id, "id": submission_id})
+            # 취소된 접수는 Dagster Run을 새로 생성하지 않는다.
+            cancelled = db.execute(text(
+                "SELECT cancel_requested FROM workflow_submissions WHERE id=:id"
+            ), {"id": submission_id}).scalar_one()
+            if not cancelled:
+                run_id = client.find_by_submission(submission_id) or client.launch(submission_id)
+                db.execute(text(
+                    "UPDATE workflow_submissions SET dagster_run_id=:run WHERE id=:id"
+                ), {"run": run_id, "id": submission_id})
         store._audit(
             db, actor_id=owner_actor, actor_type=actor_type,
             action="workflow.submit", resource_type="workflow",
@@ -176,6 +183,11 @@ def cancel_run(store, submission_id: str) -> dict | None:
     row = _submission(store, submission_id)
     if row is None:
         return None
+    # 접수만 완료된 요청에도 취소 의도를 보존한다. 실제 Run 상태는 Dagster 정본이다.
+    with store.connection() as db:
+        db.execute(text(
+            "UPDATE workflow_submissions SET cancel_requested=TRUE WHERE id=:id"
+        ), {"id": submission_id})
     client = DagsterClient()
     run_id = row["dagster_run_id"] or client.find_by_submission(submission_id)
     if run_id is not None:
