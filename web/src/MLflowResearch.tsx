@@ -12,7 +12,7 @@ function url(path: string, params: Record<string, string | null>) {
   return path + (query.size ? "?" + query.toString() : "");
 }
 
-/** 연구 묶음·Run·모델 판본의 정본은 MLflow다. 실행 권한은 SOS API에서 판단한다. */
+/** 연구 묶음·Run·모델 버전의 정본은 MLflow다. 실행 권한은 SOS API에서 판단한다. */
 export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
   onOpenModel: (id: string) => void;
   onScoreModel: (id: string) => void;
@@ -155,7 +155,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
       </label>
     </section>
     <section className="panel">
-      <h3>등록된 모델 판본</h3>
+      <h3>등록된 모델 버전</h3>
       {filteredModels.length === 0 && <p className="muted">등록된 모델이 없습니다. 학습 및 등록 후 표시됩니다.</p>}
       <div className="job-list">
         {filteredModels.map(item => <article className="ml-resource-row" key={item.name + "@" + item.version}>
@@ -176,7 +176,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
         </article>)}
       </div>
       {modelCursor && <button type="button" className="secondary" disabled={loadingMore}
-        onClick={() => void loadMore("models")}>모델 판본 더 보기</button>}
+        onClick={() => void loadMore("models")}>모델 버전 더 보기</button>}
     </section>
     <section className="panel">
       <h3>Run 검색 및 비교</h3>
