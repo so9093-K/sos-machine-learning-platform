@@ -11,7 +11,6 @@ from .errors import RuntimeConfigurationError
 from .object_store import ObjectStore
 from .security import Actor, require
 from .store import Store
-from .store_administration import now
 
 READ = Depends(require("job.read"))
 MANAGE = Depends(require("model.manage"))
@@ -159,8 +158,11 @@ def model_deletion_router(store: Store) -> APIRouter:
                     raise
             storage=ObjectStore()
             key=storage.key(row["location"])
-            if not key.startswith("results/") or not key.endswith(".model.joblib"):
-                raise ValueError("Only SOS-published model artifacts may be deleted")
+            expected_key = (
+                f"results/{row['job_id']}/{row['attempt_id']}.model.joblib"
+            )
+            if key != expected_key:
+                raise ValueError("Model artifact does not match its publishing Attempt")
             storage.permanently_delete(key)
         except (MLflowDeliveryError, ValueError, OSError, RuntimeError, BotoCoreError, ClientError) as exc:
             # 외부 시스템은 공통 트랜잭션이 아니므로 중단된 상태를 실패로 확정하지 않는다.
