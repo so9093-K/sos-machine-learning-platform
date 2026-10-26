@@ -10,6 +10,7 @@ const TERMINAL = new Set(["Disabled", "Succeeded"]);
 export function MLTrackingStatus({ jobId }: Props) {
   const [status, setStatus] = useState<MLflowExportStatus | null>(null);
   const [error, setError] = useState("");
+  const [retryRevision, setRetryRevision] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -34,9 +35,15 @@ export function MLTrackingStatus({ jobId }: Props) {
     }
     void poll();
     return () => { active = false; if (timer) clearTimeout(timer); };
-  }, [jobId]);
+  }, [jobId, retryRevision]);
 
-  return <MLTrackingDetails status={status} error={error} />;
+  return <>
+    <MLTrackingDetails status={status} error={error} />
+    {error && <button type="button" className="secondary"
+      onClick={() => { setError(""); setRetryRevision(value => value + 1); }}>
+      MLflow 기록 다시 조회
+    </button>}
+  </>;
 }
 
 /** 조회 결과의 대기·재시도·완료와 통신 오류를 분리해 표시한다. */
