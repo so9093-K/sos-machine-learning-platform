@@ -91,7 +91,7 @@ export function MLScoringPanel({
     };
     timer = setTimeout(() => void poll(), 1500);
     return () => { alive = false; if (timer) clearTimeout(timer); };
-  }, [selectedJob?.id, selectedJob?.status]);
+  }, [selectedJob?.id, selectedJob?.status, historyOpen]);
 
   useEffect(() => {
     let alive = true;
