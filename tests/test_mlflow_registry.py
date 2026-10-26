@@ -17,6 +17,9 @@ class FakeClient:
     def get(self, endpoint, params):
         if endpoint == "registered-models/search":
             return {"registered_models": self.models}
+        if endpoint == "registered-models/get":
+            selected = next((item for item in self.models if item["name"] == params["name"]), None)
+            return {"registered_model": selected}
         if endpoint == "model-versions/search":
             return {"model_versions": self.versions}
         if endpoint == "model-versions/get":
