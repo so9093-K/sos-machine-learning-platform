@@ -73,8 +73,9 @@ def test_versioned_s3_delete_does_not_create_new_marker():
 def test_model_delete_does_not_mark_completed_when_s3_fails(monkeypatch):
     actor = Actor("researcher-one", "human", frozenset({"researcher"}))
     item = {
-        "id": "model-id", "registry_model": "sos-if-test",
-        "registry_version": "2", "location": "s3://bucket/results/job/attempt.model.joblib",
+        "id": "model-id", "job_id": "job", "attempt_id": "attempt",
+        "registry_model": "sos-if-test", "registry_version": "2",
+        "location": "s3://bucket/results/job/attempt.model.joblib",
         "lifecycle_state": "Active",
     }
     calls = []
