@@ -4,7 +4,10 @@ from urllib.error import URLError
 
 import pytest
 
+from fastapi import HTTPException
+
 from sos_platform import dagster_workflows, pipeline_reference
+from sos_platform.api_pipelines import _candidate_rows
 from sos_platform.dagster_client import DagsterClient, DagsterUnavailable
 
 
@@ -27,6 +30,10 @@ class FakeStore:
 class FakeDagster:
     def __init__(self, status):
         self.run_status = status
+
+    def find_by_submission(self, submission_id):
+        assert submission_id == "submission-1"
+        return None
 
     def status(self, run_id):
         assert run_id == "dagster-run-1"
@@ -92,3 +99,20 @@ def test_dagster_graphql_outage_is_reported(monkeypatch):
     monkeypatch.setattr(dagster_client, "urlopen", unavailable)
     with pytest.raises(DagsterUnavailable):
         DagsterClient("http://example.test/graphql").status("run-1")
+
+
+def test_cancelled_submission_without_dagster_run_is_not_queued(monkeypatch):
+    monkeypatch.setattr(dagster_workflows, "_job_by_stage", lambda *_: None)
+    row = {**_row(), "dagster_run_id": None, "cancel_requested": True}
+    result = dagster_workflows._run(
+        FakeStore(), row, client=FakeDagster("STARTED")
+    )
+    assert result["status"] == "Cancelled"
+    assert result["cancel_requested"] is True
+    assert result["current_stage"] is None
+
+
+def test_candidate_lookup_never_assumes_missing_stage_evidence():
+    with pytest.raises(HTTPException) as error:
+        _candidate_rows(FakeStore(), {"stages": [], "owner_actor": "owner-1"}, 25, None)
+    assert error.value.status_code == 409
