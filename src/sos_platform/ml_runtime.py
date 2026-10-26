@@ -58,6 +58,8 @@ def load_trusted_isolation_forest(revision: dict, scratch: Path) -> TrainedIsola
     Raises:
         ValueError: 신뢰·무결성·호환성·모델 서명 검증 실패.
     """
+    if revision.get("lifecycle_state", "Active") != "Active":
+        raise ValueError("Deleted or deleting model artifact cannot be loaded")
     assert_model_runtime_compatible(revision)
     storage = ObjectStore()
     expected_key = f"results/{revision['job_id']}/{revision['attempt_id']}.model.joblib"

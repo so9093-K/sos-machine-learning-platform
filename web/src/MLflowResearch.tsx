@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request } from "./api";
+import { ModelRegistryManager, ModelVersionManagement } from "./ModelRegistryManager";
 import type {
   MLflowExperiment, MLflowExperimentPage, MLflowModelVersion,
   MLflowModelVersionPage, MLflowRun, MLflowRunPage,
@@ -11,11 +12,12 @@ function url(path: string, params: Record<string, string | null>) {
   return path + (query.size ? "?" + query.toString() : "");
 }
 
-/** 연구 묶음·Run·모델 판본의 정본은 MLflow다. 실행 권한은 SOS API에서 판단한다. */
-export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
+/** 연구 묶음·Run·모델 버전의 정본은 MLflow다. 실행 권한은 SOS API에서 판단한다. */
+export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }: {
   onOpenModel: (id: string) => void;
   onScoreModel: (id: string) => void;
   onTrain: () => void;
+  canManage: boolean;
 }) {
   const [experiments, setExperiments] = useState<MLflowExperiment[]>([]);
   const [models, setModels] = useState<MLflowModelVersion[]>([]);
@@ -27,12 +29,25 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
   const [selected, setSelected] = useState<string[]>([]);
   const [term, setTerm] = useState("");
   const [revision, setRevision] = useState(0);
+  const [registryKey, setRegistryKey] = useState("default");
+  const [groupArchived, setGroupArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   // 연구 선택·새로고침 이후 도착한 이전 페이지가 현재 목록을 오염시키지 않는다.
-  const activeSelection = useRef({ experimentId, revision });
-  activeSelection.current = { experimentId, revision };
+  const activeSelection = useRef({ experimentId, revision, registryKey });
+  activeSelection.current = { experimentId, revision, registryKey };
+
+  useEffect(() => {
+    let active = true;
+    void request<{items: Array<{registry_key: string; archived: boolean}>}>(
+      "/api/ml/registry/groups",
+    ).then(page => {
+      if (active) setGroupArchived(
+        page.items.some(item => item.registry_key === registryKey && item.archived));
+    }).catch(() => { if (active) setGroupArchived(false); });
+    return () => { active = false; };
+  }, [registryKey, revision]);
 
   useEffect(() => {
     let active = true;
@@ -40,7 +55,9 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
     setError("");
     void Promise.all([
       request<MLflowExperimentPage>("/api/ml/experiments"),
-      request<MLflowModelVersionPage>("/api/ml/registry/models"),
+      request<MLflowModelVersionPage>(url("/api/ml/registry/models", {
+        registry_key: registryKey, include_archived: "true",
+      })),
     ]).then(([exp, model]) => {
       if (!active) return;
       setExperiments(exp.items); setExperimentCursor(exp.next_page_token ?? null);
@@ -48,7 +65,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
     }).catch(exc => { if (active) setError(formatError(exc)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [revision]);
+  }, [revision, registryKey]);
 
   useEffect(() => {
     let active = true;
@@ -68,7 +85,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
     const cursor = kind === "experiments" ? experimentCursor :
       kind === "models" ? modelCursor : runCursor;
     if (!cursor) return;
-    const selection = { experimentId, revision };
+    const selection = { experimentId, revision, registryKey };
     setLoadingMore(true); setError("");
     try {
       if (kind === "experiments") {
@@ -77,8 +94,11 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
         setExperiments(old => [...old, ...page.items]);
         setExperimentCursor(page.next_page_token ?? null);
       } else if (kind === "models") {
-        const page = await request<MLflowModelVersionPage>(url("/api/ml/registry/models", { page_token: cursor }));
-        if (activeSelection.current.revision !== selection.revision) return;
+        const page = await request<MLflowModelVersionPage>(url("/api/ml/registry/models", {
+          page_token: cursor, registry_key: registryKey, include_archived: "true",
+        }));
+        if (activeSelection.current.revision !== selection.revision ||
+            activeSelection.current.registryKey !== selection.registryKey) return;
         setModels(old => [...old, ...page.items]);
         setModelCursor(page.next_page_token ?? null);
       } else {
@@ -116,6 +136,9 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
   }
 
   return <div className="ml-resource-workspace">
+    <ModelRegistryManager activeKey={registryKey} onSelect={setRegistryKey}
+      canManage={canManage}
+      onChanged={() => setRevision(x => x + 1)} />
     <section className="panel">
       <div className="panel-head">
         <div><h3>실험·모델 자산 관리</h3>
@@ -146,24 +169,29 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
       </label>
     </section>
     <section className="panel">
-      <h3>등록된 모델 판본</h3>
+      <h3>등록된 모델 버전</h3>
       {filteredModels.length === 0 && <p className="muted">등록된 모델이 없습니다. 학습 및 등록 후 표시됩니다.</p>}
       <div className="job-list">
         {filteredModels.map(item => <article className="ml-resource-row" key={item.name + "@" + item.version}>
           <div><strong>{item.name} · v{item.version}</strong>
             <p className="hint">상태 {item.status} · 생성 Job {item.job_id.slice(0, 12)}
-              {item.aliases?.length ? " · Alias " + item.aliases.join(", ") : ""}</p>
+              {item.aliases?.length ? " · Alias " + item.aliases.join(", ") : ""}
+              {item.archived ? " · 보관됨" : ""}</p>
           </div>
           <div className="model-index-actions">
             <button type="button" className="secondary" onClick={() => onOpenModel(item.model_id)}>
               모델 근거 확인
             </button>
-            <button type="button" onClick={() => onScoreModel(item.model_id)}>Scoring →</button>
+            <button type="button" disabled={item.archived || groupArchived}
+              onClick={() => onScoreModel(item.model_id)}>Scoring →</button>
+            <ModelVersionManagement model={item} registryKey={registryKey}
+              canManage={canManage}
+              onChanged={() => setRevision(x => x + 1)}/>
           </div>
         </article>)}
       </div>
       {modelCursor && <button type="button" className="secondary" disabled={loadingMore}
-        onClick={() => void loadMore("models")}>모델 판본 더 보기</button>}
+        onClick={() => void loadMore("models")}>모델 버전 더 보기</button>}
     </section>
     <section className="panel">
       <h3>Run 검색 및 비교</h3>

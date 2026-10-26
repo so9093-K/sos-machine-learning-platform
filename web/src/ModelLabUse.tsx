@@ -7,6 +7,8 @@ import type { MLResourceKind } from "./PlatformNavigation";
 import type { Dataset, MLflowModelVersion, MLflowModelVersionPage, ModelRevision, PipelineDefinition } from "./types";
 
 type RegisteredActivityModel = { version: MLflowModelVersion; revision: ModelRevision };
+type ModelGroup = { registry_key: string; title: string; archived: boolean };
+type ModelGroupPage = { items: ModelGroup[]; next_page_token: string | null };
 
 export function isActivityModelCompatible(model: Pick<ModelRevision, "algorithm" | "features">,
   definition: Pick<PipelineDefinition, "algorithm" | "required_features">): boolean {
@@ -43,6 +45,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   onBack: () => void; onLearn: () => void;
 }) {
   const [models, setModels] = useState<RegisteredActivityModel[]>([]);
+  const [groups, setGroups] = useState<ModelGroup[]>([]);
+  const [registryKey, setRegistryKey] = useState("default");
   const [definition, setDefinition] = useState<PipelineDefinition | null>(null);
   const [nextPage, setNextPage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,22 +64,27 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     setModels([]); setNextPage(null); setLookupFailures(0);
     void Promise.all([
       request<PipelineDefinition[]>("/api/pipelines"),
-      request<MLflowModelVersionPage>("/api/ml/registry/models"),
-    ]).then(async ([definitions, page]) => {
+      request<MLflowModelVersionPage>("/api/ml/registry/models?registry_key=" +
+        encodeURIComponent(registryKey)),
+      request<ModelGroupPage>("/api/ml/registry/groups"),
+    ]).then(async ([definitions, page, groupsPage]) => {
       const current = definitions.find(item => item.id === "activity-anomaly-if");
       if (!current) throw new Error("활동 이상 탐지 분석 방법을 찾을 수 없습니다.");
       const checked = await compatiblePage(page, current);
       if (active) {
         setDefinition(current);
-        setModels(checked.items);
-        if (!selectedModelId && checked.items.length) onSelectModel(checked.items[0].revision.id);
+        setGroups(groupsPage.items.filter(item => !item.archived));
+        const groupArchived = groupsPage.items.some(item =>
+          item.registry_key === registryKey && item.archived);
+        setModels(groupArchived ? [] : checked.items);
+        if (!groupArchived && !selectedModelId && checked.items.length) onSelectModel(checked.items[0].revision.id);
         setLookupFailures(checked.failed);
         setNextPage(page.next_page_token ?? null);
       }
     }).catch(cause => { if (active) setError(formatError(cause)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [refresh]);
+  }, [refresh, registryKey]);
 
   async function loadMore() {
     if (!definition || !nextPage || moreLoading) return;
@@ -83,7 +92,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     setMoreLoading(true); setError("");
     try {
       const page = await request<MLflowModelVersionPage>(
-        "/api/ml/registry/models?page_token=" + encodeURIComponent(token));
+        "/api/ml/registry/models?registry_key=" + encodeURIComponent(registryKey) +
+        "&page_token=" + encodeURIComponent(token));
       const checked = await compatiblePage(page, definition);
       setModels(previous => {
         const seen = new Set(previous.map(item => item.revision.id));
@@ -112,10 +122,20 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}
         disabled={loading || moreLoading}>모델 목록 새로고침</button>
     </header>
+    <label>사용할 모델 그룹
+      <select value={registryKey} onChange={event => {
+        setRegistryKey(event.target.value);
+        onSelectModel("");
+      }}>
+        <option value="default">기본 활동 이상 탐지</option>
+        {groups.filter(g => g.registry_key !== "default").map(g =>
+          <option key={g.registry_key} value={g.registry_key}>{g.title}</option>)}
+      </select>
+    </label>
     {loading && <p role="status">사용 가능한 모델을 확인하는 중입니다.</p>}
     {error && <div className="pipeline-readiness-blocked" role="alert">
       <p>{models.length > 0 || nextPage
-        ? "추가 모델 판본을 불러오지 못했습니다: "
+        ? "추가 모델 버전을 불러오지 못했습니다: "
         : "모델 목록을 확인하지 못했습니다: "}{error}</p>
       <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}>
         다시 조회
@@ -133,7 +153,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         ? "호환되는 모델을 아직 찾지 못했습니다"
         : "아직 사용할 수 있는 활동 이상 탐지 모델이 없습니다"}</h3>
       <p>{nextPage
-        ? "등록된 모델 판본이 더 있습니다. 다음 페이지를 확인하면 사용할 모델이 나올 수 있습니다."
+        ? "등록된 모델 버전이 더 있습니다. 다음 페이지를 확인하면 사용할 모델이 나올 수 있습니다."
         : lookupFailures
           ? "일부 모델 정보를 확인하지 못해 사용 가능한 모델이 없는지 판단할 수 없습니다. 다시 조회해 주세요."
           : "처음 시작한다면 예제 데이터로 모델을 학습해 보세요. 등록이 끝나면 여기서 사용할 수 있습니다."}</p>
@@ -146,7 +166,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         <p>학습 시각 {new Date(selected.revision.created_at).toLocaleString("ko-KR")}
           · 입력 Feature {selected.revision.features.length}개</p></div>
       <details className="model-lab-version-picker">
-        <summary>모델 판본 변경</summary>
+        <summary>사용할 모델 선택</summary>
         <div className="model-lab-model-list">
           {models.map(({ revision, version }) => <button key={revision.id} type="button"
             className="surface-button model-lab-model-choice" aria-pressed={selectedModelId === revision.id}
@@ -161,7 +181,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       </details>
     </div>}
     {!loading && nextPage && <button type="button" className="secondary" disabled={moreLoading}
-      onClick={() => void loadMore()}>{moreLoading ? "모델 확인 중…" : "다음 모델 판본 조회"}</button>}
+      onClick={() => void loadMore()}>{moreLoading ? "모델 확인 중…" : "다음 모델 버전 조회"}</button>}
     {!loading && !error && selectedModelId && !selected &&
       <div className="pipeline-readiness-blocked" role="status">
         <p>URL에서 선택한 모델은 현재 조회된 호환 모델 목록에 없습니다.

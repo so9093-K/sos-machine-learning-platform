@@ -291,6 +291,7 @@ class MLflowRunPageOut(BaseModel):
 
 
 class MLflowModelVersionOut(BaseModel):
+    archived: bool = False
     name: str
     version: str
     model_id: str
@@ -451,13 +452,15 @@ class MLTrainingInputPolicy(BaseModel):
 
 
 class MLForkRequest(BaseModel):
-    """원본 학습 실행의 Feature/판본을 그대로 유지하고 모델 설정만 바꿀 수 있다."""
+    """원본 학습을 바탕으로 재학습하고 모델 그룹을 선택한다."""
 
     params: IsolationForestParameters | None = None
+    registry_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{0,39}$")
 
 
 class MLTrainRequest(BaseModel):
     dataset_id: str
+    registry_key: str = Field(default="default", pattern=r"^[a-z][a-z0-9-]{0,39}$")
     experiment_title: str = Field(default="기본 실험", min_length=1, max_length=80)
     features: list[str] = Field(min_length=1)
     params: IsolationForestParameters = Field(default_factory=IsolationForestParameters)
@@ -479,6 +482,7 @@ class MLTrainRequest(BaseModel):
 
 
 class ModelRevisionOut(BaseModel):
+    lifecycle_state: Literal["Active", "Deleting", "Deleted"] = "Active"
     id: str
     job_id: str
     attempt_id: str

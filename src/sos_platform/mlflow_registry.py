@@ -17,7 +17,11 @@ def registered_model_name(model: dict) -> str:
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
     if algorithm != "isolation_forest":
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
-    return "sos-if-" + hashlib.sha256(owner.encode("utf-8")).hexdigest()[:24]
+    registry_key = model.get("registry_key") or "default"
+    if not isinstance(registry_key, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,39}", registry_key):
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
+    base = "sos-if-" + hashlib.sha256(owner.encode("utf-8")).hexdigest()[:24]
+    return base if registry_key == "default" else base + "-" + registry_key
 
 
 def _tags(version: dict) -> dict[str, str]:
@@ -61,6 +65,8 @@ def verify_registered_version(client, model: dict) -> None:
     """실행 제출에서 Registry가 가리키는 판본과 내부 불변 바이트를 대조한다."""
     name = model.get("registry_model")
     version = model.get("registry_version")
+    if model.get("lifecycle_state", "Active") != "Active":
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
     if name != registered_model_name(model) or not isinstance(version, str):
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
     entry = client.get("model-versions/get", {"name": name, "version": version}).get(
@@ -72,8 +78,12 @@ def verify_registered_version(client, model: dict) -> None:
         or _tags(entry).get("sos.job_id") != model.get("job_id")
         or _tags(entry).get("sos.sha256") != model.get("sha256")
         or entry.get("status") != "READY"
+        or _tags(entry).get("sos.archived") == "true"
     ):
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
+    group = client.get("registered-models/get", {"name": name}).get("registered_model")
+    if not isinstance(group, dict) or _tags(group).get("sos.archived") == "true":
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
 
 
 def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
@@ -99,6 +109,11 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
             existing.append(version)
     if len(existing) > 1:
         raise MLflowDeliveryError("SOS-MLFLOW-DUPLICATE-MODELS")
+    # 보관된 모델 그룹에는 새 버전을 등록하지 않는다. 버전 보관과
+    # 논리적 그룹 보관은 SOS의 신규 실행 가능성에 동일하게 적용한다.
+    group = client.get("registered-models/get", {"name": name}).get("registered_model")
+    if isinstance(group, dict) and _tags(group).get("sos.archived") == "true":
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-ARCHIVED")
     if existing:
         item = existing[0]
         if (

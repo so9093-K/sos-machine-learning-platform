@@ -12,8 +12,11 @@ class ResearchClient:
         self.experiment = None
         self.versions = []
         self.runs = []
+        self.group_tags = []
 
     def get(self, endpoint, params):
+        if endpoint == "registered-models/get":
+            return {"registered_model": {"name": params["name"], "tags": self.group_tags}}
         if endpoint == "model-versions/search":
             return {"model_versions": self.versions}
         if endpoint == "experiments/get":
@@ -144,3 +147,52 @@ def test_missing_experiment_returns_not_found_instead_of_management_outage():
     with pytest.raises(MLflowDeliveryError, match="EXPERIMENT-NOT-FOUND"):
         read_runs(NotFoundClient(), SimpleNamespace(get_job=lambda _: None), "alice",
                   experiment_id="999")
+
+
+def test_run_search_with_archived_tag_does_not_crash():
+    client = ResearchClient()
+    ensure_experiment(client, "alice")
+    client.runs = [
+        {"info": {"run_id": "archived-run"}, "data": {
+            "tags": [
+                {"key": "sos.job_id", "value": "j1"},
+                {"key": "sos.archived", "value": "true"},
+            ],
+        }}
+    ]
+    store = SimpleNamespace(
+        get_job=lambda job_id: {"owner_actor": "alice", "kind": "ml_train"}
+        if job_id == "j1" else None,
+    )
+    assert [x["id"] for x in read_runs(client, store, "alice")["items"]] == ["archived-run"]
+
+
+def test_archived_version_is_hidden_from_use_but_visible_for_management():
+    client = ResearchClient()
+    name = registered_model_name({"owner_actor": "alice", "algorithm": "isolation_forest"})
+    client.versions = [{
+        "name": name, "version": "4", "status": "READY",
+        "source": "s3://sos-data/results/job/attempt.model.joblib",
+        "tags": [
+            {"key": "sos.job_id", "value": "own"},
+            {"key": "sos.sha256", "value": "a" * 64},
+            {"key": "sos.archived", "value": "true"},
+        ],
+    }]
+    model = {
+        "registry_model": name, "registry_version": "4",
+        "location": client.versions[0]["source"], "sha256": "a" * 64,
+        "owner_actor": "alice",
+    }
+    store = SimpleNamespace(
+        get_job=lambda _: {"owner_actor": "alice", "result": {"model_revision_id": "model-a"}},
+        get_model_revision=lambda _: model,
+    )
+    assert read_model_versions(client, store, "alice")["items"] == []
+    assert read_model_versions(client, store, "alice", include_archived=True)["items"][0]["archived"]
+
+    client.versions[0]["tags"] = [tag for tag in client.versions[0]["tags"]
+                                   if tag["key"] != "sos.archived"]
+    client.group_tags = [{"key": "sos.archived", "value": "true"}]
+    assert read_model_versions(client, store, "alice")["items"] == []
+    assert read_model_versions(client, store, "alice", include_archived=True)["items"]

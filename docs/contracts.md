@@ -24,6 +24,8 @@
 
 단순한 Job은 반드시 Workflow Definition에 속할 필요가 없다. 실험은 실행 자체가 아니며, Job과 실행 시도도 동일하지 않다. 모델 판본·아티팩트·배포 대상은 서로 다른 생명주기를 가진다.
 
+모델 그룹은 목적별 논리적 Registered Model이며, 그룹의 표시 이름·설명·보관과 모델 버전은 MLflow가 관리한다. 새 학습으로 기존 고정 모델 결과를 덮어쓰지 않으며 기존 단일 그룹은 `default`로 참조한다. Registry 그룹/버전 보관은 신규 모델 사용을 제한하지만 물리 삭제가 아니다. 모델 파일의 영구 삭제는 SOS가 실제 S3 객체와 MLflow 버전 제거를 확인하고 `Deleting`/ `Deleted` 상태를 기록한다. 과거 Scoring·정책·평가·설명은 독립 실행 근거로 남고 삭제된 Model Revision은 접근 불가 모델 파일의 참조 tombstone이 된다. [ADR 0017](adr/0017-model-lifecycle.md)을 따른다.
+
 ## ML 점수·판정·평가의 독립성
 
 - **Scoring 근거:** 학습에 사용한 동일 Dataset 판본을 점수화한 결과는 독립 검증 데이터의 성능이 아니다. Scoring 결과의 데이터 관계와 분위수 임계값의 참조 판본을 구분한다. 학습 시 고정한 UTC 시간 경계로 선택된 Calibration/Test 범위는 Dataset 원본 판본·구간·행 수를 결과 근거로 보존한다. 결과 파일의 row_index는 결과 내부 순서이며 원본 관측치 식별자가 아니다. 시간 분할 Scoring은 검증된 원본 관측 시각을 같은 결과 행에 보존하며, 참조 Pipeline의 선택적 `sos_observation_id`는 UUIDv4·고유성 검증 후에만 연결된다. 관측 시각은 고유 ID가 아니고 집계 Feature 관측치는 원시 이벤트 한 건을 보장하지 않는다. 과거 결과에 해당 필드가 없다면 임의로 연결하지 않는다. 필요한 경우 원본에 **미리 고정된 불투명 UUIDv4 관측치 ID**를 명시해 Scoring Result의 별도 필드로 연결할 수 있다. 이 값은 선택한 점수화 범위 내 유효성·고유성을 검증하며, 사용자·호스트 등 업무 식별자에서 자동 파생하거나 원본 접근 권한을 대신하지 않는다. 기존 Transform Job이 UUID를 생성해 새 Dataset Revision을 게시할 수 있다. 발급 UUID는 **게시된 Dataset Revision 내부**에서 안정적이며, 같은 소스로 다시 Prepare하면 새로운 UUID가 생길 수 있으므로 재현 실험에는 게시된 Dataset Revision을 고정한다. 게시 전 Preview의 임시 결과는 정식 관측치 ID로 취급하지 않는다. 시간 구간의 비중복과 관측값 간 통계적 독립성도 다르다.

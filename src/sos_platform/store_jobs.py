@@ -58,6 +58,23 @@ class JobStoreMixin:
             updated_at=now(),
         )
         with self.connection() as db:
+            if kind in ("ml_score", "ml_playground"):
+                model_id = spec.get("model_revision_id")
+                state = db.execute(text(
+                    "SELECT lifecycle_state FROM model_revisions WHERE id=:id FOR SHARE"
+                ), {"id": model_id}).scalar_one_or_none()
+                if state != "Active":
+                    raise PlatformError("SOS-ML-MODEL-INVALID")
+            if kind == "ml_explain":
+                # 설명 계산은 과거 Scoring Result를 읽고 모델 파일을 재로딩한다.
+                # 삭제와 경합하지 않도록 실제 Model Revision에 공유 잠금을 건다.
+                model_state = db.execute(text(
+                    "SELECT m.lifecycle_state FROM model_revisions m "
+                    "JOIN scoring_results s ON s.model_revision_id=m.id "
+                    "WHERE s.id=:scoring_id FOR SHARE OF m"
+                ), {"scoring_id": spec.get("scoring_result_id")}).scalar_one_or_none()
+                if model_state != "Active":
+                    raise PlatformError("SOS-ML-MODEL-INVALID")
             is_understanding = (
                 kind == "profile"
                 and spec.get("mode") == "understanding"
@@ -432,6 +449,7 @@ class JobStoreMixin:
                     "dataset_id": row["dataset_id"],
                     "dataset_version": model_publish["dataset_version"],
                     "algorithm": model_publish["algorithm"],
+                    "registry_key": (json.loads(row["spec"]) or {}).get("registry_key", "default"),
                     "location": model_publish["location"],
                     "sha256": model_publish["sha256"],
                     "features": json.dumps(model_publish["features"], allow_nan=False),
@@ -448,10 +466,10 @@ class JobStoreMixin:
                         "INSERT INTO model_revisions "
                         "(id,job_id,attempt_id,dataset_id,dataset_version,algorithm,"
                         "location,sha256,features,params,training_score_summary,runtime,"
-                        "owner_actor,created_at) "
+                        "registry_key,owner_actor,created_at) "
                         "VALUES (:id,:job_id,:attempt_id,:dataset_id,:dataset_version,"
                         ":algorithm,:location,:sha256,:features,:params,"
-                        ":training_score_summary,:runtime,:owner_actor,:created_at)"
+                        ":training_score_summary,:runtime,:registry_key,:owner_actor,:created_at)"
                     ),
                     item,
                 )

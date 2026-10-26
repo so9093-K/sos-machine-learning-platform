@@ -71,10 +71,15 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
       const m = data as ModelRevision;
       return <>
         <div className="ml-resource-summary">
-          <h4>{m.algorithm} · 모델 판본</h4>
-          <p>학습에서 생성한 불변 결과입니다. 새 학습 없이 기존 모델을 활용할 수 있습니다.</p>
+          <h4>{m.algorithm} · 모델 버전</h4>
+          <p>{m.lifecycle_state === "Active"
+            ? "학습에서 생성한 불변 결과입니다. 새 학습 없이 기존 모델을 활용할 수 있습니다."
+            : m.lifecycle_state === "Deleting"
+              ? "모델 파일을 삭제 중입니다. 현재 새 점수화에 사용할 수 없습니다."
+              : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>
           <div className="ml-resource-actions">
-            <button onClick={() => onScoring(m.id)}>이 모델로 점수화 시작 →</button>
+            <button disabled={m.lifecycle_state !== "Active"}
+              onClick={() => onScoring(m.id)}>이 모델로 점수화 시작 →</button>
           </div>
         </div>
         <dl className="ml-resource-fields">
@@ -114,9 +119,9 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
             </button>)}
         </div>
         <details className="ml-resource-evidence">
-          <summary>모델 판본 · 입력 Feature · 평가 지표와 기술 근거</summary>
+          <summary>모델 버전 · 입력 Feature · 평가 지표와 기술 근거</summary>
           <dl className="ml-resource-fields">
-            <Field label="모델 판본"><button className="secondary"
+            <Field label="모델 버전"><button className="secondary"
               onClick={() => onOpenResource("model", r.model_revision_id)}>{r.model_revision_id} ↗</button></Field>
             <Field label="Dataset 판본">{r.dataset_id} · {r.dataset_version}</Field>
             <Field label="Feature 서명">{r.feature_names.join(", ")}</Field>
@@ -171,7 +176,7 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
         <dl className="ml-resource-fields">
           <Field label="Scoring Result"><button className="secondary"
             onClick={() => onOpenResource("scoring", r.scoring_result_id)}>{r.scoring_result_id} ↗</button></Field>
-          <Field label="모델 판본"><button className="secondary"
+          <Field label="모델 버전"><button className="secondary"
             onClick={() => onOpenResource("model", r.model_revision_id)}>{r.model_revision_id} ↗</button></Field>
           <Field label="방법">{r.method}</Field>
           <Field label="결과 내부 행 번호">{r.row_index}</Field>
@@ -241,17 +246,17 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   return <div className="ml-resource-workspace">
     <section className="panel">
       <h3>Scoring 대상 모델</h3>
-      <p className="hint">기존 모델 판본을 선택하거나 ID를 직접 입력할 수 있습니다. 새 학습은 필요하지 않습니다.
+      <p className="hint">기존 모델 버전을 선택하거나 ID를 직접 입력할 수 있습니다. 새 학습은 필요하지 않습니다.
         목록은 MLflow Registry에서 현재 Actor가 이용할 수 있는 모델을 조회합니다.</p>
       {error && <p role="alert">{error}</p>}
       <div className="form-row">
         <label>Model Revision ID
           <input value={modelId} onChange={event => setModelId(event.target.value)}
-            placeholder="기존 모델 판본 ID" aria-label="점수화 대상 모델 판본 ID"/>
+            placeholder="기존 모델 버전 ID" aria-label="점수화 대상 모델 버전 ID"/>
         </label>
-        <label>MLflow 등록 모델 판본
+        <label>MLflow 등록 모델 버전
           <select value={available.includes(modelId) ? modelId : ""}
-            aria-label="조회된 모델 판본 선택" onChange={event => {
+            aria-label="조회된 모델 버전 선택" onChange={event => {
               setModelId(event.target.value);
               setLoadedModelId(event.target.value);
               onModelSelected(event.target.value);
@@ -272,14 +277,14 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
           setRegisteredModels(old => [...old, ...page.items]);
           setNextModelPage(page.next_page_token ?? null);
         }).catch(e => { setNextModelPage(token); setError(formatError(e)); });
-      }}>모델 판본 더 보기</button>}
+      }}>모델 버전 더 보기</button>}
       <button type="button" className="secondary" disabled={!modelId.trim()}
         onClick={() => {
           const identifier = modelId.trim();
           if (identifier === loadedModelId) retryModelLookup(n => n + 1);
           else setLoadedModelId(identifier);
           onModelSelected(identifier);
-        }}>모델 판본 조회</button>
+        }}>모델 버전 조회</button>
       {modelId.trim() !== loadedModelId && <p className="hint">
         모델 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
       {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
@@ -288,7 +293,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
       {!loadedModelId && <div className="steps">
         <p className="hint">점수화하려면 기존 Model Revision을 선택하세요. 모델이 없다면 독립 학습을 시작할 수 있습니다.</p>
         <button className="secondary" type="button" onClick={() => onNavigate("ml")}>
-          모델 판본·학습 확인 →
+          모델 버전·학습 확인 →
         </button>
       </div>}
     </section>

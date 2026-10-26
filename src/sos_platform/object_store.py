@@ -98,6 +98,46 @@ class ObjectStore:
         ]
         return objects, response.get("NextContinuationToken")
 
+    def permanently_delete(self, key: str) -> None:
+        """SOS 전용 모델 객체의 모든 저장 버전을 제거하고 재조회로 확인한다."""
+        if not key.startswith("results/") or not key.endswith(".model.joblib"):
+            raise ValueError("Only SOS model artifacts can be deleted")
+        bucket = self.config.s3_bucket
+        while True:
+            batch = self.client.list_object_versions(
+                Bucket=bucket, Prefix=key, MaxKeys=1000,
+            )
+            refs = [
+                {"Key": key, "VersionId": item["VersionId"]}
+                for kind in ("Versions", "DeleteMarkers")
+                for item in batch.get(kind, [])
+                if item.get("Key") == key
+            ]
+            if not refs:
+                break
+            outcome = self.client.delete_objects(
+                Bucket=bucket, Delete={"Objects": refs, "Quiet": False},
+            )
+            if outcome.get("Errors"):
+                raise RuntimeError("Object versions could not be deleted")
+        # 버전 관리가 Enabled/Suspended인 버킷에 별도 delete_object를 호출하면
+        # 삭제 marker가 새로 생성되므로 이미 제거한 버전을 다시 늘리게 된다.
+        versioning = self.client.get_bucket_versioning(Bucket=bucket).get("Status")
+        if versioning not in ("Enabled", "Suspended"):
+            self.client.delete_object(Bucket=bucket, Key=key)
+        remaining = self.client.list_object_versions(Bucket=bucket, Prefix=key, MaxKeys=1000)
+        if any(obj.get("Key") == key
+               for kind in ("Versions", "DeleteMarkers")
+               for obj in remaining.get(kind, [])):
+            raise RuntimeError("Object versions remain after deletion")
+        try:
+            self.client.head_object(Bucket=bucket, Key=key)
+        except ClientError as exc:
+            if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
+                return
+            raise
+        raise RuntimeError("Model artifact remains after deletion")
+
     def location(self, key: str) -> str:
         return f"s3://{self.config.s3_bucket}/{key}"
 

@@ -19,6 +19,8 @@ Workflow Definition은 작업 사이의 재사용 가능한 관계, Workflow Run
 
 접수·취소 **요청**은 완료가 아니다. 취소와 완료의 경합에서는 실제 확정된 한 가지 결과를 일관되게 기록한다. 재시도는 새로운 Attempt이고, 사용자가 Fork·Reproduce를 선택하면 원래 Job의 입력과 연결된 **새 Job**을 만든다. 진행률은 측정 근거가 있을 때만 제공하며, 일부 결과나 오류가 확정 상태와 모순돼서는 안 된다.
 
+모델 영구 삭제는 학습 Job 완료·MLflow 등록·과거 결과의 확정과 다른 관리 수명주기다. 삭제 의도(`Deleting`)와 Registry/S3 실제 삭제 확인을 구분하며 실패 시 완료를 주장하지 않는다. 삭제된 모델이 과거 Scoring과 연결돼 있더라도 그 Scoring 결과 자체는 새 삭제 지시 없이 제거하지 않는다. 새 Job은 삭제 중이거나 삭제된 모델을 로딩하지 않는다.
+
 ## 독립 결과와 외부 전송
 
 학습의 완료와 모델 평가의 신뢰성은 다르다. Model Revision·Scoring Result·정책·Evaluation·Explanation은 각자의 판본을 가지며 같은 점수에 다른 정책을 적용하더라도 재학습을 강제하지 않는다. 의미의 정본은 [Contracts](contracts.md)다.

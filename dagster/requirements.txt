@@ -1,5 +1,0 @@
-# Dagster core 및 통합 버전은 동일한 1.13.26 릴리스군으로 고정한다.
-dagster==1.13.26
-dagster-webserver==1.13.26
-dagster-graphql==1.13.26
-dagster-postgres==0.29.26

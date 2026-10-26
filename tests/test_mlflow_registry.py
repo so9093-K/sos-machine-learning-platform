@@ -17,6 +17,9 @@ class FakeClient:
     def get(self, endpoint, params):
         if endpoint == "registered-models/search":
             return {"registered_models": self.models}
+        if endpoint == "registered-models/get":
+            selected = next((item for item in self.models if item["name"] == params["name"]), None)
+            return {"registered_model": selected}
         if endpoint == "model-versions/search":
             return {"model_versions": self.versions}
         if endpoint == "model-versions/get":
@@ -103,3 +106,11 @@ def test_registry_separates_actor_model_names(model):
 def test_registry_rejects_invalid_model(model, patch):
     with pytest.raises(MLflowDeliveryError):
         register_model_version(FakeClient(), {**model, **patch}, "run-1")
+
+
+def test_archived_model_group_rejects_new_version(model):
+    client = FakeClient()
+    register_model_version(client, model, "run-1")
+    client.models[0]["tags"] = [{"key": "sos.archived", "value": "true"}]
+    with pytest.raises(MLflowDeliveryError, match="ARCHIVED"):
+        register_model_version(client, {**model, "job_id": "job-2"}, "run-2")
