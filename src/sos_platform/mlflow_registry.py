@@ -45,14 +45,16 @@ def _versions(client, name: str):
         if token:
             params["page_token"] = token
         result = client.get("model-versions/search", params)
-        versions = result.get("model_versions") or []
+        versions = result.get("model_versions")
+        if versions is None:
+            versions = []  # MLflow는 빈 반복 필드를 생략할 수 있다.
         if not isinstance(versions, list):
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
         for version in versions:
-            if not isinstance(version, dict):
+            if not isinstance(version, dict) or version.get("name") != name:
+                # 정확한 이름 검색 결과가 불완전하면 새 판본을 생성하지 않는다.
                 raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-            if version.get("name") == name:
-                yield version
+            yield version
         token = result.get("next_page_token")
         if not token:
             return
