@@ -29,12 +29,24 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
   const [term, setTerm] = useState("");
   const [revision, setRevision] = useState(0);
   const [registryKey, setRegistryKey] = useState("default");
+  const [groupArchived, setGroupArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   // 연구 선택·새로고침 이후 도착한 이전 페이지가 현재 목록을 오염시키지 않는다.
   const activeSelection = useRef({ experimentId, revision, registryKey });
   activeSelection.current = { experimentId, revision, registryKey };
+
+  useEffect(() => {
+    let active = true;
+    void request<{items: Array<{registry_key: string; archived: boolean}>}>(
+      "/api/ml/registry/groups",
+    ).then(page => {
+      if (active) setGroupArchived(
+        page.items.some(item => item.registry_key === registryKey && item.archived));
+    }).catch(() => { if (active) setGroupArchived(false); });
+    return () => { active = false; };
+  }, [registryKey, revision]);
 
   useEffect(() => {
     let active = true;
@@ -168,7 +180,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
             <button type="button" className="secondary" onClick={() => onOpenModel(item.model_id)}>
               모델 근거 확인
             </button>
-            <button type="button" disabled={item.archived}
+            <button type="button" disabled={item.archived || groupArchived}
               onClick={() => onScoreModel(item.model_id)}>Scoring →</button>
             <ModelVersionManagement model={item} registryKey={registryKey}
               onChanged={() => setRevision(x => x + 1)}/>
