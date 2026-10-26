@@ -90,7 +90,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     navigateWithContext(
       view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
       { scoringId, ...(context.modelLabReturn && context.modelId
-        ? { modelLabReturn: true, modelId: context.modelId } : {}) },
+        ? { modelLabReturn: true, modelId: context.modelId,
+          modelGroupKey: context.modelGroupKey } : {}) },
     );
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
@@ -581,7 +582,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
         <ModelLabUse key="activity-anomaly" datasets={datasets}
           selectedModelId={context.modelId ?? ""}
-          onSelectModel={modelId => selectContext({ pipelineView: "use", modelId })}
+          selectedGroupKey={context.modelGroupKey ?? "default"}
+          onSelectModel={modelId => selectContext({ pipelineView: "use", modelId,
+            modelGroupKey: context.modelGroupKey })}
+          onSelectGroup={modelGroupKey => selectContext({ pipelineView: "use",
+            modelGroupKey })}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
           canUpload={canWrite} onDatasetRegistered={data => {
@@ -860,6 +865,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           <button type="button" className="secondary"
             onClick={() => navigateWithContext("pipelines", {
               pipelineView: "use", modelId: context.modelId,
+              modelGroupKey: context.modelGroupKey,
             })}>모델 사용 화면으로 돌아가기 →</button>
         </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
