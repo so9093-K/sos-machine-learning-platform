@@ -139,7 +139,7 @@ def read_model_versions(client, store, actor_id: str, *, page_token: str | None 
             for tag in registered.get("tags") or [] if isinstance(tag, dict)
         }
         if group_tags.get("sos.archived") == "true":
-            return {"items": [], "next_page_token": _page_token(result)}
+            return {"items": [], "next_page_token": None}
     visible = []
     for version in versions:
         if not isinstance(version, dict) or version.get("name") != name:
