@@ -97,7 +97,7 @@ def read_runs(
             item.get("key"): item.get("value")
             for item in data.get("tags", []) if isinstance(item, dict)
         }
-        if tags.get("sos.archived") == "true":
+        if tags.get("sos.archived") == "true" and not include_archived:
             continue
         job_id = tags.get("sos.job_id")
         job = store.get_job(job_id) if isinstance(job_id, str) else None
@@ -119,7 +119,7 @@ def read_runs(
     return {"items": visible, "next_page_token": _page_token(result)}
 
 
-def read_model_versions(client, store, actor_id: str, *, page_token: str | None = None, registry_key: str = "default") -> dict:
+def read_model_versions(client, store, actor_id: str, *, page_token: str | None = None, registry_key: str = "default", include_archived: bool = False) -> dict:
     """Registry 판본과 SOS 아티팩트를 대조하며 페이지 정보를 보존한다."""
     name = registered_model_name({
         "owner_actor": actor_id, "algorithm": "isolation_forest", "registry_key": registry_key,
@@ -160,5 +160,6 @@ def read_model_versions(client, store, actor_id: str, *, page_token: str | None 
             "model_id": model_id, "run_id": version.get("run_id"),
             "status": version.get("status"), "job_id": job_id,
             "aliases": version.get("aliases") or [],
+            "archived": tags.get("sos.archived") == "true",
         })
     return {"items": visible, "next_page_token": _page_token(result)}
