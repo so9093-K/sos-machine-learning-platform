@@ -87,15 +87,12 @@ def _run(store, row: dict, *, include_jobs: bool = True, client: DagsterClient |
         "dataset_version": row["dataset_version"],
         "owner_actor": row["owner_actor"],
         "input_plan": plan,
-        "stage_index": len(created),
-        "job_ids": {name: job["id"] for name, job in created.items()},
         "status": statuses[raw_status],
         "cancel_requested": statuses[raw_status] in ("Queued", "Running") and (
             bool(row.get("cancel_requested")) or raw_status == "CANCELING"
         ),
         "error_code": error,
         "created_at": row["created_at"],
-        "updated_at": row["created_at"],
         "current_stage": current,
         "stages": [
             {"name": name, "job": job} for name, job in created.items()
