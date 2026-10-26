@@ -209,7 +209,7 @@ def model_management_router(store: Store) -> APIRouter:
             }).get("model_versions") or []
             if versions:
                 raise HTTPException(status_code=409, detail="Delete model versions first")
-            client.post("registered-models/delete", {"name": name})
+            client.delete("registered-models/delete", {"name": name})
         except MLflowDeliveryError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return {"registry_key": registry_key, "deleted": True}
