@@ -160,6 +160,7 @@ def test_registry_does_not_recreate_missing_group_with_existing_version(model):
 
 
 @pytest.mark.parametrize("bad_result", [
+    {"registered_models": None},
     {"registered_models": ""},
     {"registered_models": {}},
     {"registered_models": [{"unexpected": "schema"}]},
@@ -184,6 +185,7 @@ def test_registry_does_not_create_on_malformed_exact_search(model, bad_result):
 
 
 @pytest.mark.parametrize("bad_result", [
+    {"model_versions": None},
     {"model_versions": ""},
     {"model_versions": {}},
     {"model_versions": [{"name": "wrong-model", "version": "1"}]},
