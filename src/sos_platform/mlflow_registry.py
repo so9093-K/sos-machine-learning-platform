@@ -65,6 +65,8 @@ def verify_registered_version(client, model: dict) -> None:
     """실행 제출에서 Registry가 가리키는 판본과 내부 불변 바이트를 대조한다."""
     name = model.get("registry_model")
     version = model.get("registry_version")
+    if model.get("lifecycle_state", "Active") != "Active":
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
     if name != registered_model_name(model) or not isinstance(version, str):
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
     entry = client.get("model-versions/get", {"name": name, "version": version}).get(
@@ -76,8 +78,12 @@ def verify_registered_version(client, model: dict) -> None:
         or _tags(entry).get("sos.job_id") != model.get("job_id")
         or _tags(entry).get("sos.sha256") != model.get("sha256")
         or entry.get("status") != "READY"
+        or _tags(entry).get("sos.archived") == "true"
     ):
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
+    group = client.get("registered-models/get", {"name": name}).get("registered_model")
+    if not isinstance(group, dict) or _tags(group).get("sos.archived") == "true":
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
 
 
 def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
