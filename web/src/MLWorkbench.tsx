@@ -44,6 +44,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [previousJobNotice, setPreviousJobNotice] = useState("");
   const currentDataset = useRef(selectedId);
   currentDataset.current = selectedId;
   const selectionRequest = useRef(0);
@@ -107,6 +108,18 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
     return () => { active = false; };
   }, [selectedJob?.status, selectedJob?.result?.model_revision_id]);
 
+  function changeDataset(id: string) {
+    if (id === selectedId) return;
+    setPreviousJobNotice(selectedJob && !TERMINAL.has(selectedJob.status)
+      ? "이전 Dataset의 학습 Job은 계속 실행됩니다. 기존 Job 상태는 ML 작업 이력에서 확인하세요."
+      : "");
+    setSelectedJob(null);
+    setModel(null);
+    setError("");
+    setNotice("");
+    onDatasetSelected(id);
+  }
+
   async function startTraining() {
     if (!canTrain || !selectedId || features.length < 1 || !experimentTitle.trim() ||
         experimentTitle.trim().length > 80 || submitting ||
@@ -114,7 +127,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
           !Number.isInteger(inputSeed) || inputSeed < 0 || inputSeed > 4294967295))) return;
     const expectedDataset = selectedId;
     const revision = ++selectionRequest.current;
-    setSubmitting(true); setError(""); setNotice("");
+    setSubmitting(true); setError(""); setNotice(""); setPreviousJobNotice("");
     try {
       const result = await submitJob<MLTrainingJob>("/api/ml/train/jobs", {
         dataset_id: selectedId, features, experiment_title: experimentTitle.trim(),
@@ -169,6 +182,11 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
     {notice && (!selectedJob || !TERMINAL.has(selectedJob.status)) && <section className="alert success" role="status">
       {notice}<button type="button" onClick={() => setNotice("")} aria-label="ML 알림 닫기">×</button>
     </section>}
+    {previousJobNotice && <section className="panel" role="status">
+      <p>{previousJobNotice}</p>
+      <button type="button" className="secondary"
+        onClick={() => setPreviousJobNotice("")}>확인</button>
+    </section>}
     {error && <section className="panel" role="alert">
       <strong>ML 작업을 처리하지 못했습니다.</strong> {error}
       <button className="ghost" onClick={() => setError("")}>닫기</button>
@@ -181,7 +199,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
       <div className="form-row">
         <label>학습 Dataset
           <select aria-label="ML 학습 Dataset" value={selectedId}
-            onChange={event => onDatasetSelected(event.target.value)}>
+            onChange={event => changeDataset(event.target.value)}>
             <option value="">선택하세요</option>
             {selectedId && !datasets.some(item => item.id === selectedId) &&
               <option value={selectedId}>현재 목록 외 Dataset · {selectedId}</option>}
