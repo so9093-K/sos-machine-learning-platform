@@ -90,7 +90,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     navigateWithContext(
       view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
       { scoringId, ...(context.modelLabReturn && context.modelId
-        ? { modelLabReturn: true, modelId: context.modelId } : {}) },
+        ? { modelLabReturn: true, modelId: context.modelId,
+          modelGroupKey: context.modelGroupKey } : {}) },
     );
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
@@ -100,6 +101,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const [pendingDelimited, setPendingDelimited] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // 화면과 무관한 백그라운드 GET 실패를 전역 작업 실패로 표시하지 않는다.
+  const [datasetReadError, setDatasetReadError] = useState("");
+  const [jobsReadError, setJobsReadError] = useState("");
+  const [discoveryReadError, setDiscoveryReadError] = useState("");
+  const [uploadPolicyReadError, setUploadPolicyReadError] = useState("");
   const [queryPreview, setQueryPreview] = useState<{
     datasetId: string; revision: number; data: Preview; explicitProjection: boolean
   } | null>(null);
@@ -264,18 +270,22 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       void request<Dataset>(`/api/datasets/${encodeURIComponent(requestedId)}`)
         .then(item => { if (active) setDatasets(previous =>
           [item, ...previous.filter(entry => entry.id !== item.id)]); })
-        .catch(e => { if (active) setError(formatError(e)); });
+        .catch(e => { if (active) setDatasetReadError(formatError(e)); });
     }
     return () => { active = false; };
   }, [context.pipelineReturn, context.datasetId]);
   useEffect(() => {
     if (canWrite) {
       request<UploadPolicy>("/api/datasets/upload-policy")
-        .then(setUploadPolicy).catch(e => setError(formatError(e)));
+        .then(policy => { setUploadPolicy(policy); setUploadPolicyReadError(""); })
+        .catch(e => setUploadPolicyReadError(formatError(e)));
     }
-    refreshDatasets().catch(e => setError(formatError(e)));
-    refreshJobs().catch(e => setError(formatError(e)));
-    refreshDiscoveryJobs().catch(e => setError(formatError(e)));
+    refreshDatasets().then(() => setDatasetReadError(""))
+      .catch(e => setDatasetReadError(formatError(e)));
+    refreshJobs().then(() => setJobsReadError(""))
+      .catch(e => setJobsReadError(formatError(e)));
+    refreshDiscoveryJobs().then(() => setDiscoveryReadError(""))
+      .catch(e => setDiscoveryReadError(formatError(e)));
   }, []);
   useEffect(() => {
     let active = true;
@@ -319,14 +329,19 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   useEffect(() => {
     const handle = window.setInterval(() => {
       if (jobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
-        refreshJobs().catch(e => setError(formatError(e)));
+        refreshJobs().then(() => setJobsReadError(""))
+          .catch(e => setJobsReadError(formatError(e)));
       }
       if (discoveryJobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
-        refreshDiscoveryJobs().catch(e => setError(formatError(e)));
+        refreshDiscoveryJobs().then(() => setDiscoveryReadError(""))
+          .catch(e => setDiscoveryReadError(formatError(e)));
       }
     }, 2000);
     return () => window.clearInterval(handle);
   }, [jobs, discoveryJobs]);
+
+  // 수동 작업 오류는 다음 화면까지 따라다니지 않는다.
+  useEffect(() => { setError(""); }, [tab]);
 
   async function withFeedback(action: () => Promise<void>) {
     feedbackRequests.current += 1;
@@ -504,8 +519,46 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onLoadSnapshots={() => void loadSnapshots()}
           onConnectExisting={() => void connectExisting()}
           hasMore={Boolean(nextDatasetCursor)} onLoadMore={() => void loadMoreDatasets()} />}>
-      {error && <div role="alert" className="alert error"><strong>작업을 완료하지 못했습니다.</strong> {error}
+      {error && <div role="alert" className="alert error">
+        {error.includes("SOS-") || error.includes("요청 ID:")
+          ? <>
+            <strong>선택한 작업의 요청 또는 확인에 문제가 생겼습니다.</strong>
+            <details><summary>오류 진단 정보 및 복구 안내</summary>{error}</details>
+          </>
+          : <strong>{error}</strong>}
         <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
+      {datasetReadError && ["overview", "understanding", "preview", "profile", "preparation", "pipelines"].includes(tab) &&
+        <div role="alert" className="alert error">
+          Dataset 목록을 확인하지 못했습니다. 현재 화면의 데이터 선택이 제한될 수 있습니다.
+          <details><summary>문제 정보</summary>{datasetReadError}</details>
+          <button type="button" className="secondary" onClick={() => void refreshDatasets()
+            .then(() => setDatasetReadError("")).catch(e => setDatasetReadError(formatError(e)))}>
+            Dataset 다시 조회
+          </button>
+        </div>}
+      {jobsReadError && ["jobs", "ml-jobs", "pipeline-jobs"].includes(tab) &&
+        <div role="alert" className="alert error">
+          작업 이력을 새로 확인하지 못했습니다. 실행이 실패했다는 의미는 아닙니다.
+          <details><summary>문제 정보</summary>{jobsReadError}</details>
+          <button type="button" className="secondary" onClick={() => void refreshJobs()
+            .then(() => setJobsReadError("")).catch(e => setJobsReadError(formatError(e)))}>
+            작업 이력 다시 조회
+          </button>
+        </div>}
+      {discoveryReadError && ["jobs", "ml-jobs", "pipeline-jobs"].includes(tab) &&
+        <div role="alert" className="alert error">
+          데이터 탐색 작업 이력을 새로 확인하지 못했습니다.
+          <details><summary>문제 정보</summary>{discoveryReadError}</details>
+          <button type="button" className="secondary" onClick={() => void refreshDiscoveryJobs()
+            .then(() => setDiscoveryReadError("")).catch(e => setDiscoveryReadError(formatError(e)))}>
+            탐색 이력 다시 조회
+          </button>
+        </div>}
+      {uploadPolicyReadError && tab === "preparation" &&
+        <div role="status" className="alert error">
+          업로드 정책을 조회할 수 없어 새 파일 등록이 제한될 수 있습니다.
+          <details><summary>문제 정보</summary>{uploadPolicyReadError}</details>
+        </div>}
       {notice && <div role="status" className="alert success">{notice}
         <button onClick={() => setNotice("")} aria-label="알림 닫기">×</button></div>}
       {pendingDelimited && <DelimitedImport file={pendingDelimited} disabled={busy}
@@ -535,9 +588,17 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
         <ModelLabUse key="activity-anomaly" datasets={datasets}
           selectedModelId={context.modelId ?? ""}
-          onSelectModel={modelId => selectContext({ pipelineView: "use", modelId })}
+          selectedGroupKey={context.modelGroupKey ?? "default"}
+          onSelectModel={modelId => selectContext({ pipelineView: "use", modelId,
+            modelGroupKey: context.modelGroupKey })}
+          onSelectGroup={modelGroupKey => selectContext({ pipelineView: "use",
+            modelGroupKey })}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
+          canUpload={canWrite} onDatasetRegistered={data => {
+            setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+            showExamples.current = false;
+          }}
           onBack={() => navigateWithContext("pipelines", {})}
           onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
       {tab === "pipelines" && !context.pipelineRunId && (
@@ -810,6 +871,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           <button type="button" className="secondary"
             onClick={() => navigateWithContext("pipelines", {
               pipelineView: "use", modelId: context.modelId,
+              modelGroupKey: context.modelGroupKey,
             })}>모델 사용 화면으로 돌아가기 →</button>
         </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}

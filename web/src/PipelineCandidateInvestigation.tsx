@@ -207,7 +207,7 @@ export function PipelineCandidateInvestigation({
     <p className="hint">활동 Feature 관측치이며 원시 이벤트 한 건이라는 뜻은 아닙니다.
       시각은 고유 ID가 아니고 이상 점수는 실제 사건을 확정하지 않습니다.
       UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다.</p>
-    <details className="pipeline-feature-details">
+    <details className="pipeline-feature-details" open={observationMode}>
       <summary>전체 {Object.keys(candidate.features).length}개 Feature 관측값·학습 참조값 비교</summary>
       <p className="hint">Train Feature별 중앙값은 비교 기준입니다.
         값의 차이만으로 원인이나 모델 기여도를 판단하지 않습니다.</p>

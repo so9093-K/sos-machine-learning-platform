@@ -20,6 +20,25 @@ try {
   const { activityFeatureLabel } = await vite.ssrLoadModule("/src/ActivityFeatureLabels.ts");
   assert.equal(activityFeatureLabel("cnt_proc_exec"), "프로세스 실행 횟수");
   assert.equal(activityFeatureLabel("unknown_custom"), "unknown_custom");
+  // 독립 Scoring 결과는 별도 접기·선택 없이 전체 근거를 바로 제공한다.
+  const { ScoringObservationExplorer } =
+    await vite.ssrLoadModule("/src/ScoringObservationExplorer.tsx");
+  const resultView = renderToStaticMarkup(React.createElement(ScoringObservationExplorer, {
+    result: {
+      id: "score-1", model_revision_id: "model-1", row_count: 3,
+      score_summary: {
+        score_min: 0.1, score_max: 0.3, score_mean: 0.2,
+        histogram: { method: "equal_width_exact_v1", score_count: 3,
+          bin_edges: [0.1, 0.2, 0.3], bin_counts: [1, 2] },
+      },
+    },
+    canRun: false, canCancel: false, onOpenResource: () => {},
+  }));
+  assert.match(resultView, /전체 이상 점수 분포/);
+  assert.match(resultView, /분석한 관측값/);
+  assert.match(resultView, /점수가 높은 관측값/);
+  assert.match(resultView, /점수는 확률이나 확정된 이상 사건이 아닙니다/);
+
   const { modelLabLabels, modelLabTree } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
   const grouped = modelLabTree([
     { id: "a", name: "활동 이상 탐지", learning_type: "unsupervised",
@@ -67,6 +86,31 @@ try {
   assert.equal(contextPath("pipelines", { pipelineView: "use", modelId: "model one" }),
     "/pipelines?view=use&model=model+one");
   assert.equal(routeAt("/pipelines", "?view=use&model=model-one").context.modelId, "model-one");
+  // 사용자 정의 모델 그룹의 직접 URL과 결과에서 복귀할 때 모델 선택이 유지된다.
+  const groupedUse = contextPath("pipelines", {
+    pipelineView: "use", modelId: "model-a", modelGroupKey: "anomaly-team",
+  });
+  assert.equal(groupedUse, "/pipelines?view=use&model=model-a&group=anomaly-team");
+  assert.equal(routeAt("/pipelines", "?view=use&model=model-a&group=anomaly-team")
+    .context.modelGroupKey, "anomaly-team");
+  assert.equal(routeAt("/pipelines", "?view=use&model=model-a&group=invalid!")
+    .context.modelGroupKey, undefined);
+  const groupedResource = resourcePath("scoring", "result-a", {
+    modelLabReturn: true, modelId: "model-a", modelGroupKey: "anomaly-team",
+  });
+  assert.equal(groupedResource,
+    "/scoring/results/result-a?from=model-lab&model=model-a&group=anomaly-team");
+  assert.equal(routeAt("/scoring/results/result-a",
+    "?from=model-lab&model=model-a&group=anomaly-team").context.modelGroupKey, "anomaly-team");
+  const groupedDecision = contextPath("policies", {
+    scoringId: "score-a", modelLabReturn: true, modelId: "model-a",
+    modelGroupKey: "anomaly-team",
+  });
+  assert.equal(groupedDecision,
+    "/policies?scoring=score-a&from=model-lab&model=model-a&group=anomaly-team");
+  assert.equal(routeAt("/policies", "?scoring=score-a&from=model-lab&model=model-a&group=anomaly-team")
+    .context.modelGroupKey, "anomaly-team");
+
   assert.equal(routeAt("/pipelines", "?view=learn&model=model-one").context.modelId, undefined);
   assert.equal(routeAt("/pipelines", "?view=unexpected").context.pipelineView, undefined);
   assert.equal(routeAt("/pipelines", "?run=run-1&view=use").context.pipelineView, undefined);
@@ -431,7 +475,7 @@ try {
     canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
     onOpenResource: () => {}, onBack: () => {}, onLearn: () => {},
   }));
-  assert.match(pendingUse, /학습된 모델 사용해보기/);
+  assert.match(pendingUse, /준비된 모델로 바로 분석하기/);
   assert.match(pendingUse, /사용 가능한 모델을 확인하는 중/);
   const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
   const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {

@@ -1,9 +1,48 @@
-/** 범용 Scoring Result의 실제 관측치를 명시적으로 탐색한다. Pipeline 판정 후보와 구별한다. */
-import { useEffect, useRef, useState } from "react";
+/** 독립 Scoring 결과는 점수 분포와 실제 관측값을 한 문맥에서 탐구한다. */
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { EChartsCoreOption } from "echarts";
 import { formatError, request } from "./api";
+import { DataChart } from "./DataChart";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { ScoringObservations, ScoringResult } from "./types";
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+function readable(value: unknown): string {
+  const number = finiteNumber(value);
+  return number === null ? "근거 없음" : number.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
+}
+
+/** 실제 결과의 검증된 전체 히스토그램만 표시한다. 추정 분포를 만들지 않는다. */
+function distributionOption(summary: Record<string, unknown>, rowCount: number): EChartsCoreOption | null {
+  const histogram = summary.histogram;
+  if (!histogram || typeof histogram !== "object") return null;
+  const data = histogram as Record<string, unknown>;
+  const edges = data.bin_edges;
+  const counts = data.bin_counts;
+  if (data.method !== "equal_width_exact_v1" || !Array.isArray(edges) ||
+      !Array.isArray(counts) || counts.length === 0 || counts.length > 128 ||
+      edges.length !== counts.length + 1 || data.score_count !== rowCount ||
+      !edges.every((value: unknown, index: number) =>
+        typeof value === "number" && Number.isFinite(value) &&
+        (index === 0 || value > edges[index - 1])) ||
+      !counts.every((value: unknown) => typeof value === "number" && Number.isInteger(value) && value >= 0) ||
+      counts.reduce((sum: number, value: number) => sum + value, 0) !== rowCount) return null;
+  return {
+    aria: { enabled: true },
+    tooltip: { trigger: "item" },
+    grid: { left: 58, right: 24, top: 26, bottom: 56 },
+    xAxis: { type: "value", name: "이상 점수", min: edges[0], max: edges[edges.length - 1],
+      axisLabel: { formatter: (value: number) => value.toPrecision(3) } },
+    yAxis: { type: "value", name: "관측 수", minInterval: 1 },
+    series: [{
+      name: "점수 구간별 관측 수", type: "bar",
+      data: counts.map((count: number, index: number) => [(edges[index] + edges[index + 1]) / 2, count]),
+    }],
+  };
+}
 
 export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenResource }: {
   result: ScoringResult;
@@ -11,18 +50,18 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [visited, setVisited] = useState(false);
   const [loaded, setLoaded] = useState<ScoringObservations | null>(null);
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const pendingMore = useRef(false);
+  const summary = result.score_summary as Record<string, unknown>;
+  const histogram = useMemo(() => distributionOption(summary, result.row_count),
+    [summary, result.row_count]);
 
   useEffect(() => {
-    if (!visited) return;
     let active = true;
     setLoaded(null); setSelectedRow(null); setLoading(true); setError("");
     void request<ScoringObservations>(
@@ -31,10 +70,10 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       if (!active) return;
       if (page.result_id !== result.id) throw new Error("조회 결과 판본이 일치하지 않습니다.");
       setLoaded(page);
-    }).catch(e => { if (active) setError(formatError(e)); })
+    }).catch(cause => { if (active) setError(formatError(cause)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [visited, result.id, retry]);
+  }, [result.id, retry]);
 
   async function more() {
     if (!loaded?.next_cursor || pendingMore.current) return;
@@ -49,57 +88,79 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
         ...next, items: [...previous.items,
           ...next.items.filter(item => !previous.items.some(old => old.row_index === item.row_index))],
       } : previous);
-    } catch (e) { setError(formatError(e)); }
+    } catch (cause) { setError(formatError(cause)); }
     finally { pendingMore.current = false; setLoadingMore(false); }
   }
-  const selected = loaded?.items.find(item => item.row_index === selectedRow);
-  return <section className="panel scoring-observation-explorer" aria-label="점수 관측치 탐구">
-    <div className="pipeline-section-heading"><div>
-      <h4>이 Scoring 결과의 상위 점수 관측치</h4>
-      <p>개별 관측치를 점수 높은 순서로 확인합니다. 점수는 확률이나 판정 결과가 아니며
-        별도 정책을 적용하지 않은 순위입니다.</p>
+
+  const selected = loaded?.items.find(item => item.row_index === selectedRow) ??
+    (selectedRow === null ? loaded?.items[0] : undefined);
+  return <section className="scoring-observation-explorer" aria-label="모델 적용 분석 결과">
+    <div className="pipeline-section-heading">
+      <div>
+        <span className="eyebrow">모델 적용 완료</span>
+        <h3>활동 데이터 분석 결과</h3>
+        <p>전체 점수 분포에서 특이한 관측값을 찾고 실제 입력 특징을 확인합니다.</p>
+      </div>
     </div>
-      <button type="button" className="secondary" aria-expanded={expanded}
-        onClick={() => { setVisited(true); setExpanded(value => !value); }}>
-        {expanded ? "점수 관측치 접기" : "상위 점수 관측치 살펴보기 →"}
-      </button>
+    <div className="scoring-result-summary">
+      <div><span>분석한 관측값</span><strong>{result.row_count.toLocaleString("ko-KR")}건</strong></div>
+      <div><span>평균 이상 점수</span><strong>{readable(summary.score_mean)}</strong></div>
+      <div><span>이상 점수 범위</span><strong>{readable(summary.score_min)} ~ {readable(summary.score_max)}</strong></div>
     </div>
-    {visited && <div hidden={!expanded}>
-      {loading && <p role="status">불변 점수 결과에서 관측치를 읽고 있습니다.</p>}
-      {error && <div role="alert" className="pipeline-readiness-blocked">
-        <p>{error}</p>
-        {!loaded && <button type="button" className="secondary"
-          onClick={() => setRetry(n => n + 1)}>관측치 다시 조회</button>}
-      </div>}
-      {loaded && <>
-        <p className="hint">점수화된 전체 {result.row_count.toLocaleString("ko-KR")}행 중
-          현재 점수순 {loaded.items.length.toLocaleString("ko-KR")}행을 불러왔습니다.</p>
-        {loaded.items.length === 0 && <p>조회할 관측치가 없습니다.</p>}
-        {selectedRow === null && loaded.items.length > 0 &&
-          <button type="button" onClick={() => setSelectedRow(loaded.items[0].row_index)}>
-            가장 높은 점수 관측치 살펴보기 →
-          </button>}
-        {loaded.items.length > 0 && <label className="pipeline-candidate-picker">
-          탐구할 관측치
-          <select aria-label="Scoring 결과 관측치 선택"
-            value={selectedRow === null ? "" : String(selectedRow)}
-            onChange={e => setSelectedRow(e.target.value === "" ? null : Number(e.target.value))}>
-            <option value="">관측치를 선택하세요</option>
-            {loaded.items.map(item => <option key={item.row_index} value={item.row_index}>
-              #{item.row_index.toLocaleString("ko-KR")} · 이상 점수 {item.anomaly_score.toPrecision(6)}
-            </option>)}
-          </select>
-        </label>}
+    <section className="scoring-distribution" aria-label="전체 이상 점수 분포">
+      <h4>전체 이상 점수 분포</h4>
+      {histogram
+        ? <DataChart option={histogram} ariaLabel="점수화한 전체 관측값의 이상 점수 구간별 관측 수" />
+        : <p className="hint">이 결과에는 검증 가능한 전체 점수 분포가 없습니다.
+          위의 실제 요약값과 아래 관측값 목록을 확인할 수 있습니다.</p>}
+      <p className="hint">높은 점수일수록 모델에서 더 이례적인 입력입니다.
+        점수는 확률이나 확정된 이상 사건이 아닙니다. 판정 정책을 적용하지 않은 점수순 결과입니다.</p>
+    </section>
+    <div className="pipeline-section-heading">
+      <div>
+        <h4>점수가 높은 관측값</h4>
+        <p>점수순으로 실제 관측값을 조회합니다. 왼쪽 항목을 선택하면 상세 내용이 바뀝니다.</p>
+      </div>
+      {loaded && <span className="hint">전체 {result.row_count.toLocaleString("ko-KR")}건 중
+        현재 {loaded.items.length.toLocaleString("ko-KR")}건 조회</span>}
+    </div>
+    {loading && <p role="status">점수가 높은 관측값을 불러오는 중입니다.</p>}
+    {error && <div role="alert" className="pipeline-readiness-blocked">
+      <strong>관측값 조회를 완료하지 못했습니다.</strong>
+      <details><summary>오류 진단 정보</summary><p>{error}</p></details>
+      {!loaded && <button type="button" className="secondary"
+        onClick={() => setRetry(n => n + 1)}>관측값 다시 조회</button>}
+    </div>}
+    {loaded && loaded.items.length === 0 && <p>조회할 관측값이 없습니다.</p>}
+    {loaded && loaded.items.length > 0 && <div className="scoring-observation-workspace">
+      <div className="scoring-observation-list">
+        {loaded.items.map((item, index) =>
+          <button key={item.row_index} type="button"
+            className="surface-button scoring-observation-choice"
+            aria-pressed={selected?.row_index === item.row_index}
+            onClick={() => setSelectedRow(item.row_index)}>
+            <span className="scoring-observation-rank">{index + 1}</span>
+            <span className="scoring-observation-identity">
+              <strong>{item.observed_at ?? "결과 행 #" + item.row_index.toLocaleString("ko-KR")}</strong>
+              <small>결과 행 #{item.row_index.toLocaleString("ko-KR")}</small>
+            </span>
+            <span className="scoring-observation-score">
+              <small>이상 점수</small>
+              <strong>{readable(item.anomaly_score)}</strong>
+            </span>
+          </button>)}
         {loaded.next_cursor && <button type="button" className="secondary"
           disabled={loadingMore} onClick={() => void more()}>
-          {loadingMore ? "점수 결과 불러오는 중…" : "다음 점수순 관측치 25건 불러오기"}
+          {loadingMore ? "다음 관측값 불러오는 중…" : "다음 점수순 관측값 25건"}
         </button>}
+      </div>
+      <div className="scoring-observation-detail">
         {selected && <PipelineCandidateInvestigation
           key={result.id + ":" + selected.row_index}
           candidate={selected} scoringResultId={result.id}
           modelRevisionId={result.model_revision_id}
           observationMode canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
-      </>}
+      </div>
     </div>}
   </section>;
 }
