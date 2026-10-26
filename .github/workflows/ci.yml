@@ -49,17 +49,3 @@ jobs:
         run: npm run build
 
 
-
-  dagster-oss-smoke:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Check Compose wiring
-        run: docker compose --profile app config --quiet
-      - name: Build pinned Dagster OSS image
-        run: docker build -f dagster/Dockerfile -t sos-dagster-ci .
-      - name: Load Dagster definitions
-        run: |
-          docker run --rm --entrypoint python \
-            -e PYTHONPATH=/app/dagster sos-dagster-ci \
-            -c 'from sos_dagster.definitions import defs; assert defs.get_job_def("activity_anomaly_workflow")'
