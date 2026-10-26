@@ -34,6 +34,8 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
   canManage: boolean;
 }) {
   const [groups, setGroups] = useState<ModelGroup[]>([]);
+  const [groupCursor, setGroupCursor] = useState<string | null>(null);
+  const [loadingMoreGroups, setLoadingMoreGroups] = useState(false);
   const [pendingDeletes, setPendingDeletes] = useState<Array<{
     id: string; registry_key: string; registry_version: string;
   }>>([]);
@@ -56,6 +58,7 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
     ]).then(([groupsPage, pendingPage]) => {
       if (active) {
         setGroups(groupsPage.items);
+        setGroupCursor(groupsPage.next_page_token ?? null);
         setPendingDeletes(pendingPage.items);
       }
     }).catch(e => { if (active) setError(formatError(e)); });
@@ -65,6 +68,22 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
     setEditTitle(current?.title ?? "");
     setEditDescription(current?.description ?? "");
   }, [current?.title, current?.description, activeKey]);
+
+  async function loadMoreGroups() {
+    if (!groupCursor || loadingMoreGroups) return;
+    setLoadingMoreGroups(true); setError("");
+    try {
+      const currentCursor = groupCursor;
+      const page = await request<GroupPage>(
+        "/api/ml/registry/groups?page_token=" + encodeURIComponent(currentCursor));
+      setGroups(previous => {
+        const seen = new Set(previous.map(group => group.registry_key));
+        return [...previous, ...page.items.filter(group => !seen.has(group.registry_key))];
+      });
+      setGroupCursor(page.next_page_token ?? null);
+    } catch (e) { setError(formatError(e)); }
+    finally { setLoadingMoreGroups(false); }
+  }
 
   async function change(action: () => Promise<unknown>) {
     setPending(true); setError("");
@@ -91,6 +110,10 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
           </option>)}
       </select>
     </label>
+    {groupCursor && <button type="button" className="secondary"
+      disabled={loadingMoreGroups} onClick={() => void loadMoreGroups()}>
+      {loadingMoreGroups ? "모델 그룹 조회 중…" : "모델 그룹 더 보기"}
+    </button>}
     {canManage && current && <div className="steps">
       <label>모델 표시 이름
         <input value={editTitle} maxLength={80}
