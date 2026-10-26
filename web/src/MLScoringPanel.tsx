@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatError, request, submitJob } from "./api";
+import { formatError, request, submitJob, uploadFile } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
 import type { MLResourceKind } from "./PlatformNavigation";
@@ -16,6 +16,8 @@ type Props = {
   canCancel: boolean;
   onOpenResult: (id: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
+  canUpload?: boolean;
+  onDatasetRegistered?: (dataset: Dataset) => void;
 };
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -23,6 +25,7 @@ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 /** 학습된 모델을 다른 Dataset에 적용하는 독립 Scoring 경험. */
 export function MLScoringPanel({
   model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult, onOpenResource,
+  canUpload = false, onDatasetRegistered,
 }: Props) {
   const [datasetId, setDatasetId] = useState("");
   const [loadingMoreDatasets, setLoadingMoreDatasets] = useState(false);
@@ -32,6 +35,8 @@ export function MLScoringPanel({
   const [columnsDatasetId, setColumnsDatasetId] = useState("");
   const [columnError, setColumnError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [error, setError] = useState("");
@@ -106,6 +111,23 @@ export function MLScoringPanel({
   const missingFeatures = checkedColumns
     ? model.features.filter(feature => !columns.some(col => col.name === feature)) : [];
   const inputReady = datasetId !== "" && checkedColumns && missingFeatures.length === 0;
+  /** 파일 등록과 Scoring 제출은 서로 다른 완료 사건이다. */
+  async function addDataset(file: File) {
+    if (uploading || !canUpload || !onDatasetRegistered) return;
+    setUploading(true); setUploadError("");
+    try {
+      const data = await uploadFile<Dataset>("/api/datasets/files", file, () => {}, () => {});
+      // 201 등록 성공 후 화면 목록을 업데이트하며, 점수 계산은 사용자가 명시적으로 시작한다.
+      onDatasetRegistered(data);
+      setDatasetId(data.id);
+      setColumnStatus("idle");
+      setColumnsDatasetId("");
+      setColumns([]);
+      setLabelColumn("");
+    } catch (cause) { setUploadError(formatError(cause)); }
+    finally { setUploading(false); }
+  }
+
   async function create() {
     if (submitted || !canRun || !inputReady) return;
     setSubmitted(true);
@@ -161,6 +183,20 @@ export function MLScoringPanel({
       <p>선택한 Dataset에 학습 모델을 적용해 불변 Scoring Result를 생성합니다.</p>
     </div></div>
     {error && <p role="alert">{error}</p>}
+    {canUpload && onDatasetRegistered && <div className="scoring-file-input">
+      <label>새 파일로 분석 준비
+        <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
+          onChange={event => {
+            const file = event.currentTarget.files?.[0];
+            if (file) void addDataset(file);
+            event.currentTarget.value = "";
+          }} />
+      </label>
+      <p className="hint">CSV·Parquet 파일을 Dataset으로 등록한 뒤 입력 조건을 확인합니다.
+        등록이 끝나도 점수 계산은 자동 제출하지 않습니다. 원시 로그의 활동 Feature 자동 변환은 아직 지원하지 않습니다.</p>
+      {uploading && <p role="status">파일을 등록하고 있습니다. 완료 후 입력 조건을 확인합니다.</p>}
+      {uploadError && <p role="alert">파일 등록 실패: {uploadError}</p>}
+    </div>}
     <div className="form-row">
       <label>모델에 적용할 Dataset
         <select aria-label="모델에 적용할 Dataset" value={datasetId}
