@@ -294,6 +294,7 @@ workflow_submissions = Table(
     Column("owner_actor", Text, nullable=False),
     Column("owner_actor_type", String(16), nullable=False),
     Column("dagster_run_id", String(36), unique=True),
+    Column("cancel_requested", Boolean, nullable=False, default=False),
     Column("created_at", Text, nullable=False),
     UniqueConstraint("actor_id", "submission_key", name="uq_workflow_submission_key"),
     Index("ix_workflow_owner_created", "owner_actor", "created_at"),
