@@ -9,6 +9,7 @@ from .mlflow_errors import MLflowDeliveryError
 from .mlflow_registry import registered_model_name
 from .mlflow_tracking import MLflowClient
 from .mlflow_config import MLflowSettings
+from .errors import RuntimeConfigurationError
 from .security import Actor, require
 from .store import Store
 
@@ -34,7 +35,13 @@ class VersionArchiveUpdate(BaseModel):
 
 
 def _client() -> MLflowClient:
-    return MLflowClient(MLflowSettings.from_env())
+    try:
+        settings = MLflowSettings.from_env()
+    except RuntimeConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="MLflow configuration is invalid") from exc
+    if settings is None:
+        raise HTTPException(status_code=503, detail="MLflow management is unavailable")
+    return MLflowClient(settings)
 
 
 def _name(actor_id: str, key: str) -> str:
