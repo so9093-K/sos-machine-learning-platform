@@ -432,6 +432,7 @@ class JobStoreMixin:
                     "dataset_id": row["dataset_id"],
                     "dataset_version": model_publish["dataset_version"],
                     "algorithm": model_publish["algorithm"],
+                    "registry_key": (json.loads(row["spec"]) or {}).get("registry_key", "default"),
                     "location": model_publish["location"],
                     "sha256": model_publish["sha256"],
                     "features": json.dumps(model_publish["features"], allow_nan=False),
@@ -448,10 +449,10 @@ class JobStoreMixin:
                         "INSERT INTO model_revisions "
                         "(id,job_id,attempt_id,dataset_id,dataset_version,algorithm,"
                         "location,sha256,features,params,training_score_summary,runtime,"
-                        "owner_actor,created_at) "
+                        "registry_key,owner_actor,created_at) "
                         "VALUES (:id,:job_id,:attempt_id,:dataset_id,:dataset_version,"
                         ":algorithm,:location,:sha256,:features,:params,"
-                        ":training_score_summary,:runtime,:owner_actor,:created_at)"
+                        ":training_score_summary,:runtime,:registry_key,:owner_actor,:created_at)"
                     ),
                     item,
                 )
