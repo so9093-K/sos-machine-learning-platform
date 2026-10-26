@@ -18,6 +18,12 @@ run_launcher:
   module: dagster.core.launcher
   class: DefaultRunLauncher
 
+local_artifact_storage:
+  module: dagster.core.storage.root
+  class: LocalArtifactStorage
+  config:
+    base_dir: /var/lib/dagster/data
+
 compute_logs:
   module: dagster.core.storage.local_compute_log_manager
   class: LocalComputeLogManager
