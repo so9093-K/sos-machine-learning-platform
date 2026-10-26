@@ -37,6 +37,7 @@ export function MLScoringPanel({
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number; phase: "transferring" | "registering" } | null>(null);
   const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [error, setError] = useState("");
@@ -76,6 +77,7 @@ export function MLScoringPanel({
         );
         if (alive) {
           setSelectedJob(next);
+          setError("");
           if (TERMINAL.has(next.status)) {
             void refresh().catch(e => { if (alive) setHistoryError(formatError(e)); });
           }
@@ -120,13 +122,16 @@ export function MLScoringPanel({
   async function addDataset(file: File) {
     if (uploading || submitted || !canUpload || !onDatasetRegistered) return;
     setUploading(true); setUploadError("");
+    setUploadProgress({ loaded: 0, total: file.size, phase: "transferring" });
     try {
-      const data = await uploadFile<Dataset>("/api/datasets/files", file, () => {}, () => {});
+      const data = await uploadFile<Dataset>("/api/datasets/files", file,
+        (loaded, total) => setUploadProgress({ loaded, total, phase: "transferring" }),
+        () => setUploadProgress(previous => previous ? { ...previous, phase: "registering" } : null));
       // 201 등록 성공 후 화면 목록을 업데이트하며, 점수 계산은 사용자가 명시적으로 시작한다.
       onDatasetRegistered(data);
       chooseDataset(data.id);
     } catch (cause) { setUploadError(formatError(cause)); }
-    finally { setUploading(false); }
+    finally { setUploading(false); setUploadProgress(null); }
   }
 
   async function create() {
@@ -183,7 +188,10 @@ export function MLScoringPanel({
       <h4>어떤 데이터에 모델을 적용할까요?</h4>
       <p>선택한 Dataset에 학습 모델을 적용해 불변 Scoring Result를 생성합니다.</p>
     </div></div>
-    {error && <p role="alert">{error}</p>}
+    {error && <div role="alert" className="pipeline-readiness-blocked">
+      <strong>모델 점수 계산 또는 상태 확인에 문제가 생겼습니다.</strong>
+      <details><summary>요청 오류와 복구 정보</summary><p>{error}</p></details>
+    </div>}
     {canUpload && onDatasetRegistered && <div className="scoring-file-input">
       <label>새 파일로 분석 준비
         <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
@@ -195,7 +203,13 @@ export function MLScoringPanel({
       </label>
       <p className="hint">CSV·Parquet 파일을 Dataset으로 등록한 뒤 입력 조건을 확인합니다.
         등록이 끝나도 점수 계산은 자동 제출하지 않습니다. 원시 로그의 활동 Feature 자동 변환은 아직 지원하지 않습니다.</p>
-      {uploading && <p role="status">파일을 등록하고 있습니다. 완료 후 입력 조건을 확인합니다.</p>}
+      {uploading && <div role="status" className="scoring-upload-status">
+        <p>{uploadProgress?.phase === "registering"
+          ? "파일 전송 완료 · 서버에서 검증하고 Dataset을 등록하고 있습니다."
+          : `파일 전송 중 · ${uploadProgress?.total ? Math.floor(100 * uploadProgress.loaded / uploadProgress.total) : 0}%`}</p>
+        {uploadProgress?.phase === "transferring" && uploadProgress.total > 0 &&
+          <progress max={uploadProgress.total} value={uploadProgress.loaded} aria-label="파일 전송 진행률" />}
+      </div>}
       {uploadError && <p role="alert">파일 등록 실패: {uploadError}</p>}
     </div>}
     <div className="form-row">
