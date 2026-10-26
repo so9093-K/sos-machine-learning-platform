@@ -26,8 +26,9 @@ function distributionOption(summary: Record<string, unknown>, rowCount: number):
       !Array.isArray(counts) || counts.length === 0 || counts.length > 128 ||
       edges.length !== counts.length + 1 || data.score_count !== rowCount ||
       !edges.every((value: unknown, index: number) =>
-        finiteNumber(value) !== null && (index === 0 || value > edges[index - 1])) ||
-      !counts.every((value: unknown) => Number.isInteger(value) && value >= 0) ||
+        typeof value === "number" && Number.isFinite(value) &&
+        (index === 0 || value > edges[index - 1])) ||
+      !counts.every((value: unknown) => typeof value === "number" && Number.isInteger(value) && value >= 0) ||
       counts.reduce((sum: number, value: number) => sum + value, 0) !== rowCount) return null;
   return {
     aria: { enabled: true },
