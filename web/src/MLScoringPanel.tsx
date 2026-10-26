@@ -46,12 +46,6 @@ export function MLScoringPanel({
 
   useEffect(() => {
     let alive = true;
-    void refresh().catch(e => { if (alive) setHistoryError(formatError(e)); });
-    return () => { alive = false; };
-  }, []);
-
-  useEffect(() => {
-    let alive = true;
     setColumns([]);
     setColumnsDatasetId("");
     setLabelColumn("");
@@ -112,25 +106,31 @@ export function MLScoringPanel({
   const missingFeatures = checkedColumns
     ? model.features.filter(feature => !columns.some(col => col.name === feature)) : [];
   const inputReady = datasetId !== "" && checkedColumns && missingFeatures.length === 0;
+  function chooseDataset(id: string) {
+    setDatasetId(id);
+    setColumnStatus("idle");
+    setColumnsDatasetId("");
+    setColumns([]);
+    setLabelColumn("");
+    setSelectedJob(null);
+    setResult(null);
+    setError("");
+  }
   /** 파일 등록과 Scoring 제출은 서로 다른 완료 사건이다. */
   async function addDataset(file: File) {
-    if (uploading || !canUpload || !onDatasetRegistered) return;
+    if (uploading || submitted || !canUpload || !onDatasetRegistered) return;
     setUploading(true); setUploadError("");
     try {
       const data = await uploadFile<Dataset>("/api/datasets/files", file, () => {}, () => {});
       // 201 등록 성공 후 화면 목록을 업데이트하며, 점수 계산은 사용자가 명시적으로 시작한다.
       onDatasetRegistered(data);
-      setDatasetId(data.id);
-      setColumnStatus("idle");
-      setColumnsDatasetId("");
-      setColumns([]);
-      setLabelColumn("");
+      chooseDataset(data.id);
     } catch (cause) { setUploadError(formatError(cause)); }
     finally { setUploading(false); }
   }
 
   async function create() {
-    if (submitted || !canRun || !inputReady) return;
+    if (submitted || uploading || !canRun || !inputReady) return;
     setSubmitted(true);
     setError("");
     try {
@@ -201,17 +201,15 @@ export function MLScoringPanel({
     <div className="form-row">
       <label>모델에 적용할 Dataset
         <select aria-label="모델에 적용할 Dataset" value={datasetId}
-          onChange={e => {
-            setDatasetId(e.target.value);
-            setColumnStatus("idle"); setColumnsDatasetId("");
-            setColumns([]); setLabelColumn("");
-          }}>
+          disabled={submitted || uploading}
+          onChange={e => chooseDataset(e.target.value)}>
           <option value="">Dataset 선택</option>
           {datasets.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
         </select>
       </label>
       <label>정답 레이블 (선택)
         <select aria-label="Scoring 정답 레이블" value={labelColumn}
+          disabled={submitted || uploading}
           onChange={e => setLabelColumn(e.target.value)}>
           <option value="">레이블 없음</option>
           {columns.filter(col => !model.features.includes(col.name)).map(col =>
@@ -245,7 +243,7 @@ export function MLScoringPanel({
       학습 시 사용한 Dataset과 ID가 같습니다. Dataset 판본을 확인하세요.
       동일 학습 판본에 적용한 점수는 독립적인 Test 성능이 아닙니다.
     </p>}
-    <button disabled={!canRun || submitted || !inputReady} onClick={() => void create()}>
+    <button disabled={!canRun || submitted || uploading || !inputReady} onClick={() => void create()}>
       {submitted ? "점수 계산 요청 중…" : "이 Dataset으로 모델 사용하기 →"}
     </button>
     <details className="pipeline-scoring-history" onToggle={event => {
@@ -273,7 +271,7 @@ export function MLScoringPanel({
         Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
         Failed: "실패", Cancelled: "취소됨",
       } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>
-      <p className="hint">대상 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
+      <p className="hint">실행에 사용한 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
         "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>
       {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
         !selectedJob.cancel_requested &&
