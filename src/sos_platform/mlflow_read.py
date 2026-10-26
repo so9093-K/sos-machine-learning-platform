@@ -97,8 +97,6 @@ def read_runs(
             item.get("key"): item.get("value")
             for item in data.get("tags", []) if isinstance(item, dict)
         }
-        if tags.get("sos.archived") == "true" and not include_archived:
-            continue
         job_id = tags.get("sos.job_id")
         job = store.get_job(job_id) if isinstance(job_id, str) else None
         if not job or job.get("owner_actor") != actor_id:
@@ -131,6 +129,17 @@ def read_model_versions(client, store, actor_id: str, *, page_token: str | None 
     versions = result.get("model_versions") or []
     if not isinstance(versions, list):
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+    # 관리 화면은 보관된 그룹도 확인해야 하지만 모델 사용 경로는 제외한다.
+    if versions and not include_archived:
+        registered = client.get("registered-models/get", {"name": name}).get("registered_model")
+        if not isinstance(registered, dict):
+            raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+        group_tags = {
+            tag.get("key"): tag.get("value")
+            for tag in registered.get("tags") or [] if isinstance(tag, dict)
+        }
+        if group_tags.get("sos.archived") == "true":
+            return {"items": [], "next_page_token": _page_token(result)}
     visible = []
     for version in versions:
         if not isinstance(version, dict) or version.get("name") != name:
@@ -139,6 +148,8 @@ def read_model_versions(client, store, actor_id: str, *, page_token: str | None 
             tag.get("key"): tag.get("value")
             for tag in version.get("tags") or [] if isinstance(tag, dict)
         }
+        if tags.get("sos.archived") == "true" and not include_archived:
+            continue
         job_id = tags.get("sos.job_id")
         job = store.get_job(job_id) if isinstance(job_id, str) else None
         if not job or job.get("owner_actor") != actor_id:
