@@ -2,6 +2,7 @@
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import text
 from pydantic import BaseModel, Field
 
 from .mlflow_errors import MLflowDeliveryError
@@ -9,6 +10,7 @@ from .mlflow_registry import registered_model_name
 from .mlflow_tracking import MLflowClient
 from .mlflow_config import MLflowSettings
 from .security import Actor, require
+from .store import Store
 
 READ = Depends(require("job.read"))
 MANAGE = Depends(require("model.manage"))
@@ -83,7 +85,7 @@ def _view(actor_id: str, record: dict) -> dict:
     }
 
 
-def model_management_router() -> APIRouter:
+def model_management_router(store: Store) -> APIRouter:
     router = APIRouter()
 
     @router.get("/api/ml/registry/groups", tags=["Models"])
@@ -192,6 +194,13 @@ def model_management_router() -> APIRouter:
         if registry_key == "default":
             raise HTTPException(status_code=409, detail="Default model group cannot be deleted")
         name = _name(actor.id, registry_key)
+        with store.connection() as db:
+            in_use = db.execute(text(
+                "SELECT count(*) FROM model_revisions "
+                "WHERE owner_actor=:actor AND registry_key=:key AND lifecycle_state!='Deleted'"
+            ), {"actor": actor.id, "key": registry_key}).scalar_one()
+            if in_use:
+                raise HTTPException(status_code=409, detail="Model group still has managed versions")
         client = _client()
         try:
             _get_group(client, name)
