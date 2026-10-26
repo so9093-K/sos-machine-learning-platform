@@ -461,6 +461,7 @@ class MLTrainRequest(BaseModel):
 
 
 class ModelRevisionOut(BaseModel):
+    lifecycle_state: Literal["Active", "Deleting", "Deleted"] = "Active"
     id: str
     job_id: str
     attempt_id: str
