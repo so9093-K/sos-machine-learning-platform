@@ -775,7 +775,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     ):
         return job_page(limit, cursor, actor, discovery_only=True)
 
-    app.include_router(model_management_router())
+    app.include_router(model_management_router(store))
     app.include_router(model_deletion_router(store))
 
     app.include_router(
