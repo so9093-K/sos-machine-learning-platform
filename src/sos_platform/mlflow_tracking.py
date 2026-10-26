@@ -61,7 +61,7 @@ class MLflowClient:
         except (UnicodeDecodeError, ValueError) as exc:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID") from exc
 
-    def post(self, endpoint: str, payload: dict) -> dict:
+    def post(self, endpoint: str, payload: dict, *, method: str = "POST") -> dict:
         """HTTP 리다이렉트를 거부하고 응답 크기·대기 시간을 제한한다."""
         data = json.dumps(payload, allow_nan=False).encode("utf-8")
         headers = {"Content-Type": "application/json"}
@@ -71,14 +71,14 @@ class MLflowClient:
             self.settings.endpoint + "/api/2.0/mlflow/" + endpoint,
             data=data,
             headers=headers,
-            method="POST",
+            method=method,
         )
         try:
             with self._opener.open(req, timeout=self.settings.timeout_seconds) as response:
                 raw = response.read(1_048_577)
             if len(raw) > 1_048_576:
                 raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-            parsed = json.loads(raw)
+            parsed = json.loads(raw) if raw else ({} if method == "DELETE" else None)
             if not isinstance(parsed, dict):
                 raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
             return parsed
@@ -90,6 +90,15 @@ class MLflowClient:
             raise MLflowDeliveryError("SOS-MLFLOW-UNAVAILABLE") from exc
         except (UnicodeDecodeError, ValueError) as exc:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID") from exc
+
+
+    def patch(self, endpoint: str, payload: dict) -> dict:
+        """MLflow REST PATCH 계약의 JSON 요청."""
+        return self.post(endpoint, payload, method="PATCH")
+
+    def delete(self, endpoint: str, payload: dict) -> dict:
+        """MLflow REST DELETE 계약의 JSON 요청. 빈 응답도 허용한다."""
+        return self.post(endpoint, payload, method="DELETE")
 
 
 def _numeric_metrics(job: dict) -> list[dict]:
