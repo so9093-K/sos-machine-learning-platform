@@ -34,14 +34,16 @@ async function compatiblePage(page: MLflowModelVersionPage, definition: Pipeline
 }
 
 export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, canRun, canCancel,
-  selectedModelId, onSelectModel, onOpenResource, onBack, onLearn,
+  selectedModelId, selectedGroupKey, onSelectModel, onSelectGroup, onOpenResource, onBack, onLearn,
   canUpload, onDatasetRegistered }: {
   datasets: Dataset[];
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
   canRun: boolean; canCancel: boolean;
   selectedModelId: string;
+  selectedGroupKey: string;
   onSelectModel: (id: string) => void;
+  onSelectGroup: (group: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onBack: () => void; onLearn: () => void;
   canUpload: boolean;
@@ -49,7 +51,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
 }) {
   const [models, setModels] = useState<RegisteredActivityModel[]>([]);
   const [groups, setGroups] = useState<ModelGroup[]>([]);
-  const [registryKey, setRegistryKey] = useState("default");
+  const registryKey = selectedGroupKey;
   const [definition, setDefinition] = useState<PipelineDefinition | null>(null);
   const [nextPage, setNextPage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,8 +130,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       <summary>사용 모델 변경 · 모델 목록 관리</summary>
       <label>사용할 모델 그룹
         <select value={registryKey} onChange={event => {
-          setRegistryKey(event.target.value);
-          onSelectModel("");
+          onSelectGroup(event.target.value);
         }}>
           <option value="default">기본 활동 이상 탐지</option>
           {groups.filter(g => g.registry_key !== "default").map(g =>
@@ -163,7 +164,12 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         ? "등록된 모델 버전이 더 있습니다. 다음 페이지를 확인하면 사용할 모델이 나올 수 있습니다."
         : lookupFailures
           ? "일부 모델 정보를 확인하지 못해 사용 가능한 모델이 없는지 판단할 수 없습니다. 다시 조회해 주세요."
-          : "처음 시작한다면 예제 데이터로 모델을 학습해 보세요. 등록이 끝나면 여기서 사용할 수 있습니다."}</p>
+          : "이 그룹에는 사용할 수 있는 모델이 없습니다. 다른 모델 그룹을 확인하거나 새 모델을 학습해 보세요."}</p>
+      {!nextPage && !lookupFailures && groups.some(group => group.registry_key !== registryKey) &&
+        <button type="button" className="secondary"
+          onClick={() => onSelectGroup(groups.find(group => group.registry_key !== registryKey)!.registry_key)}>
+          다른 모델 그룹 확인하기 →
+        </button>}
       {!nextPage && !lookupFailures &&
         <button type="button" onClick={onLearn}>예제로 모델 학습하기 →</button>}
     </div>}
