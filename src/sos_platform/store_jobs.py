@@ -65,6 +65,16 @@ class JobStoreMixin:
                 ), {"id": model_id}).scalar_one_or_none()
                 if state != "Active":
                     raise PlatformError("SOS-ML-MODEL-INVALID")
+            if kind == "ml_explain":
+                # 설명 계산은 과거 Scoring Result를 읽고 모델 파일을 재로딩한다.
+                # 삭제와 경합하지 않도록 실제 Model Revision에 공유 잠금을 건다.
+                model_state = db.execute(text(
+                    "SELECT m.lifecycle_state FROM model_revisions m "
+                    "JOIN scoring_results s ON s.model_revision_id=m.id "
+                    "WHERE s.id=:scoring_id FOR SHARE OF m"
+                ), {"scoring_id": spec.get("scoring_result_id")}).scalar_one_or_none()
+                if model_state != "Active":
+                    raise PlatformError("SOS-ML-MODEL-INVALID")
             is_understanding = (
                 kind == "profile"
                 and spec.get("mode") == "understanding"
