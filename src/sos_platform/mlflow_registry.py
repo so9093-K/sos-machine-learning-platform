@@ -126,8 +126,7 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
     if len(models) > 1:
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-    groups = models
-    if groups:
+    if models:
         group = client.get("registered-models/get", {"name": name}).get("registered_model")
         if not isinstance(group, dict) or group.get("name") != name:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
