@@ -953,6 +953,8 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .scoring-result-complete { display:grid; gap:18px; min-width:0; }
 
 /* 자유 학습에서는 대량 Feature를 요약하고 선택할 때만 펼친다. */
+.training-feature-guidance { margin:10px 0 0; padding:10px 12px; border:1px solid var(--sos-border);
+  border-radius:8px; font-size:12px; line-height:1.6; color:var(--sos-muted); }
 .training-feature-editor { margin-top:12px; min-width:0; border:1px solid var(--sos-border);
   border-radius:10px; padding:12px 14px; }
 .training-feature-editor > summary { cursor:pointer; font-weight:650; line-height:1.6; }
