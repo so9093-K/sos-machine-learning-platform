@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
 import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
@@ -45,6 +45,10 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
   dataSidebar?: ReactNode;
   children: ReactNode;
 }) {
+  const [localOperatorHost, setLocalOperatorHost] = useState(false);
+  useEffect(() => {
+    setLocalOperatorHost(["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
+  }, []);
   const label = pageLabels[section];
   const title = section === "overview" ? `${brandName} Workspace` : label.title;
   useEffect(() => {
@@ -58,7 +62,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
       <PlatformNavigation active={section} onNavigate={onNavigate}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit} />
       {dataSidebar}
-      {(canInspectStorage || canViewAudit) && <div className="operator-tools">
+      {localOperatorHost && (canInspectStorage || canViewAudit) && <div className="operator-tools">
         <span className="eyebrow">로컬 운영 도구</span>
         <a href="http://localhost:9607" target="_blank" rel="noopener noreferrer">
           Dagster Workflow · 실행 기록 ↗
