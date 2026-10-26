@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from sqlalchemy import text
 
-from .dagster_client import DagsterClient
+from .dagster_client import DagsterClient, DagsterUnavailable
 from .pipeline_reference import PIPELINE_ID, PIPELINE_VERSION, STAGES
 from .store_administration import now
 
@@ -47,7 +47,10 @@ def _run(store, row: dict, *, include_jobs: bool = True, client: DagsterClient |
         "FAILURE": "Failed", "CANCELED": "Cancelled",
     }
     if raw_status not in statuses:
-        raise ValueError("Dagster에서 알 수 없는 실행 상태를 반환했습니다.")
+        raise DagsterUnavailable(
+            "Dagster에서 알 수 없는 실행 상태를 반환했습니다.",
+            operation="run_status", failure_type="unexpected_result",
+        )
     jobs = {stage: _job_by_stage(store, row, stage) for stage in STAGES}
     created = {name: item for name, item in jobs.items() if item is not None}
     preflight = jobs["preflight"]
