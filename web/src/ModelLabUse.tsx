@@ -141,6 +141,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           onSelectGroup(event.target.value);
         }}>
           <option value="default">기본 활동 이상 탐지</option>
+          {registryKey !== "default" && !groups.some(g => g.registry_key === registryKey) &&
+            <option value={registryKey}>현재 선택한 모델 그룹</option>}
           {groups.filter(g => g.registry_key !== "default").map(g =>
             <option key={g.registry_key} value={g.registry_key}>{g.title}</option>)}
         </select>
