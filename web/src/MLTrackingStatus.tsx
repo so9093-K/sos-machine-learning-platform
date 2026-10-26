@@ -43,7 +43,7 @@ export function MLTrackingDetails({ status, error }: {
     <strong>MLflow 실행 기록</strong>
     {status && <p role="status">
       {status.state === "Disabled"
-        ? "MLflow 관리 기록이 비활성화됐습니다. SOS 실행 결과는 보존됩니다."
+        ? "MLflow 관리 기록이 비활성화됐습니다. 플랫폼 실행 결과는 보존됩니다."
         : status.state === "Succeeded"
           ? `MLflow 기록 완료 · Run ID ${status.run_id ?? "미확인"}`
           : status.state === "Retry"
@@ -51,7 +51,7 @@ export function MLTrackingDetails({ status, error }: {
             : status.state === "Sending" ? "외부 전송 중" : "MLflow 기록 대기"}
     </p>}
     {status?.last_error_code && status.state === "Retry" &&
-      <p className="hint">MLflow 연동 오류 코드: {status.last_error_code}. SOS Job 결과는 바뀌지 않으며 학습 모델은 등록 전 사용할 수 없습니다.</p>}
+      <p className="hint">MLflow 연동 오류 코드: {status.last_error_code}. 플랫폼 Job 결과는 바뀌지 않으며 학습 모델은 등록 전 사용할 수 없습니다.</p>}
     {error && <p role="alert">{error}</p>}
   </div>;
 }
