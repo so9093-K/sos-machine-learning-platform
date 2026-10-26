@@ -45,6 +45,7 @@ from .mlflow_errors import MLflowDeliveryError
 from .mlflow_read import read_experiments, read_runs, read_model_versions
 from .mlflow_registry import verify_registered_version
 from .api_model_management import model_management_router
+from .model_deletion import model_deletion_router
 from .mlflow_tracking import MLflowClient
 from .pagination import decode_cursor, page_from_rows
 from .processing import bounded_feature_preview
@@ -775,6 +776,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         return job_page(limit, cursor, actor, discovery_only=True)
 
     app.include_router(model_management_router())
+    app.include_router(model_deletion_router(store))
 
     app.include_router(
         training_router(
