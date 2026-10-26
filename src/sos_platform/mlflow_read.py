@@ -117,10 +117,10 @@ def read_runs(
     return {"items": visible, "next_page_token": _page_token(result)}
 
 
-def read_model_versions(client, store, actor_id: str, *, page_token: str | None = None) -> dict:
+def read_model_versions(client, store, actor_id: str, *, page_token: str | None = None, registry_key: str = "default") -> dict:
     """Registry 판본과 SOS 아티팩트를 대조하며 페이지 정보를 보존한다."""
     name = registered_model_name({
-        "owner_actor": actor_id, "algorithm": "isolation_forest",
+        "owner_actor": actor_id, "algorithm": "isolation_forest", "registry_key": registry_key,
     })
     request = {"filter": f"name = '{name}'", "max_results": 100}
     if page_token:
