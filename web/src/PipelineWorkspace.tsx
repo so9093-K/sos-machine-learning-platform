@@ -688,6 +688,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </div>}
         {run.status === "Cancelled" && <p className="pipeline-next-step" role="status">
           실행 취소가 확정되었습니다. 기존 기록은 보존되며 필요하다면 새 Run을 실행할 수 있습니다.
+          {(run.stages ?? []).some(stage => stage.name === "training" && stage.job?.status === "Succeeded") &&
+            " 이미 완료한 학습의 MLflow 등록 요청과 자동 재시도는 별도로 계속될 수 있습니다."}
         </p>}
         {!terminal.has(run.status) && <div className="pipeline-next-step" role="status">
           <strong>{run.cancel_requested ? "취소 요청을 처리하고 있습니다." :
