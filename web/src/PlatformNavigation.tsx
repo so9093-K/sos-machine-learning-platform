@@ -14,6 +14,7 @@ export type MLNavigationContext = {
   datasetId?: string; modelId?: string; scoringId?: string;
   pipelineRunId?: string; pipelineReturn?: boolean; candidateRowIndex?: number;
   pipelineView?: "learn" | "use";
+  modelGroupKey?: string;
   modelLabReturn?: boolean;
   pipelineAnalysisSection?: "overview" | "training" | "calibration" | "test";
 };
@@ -38,6 +39,11 @@ function analysisSectionAt(params: URLSearchParams): MLNavigationContext["pipeli
     value === "calibration" || value === "test" ? value : undefined;
 }
 
+function modelGroupAt(params: URLSearchParams): string | undefined {
+  const group = params.get("group");
+  return group && /^[a-z][a-z0-9-]{0,39}$/.test(group) ? group : undefined;
+}
+
 function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
   if (tab === "pipelines") {
@@ -49,6 +55,8 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
         ? { pipelineView: params.get("view") as "learn" | "use" } : {}),
       ...(!runId && params.get("view") === "use" && params.get("model")
         ? { modelId: params.get("model")! } : {}),
+      ...(!runId && params.get("view") === "use" && modelGroupAt(params)
+        ? { modelGroupKey: modelGroupAt(params) } : {}),
       ...(runId && candidateRowAt(params) !== undefined
         ? { candidateRowIndex: candidateRowAt(params) } : {}),
       ...(runId && analysisSectionAt(params) !== undefined
@@ -96,6 +104,9 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
     if (!context.pipelineRunId && context.pipelineView) params.set("view", context.pipelineView);
     if (!context.pipelineRunId && context.pipelineView === "use" && context.modelId)
       params.set("model", context.modelId);
+    if (!context.pipelineRunId && context.pipelineView === "use" &&
+        context.modelGroupKey && context.modelGroupKey !== "default")
+      params.set("group", context.modelGroupKey);
     if (context.pipelineRunId) params.set("run", context.pipelineRunId);
     if (context.pipelineRunId && context.candidateRowIndex !== undefined)
       params.set("candidate", String(context.candidateRowIndex));
@@ -142,7 +153,9 @@ const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }>
 export function resourcePath(kind: MLResourceKind, id: string, context: MLNavigationContext = {}): string {
   const path = `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
   if (context.modelLabReturn && context.modelId && !context.pipelineRunId) {
-    return path + "?" + new URLSearchParams({ from: "model-lab", model: context.modelId });
+    return path + "?" + new URLSearchParams({ from: "model-lab", model: context.modelId,
+      ...(context.modelGroupKey && context.modelGroupKey !== "default"
+        ? { group: context.modelGroupKey } : {}) });
   }
   if (!context.pipelineReturn || !context.pipelineRunId) return path;
   const params = new URLSearchParams({ from: "pipeline", run: context.pipelineRunId });
@@ -157,7 +170,8 @@ export function resourcePath(kind: MLResourceKind, id: string, context: MLNaviga
 function resourceContext(search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
   if (params.get("from") === "model-lab" && params.get("model"))
-    return { modelLabReturn: true, modelId: params.get("model")! };
+    return { modelLabReturn: true, modelId: params.get("model")!,
+      ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
   if (params.get("from") !== "pipeline" || !params.get("run")) return {};
   return { pipelineReturn: true, pipelineRunId: params.get("run")!,
     datasetId: params.get("dataset") ?? "",
@@ -286,7 +300,8 @@ export function useWorkspaceNavigation() {
           candidateRowIndex: previous.context.candidateRowIndex,
           pipelineAnalysisSection: previous.context.pipelineAnalysisSection }
       : fromLabUse && previous.context.modelId
-        ? { modelLabReturn: true, modelId: previous.context.modelId } : {};
+        ? { modelLabReturn: true, modelId: previous.context.modelId,
+            modelGroupKey: previous.context.modelGroupKey } : {};
     update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context },
       resourcePath(kind, id, context));
   }, [update]);
