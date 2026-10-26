@@ -29,6 +29,10 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
   const [features, setFeatures] = useState<string[]>([]);
   const [nEstimators, setNEstimators] = useState(100);
   const [experimentTitle, setExperimentTitle] = useState("기본 실험");
+  const [registryKey, setRegistryKey] = useState("default");
+  const [modelGroups, setModelGroups] = useState<Array<{
+    registry_key: string; title: string; archived: boolean;
+  }>>([]);
   const [maxSamples, setMaxSamples] = useState("auto");
   const [inputMode, setInputMode] = useState<"all" | "sample">("all");
   const [inputRows, setInputRows] = useState(100000);
@@ -45,6 +49,15 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
   const numericColumns = useMemo(
     () => columns.filter(column => NUMERIC.test(column.dtype)), [columns],
   );
+
+  useEffect(() => {
+    let mounted = true;
+    void request<{items: Array<{registry_key: string; title: string; archived: boolean}>}>(
+      "/api/ml/registry/groups",
+    ).then(result => { if (mounted) setModelGroups(result.items.filter(g => !g.archived)); })
+      .catch(() => { /* MLflow 장애는 독립 학습의 실행 제출을 직접 차단하지 않는다. */ });
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -104,6 +117,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
     try {
       const result = await submitJob<MLTrainingJob>("/api/ml/train/jobs", {
         dataset_id: selectedId, features, experiment_title: experimentTitle.trim(),
+        registry_key: registryKey,
         training_input: inputMode === "all" ? { mode: "all" } :
           { mode: "sample", rows: inputRows, seed: inputSeed },
         params: { n_estimators: nEstimators, max_samples: maxSamples === "auto"
@@ -138,7 +152,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
     setSubmitting(true); setError("");
     try {
       const result = await submitJob<MLTrainingJob>(
-        `/api/ml/train/jobs/${encodeURIComponent(selectedJob.id)}/fork`, { params: null });
+        `/api/ml/train/jobs/${encodeURIComponent(selectedJob.id)}/fork`,
+        { params: null, registry_key: registryKey });
       if (currentDataset.current === expectedDataset &&
           selectionRequest.current === revision) {
         setSelectedJob(result);
@@ -175,6 +190,14 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
           <input aria-label="연구 Experiment 이름" maxLength={80}
             value={experimentTitle} onChange={event => setExperimentTitle(event.target.value)}
             placeholder="연구 목적을 입력하세요" />
+        </label>
+        <label>등록할 모델 그룹
+          <select aria-label="학습 결과 모델 그룹" value={registryKey}
+            onChange={event => setRegistryKey(event.target.value)}>
+            <option value="default">기본 활동 이상 탐지</option>
+            {modelGroups.filter(g => g.registry_key !== "default").map(g =>
+              <option key={g.registry_key} value={g.registry_key}>{g.title}</option>)}
+          </select>
         </label>
         <label>트리 개수
           <input type="number" aria-label="Isolation Forest 트리 개수"
