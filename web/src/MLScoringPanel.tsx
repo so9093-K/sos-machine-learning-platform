@@ -211,7 +211,11 @@ export function MLScoringPanel({
         {uploadProgress?.phase === "transferring" && uploadProgress.total > 0 &&
           <progress max={uploadProgress.total} value={uploadProgress.loaded} aria-label="파일 전송 진행률" />}
       </div>}
-      {uploadError && <p role="alert">파일 등록 실패: {uploadError}</p>}
+      {uploadError && <div role="alert" className="pipeline-readiness-blocked">
+        <strong>파일을 등록하지 못했습니다.</strong>
+        <p>파일 형식과 크기, 연결 상태를 확인해 주세요. 등록 여부가 불확실하면 Dataset 목록에서 먼저 확인해 주세요.</p>
+        <details><summary>오류 진단 정보</summary><p>{uploadError}</p></details>
+      </div>}
     </div>}
     <div className="form-row">
       <label>모델에 적용할 Dataset
