@@ -584,6 +584,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onSelectModel={modelId => selectContext({ pipelineView: "use", modelId })}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
+          canUpload={canWrite} onDatasetRegistered={data => {
+            setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+            showExamples.current = false;
+          }}
           onBack={() => navigateWithContext("pipelines", {})}
           onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
       {tab === "pipelines" && !context.pipelineRunId && (
