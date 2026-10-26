@@ -660,6 +660,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/models/deletion-pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pending Deletions
+         * @description Registry에서 사라졌더라도 실제 삭제가 끝나지 않은 모델을 재시도할 수 있게 한다.
+         */
+        get: operations["pending_deletions_api_ml_models_deletion_pending_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/models/{revision_id}": {
         parameters: {
             query?: never;
@@ -4789,6 +4809,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExplanationResultOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    pending_deletions_api_ml_models_deletion_pending_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Structured API error */
