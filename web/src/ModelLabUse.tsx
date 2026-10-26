@@ -211,7 +211,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         {datasetVisited && <MLScoringPanel key={selected.revision.id} model={selected.revision}
           datasets={datasets} hasMoreDatasets={hasMoreDatasets}
           onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
-          onOpenResult={id => onOpenResource("scoring", id)} />}
+          onOpenResult={id => onOpenResource("scoring", id)}
+          onOpenResource={onOpenResource} />}
       </div>
     </>}
     <div className="model-lab-use-footer">
