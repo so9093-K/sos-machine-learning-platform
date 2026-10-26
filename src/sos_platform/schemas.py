@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Literal
+from unicodedata import category
 
 from pydantic import BaseModel, Field, StrictFloat, StrictInt, field_validator, model_validator
 
@@ -97,6 +98,25 @@ class AuthMeOut(BaseModel):
     roles: list[str]
     capabilities: list[str]
     mode: Literal["development", "token"]
+
+
+class BrandingSettingsOut(BaseModel):
+    """인증 이전에도 노출할 수 있는 제품 표시 브랜드. 기술 식별자와 별개다."""
+
+    brand_name: str = Field(min_length=1, max_length=48)
+
+
+class BrandingSettingsUpdate(BaseModel):
+    """관리자만 변경할 수 있는 표시 브랜드."""
+
+    brand_name: str = Field(min_length=1, max_length=48)
+
+    @model_validator(mode="after")
+    def validate_name(self) -> "BrandingSettingsUpdate":
+        self.brand_name = self.brand_name.strip()
+        if not self.brand_name or any(category(char) in {"Cc", "Cf", "Cs"} for char in self.brand_name):
+            raise ValueError("Invalid brand name")
+        return self
 
 
 class InstanceSettingsOut(BaseModel):
