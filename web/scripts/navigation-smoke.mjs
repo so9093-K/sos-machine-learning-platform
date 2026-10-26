@@ -230,7 +230,8 @@ try {
     selected: [], disabled: false, onChange: () => {},
   }));
   assert.match(emptyFeatureSelection, /학습 Feature 검색/);
-  assert.match(emptyFeatureSelection, /0개 선택 · 2개 표시/);
+  assert.match(emptyFeatureSelection, /0(?:<!-- -->)?개 선택/);
+  assert.match(emptyFeatureSelection, /2(?:<!-- -->)?개 표시/);
   assert.match(emptyFeatureSelection, /표시된 항목 선택/);
   assert.match(emptyFeatureSelection, /metric_a/);
   assert.match(emptyFeatureSelection, /metric_b/);
