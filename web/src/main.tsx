@@ -66,7 +66,9 @@ function App() {
       setToken("");
     } catch (error) {
       setAccessToken(null);
-      setMessage(formatError(error));
+      setMessage(error instanceof ApiError && error.status === 401
+        ? "액세스 토큰을 확인하세요. 인증되지 않았으며 토큰은 저장되지 않았습니다."
+        : formatError(error));
     } finally { setSubmitting(false); }
   }
   function signOut() {
