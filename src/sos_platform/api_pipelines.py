@@ -5,7 +5,7 @@ from typing import Literal
 
 from .scoring_observations import ranked_scoring_rows
 from .pipeline_reference import PIPELINE_ID, definition, inspect_dataset
-from .pipeline_runs import cancel_run, create_run, get_run, list_runs
+from .dagster_workflows import cancel_run, create_run, get_run, list_runs
 from .security import Actor, require, resource_allowed
 from .store import Store
 
