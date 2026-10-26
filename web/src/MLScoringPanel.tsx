@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
+import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
+import type { MLResourceKind } from "./PlatformNavigation";
 import type {
   Dataset, DatasetColumns, MLScoringJob, MLScoringJobSummary, ModelRevision, ScoringResult,
 } from "./types";
@@ -13,13 +15,14 @@ type Props = {
   canRun: boolean;
   canCancel: boolean;
   onOpenResult: (id: string) => void;
+  onOpenResource: (kind: MLResourceKind, id: string) => void;
 };
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 /** 학습된 모델을 다른 Dataset에 적용하는 독립 Scoring 경험. */
 export function MLScoringPanel({
-  model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult,
+  model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult, onOpenResource,
 }: Props) {
   const [datasetId, setDatasetId] = useState("");
   const [loadingMoreDatasets, setLoadingMoreDatasets] = useState(false);
@@ -235,24 +238,24 @@ export function MLScoringPanel({
       {selectedJob.cancel_requested && selectedJob.status === "Running" &&
         <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
       {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error_code}</p>}
-      {result && <div>
-        <p>새로운 점수 결과가 저장됐습니다. 원래 학습·Test 결과는 변경되지 않습니다.</p>
-        <div className="cards">
-          <div className="stat"><span>점수화된 행</span><strong>{result.row_count}</strong></div>
-          <div className="stat"><span>평균 이상 점수</span>
-            <strong>{value(result.score_summary.score_mean)}</strong></div>
-          {typeof result.ranking_metrics?.average_precision === "number" &&
-            <div className="stat"><span>Average Precision</span>
-              <strong>{value(result.ranking_metrics.average_precision)}</strong></div>}
-          {typeof result.ranking_metrics?.roc_auc === "number" &&
-            <div className="stat"><span>ROC-AUC</span>
-              <strong>{value(result.ranking_metrics.roc_auc)}</strong></div>}
-        </div>
-        <p className="hint">모델과 Scoring Dataset의 판본 및 점수 아티팩트가 보존됩니다. 위 지표는 완전한 이진 레이블과 양성·음성 사례가 모두 있을 때만 계산합니다. 임계값 정책과 판정 정확도는 별도 평가 대상입니다.</p>
+      {result && <div className="scoring-result-complete">
         {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&
-          <p className="hint">학습에 사용한 동일 Dataset 판본을 점수화했습니다. 이 결과의 순위·판정 지표는 독립 검증 데이터의 성능이 아닙니다.</p>}
+          <p className="hint">학습에 사용한 동일 Dataset 판본의 결과입니다.
+            독립된 Test 데이터에서 얻은 성능으로 해석하지 마세요.</p>}
+        <ScoringObservationExplorer key={result.id} result={result} canRun={canRun}
+          canCancel={canCancel} onOpenResource={onOpenResource} />
+        {(typeof result.ranking_metrics?.average_precision === "number" ||
+          typeof result.ranking_metrics?.roc_auc === "number") && <details>
+          <summary>정답 레이블 기반 순위 지표</summary>
+          {typeof result.ranking_metrics?.average_precision === "number" &&
+            <p>Average Precision · {value(result.ranking_metrics.average_precision)}</p>}
+          {typeof result.ranking_metrics?.roc_auc === "number" &&
+            <p>ROC-AUC · {value(result.ranking_metrics.roc_auc)}</p>}
+          <p className="hint">정답 레이블과 계산 조건이 충족된 경우에만 표시합니다.
+            판정 정책과 판정 정확도는 별도 평가 대상입니다.</p>
+        </details>}
         <button type="button" className="secondary" onClick={() => onOpenResult(result.id)}>
-          점수 결과와 판단 근거 살펴보기 →
+          모델·Dataset 판본과 기술 근거 열기 →
         </button>
       </div>}
     </div>}
