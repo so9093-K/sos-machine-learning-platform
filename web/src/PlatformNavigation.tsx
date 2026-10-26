@@ -78,7 +78,8 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   if (isDecisionTab(tab)) return {
     scoringId: params.get("scoring") ?? "",
     ...(params.get("from") === "model-lab" && params.get("model")
-      ? { modelLabReturn: true, modelId: params.get("model")! } : {}),
+      ? { modelLabReturn: true, modelId: params.get("model")!,
+          ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) } : {}),
   };
   return {};
 }
@@ -131,6 +132,8 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
   if (isDecisionTab(tab) && context.modelLabReturn && context.modelId) {
     params.set("from", "model-lab");
     params.set("model", context.modelId);
+    if (context.modelGroupKey && context.modelGroupKey !== "default")
+      params.set("group", context.modelGroupKey);
   }
   return paths[tab] + (params.size ? "?" + params.toString() : "");
 }
@@ -226,7 +229,8 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
     return {
       scoringId: previous.context.scoringId,
       ...(previous.context.modelLabReturn && previous.context.modelId
-        ? { modelLabReturn: true, modelId: previous.context.modelId } : {}),
+        ? { modelLabReturn: true, modelId: previous.context.modelId,
+            modelGroupKey: previous.context.modelGroupKey } : {}),
     };
   }
   if ((tab === "training" || tab === "ml") &&
