@@ -223,6 +223,17 @@ try {
   assert.match(trainingForm, /결측 허용 안 함 \(기본값\)/);
   assert.match(trainingForm, /Train 중앙값으로 대체/);
   assert.match(trainingForm, /Feature와 입력 정책을 직접 선택하는 독립 실험/);
+  // 필수 Feature 선택은 초기 숨김 없이 접근할 수 있고, 한 번에 전체 선택을 강요하지 않는다.
+  const { FeatureSelector } = await vite.ssrLoadModule("/src/FeatureSelector.tsx");
+  const emptyFeatureSelection = renderToStaticMarkup(React.createElement(FeatureSelector, {
+    columns: [{ name: "metric_a", dtype: "Float64" }, { name: "metric_b", dtype: "Int64" }],
+    selected: [], disabled: false, onChange: () => {},
+  }));
+  assert.match(emptyFeatureSelection, /학습 Feature 검색/);
+  assert.match(emptyFeatureSelection, /0개 선택 · 2개 표시/);
+  assert.match(emptyFeatureSelection, /표시된 항목 선택/);
+  assert.match(emptyFeatureSelection, /metric_a/);
+  assert.match(emptyFeatureSelection, /metric_b/);
 
   const pagedDatasetForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
     datasets: [], initialDatasetId: "data-not-on-first-page",
