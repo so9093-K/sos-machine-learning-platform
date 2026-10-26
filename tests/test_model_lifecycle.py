@@ -133,3 +133,28 @@ def test_mlflow_management_uses_patch_and_delete_http_methods():
     assert client.patch("registered-models/update", {"name":"sos-if-test"}) == {}
     assert client.delete("model-versions/delete", {"name":"sos-if-test", "version":"1"}) == {}
     assert opener.methods == ["PATCH", "DELETE"]
+
+
+def test_deleted_model_cannot_be_reloaded_into_runtime(tmp_path):
+    from sos_platform.ml_runtime import load_trusted_isolation_forest
+
+    with pytest.raises(ValueError, match="Deleted or deleting"):
+        load_trusted_isolation_forest({"lifecycle_state": "Deleted"}, tmp_path)
+    with pytest.raises(ValueError, match="Deleted or deleting"):
+        load_trusted_isolation_forest({"lifecycle_state": "Deleting"}, tmp_path)
+
+
+def test_unconfigured_mlflow_does_not_begin_model_deletion(monkeypatch):
+    from sos_platform import model_deletion
+    from sos_platform.model_deletion import model_deletion_router
+
+    actor = Actor("researcher-one", "human", frozenset({"researcher"}))
+    monkeypatch.setattr(model_deletion.MLflowSettings, "from_env", lambda: None)
+    monkeypatch.setattr(model_deletion, "begin_delete",
+                        lambda *args: pytest.fail("Unconfigured MLflow must not mark Deleting"))
+    router = model_deletion_router(object())
+    endpoint = next(route.endpoint for route in router.routes
+                    if getattr(route, "path", "") == "/api/ml/models/{revision_id}")
+    with pytest.raises(HTTPException) as error:
+        endpoint("model-id", confirm=True, actor=actor)
+    assert error.value.status_code == 503
