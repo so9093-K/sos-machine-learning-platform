@@ -721,7 +721,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
               disabled={busy || run.cancel_requested} onClick={() => void cancel()}>
               Pipeline 취소 요청
             </button>
-          </div>}}
+          </div>}
         </div>}
         {run.status === "Succeeded" && <section className="pipeline-candidates" aria-labelledby="pipeline-candidates-heading">
           <h4 id="pipeline-candidates-heading" tabIndex={-1}>검토할 이상 후보</h4>
