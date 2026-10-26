@@ -13,10 +13,11 @@ function url(path: string, params: Record<string, string | null>) {
 }
 
 /** 연구 묶음·Run·모델 버전의 정본은 MLflow다. 실행 권한은 SOS API에서 판단한다. */
-export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
+export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }: {
   onOpenModel: (id: string) => void;
   onScoreModel: (id: string) => void;
   onTrain: () => void;
+  canManage: boolean;
 }) {
   const [experiments, setExperiments] = useState<MLflowExperiment[]>([]);
   const [models, setModels] = useState<MLflowModelVersion[]>([]);
@@ -136,6 +137,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
 
   return <div className="ml-resource-workspace">
     <ModelRegistryManager activeKey={registryKey} onSelect={setRegistryKey}
+      canManage={canManage}
       onChanged={() => setRevision(x => x + 1)} />
     <section className="panel">
       <div className="panel-head">
@@ -183,6 +185,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain }: {
             <button type="button" disabled={item.archived || groupArchived}
               onClick={() => onScoreModel(item.model_id)}>Scoring →</button>
             <ModelVersionManagement model={item} registryKey={registryKey}
+              canManage={canManage}
               onChanged={() => setRevision(x => x + 1)}/>
           </div>
         </article>)}
