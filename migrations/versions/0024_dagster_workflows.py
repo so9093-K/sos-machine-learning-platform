@@ -74,6 +74,7 @@ def upgrade() -> None:
         sa.Column("owner_actor", sa.Text(), nullable=False),
         sa.Column("owner_actor_type", sa.String(16), nullable=False),
         sa.Column("dagster_run_id", sa.String(36), nullable=True, unique=True),
+        sa.Column("cancel_requested", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.Text(), nullable=False),
         sa.UniqueConstraint("actor_id", "submission_key", name="uq_workflow_submission_key"),
     )
