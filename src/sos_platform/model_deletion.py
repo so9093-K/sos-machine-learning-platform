@@ -104,6 +104,23 @@ def finish_delete(store: Store, model_id: str, actor: Actor) -> None:
 def model_deletion_router(store: Store) -> APIRouter:
     router=APIRouter()
 
+    @router.get("/api/ml/models/deletion-pending",tags=["Models"])
+    def pending_deletions(actor:Actor=READ):
+        """Registry에서 사라졌더라도 실제 삭제가 끝나지 않은 모델을 재시도할 수 있게 한다."""
+        with store.connection() as db:
+            if actor.privileged:
+                rows = db.execute(text(
+                    "SELECT id,registry_key,registry_version,created_at FROM model_revisions "
+                    "WHERE lifecycle_state='Deleting' ORDER BY created_at DESC LIMIT 100"
+                )).mappings().all()
+            else:
+                rows = db.execute(text(
+                    "SELECT id,registry_key,registry_version,created_at FROM model_revisions "
+                    "WHERE lifecycle_state='Deleting' AND owner_actor=:actor "
+                    "ORDER BY created_at DESC LIMIT 100"
+                ), {"actor":actor.id}).mappings().all()
+        return {"items":[dict(item) for item in rows]}
+
     @router.get("/api/ml/models/{revision_id}/deletion-impact",tags=["Models"])
     def impact(revision_id: str,actor:Actor=READ):
         item=store.get_model_revision(revision_id)
