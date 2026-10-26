@@ -462,8 +462,17 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           requestAnimationFrame(() => ownDataDetails.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
         }
       }} />}
-    {error && <div className="alert error" role="alert">{error}
-      <button className="ghost" onClick={() => setError("")}>닫기</button></div>}
+    {error && <div className="alert error" role="alert">
+      {error.includes("SOS-API-DEPENDENCY") ? <>
+        <strong>Workflow 실행 서버에서 요청을 확인하지 못했습니다.</strong>
+        <p>Dataset 구조 검사와는 별개의 오류입니다. 이미 실행이 접수됐을 수 있으니
+          분석 이력과 Dagster Run 상태를 확인한 뒤 다시 제출하세요.</p>
+        <details><summary>오류 진단 정보</summary>{error}</details>
+        <button type="button" className="secondary"
+          onClick={() => onNavigate("pipeline-jobs", datasetId)}>분석 이력 확인 →</button>
+      </> : error}
+      <button className="ghost" onClick={() => setError("")}>닫기</button>
+    </div>}
     {!hasActiveAnalysis && <details ref={ownDataDetails} className="pipeline-advanced"
       open={showOwnData}
       onToggle={event => setShowOwnData(event.currentTarget.open)}>
