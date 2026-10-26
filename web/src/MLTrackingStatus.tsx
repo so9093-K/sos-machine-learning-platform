@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatError, request } from "./api";
+import { ApiError, formatError, request } from "./api";
 import type { MLflowExportStatus } from "./types";
 
 type Props = { jobId: string };
@@ -24,7 +24,11 @@ export function MLTrackingStatus({ jobId }: Props) {
       } catch (exc) {
         if (active) {
           setError(formatError(exc));
-          timer = setTimeout(() => void poll(), 5000);
+          // 인증·권한·존재하지 않는 Job은 재시도해도 해결되지 않는다.
+          const permanent = exc instanceof ApiError && exc.status >= 400 &&
+            exc.status < 500 && exc.status !== 429;
+          if (permanent) setStatus(null);
+          else timer = setTimeout(() => void poll(), 5000);
         }
       }
     }
