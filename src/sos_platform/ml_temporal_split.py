@@ -10,6 +10,39 @@ from typing import Literal
 import polars as pl
 
 
+def utc_observation_time(source: pl.LazyFrame, timestamp_column: str) -> pl.Expr:
+    """명시적인 시간대가 있는 관측 시각만 UTC Datetime으로 정규화한다.
+
+    시간 분할 선택과 일반 Scoring의 시각 보존에서 같은 파싱 규칙을 사용한다.
+    값의 결측·파싱 실패 여부는 호출자가 실제 선택 범위에서 검증한다.
+    """
+    schema = source.collect_schema()
+    if timestamp_column not in schema:
+        raise ValueError("Observation timestamp column is missing")
+    dtype = schema[timestamp_column]
+    if dtype == pl.String:
+        # 문자열을 암묵적으로 로컬 시각으로 해석하지 않는다.
+        values = pl.col(timestamp_column)
+        # 일부 실제 Parquet 소스는 UTC 오프셋을 +00처럼 시간 단위로 기록한다.
+        # 오프셋 없는 문자열과 구별하면서 +HH, +HHMM, +HH:MM을 같은 의미로 정규화한다.
+        explicit_timezone = values.str.contains(r"(?:Z|[+-]\d{2}(?::?\d{2})?)$")
+        normalized = (
+            values.str.replace(r"([+-]\d{2})$", "${1}:00")
+            .str.replace(r"([+-]\d{2})(\d{2})$", "${1}:${2}")
+            .str.replace(r"Z$", "+00:00")
+        )
+        parsed = (
+            pl.when(explicit_timezone)
+            .then(normalized.str.to_datetime(time_zone="UTC", strict=False))
+            .otherwise(pl.lit(None, dtype=pl.Datetime(time_zone="UTC")))
+        )
+    elif isinstance(dtype, pl.Datetime) and dtype.time_zone:
+        parsed = pl.col(timestamp_column).dt.convert_time_zone("UTC")
+    else:
+        raise ValueError("Observation time requires timezone-aware timestamps")
+    return parsed
+
+
 def select_temporal_partition(
     source: pl.LazyFrame,
     *,
@@ -38,33 +71,9 @@ def select_temporal_partition(
         or not train_end < calibration_end
     ):
         raise ValueError("Temporal split boundaries must be ordered timezone-aware datetimes")
-    schema = source.collect_schema()
-    if timestamp_column not in schema:
-        raise ValueError("Temporal split timestamp column is missing")
-    if "__sos_event_time" in schema:
+    if "__sos_event_time" in source.collect_schema():
         raise ValueError("Dataset contains reserved temporal column")
-    dtype = schema[timestamp_column]
-    if dtype == pl.String:
-        # 문자열을 암묵적으로 로컬 시각으로 해석하지 않는다.
-        values = pl.col(timestamp_column)
-        # 일부 실제 Parquet 소스는 UTC 오프셋을 +00처럼 시간 단위로 기록한다.
-        # 오프셋 없는 문자열과 구별하면서 +HH, +HHMM, +HH:MM을 같은 의미로 정규화한다.
-        explicit_timezone = values.str.contains(r"(?:Z|[+-]\d{2}(?::?\d{2})?)$")
-        normalized = (
-            values.str.replace(r"([+-]\d{2})$", "${1}:00")
-            .str.replace(r"([+-]\d{2})(\d{2})$", "${1}:${2}")
-            .str.replace(r"Z$", "+00:00")
-        )
-        parsed = (
-            pl.when(explicit_timezone)
-            .then(normalized.str.to_datetime(time_zone="UTC", strict=False))
-            .otherwise(pl.lit(None, dtype=pl.Datetime(time_zone="UTC")))
-        )
-    elif isinstance(dtype, pl.Datetime) and dtype.time_zone:
-        parsed = pl.col(timestamp_column).dt.convert_time_zone("UTC")
-    else:
-        raise ValueError("Temporal split requires timezone-aware event timestamps")
-
+    parsed = utc_observation_time(source, timestamp_column)
     prepared = source.with_columns(parsed.alias("__sos_event_time"))
     start_calibration = train_end.astimezone(timezone.utc)
     start_test = calibration_end.astimezone(timezone.utc)

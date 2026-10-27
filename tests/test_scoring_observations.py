@@ -43,6 +43,38 @@ def test_ranked_scoring_rows_reuses_immutable_artifact_without_a_policy(tmp_path
     assert [item["row_index"] for item in only_alerts["items"]] == [1, 2, 3]
 
 
+
+def test_ranked_scoring_rows_preserves_timestamp_and_features_for_scored_rows(tmp_path, monkeypatch):
+    """점수순 정렬 이후에도 원본 관측 시각은 해당 Feature·행 번호에 붙어 있어야 한다."""
+    path = tmp_path / "timestamps.parquet"
+    pq.write_table(pa.Table.from_pylist([
+        {"row_index": 0, "anomaly_score": 0.22, "features": {"count": 1.0},
+         "observed_at": "2026-01-01T00:00:00+00:00"},
+        {"row_index": 1, "anomaly_score": 0.91, "features": {"count": 2.0},
+         "observed_at": "2026-01-01T00:30:00+00:00"},
+        {"row_index": 2, "anomaly_score": 0.66, "features": {"count": 3.0},
+         "observed_at": "2026-01-01T01:00:00+00:00"},
+    ]), path)
+
+    @contextmanager
+    def local_cache(*_args):
+        yield path
+
+    monkeypatch.setattr(scoring_observations, "cached_dataset_file", local_cache)
+    scoring = {"id": "with-time", "sha256": "sha", "location": "ignored"}
+    page = scoring_observations.ranked_scoring_rows(None, scoring, 2, None)
+    assert [(item["row_index"], item["features"]["count"], item["observed_at"])
+            for item in page["items"]] == [
+        (1, 2.0, "2026-01-01T00:30:00+00:00"),
+        (2, 3.0, "2026-01-01T01:00:00+00:00"),
+    ]
+    remainder = scoring_observations.ranked_scoring_rows(
+        None, scoring, 2, page["next_cursor"])
+    assert remainder["items"][0]["row_index"] == 0
+    assert remainder["items"][0]["observed_at"] == "2026-01-01T00:00:00+00:00"
+
+
+
 def test_ranked_scoring_row_lookup_and_cursor_conflict(tmp_path, monkeypatch):
     path = tmp_path / "scores.parquet"
     pq.write_table(pa.Table.from_pylist([

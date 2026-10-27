@@ -75,13 +75,14 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
 
 export function PipelineCandidateInvestigation({
   candidate, scoringResultId, modelRevisionId, canRun, canCancel, onOpenResource,
-  observationMode = false, scoreOrder,
+  observationMode = false, scoreOrder, isDefaultObservation = false,
 }: {
   candidate: Candidate; scoringResultId: string; modelRevisionId: string | null;
   scoreOrder?: number;
   canRun: boolean; canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   observationMode?: boolean;
+  isDefaultObservation?: boolean;
 }) {
   const subject = observationMode ? "관측치" : "후보";
   const [model, setModel] = useState<ModelRevision | null>(null);
@@ -223,9 +224,13 @@ export function PipelineCandidateInvestigation({
     } catch (e) { setError(formatError(e)); }
     finally { setBusy(false); }
   }
-  return <section className="pipeline-candidate-inspection" aria-label="선택한 후보 분석">
+  return <section className="pipeline-candidate-inspection"
+    aria-label={observationMode
+      ? isDefaultObservation ? "기본 표시 관측값 분석" : "선택한 관측값 분석"
+      : "선택한 후보 분석"}>
     <h5 id="pipeline-candidate-detail-heading" tabIndex={-1}>
-      {observationMode ? "선택한 관측값" : `선택한 후보 #${candidate.row_index.toLocaleString("ko-KR")}`}</h5>
+      {observationMode ? (isDefaultObservation ? "점수순 첫 번째 관측값 미리보기" : "선택한 관측값")
+        : `선택한 후보 #${candidate.row_index.toLocaleString("ko-KR")}`}</h5>
     <p>이상 점수 <strong>{format(candidate.anomaly_score)}</strong>
       {typeof scoreOrder === "number" ? ` · 점수순 ${scoreOrder.toLocaleString("ko-KR")}번째` : ""}
       {" · "}높을수록 모델이 더 특이하게 본 관측치입니다.</p>

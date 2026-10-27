@@ -42,8 +42,10 @@ try {
   assert.equal(new Set(representativeGroups.flatMap(group =>
     group.entries.map(([name]) => name))).size, 8);
   // 독립 Scoring 결과는 별도 접기·선택 없이 전체 근거를 바로 제공한다.
-  const { ScoringObservationExplorer } =
+  const { ScoringObservationExplorer, observationSelectionLabel } =
     await vite.ssrLoadModule("/src/ScoringObservationExplorer.tsx");
+  assert.equal(observationSelectionLabel(false), "기본 표시");
+  assert.equal(observationSelectionLabel(true), "현재 선택");
   const resultView = renderToStaticMarkup(React.createElement(ScoringObservationExplorer, {
     result: {
       id: "score-1", model_revision_id: "model-1", dataset_id: "dataset-1",
@@ -58,8 +60,9 @@ try {
   }));
   assert.match(resultView, /전체 이상 점수 분포/);
   assert.match(resultView, /분석한 관측값/);
-  assert.match(resultView, /선택 관측값 점수/);
-  assert.match(resultView, /점수순 위치/);
+  assert.match(resultView, /최고 이상 점수/);
+  assert.match(resultView, /평균 이상 점수/);
+  assert.doesNotMatch(resultView, /선택 관측값 점수/);
   assert.match(resultView, /판정 정책 미적용/);
   assert.match(resultView, /관측값 살펴보기/);
   assert.match(resultView, /분석 판본과 식별자/);
@@ -397,6 +400,21 @@ try {
       scoringResultId: "score-1", modelRevisionId: null,
       canRun: false, canCancel: false, onOpenResource: () => {},
     }));
+  assert.match(groupedObservation, /선택한 관측값/);
+  const defaultObservation = renderToStaticMarkup(
+    React.createElement(PipelineCandidateInvestigation, {
+      candidate: {
+        row_index: 0, anomaly_score: 0.91, features: { cnt_file_create: 2 },
+        observed_at: "2026-01-01T02:00:00+00:00",
+      },
+      scoreOrder: 1, observationMode: true, isDefaultObservation: true,
+      scoringResultId: "score-1", modelRevisionId: null,
+      canRun: false, canCancel: false, onOpenResource: () => {},
+    }));
+  assert.match(defaultObservation, /점수순 첫 번째 관측값 미리보기/);
+  assert.match(defaultObservation, /기본 표시 관측값 분석/);
+  assert.match(defaultObservation, /2026-01-01 02:00:00 UTC/);
+  assert.doesNotMatch(defaultObservation, /관측 시각·원본 관측치 ID 없음/);
   assert.match(groupedObservation, /활동 특징/);
   // 상단 대표 Feature를 그룹에서 중복 제거해도 학습 참조값은 잃지 않아야 한다.
   assert.match(groupedObservation, /Train 중앙값 모델 판본 없음/);

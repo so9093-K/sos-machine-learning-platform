@@ -403,6 +403,7 @@ class MLScoringRequest(BaseModel):
     label_column: str | None = Field(default=None, min_length=1, max_length=256)
     temporal_scope: MLScoringTemporalScope | None = None
     observation_id_column: str | None = Field(default=None, min_length=1, max_length=256)
+    observation_time_column: str | None = Field(default=None, min_length=1, max_length=256)
 
     @model_validator(mode="after")
     def validate_observation_column(self):
@@ -414,6 +415,15 @@ class MLScoringRequest(BaseModel):
             )
         ):
             raise ValueError("Observation ID cannot also be the label or time column")
+        if self.observation_time_column is not None and (
+            self.observation_time_column == self.label_column
+            or self.observation_time_column == self.observation_id_column
+            or (
+                self.temporal_scope is not None
+                and self.observation_time_column != self.temporal_scope.timestamp_column
+            )
+        ):
+            raise ValueError("Observation time must be separate from label/ID and match temporal scope")
         return self
 
 
