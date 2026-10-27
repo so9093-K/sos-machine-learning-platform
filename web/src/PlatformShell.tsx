@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
+import { dagsterUrl, isLocalOperatorHost, mlflowUrl } from "./operator-tools";
 import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
   type WorkspaceTab, type MLNavigationContext, type ResourceRoute } from "./PlatformNavigation";
 
@@ -11,9 +12,9 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "Dataset · Recipe · Transform" },
   pipelines: { eyebrow: "모델 실험실", title: "활동 이상 탐지", description: "활동 패턴을 이해하고, 모델을 사용하거나 직접 학습합니다." },
-  ml: { eyebrow: "MODELS", title: "Model Revisions", description: "불변 모델 판본 · 학습 이력 · 비교" },
+  ml: { eyebrow: "MODELS", title: "모델 버전", description: "불변 모델 판본 · 학습 이력 · 비교" },
   training: { eyebrow: "TRAINING", title: "모델 학습", description: "Dataset · Feature · Training Job" },
-  scoring: { eyebrow: "SCORING", title: "Scoring Results", description: "모델 판본 · 점수화 · 결과 조회" },
+  scoring: { eyebrow: "SCORING", title: "점수 결과", description: "모델 판본 · 점수화 · 결과 조회" },
   policies: { eyebrow: "DECISION POLICY", title: "판정 정책", description: "점수 결과 · 정책 판본 · 재사용" },
   evaluations: { eyebrow: "EVALUATION", title: "평가 결과", description: "평가 근거 · 레이블 · 지표" },
   explanations: { eyebrow: "EXPLANATION", title: "점수 설명", description: "관측 결과 · 국소 민감도" },
@@ -46,8 +47,11 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
   children: ReactNode;
 }) {
   const [localOperatorHost, setLocalOperatorHost] = useState(false);
+  // 좁은 화면에서는 메뉴가 업무 화면을 밀어내지 않도록 접어 두고, 화면 이동 후 다시 접는다.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => { setMenuOpen(false); }, [section]);
   useEffect(() => {
-    setLocalOperatorHost(["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
+    setLocalOperatorHost(isLocalOperatorHost());
   }, []);
   const label = pageLabels[section];
   const title = section === "overview" ? `${brandName} Workspace` : label.title;
@@ -56,23 +60,31 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
   }, [section, title, brandName]);
   return <div className="shell">
     <aside className="sidebar">
-      <InstanceBrand canEdit={canConfigure} brandName={brandName}
-        brandReady={brandReady} brandLoadError={brandLoadError} onBrandChange={onBrandChange}
-        onBrandRetry={onBrandRetry} />
+      <div className="sidebar-top">
+        <InstanceBrand canEdit={canConfigure} brandName={brandName}
+          brandReady={brandReady} brandLoadError={brandLoadError} onBrandChange={onBrandChange}
+          onBrandRetry={onBrandRetry} />
+        <button type="button" className="secondary sidebar-menu-toggle" aria-expanded={menuOpen}
+          aria-controls="sos-sidebar-menu" onClick={() => setMenuOpen(open => !open)}>
+          {menuOpen ? "메뉴 닫기" : "메뉴"}
+        </button>
+      </div>
+      <div id="sos-sidebar-menu" className={"sidebar-menu" + (menuOpen ? " open" : "")}>
       <PlatformNavigation active={section} onNavigate={onNavigate}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit} />
       {dataSidebar}
       {localOperatorHost && (canInspectStorage || canViewAudit) && <div className="operator-tools">
         <span className="eyebrow">로컬 운영 도구</span>
-        <a href="http://localhost:9607" target="_blank" rel="noopener noreferrer">
+        <a href={dagsterUrl()} target="_blank" rel="noopener noreferrer">
           Dagster · Workflow Run/실행 로그 ↗
         </a>
-        <a href="http://localhost:9606" target="_blank" rel="noopener noreferrer">
+        <a href={mlflowUrl()} target="_blank" rel="noopener noreferrer">
           MLflow · 연구 Run/모델 Registry ↗
         </a>
         <small>운영자용 별도 관리 UI입니다. 같은 PC에서만 접속할 수 있으며
           SOS 로그인 권한이 이 도구에 적용되는 것은 아닙니다.</small>
       </div>}
+      </div>
       <div className="sidebar-bottom">
         <a href="/docs" target="_blank" rel="noreferrer">↗ Scalar API Reference</a>
       </div>

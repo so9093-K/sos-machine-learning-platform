@@ -8,6 +8,8 @@ import hashlib
 import re
 from .mlflow_errors import MLflowDeliveryError
 
+DEFAULT_GROUP_TITLE = "기본 활동 이상 탐지"
+
 
 def registered_model_name(model: dict) -> str:
     """Actor 원문을 Registry 이름에 노출하지 않는 안정적인 이름."""
@@ -87,6 +89,19 @@ def verify_registered_version(client, model: dict) -> None:
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
 
 
+def _version_description(model: dict) -> str:
+    """MLflow 운영자에게 입력 계약과 SOS 무결성 태그의 의미를 알린다. SOS는 이 설명을 읽지 않는다."""
+    features = model.get("features")
+    count = f" · 입력 Feature {len(features)}개" if isinstance(features, list) else ""
+    version = model.get("dataset_version")
+    dataset = f" · Dataset 판본 {version[:12]}" if isinstance(version, str) and version else ""
+    return (
+        f"SOS 학습 Job {model.get('job_id')}의 Isolation Forest 모델{count}{dataset}.\n\n"
+        "sos.job_id·sos.sha256 태그는 SOS가 모델 파일 무결성을 대조하는 값입니다. "
+        "수정하거나 삭제하면 SOS에서 이 버전을 사용할 수 없습니다."
+    )
+
+
 def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
     """한 학습 Job의 단일 Registry 판본을 검색 후 생성한다.
 
@@ -135,10 +150,14 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
         # 이미 버전이 있는데 Registry 그룹은 없다는 불일치 상태에서는 재생성 금지.
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
     else:
-        client.post("registered-models/create", {
-            "name": name,
-            "tags": [{"key": "sos.source", "value": "sos-platform"}],
-        })
+        tags = [{"key": "sos.source", "value": "sos-platform"}]
+        # 기본 그룹은 학습 시 처음 생성되므로 SOS 그룹 생성 API와 같은 제목·보관 태그를 붙인다.
+        if (model.get("registry_key") or "default") == "default":
+            tags += [
+                {"key": "sos.title", "value": DEFAULT_GROUP_TITLE},
+                {"key": "sos.archived", "value": "false"},
+            ]
+        client.post("registered-models/create", {"name": name, "tags": tags})
     if existing:
         item = existing[0]
         if (
@@ -149,6 +168,7 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
     else:
         result = client.post("model-versions/create", {
             "name": name, "source": source, "run_id": run_id,
+            "description": _version_description(model),
             "tags": [
                 {"key": "sos.job_id", "value": job_id},
                 {"key": "sos.sha256", "value": digest},

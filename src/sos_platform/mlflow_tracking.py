@@ -15,6 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from .dagster_workflows import workflow_stage_of_job
 from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
 from .mlflow_errors import MLflowDeliveryError
@@ -177,6 +178,35 @@ def _job_experiment_title(store, job: dict) -> str:
     return training_job["spec"].get("experiment_title") or DEFAULT_EXPERIMENT
 
 
+def _training_params(spec: dict) -> list[dict]:
+    """Run 비교·재현에 필요한 학습 입력 조건을 식별자·열거값·수치로만 보낸다.
+
+    Feature 이름은 사용자 Dataset의 컬럼명이므로 원문 대신 개수와 순서 포함 지문을 보낸다.
+    """
+    params: list[dict] = []
+    features = spec.get("features")
+    if isinstance(features, list) and all(isinstance(item, str) for item in features):
+        digest = hashlib.sha256(json.dumps(features, ensure_ascii=False).encode()).hexdigest()
+        params += [
+            {"key": "sos.feature_count", "value": str(len(features))},
+            {"key": "sos.feature_set_sha256", "value": digest[:16]},
+        ]
+    missing = spec.get("missing_policy")
+    if missing in ("reject", "train_median"):
+        params.append({"key": "sos.missing_policy", "value": missing})
+    selection = spec.get("training_input") or {}
+    if selection.get("mode") in ("all", "sample"):
+        params.append({"key": "sos.training_input_mode", "value": selection["mode"]})
+        for key in ("rows", "seed"):
+            if type(selection.get(key)) is int:
+                params.append({"key": f"sos.training_input_{key}", "value": str(selection[key])})
+    split = spec.get("temporal_split") or {}
+    for key in ("train_end", "calibration_end"):
+        if isinstance(split.get(key), str) and split[key]:
+            params.append({"key": f"sos.{key}", "value": split[key]})
+    return params
+
+
 def send_to_mlflow(
     client: MLflowClient,
     job: dict,
@@ -184,11 +214,13 @@ def send_to_mlflow(
     known_run_id: str | None,
     remember_run: Callable[[str], None],
     experiment_title: str | None = None,
+    workflow: dict | None = None,
 ) -> str:
     """Sos Job ID를 외부 Run 검색 키로 사용해 중단 후 재전송한다.
 
     응답이 소실된 신규 Run 생성은 전송 전 검색으로 최대한 복구하나,
     MLflow 서버의 비원자적 search/create 때문에 완전한 exactly-once는 보장하지 않는다.
+    등록형 Workflow 단계 Job은 분석·단계 태그와 Dagster 단계명을 쓴 Run 이름으로 묶는다.
     """
     if job["status"] not in ("Succeeded", "Failed", "Cancelled") or not job["kind"].startswith("ml_"):
         raise ValueError("Only terminal ML jobs can be tracked")
@@ -218,7 +250,11 @@ def send_to_mlflow(
             started_ms, _ = _job_event_times(job)
             create_payload = {
                 "experiment_id": experiment,
-                "run_name": f"sos-{job['kind']}-{job['id'][:8]}",
+                # Workflow 단계는 Dagster op 이름과 같은 단계명으로 두 운영 UI를 대조할 수 있게 한다.
+                "run_name": (
+                    f"sos-workflow-{workflow['submission_id'][:8]}-{workflow['stage']}"
+                    if workflow else f"sos-{job['kind']}-{job['id'][:8]}"
+                ),
                 "tags": [
                     {"key": "sos.job_id", "value": job["id"]},
                     {"key": "sos.job_kind", "value": job["kind"]},
@@ -248,13 +284,27 @@ def send_to_mlflow(
         for key, value in sorted(job["spec"].get("params", {}).items()):
             if key in supported and type(value) in (str, int, float, bool):
                 params.append({"key": f"sos.{key}", "value": str(value)})
+        params += _training_params(job["spec"])
+    if job["kind"] == "ml_explain":
+        method = job["spec"].get("method")
+        if isinstance(method, str) and method:
+            params.append({"key": "sos.explanation_method", "value": method})
+        if type(job["spec"].get("row_index")) is int:
+            params.append({"key": "sos.row_index", "value": str(job["spec"]["row_index"])})
+    tags = [{"key": "sos.source", "value": "sos-platform"}]
+    if workflow:
+        tags += [
+            {"key": "sos.workflow_id", "value": workflow["definition_id"]},
+            {"key": "sos.workflow_submission_id", "value": workflow["submission_id"]},
+            {"key": "sos.workflow_stage", "value": workflow["stage"]},
+        ]
     client.post(
         "runs/log-batch",
         {
             "run_id": run_id,
             "metrics": _numeric_metrics(job),
             "params": params,
-            "tags": [{"key": "sos.source", "value": "sos-platform"}],
+            "tags": tags,
         },
     )
     _, finished_ms = _job_event_times(job)
@@ -294,6 +344,7 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
             known_run_id=export["run_id"],
             remember_run=lambda value: store.save_tracking_run_id(job_id, value),
             experiment_title=_job_experiment_title(store, job),
+            workflow=workflow_stage_of_job(store, job),
         )
         if job["kind"] == "ml_train" and job["status"] == "Succeeded":
             model_id = (job.get("result") or {}).get("model_revision_id")

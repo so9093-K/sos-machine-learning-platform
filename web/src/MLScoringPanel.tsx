@@ -6,6 +6,7 @@ import type { MLResourceKind } from "./PlatformNavigation";
 import type {
   Dataset, DatasetColumns, MLScoringJob, MLScoringJobSummary, ModelRevision, ScoringResult,
 } from "./types";
+import { jobStatusLabel } from "./display-format";
 
 type Props = {
   model: ModelRevision;
@@ -286,7 +287,7 @@ export function MLScoringPanel({
       <strong>이 모델의 Scoring 이력</strong>
       {available.map(item => <button key={item.id} className="secondary"
         onClick={() => void selectHistory(item.id)}>
-        {item.id.slice(0, 8)} · {item.status}
+        {item.id.slice(0, 8)} · {jobStatusLabel(item.status)}
       </button>)}
       {available.length === 0 && <p className="hint">현재 조회한 이력에 이 모델의 Scoring Job이 없습니다.</p>}
       {nextCursor && <button className="secondary"

@@ -36,6 +36,24 @@ DEFINITIONS = (
         "파일이 비어 있거나 지원되는 형식의 데이터 구조·인코딩이 올바르지 않습니다.",
         "validation",
     ),
+    spec(
+        "SOS-UPLOAD-ENCODING",
+        "UTF-8이 아닌 파일",
+        "UTF-8로 저장된 파일만 등록할 수 있습니다. Excel에서는 'CSV UTF-8(쉼표로 분리)' 형식으로 다시 저장해 올려주세요.",
+        "validation",
+    ),
+    spec(
+        "SOS-UPLOAD-STRUCTURE",
+        "표 구조 검사 실패",
+        "첫 행에는 비어 있지 않고 서로 다른 컬럼명이 필요하며, 모든 행의 열 개수가 같고 빈 행이 없어야 합니다. CSV는 쉼표(,)로 구분해야 합니다.",
+        "validation",
+    ),
+    spec(
+        "SOS-DATASET-UNREADABLE",
+        "등록 파일 해석 실패",
+        "이 Dataset의 원본 파일을 현재 해석 규칙으로 읽을 수 없습니다. UTF-8 인코딩·쉼표 구분·일정한 열 개수를 확인한 뒤 새 Dataset으로 다시 등록하세요.",
+        "validation",
+    ),
     spec("SOS-API-NOT-FOUND", "리소스 부재", "요청한 리소스를 찾을 수 없습니다.", "not_found"),
     spec(
         "SOS-API-METHOD-NOT-ALLOWED",

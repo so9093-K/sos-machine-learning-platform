@@ -45,7 +45,7 @@ def save_upload_file(
         reader = reader_for_suffix(staged.suffix)
         options = reader.upload_options(read_options)
         try:
-            reader.validate(staged.path, options)
+            row_count = reader.inspect_upload(staged.path, options)
             lf = reader.scan_polars(staged.path, options)
             if not lf.collect_schema().names():
                 raise PlatformError("SOS-UPLOAD-INVALID")
@@ -66,6 +66,7 @@ def save_upload_file(
                 location=location,
                 version=staged.sha256,
                 parse_options=options,
+                row_count=row_count,
                 write_id=write_id,
                 owner_actor=owner_actor,
             )

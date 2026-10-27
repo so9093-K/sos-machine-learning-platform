@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsCoreOption } from "echarts";
 import { formatError, request } from "./api";
 import { DataChart } from "./DataChart";
+import { formatObservedAt } from "./display-format";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { ScoringObservations, ScoringResult } from "./types";
@@ -141,7 +142,8 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
             onClick={() => setSelectedRow(item.row_index)}>
             <span className="scoring-observation-rank">{index + 1}</span>
             <span className="scoring-observation-identity">
-              <strong>{item.observed_at ?? "결과 행 #" + item.row_index.toLocaleString("ko-KR")}</strong>
+              <strong title={item.observed_at ?? undefined}>{item.observed_at
+                ? formatObservedAt(item.observed_at) : "결과 행 #" + item.row_index.toLocaleString("ko-KR")}</strong>
               <small>결과 행 #{item.row_index.toLocaleString("ko-KR")}</small>
             </span>
             <span className="scoring-observation-score">

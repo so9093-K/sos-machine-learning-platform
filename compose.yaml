@@ -106,6 +106,9 @@ services:
     environment:
       SOS_WEB_PORT: "9601"
       SOS_API_INTERNAL_URL: http://api:9602
+      # 브라우저의 로컬 운영 도구 링크가 실제 공개 포트를 따르도록 전달한다.
+      SOS_DAGSTER_PORT: ${SOS_DAGSTER_PORT:-9607}
+      SOS_MLFLOW_PORT: ${SOS_MLFLOW_PORT:-9606}
     ports:
       - "127.0.0.1:${SOS_WEB_PORT:-9601}:9601"
     depends_on:

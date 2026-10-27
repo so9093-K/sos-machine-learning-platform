@@ -3,6 +3,7 @@ import { request, formatError } from "./api";
 import { explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
 import { AnalysisEvidence, analysisScopeLabel, dataSelectionLabel } from "./AnalysisEvidence";
 import type { Dataset, Job, JobSummary, ExplorationJob, ExplorationJobSummary } from "./types";
+import { jobStatusLabel } from "./display-format";
 
 type AnyJobSummary = JobSummary | ExplorationJobSummary;
 
@@ -92,7 +93,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
 
   return <section className="panel" aria-label="실행 작업">
     <div className="panel-head"><div>
-      <h3>Execution Jobs</h3>
+      <h3>데이터·탐색 작업</h3>
       <p>모든 데이터셋의 작업을 조회합니다. 취소 요청과 실제 취소 완료는 구분합니다.</p>
     </div><button className="secondary" onClick={onRefresh}>새로고침</button></div>
     {jobs.length === 0 && <p className="muted">아직 제출된 작업이 없습니다. 데이터셋을 선택해 EDA 또는 Feature Job을 실행하세요.</p>}
@@ -104,7 +105,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
             job.kind === "exploration" ? "Full Discovery Analysis" : "Feature Transform"}</strong>
           <small>{job.id}</small>
         </div><span className={`status ${job.status.toLowerCase()}`}>
-          {job.status}{job.cancel_requested ? " · 취소 요청 중" : ""}
+          {jobStatusLabel(job.status)}{job.cancel_requested ? " · 취소 요청 중" : ""}
         </span></div>
         <div className="job-metadata">
           <span>입력 데이터 · {datasets.find(d => d.id === job.dataset_id)?.name ?? job.dataset_id}</span>
@@ -141,7 +142,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
           </div>}
           {!detailById[job.id] && !detailErrors[job.id] && <p role="status">상세 이력을 확인하고 있습니다.</p>}
           {detailById[job.id]?.attempts.map(attempt => <p key={attempt.id} className="muted">
-            #{attempt.number} {attempt.status} · {attempt.started_at}
+            #{attempt.number} {jobStatusLabel(attempt.status)} · {attempt.started_at}
             {attempt.error ? ` · ${attempt.error}` : ""}
             {attempt.error_code ? ` · ${attempt.error_code}` : ""}
             {attempt.failure_stage ? ` · 단계: ${attempt.failure_stage}` : ""}

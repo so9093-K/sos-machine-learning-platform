@@ -311,7 +311,10 @@ def columns(store: Store, dataset: dict, search: str = "") -> dict:
 
 
 def overview(store: Store, dataset: dict) -> dict:
-    """Parquet는 Footer의 행 수를, CSV는 미계산 상태를 명시한다."""
+    """Parquet는 Footer의 행 수를, CSV·TSV는 등록 시 전수 검사한 행 수를 사용한다.
+
+    전수 검사 도입 전에 등록된 파일은 행 수를 추정하지 않고 미계산으로 표시한다.
+    """
     row_count = None
     basis = "not_computed"
     size = None
@@ -322,6 +325,9 @@ def overview(store: Store, dataset: dict) -> dict:
             row_count = reader.metadata_row_count(path)
             if row_count is not None:
                 basis = "parquet_metadata"
+            elif dataset.get("row_count") is not None:
+                row_count = int(dataset["row_count"])
+                basis = "upload_validation"
     with source_connection(store, dataset) as conn:
         found = _columns(conn)
     return {

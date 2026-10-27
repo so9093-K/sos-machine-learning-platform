@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { explorationMetricLabel } from "./exploration-format";
-import { AnalysisEvidence, analysisScopeLabel, dataSelectionLabel } from "./AnalysisEvidence";
+import { AnalysisEvidence, analysisScopeLabel, coversAllRows, dataSelectionLabel } from "./AnalysisEvidence";
+import { formatDtype, jobStatusLabel, roleCandidateLabel } from "./display-format";
 import type { DatasetOverview, ExplorationRequest, Job } from "./types";
 
 import type { components } from "./api.generated";
@@ -90,6 +91,11 @@ export function UnderstandingPanel({
   const constantCount = columns.filter(col => col.is_constant).length;
   const missingCount = columns.filter(col => col.null_count > 0).length;
   const timeCount = columns.filter(col => col.roles.some(r => r.role === "temporal")).length;
+  // 표본 상한보다 데이터가 작으면 Reservoir 표본이 곧 전체 행이다.
+  const completeSample = Boolean(profile && profile.scope === "sample" &&
+    coversAllRows(profile.row_count, profile.sample_limit));
+  const scopeLabel = profile
+    ? completeSample ? analysisScopeLabel("full") : analysisScopeLabel(profile.scope) : "";
   return <section className="understanding-content" aria-label="Dataset Understanding">
     <div className="panel-head"><div><h3>원본 데이터 개요</h3>
       <p>데이터 등록과 프로파일 계산은 별도 작업입니다. 원본 정보부터 확인하세요.</p>
@@ -115,13 +121,15 @@ export function UnderstandingPanel({
       </div>
       <p className="hint">{overview.row_count_basis === "parquet_metadata"
         ? "행 수는 Parquet 메타데이터 기준입니다."
-        : "이 데이터 소스의 원본 행 수는 메타데이터에서 계산하지 않았습니다."}
+        : overview.row_count_basis === "upload_validation"
+          ? "행 수는 등록할 때 파일 전체를 검사해 확인했습니다."
+          : "이 Dataset은 등록 시 행 수를 기록하지 않아 원본 행 수를 계산하지 않았습니다."}
         {" · "}{profile ? "원본 규모와 분석 결과의 범위는 구별합니다." : "분포와 역할 후보는 별도 분석에서 계산됩니다."}</p>
       {!profile && <><h4>기본 스키마</h4>
       <div className="table-scroll"><table><thead><tr>
         <th>컬럼</th><th>자료형</th>
       </tr></thead><tbody>{overview.columns.map(col => <tr key={col.name}>
-        <td>{col.name}</td><td>{col.dtype}</td>
+        <td>{col.name}</td><td title={col.dtype}>{formatDtype(col.dtype)}</td>
       </tr>)}</tbody></table></div></>}
     </>}
     <div className="panel-head"><div><h3>데이터 프로파일</h3>
@@ -129,8 +137,8 @@ export function UnderstandingPanel({
     {!state && !error && <p role="status">분석 실행 상태를 확인하는 중입니다.</p>}
     {error && <div role="alert">{error} <button onClick={() => setRevision(n => n + 1)}>다시 조회</button></div>}
     {state && <p className="hint">원본 판본 {state.version.slice(0, 12)} · 분석 상태 {
-      state.job_status ?? (profile ? "완료" : "미실행")
-    }{state.job_id && <> · Job {state.job_id}</>}</p>}
+      state.job_status ? jobStatusLabel(state.job_status) : profile ? "완료" : "미실행"
+    }{state.job_id && <> · 작업 <code title={state.job_id}>{state.job_id.slice(0, 8)}</code></>}</p>}
     {state?.job_id && <button className="secondary" onClick={onViewJobs}>
       전체 Jobs에서 진행 확인 ↗
     </button>}
@@ -139,7 +147,7 @@ export function UnderstandingPanel({
     </p>}
     {!profile && !state?.job_status && canCreate && <p className="hint">
       기본 분석은 Reservoir 방식으로 최대 1,000행을 선택합니다. 원본 읽기와 Worker 자원을 사용하므로 실행할 때에만 Job을 접수합니다.
-      분석 없이 데이터 조회나 Preparation으로 이동할 수도 있습니다.
+      분석 없이 데이터 조회나 데이터 준비로 이동할 수도 있습니다.
     </p>}
     {profile && <>
       <div className="cards">
@@ -149,8 +157,10 @@ export function UnderstandingPanel({
         }</strong></div>
       </div>
       <AnalysisEvidence
-        summary={analysisScopeLabel(profile.scope) + " · " + profile.row_count.toLocaleString() + "행 분석"}
-        note={profile.scope === "sample"
+        summary={scopeLabel + " · " + profile.row_count.toLocaleString() + "행 분석"}
+        note={completeSample
+          ? `표본 상한(${(profile.sample_limit ?? 0).toLocaleString()}행)보다 데이터가 작아 전체 행을 분석했습니다.`
+          : profile.scope === "sample"
           ? profile.sampling_method === "reservoir"
             ? "무작위로 선택된 데이터의 결과입니다. 전체 분포를 대표한다고 보장하지 않습니다."
             : "부분 데이터 분석 결과입니다. 전체 데이터의 특성으로 단정하지 마세요."
@@ -172,7 +182,7 @@ export function UnderstandingPanel({
       />
       <div className="profile-findings" aria-label="주요 데이터 특성">
         <div><strong>{constantCount.toLocaleString()}</strong>
-          <span>{profile.scope === "sample" ? "표본 내 상수 후보" : "전체 상수 컬럼"}</span></div>
+          <span>{profile.scope === "sample" && !completeSample ? "표본 내 상수 후보" : "전체 상수 컬럼"}</span></div>
         <div><strong>{missingCount.toLocaleString()}</strong><span>결측 포함 컬럼</span></div>
         <div><strong>{timeCount.toLocaleString()}</strong><span>시간 역할 후보</span></div>
       </div>
@@ -198,12 +208,12 @@ export function UnderstandingPanel({
       <div className="table-scroll"><table><thead><tr>
         <th>컬럼</th><th>자료형</th><th>NULL</th><th>NaN</th><th>고유값</th><th>역할 후보 (미확정)</th>
       </tr></thead><tbody>{filteredColumns.map(col => <tr key={col.name}>
-        <td>{col.name}</td><td>{col.dtype}</td>
+        <td>{col.name}</td><td title={col.dtype}>{formatDtype(col.dtype)}</td>
         <td>{col.null_ratio === null ? "—" : (col.null_ratio * 100).toFixed(1) + "%"}</td>
         <td>{col.nan_count === null ? "—" : col.nan_count.toLocaleString()}</td>
         <td>{col.distinct_exact ? "" : "≈ "}{col.distinct_count.toLocaleString()}</td>
         <td>{col.is_constant ? "상수 · " : ""}
-          {col.roles.map(r => r.role + " (" + r.basis + ")").join(", ") || "미확인"}</td>
+          {col.roles.map(r => roleCandidateLabel(r.role, r.basis)).join(", ") || "미확인"}</td>
       </tr>)}</tbody></table></div>
       {columns.some(col => !col.distinct_exact) && <p className="hint">
         ≈ 표시는 고유값 수가 근사 계산되었음을 뜻합니다. 다른 컬럼 통계까지 근사라는 의미는 아닙니다.
@@ -215,7 +225,7 @@ export function UnderstandingPanel({
       <div className="example-grid">{profile.insights.map((item, i) => <article
         className="example-card" key={item.kind + i}>
         <h4>{item.title}</h4><p>{item.reason}</p>
-        <p className="hint">구성 근거: {analysisScopeLabel(profile.scope)}
+        <p className="hint">구성 근거: {scopeLabel}
           {" · "}실행 범위: 별도로 제한 조회한 부분 데이터</p>
         <p className="hint">분석 조건: {item.request.column} · {explorationMetricLabel(item.request.metric)}{
           item.request.group_by ? ` · 그룹 ${item.request.group_by}` : " · 전체 그룹"

@@ -7,6 +7,11 @@ export function analysisScopeLabel(scope: string): string {
   return "분석 범위 미확인";
 }
 
+/** 제한 조회·표본 상한보다 적은 행이 반환됐다면 상한에 걸리지 않고 전체 행을 분석한 것이다. */
+export function coversAllRows(rowCount: number, limit: number | null | undefined): boolean {
+  return limit != null && rowCount < limit;
+}
+
 export function dataSelectionLabel(method: string): string {
   switch (method) {
     case "reservoir": return "무작위 추출 (Reservoir)";

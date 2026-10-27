@@ -6,6 +6,8 @@ import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation
 import { PipelineModelUsage } from "./PipelineModelUsage";
 import { ModelLabIntroduction } from "./ModelLabIntroduction";
 import { MLTrackingStatus } from "./MLTrackingStatus";
+import { formatObservedAt, jobStatusLabel } from "./display-format";
+import { dagsterRunsForAnalysis, isLocalOperatorHost, mlflowRegistryUrl } from "./operator-tools";
 import type { Dataset, Example, PipelineDefinition as Definition, PipelineCheck as Check,
   PipelineRun as Run, PipelineJob, PipelineCandidates as CandidatePage } from "./types";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
@@ -17,9 +19,10 @@ const resultId = (job: PipelineJob | undefined, key: string): string | null => {
 
 const PIPELINE = "activity-anomaly-if";
 const stageLabel: Record<string,string> = {
-  preflight: "시간 범위·데이터 검사", training: "모델 학습", calibration: "Calibration 점수화",
-  policy: "판정 기준 생성", test: "Test 점수화", evaluation: "정책 적용 평가",
+  preflight: "시간 범위·데이터 검사", training: "모델 학습", calibration: "보정 구간 점수 계산",
+  policy: "판정 기준 설정", test: "Test 구간 점수 계산", evaluation: "이상 후보 판정",
 };
+const DEFAULT_STAGES = Object.keys(stageLabel);
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 const statusLabel: Record<Run["status"], string> = {
   Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
@@ -31,6 +34,46 @@ const count = (value: number) => value.toLocaleString("ko-KR");
 export function isRegistrationPending(run: Run | null): boolean {
   return run?.status === "Running" && run.current_stage === "training" &&
     (run.stages ?? []).some(stage => stage.name === "training" && stage.job?.status === "Succeeded");
+}
+
+type StageState = "done" | "active" | "registering" | "waiting" | "failed" | "cancelled" | "skipped";
+const stageStateText: Record<StageState, string> = {
+  done: "완료", active: "진행 중", registering: "모델 등록 확인 중", waiting: "대기",
+  failed: "실패", cancelled: "취소됨", skipped: "실행 안 됨",
+};
+const stageMarker: Record<StageState, string> = {
+  done: "✓", active: "●", registering: "●", waiting: "○", failed: "✕", cancelled: "–", skipped: "–",
+};
+
+/** 실제 단계 Job 상태만 표시한다. 단계 안의 진행률은 측정할 수 없으므로 추정하지 않는다. */
+function pipelineStageStates(run: Run, stages: readonly string[]): Array<{ stage: string; state: StageState }> {
+  const jobs = new Map((run.stages ?? []).map(item => [item.name, item.job]));
+  const registering = isRegistrationPending(run);
+  return stages.map(stage => {
+    const job = jobs.get(stage);
+    if (stage === "training" && registering) return { stage, state: "registering" };
+    if (job?.status === "Succeeded") return { stage, state: "done" };
+    if (job?.status === "Failed") return { stage, state: "failed" };
+    if (job?.status === "Cancelled") return { stage, state: "cancelled" };
+    if (job || (run.current_stage === stage && !terminal.has(run.status))) return { stage, state: "active" };
+    return { stage, state: terminal.has(run.status) ? "skipped" : "waiting" };
+  });
+}
+
+function PipelineStageProgress({ run, stages }: { run: Run; stages: readonly string[] }) {
+  const states = pipelineStageStates(run, stages);
+  const done = states.filter(item => item.state === "done").length;
+  return <div className="pipeline-stage-progress">
+    <p className="pipeline-stage-count">{stages.length}단계 중 {done}단계 완료</p>
+    <ol aria-label="분석 단계 진행 상태">
+      {states.map(({ stage, state }) => <li key={stage} className={"pipeline-stage stage-" + state}
+        aria-current={state === "active" || state === "registering" ? "step" : undefined}>
+        <span className="pipeline-stage-marker" aria-hidden="true">{stageMarker[state]}</span>
+        <span className="pipeline-stage-name">{stageLabel[stage] ?? stage}</span>
+        <small>{stageStateText[state]}</small>
+      </li>)}
+    </ol>
+  </div>;
 }
 
 /** 마지막 히스토그램 구간만 오른쪽 경계를 포함한다. */
@@ -68,7 +111,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
 }) {
   const [localOperatorHost, setLocalOperatorHost] = useState(false);
   useEffect(() => {
-    setLocalOperatorHost(["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
+    setLocalOperatorHost(isLocalOperatorHost());
   }, []);
   const [catalog, setCatalog] = useState<Definition[]>([]);
   const [catalogError, setCatalogError] = useState("");
@@ -583,8 +626,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <div>
           <span className="eyebrow">학습 · 결과 탐구</span>
           <h3 id="pipeline-current-run-heading" tabIndex={-1}>{
-            run ? registrationPending ? "모델 학습 완료 · 모델 등록 상태 확인"
-            : "모델 학습 · " + statusLabel[run.status] : "학습 기록을 불러오는 중"
+            run ? "모델 학습 · " + statusLabel[run.status] : "학습 기록을 불러오는 중"
           }</h3>
         </div>
         <button type="button" className="secondary" disabled={exampleBusy}
@@ -603,6 +645,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           </dl>
         </details>
       </div>}
+      {run && <PipelineStageProgress run={run} stages={current?.stages ?? DEFAULT_STAGES} />}
       {run && runLoadError && <div className="pipeline-context-error" role="alert">
         <p>실행 상태를 다시 확인하지 못했습니다: {runLoadError}</p>
         <button type="button" className="secondary"
@@ -698,16 +741,17 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
             activeStage ? activeStage + " 단계 진행 중" : "실행 대기 또는 단계 전환 중"}</strong>
           {registrationPending ? <>
             <p>학습은 완료됐습니다. 결과 등록 확인 후 다른 시간 구간을 분석합니다.</p>
-            {trainingJob && <MLTrackingStatus key={trainingJob.id} jobId={trainingJob.id} />}
+            {trainingJob && <MLTrackingStatus key={trainingJob.id} jobId={trainingJob.id}
+              operatorLinks={canInspectOperations && localOperatorHost} />}
             {canInspectOperations && localOperatorHost && <details className="pipeline-operator-links">
               <summary>운영자용 Run·Registry 상세 확인</summary>
-              <p>Dagster의 Runs에서 Job <code>activity_anomaly_workflow</code>를 확인하고,
+              <p>Dagster에서 이 분석의 Run과 단계 로그를 확인하고,
                 MLflow의 Run ID 및 Registered Model Version과 대조할 수 있습니다.</p>
               <div className="actions">
-                <a href="http://localhost:9607" target="_blank" rel="noopener noreferrer">
-                  Dagster Runs 열기 ↗
+                <a href={dagsterRunsForAnalysis(run.id)} target="_blank" rel="noopener noreferrer">
+                  Dagster에서 이 분석 열기 ↗
                 </a>
-                <a href="http://localhost:9606" target="_blank" rel="noopener noreferrer">
+                <a href={mlflowRegistryUrl()} target="_blank" rel="noopener noreferrer">
                   MLflow 모델 Registry 열기 ↗
                 </a>
               </div>
@@ -716,12 +760,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           </> : null}
           {canCancel && <div className="pipeline-cancel-action">
             {registrationPending && <p className="hint">
-              Pipeline 취소는 남은 Workflow 실행의 중단 요청입니다.
+              실행 취소는 남은 단계의 중단 요청입니다.
               이미 완료된 학습 결과와 별도로 접수된 MLflow 등록 재시도는 삭제하거나 취소하지 않습니다.
             </p>}
             <button type="button" className="secondary"
               disabled={busy || run.cancel_requested} onClick={() => void cancel()}>
-              Pipeline 취소 요청
+              학습 실행 취소
             </button>
           </div>}
         </div>}
@@ -752,9 +796,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           </p>}
           {rows && <>
             {rows.items.length === 0 && <p>현재 조회에서 이상 후보가 없습니다.</p>}
-            {rows.items.length > 0 && <p className="pipeline-result-count">
-              점수순 {count(rows.items.length)}건 조회 · 현재 표시 {count(shownCandidates.length)}건
-            </p>}
+            {rows.items.length > 0 && (rows.next_cursor || candidateScoreRange) &&
+              <p className="pipeline-result-count">
+                점수순으로 {count(rows.items.length)}건을 불러왔습니다{rows.next_cursor ? " (후보가 더 있습니다)" : ""}
+                {candidateScoreRange ? ` · 점수 범위에 해당하는 ${count(shownCandidates.length)}건 표시` : ""}
+              </p>}
             {rows.items.length > 0 && shownCandidates.length === 0 &&
               <p className="hint">현재 불러온 후보에서 이 점수 구간과 일치하는 항목이 없습니다.
                 필터를 해제하거나 다음 후보를 불러와 확인하세요.</p>}
@@ -762,18 +808,18 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
               <div className="pipeline-candidate-list">
                 {shownCandidates.length > 0 && <div className="pipeline-candidate-top-panel">
                   <div className="pipeline-candidate-top-heading">
-                    <strong>{candidateScoreRange ? "선택한 점수 범위의 후보" : "점수가 높은 후보"}</strong>
-                    <span>현재 조회·필터 범위에서 {count(Math.min(3, shownCandidates.length))}건 표시</span>
+                    <strong>{candidateScoreRange ? "선택한 점수 범위의 상위 후보" : "점수가 높은 후보"}</strong>
                   </div>
                   <div className="pipeline-candidate-top-list" aria-label="조회한 이상 후보 목록">
                     {shownCandidates.slice(0, 3).map((item, i) => <button
                       key={item.row_index} type="button" className="ghost pipeline-candidate-top-item"
                       aria-pressed={selectedCandidate === item.row_index}
                       onClick={() => selectCandidateRow(item.row_index)}>
-                      <span className="pipeline-candidate-top-rank">표시 {i+1}</span>
+                      <span className="pipeline-candidate-top-rank">{i+1}위</span>
                       <span className="pipeline-candidate-top-meta">
-                        <strong>결과 행 {count(item.row_index)}</strong>
-                        {item.observed_at && <small>관측 시각 {item.observed_at}</small>}
+                        <strong title={item.observed_at ?? undefined}>{item.observed_at
+                          ? formatObservedAt(item.observed_at) : "결과 행 " + count(item.row_index)}</strong>
+                        {item.observed_at && <small>결과 행 {count(item.row_index)}</small>}
                       </span>
                       <span className="pipeline-candidate-top-score">
                         <small>이상 점수</small>
@@ -840,6 +886,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </section>}
         <details className="pipeline-evidence">
           <summary>단계별 실행 상태·분할 범위·기술 근거</summary>
+          {canInspectOperations && localOperatorHost && <p className="hint">
+            운영자 확인: <a href={dagsterRunsForAnalysis(run.id)} target="_blank"
+              rel="noopener noreferrer">Dagster에서 이 분석의 Run 열기 ↗</a>
+            {" "}(태그 sos/submission_id = {run.id})
+          </p>}
           {run.input_plan && <div className="steps">
             <strong>Worker가 확정한 실제 시간 분할</strong>
             <p>Train 종료: {new Date(run.input_plan.train_end).toLocaleString("ko-KR")} ·
@@ -856,7 +907,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
               const evaluation = resultId(entry?.job, "evaluation_revision_id");
               return <div className="ml-resource-row" key={stage}>
                 <strong>{stageLabel[stage] ?? stage}</strong>
-                <span>{entry ? entry.job.status : run.current_stage === stage ? "대기" : "미시작"}</span>
+                <span>{entry ? jobStatusLabel(entry.job.status) : run.current_stage === stage ? "대기" : "미시작"}</span>
                 {entry?.job.error_code && <small>오류 {entry.job.error_code}</small>}
                 {modelId && <button type="button" className="secondary"
                   onClick={() => onOpenResource("model", modelId)}>모델 결과 →</button>}

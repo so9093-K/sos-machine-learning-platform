@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { mergeById } from "./collections";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
-import { AnalysisEvidence, dataSelectionLabel } from "./AnalysisEvidence";
+import { AnalysisEvidence, coversAllRows, dataSelectionLabel } from "./AnalysisEvidence";
+import { formatDtype } from "./display-format";
 import { histogram, needsTimeOrder } from "./feature-utils";
 import { useFeatureEditor } from "./useFeatureEditor";
 import { FeaturePanel } from "./FeaturePanel";
@@ -152,6 +153,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     useDatasetOverview(isDataArea ? selected : "", reloadRevision);
   const { preview, profile, previewStatus, profileStatus, previewError, profileError } =
     useDatasetInspection(selected, reloadRevision, tab);
+  const profileComplete = Boolean(profile?.sampled &&
+    coversAllRows(profile.row_count, profile.sample_limit));
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const editor = useFeatureEditor({
     datasetId: selected, revision: reloadRevision, preview, onError: setError, withFeedback,
@@ -786,9 +789,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
                 (s, c) => s + c.nulls, 0).toLocaleString()}</strong></div>
             </div>
             <AnalysisEvidence
-              summary={(profile.sampled ? "부분 데이터 분석 · " : "전체 데이터 분석 · ")
+              summary={(profile.sampled && !profileComplete ? "부분 데이터 분석 · " : "전체 데이터 분석 · ")
                 + profile.row_count.toLocaleString() + "행 분석"}
-              note={profile.sampled
+              note={profileComplete
+                ? `조회 상한(${(profile.sample_limit ?? 0).toLocaleString()}행)보다 데이터가 작아 전체 행을 분석했습니다.`
+                : profile.sampled
                 ? "정렬 기준 없는 제한 조회 결과입니다. 전체 데이터의 분포를 대표하지 않습니다."
                 : "전체 데이터 대상 분석입니다. 개별 수치의 계산 정확도는 별도 확인이 필요합니다."}
               details={[
@@ -803,7 +808,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             <h4>컬럼 프로파일</h4><div className="table-scroll"><table><thead><tr>
               <th>컬럼</th><th>dtype</th><th>NULL</th><th>NaN</th><th>고유 값</th><th>평균</th>
             </tr></thead><tbody>{profile.columns.map(c => <tr key={c.name}>
-              <td>{c.name}</td><td>{c.dtype}</td><td>{c.nulls}</td>
+              <td>{c.name}</td><td title={c.dtype}>{formatDtype(c.dtype)}</td><td>{c.nulls}</td>
               <td>{c.nan_count ?? "—"}</td><td>{c.unique}</td>
               <td>{typeof c.mean === "number" ? c.mean.toFixed(3) : "—"}</td>
             </tr>)}</tbody></table></div>
@@ -850,7 +855,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           initialDatasetId={context.datasetId ?? ""}
           onDatasetSelected={datasetId => selectContext({ datasetId })}
           onOpenModel={id => openResource("model", id)}
-          canTrain={canRun} canCancel={canCancel} />}
+          canTrain={canRun} canCancel={canCancel}
+          canInspectOperations={canInspectStorage || canViewAudit} />}
       {resource && context.pipelineReturn && context.pipelineRunId &&
         <section className="pipeline-return" role="status">
           <div><strong>모델 실험실에서 열린 결과입니다.</strong>

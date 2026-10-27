@@ -22,6 +22,7 @@ from dagster import (
 )
 from sqlalchemy import text
 
+from sos_platform.dagster_workflows import workflow_job_key
 from sos_platform.pipeline_reference import FEATURES, PIPELINE_ID, PIPELINE_VERSION, STAGES
 from sos_platform.store import Store
 
@@ -47,7 +48,7 @@ def _submission(context: OpExecutionContext, store: Store) -> dict:
 
 def _job(context: OpExecutionContext, row: dict, stage: str, spec: dict, kind: str) -> dict:
     store = Store(os.environ.get("SOS_HOME", "/var/lib/sos"))
-    key = "workflow:" + row["id"] + ":" + stage
+    key = workflow_job_key(row["id"], stage)
     job = store.create_job(
         kind=kind,
         dataset_id=row["dataset_id"],
@@ -81,7 +82,7 @@ def _base_state(context: OpExecutionContext) -> tuple[Store, dict]:
     return store, _submission(context, store)
 
 
-@op
+@op(description="고정된 Dataset 판본의 입력 조건을 검사하고 Train·Calibration·Test 시간 분할을 확정하는 SOS Job을 실행합니다.")
 def preflight(context: OpExecutionContext) -> dict:
     store, row = _base_state(context)
     result = _job(context, row, "preflight", {
@@ -97,7 +98,7 @@ def preflight(context: OpExecutionContext) -> dict:
     return {"plan": plan}
 
 
-@op
+@op(description="Train 구간으로 Isolation Forest를 학습하는 SOS Job을 실행하고, MLflow Registry 등록이 확인될 때까지 기다립니다.")
 def training(context: OpExecutionContext, state: dict) -> dict:
     store, row = _base_state(context)
     plan = state["plan"]
@@ -143,7 +144,7 @@ def training(context: OpExecutionContext, state: dict) -> dict:
     return {**state, "model_id": model_id}
 
 
-@op
+@op(description="학습한 모델로 Calibration 구간을 점수화하는 SOS Job을 실행합니다.")
 def calibration(context: OpExecutionContext, state: dict) -> dict:
     _, row = _base_state(context)
     scope = {name: state["plan"][name] for name in
@@ -159,7 +160,7 @@ def calibration(context: OpExecutionContext, state: dict) -> dict:
     return {**state, "calibration_id": result["result"]["scoring_result_id"]}
 
 
-@op
+@op(description="Calibration 점수의 분위수로 판정 기준(Decision Policy)을 만드는 SOS Job을 실행합니다.")
 def policy(context: OpExecutionContext, state: dict) -> dict:
     _, row = _base_state(context)
     result = _job(context, row, "policy", {
@@ -170,7 +171,7 @@ def policy(context: OpExecutionContext, state: dict) -> dict:
     return {**state, "policy_id": result["result"]["policy_revision_id"]}
 
 
-@op
+@op(description="학습한 모델로 Test 구간을 점수화하는 SOS Job을 실행합니다.")
 def test(context: OpExecutionContext, state: dict) -> dict:
     _, row = _base_state(context)
     scope = {name: state["plan"][name] for name in
@@ -192,7 +193,7 @@ def test(context: OpExecutionContext, state: dict) -> dict:
     return {**state, "test_id": score_id}
 
 
-@op
+@op(description="Test 점수에 판정 기준을 적용해 이상 후보를 확정하는 SOS Job을 실행합니다.")
 def evaluation(context: OpExecutionContext, state: dict) -> None:
     _, row = _base_state(context)
     result = _job(context, row, "evaluation", {
@@ -212,7 +213,15 @@ def evaluation(context: OpExecutionContext, state: dict) -> None:
     return None
 
 
-@job(executor_def=in_process_executor, tags={"sos/workflow": PIPELINE_ID})
+@job(
+    executor_def=in_process_executor,
+    tags={"sos/workflow": PIPELINE_ID},
+    description=(
+        "SOS 활동 이상 탐지 분석. 실행은 SOS API로만 제출하며 태그 sos/submission_id가 SOS 분석 ID입니다. "
+        "각 단계는 같은 SOS Job을 멱등 키로 재사용하므로 여기서 Re-execute하면 완료된 단계 결과를 그대로 쓰고 "
+        "실패한 단계는 같은 이유로 다시 실패합니다. 다시 실행하려면 SOS에서 새 분석을 시작하세요."
+    ),
+)
 def activity_anomaly_workflow():
     evaluation(test(policy(calibration(training(preflight())))))
 
@@ -242,7 +251,7 @@ def _cancel_orphaned_sos_jobs(context: RunStatusSensorContext) -> None:
                 "WHERE actor_id=:actor AND submission_key=:key"
             ), {
                 "actor": row["owner_actor"],
-                "key": "workflow:" + submission_id + ":" + stage,
+                "key": workflow_job_key(submission_id, stage),
             }).scalar_one_or_none()
         if not job_id:
             continue

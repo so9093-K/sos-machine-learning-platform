@@ -1,6 +1,7 @@
 """PostgreSQL 테이블 정의. Alembic 마이그레이션의 기준 스키마다."""
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     Float,
@@ -26,6 +27,7 @@ datasets = Table(
     Column("location", Text, nullable=False),
     Column("version", Text, nullable=False),
     Column("parse_options", Text),
+    Column("row_count", BigInteger),
     Column("created_at", Text, nullable=False),
     Column("owner_actor", Text),
     Index("ix_datasets_created_at_id", "created_at", "id"),

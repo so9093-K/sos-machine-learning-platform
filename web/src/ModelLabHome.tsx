@@ -1,7 +1,36 @@
+import { useEffect, useState } from "react";
+import { request } from "./api";
+import type { MLflowModelVersionPage } from "./types";
+
+type ModelAvailability = "checking" | "available" | "none" | "unknown";
+
+/** 기본 모델 그룹의 첫 Registry 페이지로 사용 가능한 모델의 존재만 확인한다.
+ * 조회 실패나 남은 페이지가 있으면 빈 목록으로 단정하지 않는다.
+ */
+function useModelAvailability(): ModelAvailability {
+  const [state, setState] = useState<ModelAvailability>("checking");
+  useEffect(() => {
+    let active = true;
+    void request<MLflowModelVersionPage>("/api/ml/registry/models?registry_key=default")
+      .then(page => {
+        if (!active) return;
+        if (page.items.some(item => item.status === "READY")) setState("available");
+        else setState(page.next_page_token ? "unknown" : "none");
+      })
+      .catch(() => { if (active) setState("unknown"); });
+    return () => { active = false; };
+  }, []);
+  return state;
+}
+
 /** 활동 이상 탐지 주제: 처리 단계가 아니라 모델의 목적과 실제 사용 행동을 보여준다. */
 export function ModelLabHome({ onUse, onLearn }: {
   onUse: () => void; onLearn: () => void;
 }) {
+  const availability = useModelAvailability();
+  // 사용할 모델이 없으면 새 학습을, 있으면 모델 사용을 주요 행동으로 둔다. 확인 전에는 어느 쪽도 강조하지 않는다.
+  const useClass = availability === "available" ? undefined : "secondary";
+  const learnClass = availability === "none" ? undefined : "secondary";
   return <section className="model-lab-home" aria-labelledby="model-lab-home-heading">
     <div className="model-lab-home-lead">
       <div className="model-lab-home-copy">
@@ -40,15 +69,17 @@ export function ModelLabHome({ onUse, onLearn }: {
         <span className="model-lab-choice-icon" aria-hidden="true">↗</span>
         <h3>모델 사용해보기</h3>
         <p>이미 학습한 모델을 데이터에 적용해 이상 점수와 검토할 관측치를 확인합니다.</p>
-        <button type="button" onClick={onUse}>모델 사용하기 →</button>
+        <button type="button" className={useClass} onClick={onUse}>모델 사용하기 →</button>
       </article>
       <article className="model-lab-choice">
         <span className="model-lab-choice-icon" aria-hidden="true">✳</span>
         <h3>모델 학습해보기</h3>
         <p>준비된 예제 또는 내 데이터로 모델을 학습하고, 생성된 모델과 Test 결과를 살펴봅니다.</p>
-        <button type="button" className="secondary" onClick={onLearn}>모델 학습하기 →</button>
+        <button type="button" className={learnClass} onClick={onLearn}>모델 학습하기 →</button>
       </article>
     </div>
-    <p className="model-lab-home-note">이미 학습한 모델이 없어도 괜찮습니다. 먼저 예제로 모델을 학습할 수 있습니다.</p>
+    {availability !== "available" && <p className="model-lab-home-note">{availability === "none"
+      ? "기본 모델 그룹에 사용할 수 있는 모델이 아직 없습니다. 먼저 예제로 모델을 학습해 보세요."
+      : "이미 학습한 모델이 없어도 괜찮습니다. 먼저 예제로 모델을 학습할 수 있습니다."}</p>}
   </section>;
 }

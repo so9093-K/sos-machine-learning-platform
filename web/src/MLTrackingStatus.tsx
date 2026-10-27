@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { ApiError, formatError, request } from "./api";
+import { mlflowRunUrl } from "./operator-tools";
 import type { MLflowExportStatus } from "./types";
 
-type Props = { jobId: string };
+type Props = { jobId: string; operatorLinks?: boolean };
 
 const TERMINAL = new Set(["Disabled", "Succeeded"]);
 
 /** Job 결과와 별개인 MLflow Run 기록 상태를 표시한다. 학습은 Registry 등록까지 포함한다. */
-export function MLTrackingStatus({ jobId }: Props) {
+export function MLTrackingStatus({ jobId, operatorLinks = false }: Props) {
   const [status, setStatus] = useState<MLflowExportStatus | null>(null);
   const [error, setError] = useState("");
   const [retryRevision, setRetryRevision] = useState(0);
@@ -39,6 +40,10 @@ export function MLTrackingStatus({ jobId }: Props) {
 
   return <>
     <MLTrackingDetails status={status} error={error} />
+    {operatorLinks && status?.run_id && <p className="hint">
+      <a href={mlflowRunUrl(status.run_id)} target="_blank" rel="noopener noreferrer">
+        MLflow에서 이 Run 열기 ↗</a>
+    </p>}
     {error && <button type="button" className="secondary"
       onClick={() => { setError(""); setRetryRevision(value => value + 1); }}>
       MLflow 기록 다시 조회

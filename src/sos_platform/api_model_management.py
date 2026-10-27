@@ -6,7 +6,7 @@ from sqlalchemy import text
 from pydantic import BaseModel, Field
 
 from .mlflow_errors import MLflowDeliveryError
-from .mlflow_registry import registered_model_name
+from .mlflow_registry import DEFAULT_GROUP_TITLE, registered_model_name
 from .mlflow_tracking import MLflowClient
 from .mlflow_config import MLflowSettings
 from .errors import RuntimeConfigurationError
@@ -86,7 +86,7 @@ def _view(actor_id: str, record: dict) -> dict:
     tags = _tags(record)
     return {
         "registry_key": key, "name": name,
-        "title": tags.get("sos.title") or ("기본 활동 이상 탐지" if key == "default" else key),
+        "title": tags.get("sos.title") or (DEFAULT_GROUP_TITLE if key == "default" else key),
         "description": record.get("description") or "",
         "archived": tags.get("sos.archived") == "true",
     }

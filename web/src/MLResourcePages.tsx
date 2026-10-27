@@ -10,6 +10,7 @@ import type {
   MLEvaluationJobSummary, MLExplanationJobSummary, ModelRevision, ScoringResult,
   DecisionPolicyRevision, EvaluationRevision, ExplanationResult, MLflowModelVersionPage,
 } from "./types";
+import { jobStatusLabel } from "./display-format";
 
 type OpenResource = (kind: MLResourceKind, id: string) => void;
 type ResultKind = "policy" | "evaluation" | "explanation";
@@ -302,7 +303,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
       </div>
       <div className="ml-resource-list">
         {scores.items.map(j => <div key={j.id} className="ml-resource-row">
-          <span>{j.id.slice(0,12)} · {j.status} · {j.dataset_id}</span>
+          <span>{j.id.slice(0,12)} · {jobStatusLabel(j.status)} · {j.dataset_id}</span>
           {revisionId(j,"scoring_result_id") &&
             <button className="secondary"
               onClick={() => onOpenResource("scoring", revisionId(j,"scoring_result_id")!)}>
@@ -412,7 +413,7 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
       </div>
       <div className="ml-resource-list">
         {history.items.map(j => <div className="ml-resource-row" key={j.id}>
-          <span>{j.id.slice(0,12)} · {j.status} · {j.created_at}</span>
+          <span>{j.id.slice(0,12)} · {jobStatusLabel(j.status)} · {j.created_at}</span>
           {revisionId(j,config.field) && <button className="secondary"
             onClick={() => onOpenResource(view, revisionId(j,config.field)!)}>
             결과 판본 열기 →

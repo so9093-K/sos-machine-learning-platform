@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
+import { jobStatusLabel } from "./display-format";
 import type { MLPlaygroundJob, MLPlaygroundJobPage, MLPlaygroundJobSummary, ModelRevision } from "./types";
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -197,6 +198,9 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
       정수 Feature는 정수로 조정했으며, 실제 관측치나 정상 활동의 판정값이 아닙니다.</p>
       : <p className="hint" role="status">이 모델 판본에는 초기 입력 기준값이 없어 자동으로 채우지 않았습니다.
         직접 수정 모드에서 모든 필수 Feature 값을 입력해 주세요.</p>}
+    {mode === "edit" && <p className="hint">Isolation Forest는 학습 데이터 범위를 벗어난 값을 범위 끝의
+      값과 비슷하게 다룹니다. 한 Feature에 아주 큰 값을 넣어도 점수가 크게 오르지 않을 수 있으며,
+      여러 Feature가 함께 평소와 다를 때 점수 변화가 더 뚜렷해질 수 있습니다.</p>}
     <div className="model-lab-input-grid">{shortNames.map(featureField)}</div>
     {otherNames.length > 0 && <details open={expanded}
       onToggle={event => setExpanded(event.currentTarget.open)}
@@ -249,7 +253,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
           {history.map(item => <button type="button" className="surface-button"
             key={item.id} disabled={running}
             aria-pressed={job?.id === item.id} onClick={() => void reopenHistory(item.id)}>
-            <span>{new Date(item.created_at).toLocaleString("ko-KR")} · {item.status}</span>
+            <span>{new Date(item.created_at).toLocaleString("ko-KR")} · {jobStatusLabel(item.status)}</span>
             <span>결과 보기 →</span>
           </button>)}
         </div>
