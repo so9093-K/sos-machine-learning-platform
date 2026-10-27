@@ -60,6 +60,9 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   const [historyError, setHistoryError] = useState("");
   const [selectedHistory, setSelectedHistory] = useState<MLPlaygroundJob | null>(null);
   const [historyDetailError, setHistoryDetailError] = useState("");
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const [historyDetailLoading, setHistoryDetailLoading] = useState(false);
+  const historyRequest = useRef(0);
 
   async function loadHistory(append: boolean) {
     if (historyFetching.current || (append && !historyCursor)) return;
@@ -79,15 +82,31 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   }
 
   async function reopenHistory(id: string) {
+    // 다른 기록을 선택하거나 접는 동안 도착한 이전 응답은 화면 상태를 바꾸지 않는다.
+    const requestNumber = ++historyRequest.current;
+    if (selectedHistoryId === id) {
+      setSelectedHistoryId(null);
+      setSelectedHistory(null);
+      setHistoryDetailLoading(false);
+      setHistoryDetailError("");
+      return;
+    }
+    setSelectedHistoryId(id);
+    setSelectedHistory(null);
+    setHistoryDetailLoading(true);
     setHistoryDetailError("");
     try {
       const restored = await request<MLPlaygroundJob>(
         "/api/ml/playground/jobs/" + encodeURIComponent(id));
-      if (restored.spec.model_revision_id !== model.id)
-        throw new Error("현재 모델과 다른 실행 기록입니다.");
-      // 과거 결과 조회는 현재 작업과 입력값을 변경하지 않는다.
+      if (requestNumber !== historyRequest.current) return;
+      if (restored.id !== id || restored.spec.model_revision_id !== model.id)
+        throw new Error("선택한 기록 또는 모델 판본이 조회 결과와 일치하지 않습니다.");
       setSelectedHistory(restored);
-    } catch (cause) { setHistoryDetailError(formatError(cause)); }
+    } catch (cause) {
+      if (requestNumber === historyRequest.current) setHistoryDetailError(formatError(cause));
+    } finally {
+      if (requestNumber === historyRequest.current) setHistoryDetailLoading(false);
+    }
   }
 
   function useHistoryInput(restored: MLPlaygroundJob) {
@@ -245,20 +264,22 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
         <button type="button" className="secondary" disabled={historyLoading}
           onClick={() => void loadHistory(false)}>실행 기록 새로고침</button>
         {historyError && <p role="alert">{historyError}</p>}
-        {historyDetailError && <p role="alert">선택한 실행 기록을 열지 못했습니다: {historyDetailError}</p>}
         {historyLoading && <p role="status">실행 기록 조회 중…</p>}
         {historyLoaded && history.length === 0 && <p className="hint">
           현재 조회한 실행 기록에는 이 모델의 결과가 없습니다.</p>}
         <div className="model-lab-history-list">
           {history.map(item => <div className="model-lab-history-entry" key={item.id}>
             <button type="button" className="surface-button"
-              aria-expanded={selectedHistory?.id === item.id}
+              aria-expanded={selectedHistoryId === item.id}
               onClick={() => void reopenHistory(item.id)}>
               <span>{new Date(item.created_at).toLocaleString("ko-KR")} · {jobStatusLabel(item.status)}</span>
-              <span>{selectedHistory?.id === item.id ? "상세 확인 중" : item.status === "Failed"
-                ? "실패 이유 확인" : "결과 확인"} ↓</span>
+              <span>{selectedHistoryId === item.id ? "상세 접기 ↑" : item.status === "Failed"
+                ? "실패 이유 확인 ↓" : "결과 확인 ↓"}</span>
             </button>
-            {selectedHistory?.id === item.id && <div className="model-lab-history-detail">
+            {selectedHistoryId === item.id && <div className="model-lab-history-detail">
+              {historyDetailLoading && <p role="status">선택한 결과를 조회하는 중입니다.</p>}
+              {historyDetailError && <p role="alert">기록 조회 실패: {historyDetailError}</p>}
+              {selectedHistory && <>
               <strong>선택한 실행 · {jobStatusLabel(selectedHistory.status)}</strong>
               {selectedHistory.status === "Succeeded" &&
                 typeof selectedHistory.result?.anomaly_score === "number" &&
@@ -280,6 +301,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
               <button type="button" className="secondary"
                 disabled={running}
                 onClick={() => useHistoryInput(selectedHistory)}>이 입력으로 다시 계산 준비</button>
+              </>}
             </div>}
           </div>)}
         </div>
