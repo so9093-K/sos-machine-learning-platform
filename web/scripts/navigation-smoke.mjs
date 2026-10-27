@@ -42,8 +42,10 @@ try {
   assert.equal(new Set(representativeGroups.flatMap(group =>
     group.entries.map(([name]) => name))).size, 8);
   // 독립 Scoring 결과는 별도 접기·선택 없이 전체 근거를 바로 제공한다.
-  const { ScoringObservationExplorer } =
+  const { ScoringObservationExplorer, observationSelectionLabel } =
     await vite.ssrLoadModule("/src/ScoringObservationExplorer.tsx");
+  assert.equal(observationSelectionLabel(false), "기본 표시");
+  assert.equal(observationSelectionLabel(true), "현재 선택");
   const resultView = renderToStaticMarkup(React.createElement(ScoringObservationExplorer, {
     result: {
       id: "score-1", model_revision_id: "model-1", dataset_id: "dataset-1",
@@ -58,8 +60,9 @@ try {
   }));
   assert.match(resultView, /전체 이상 점수 분포/);
   assert.match(resultView, /분석한 관측값/);
-  assert.match(resultView, /선택 관측값 점수/);
-  assert.match(resultView, /점수순 위치/);
+  assert.match(resultView, /최고 이상 점수/);
+  assert.match(resultView, /평균 이상 점수/);
+  assert.doesNotMatch(resultView, /선택 관측값 점수/);
   assert.match(resultView, /판정 정책 미적용/);
   assert.match(resultView, /관측값 살펴보기/);
   assert.match(resultView, /분석 판본과 식별자/);
