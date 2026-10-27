@@ -37,9 +37,24 @@ export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
   if (!supported) return <p role="alert">
     이 설명 방법의 결과 표시는 아직 지원하지 않습니다. 계산 결과의 판본과 방법을 확인하세요.
   </p>;
-  if (result.method !== result.output.method) return <p role="alert">
+  if (!result.output || typeof result.output !== "object" ||
+      result.method !== result.output.method) return <p role="alert">
     설명 결과의 방법과 계산 근거가 일치하지 않습니다. 내용을 표시하지 않습니다.
   </p>;
+  if (result.method === "median_reference_feature_replacement") {
+    const entries = result.output.feature_sensitivities;
+    const valid = Array.isArray(entries) && entries.length > 0 && entries.every(item =>
+      item && typeof item === "object" &&
+      typeof item.feature === "string" && item.feature.length > 0 &&
+      typeof item.anomaly_score_delta === "number" && Number.isFinite(item.anomaly_score_delta) &&
+      typeof item.score_if_replaced === "number" && Number.isFinite(item.score_if_replaced) &&
+      typeof item.reference_median === "number" && Number.isFinite(item.reference_median) &&
+      (item.actual_value === null ||
+        (typeof item.actual_value === "number" && Number.isFinite(item.actual_value))));
+    if (!valid) return <p role="alert">
+      치환 민감도의 Feature별 계산 근거가 없거나 유효하지 않습니다. 결과를 표시하지 않습니다.
+    </p>;
+  }
   return result.method === "permutation_shap_median_v1"
     ? <ShapContributionChart result={result} /> : <SensitivityChart result={result} />;
 }
