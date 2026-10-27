@@ -169,6 +169,10 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           <h4>관측값 살펴보기</h4>
           <p>점수가 높은 순 · 전체 {result.row_count.toLocaleString("ko-KR")}건 중
             {loaded ? ` ${loaded.items.length.toLocaleString("ko-KR")}건 조회` : " 조회 대기"}</p>
+          {selected && <p className="scoring-observation-current" role="status">
+            현재 선택 · 점수순 {scoreOrder?.toLocaleString("ko-KR")}번째 ·
+            결과 행 #{selected.row_index.toLocaleString("ko-KR")} · 점수 {readable(selected.anomaly_score)}
+          </p>}
         </div>
         {loading && <p role="status">점수가 높은 관측값을 불러오는 중입니다.</p>}
         {error && <div role="alert" className="pipeline-readiness-blocked">
