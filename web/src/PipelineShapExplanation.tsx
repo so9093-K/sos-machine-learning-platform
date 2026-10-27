@@ -58,7 +58,7 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
   const shown = contributions.slice(0, 8);
   const rest = contributions.slice(8);
   const restSum = rest.reduce((sum, item) => sum + item.shap_value, 0);
-  const selected = (featureSelection?.resultId === result.id
+  const selected = (featureSelection && featureSelection.resultId === result.id
     ? shown.find(item => item.feature === featureSelection.feature) : undefined) ?? shown[0];
   // 나머지 Feature의 합계는 개별 Feature와 다른 집계값이므로 차트 막대와 분리한다.
   const bars = [...shown].reverse().map(item => ({
