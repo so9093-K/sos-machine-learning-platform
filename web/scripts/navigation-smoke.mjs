@@ -459,8 +459,11 @@ try {
   const { ExplanationEvidence } = await vite.ssrLoadModule("/src/MLResourcePages.tsx");
   const shapResult = {
     method: "permutation_shap_median_v1",
+    scoring_result_id: "score-v1", model_revision_id: "model-v1", row_index: 7,
     output: {
-      method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
+      method: "permutation_shap_median_v1",
+      scoring_result_id: "score-v1", model_revision_id: "model-v1", row_index: 7,
+      baseline_score: 0.3, score: 0.5,
       reconstructed_score: 0.5, additivity_residual: 0,
       additive_attribution: true, model_output: "negative_sklearn_score_samples",
       baseline_row_count: 1, permutation_rounds: 3, sampling_seed: 42,
@@ -479,8 +482,10 @@ try {
   assert.doesNotMatch(detailShap, /참조 중앙값 치환에 따른 이상 점수 민감도/);
   const sensitivityResult = {
     method: "median_reference_feature_replacement",
+    scoring_result_id: "score-v1", model_revision_id: "model-v1", row_index: 7,
     output: {
       method: "median_reference_feature_replacement",
+      scoring_result_id: "score-v1", model_revision_id: "model-v1", row_index: 7,
       feature_sensitivities: [
         { feature: "outbound_traffic", actual_value: 4, reference_median: 1,
           anomaly_score_delta: 0.1, score_if_replaced: 0.4 },
@@ -502,6 +507,12 @@ try {
       method: "median_reference_feature_replacement" } },
   }));
   assert.match(mismatchedExplanation, /방법과 계산 근거가 일치하지 않습니다/);
+  const wrongScoringEvidence = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { ...shapResult, output: { ...shapResult.output,
+      scoring_result_id: "another-scoring" } },
+  }));
+  assert.match(wrongScoringEvidence, /Scoring·모델·관측 행 판본이 계산 근거와 일치하지 않습니다/);
+  assert.doesNotMatch(wrongScoringEvidence, /SHAP 모델 점수 기여도/);
   const missingEvidence = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
     result: { ...sensitivityResult, output: { method: sensitivityResult.method,
       feature_sensitivities: [] } },
