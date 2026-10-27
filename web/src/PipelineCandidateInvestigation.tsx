@@ -254,6 +254,8 @@ export function PipelineCandidateInvestigation({
         {previewFeatures.map(name => <div key={name} className="observation-activity-highlight">
           <span title={name}>{activityFeatureLabel(name)}</span>
           <strong>{format(candidate.features[name])}</strong>
+          <small>Train 중앙값 {referenceLabel(name)}
+            {referenceDifference(name, candidate.features[name]) && ` · ${referenceDifference(name, candidate.features[name])}`}</small>
         </div>)}
       </div>
       {!modelRevisionId && <p className="hint">학습 모델 판본 참조가 없어 중앙값을 비교할 수 없습니다.</p>}
@@ -281,6 +283,7 @@ export function PipelineCandidateInvestigation({
             <strong>{group.title}</strong><span>{group.entries.length}개 입력값</span>
           </div>
           <p>{group.description}</p>
+          {shown.length === 0 && <p className="hint">이 그룹에서 표시한 지표는 상단 활동 특징에 있습니다.</p>}
           <div className="observation-activity-figures">
             {shown.map(([name, value]) =>
               <div key={name} className="observation-activity-figure">
