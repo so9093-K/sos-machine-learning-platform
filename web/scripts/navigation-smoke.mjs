@@ -692,6 +692,10 @@ try {
   const noRatio = renderToStaticMarkup(React.createElement(FeatureValueComparison,
     { actual: -5, reference: 0 }));
   assert.doesNotMatch(noRatio, /feature-reference-bars/);
+  const zeroMedian = renderToStaticMarkup(React.createElement(FeatureValueComparison,
+    { actual: 1000, reference: 0 }));
+  assert.match(zeroMedian, /Train 중앙값/);
+  assert.doesNotMatch(zeroMedian, /feature-reference-bars/);
   const exampleModel = {
     id: "model-test", features: ["cnt_proc_exec", "cnt_file_del"],
     runtime: { feature_reference_medians: [12, 2], feature_dtypes: ["Int64", "Int64"] },
