@@ -973,7 +973,7 @@ button.surface-button[aria-pressed="true"] {
 .scoring-observation-list-heading .scoring-observation-current { padding:8px 10px;
   border-left:3px solid var(--sos-accent); background:var(--sos-raised); border-radius:5px;
   color:var(--sos-text); font-size:12px; font-variant-numeric:tabular-nums; }
-.scoring-observation-choice[aria-pressed="true"] { background:var(--sos-accent-bg); border-color:var(--sos-accent); }
+.scoring-observation-choice[aria-current="true"] { background:var(--sos-accent-bg); border-color:var(--sos-accent); }
 .observation-activity-highlights { display:grid; gap:0; margin:12px 0; }
 .observation-activity-highlight { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; gap:4px 12px;
   padding:10px 0; border-bottom:1px solid var(--sos-border); }
