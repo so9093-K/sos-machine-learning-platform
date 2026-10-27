@@ -907,6 +907,14 @@ button.surface-button[aria-pressed="true"] {
 
 
 
+/* SHAP 차트에는 개별 Feature만 표시하고 잔여 기여 합계는 별도 맥락으로 읽는다. */
+.pipeline-shap-remainder { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px 12px;
+  padding:12px 14px; border:1px solid var(--sos-border); border-radius:8px; background:var(--sos-raised);
+  align-items:center; font-variant-numeric:tabular-nums; }
+.pipeline-shap-remainder > span { color:var(--sos-text); font-size:13px; font-weight:650; }
+.pipeline-shap-remainder > strong { font-size:15px; text-align:right; }
+.pipeline-shap-remainder > small { grid-column:1/-1; color:var(--sos-muted); font-size:12px; line-height:1.5; }
+
 /* 모델 활용 결과에서는 기존 입력/모델 설정을 사용자 요청 시에만 다시 노출한다. */
 .model-lab-result-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
   padding:8px 0; border-bottom:1px solid var(--sos-border); }
