@@ -672,8 +672,23 @@ try {
   assert.equal(routeAt("/model-experience", "").tab, "overview");
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
-  const { ModelLabPlayground, exampleValues, playgroundInputMatchesResult } =
+  const { ModelLabPlayground, exampleValues, playgroundInputMatchesResult,
+    playgroundLatestSuccessfulScore, playgroundChangedFeatures } =
     await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
+  // 성공 -> 실패/취소 -> 성공 경로에서도 이전 성공 점수를 잃지 않는다.
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Failed", result: null }), 0.41);
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Cancelled", result: null }), 0.41);
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Running", result: null }), 0.41);
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Succeeded", result: { anomaly_score: 0.52 } }), 0.52);
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Succeeded", result: { anomaly_score: Number.NaN } }), 0.41);
+  assert.deepEqual(playgroundChangedFeatures(
+    { a: "1e3", b: "0.25", c: "5" }, { a: "1000", b: "0.25", c: "4" },
+    ["a", "b", "c"]), ["c"]);
   assert.equal(playgroundInputMatchesResult({ a: "1e3", b: "0.25" },
     { a: 1000, b: 0.25 }, ["a", "b"]), true);
   assert.equal(playgroundInputMatchesResult({ a: "1001", b: "0.25" },
@@ -689,6 +704,12 @@ try {
   assert.match(bars, /Train 중앙값/);
   assert.match(bars, /width:100%/);
   assert.match(bars, /width:1%/);
+  assert.match(bars, /feature-reference-legend-actual/);
+  assert.match(bars, /feature-reference-legend-train/);
+  const tinyValue = renderToStaticMarkup(React.createElement(FeatureValueComparison,
+    { actual: 0.0000000034, reference: 1 }));
+  assert.match(tinyValue, /3[.]400e-9/);
+  assert.doesNotMatch(tinyValue, /<strong>0<\/strong>/);
   const noRatio = renderToStaticMarkup(React.createElement(FeatureValueComparison,
     { actual: -5, reference: 0 }));
   assert.doesNotMatch(noRatio, /feature-reference-bars/);
