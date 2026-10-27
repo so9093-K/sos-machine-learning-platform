@@ -89,17 +89,21 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   }, [result.id, retry]);
 
   function chooseObservation(rowIndex: number) {
+    if (selected?.row_index === rowIndex) return;
     setSelectedRow(rowIndex);
-    // 나란히 보이는 넓은 화면은 위치를 유지한다. 세로 배치일 때만
-    // 사용자가 선택한 상세로 이동해 갱신 결과를 확인할 수 있게 한다.
-    if (window.matchMedia("(max-width: 1080px)").matches) {
-      window.requestAnimationFrame(() => {
-        detailRef.current?.scrollIntoView({
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-          block: "start",
-        });
+    // 다른 관측값으로 전환할 때 상세의 시작 부분이 시야 밖이면 결과를 보여준다.
+    // 이미 요약이 보이는 데스크톱에서는 불필요한 자동 스크롤을 하지 않는다.
+    window.requestAnimationFrame(() => {
+      const detail = detailRef.current;
+      if (!detail) return;
+      const bounds = detail.getBoundingClientRect();
+      const stacked = window.matchMedia("(max-width: 1080px)").matches;
+      if (!stacked && bounds.top >= 0 && bounds.top < window.innerHeight - 120) return;
+      detail.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
       });
-    }
+    });
   }
 
   async function more() {
@@ -184,8 +188,9 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
               <span className="scoring-observation-identity">
                 <strong title={item.observed_at ?? undefined}>{item.observed_at
                   ? formatObservedAt(item.observed_at) : "결과 행 #" + item.row_index.toLocaleString("ko-KR")}</strong>
-                <small>{item.observation_id ? "관측치 ID " + item.observation_id.slice(0, 8) + "… · " : ""}
-                  결과 행 #{item.row_index.toLocaleString("ko-KR")}</small>
+                {(item.observation_id || item.observed_at) && <small>
+                  {item.observation_id ? "관측치 ID " + item.observation_id.slice(0, 8) + "… · " : ""}
+                  결과 행 #{item.row_index.toLocaleString("ko-KR")}</small>}
               </span>
               <span className="scoring-observation-score">
                 <small>점수</small>

@@ -3,6 +3,8 @@ import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { MLScoringPanel } from "./MLScoringPanel";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
+import { ShapContributionChart } from "./PipelineShapExplanation";
+import { SensitivityChart } from "./PipelineCandidateInvestigation";
 import { MLDecisionPanel, type DecisionView } from "./MLDecisionPanel";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type {
@@ -26,6 +28,42 @@ function amount(n: unknown): string {
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="ml-resource-field"><dt>{label}</dt><dd>{children}</dd></div>;
+}
+
+/** 설명 방법별 출력 계약에 따라 동일한 결과 판본을 표시한다. */
+export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
+  const supported = result.method === "permutation_shap_median_v1" ||
+    result.method === "median_reference_feature_replacement";
+  if (!supported) return <p role="alert">
+    이 설명 방법의 결과 표시는 아직 지원하지 않습니다. 계산 결과의 판본과 방법을 확인하세요.
+  </p>;
+  if (!result.output || typeof result.output !== "object" ||
+      result.method !== result.output.method) return <p role="alert">
+    설명 결과의 방법과 계산 근거가 일치하지 않습니다. 내용을 표시하지 않습니다.
+  </p>;
+  // 불변 Explanation 결과의 외부 식별자와 계산 근거 안의 식별자가 일치해야 한다.
+  if (result.output.scoring_result_id !== result.scoring_result_id ||
+      result.output.model_revision_id !== result.model_revision_id ||
+      result.output.row_index !== result.row_index) return <p role="alert">
+    설명 결과의 Scoring·모델·관측 행 판본이 계산 근거와 일치하지 않습니다.
+    다른 분석의 설명으로 표시하지 않습니다.
+  </p>;
+  if (result.method === "median_reference_feature_replacement") {
+    const entries = result.output.feature_sensitivities;
+    const valid = Array.isArray(entries) && entries.length > 0 && entries.every(item =>
+      item && typeof item === "object" &&
+      typeof item.feature === "string" && item.feature.length > 0 &&
+      typeof item.anomaly_score_delta === "number" && Number.isFinite(item.anomaly_score_delta) &&
+      typeof item.score_if_replaced === "number" && Number.isFinite(item.score_if_replaced) &&
+      typeof item.reference_median === "number" && Number.isFinite(item.reference_median) &&
+      (item.actual_value === null ||
+        (typeof item.actual_value === "number" && Number.isFinite(item.actual_value))));
+    if (!valid) return <p role="alert">
+      치환 민감도의 Feature별 계산 근거가 없거나 유효하지 않습니다. 결과를 표시하지 않습니다.
+    </p>;
+  }
+  return result.method === "permutation_shap_median_v1"
+    ? <ShapContributionChart result={result} /> : <SensitivityChart result={result} />;
 }
 
 /** 불변 ID로 직접 조회하므로 목록 첫 페이지나 이전 학습 화면을 요구하지 않는다. */
@@ -164,8 +202,6 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
     })()}
     {kind === "explanation" && (() => {
       const r = data as ExplanationResult;
-      const values = Array.isArray(r.output.feature_sensitivities)
-        ? r.output.feature_sensitivities as Array<Record<string, unknown>> : [];
       return <>
         <dl className="ml-resource-fields">
           <Field label="Scoring Result"><button className="secondary"
@@ -175,14 +211,8 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
           <Field label="방법">{r.method}</Field>
           <Field label="결과 내부 행 번호">{r.row_index}</Field>
         </dl>
-        <div className="table-scroll"><table><caption>Feature 참조 중앙값 치환에 따른 점수 민감도</caption>
-          <thead><tr><th>Feature</th><th>실제값</th><th>참조 중앙값</th><th>점수 변화</th></tr></thead>
-          <tbody>{values.map((x,i) => <tr key={i}><th>{String(x.feature)}</th>
-            <td>{amount(x.actual_value)}</td><td>{amount(x.reference_median)}</td>
-            <td>{amount(x.anomaly_score_delta)}</td></tr>)}</tbody>
-        </table></div>
-        <p className="hint">국소 점수 민감도이며 SHAP·LIME·인과적 원인·가법 기여도로 해석하지 않습니다.
-          행 번호는 Scoring Result 내부 순서이지 원본 관측치 ID가 아닙니다.</p>
+        <ExplanationEvidence result={r} />
+        <p className="hint">결과 행 번호는 Scoring Result 내부 순서이지 원본 관측치 ID가 아닙니다.</p>
       </>;
     })()}
   </section>;

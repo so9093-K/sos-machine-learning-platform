@@ -455,6 +455,93 @@ try {
   assert.match(unverifiedShap, /검증에 실패했습니다/);
   assert.doesNotMatch(unverifiedShap, /실제 SOS 이상 점수 기준 Feature별/);
   assert.match(shapPreview, /전체 SHAP 값과 계산 근거/);
+  // 저장된 독립 Explanation도 SHAP/치환 민감도에 맞게 표시하며 다른 방법을 섞지 않는다.
+  const { ExplanationEvidence } = await vite.ssrLoadModule("/src/MLResourcePages.tsx");
+  const shapResult = {
+    method: "permutation_shap_median_v1",
+    scoring_result_id: "score-v1", model_revision_id: "model-v1", row_index: 7,
+    output: {
+      method: "permutation_shap_median_v1",
+      scoring_result_id: "score-v1", model_revision_id: "model-v1", row_index: 7,
+      baseline_score: 0.3, score: 0.5,
+      reconstructed_score: 0.5, additivity_residual: 0,
+      additive_attribution: true, model_output: "negative_sklearn_score_samples",
+      baseline_row_count: 1, permutation_rounds: 3, sampling_seed: 42,
+      shap_version: "0.50.0",
+      feature_contributions: [
+        { feature: "outbound_traffic", shap_value: 0.2, actual_value: 4,
+          reference_median: 1, missing_imputed: false },
+      ],
+    },
+  };
+  const detailShap = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: shapResult,
+  }));
+  assert.match(detailShap, /SHAP 모델 점수 기여도/);
+  assert.match(detailShap, /Feature 기여도 합/);
+  assert.doesNotMatch(detailShap, /참조 중앙값 치환에 따른 이상 점수 민감도/);
+  const sensitivityResult = {
+    method: "median_reference_feature_replacement",
+    scoring_result_id: "score-v1", model_revision_id: "model-v1", row_index: 7,
+    output: {
+      method: "median_reference_feature_replacement",
+      scoring_result_id: "score-v1", model_revision_id: "model-v1", row_index: 7,
+      feature_sensitivities: [
+        { feature: "outbound_traffic", actual_value: 4, reference_median: 1,
+          anomaly_score_delta: 0.1, score_if_replaced: 0.4 },
+      ],
+    },
+  };
+  const detailSensitivity = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: sensitivityResult,
+  }));
+  assert.match(detailSensitivity, /점수 민감도/);
+  assert.match(detailSensitivity, /전체 Feature의 실제 값/);
+  assert.doesNotMatch(detailSensitivity, /SHAP 모델 점수 기여도/);
+  const unsupportedExplanation = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { method: "unknown_method_v1", output: { method: "unknown_method_v1" } },
+  }));
+  assert.match(unsupportedExplanation, /표시는 아직 지원하지 않습니다/);
+  const mismatchedExplanation = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { ...shapResult, output: { ...shapResult.output,
+      method: "median_reference_feature_replacement" } },
+  }));
+  assert.match(mismatchedExplanation, /방법과 계산 근거가 일치하지 않습니다/);
+  const wrongScoringEvidence = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { ...shapResult, output: { ...shapResult.output,
+      scoring_result_id: "another-scoring" } },
+  }));
+  assert.match(wrongScoringEvidence, /Scoring·모델·관측 행 판본이 계산 근거와 일치하지 않습니다/);
+  assert.doesNotMatch(wrongScoringEvidence, /SHAP 모델 점수 기여도/);
+  const missingEvidence = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { ...sensitivityResult, output: { ...sensitivityResult.output,
+      feature_sensitivities: [] } },
+  }));
+  assert.match(missingEvidence, /Feature별 계산 근거가 없거나 유효하지 않습니다/);
+  assert.doesNotMatch(missingEvidence, /chart/);
+  const invalidSensitivity = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { ...sensitivityResult, output: { ...sensitivityResult.output,
+      feature_sensitivities: [{ feature: "outbound_traffic", actual_value: 4,
+        reference_median: 1, anomaly_score_delta: "invalid", score_if_replaced: 0.4 }] } },
+  }));
+  assert.match(invalidSensitivity, /Feature별 계산 근거가 없거나 유효하지 않습니다/);
+  const missingOutput = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { ...shapResult, output: null },
+  }));
+  assert.match(missingOutput, /방법과 계산 근거가 일치하지 않습니다/);
+  const { escapeShapTooltipText } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
+  assert.equal(escapeShapTooltipText('<img src=x onerror="test()">&'),
+    '&lt;img src=x onerror=&quot;test()&quot;&gt;&amp;');
+  const groupShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
+    result: { output: { ...shapResult.output, score: 0.5,
+      feature_contributions: Array.from({ length: 10 }, (_, i) => ({
+        feature: "feature_" + i, shap_value: 0.02, actual_value: 4,
+        reference_median: 1, missing_imputed: false,
+      })) } },
+  }));
+  assert.match(groupShap, /나머지 2개 Feature 기여도 합계/);
+  assert.match(groupShap, /단일 Feature의 기여도가 아닙니다/);
+  assert.doesNotMatch(groupShap, /실제 모델 이상 점수 기준 주요 8개 Feature와 나머지 합/);
   assert.match(candidateWithContext, /활동 Feature 관측치는 원시 이벤트 한 건이라는 뜻이 아니며/);
   assert.match(candidateWithContext, /UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다/);
   // 인접 점수 구간의 경계값은 한 구간에만 속해야 한다.

@@ -6,6 +6,14 @@ import { formatError, request, submitJob } from "./api";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary } from "./types";
 
+/** ECharts 기본 HTML 툴팁에 Dataset/모델 Feature 이름을 직접 삽입하지 않는다. */
+export function escapeShapTooltipText(text: string): string {
+  const entities: Record<string, string> = {
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  };
+  return text.replace(/[&<>"']/g, char => entities[char]);
+}
+
 const METHOD = "permutation_shap_median_v1";
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 type JobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
@@ -46,13 +54,10 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
   const shown = contributions.slice(0, 8);
   const rest = contributions.slice(8);
   const restSum = rest.reduce((sum, item) => sum + item.shap_value, 0);
-  // 나머지 기여의 합을 함께 그려 막대의 합이 "Feature 기여도 합"과 맞음을 확인할 수 있게 한다.
-  const bars = [
-    ...(rest.length ? [{ label: `나머지 ${rest.length}개 Feature 합`, feature: null, value: restSum }] : []),
-    ...[...shown].reverse().map(item => ({
-      label: activityFeatureLabel(item.feature), feature: item.feature, value: item.shap_value,
-    })),
-  ];
+  // 나머지 Feature의 합계는 개별 Feature와 다른 집계값이므로 차트 막대와 분리한다.
+  const bars = [...shown].reverse().map(item => ({
+    label: activityFeatureLabel(item.feature), feature: item.feature, value: item.shap_value,
+  }));
   const option = {
     baseOption: {
       aria: { enabled: true },
@@ -60,7 +65,7 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
         const bar = bars[params[0]?.dataIndex ?? -1];
         if (!bar) return "";
         const name = bar.feature && bar.feature !== bar.label ? `${bar.label} (${bar.feature})` : bar.label;
-        return `${name}<br/>점수 기여 ${key(bar.value)}`;
+        return `${escapeShapTooltipText(name)}<br/>점수 기여 ${key(bar.value)}`;
       } },
       grid: { left: 240, right: 45, top: 20, bottom: 44 },
       xAxis: { type: "value" as const, name: "점수 기여", nameGap: 24,
@@ -70,9 +75,8 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
         axisLabel: { width: 210, overflow: "truncate" as const, fontSize: 12 } },
       series: [{ type: "bar" as const, name: "기준 점수 대비 기여",
         data: bars.map(bar => bar.value),
-        itemStyle: { color: (params: { value: number; dataIndex: number }) =>
-          bars[params.dataIndex]?.feature === null ? CHART_COLORS.label
-            : params.value >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative },
+        itemStyle: { color: (params: { value: number }) =>
+          params.value >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative },
         markLine: { silent: true, symbol: "none", label: { show: false },
           data: [{ xAxis: 0 }] } }],
     },
@@ -90,7 +94,12 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
       저장된 모델 점수와 가법적 설명 결과를 검증했습니다.</p>
     <p className="pipeline-shap-legend"><span className="pipeline-shap-positive">양수: 이상 점수를 높이는 방향</span>
       <span className="pipeline-shap-negative">음수: 이상 점수를 낮추는 방향</span></p>
-    <DataChart option={option} ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature와 나머지 합의 양수·음수 Permutation SHAP 기여도`} />
+    <DataChart option={option} ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature의 개별 양수·음수 Permutation SHAP 기여도`} />
+    {rest.length > 0 && <div className="pipeline-shap-remainder">
+      <span>나머지 {rest.length}개 Feature 기여도 합계</span>
+      <strong>{key(restSum)}</strong>
+      <small>전체 Feature 기여도 합에 포함된 값이며 단일 Feature의 기여도가 아닙니다.</small>
+    </div>}
     <p className="hint">Train Feature 중앙값으로 구성한 합성 관측치 한 행을 기준으로 합니다.
       실제 이상 사건의 원인이나 확률을 의미하지 않습니다.</p>
     <details><summary>전체 SHAP 값과 계산 근거</summary>
