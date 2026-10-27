@@ -64,6 +64,17 @@ try {
   assert.match(resultView, /분석 판본과 식별자/);
   assert.match(resultView, /점수가 높은 관측값/);
   assert.match(resultView, /점수는 확률이나 사건 판정이 아니며/);
+  // 히스토그램이 없는 이전 결과에는 분포나 선택 위치를 추정하지 않는다.
+  const resultWithoutHistogram = renderToStaticMarkup(React.createElement(ScoringObservationExplorer, {
+    result: {
+      id: "score-no-hist", model_revision_id: "model-1", dataset_id: "dataset-1",
+      dataset_version: "version-1", created_at: "2026-10-27T00:00:00Z",
+      row_count: 3, score_summary: { score_mean: 0.2, score_min: 0.1, score_max: 0.3 },
+    },
+    canRun: false, canCancel: false, onOpenResource: () => {},
+  }));
+  assert.match(resultWithoutHistogram, /검증 가능한 전체 점수 분포가 없습니다/);
+  assert.doesNotMatch(resultWithoutHistogram, /점선은 선택한 관측값/);
 
   const { modelLabLabels, modelLabTree } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
   const grouped = modelLabTree([
