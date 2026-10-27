@@ -1598,7 +1598,7 @@ export interface components {
              * Row Count Basis
              * @enum {string}
              */
-            row_count_basis: "parquet_metadata" | "not_computed";
+            row_count_basis: "parquet_metadata" | "upload_validation" | "not_computed";
             /** Size Bytes */
             size_bytes: number | null;
             /** Version */

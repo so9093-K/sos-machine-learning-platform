@@ -51,6 +51,8 @@ def ensure_experiment(client, owner: str, title: str = DEFAULT_EXPERIMENT) -> st
                 "tags": [
                     {"key": "sos.source", "value": "sos-platform"},
                     {"key": "sos.title", "value": title.strip()},
+                    # 이름은 Actor를 가린 조회 키이므로 MLflow 목록에는 설명으로 연구 제목을 보여준다.
+                    {"key": "mlflow.note.content", "value": f"SOS 연구 묶음 · {title.strip()}"},
                 ],
             },
         ).get("experiment_id")

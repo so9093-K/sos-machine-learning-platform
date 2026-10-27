@@ -6,6 +6,7 @@ import type {
   MLTrainingJobSummary, MLScoringJobSummary, MLPolicyJobSummary,
   MLEvaluationJobSummary, MLExplanationJobSummary,
 } from "./types";
+import { jobStatusLabel } from "./display-format";
 
 type Kind = "training" | "scoring" | "policy" | "evaluation" | "explanation";
 type JobLike = {
@@ -165,7 +166,7 @@ export function MLActivityPanel({ compact = false, canCancel = false, onNavigate
         <div className="ml-activity-title">
           <strong>{operations[job.kind].label}</strong>
           <span className={`status ${job.status.toLowerCase()}`}>
-            {job.status}{job.cancelRequested ? " · 취소 요청 중" : ""}
+            {jobStatusLabel(job.status)}{job.cancelRequested ? " · 취소 요청 중" : ""}
           </span>
         </div>
         <span className="ml-activity-meta">

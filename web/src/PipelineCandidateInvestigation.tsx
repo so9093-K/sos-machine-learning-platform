@@ -6,6 +6,7 @@ import type { MLResourceKind } from "./PlatformNavigation";
 import type { MLExplanationJob, MLExplanationJobSummary, ExplanationResult, PipelineCandidates, ModelRevision } from "./types";
 import { PipelineShapExplanation } from "./PipelineShapExplanation";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
+import { formatObservedAt, jobStatusLabel } from "./display-format";
 
 type Candidate = PipelineCandidates["items"][number];
 type ExplanationJobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
@@ -200,7 +201,8 @@ export function PipelineCandidateInvestigation({
       선택한 {subject} #{candidate.row_index.toLocaleString("ko-KR")}</h5>
     <p>이상 점수 <strong>{format(candidate.anomaly_score)}</strong> · 높을수록 모델이 더 특이하게 본 관측치입니다.</p>
     <dl className="pipeline-candidate-observation">
-      <div><dt>관측 시각</dt><dd>{candidate.observed_at ?? "이전 결과에 시각 근거 없음"}</dd></div>
+      <div><dt>관측 시각</dt><dd title={candidate.observed_at ?? undefined}>{candidate.observed_at
+        ? formatObservedAt(candidate.observed_at) : "이전 결과에 시각 근거 없음"}</dd></div>
       <div><dt>관측치 ID (UUIDv4)</dt><dd>{candidate.observation_id ?? "연결된 ID 없음"}</dd></div>
       <div><dt>결과 내부 행 번호</dt><dd>{candidate.row_index.toLocaleString("ko-KR")}</dd></div>
     </dl>
@@ -244,7 +246,7 @@ export function PipelineCandidateInvestigation({
         setLookupRetry(n => n + 1)}>이전 설명 작업 다시 조회</button>
     </div>}
     {(!job || job.status === "Failed" || job.status === "Cancelled") && canRun &&
-      <button type="button" onClick={() => void start()}
+      <button type="button" className="secondary pipeline-sensitivity-start" onClick={() => void start()}
         disabled={busy || previousLookup !== "ready"}>
         {busy ? "설명 Job 제출 중…" : job ? "새 설명 Job으로 다시 계산 →" :
           "이 " + subject + "의 점수 민감도 계산 →"}
@@ -257,7 +259,7 @@ export function PipelineCandidateInvestigation({
       이 {subject}에 연결된 설명 Job을 조회했습니다. 다른 후보를 살펴본 뒤에도 다시 확인할 수 있습니다.
     </p>}
     {!canRun && <p className="hint">현재 계정은 설명 Job을 제출할 권한이 없습니다.</p>}
-    {job && <p role="status">설명 Job: {job.status}
+    {job && <p role="status">설명 Job: {jobStatusLabel(job.status)}
       {job.cancel_requested ? " · 취소 요청됨 (Worker 확인 중)" :
         job.status === "Running" || job.status === "Queued" ? " · 계산 중" : ""}
       {job.error_code ? " · 오류 " + job.error_code : ""}</p>}

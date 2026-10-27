@@ -1,6 +1,7 @@
 /** 홈은 백엔드 Job 분류 대신 지금 이용 가능한 제품 기능을 제공한다. */
 import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
+import { jobStatusLabel } from "./display-format";
 import type { WorkspaceTab } from "./PlatformNavigation";
 import type { PipelineRun } from "./types";
 
@@ -83,7 +84,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
             활동 이상 탐지 · {datasetName(run.dataset_id)}
           </span>
           <small>{new Date(run.created_at).toLocaleString("ko-KR")}</small>
-          <span className={`status ${run.status.toLowerCase()}`}>{run.status}</span>
+          <span className={`status ${run.status.toLowerCase()}`}>{jobStatusLabel(run.status)}</span>
         </button>)}
       </div>}
     </section>

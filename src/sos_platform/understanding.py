@@ -18,7 +18,7 @@ from .discovery import (
 from .errors import InvalidRequestError
 from .store import Store
 
-ALGORITHM_VERSION = "understanding-v1"
+ALGORITHM_VERSION = "understanding-v2"
 SAMPLE_ROWS = 1000
 SAMPLE_SEED = 42
 
@@ -40,7 +40,12 @@ def role_candidates(name: str, dtype: str, unique: int, total: int) -> list[dict
         add("identifier", "column_name_hint")
     if "BOOL" in kind:
         add("categorical", "physical_dtype")
-    elif total and 1 < unique <= min(32, max(2, total // 2)):
+    elif (
+        not any(token in kind for token in ("FLOAT", "DOUBLE", "DECIMAL"))
+        and total
+        and 1 < unique <= min(32, max(2, total // 2))
+    ):
+        # 실수 측정값은 표본이 작으면 고유값이 적어도 범주가 아니다.
         add("categorical", "sample_cardinality")
     if any(token in kind for token in ("INT", "FLOAT", "DOUBLE", "DECIMAL", "HUGE")) and not any(
         item["role"] == "identifier" for item in values
@@ -186,17 +191,20 @@ def suggest_analyses(columns: list[dict], row_count: int) -> list[dict]:
             col
             for col in eligible
             if any(r["role"] == "numeric_measure" for r in col["roles"])
+            # 시간·식별자 성격의 숫자는 평균·최댓값을 비교할 측정값이 아니다.
+            and not any(r["role"] in ("temporal", "identifier") for r in col["roles"])
             and not col["is_constant"]
             and col["distinct_count"] > 1
             and col["null_count"] < row_count
         ),
         None,
     )
+    # 고유값이 적은 식별자(예: 설비 ID)는 그룹 기준으로 유효하다. 민감 후보만 제외한다.
     categories = [
         col
         for col in eligible
         if any(r["role"] == "categorical" for r in col["roles"])
-        and not any(r["role"] in ("potentially_sensitive", "identifier") for r in col["roles"])
+        and not any(r["role"] == "potentially_sensitive" for r in col["roles"])
         and not col["is_constant"]
         and col["distinct_count"] > 1
     ]

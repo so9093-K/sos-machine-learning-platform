@@ -7,6 +7,8 @@ storage:
         env: SOS_DAGSTER_DB_PASSWORD
       db_name: sos_dagster
       port: 5432
+      # SQLAlchemy 2.1의 postgresql:// 기본 드라이버는 psycopg(v3)이므로 dagster-postgres가 의존하는 psycopg2를 명시한다.
+      scheme: postgresql+psycopg2
 
 run_coordinator:
   module: dagster.core.run_coordinator

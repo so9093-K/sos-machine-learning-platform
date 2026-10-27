@@ -43,6 +43,10 @@ make doctor   # 설정·준비 상태 진단
 - 학습 완료 후 등록 대기 중에는 SOS의 MLflow Run ID·재시도 상태를 확인하고, 로컬 운영자라면 Dagster Runs와 MLflow Registry를 대조한다. Dagster Code Location `Loaded` 또는 MLflow Run `Finished`만으로 전체 Pipeline의 완료를 판단하지 않는다.
 - Dagster OSS 운영자 UI: `http://localhost:9607` (localhost 전용, 사용자 인증 기능 없음)
 - Dagster에서 등록형 활동 이상 탐지 실행을 찾을 때는 Code Location `sos`, Job `activity_anomaly_workflow`를 확인하세요.
+  운영 권한이 있으면 SOS 분석 화면의 기술 근거에서 해당 분석의 Dagster Run(태그 `sos/submission_id` = SOS 분석 ID)으로 바로 이동할 수 있습니다.
+  Dagster의 Re-execute는 같은 SOS 단계 Job을 재사용하므로 재시도가 아닙니다. 다시 실행하려면 SOS에서 새 분석을 시작합니다.
+- MLflow에서 한 분석의 Run은 이름 `sos-workflow-<분석 ID 앞 8자>-<Dagster 단계명>`과 태그 `sos.workflow_submission_id`로 묶입니다.
+  모델 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 MLflow UI에서 수정하거나 삭제하지 않습니다.
 - Dagster는 SOS 사용자용 학습 화면이 아니라 **로컬 운영자의 Workflow Run·단계·이벤트 확인 도구**입니다.
   실행과 결과는 SOS 웹에서 확인하며, Dagster 접속은 같은 PC의 브라우저에서만 가능합니다.
   API 컨테이너의 내부 GraphQL 주소는 `http://dagster-webserver:3000/graphql`입니다.
@@ -60,7 +64,7 @@ Web UI의 인증 화면에 앞에서 보관한 Bearer Token을 입력한다. 토
 
 ## 첫 Dataset 탐색
 
-1. 왼쪽의 **예제 데이터 살펴보기**에서 합성 데이터를 선택하거나 **파일 가져오기**로 CSV·Parquet·TSV/TXT를 등록한다. TSV/TXT는 자유 서술 텍스트가 아닌 UTF-8 탭 구분 데이터이며, 등록 시 헤더 유무를 지정한다. 예제 목록을 여는 것만으로는 등록되지 않으며, **이 예제로 탐색 시작**을 선택하면 일반 Dataset으로 등록된다.
+1. 왼쪽의 **예제 데이터 살펴보기**에서 합성 데이터를 선택하거나 **파일 가져오기**로 CSV·Parquet·TSV/TXT를 등록한다. CSV는 UTF-8 인코딩·쉼표 구분·첫 행 헤더 형식이어야 하며, Excel에서는 'CSV UTF-8(쉼표로 분리)'로 저장한다. TSV/TXT는 자유 서술 텍스트가 아닌 UTF-8 탭 구분 데이터이며, 등록 시 헤더 유무를 지정한다. 예제 목록을 여는 것만으로는 등록되지 않으며, **이 예제로 탐색 시작**을 선택하면 일반 Dataset으로 등록된다.
 2. 등록된 Dataset을 선택하고 **데이터 탐색**에서 구조와 판본을 확인한다. 필요하면 **기본 분석 실행**을 명시적으로 요청하거나 **데이터 조회**·**탐색**에서 일부 데이터를 살펴본다. 업로드만으로 분석 Job이 자동 실행되지는 않는다.
 3. 전체 범위의 집계나 데이터 가공이 필요하면 해당 Job 또는 **데이터 준비**를 별도로 실행한다. Data Explorer에서 탐색만 하고 끝내도 된다.
 

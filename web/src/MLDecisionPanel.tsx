@@ -6,6 +6,7 @@ import type {
   MLEvaluationJob, MLEvaluationJobSummary, MLExplanationJob,
   MLExplanationJobSummary, MLPolicyJob, MLPolicyJobSummary, ScoringResult,
 } from "./types";
+import { jobStatusLabel } from "./display-format";
 
 export type DecisionView = "policy" | "evaluation" | "explanation";
 type Props = {
@@ -274,7 +275,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     <button disabled={!canRun || (policyJob !== null && !DONE.has(policyJob.status)) ||
       (mode === "fixed" ? !Number.isFinite(fixed) : !(fraction > 0 && fraction < 1))}
       onClick={() => void createPolicy()}>새 정책 판본 생성</button>
-    {policyJob && <p role="status">정책 Job · {policyJob.status}
+    {policyJob && <p role="status">정책 Job · {jobStatusLabel(policyJob.status)}
       {policyJob.cancel_requested && policyJob.status === "Running" && " · 취소 요청됨"}
     </p>}
     {canCancel && policyJob && !DONE.has(policyJob.status) && !policyJob.cancel_requested &&
@@ -285,7 +286,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       {policyHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
         .map(job => <button key={job.id} className="secondary"
           onClick={() => void restorePolicy(job.id)}>
-          정책 {job.id.slice(0, 8)} · {job.status}
+          정책 {job.id.slice(0, 8)} · {jobStatusLabel(job.status)}
         </button>)}
       {policyHistory.nextCursor && <button className="secondary"
         onClick={() => void policyHistory.loadMore().catch(e => setError(formatError(e)))}>
@@ -346,7 +347,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       onClick={() => void createEvaluation()}>Evaluation 판본 생성</button>
     {policyJob && !policy && <p role="status">선택한 정책 판본을 확인하는 중입니다.
       완료 전에는 평가를 제출할 수 없습니다.</p>}
-    {evaluationJob && <p role="status">Evaluation Job · {evaluationJob.status}
+    {evaluationJob && <p role="status">Evaluation Job · {jobStatusLabel(evaluationJob.status)}
       {evaluationJob.cancel_requested && evaluationJob.status === "Running" && " · 취소 요청됨"}
     </p>}
     {canCancel && evaluationJob && !DONE.has(evaluationJob.status) && !evaluationJob.cancel_requested &&
@@ -357,7 +358,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       {evaluationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
         .map(job => <button key={job.id} className="secondary"
           onClick={() => void restoreEvaluation(job.id)}>
-          평가 {job.id.slice(0, 8)} · {job.status}
+          평가 {job.id.slice(0, 8)} · {jobStatusLabel(job.status)}
         </button>)}
       {evaluationHistory.nextCursor && <button className="secondary"
         onClick={() => void evaluationHistory.loadMore().catch(e => setError(formatError(e)))}>
@@ -390,7 +391,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     <button disabled={!canRun || !Number.isInteger(rowIndex) || rowIndex < 0 ||
       rowIndex >= scoring.row_count || (explanationJob !== null && !DONE.has(explanationJob.status))}
       onClick={() => void createExplanation()}>점수 민감도 설명 실행</button>
-    {explanationJob && <p role="status">설명 Job · {explanationJob.status}
+    {explanationJob && <p role="status">설명 Job · {jobStatusLabel(explanationJob.status)}
       {explanationJob.cancel_requested && explanationJob.status === "Running" && " · 취소 요청됨"}
     </p>}
     {canCancel && explanationJob && !DONE.has(explanationJob.status) && !explanationJob.cancel_requested &&
@@ -401,7 +402,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       {explanationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
         .map(job => <button key={job.id} className="secondary"
           onClick={() => void restoreExplanation(job.id)}>
-          설명 {job.id.slice(0, 8)} · {job.status}
+          설명 {job.id.slice(0, 8)} · {jobStatusLabel(job.status)}
         </button>)}
       {explanationHistory.nextCursor && <button className="secondary"
         onClick={() => void explanationHistory.loadMore().catch(e => setError(formatError(e)))}>

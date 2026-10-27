@@ -43,21 +43,36 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
     Math.abs(b.shap_value) - Math.abs(a.shap_value));
   const key = (value: unknown) => typeof value === "number" && Number.isFinite(value)
     ? value.toLocaleString("ko-KR", { maximumFractionDigits: 7 }) : "미정의";
-  const top = contributions.slice(0, 8).reverse();
+  const shown = contributions.slice(0, 8);
+  const rest = contributions.slice(8);
+  const restSum = rest.reduce((sum, item) => sum + item.shap_value, 0);
+  // 나머지 기여의 합을 함께 그려 막대의 합이 "Feature 기여도 합"과 맞음을 확인할 수 있게 한다.
+  const bars = [
+    ...(rest.length ? [{ label: `나머지 ${rest.length}개 Feature 합`, feature: null, value: restSum }] : []),
+    ...[...shown].reverse().map(item => ({
+      label: activityFeatureLabel(item.feature), feature: item.feature, value: item.shap_value,
+    })),
+  ];
   const option = {
     baseOption: {
       aria: { enabled: true },
-      tooltip: { trigger: "axis" },
+      tooltip: { trigger: "axis", formatter: (params: Array<{ dataIndex: number }>) => {
+        const bar = bars[params[0]?.dataIndex ?? -1];
+        if (!bar) return "";
+        const name = bar.feature && bar.feature !== bar.label ? `${bar.label} (${bar.feature})` : bar.label;
+        return `${name}<br/>점수 기여 ${key(bar.value)}`;
+      } },
       grid: { left: 240, right: 45, top: 20, bottom: 44 },
       xAxis: { type: "value" as const, name: "점수 기여", nameGap: 24,
         axisLabel: { formatter: (value: number) => value.toFixed(3) } },
       yAxis: { type: "category" as const,
-        data: top.map(x => activityFeatureLabel(x.feature)),
+        data: bars.map(bar => bar.label),
         axisLabel: { width: 210, overflow: "truncate" as const, fontSize: 12 } },
       series: [{ type: "bar" as const, name: "기준 점수 대비 기여",
-        data: top.map(x => x.shap_value),
-        itemStyle: { color: (params: { value: number }) =>
-          params.value >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative },
+        data: bars.map(bar => bar.value),
+        itemStyle: { color: (params: { value: number; dataIndex: number }) =>
+          bars[params.dataIndex]?.feature === null ? CHART_COLORS.label
+            : params.value >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative },
         markLine: { silent: true, symbol: "none", label: { show: false },
           data: [{ xAxis: 0 }] } }],
     },
@@ -67,7 +82,7 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
     } }],
   };
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
-    <h6>점수 변화에 기여한 주요 Feature {top.length}개 (SHAP)</h6>
+    <h6>점수 변화에 기여한 주요 Feature {shown.length}개 (SHAP)</h6>
     <p>기준 점수 <strong>{key(baseline)}</strong> +
       Feature 기여도 합 <strong>{key(shapSum)}</strong> =
       이상 점수 <strong>{key(score)}</strong></p>
@@ -75,7 +90,7 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
       저장된 모델 점수와 가법적 설명 결과를 검증했습니다.</p>
     <p className="pipeline-shap-legend"><span className="pipeline-shap-positive">양수: 이상 점수를 높이는 방향</span>
       <span className="pipeline-shap-negative">음수: 이상 점수를 낮추는 방향</span></p>
-    <DataChart option={option} ariaLabel="실제 모델 이상 점수 기준 주요 8개 Feature의 양수·음수 Permutation SHAP 기여도" />
+    <DataChart option={option} ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature와 나머지 합의 양수·음수 Permutation SHAP 기여도`} />
     <p className="hint">Train Feature 중앙값으로 구성한 합성 관측치 한 행을 기준으로 합니다.
       실제 이상 사건의 원인이나 확률을 의미하지 않습니다.</p>
     <details><summary>전체 SHAP 값과 계산 근거</summary>

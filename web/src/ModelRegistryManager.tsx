@@ -186,7 +186,7 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
           })}>새 모델 만들기</button>
       </div>
     </details>}
-    <p className="hint">새 그룹을 만든 뒤 학습 요청의 registry_key에 해당 키를 지정하면 새 버전이 등록됩니다.</p>
+    <p className="hint">새 그룹을 만든 뒤 모델 학습 화면의 '등록할 모델 그룹'에서 선택하면 그 그룹의 새 버전으로 등록됩니다.</p>
   </section>;
 }
 

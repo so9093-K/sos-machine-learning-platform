@@ -10,6 +10,30 @@ from .pipeline_reference import PIPELINE_ID, PIPELINE_VERSION, STAGES
 from .store_administration import now
 
 
+def workflow_job_key(submission_id: str, stage: str) -> str:
+    """Workflow 단계 Job의 멱등 제출 키. Dagster 재실행도 같은 SOS Job을 재사용한다."""
+    return f"workflow:{submission_id}:{stage}"
+
+
+def workflow_stage_of_job(store, job: dict) -> dict | None:
+    """독립 ML Job이 등록형 Workflow 단계에서 생성됐다면 소속 분석과 단계를 반환한다.
+
+    Actor가 같은 형식의 제출 키를 직접 쓴 경우를 구별하도록 제출 소유자도 대조한다.
+    """
+    with store.connection() as db:
+        key = db.execute(
+            text("SELECT submission_key FROM job_submissions WHERE job_id=:job"),
+            {"job": job["id"]},
+        ).scalar_one_or_none()
+    parts = key.split(":") if isinstance(key, str) else []
+    if len(parts) != 3 or parts[0] != "workflow" or parts[2] not in STAGES:
+        return None
+    row = _submission(store, parts[1])
+    if row is None or row["owner_actor"] != job.get("owner_actor"):
+        return None
+    return {"submission_id": row["id"], "stage": parts[2], "definition_id": row["definition_id"]}
+
+
 def _submission(store, submission_id: str) -> dict | None:
     with store.connection() as db:
         row = db.execute(
@@ -26,7 +50,7 @@ def _job_by_stage(store, row: dict, stage: str) -> dict | None:
             "WHERE actor_id=:actor AND submission_key=:key"
         ), {
             "actor": row["owner_actor"],
-            "key": "workflow:" + row["id"] + ":" + stage,
+            "key": workflow_job_key(row["id"], stage),
         }).scalar_one_or_none()
     return store.get_job(job_id) if job_id else None
 

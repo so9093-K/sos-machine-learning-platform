@@ -648,7 +648,7 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .pipeline-result-count { margin:0; }
 .pipeline-consumer h3[tabindex="-1"],.pipeline-consumer h4[tabindex="-1"],
 .pipeline-consumer h5[tabindex="-1"] { scroll-margin-top:24px; }
-.pipeline-consumer [tabindex="-1"]:focus { outline:2px solid var(--sos-accent); outline-offset:4px; }
+.pipeline-consumer [tabindex="-1"]:focus-visible { outline:2px solid var(--sos-accent); outline-offset:4px; }
 @media(max-width:1280px) {
   .pipeline-context-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .pipeline-candidate-workspace { grid-template-columns:minmax(0,1fr); }
@@ -997,3 +997,39 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .pipeline-operator-links p { color:var(--sos-muted); font-size:12px; line-height:1.6; }
 .pipeline-operator-links .actions { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
 .pipeline-operator-links a { font-size:12px; color:var(--sos-accent); overflow-wrap:anywhere; }
+
+/* 분석 단계 진행: 실제 단계 Job 상태만 표시한다. */
+.pipeline-stage-progress { display:grid; gap:10px; margin-top:14px; }
+.pipeline-stage-count { margin:0; color:var(--sos-muted); font-size:12px; }
+.pipeline-stage-progress ol { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; margin:0; padding:0; list-style:none; }
+.pipeline-stage { display:grid; gap:4px; align-content:start; padding:10px; border:1px solid var(--sos-border); border-radius:9px; min-width:0; }
+.pipeline-stage-marker { font-size:13px; font-weight:700; color:var(--sos-muted); }
+.pipeline-stage-name { font-size:12px; font-weight:650; overflow-wrap:anywhere; }
+.pipeline-stage small { color:var(--sos-muted); font-size:11px; }
+.pipeline-stage.stage-done .pipeline-stage-marker { color:var(--sos-success); }
+.pipeline-stage.stage-active, .pipeline-stage.stage-registering { border-color:var(--sos-accent); background:var(--sos-accent-bg); }
+.pipeline-stage.stage-active .pipeline-stage-marker, .pipeline-stage.stage-registering .pipeline-stage-marker { color:var(--sos-accent); }
+.pipeline-stage.stage-failed { border-color:var(--sos-danger); }
+.pipeline-stage.stage-failed .pipeline-stage-marker, .pipeline-stage.stage-failed small { color:var(--sos-danger); }
+.pipeline-stage.stage-skipped, .pipeline-stage.stage-cancelled { opacity:.65; }
+@media(max-width:980px) { .pipeline-stage-progress ol { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:520px) { .pipeline-stage-progress ol { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* 대안 설명 방법은 주요 행동보다 낮은 위계로 둔다. */
+.pipeline-sensitivity-start { justify-self:start; }
+
+/* 관리자 표시 이름 설정은 하나의 접힌 항목으로 둔다. */
+.brand-settings summary { cursor:pointer; color:var(--sos-muted); font-size:11px; }
+.brand-settings[open] { display:grid; gap:5px; }
+
+/* 좁은 화면에서는 탐색 메뉴를 접어 업무 화면이 첫 화면에 보이게 한다. */
+.sidebar-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.sidebar-top .brand { flex:1; min-width:0; }
+.sidebar-menu { display:contents; }
+.sidebar-menu-toggle { display:none; }
+@media(max-width:850px) {
+  .sidebar-menu-toggle { display:inline-flex; flex-shrink:0; font-size:12px; }
+  .sidebar-top .brand { padding-bottom:4px; }
+  .sidebar-menu { display:none; }
+  .sidebar-menu.open { display:block; padding-top:10px; }
+}

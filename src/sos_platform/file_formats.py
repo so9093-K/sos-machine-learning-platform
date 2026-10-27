@@ -4,9 +4,10 @@ from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
 
+import duckdb
 import polars as pl
 
-from .delimited import TABULAR_SUFFIXES, parse_options, validate_tabular_text
+from .delimited import TABULAR_SUFFIXES, parse_options, validate_csv_text, validate_tabular_text
 from .errors import PlatformError
 
 SqlQuoter = Callable[[str], str]
@@ -28,9 +29,14 @@ class FileReader:
         return None
 
     def validate(self, path: Path, options: dict | None) -> None:
-        """포맷별 입력 검증을 수행한다. 기존 CSV·Parquet 계약은 유지한다."""
+        """읽기 직전의 해석 설정을 확인한다. 파일 전체를 다시 검사하지 않는다."""
         if options is not None:
             raise PlatformError("SOS-UPLOAD-INVALID")
+
+    def inspect_upload(self, path: Path, options: dict | None) -> int | None:
+        """등록 시 포맷 계약을 확인하고, 전수 검사한 경우 데이터 행 수를 반환한다."""
+        self.validate(path, options)
+        return None
 
     def scan_polars(self, path: Path, options: dict | None) -> pl.LazyFrame:
         raise NotImplementedError
@@ -46,19 +52,40 @@ class FileReader:
 
 
 class CsvReader(FileReader):
-    """기존 CSV 파서의 기본값을 변경하지 않는 호환 리더."""
+    """UTF-8·쉼표 구분·첫 행 헤더 CSV를 두 엔진에서 같은 명시적 설정으로 읽는다.
+
+    DuckDB의 구분자·헤더·앞부분 건너뛰기 자동 감지를 쓰지 않는다. 자동 감지는
+    Polars와 다른 컬럼·행을 만들 수 있다.
+    """
 
     extensions = (".csv",)
 
+    def inspect_upload(self, path: Path, options: dict | None) -> int:
+        self.validate(path, options)
+        return validate_csv_text(path)
+
     def scan_polars(self, path: Path, options: dict | None) -> pl.LazyFrame:
         self.validate(path, options)
-        return pl.scan_csv(path, try_parse_dates=True)
+        return pl.scan_csv(
+            path,
+            separator=",",
+            quote_char='"',
+            has_header=True,
+            encoding="utf8",
+            try_parse_dates=True,
+            # DuckDB와 같은 자료형을 얻도록 전체 행으로 추론한다.
+            infer_schema_length=None,
+        )
 
     def create_duckdb_view(
         self, conn, path: Path, options: dict | None, literal: SqlQuoter, quoted: SqlQuoter
     ) -> None:
         self.validate(path, options)
-        conn.execute(f"CREATE TEMP VIEW source AS SELECT * FROM read_csv({literal(str(path))})")
+        conn.execute(
+            f"CREATE TEMP VIEW source AS SELECT * FROM read_csv({literal(str(path))}, "
+            "delim=',', quote='\"', escape='\"', header=true, skip=0, "
+            "encoding='utf-8', strict_mode=true, sample_size=-1)"
+        )
 
 
 class ParquetReader(FileReader):
@@ -118,7 +145,10 @@ class TabDelimitedReader(FileReader):
         return options["has_header"]
 
     def validate(self, path: Path, options: dict | None) -> None:
-        validate_tabular_text(path, has_header=self._header(options))
+        self._header(options)
+
+    def inspect_upload(self, path: Path, options: dict | None) -> int:
+        return validate_tabular_text(path, has_header=self._header(options))
 
     def scan_polars(self, path: Path, options: dict | None) -> pl.LazyFrame:
         frame = pl.scan_csv(
@@ -141,7 +171,7 @@ class TabDelimitedReader(FileReader):
         header = self._header(options)
         source = (
             f"read_csv({literal(str(path))}, delim={literal(chr(9))}, quote='', "
-            f"header={str(header).lower()}, sample_size=-1)"
+            f"header={str(header).lower()}, skip=0, encoding='utf-8', sample_size=-1)"
         )
         if header:
             conn.execute(f"CREATE TEMP VIEW source AS SELECT * FROM {source}")
@@ -202,4 +232,8 @@ def create_duckdb_file_view(
     conn, path: Path, dataset: dict, literal: SqlQuoter, quoted: SqlQuoter
 ) -> None:
     reader, options = dataset_reader(dataset, path)
-    reader.create_duckdb_view(conn, path, options, literal, quoted)
+    try:
+        reader.create_duckdb_view(conn, path, options, literal, quoted)
+    except duckdb.InvalidInputException as exc:
+        # 계약 도입 전에 등록된 비 UTF-8·불규칙 파일을 내부 오류가 아닌 데이터 문제로 알린다.
+        raise PlatformError("SOS-DATASET-UNREADABLE") from exc

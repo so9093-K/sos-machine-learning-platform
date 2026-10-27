@@ -10,7 +10,9 @@ import type { ExplorationDraft } from "./ExplorationDraft";
 function analysisLabel(basis: string) {
   return basis === "parquet_metadata"
     ? "Parquet 파일 메타데이터"
-    : "행 수는 아직 전체 계산하지 않았습니다";
+    : basis === "upload_validation"
+      ? "등록 시 전체 검사"
+      : "행 수는 아직 전체 계산하지 않았습니다";
 }
 
 /** 사람과 외부 API가 동일하게 사용하는 Dataset Discovery 계약을 표시한다. */

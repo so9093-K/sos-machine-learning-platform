@@ -78,45 +78,48 @@ export function InstanceBrand({ canEdit, brandName, brandReady, brandLoadError,
       <span className="instance-name" aria-live="polite">{
         instance?.display_name ?? (error ? "설정 조회 실패" : "인스턴스 정보 조회 중")
       }</span>
-      {canEdit && brandReady && !brandEditing && <button type="button"
-        className="brand-edit ghost"
-        onClick={() => { setBrandDraft(brandName); setBrandError(""); setBrandEditing(true); }}>
-        제품명 설정
-      </button>}
-      {brandEditing && <form className="brand-form" onSubmit={event => void saveBrand(event)}>
-        <label htmlFor="brand-display-name">제품 브랜드명</label>
-        <input id="brand-display-name" value={brandDraft} maxLength={48}
-          onChange={event => setBrandDraft(event.target.value)} autoFocus required disabled={brandSaving} />
-        <div className="brand-form-actions">
-          <button type="submit" disabled={brandSaving || !brandDraft.trim()}>
-            {brandSaving ? "저장 중" : "저장"}
-          </button>
-          <button type="button" className="ghost" disabled={brandSaving} onClick={() => {
-            setBrandEditing(false); setBrandError("");
-          }}>취소</button>
-        </div>
-      </form>}
+      {canEdit && <details className="brand-settings">
+        <summary>표시 이름 설정</summary>
+        {brandReady && !brandEditing && <button type="button"
+          className="brand-edit ghost"
+          onClick={() => { setBrandDraft(brandName); setBrandError(""); setBrandEditing(true); }}>
+          제품명 설정
+        </button>}
+        {brandEditing && <form className="brand-form" onSubmit={event => void saveBrand(event)}>
+          <label htmlFor="brand-display-name">제품 브랜드명</label>
+          <input id="brand-display-name" value={brandDraft} maxLength={48}
+            onChange={event => setBrandDraft(event.target.value)} autoFocus required disabled={brandSaving} />
+          <div className="brand-form-actions">
+            <button type="submit" disabled={brandSaving || !brandDraft.trim()}>
+              {brandSaving ? "저장 중" : "저장"}
+            </button>
+            <button type="button" className="ghost" disabled={brandSaving} onClick={() => {
+              setBrandEditing(false); setBrandError("");
+            }}>취소</button>
+          </div>
+        </form>}
+        {!editing && <button type="button" disabled={!instance}
+          className="brand-edit ghost"
+          onClick={() => { setDraft(instance!.display_name); setEditing(true); }}>
+          인스턴스 표시명 설정
+        </button>}
+        {editing && <form className="brand-form" onSubmit={event => void save(event)}>
+          <label htmlFor="instance-display-name">인스턴스 표시명</label>
+          <input id="instance-display-name" value={draft} maxLength={48}
+            onChange={event => setDraft(event.target.value)} autoFocus required />
+          <div className="brand-form-actions">
+            <button type="submit" disabled={saving || !draft.trim()}>{saving ? "저장 중" : "저장"}</button>
+            <button type="button" className="ghost" onClick={() => {
+              setEditing(false); setDraft(instance?.display_name ?? ""); setError("");
+            }}>취소</button>
+          </div>
+        </form>}
+      </details>}
       {brandError && <div className="brand-error" role="alert">{brandError}</div>}
       {brandLoadError && <div className="brand-error" role="alert">
         <p>제품명 조회 실패: {brandLoadError}</p>
         <button type="button" className="ghost" onClick={onBrandRetry}>제품명 다시 조회</button>
       </div>}
-      {canEdit && !editing && <button type="button" disabled={!instance}
-        className="brand-edit ghost"
-        onClick={() => { setDraft(instance!.display_name); setEditing(true); }}>
-        인스턴스 표시명 설정
-      </button>}
-      {editing && <form className="brand-form" onSubmit={event => void save(event)}>
-        <label htmlFor="instance-display-name">인스턴스 표시명</label>
-        <input id="instance-display-name" value={draft} maxLength={48}
-          onChange={event => setDraft(event.target.value)} autoFocus required />
-        <div className="brand-form-actions">
-          <button type="submit" disabled={saving || !draft.trim()}>{saving ? "저장 중" : "저장"}</button>
-          <button type="button" className="ghost" onClick={() => {
-            setEditing(false); setDraft(instance?.display_name ?? ""); setError("");
-          }}>취소</button>
-        </div>
-      </form>}
       {error && <div className="brand-error" role="alert">
         <p>{error}</p>
         {!instance && <button type="button" className="ghost"

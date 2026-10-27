@@ -559,7 +559,7 @@ class DatasetOverviewOut(BaseModel):
     dataset_id: str
     version: str
     row_count: int | None
-    row_count_basis: Literal["parquet_metadata", "not_computed"]
+    row_count_basis: Literal["parquet_metadata", "upload_validation", "not_computed"]
     column_count: int
     size_bytes: int | None
     columns: list[DiscoveryColumnOut]

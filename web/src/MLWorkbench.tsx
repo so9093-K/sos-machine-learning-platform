@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { MLTrackingStatus } from "./MLTrackingStatus";
 import { FeatureSelector } from "./FeatureSelector";
+import { isLocalOperatorHost } from "./operator-tools";
 import type { Dataset, DatasetColumns, MLTrainingJob, ModelRevision } from "./types";
+import { jobStatusLabel } from "./display-format";
 
 const NUMERIC = /^(?:U?Int(?:8|16|32|64)|Float(?:32|64))$/;
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -11,6 +13,7 @@ type Props = {
   datasets: Dataset[];
   canTrain: boolean;
   canCancel: boolean;
+  canInspectOperations?: boolean;
   onOpenModel: (id: string) => void;
   initialDatasetId: string;
   onDatasetSelected: (id: string) => void;
@@ -22,9 +25,11 @@ function statistic(value: unknown): string {
 }
 
 /** 독립 Training은 SOS 실행 계약, 모델 자산 탐색은 MLflowResearch가 책임진다. */
-export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
-  initialDatasetId, onDatasetSelected }: Props) {
+export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperations = false,
+  onOpenModel, initialDatasetId, onDatasetSelected }: Props) {
   const selectedId = initialDatasetId;
+  const [localOperatorHost, setLocalOperatorHost] = useState(false);
+  useEffect(() => { setLocalOperatorHost(isLocalOperatorHost()); }, []);
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [features, setFeatures] = useState<string[]>([]);
   const [featureEditorOpen, setFeatureEditorOpen] = useState(true);
@@ -310,7 +315,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
     </section>
     {selectedJob && <section className="panel" aria-label="ML 학습 Job 상태">
       <div className="panel-head"><div><h3>학습 Job 상태</h3>
-        <p>Job {selectedJob.id} · {selectedJob.status}</p>
+        <p>Job {selectedJob.id} · {jobStatusLabel(selectedJob.status)}</p>
       </div></div>
       {selectedJob.cancel_requested && selectedJob.status === "Running" &&
         <p className="hint">취소 요청 중입니다. 실제 종료 확인까지 기다립니다.</p>}
@@ -330,7 +335,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel, onOpenModel,
         !selectedJob.cancel_requested && <button type="button" className="secondary"
           onClick={() => void cancelJob()}>취소 요청</button>}
       {TERMINAL.has(selectedJob.status) &&
-        <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id}/>}
+        <MLTrackingStatus key={selectedJob.id} jobId={selectedJob.id}
+          operatorLinks={canInspectOperations && localOperatorHost} />}
       {selectedJob.status === "Succeeded" && <>
         <button type="button" className="secondary" disabled={!canTrain || submitting}
           onClick={() => void forkTraining()}>동일 조건 Fork·Reproduce</button>
