@@ -1,5 +1,5 @@
 /** 기존 독립 설명 Job을 SHAP 방법으로 요청하고 해당 결과를 탐구한다. */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CHART_COLORS, DataChart } from "./DataChart";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { formatError, request, submitJob } from "./api";
@@ -21,6 +21,10 @@ type Contribution = { feature: string; shap_value: number; actual_value: number 
   reference_median: number; missing_imputed: boolean };
 
 export function ShapContributionChart({ result }: { result: ExplanationResult }) {
+  // Explanation 판본별로 선택을 묶어 다른 관측값의 Feature 선택이 남지 않게 한다.
+  const [featureSelection, setFeatureSelection] = useState<{
+    resultId: string; feature: string;
+  } | null>(null);
   const output = result.output;
   const values = Array.isArray(output.feature_contributions)
     ? output.feature_contributions as Contribution[] : [];
@@ -43,22 +47,23 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
     Math.abs(baseline + shapSum - score) <= tolerance &&
     Math.abs(reconstructed - score) <= tolerance &&
     Math.abs(residual - (score - reconstructed)) <= tolerance;
-  if (!isValid) {
-    return <p role="alert">SHAP 설명 근거의 점수·기여도 검증에 실패했습니다.
-      이 결과의 차트는 표시하지 않습니다. 설명 결과 판본을 확인하세요.</p>;
-  }
-  const contributions = [...values].sort((a, b) =>
-    Math.abs(b.shap_value) - Math.abs(a.shap_value));
+  // 선택 항목만 바뀌어도 ECharts를 재초기화하지 않도록 불변 설명 출력별로 차트 데이터를 보존한다.
+  const { contributions, shown, rest, restSum, bars } = useMemo(() => {
+    const contributions = [...values].sort((a, b) =>
+      Math.abs(b.shap_value) - Math.abs(a.shap_value));
+    const shown = contributions.slice(0, 8);
+    const rest = contributions.slice(8);
+    const restSum = rest.reduce((sum, item) => sum + item.shap_value, 0);
+    const bars = [...shown].reverse().map(item => ({
+      label: activityFeatureLabel(item.feature), feature: item.feature, value: item.shap_value,
+    }));
+    return { contributions, shown, rest, restSum, bars };
+  }, [output]);
   const key = (value: unknown) => typeof value === "number" && Number.isFinite(value)
     ? value.toLocaleString("ko-KR", { maximumFractionDigits: 7 }) : "미정의";
-  const shown = contributions.slice(0, 8);
-  const rest = contributions.slice(8);
-  const restSum = rest.reduce((sum, item) => sum + item.shap_value, 0);
-  // 나머지 Feature의 합계는 개별 Feature와 다른 집계값이므로 차트 막대와 분리한다.
-  const bars = [...shown].reverse().map(item => ({
-    label: activityFeatureLabel(item.feature), feature: item.feature, value: item.shap_value,
-  }));
-  const option = {
+  const selected = (featureSelection && featureSelection.resultId === result.id
+    ? shown.find(item => item.feature === featureSelection.feature) : undefined) ?? shown[0];
+  const option = useMemo(() => ({
     baseOption: {
       aria: { enabled: true },
       tooltip: { trigger: "axis", formatter: (params: Array<{ dataIndex: number }>) => {
@@ -84,7 +89,11 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
       grid: { left: 153, right: 20, top: 20, bottom: 52 },
       yAxis: { axisLabel: { width: 127, overflow: "truncate" as const, fontSize: 11 } },
     } }],
-  };
+  }), [bars]);
+  if (!isValid) {
+    return <p role="alert">SHAP 설명 근거의 점수·기여도 검증에 실패했습니다.
+      이 결과의 차트는 표시하지 않습니다. 설명 결과 판본을 확인하세요.</p>;
+  }
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
     <h6>점수 변화에 기여한 주요 Feature {shown.length}개 (SHAP)</h6>
     <p>기준 점수 <strong>{key(baseline)}</strong> +
@@ -94,7 +103,31 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
       저장된 모델 점수와 가법적 설명 결과를 검증했습니다.</p>
     <p className="pipeline-shap-legend"><span className="pipeline-shap-positive">양수: 이상 점수를 높이는 방향</span>
       <span className="pipeline-shap-negative">음수: 이상 점수를 낮추는 방향</span></p>
-    <DataChart option={option} ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature의 개별 양수·음수 Permutation SHAP 기여도`} />
+    <DataChart option={option}
+      ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature의 개별 양수·음수 Permutation SHAP 기여도`}
+      onDataClick={index => {
+        const entry = bars[index];
+        if (entry) setFeatureSelection({ resultId: result.id, feature: entry.feature });
+      }} />
+    <div className="pipeline-shap-feature-focus" aria-label="선택한 SHAP Feature 근거">
+      <label className="pipeline-shap-feature-picker">
+        <span>Feature 살펴보기</span>
+        <select value={selected.feature} onChange={event =>
+          setFeatureSelection({ resultId: result.id, feature: event.target.value })}>
+          {shown.map(item => <option key={item.feature} value={item.feature}>
+            {activityFeatureLabel(item.feature)}
+          </option>)}
+        </select>
+      </label>
+      <div className="pipeline-shap-feature-values" aria-live="polite">
+        <div><span>실제 관측값</span>
+          <strong>{selected.missing_imputed ? "결측 대체" : key(selected.actual_value)}</strong></div>
+        <div><span>Train 참조 중앙값</span><strong>{key(selected.reference_median)}</strong></div>
+        <div><span>SHAP 점수 기여</span><strong>{key(selected.shap_value)}</strong></div>
+      </div>
+      <p className="hint">막대를 누르거나 목록에서 Feature를 선택하면 이 관측값의 수치와
+        실제 모델 점수에 대한 기여도가 함께 바뀝니다. 참조값과의 차이는 이상 원인을 뜻하지 않습니다.</p>
+    </div>
     {rest.length > 0 && <div className="pipeline-shap-remainder">
       <span>나머지 {rest.length}개 Feature 기여도 합계</span>
       <strong>{key(restSum)}</strong>
