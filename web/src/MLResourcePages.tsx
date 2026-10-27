@@ -30,6 +30,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div className="ml-resource-field"><dt>{label}</dt><dd>{children}</dd></div>;
 }
 
+/** 설명 방법별 출력 계약에 따라 동일한 결과 판본을 표시한다. */
+export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
+  const supported = result.method === "permutation_shap_median_v1" ||
+    result.method === "median_reference_feature_replacement";
+  if (!supported) return <p role="alert">
+    이 설명 방법의 결과 표시는 아직 지원하지 않습니다. 계산 결과의 판본과 방법을 확인하세요.
+  </p>;
+  if (result.method !== result.output.method) return <p role="alert">
+    설명 결과의 방법과 계산 근거가 일치하지 않습니다. 내용을 표시하지 않습니다.
+  </p>;
+  return result.method === "permutation_shap_median_v1"
+    ? <ShapContributionChart result={result} /> : <SensitivityChart result={result} />;
+}
+
 /** 불변 ID로 직접 조회하므로 목록 첫 페이지나 이전 학습 화면을 요구하지 않는다. */
 export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecision, canRun, canCancel }: {
   kind: MLResourceKind; id: string; onOpenResource: OpenResource;
@@ -166,10 +180,6 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
     })()}
     {kind === "explanation" && (() => {
       const r = data as ExplanationResult;
-      // 설명 방법별 결과 형태는 다른 계약이므로 치환 민감도와 SHAP을 혼용하지 않는다.
-      const supported = r.method === "permutation_shap_median_v1" ||
-        r.method === "median_reference_feature_replacement";
-      const methodConsistent = r.method === r.output.method;
       return <>
         <dl className="ml-resource-fields">
           <Field label="Scoring Result"><button className="secondary"
@@ -179,13 +189,7 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
           <Field label="방법">{r.method}</Field>
           <Field label="결과 내부 행 번호">{r.row_index}</Field>
         </dl>
-        {!supported
-          ? <p role="alert">이 설명 방법의 결과 표시는 아직 지원하지 않습니다. 계산 결과의 판본과 방법을 확인하세요.</p>
-          : !methodConsistent
-            ? <p role="alert">설명 결과의 방법과 계산 근거가 일치하지 않습니다. 내용을 표시하지 않습니다.</p>
-            : r.method === "permutation_shap_median_v1"
-              ? <ShapContributionChart result={r} />
-              : <SensitivityChart result={r} />}
+        <ExplanationEvidence result={r} />
         <p className="hint">결과 행 번호는 Scoring Result 내부 순서이지 원본 관측치 ID가 아닙니다.</p>
       </>;
     })()}
