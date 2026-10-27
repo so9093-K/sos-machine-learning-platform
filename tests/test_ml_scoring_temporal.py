@@ -197,6 +197,110 @@ def test_unscoped_batched_scoring_handles_more_than_50000_rows(scoring_env, tmp_
     assert result["score_summary"]["training_data_reused"] is True
 
 
+def test_unscoped_scoring_preserves_utc_observation_time_and_row_alignment(scoring_env, tmp_path):
+    """일반 Dataset 점수화도 시간 메타데이터를 각 Scoring 행에 고정한다."""
+    store, _, dataset, _, frames = scoring_env
+    frames[0] = pl.DataFrame({
+        "count": [10.0, 20.0, 30.0],
+        "ts": [
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T09:00:00+09:00",
+            "2026-01-01T01:30:00+01:00",
+        ],
+    })
+    request = spec()
+    request["observation_time_column"] = "ts"
+    path = tmp_path / "unscoped-time.parquet"
+    response = ml_scoring.run_dataset_scoring(store, dataset, request, path)
+    rows = pl.read_parquet(path)
+    assert response["row_count"] == 3
+    assert "temporal_scope" not in response["score_summary"]
+    assert rows["row_index"].to_list() == [0, 1, 2]
+    assert rows["anomaly_score"].to_list() == pytest.approx([0.01, 0.02, 0.03])
+    assert all(datetime.fromisoformat(value).utcoffset().total_seconds() == 0
+               for value in rows["observed_at"].to_list())
+    assert rows["observed_at"].to_list()[0] == rows["observed_at"].to_list()[1]
+    assert datetime.fromisoformat(rows["observed_at"].to_list()[2]) == datetime(
+        2026, 1, 1, 0, 30, tzinfo=timezone.utc,
+    )
+
+
+def test_unscoped_time_survives_batch_boundary(scoring_env, tmp_path):
+    store, _, dataset, _, frames = scoring_env
+    n = ml_scoring.SCORING_BATCH_ROWS + 3
+    frames[0] = pl.DataFrame({
+        "count": np.arange(n, dtype=np.float64),
+        "ts": ["2026-01-01T00:00:00Z"] * (n - 1) + ["2026-01-01T04:00:00Z"],
+    })
+    request = spec()
+    request["observation_time_column"] = "ts"
+    path = tmp_path / "batch-time.parquet"
+    ml_scoring.run_dataset_scoring(store, dataset, request, path)
+    rows = pl.read_parquet(path)
+    assert rows.height == n
+    assert rows["row_index"].to_list()[-4:] == list(range(n - 4, n))
+    assert rows["anomaly_score"][-1] == pytest.approx((n - 1) / 1000.0)
+    assert datetime.fromisoformat(rows["observed_at"][-1]) == datetime(
+        2026, 1, 1, 4, tzinfo=timezone.utc,
+    )
+    assert datetime.fromisoformat(rows["observed_at"][-2]) == datetime(
+        2026, 1, 1, 0, tzinfo=timezone.utc,
+    )
+
+
+def test_unscoped_datetime_column_preserves_utc(scoring_env, tmp_path):
+    store, _, dataset, _, frames = scoring_env
+    frames[0] = frames[0].with_columns(pl.col("ts").str.to_datetime(time_zone="UTC"))
+    request = spec()
+    request["observation_time_column"] = "ts"
+    path = tmp_path / "unscoped-datetime.parquet"
+    ml_scoring.run_dataset_scoring(store, dataset, request, path)
+    assert datetime.fromisoformat(pl.read_parquet(path)["observed_at"][0]) == datetime(
+        2026, 1, 1, tzinfo=timezone.utc,
+    )
+
+
+@pytest.mark.parametrize("invalid_time", [None, "2026-01-01T05:00:00", "bad-time"])
+def test_unscoped_time_rejects_invalid_or_missing_values(
+    scoring_env, tmp_path, invalid_time,
+):
+    store, _, dataset, _, frames = scoring_env
+    frames[0] = pl.DataFrame({
+        "count": [1.0, 2.0],
+        "ts": ["2026-01-01T00:00:00Z", invalid_time],
+    })
+    request = spec()
+    request["observation_time_column"] = "ts"
+    with pytest.raises(ValueError, match="Observation time"):
+        ml_scoring.run_dataset_scoring(store, dataset, request, tmp_path / "invalid-time.parquet")
+
+
+def test_unscoped_scoring_keeps_legacy_result_without_selected_time(scoring_env, tmp_path):
+    store, _, dataset, _, _ = scoring_env
+    path = tmp_path / "unscoped-legacy.parquet"
+    ml_scoring.run_dataset_scoring(store, dataset, spec(), path)
+    assert "observed_at" not in pl.read_parquet(path).columns
+
+
+def test_observation_time_request_rejects_conflicting_columns(scoring_env, tmp_path):
+    store, _, dataset, _, _ = scoring_env
+    request = spec()
+    request["observation_time_column"] = "count"
+    with pytest.raises(ValueError, match="Observation time"):
+        ml_scoring.run_dataset_scoring(store, dataset, request, tmp_path / "feature-time.parquet")
+    MLScoringRequest(model_revision_id="m", dataset_id="d", observation_time_column="ts")
+    with pytest.raises(ValidationError):
+        MLScoringRequest(
+            model_revision_id="m", dataset_id="d",
+            observation_time_column="ts", label_column="ts",
+        )
+    with pytest.raises(ValidationError):
+        MLScoringRequest(
+            model_revision_id="m", dataset_id="d",
+            observation_time_column="other", temporal_scope=scope("test"),
+        )
+
+
 def test_labeled_scoring_keeps_ranking_metrics(scoring_env, tmp_path):
     store, _, dataset, _, frames = scoring_env
     frames[0] = pl.DataFrame({
