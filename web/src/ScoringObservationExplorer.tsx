@@ -68,6 +68,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const summary = result.score_summary as Record<string, unknown>;
   const selected = loaded?.items.find(item => item.row_index === selectedRow) ??
     (selectedRow === null ? loaded?.items[0] : undefined);
+  const userSelected = selectedRow !== null && selected?.row_index === selectedRow;
   const selectedScore = finiteNumber(selected?.anomaly_score);
   const scoreOrder = selected && loaded
     ? loaded.items.findIndex(item => item.row_index === selected.row_index) + 1 : undefined;
@@ -89,8 +90,9 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   }, [result.id, retry]);
 
   function chooseObservation(rowIndex: number) {
-    if (selected?.row_index === rowIndex) return;
+    // 기본으로 보이는 첫 행을 직접 눌러도 명시적 선택으로 상태가 바뀐다.
     setSelectedRow(rowIndex);
+    if (selected?.row_index === rowIndex) return;
     // 다른 관측값으로 전환할 때 상세의 시작 부분이 시야 밖이면 결과를 보여준다.
     // 이미 요약이 보이는 데스크톱에서는 불필요한 자동 스크롤을 하지 않는다.
     window.requestAnimationFrame(() => {
@@ -142,18 +144,15 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     </div>
     <div className="scoring-result-summary" aria-label="분석 결과 요약">
       <div><span>분석한 관측값</span><strong>{result.row_count.toLocaleString("ko-KR")}건</strong></div>
-      <div><span>선택 관측값 점수</span><strong aria-live="polite">{selectedScore !== null
-        ? readable(selectedScore) : loading ? "조회 중" : "선택된 관측값 없음"}</strong></div>
-      <div><span>점수순 위치</span><strong aria-live="polite">{scoreOrder !== undefined
-        ? `${scoreOrder.toLocaleString("ko-KR")}위`
-        : loading ? "조회 중" : "확인 불가"}</strong></div>
+      <div><span>최고 이상 점수</span><strong>{readable(summary.score_max)}</strong></div>
+      <div><span>평균 이상 점수</span><strong>{readable(summary.score_mean)}</strong></div>
     </div>
     <p className="scoring-result-interpretation">판정 정책 미적용 · 점수순 위치는 모델의 순위이며
       이상 사건 판정이나 발생 확률을 뜻하지 않습니다.</p>
     <section className="scoring-distribution" aria-label="전체 이상 점수 분포">
       <div className="scoring-distribution-heading">
         <h4>전체 관측값의 점수 분포</h4>
-        {selected && selectedScore !== null && <span role="status">선택 관측값 <strong>{readable(selectedScore)}</strong></span>}
+        {selected && selectedScore !== null && <span role="status">{userSelected ? "선택한 관측값" : "기본 표시 관측값"} <strong>{readable(selectedScore)}</strong></span>}
       </div>
       {histogram
         ? <DataChart option={histogram} ariaLabel="점수화한 전체 관측값의 이상 점수 구간별 관측 수" />
@@ -161,7 +160,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       <p className="scoring-distribution-stats">평균 점수 <strong>{readable(summary.score_mean)}</strong>
         <span aria-hidden="true"> · </span>점수 범위 <strong>{readable(summary.score_min)} ~ {readable(summary.score_max)}</strong></p>
       <p className="hint">점수가 높을수록 이 모델에서 이례적인 입력입니다.
-        {histogram && selectedScore !== null ? " 점선은 선택한 관측값의 위치입니다." : ""}</p>
+        {histogram && selectedScore !== null ? " 점선은 현재 표시 중인 관측값의 위치입니다." : ""}</p>
     </section>
     <div className="scoring-observation-workspace">
       <section className="scoring-observation-list-panel" aria-label="점수가 높은 관측값 목록">
@@ -170,7 +169,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           <p>점수가 높은 순 · 전체 {result.row_count.toLocaleString("ko-KR")}건 중
             {loaded ? ` ${loaded.items.length.toLocaleString("ko-KR")}건 조회` : " 조회 대기"}</p>
           {selected && <p className="scoring-observation-current" role="status">
-            현재 선택 · 점수순 {scoreOrder?.toLocaleString("ko-KR")}번째 ·
+            {userSelected ? "현재 선택" : "기본 표시"} · 점수순 {scoreOrder?.toLocaleString("ko-KR")}번째 ·
             결과 행 #{selected.row_index.toLocaleString("ko-KR")} · 점수 {readable(selected.anomaly_score)}
           </p>}
         </div>
@@ -208,11 +207,12 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
         </div>
       </section>
       <section className="scoring-observation-detail" ref={detailRef} tabIndex={-1}
-        aria-label="선택한 관측값 상세">
+        aria-label="현재 표시 중인 관측값 상세">
         {selected
           ? <PipelineCandidateInvestigation
               key={result.id + ":" + selected.row_index}
               candidate={selected} scoreOrder={scoreOrder} scoringResultId={result.id}
+              isDefaultObservation={!userSelected}
               modelRevisionId={result.model_revision_id}
               observationMode canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />
           : <p className="hint">{loading ? "관측값 상세를 준비하고 있습니다."
