@@ -502,6 +502,25 @@ try {
       method: "median_reference_feature_replacement" } },
   }));
   assert.match(mismatchedExplanation, /방법과 계산 근거가 일치하지 않습니다/);
+  const missingEvidence = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { ...sensitivityResult, output: { method: sensitivityResult.method,
+      feature_sensitivities: [] } },
+  }));
+  assert.match(missingEvidence, /Feature별 계산 근거가 없거나 유효하지 않습니다/);
+  assert.doesNotMatch(missingEvidence, /chart/);
+  const invalidSensitivity = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { ...sensitivityResult, output: { method: sensitivityResult.method,
+      feature_sensitivities: [{ feature: "outbound_traffic", actual_value: 4,
+        reference_median: 1, anomaly_score_delta: "invalid", score_if_replaced: 0.4 }] } },
+  }));
+  assert.match(invalidSensitivity, /Feature별 계산 근거가 없거나 유효하지 않습니다/);
+  const missingOutput = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
+    result: { ...shapResult, output: null },
+  }));
+  assert.match(missingOutput, /방법과 계산 근거가 일치하지 않습니다/);
+  const { escapeShapTooltipText } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
+  assert.equal(escapeShapTooltipText('<img src=x onerror="test()">&'), 
+    '&lt;img src=x onerror=&quot;test()&quot;&gt;&amp;');
   const groupShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: { ...shapResult.output, score: 0.5,
       feature_contributions: Array.from({ length: 10 }, (_, i) => ({
