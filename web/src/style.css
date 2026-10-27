@@ -907,7 +907,7 @@ button.surface-button[aria-pressed="true"] {
 
 
 /* Scoring 결과 작업공간: 전체 맥락과 관측값 상세를 같은 위치에서 읽는다. */
-.scoring-workspace-heading { display:flex; justify-content:space-between; align-items:end; gap:12px 24px; flex-wrap:wrap; }
+.scoring-workspace-heading { display:flex; justify-content:space-between; align-items:end; gap:12px 24px; flex-wrap:wrap; margin:0; }
 .scoring-workspace-heading > div { display:grid; gap:6px; }
 .scoring-workspace-heading h3 { font-size:clamp(20px,2vw,26px); }
 .scoring-workspace-heading p { color:var(--sos-muted); font-size:13px; line-height:1.5; max-width:520px; }
@@ -924,9 +924,9 @@ button.surface-button[aria-pressed="true"] {
   padding:10px 0; border-bottom:1px solid var(--sos-border); }
 .observation-activity-highlight span { font-size:12px; color:var(--sos-muted); overflow-wrap:anywhere; }
 .observation-activity-highlight strong { font-size:14px; font-variant-numeric:tabular-nums; text-align:right; }
-.scoring-activity-group-details { border-top:1px solid var(--sos-border); padding-top:12px; margin-top:10px; }
-.scoring-activity-group-details > summary { cursor:pointer; color:var(--sos-accent); font-size:13px; font-weight:650; }
-.scoring-activity-group-details[open] > summary { margin-bottom:14px; }
+.observation-activity-group-intro { border-top:1px solid var(--sos-border); padding-top:12px; display:grid; gap:5px; }
+.observation-activity-group-intro strong { font-size:13px; }
+.observation-activity-group-intro span { color:var(--sos-muted); font-size:12px; }
 .scoring-observation-detail .pipeline-candidate-observation { margin-top:8px; }
 @media(max-width:1080px) {
   .scoring-workspace-heading { align-items:start; }
