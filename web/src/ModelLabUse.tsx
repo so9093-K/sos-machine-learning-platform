@@ -229,7 +229,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       </div>
       <div hidden={usage !== "playground"}>
         <ModelLabPlayground key={selected.revision.id} model={selected.revision}
-          canRun={canRun} canCancel={canCancel} onDataset={openDataset} />
+          canRun={canRun} canCancel={canCancel} />
       </div>
       <div hidden={usage !== "dataset"}>
         {datasetVisited && <MLScoringPanel key={selected.revision.id} model={selected.revision}
