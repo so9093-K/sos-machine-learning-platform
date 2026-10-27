@@ -187,8 +187,8 @@ export function MLScoringPanel({
     }
   }
 
-  const visibleResult = selectedJob?.status === "Succeeded" &&
-    result?.id === selectedJob.result?.scoring_result_id &&
+  const visibleResult = result && selectedJob?.status === "Succeeded" &&
+    result.id === selectedJob.result?.scoring_result_id &&
     result.model_revision_id === model.id ? result : null;
 
   const available = history.filter(job =>
@@ -228,7 +228,7 @@ export function MLScoringPanel({
         <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
       {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error ?? "실행 오류"}
         {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
-      {selectedJob.status === "Succeeded" && !visibleResult &&
+      {selectedJob.status === "Succeeded" && !visibleResult && !error &&
         <p role="status">완료된 분석의 결과 판본을 조회하는 중입니다.</p>}
       {visibleResult && <div className="scoring-result-complete">
         {visibleResult.dataset_id === model.dataset_id && visibleResult.dataset_version === model.dataset_version &&
