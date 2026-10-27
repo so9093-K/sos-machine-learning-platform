@@ -19,6 +19,7 @@ type Props = {
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   canUpload?: boolean;
   onDatasetRegistered?: (dataset: Dataset) => void;
+  onResultViewChange?: (visible: boolean) => void;
 };
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -26,7 +27,7 @@ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 /** 학습된 모델을 다른 Dataset에 적용하는 독립 Scoring 경험. */
 export function MLScoringPanel({
   model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult, onOpenResource,
-  canUpload = false, onDatasetRegistered,
+  canUpload = false, onDatasetRegistered, onResultViewChange,
 }: Props) {
   const [datasetId, setDatasetId] = useState("");
   const [loadingMoreDatasets, setLoadingMoreDatasets] = useState(false);
@@ -212,18 +213,22 @@ export function MLScoringPanel({
     result.id === selectedJob.result?.scoring_result_id &&
     result.model_revision_id === model.id ? result : null;
 
+  useEffect(() => {
+    onResultViewChange?.(Boolean(visibleResult));
+  }, [onResultViewChange, visibleResult !== null]);
+
   const available = history.filter(job =>
     job.spec.model_revision_id === model.id);
   const value = (n: unknown) => typeof n === "number" && Number.isFinite(n)
     ? n.toLocaleString("ko-KR", { maximumFractionDigits: 5 }) : "미정의";
 
-  return <section className="panel" aria-label="독립 이상 점수 계산">
-    <div className="panel-head"><div>
+  return <section className={`panel ml-scoring-panel${visibleResult ? " scoring-has-result" : ""}`} aria-label="독립 이상 점수 계산">
+    {!visibleResult && <div className="panel-head"><div>
       <h4>{selectedJob ? "Dataset 분석 결과" : "어떤 데이터에 모델을 적용할까요?"}</h4>
       <p>{selectedJob
         ? "선택한 실행의 상태와 실제 결과를 먼저 확인합니다. 다른 Dataset도 아래에서 분석할 수 있습니다."
         : "선택한 Dataset에 모델을 적용해 불변 Scoring Result를 생성합니다."}</p>
-    </div></div>
+    </div></div>}
     {previousJobNotice && <div role="status" className="pipeline-readiness-blocked">
       이전 Dataset에서 시작한 점수 계산 Job은 자동 취소되지 않습니다.
       완료 여부는 작업 이력에서 확인할 수 있습니다.
@@ -240,8 +245,8 @@ export function MLScoringPanel({
         Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
         Failed: "실패", Cancelled: "취소됨",
       } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>}
-      <p className="hint">실행에 사용한 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
-        "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>
+      {!visibleResult && <p className="hint">실행에 사용한 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
+        "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>}
       {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
         !selectedJob.cancel_requested &&
         <button className="secondary" onClick={() => void cancel()}>Scoring 취소 요청</button>}
@@ -282,7 +287,10 @@ export function MLScoringPanel({
         </button>
       </div>}
     </div>}
-    {visibleResult && <h4 className="scoring-next-input-heading">다른 Dataset 분석하기</h4>}
+    <details key={visibleResult ? "completed" : "prepare"} className="scoring-next-analysis"
+      open={!visibleResult}>
+      <summary>{visibleResult ? "다른 Dataset 분석하기" : "모델에 적용할 Dataset 선택"}</summary>
+      <div className="scoring-next-analysis-body">
     {canUpload && onDatasetRegistered && <div className="scoring-file-input">
       <label>새 파일로 분석 준비
         <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
@@ -378,6 +386,8 @@ export function MLScoringPanel({
         이전 Scoring 더 보기
       </button>}
     </div>
+    </details>
+      </div>
     </details>
   </section>;
 }
