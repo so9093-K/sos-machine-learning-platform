@@ -187,6 +187,10 @@ export function MLScoringPanel({
     }
   }
 
+  const visibleResult = selectedJob?.status === "Succeeded" &&
+    result?.id === selectedJob.result?.scoring_result_id &&
+    result.model_revision_id === model.id ? result : null;
+
   const available = history.filter(job =>
     job.spec.model_revision_id === model.id);
   const value = (n: unknown) => typeof n === "number" && Number.isFinite(n)
@@ -224,28 +228,30 @@ export function MLScoringPanel({
         <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
       {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error ?? "실행 오류"}
         {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
-      {result && <div className="scoring-result-complete">
-        {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&
+      {selectedJob.status === "Succeeded" && !visibleResult &&
+        <p role="status">완료된 분석의 결과 판본을 조회하는 중입니다.</p>}
+      {visibleResult && <div className="scoring-result-complete">
+        {visibleResult.dataset_id === model.dataset_id && visibleResult.dataset_version === model.dataset_version &&
           <p className="hint">학습에 사용한 동일 Dataset 판본의 결과입니다.
             독립된 Test 데이터에서 얻은 성능으로 해석하지 마세요.</p>}
-        <ScoringObservationExplorer key={result.id} result={result} canRun={canRun}
+        <ScoringObservationExplorer key={visibleResult.id} result={visibleResult} canRun={canRun}
           canCancel={canCancel} onOpenResource={onOpenResource} />
-        {(typeof result.ranking_metrics?.average_precision === "number" ||
-          typeof result.ranking_metrics?.roc_auc === "number") && <details>
+        {(typeof visibleResult.ranking_metrics?.average_precision === "number" ||
+          typeof visibleResult.ranking_metrics?.roc_auc === "number") && <details>
           <summary>정답 레이블 기반 순위 지표</summary>
-          {typeof result.ranking_metrics?.average_precision === "number" &&
-            <p>Average Precision · {value(result.ranking_metrics.average_precision)}</p>}
-          {typeof result.ranking_metrics?.roc_auc === "number" &&
-            <p>ROC-AUC · {value(result.ranking_metrics.roc_auc)}</p>}
+          {typeof visibleResult.ranking_metrics?.average_precision === "number" &&
+            <p>Average Precision · {value(visibleResult.ranking_metrics.average_precision)}</p>}
+          {typeof visibleResult.ranking_metrics?.roc_auc === "number" &&
+            <p>ROC-AUC · {value(visibleResult.ranking_metrics.roc_auc)}</p>}
           <p className="hint">정답 레이블과 계산 조건이 충족된 경우에만 표시합니다.
             판정 정책과 판정 정확도는 별도 평가 대상입니다.</p>
         </details>}
-        <button type="button" className="secondary" onClick={() => onOpenResult(result.id)}>
+        <button type="button" className="secondary" onClick={() => onOpenResult(visibleResult.id)}>
           모델·Dataset 판본과 기술 근거 열기 →
         </button>
       </div>}
     </div>}
-    {result && <h4 className="scoring-next-input-heading">다른 Dataset 분석하기</h4>}
+    {visibleResult && <h4 className="scoring-next-input-heading">다른 Dataset 분석하기</h4>}
     {canUpload && onDatasetRegistered && <div className="scoring-file-input">
       <label>새 파일로 분석 준비
         <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
