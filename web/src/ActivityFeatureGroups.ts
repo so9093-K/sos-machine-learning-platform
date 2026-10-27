@@ -40,7 +40,8 @@ export const activityFeatureGroups = [
 /** 결과에 실제 보존된 Feature만 표시한다. 알려지지 않은 이름도 누락하지 않는다. */
 export function groupActivityFeatures(features: Record<string, number | null>) {
   const seen = new Set<string>();
-  const groups = activityFeatureGroups.map(group => {
+  const groups: Array<{ id: string; title: string; description: string;
+    entries: Array<readonly [string, number | null]> }> = activityFeatureGroups.map(group => {
     const entries = group.features.filter(name => Object.prototype.hasOwnProperty.call(features, name))
       .map(name => { seen.add(name); return [name, features[name]] as const; });
     return { id: group.id, title: group.title, description: group.description, entries };
