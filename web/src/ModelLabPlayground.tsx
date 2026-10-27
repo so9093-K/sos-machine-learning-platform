@@ -163,6 +163,8 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
 
   const featureDtypes = Array.isArray(model.runtime.feature_dtypes)
     ? model.runtime.feature_dtypes as string[] : [];
+  const referenceMedians = Array.isArray(model.runtime.feature_reference_medians)
+    ? model.runtime.feature_reference_medians as number[] : [];
   const input = model.features.map((name, index) => {
     const raw = fields[name]?.trim() ?? "";
     const dtype = String(featureDtypes[index] ?? "");
@@ -171,8 +173,12 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   });
   const invalid = input.filter(item => !item.valid);
   const running = sending || Boolean(job && !TERMINAL.has(job.status));
+  const submittedFeatures = job?.spec.features;
+  const submittedInput = submittedFeatures && typeof submittedFeatures === "object" &&
+    !Array.isArray(submittedFeatures)
+    ? submittedFeatures as Record<string, unknown> : null;
   const matchesCompletedInput = job?.status === "Succeeded" && lastScore !== null &&
-    playgroundInputMatchesResult(fields, job.spec.features, model.features);
+    playgroundInputMatchesResult(fields, submittedInput, model.features);
   const editedNames = reference ? model.features.filter(name =>
     fields[name]?.trim() !== reference[name]?.trim()) : [];
   const comparisonNames = reference
@@ -273,7 +279,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
           <FeatureValueComparison actual={playgroundNumberValid(fields[name] ?? "",
             featureDtypes[model.features.indexOf(name)] ?? "")
             ? Number(fields[name]) : null}
-            reference={model.runtime.feature_reference_medians?.[model.features.indexOf(name)]}
+            reference={referenceMedians[model.features.indexOf(name)]}
             actualLabel="현재 입력값" />
         </div>)}
       </div>
