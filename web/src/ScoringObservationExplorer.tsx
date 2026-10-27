@@ -140,22 +140,23 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
         {histogram && selectedScore !== null ? " 점선은 선택한 관측값의 위치입니다." : ""}
         점수는 확률이나 사건 판정이 아니며, 이 결과에는 판정 정책을 적용하지 않았습니다.</p>
     </section>
-    {loading && <p role="status">점수가 높은 관측값을 불러오는 중입니다.</p>}
-    {error && <div role="alert" className="pipeline-readiness-blocked">
-      <strong>관측값 조회를 완료하지 못했습니다.</strong>
-      <details><summary>오류 진단 정보</summary><p>{error}</p></details>
-      {!loaded && <button type="button" className="secondary"
-        onClick={() => setRetry(n => n + 1)}>관측값 다시 조회</button>}
-    </div>}
-    {loaded && loaded.items.length === 0 && <p>조회할 관측값이 없습니다.</p>}
-    {loaded && loaded.items.length > 0 && <div className="scoring-observation-workspace">
+    <div className="scoring-observation-workspace">
       <section className="scoring-observation-list-panel" aria-label="점수가 높은 관측값 목록">
         <div className="scoring-observation-list-heading">
           <h4>관측값 살펴보기</h4>
-          <p>점수가 높은 순 · 전체 {result.row_count.toLocaleString("ko-KR")}건 중 {loaded.items.length.toLocaleString("ko-KR")}건 조회</p>
+          <p>점수가 높은 순 · 전체 {result.row_count.toLocaleString("ko-KR")}건 중
+            {loaded ? ` ${loaded.items.length.toLocaleString("ko-KR")}건 조회` : " 조회 대기"}</p>
         </div>
+        {loading && <p role="status">점수가 높은 관측값을 불러오는 중입니다.</p>}
+        {error && <div role="alert" className="pipeline-readiness-blocked">
+          <strong>관측값 조회를 완료하지 못했습니다.</strong>
+          <details><summary>오류 진단 정보</summary><p>{error}</p></details>
+          {!loaded && <button type="button" className="secondary"
+            onClick={() => setRetry(n => n + 1)}>관측값 다시 조회</button>}
+        </div>}
+        {loaded && loaded.items.length === 0 && <p>조회할 관측값이 없습니다.</p>}
         <div className="scoring-observation-list">
-          {loaded.items.map((item, index) =>
+          {loaded?.items.map((item, index) =>
             <button key={item.row_index} type="button"
               className="surface-button scoring-observation-choice"
               aria-label={`관측값 ${index + 1}, 이상 점수 ${readable(item.anomaly_score)}`}
@@ -173,19 +174,22 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
                 <strong>{readable(item.anomaly_score)}</strong>
               </span>
             </button>)}
-          {loaded.next_cursor && <button type="button" className="secondary"
+          {loaded?.next_cursor && <button type="button" className="secondary"
             disabled={loadingMore} onClick={() => void more()}>
             {loadingMore ? "다음 관측값 불러오는 중…" : "다음 관측값 25건 불러오기"}
           </button>}
         </div>
       </section>
       <section className="scoring-observation-detail" aria-label="선택한 관측값 상세">
-        {selected && <PipelineCandidateInvestigation
-          key={result.id + ":" + selected.row_index}
-          candidate={selected} scoreOrder={scoreOrder} scoringResultId={result.id}
-          modelRevisionId={result.model_revision_id}
-          observationMode canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
+        {selected
+          ? <PipelineCandidateInvestigation
+              key={result.id + ":" + selected.row_index}
+              candidate={selected} scoreOrder={scoreOrder} scoringResultId={result.id}
+              modelRevisionId={result.model_revision_id}
+              observationMode canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />
+          : <p className="hint">{loading ? "관측값 상세를 준비하고 있습니다."
+            : "선택한 관측값이 없습니다. 조회 가능한 관측값을 확인해 주세요."}</p>}
       </section>
-    </div>}
+    </div>
   </section>;
 }
