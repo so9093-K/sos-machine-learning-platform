@@ -19,12 +19,14 @@ export const CHART_COLORS = {
   get threshold() { return themeColor("--sos-chart-threshold"); },
 };
 
-export function DataChart({ option, ariaLabel, onDataClick }: {
+export function DataChart({ option, ariaLabel, onDataClick, selectedDataIndex }: {
   option: echarts.EChartsCoreOption;
   ariaLabel: string;
   onDataClick?: (dataIndex: number) => void;
+  selectedDataIndex?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const chartInstance = useRef<echarts.ECharts | null>(null);
   const clickHandler = useRef(onDataClick);
   clickHandler.current = onDataClick;
   useEffect(() => {
@@ -42,6 +44,7 @@ export function DataChart({ option, ariaLabel, onDataClick }: {
       splitLine: { lineStyle: { color: grid } },
     };
     const chart = echarts.init(ref.current, {
+
       color: [CHART_COLORS.bar, CHART_COLORS.line, CHART_COLORS.third],
       textStyle: { color: text },
       categoryAxis: axis,
@@ -52,6 +55,7 @@ export function DataChart({ option, ariaLabel, onDataClick }: {
         textStyle: { color: text },
       },
     });
+    chartInstance.current = chart;
     // 개별 차트와 ECharts media의 baseOption 모두 동일한 기준선 대비를 적용한다.
     // Calibration 임계값과 SHAP의 0 기준선은 의미가 달라 색상도 구분한다.
     const themedSeries = (series: echarts.EChartsCoreOption["series"]) =>
@@ -93,8 +97,17 @@ export function DataChart({ option, ariaLabel, onDataClick }: {
     return () => {
       parentDetails?.removeEventListener("toggle", resizeOnToggle);
       observer.disconnect();
+      chartInstance.current = null;
       chart.dispose();
     };
   }, [option]);
+  useEffect(() => {
+    if (chartInstance.current && typeof selectedDataIndex === "number" &&
+        Number.isInteger(selectedDataIndex) && selectedDataIndex >= 0) {
+      chartInstance.current.dispatchAction({
+        type: "select", seriesIndex: 0, dataIndex: selectedDataIndex,
+      });
+    }
+  }, [selectedDataIndex, option]);
   return <div ref={ref} className="chart" role="img" aria-label={ariaLabel} />;
 }
