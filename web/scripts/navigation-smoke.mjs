@@ -442,6 +442,15 @@ try {
   assert.match(shapPreview, /Feature 기여도 합/);
   assert.match(shapPreview, /주요 Feature 1개/);
   assert.match(shapPreview, /양수: 이상 점수를 높이는 방향/);
+  // 개별 SHAP 기여를 실제 관측값·Train 중앙값과 연결해 확인할 수 있어야 한다.
+  assert.match(shapPreview, /선택한 SHAP Feature 근거/);
+  assert.match(shapPreview, /Feature 살펴보기/);
+  assert.match(shapPreview, /<select[^>]*>/);
+  assert.match(shapPreview, /실제 관측값/);
+  assert.match(shapPreview, /Train 참조 중앙값/);
+  assert.match(shapPreview, /SHAP 점수 기여/);
+  assert.match(shapPreview, /outbound_traffic/);
+  assert.match(shapPreview, /0\\.2/);
   const unverifiedShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
       method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
