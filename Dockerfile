@@ -6,7 +6,7 @@ COPY scripts/build_scalar_assets.sh ./scripts/
 RUN bash scripts/build_scalar_assets.sh
 
 # API, Worker, 초기화 명령은 같은 잠금 파일 기반 Python 이미지를 사용한다.
-FROM ghcr.io/astral-sh/uv:0.9.2 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6 AS uv
 # Model Revision은 학습 Runtime을 기록하므로 다시 빌드해도 Python이 바뀌지 않도록 digest로 고정한다.
 FROM python:3.12.16-slim-bookworm@sha256:dbecf082dea1850bcd45039ab8658daf263620e5f662944a15dd508dc851f7a3
 
