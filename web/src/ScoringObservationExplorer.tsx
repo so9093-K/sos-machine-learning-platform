@@ -58,6 +58,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const pendingMore = useRef(false);
+  const detailRef = useRef<HTMLDivElement>(null);
   const summary = result.score_summary as Record<string, unknown>;
   const histogram = useMemo(() => distributionOption(summary, result.row_count),
     [summary, result.row_count]);
@@ -139,7 +140,10 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           <button key={item.row_index} type="button"
             className="surface-button scoring-observation-choice"
             aria-pressed={selected?.row_index === item.row_index}
-            onClick={() => setSelectedRow(item.row_index)}>
+            onClick={() => {
+              setSelectedRow(item.row_index);
+              detailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }}>
             <span className="scoring-observation-rank">{index + 1}</span>
             <span className="scoring-observation-identity">
               <strong title={item.observed_at ?? undefined}>{item.observed_at
@@ -156,7 +160,8 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           {loadingMore ? "다음 관측값 불러오는 중…" : "다음 점수순 관측값 25건"}
         </button>}
       </div>
-      <div className="scoring-observation-detail">
+      <div className="scoring-observation-detail" ref={detailRef} tabIndex={-1}
+        aria-label="선택한 관측값 상세">
         {selected && <PipelineCandidateInvestigation
           key={result.id + ":" + selected.row_index}
           candidate={selected} scoringResultId={result.id}
