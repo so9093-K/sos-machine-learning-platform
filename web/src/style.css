@@ -1055,6 +1055,10 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 
 
 /* 독립 Scoring 결과: 데이터·모델 근거와 선택한 관측치의 실제 활동을 우선 표시한다. */
+.scoring-distribution-heading { display:flex; flex-wrap:wrap; align-items:center;
+  justify-content:space-between; gap:8px 14px; }
+.scoring-distribution-heading > span { font-size:12px; color:var(--sos-muted); }
+.scoring-distribution-heading strong { color:var(--sos-text); }
 .scoring-result-provenance { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center;
   border-bottom:1px solid var(--sos-border); padding:0 0 12px; min-width:0; }
 .scoring-result-provenance > span { display:flex; flex-wrap:wrap; gap:4px; font-size:12px;
