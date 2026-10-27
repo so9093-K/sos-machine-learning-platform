@@ -463,6 +463,7 @@ try {
   // 개별 SHAP 기여를 실제 관측값·Train 중앙값과 연결해 확인할 수 있어야 한다.
   assert.match(shapPreview, /선택한 SHAP Feature 근거/);
   assert.match(shapPreview, /Feature 살펴보기/);
+  assert.match(shapPreview, /현재 살펴보는 Feature/);
   assert.match(shapPreview, /<select[^>]*>/);
   assert.match(shapPreview, /실제 관측값/);
   assert.match(shapPreview, /Train 참조 중앙값/);
@@ -648,7 +649,26 @@ try {
   assert.equal(routeAt("/model-experience", "").tab, "overview");
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
-  const { ModelLabPlayground, exampleValues } = await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
+  const { ModelLabPlayground, exampleValues, playgroundInputMatchesResult } =
+    await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
+  assert.equal(playgroundInputMatchesResult({ a: "1e3", b: "0.25" },
+    { a: 1000, b: 0.25 }, ["a", "b"]), true);
+  assert.equal(playgroundInputMatchesResult({ a: "1001", b: "0.25" },
+    { a: 1000, b: 0.25 }, ["a", "b"]), false);
+  assert.equal(playgroundInputMatchesResult({ a: "", b: "0.25" },
+    { a: 1000, b: 0.25 }, ["a", "b"]), false);
+  assert.equal(playgroundInputMatchesResult({ a: "1000", b: "0.25" },
+    { a: 1000, b: 0.25, c: 1 }, ["a", "b"]), false);
+  const { FeatureValueComparison } = await vite.ssrLoadModule("/src/FeatureValueComparison.tsx");
+  const bars = renderToStaticMarkup(React.createElement(FeatureValueComparison,
+    { actual: 500, reference: 5, actualLabel: "현재 입력값" }));
+  assert.match(bars, /현재 입력값/);
+  assert.match(bars, /Train 중앙값/);
+  assert.match(bars, /width:100%/);
+  assert.match(bars, /width:1%/);
+  const noRatio = renderToStaticMarkup(React.createElement(FeatureValueComparison,
+    { actual: -5, reference: 0 }));
+  assert.doesNotMatch(noRatio, /feature-reference-bars/);
   const exampleModel = {
     id: "model-test", features: ["cnt_proc_exec", "cnt_file_del"],
     runtime: { feature_reference_medians: [12, 2], feature_dtypes: ["Int64", "Int64"] },
@@ -674,6 +694,11 @@ try {
   }));
   assert.doesNotMatch(playgroundHtml, /Dataset 전체에 적용 →/);
   assert.match(playgroundHtml, /프로세스 실행 횟수/);
+  assert.match(playgroundHtml, /파일 활동/);
+  assert.match(playgroundHtml, /프로세스 활동/);
+  assert.match(playgroundHtml, /활동량·시간 특성|네트워크 활동/);
+  assert.match(playgroundHtml, /입력 Feature와 Train 참조값 비교/);
+  assert.match(playgroundHtml, /현재 입력값은 아직 계산하지 않았습니다/);
   assert.match(playgroundHtml, /실제 이상 점수 계산하기/);
   assert.match(playgroundHtml, /입력값과 결과가 권한이 적용되는 Job 이력에 보존/);
   const { ModelLabUse, isActivityModelCompatible } =
