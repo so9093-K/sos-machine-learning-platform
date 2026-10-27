@@ -64,10 +64,10 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
   if (!current?.data) return <section className="panel" role="status">불변 결과를 조회하는 중입니다.</section>;
   const data = current.data;
   return <section className="panel ml-resource-detail">
-    <div className="panel-head"><div><h3>{{
+{kind !== "scoring" && <div className="panel-head"><div><h3>{{
       model: "Model Revision", scoring: "모델 적용 분석 결과", policy: "Decision Policy",
       evaluation: "Evaluation", explanation: "Explanation",
-    }[kind]}</h3><p>불변 ID · {id}</p></div></div>
+    }[kind]}</h3><p>불변 ID · {id}</p></div></div>}
     {kind === "model" && (() => {
       const m = data as ModelRevision;
       return <>
