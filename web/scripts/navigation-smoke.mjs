@@ -387,7 +387,9 @@ try {
     }));
   assert.match(groupedObservation, /활동 특징/);
   assert.match(groupedObservation, /observation-activity-highlights/);
-  assert.match(groupedObservation, /전체 활동 지표 3개/);
+  assert.match(groupedObservation, /전체 3개/);
+  assert.match(groupedObservation, /활동별 지표/);
+  assert.doesNotMatch(groupedObservation, /scoring-activity-group-details/);
   assert.match(groupedObservation, /파일 활동/);
   assert.match(groupedObservation, /프로세스 활동/);
   assert.match(groupedObservation, /네트워크 활동/);
