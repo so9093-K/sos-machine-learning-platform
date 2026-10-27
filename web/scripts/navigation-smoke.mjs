@@ -450,7 +450,7 @@ try {
   assert.match(shapPreview, /Train 참조 중앙값/);
   assert.match(shapPreview, /SHAP 점수 기여/);
   assert.match(shapPreview, /outbound_traffic/);
-  assert.match(shapPreview, /0\\.2/);
+  assert.match(shapPreview, /<strong>0[.]2<\/strong>/);
   const unverifiedShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
       method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
