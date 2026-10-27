@@ -33,6 +33,8 @@ export function MLScoringPanel({
   const [loadingMoreDatasets, setLoadingMoreDatasets] = useState(false);
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [labelColumn, setLabelColumn] = useState("");
+  // null은 검증 가능한 시간 컬럼 'ts' 기본 제안, 빈 문자열은 사용자가 보존하지 않음을 뜻한다.
+  const [timeColumnChoice, setTimeColumnChoice] = useState<string | null>(null);
   const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [columnsDatasetId, setColumnsDatasetId] = useState("");
   const [columnError, setColumnError] = useState("");
@@ -121,6 +123,12 @@ export function MLScoringPanel({
   const checkedColumns = columnStatus === "ready" && columnsDatasetId === datasetId;
   const missingFeatures = checkedColumns
     ? model.features.filter(feature => !columns.some(col => col.name === feature)) : [];
+  const timeColumns = checkedColumns
+    ? columns.filter(col => !model.features.includes(col.name) &&
+        col.name !== labelColumn && /^(String|Utf8|Datetime)/i.test(col.dtype)) : [];
+  const timeColumn = timeColumnChoice === null
+    ? timeColumns.find(col => col.name === "ts")?.name ?? ""
+    : timeColumns.some(col => col.name === timeColumnChoice) ? timeColumnChoice : "";
   const inputReady = datasetId !== "" && checkedColumns && missingFeatures.length === 0;
   function chooseDataset(id: string) {
     historySelectionRequest.current += 1;
@@ -131,6 +139,7 @@ export function MLScoringPanel({
     setColumnsDatasetId("");
     setColumns([]);
     setLabelColumn("");
+    setTimeColumnChoice(null);
     // 완료된 결과를 조사하는 동안 다른 Dataset을 준비하더라도 기존 근거는 유지한다.
     // 새 Job을 명시적으로 제출하거나 진행 중인 Job에서 전환할 때만 기존 선택을 해제한다.
     if (!visibleResult) {
@@ -166,6 +175,7 @@ export function MLScoringPanel({
         model_revision_id: model.id,
         dataset_id: datasetId,
         label_column: labelColumn || null,
+        observation_time_column: timeColumn || null,
       });
       // 선택한 Job/Result가 같으면 기존 결과를 유지한다. 새로운 판본은 위의 일치 검사로 격리한다.
       setSelectedJob(job);
@@ -337,6 +347,16 @@ export function MLScoringPanel({
             <option key={col.name} value={col.name}>{col.name} ({col.dtype})</option>)}
         </select>
       </label>
+      {checkedColumns && <label>관측 시각 컬럼 (선택)
+        <select aria-label="Scoring 관측 시각 컬럼" value={timeColumn}
+          disabled={submitted || uploading}
+          onChange={e => setTimeColumnChoice(e.target.value)}>
+          <option value="">관측 시각 보존 안 함</option>
+          {timeColumns.map(col => <option key={col.name} value={col.name}>
+            {col.name} ({col.dtype})
+          </option>)}
+        </select>
+      </label>}
     </div>
     {hasMoreDatasets && onLoadMoreDatasets && <button type="button" className="secondary"
       disabled={loadingMoreDatasets} onClick={() => {
@@ -359,7 +379,9 @@ export function MLScoringPanel({
       필수 Feature {model.features.length}개 이름을 확인했습니다. 자료형과 결측 조건은 실행 시에도 검증합니다.
     </p>}
     <p className="hint">학습 모델의 Feature 이름·자료형이 맞아야 합니다. 이상 점수는 사건 확률이 아닙니다.
-      정답 레이블을 지정한 경우에만 지원되는 순위 지표를 계산합니다.</p>
+      정답 레이블을 지정한 경우에만 지원되는 순위 지표를 계산합니다.
+      관측 시각은 원본 Dataset의 명시적 시간대가 있는 시간값만 새 Scoring 결과에 보존하며,
+      시간 구간 선택이나 Test 평가를 실행한다는 뜻이 아닙니다. 입력값은 실행 시 검증합니다.</p>
     {datasetId === model.dataset_id && <p className="hint">
       학습 시 사용한 Dataset과 ID가 같습니다. Dataset 판본을 확인하세요.
       동일 학습 판본에 적용한 점수는 독립적인 Test 성능이 아닙니다.
