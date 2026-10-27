@@ -17,7 +17,8 @@ function readable(value: unknown): string {
 }
 
 /** 실제 결과의 검증된 전체 히스토그램만 표시한다. 추정 분포를 만들지 않는다. */
-function distributionOption(summary: Record<string, unknown>, rowCount: number): EChartsCoreOption | null {
+function distributionOption(summary: Record<string, unknown>, rowCount: number,
+  selectedScore: number | null): EChartsCoreOption | null {
   const histogram = summary.histogram;
   if (!histogram || typeof histogram !== "object") return null;
   const data = histogram as Record<string, unknown>;
@@ -41,6 +42,10 @@ function distributionOption(summary: Record<string, unknown>, rowCount: number):
     series: [{
       name: "점수 구간별 관측 수", type: "bar",
       data: counts.map((count: number, index: number) => [(edges[index] + edges[index + 1]) / 2, count]),
+      ...(selectedScore !== null ? { markLine: {
+        silent: true, symbol: "none", lineStyle: { type: "dashed" },
+        label: { formatter: "선택 관측값" }, data: [{ xAxis: selectedScore }],
+      } } : {}),
     }],
   };
 }
@@ -60,8 +65,13 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const pendingMore = useRef(false);
   const detailRef = useRef<HTMLDivElement>(null);
   const summary = result.score_summary as Record<string, unknown>;
-  const histogram = useMemo(() => distributionOption(summary, result.row_count),
-    [summary, result.row_count]);
+  const selected = loaded?.items.find(item => item.row_index === selectedRow) ??
+    (selectedRow === null ? loaded?.items[0] : undefined);
+  const selectedScore = finiteNumber(selected?.anomaly_score);
+  const scoreOrder = selected && loaded
+    ? loaded.items.findIndex(item => item.row_index === selected.row_index) + 1 : undefined;
+  const histogram = useMemo(() => distributionOption(summary, result.row_count, selectedScore),
+    [summary, result.row_count, selectedScore]);
 
   useEffect(() => {
     let active = true;
@@ -100,15 +110,22 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     finally { pendingMore.current = false; setLoadingMore(false); }
   }
 
-  const selected = loaded?.items.find(item => item.row_index === selectedRow) ??
-    (selectedRow === null ? loaded?.items[0] : undefined);
   return <section className="scoring-observation-explorer" aria-label="모델 적용 분석 결과">
     <div className="pipeline-section-heading">
       <div>
         <span className="eyebrow">모델 적용 완료</span>
         <h3>활동 데이터 분석 결과</h3>
-        <p>전체 점수 분포에서 특이한 관측값을 찾고 실제 입력 특징을 확인합니다.</p>
+        <p>전체 점수 분포에서 점수가 높은 관측값을 확인하고, 해당 입력의 실제 활동 특징과 모델 설명을 살펴봅니다.</p>
       </div>
+    </div>
+    <div className="scoring-result-provenance">
+      <span>Dataset 판본 <strong title={result.dataset_id}>{result.dataset_id.slice(0, 8)} · {result.dataset_version}</strong></span>
+      <span>모델 참조 <strong title={result.model_revision_id}>{result.model_revision_id.slice(0, 8)}</strong></span>
+      <span>결과 생성 <strong>{new Date(result.created_at).toLocaleString("ko-KR")}</strong></span>
+      <details>
+        <summary>전체 분석 참조 확인</summary>
+        <p>Dataset ID: {result.dataset_id} · Model Revision: {result.model_revision_id} · Scoring Result: {result.id}</p>
+      </details>
     </div>
     <div className="scoring-result-summary">
       <div><span>분석한 관측값</span><strong>{result.row_count.toLocaleString("ko-KR")}건</strong></div>
@@ -116,18 +133,24 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       <div><span>이상 점수 범위</span><strong>{readable(summary.score_min)} ~ {readable(summary.score_max)}</strong></div>
     </div>
     <section className="scoring-distribution" aria-label="전체 이상 점수 분포">
-      <h4>전체 이상 점수 분포</h4>
+      <div className="scoring-distribution-heading">
+        <h4>전체 이상 점수 분포</h4>
+        {selected && selectedScore !== null &&
+          <span role="status">선택 관측값: <strong>{readable(selectedScore)}</strong>
+            {scoreOrder !== undefined ? ` · 조회한 목록의 ${scoreOrder.toLocaleString("ko-KR")}번째` : ""}</span>}
+      </div>
       {histogram
         ? <DataChart option={histogram} ariaLabel="점수화한 전체 관측값의 이상 점수 구간별 관측 수" />
         : <p className="hint">이 결과에는 검증 가능한 전체 점수 분포가 없습니다.
           위의 실제 요약값과 아래 관측값 목록을 확인할 수 있습니다.</p>}
       <p className="hint">높은 점수일수록 모델에서 더 이례적인 입력입니다.
+        {histogram && selectedScore !== null ? " 점선은 현재 선택한 관측값의 점수입니다." : ""}
         점수는 확률이나 확정된 이상 사건이 아닙니다. 판정 정책을 적용하지 않은 점수순 결과입니다.</p>
     </section>
     <div className="pipeline-section-heading">
       <div>
         <h4>점수가 높은 관측값</h4>
-        <p>점수순으로 실제 관측값을 조회합니다. 왼쪽 항목을 선택하면 상세 내용이 바뀝니다.</p>
+        <p>분포에서 확인한 점수를 실제 관측값과 연결합니다. 목록을 선택하면 오른쪽에 해당 관측값의 활동 특징과 설명을 표시합니다.</p>
       </div>
       {loaded && <span className="hint">전체 {result.row_count.toLocaleString("ko-KR")}건 중
         현재 {loaded.items.length.toLocaleString("ko-KR")}건 조회</span>}
@@ -151,7 +174,8 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
             <span className="scoring-observation-identity">
               <strong title={item.observed_at ?? undefined}>{item.observed_at
                 ? formatObservedAt(item.observed_at) : "결과 행 #" + item.row_index.toLocaleString("ko-KR")}</strong>
-              <small>결과 행 #{item.row_index.toLocaleString("ko-KR")}</small>
+              <small>{item.observation_id ? "관측치 ID " + item.observation_id.slice(0, 8) + "… · " : ""}
+                결과 행 #{item.row_index.toLocaleString("ko-KR")}</small>
             </span>
             <span className="scoring-observation-score">
               <small>이상 점수</small>
@@ -167,7 +191,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
         aria-label="선택한 관측값 상세">
         {selected && <PipelineCandidateInvestigation
           key={result.id + ":" + selected.row_index}
-          candidate={selected} scoringResultId={result.id}
+          candidate={selected} scoreOrder={scoreOrder} scoringResultId={result.id}
           modelRevisionId={result.model_revision_id}
           observationMode canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
       </div>
