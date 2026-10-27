@@ -269,10 +269,11 @@ export function PipelineCandidateInvestigation({
           {group.entries.length > 3 && <details className="observation-activity-extra">
             <summary>나머지 {group.entries.length - 3}개 입력값 확인</summary>
             <div className="table-scroll"><table>
-              <thead><tr><th>Feature</th><th>관측값</th><th>Train 중앙값</th></tr></thead>
+              <thead><tr><th>Feature</th><th>관측값</th><th>Train 중앙값</th><th>중앙값 대비</th></tr></thead>
               <tbody>{group.entries.slice(3).map(([name, value]) => <tr key={name}>
                 <th title={name}>{activityFeatureLabel(name)}</th><td>{format(value)}</td>
                 <td>{referenceLabel(name)}</td>
+                <td>{referenceDifference(name, value) ?? "비교 불가"}</td>
               </tr>)}</tbody>
             </table></div>
           </details>}
