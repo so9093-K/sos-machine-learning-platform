@@ -3,10 +3,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsCoreOption } from "echarts";
 import { formatError, request } from "./api";
 import { DataChart } from "./DataChart";
+import { EvidenceFacts } from "./EvidenceFacts";
 import { formatObservedAt } from "./display-format";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { ScoringObservations, ScoringResult } from "./types";
+
+function shortIdentifier(value: string, limit = 12): string {
+  return value.length > limit ? value.slice(0, limit) + "…" : value;
+}
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -139,12 +144,23 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       <p>실제 데이터의 전체 점수 분포와 관측값별 활동 특징을 함께 살펴봅니다.</p>
     </header>
     <div className="scoring-result-provenance">
-      <span>Dataset <strong title={result.dataset_id}>{result.dataset_id.slice(0, 8)} · {result.dataset_version}</strong></span>
-      <span>모델 <strong title={result.model_revision_id}>{result.model_revision_id.slice(0, 8)}</strong></span>
-      <span>결과 생성 <strong>{new Date(result.created_at).toLocaleString("ko-KR")}</strong></span>
-      <details>
+      <EvidenceFacts compact facts={[
+        { label: "Dataset", value: shortIdentifier(result.dataset_id, 8),
+          title: result.dataset_id },
+        { label: "Dataset 판본", value: shortIdentifier(result.dataset_version),
+          title: result.dataset_version },
+        { label: "모델 판본", value: shortIdentifier(result.model_revision_id, 8),
+          title: result.model_revision_id },
+        { label: "결과 생성", value: new Date(result.created_at).toLocaleString("ko-KR") },
+      ]} />
+      <details className="scoring-provenance-identifiers">
         <summary>분석 판본과 식별자</summary>
-        <p>Dataset ID: {result.dataset_id} · Model Revision: {result.model_revision_id} · Scoring Result: {result.id}</p>
+        <dl>
+          <div><dt>Dataset ID</dt><dd>{result.dataset_id}</dd></div>
+          <div><dt>Dataset 판본</dt><dd>{result.dataset_version}</dd></div>
+          <div><dt>Model Revision</dt><dd>{result.model_revision_id}</dd></div>
+          <div><dt>Scoring Result</dt><dd>{result.id}</dd></div>
+        </dl>
       </details>
     </div>
     <div className="scoring-result-summary" aria-label="분석 결과 요약">
