@@ -59,11 +59,12 @@ try {
   assert.match(resultView, /전체 이상 점수 분포/);
   assert.match(resultView, /분석한 관측값/);
   assert.match(resultView, /선택 관측값 점수/);
-  assert.match(resultView, /이상 판정 정책/);
+  assert.match(resultView, /점수순 위치/);
+  assert.match(resultView, /판정 정책 미적용/);
   assert.match(resultView, /관측값 살펴보기/);
   assert.match(resultView, /분석 판본과 식별자/);
   assert.match(resultView, /점수가 높은 관측값/);
-  assert.match(resultView, /점수는 확률이나 사건 판정이 아니며/);
+  assert.match(resultView, /이상 사건 판정이나 발생 확률을 뜻하지 않습니다/);
   // 히스토그램이 없는 이전 결과에는 분포나 선택 위치를 추정하지 않는다.
   const resultWithoutHistogram = renderToStaticMarkup(React.createElement(ScoringObservationExplorer, {
     result: {
@@ -399,6 +400,8 @@ try {
   assert.match(groupedObservation, /활동 특징/);
   assert.match(groupedObservation, /observation-activity-highlights/);
   assert.match(groupedObservation, /전체 3개/);
+  assert.match(groupedObservation, /관측 시각·원본 관측치 ID 없음/);
+  assert.match(groupedObservation, /결과 내부 행 #9/);
   assert.match(groupedObservation, /활동별 지표/);
   assert.doesNotMatch(groupedObservation, /scoring-activity-group-details/);
   assert.match(groupedObservation, /파일 활동/);
@@ -406,6 +409,8 @@ try {
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
   assert.match(groupedObservation, /모델 중요도나 이상 원인 순위가 아닙니다/);
+  assert.ok(groupedObservation.indexOf("모델 판단 근거 자세히 보기") <
+    groupedObservation.indexOf("활동별 지표"));
   assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
   assert.match(groupedObservation, /모델 판본 없음/);
   const pipelineViewOnly = renderToStaticMarkup(
