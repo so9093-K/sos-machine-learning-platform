@@ -123,6 +123,17 @@ export function PipelineCandidateInvestigation({
     if (!model) return "조회 중";
     return "비교 기준 없음";
   }
+  function referenceDifference(name: string, value: number | null): string | null {
+    const reference = referenceMap?.get(name);
+    if (typeof value !== "number" || !Number.isFinite(value) ||
+        typeof reference !== "number" || !Number.isFinite(reference)) return null;
+    const difference = value - reference;
+    if (!Number.isFinite(difference)) return null;
+    if (difference === 0) return "학습 중앙값과 같음";
+    const magnitude = Math.abs(difference);
+    const amount = magnitude < 0.000001 ? magnitude.toExponential(2) : format(magnitude);
+    return `학습 중앙값 대비 ${difference > 0 ? "+" : "−"}${amount}`;
+  }
   useEffect(() => {
     let active = true;
     setPreviousLookup("loading");
@@ -251,6 +262,8 @@ export function PipelineCandidateInvestigation({
                 <span title={name}>{activityFeatureLabel(name)}</span>
                 <strong>{format(value)}</strong>
                 <small>Train 중앙값 {referenceLabel(name)}</small>
+                {referenceDifference(name, value) &&
+                  <small className="observation-activity-difference">{referenceDifference(name, value)}</small>}
               </div>)}
           </div>
           {group.entries.length > 3 && <details className="observation-activity-extra">
@@ -265,8 +278,9 @@ export function PipelineCandidateInvestigation({
           </details>}
         </section>)}
       </div>
-      <p className="hint">중앙값은 학습 입력과 비교하기 위한 기준일 뿐 정상 범위나 이상 원인을 의미하지 않습니다.
-        개별 모델의 설명을 확인하려면 아래 SHAP 계산 결과를 사용하세요.</p>
+      <p className="hint">중앙값 대비 차이는 같은 Feature의 실제 값과 학습 참조값을 뺀 수치입니다.
+        정상 범위, Feature 중요도 또는 이상 원인을 의미하지 않습니다.
+        모델 점수의 기여를 확인하려면 아래 SHAP 계산 결과를 사용하세요.</p>
     </section>}
     {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
