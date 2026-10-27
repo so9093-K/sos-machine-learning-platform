@@ -20,12 +20,22 @@ try {
   const { activityFeatureLabel } = await vite.ssrLoadModule("/src/ActivityFeatureLabels.ts");
   assert.equal(activityFeatureLabel("cnt_proc_exec"), "프로세스 실행 횟수");
   assert.equal(activityFeatureLabel("unknown_custom"), "unknown_custom");
+  const { groupActivityFeatures } = await vite.ssrLoadModule("/src/ActivityFeatureGroups.ts");
+  const activityGroups = groupActivityFeatures({
+    cnt_file_create: 3, cnt_proc_exec: 2, ratio_outbound_traffic: 0.4,
+    io_bytes_per_sec: 7, external_feature: null,
+  });
+  assert.deepEqual(activityGroups.map(group => group.title), [
+    "파일 활동", "프로세스 활동", "네트워크 활동", "활동량·시간 특성", "그 밖의 입력 Feature",
+  ]);
+  assert.equal(activityGroups.flatMap(group => group.entries).length, 5);
   // 독립 Scoring 결과는 별도 접기·선택 없이 전체 근거를 바로 제공한다.
   const { ScoringObservationExplorer } =
     await vite.ssrLoadModule("/src/ScoringObservationExplorer.tsx");
   const resultView = renderToStaticMarkup(React.createElement(ScoringObservationExplorer, {
     result: {
-      id: "score-1", model_revision_id: "model-1", row_count: 3,
+      id: "score-1", model_revision_id: "model-1", dataset_id: "dataset-1",
+       dataset_version: "version-1", created_at: "2026-10-27T00:00:00Z", row_count: 3,
       score_summary: {
         score_min: 0.1, score_max: 0.3, score_mean: 0.2,
         histogram: { method: "equal_width_exact_v1", score_count: 3,
@@ -36,6 +46,8 @@ try {
   }));
   assert.match(resultView, /전체 이상 점수 분포/);
   assert.match(resultView, /분석한 관측값/);
+  assert.match(resultView, /Dataset 판본/);
+  assert.match(resultView, /전체 분석 참조 확인/);
   assert.match(resultView, /점수가 높은 관측값/);
   assert.match(resultView, /점수는 확률이나 확정된 이상 사건이 아닙니다/);
 
@@ -350,6 +362,21 @@ try {
   assert.match(candidateWithContext, /Train 참조 중앙값/);
   assert.match(candidateWithContext, /전체 1개 Feature 관측값/);
   assert.match(candidateWithContext, /모델 판단 근거 자세히 보기 \(SHAP\)/);
+  const groupedObservation = renderToStaticMarkup(
+    React.createElement(PipelineCandidateInvestigation, {
+      candidate: {
+        row_index: 9, anomaly_score: 0.71,
+        features: { cnt_file_create: 3, cnt_proc_exec: 4, ratio_outbound_traffic: 0.6 },
+      }, scoreOrder: 2, observationMode: true,
+      scoringResultId: "score-1", modelRevisionId: null,
+      canRun: false, canCancel: false, onOpenResource: () => {},
+    }));
+  assert.match(groupedObservation, /이 관측값에서 확인된 활동 특징/);
+  assert.match(groupedObservation, /파일 활동/);
+  assert.match(groupedObservation, /프로세스 활동/);
+  assert.match(groupedObservation, /네트워크 활동/);
+  assert.match(groupedObservation, /점수순 2번째/);
+  assert.match(groupedObservation, /모델 중요도 순위나 실제 로그의 프로세스/);
   const { ShapContributionChart } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
   const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
