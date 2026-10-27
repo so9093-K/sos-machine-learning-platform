@@ -58,6 +58,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const pendingMore = useRef(false);
+  const detailRef = useRef<HTMLDivElement>(null);
   const summary = result.score_summary as Record<string, unknown>;
   const histogram = useMemo(() => distributionOption(summary, result.row_count),
     [summary, result.row_count]);
@@ -75,6 +76,12 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [result.id, retry]);
+
+  // 선택된 관측값의 상세가 실제로 갱신된 다음 해당 영역을 보여준다.
+  useEffect(() => {
+    if (selectedRow === null) return;
+    detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedRow]);
 
   async function more() {
     if (!loaded?.next_cursor || pendingMore.current) return;
@@ -156,7 +163,8 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           {loadingMore ? "다음 관측값 불러오는 중…" : "다음 점수순 관측값 25건"}
         </button>}
       </div>
-      <div className="scoring-observation-detail">
+      <div className="scoring-observation-detail" ref={detailRef} tabIndex={-1}
+        aria-label="선택한 관측값 상세">
         {selected && <PipelineCandidateInvestigation
           key={result.id + ":" + selected.row_index}
           candidate={selected} scoringResultId={result.id}

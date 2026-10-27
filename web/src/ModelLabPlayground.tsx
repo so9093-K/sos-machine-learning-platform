@@ -38,8 +38,8 @@ export function playgroundNumberValid(raw: string, dtype: string): boolean {
   return dtype === "Float64";
 }
 
-export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
-  model: ModelRevision; canRun: boolean; canCancel: boolean; onDataset: () => void;
+export function ModelLabPlayground({ model, canRun, canCancel }: {
+  model: ModelRevision; canRun: boolean; canCancel: boolean;
 }) {
   const reference = exampleValues(model);
   const [mode, setMode] = useState<"example" | "edit">(reference ? "example" : "edit");
@@ -58,6 +58,11 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [selectedHistory, setSelectedHistory] = useState<MLPlaygroundJob | null>(null);
+  const [historyDetailError, setHistoryDetailError] = useState("");
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const [historyDetailLoading, setHistoryDetailLoading] = useState(false);
+  const historyRequest = useRef(0);
 
   async function loadHistory(append: boolean) {
     if (historyFetching.current || (append && !historyCursor)) return;
@@ -77,27 +82,40 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   }
 
   async function reopenHistory(id: string) {
-    if (running) return;
-    setError("");
+    // 다른 기록을 선택하거나 접는 동안 도착한 이전 응답은 화면 상태를 바꾸지 않는다.
+    const requestNumber = ++historyRequest.current;
+    if (selectedHistoryId === id) {
+      setSelectedHistoryId(null);
+      setSelectedHistory(null);
+      setHistoryDetailLoading(false);
+      setHistoryDetailError("");
+      return;
+    }
+    setSelectedHistoryId(id);
+    setSelectedHistory(null);
+    setHistoryDetailLoading(true);
+    setHistoryDetailError("");
     try {
       const restored = await request<MLPlaygroundJob>(
         "/api/ml/playground/jobs/" + encodeURIComponent(id));
-      if (restored.spec.model_revision_id !== model.id)
-        throw new Error("현재 모델과 다른 실행 기록입니다.");
-      setJob(restored);
-      setLastScore(restored.status === "Succeeded" &&
-        typeof restored.result?.anomaly_score === "number"
-          ? restored.result.anomaly_score : null);
-      setPreviousScore(null);
-      const saved = restored.spec.features;
-      if (saved && typeof saved === "object" && !Array.isArray(saved)) {
-        const values = saved as Record<string, unknown>;
-        setFields(Object.fromEntries(model.features.map(name => [
-          name, values[name] == null ? "" : String(values[name]),
-        ])));
-        setMode("edit");
-      }
-    } catch (cause) { setError(formatError(cause)); }
+      if (requestNumber !== historyRequest.current) return;
+      if (restored.id !== id || restored.spec.model_revision_id !== model.id)
+        throw new Error("선택한 기록 또는 모델 판본이 조회 결과와 일치하지 않습니다.");
+      setSelectedHistory(restored);
+    } catch (cause) {
+      if (requestNumber === historyRequest.current) setHistoryDetailError(formatError(cause));
+    } finally {
+      if (requestNumber === historyRequest.current) setHistoryDetailLoading(false);
+    }
+  }
+
+  function useHistoryInput(restored: MLPlaygroundJob) {
+    if (running || !restored.spec.features) return;
+    const saved = restored.spec.features as Record<string, unknown>;
+    setFields(Object.fromEntries(model.features.map(name => [
+      name, saved[name] == null ? "" : String(saved[name]),
+    ])));
+    setMode("edit");
   }
 
   useEffect(() => {
@@ -183,7 +201,6 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     <div className="model-lab-playground-head">
       <div><h3>활동 한 건으로 모델 체험하기</h3>
         <p>기준 입력값을 그대로 적용하거나 숫자를 바꾸어 모델의 실제 점수 변화를 확인합니다.</p></div>
-      <button type="button" className="secondary" onClick={onDataset}>Dataset 전체에 적용 →</button>
     </div>
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
       <button type="button" aria-pressed={mode === "example"} className="secondary"
@@ -243,7 +260,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     }}>
       <summary>이 모델의 이전 체험 결과 다시 보기</summary>
       <div className="model-lab-history-body">
-        <p className="hint">이전에 제출한 입력과 실제 Job 결과를 선택해 다시 확인할 수 있습니다.</p>
+        <p className="hint">과거 결과를 펼쳐 확인합니다. 조회만으로 현재 편집 중인 입력값은 변경되지 않습니다.</p>
         <button type="button" className="secondary" disabled={historyLoading}
           onClick={() => void loadHistory(false)}>실행 기록 새로고침</button>
         {historyError && <p role="alert">{historyError}</p>}
@@ -251,12 +268,42 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
         {historyLoaded && history.length === 0 && <p className="hint">
           현재 조회한 실행 기록에는 이 모델의 결과가 없습니다.</p>}
         <div className="model-lab-history-list">
-          {history.map(item => <button type="button" className="surface-button"
-            key={item.id} disabled={running}
-            aria-pressed={job?.id === item.id} onClick={() => void reopenHistory(item.id)}>
-            <span>{new Date(item.created_at).toLocaleString("ko-KR")} · {jobStatusLabel(item.status)}</span>
-            <span>결과 보기 →</span>
-          </button>)}
+          {history.map(item => <div className="model-lab-history-entry" key={item.id}>
+            <button type="button" className="surface-button"
+              aria-expanded={selectedHistoryId === item.id}
+              onClick={() => void reopenHistory(item.id)}>
+              <span>{new Date(item.created_at).toLocaleString("ko-KR")} · {jobStatusLabel(item.status)}</span>
+              <span>{selectedHistoryId === item.id ? "상세 접기 ↑" : item.status === "Failed"
+                ? "실패 이유 확인 ↓" : "결과 확인 ↓"}</span>
+            </button>
+            {selectedHistoryId === item.id && <div className="model-lab-history-detail">
+              {historyDetailLoading && <p role="status">선택한 결과를 조회하는 중입니다.</p>}
+              {historyDetailError && <p role="alert">기록 조회 실패: {historyDetailError}</p>}
+              {selectedHistory && <>
+              <strong>선택한 실행 · {jobStatusLabel(selectedHistory.status)}</strong>
+              {selectedHistory.status === "Succeeded" &&
+                typeof selectedHistory.result?.anomaly_score === "number" &&
+                <p>이상 점수 <strong>{selectedHistory.result.anomaly_score.toFixed(5)}</strong></p>}
+              {selectedHistory.status === "Failed" &&
+                <p role="status">실패 사유 · {selectedHistory.error ?? "실행 오류"}
+                  {selectedHistory.error_code && <small> ({selectedHistory.error_code})</small>}</p>}
+              {selectedHistory.status === "Cancelled" && <p>취소된 점수 계산입니다.</p>}
+              {!TERMINAL.has(selectedHistory.status) && <p>이 실행은 아직 완료되지 않았습니다.</p>}
+              <details>
+                <summary>제출 당시 Feature 입력값 {model.features.length}개 확인</summary>
+                <dl className="model-lab-history-features">
+                  {model.features.map(name => <div key={name}>
+                    <dt>{activityFeatureLabel(name)}</dt>
+                    <dd>{String((selectedHistory.spec.features as Record<string, unknown>)[name] ?? "값 없음")}</dd>
+                  </div>)}
+                </dl>
+              </details>
+              <button type="button" className="secondary"
+                disabled={running}
+                onClick={() => useHistoryInput(selectedHistory)}>이 입력으로 다시 계산 준비</button>
+              </>}
+            </div>}
+          </div>)}
         </div>
         {historyCursor && <button type="button" className="secondary"
           disabled={historyLoading} onClick={() => void loadHistory(true)}>

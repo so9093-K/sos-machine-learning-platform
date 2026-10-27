@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatError, request, submitJob, uploadFile } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
@@ -42,8 +42,13 @@ export function MLScoringPanel({
   const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
   const [previousJobNotice, setPreviousJobNotice] = useState(false);
   const [result, setResult] = useState<ScoringResult | null>(null);
+  const [resultError, setResultError] = useState("");
+  const [resultRetry, setResultRetry] = useState(0);
+  const resultRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [historyError, setHistoryError] = useState("");
+  const [loadingHistoryId, setLoadingHistoryId] = useState<string | null>(null);
+  const historySelectionRequest = useRef(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const { items: history, nextCursor, refresh, loadMore } =
     usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
@@ -98,20 +103,27 @@ export function MLScoringPanel({
   useEffect(() => {
     let alive = true;
     setResult(null);
+    setResultError("");
     const resultId = selectedJob?.result?.scoring_result_id;
     if (selectedJob?.status === "Succeeded" && typeof resultId === "string") {
       void request<ScoringResult>(`/api/ml/scoring/results/${encodeURIComponent(resultId)}`)
         .then(data => { if (alive) setResult(data); })
-        .catch(e => { if (alive) setError(formatError(e)); });
+        .catch(e => { if (alive) setResultError(formatError(e)); });
     }
     return () => { alive = false; };
-  }, [selectedJob?.status, selectedJob?.result?.scoring_result_id]);
+  }, [selectedJob?.status, selectedJob?.result?.scoring_result_id, resultRetry]);
+
+  useEffect(() => {
+    if (selectedJob?.id) resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedJob?.id]);
 
   const checkedColumns = columnStatus === "ready" && columnsDatasetId === datasetId;
   const missingFeatures = checkedColumns
     ? model.features.filter(feature => !columns.some(col => col.name === feature)) : [];
   const inputReady = datasetId !== "" && checkedColumns && missingFeatures.length === 0;
   function chooseDataset(id: string) {
+    historySelectionRequest.current += 1;
+    setLoadingHistoryId(null);
     if (selectedJob && !TERMINAL.has(selectedJob.status)) setPreviousJobNotice(true);
     setDatasetId(id);
     setColumnStatus("idle");
@@ -140,6 +152,8 @@ export function MLScoringPanel({
 
   async function create() {
     if (submitted || uploading || !canRun || !inputReady) return;
+    historySelectionRequest.current += 1;
+    setLoadingHistoryId(null);
     setSubmitted(true);
     setError("");
     try {
@@ -148,8 +162,8 @@ export function MLScoringPanel({
         dataset_id: datasetId,
         label_column: labelColumn || null,
       });
+      // 선택한 Job/Result가 같으면 기존 결과를 유지한다. 새로운 판본은 위의 일치 검사로 격리한다.
       setSelectedJob(job);
-      setResult(null);
       if (historyOpen) void refresh().catch(e => setHistoryError(formatError(e)));
     } catch (e) {
       setError(formatError(e));
@@ -159,13 +173,23 @@ export function MLScoringPanel({
   }
 
   async function selectHistory(id: string) {
-    setError("");
+    if (submitted || uploading) return;
+    const requestNumber = ++historySelectionRequest.current;
+    setLoadingHistoryId(id);
+    setHistoryError("");
     try {
-      setSelectedJob(await request<MLScoringJob>(
+      const restored = await request<MLScoringJob>(
         `/api/ml/scoring/jobs/${encodeURIComponent(id)}`,
-      ));
+      );
+      if (requestNumber !== historySelectionRequest.current) return;
+      if (restored.id !== id || restored.spec.model_revision_id !== model.id)
+        throw new Error("현재 모델 또는 선택한 실행 기록과 조회 결과가 다릅니다.");
+      setSelectedJob(restored);
+      setError("");
     } catch (e) {
-      setError(formatError(e));
+      if (requestNumber === historySelectionRequest.current) setHistoryError(formatError(e));
+    } finally {
+      if (requestNumber === historySelectionRequest.current) setLoadingHistoryId(null);
     }
   }
 
@@ -182,6 +206,12 @@ export function MLScoringPanel({
     }
   }
 
+  const hasResultReference = typeof selectedJob?.result?.scoring_result_id === "string" &&
+    selectedJob.result.scoring_result_id.length > 0;
+  const visibleResult = result && selectedJob?.status === "Succeeded" &&
+    result.id === selectedJob.result?.scoring_result_id &&
+    result.model_revision_id === model.id ? result : null;
+
   const available = history.filter(job =>
     job.spec.model_revision_id === model.id);
   const value = (n: unknown) => typeof n === "number" && Number.isFinite(n)
@@ -189,8 +219,10 @@ export function MLScoringPanel({
 
   return <section className="panel" aria-label="독립 이상 점수 계산">
     <div className="panel-head"><div>
-      <h4>어떤 데이터에 모델을 적용할까요?</h4>
-      <p>선택한 Dataset에 학습 모델을 적용해 불변 Scoring Result를 생성합니다.</p>
+      <h4>{selectedJob ? "Dataset 분석 결과" : "어떤 데이터에 모델을 적용할까요?"}</h4>
+      <p>{selectedJob
+        ? "선택한 실행의 상태와 실제 결과를 먼저 확인합니다. 다른 Dataset도 아래에서 분석할 수 있습니다."
+        : "선택한 Dataset에 모델을 적용해 불변 Scoring Result를 생성합니다."}</p>
     </div></div>
     {previousJobNotice && <div role="status" className="pipeline-readiness-blocked">
       이전 Dataset에서 시작한 점수 계산 Job은 자동 취소되지 않습니다.
@@ -203,6 +235,54 @@ export function MLScoringPanel({
       <strong>모델 점수 계산 또는 상태 확인에 문제가 생겼습니다.</strong>
       <details><summary>요청 오류와 복구 정보</summary><p>{error}</p></details>
     </div>}
+    {selectedJob && <div className="result scoring-result-first" ref={resultRef}>
+      <h4>선택한 Dataset 분석 · {({
+        Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
+        Failed: "실패", Cancelled: "취소됨",
+      } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>
+      <p className="hint">실행에 사용한 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
+        "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>
+      {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
+        !selectedJob.cancel_requested &&
+        <button className="secondary" onClick={() => void cancel()}>Scoring 취소 요청</button>}
+      {selectedJob.cancel_requested && selectedJob.status === "Running" &&
+        <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
+      {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error ?? "실행 오류"}
+        {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
+      {selectedJob.status === "Succeeded" &&
+        !hasResultReference &&
+        <p role="alert">Scoring Job은 완료됐지만 결과 참조가 없습니다. 작업 이력에서 실행 근거를 확인해 주세요.</p>}
+      {selectedJob.status === "Succeeded" && hasResultReference &&
+        resultError && <div role="alert" className="pipeline-readiness-blocked">
+          <p>점수 계산은 완료됐지만 결과를 불러오지 못했습니다: {resultError}</p>
+          <button type="button" className="secondary"
+            onClick={() => setResultRetry(current => current + 1)}>결과만 다시 조회</button>
+        </div>}
+      {selectedJob.status === "Succeeded" && hasResultReference &&
+        !visibleResult && !resultError &&
+        <p role="status">완료된 분석의 결과 판본을 조회하는 중입니다.</p>}
+      {visibleResult && <div className="scoring-result-complete">
+        {visibleResult.dataset_id === model.dataset_id && visibleResult.dataset_version === model.dataset_version &&
+          <p className="hint">학습에 사용한 동일 Dataset 판본의 결과입니다.
+            독립된 Test 데이터에서 얻은 성능으로 해석하지 마세요.</p>}
+        <ScoringObservationExplorer key={visibleResult.id} result={visibleResult} canRun={canRun}
+          canCancel={canCancel} onOpenResource={onOpenResource} />
+        {(typeof visibleResult.ranking_metrics?.average_precision === "number" ||
+          typeof visibleResult.ranking_metrics?.roc_auc === "number") && <details>
+          <summary>정답 레이블 기반 순위 지표</summary>
+          {typeof visibleResult.ranking_metrics?.average_precision === "number" &&
+            <p>Average Precision · {value(visibleResult.ranking_metrics.average_precision)}</p>}
+          {typeof visibleResult.ranking_metrics?.roc_auc === "number" &&
+            <p>ROC-AUC · {value(visibleResult.ranking_metrics.roc_auc)}</p>}
+          <p className="hint">정답 레이블과 계산 조건이 충족된 경우에만 표시합니다.
+            판정 정책과 판정 정확도는 별도 평가 대상입니다.</p>
+        </details>}
+        <button type="button" className="secondary" onClick={() => onOpenResult(visibleResult.id)}>
+          모델·Dataset 판본과 기술 근거 열기 →
+        </button>
+      </div>}
+    </div>}
+    {visibleResult && <h4 className="scoring-next-input-heading">다른 Dataset 분석하기</h4>}
     {canUpload && onDatasetRegistered && <div className="scoring-file-input">
       <label>새 파일로 분석 준비
         <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
@@ -286,8 +366,11 @@ export function MLScoringPanel({
       {historyError && <p role="alert">이전 점수 계산 이력을 확인하지 못했습니다: {historyError}</p>}
       <strong>이 모델의 Scoring 이력</strong>
       {available.map(item => <button key={item.id} className="secondary"
+        type="button" disabled={submitted || uploading}
+        aria-pressed={selectedJob?.id === item.id}
         onClick={() => void selectHistory(item.id)}>
         {item.id.slice(0, 8)} · {jobStatusLabel(item.status)}
+        {loadingHistoryId === item.id ? " · 결과 조회 중…" : selectedJob?.id === item.id ? " · 선택됨" : " · 결과 확인"}
       </button>)}
       {available.length === 0 && <p className="hint">현재 조회한 이력에 이 모델의 Scoring Job이 없습니다.</p>}
       {nextCursor && <button className="secondary"
@@ -296,40 +379,5 @@ export function MLScoringPanel({
       </button>}
     </div>
     </details>
-    {selectedJob && <div className="result">
-      <h4>모델 점수 계산 · {({
-        Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
-        Failed: "실패", Cancelled: "취소됨",
-      } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>
-      <p className="hint">실행에 사용한 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
-        "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>
-      {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
-        !selectedJob.cancel_requested &&
-        <button className="secondary" onClick={() => void cancel()}>Scoring 취소 요청</button>}
-      {selectedJob.cancel_requested && selectedJob.status === "Running" &&
-        <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
-      {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error ?? "실행 오류"}
-        {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
-      {result && <div className="scoring-result-complete">
-        {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&
-          <p className="hint">학습에 사용한 동일 Dataset 판본의 결과입니다.
-            독립된 Test 데이터에서 얻은 성능으로 해석하지 마세요.</p>}
-        <ScoringObservationExplorer key={result.id} result={result} canRun={canRun}
-          canCancel={canCancel} onOpenResource={onOpenResource} />
-        {(typeof result.ranking_metrics?.average_precision === "number" ||
-          typeof result.ranking_metrics?.roc_auc === "number") && <details>
-          <summary>정답 레이블 기반 순위 지표</summary>
-          {typeof result.ranking_metrics?.average_precision === "number" &&
-            <p>Average Precision · {value(result.ranking_metrics.average_precision)}</p>}
-          {typeof result.ranking_metrics?.roc_auc === "number" &&
-            <p>ROC-AUC · {value(result.ranking_metrics.roc_auc)}</p>}
-          <p className="hint">정답 레이블과 계산 조건이 충족된 경우에만 표시합니다.
-            판정 정책과 판정 정확도는 별도 평가 대상입니다.</p>
-        </details>}
-        <button type="button" className="secondary" onClick={() => onOpenResult(result.id)}>
-          모델·Dataset 판본과 기술 근거 열기 →
-        </button>
-      </div>}
-    </div>}
   </section>;
 }

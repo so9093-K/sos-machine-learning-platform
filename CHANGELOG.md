@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 모델 사용 화면에서 Dataset 분석을 기본 경로로 제공하고, 점수 계산 완료 후 실제 분포·점수순 관측값·설명 결과를 입력 설정보다 먼저 확인할 수 있도록 배치를 변경했습니다. 선택한 관측값은 상세로 이동하고, Playground 이전 결과는 현재 입력을 변경하지 않고 인라인에서 성공·실패 내용과 당시 입력을 확인할 수 있습니다.
+
 - Python 패치 업데이트로 다시 빌드한 뒤 기존 모델의 점수 계산·설명이 입력 오류(`SOS-ML-INPUT-INVALID`)로 실패하던 문제를 고쳤습니다. 모델 복원은 Python minor와 numpy·scikit-learn 정확한 버전으로 판단하고, Python 기반 이미지를 digest로 고정했으며, 실제 불일치는 `SOS-ML-MODEL-RUNTIME-INCOMPATIBLE`로 안내합니다.
 
 - 로컬 운영자 링크가 Compose의 Dagster·MLflow 포트 설정을 따르고, 분석·학습 화면에서 해당 Dagster Run과 MLflow Run으로 바로 이동합니다. Dagster Job·단계에 설명과 재실행 안내를 추가했습니다.
