@@ -144,7 +144,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
         : <p className="hint">이 결과에는 검증 가능한 전체 점수 분포가 없습니다.
           위의 실제 요약값과 아래 관측값 목록을 확인할 수 있습니다.</p>}
       <p className="hint">높은 점수일수록 모델에서 더 이례적인 입력입니다.
-        {selectedScore !== null ? " 점선은 현재 선택한 관측값의 점수입니다." : ""}
+        {histogram && selectedScore !== null ? " 점선은 현재 선택한 관측값의 점수입니다." : ""}
         점수는 확률이나 확정된 이상 사건이 아닙니다. 판정 정책을 적용하지 않은 점수순 결과입니다.</p>
     </section>
     <div className="pipeline-section-heading">
