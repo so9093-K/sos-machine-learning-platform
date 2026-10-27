@@ -19,7 +19,7 @@ from .ml_anomaly import histogram_edges
 from .ml_input import INTEGER_DTYPES, NUMERIC
 from .ml_observation_identity import validate_observation_identity
 from .ml_runtime import load_trusted_isolation_forest
-from .ml_temporal_split import select_temporal_partition
+from .ml_temporal_split import select_temporal_partition, utc_observation_time
 from .schemas import MLScoringTemporalScope
 
 SCORING_BATCH_ROWS = 10_000
@@ -196,7 +196,17 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
     ):
         raise ValueError("Observation identity column must be separate from ML features and label")
     temporal = spec.get("temporal_scope")
-    timestamp_column = temporal["timestamp_column"] if temporal else None
+    selected_time = spec.get("observation_time_column")
+    timestamp_column = temporal["timestamp_column"] if temporal else selected_time
+    if selected_time is not None and (
+        not isinstance(selected_time, str)
+        or not selected_time
+        or selected_time in features
+        or selected_time == label
+        or selected_time == identity_column
+        or (temporal is not None and selected_time != temporal["timestamp_column"])
+    ):
+        raise ValueError("Observation time must be separate from ML inputs and match temporal scope")
     fields = [
         *features,
         *([label] if label else []),
@@ -213,6 +223,14 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                 source, scope_evidence = _scoring_scope(
                     source, dataset, model, spec["temporal_scope"]
                 )
+            elif selected_time is not None:
+                # 시간 범위를 자르지 않고, 관측 시각만 검증·UTC 정규화해 보존한다.
+                source = source.with_columns(
+                    utc_observation_time(source, selected_time).alias(selected_time)
+                )
+                invalid = source.select(pl.col(selected_time).is_null().sum()).collect().item()
+                if invalid:
+                    raise ValueError("Observation time contains missing, unzoned or malformed timestamps")
             schema = source.collect_schema()
             if any(name not in schema for name in fields):
                 raise ValueError("Scoring feature or label is missing")
@@ -273,7 +291,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                             frame[identity_column].alias("observation_id")
                         )
                     if timestamp_column is not None:
-                        # 시간 분할에서 검증한 원본 행의 시각을 같은 배치·위치에 고정한다.
+                        # 검증된 원본 관측 시각을 Scoring 결과의 동일 행·배치에 고정한다.
                         timestamp = frame[timestamp_column]
                         if isinstance(schema[timestamp_column], pl.Datetime):
                             timestamp = timestamp.dt.strftime("%+")
