@@ -224,7 +224,10 @@ export function PipelineCandidateInvestigation({
     } catch (e) { setError(formatError(e)); }
     finally { setBusy(false); }
   }
-  return <section className="pipeline-candidate-inspection" aria-label="선택한 후보 분석">
+  return <section className="pipeline-candidate-inspection"
+    aria-label={observationMode
+      ? isDefaultObservation ? "기본 표시 관측값 분석" : "선택한 관측값 분석"
+      : "선택한 후보 분석"}>
     <h5 id="pipeline-candidate-detail-heading" tabIndex={-1}>
       {observationMode ? (isDefaultObservation ? "점수순 첫 번째 관측값 미리보기" : "선택한 관측값")
         : `선택한 후보 #${candidate.row_index.toLocaleString("ko-KR")}`}</h5>
