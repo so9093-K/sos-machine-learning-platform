@@ -77,6 +77,12 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     return () => { active = false; };
   }, [result.id, retry]);
 
+  // 선택된 관측값의 상세가 실제로 갱신된 다음 해당 영역을 보여준다.
+  useEffect(() => {
+    if (selectedRow === null) return;
+    detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedRow]);
+
   async function more() {
     if (!loaded?.next_cursor || pendingMore.current) return;
     pendingMore.current = true; setLoadingMore(true); setError("");
@@ -140,10 +146,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           <button key={item.row_index} type="button"
             className="surface-button scoring-observation-choice"
             aria-pressed={selected?.row_index === item.row_index}
-            onClick={() => {
-              setSelectedRow(item.row_index);
-              detailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            }}>
+            onClick={() => setSelectedRow(item.row_index)}>
             <span className="scoring-observation-rank">{index + 1}</span>
             <span className="scoring-observation-identity">
               <strong title={item.observed_at ?? undefined}>{item.observed_at
