@@ -422,8 +422,10 @@ try {
   assert.match(defaultObservation, /2026-01-01 02:00:00 UTC/);
   assert.doesNotMatch(defaultObservation, /관측 시각·원본 관측치 ID 없음/);
   assert.match(groupedObservation, /활동 특징/);
-  // 상단 대표 Feature를 그룹에서 중복 제거해도 학습 참조값은 잃지 않아야 한다.
-  assert.match(groupedObservation, /Train 중앙값 모델 판본 없음/);
+  // 참조 모델이 없으면 비율을 추정하지 않고 비교 기준 없음으로 표시한다.
+  assert.match(groupedObservation, /Train 중앙값/);
+  assert.match(groupedObservation, /비교 기준 없음/);
+  assert.doesNotMatch(groupedObservation, /feature-reference-bars/);
   assert.match(groupedObservation, /observation-activity-highlights/);
   assert.match(groupedObservation, /전체 3개/);
   assert.match(groupedObservation, /관측 시각·원본 관측치 ID 없음/);
@@ -434,11 +436,11 @@ try {
   assert.match(groupedObservation, /프로세스 활동/);
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
-  assert.match(groupedObservation, /모델 중요도나 이상 원인 순위가 아닙니다/);
+  assert.match(groupedObservation, /중요도·정상 범위·원인 순위로 해석할 수 없습니다/);
   assert.ok(groupedObservation.indexOf("모델 판단 근거 자세히 보기") <
     groupedObservation.indexOf("활동별 지표"));
   assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
-  assert.match(groupedObservation, /모델 판본 없음/);
+  assert.match(groupedObservation, /학습 모델 판본 참조가 없어/);
   const pipelineViewOnly = renderToStaticMarkup(
     React.createElement(PipelineCandidateInvestigation, {
       candidate: { row_index: 2, anomaly_score: 0.2, features: { cnt_proc_exec: 2 } },
