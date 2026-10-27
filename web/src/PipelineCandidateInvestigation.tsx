@@ -6,6 +6,7 @@ import type { MLResourceKind } from "./PlatformNavigation";
 import type { MLExplanationJob, MLExplanationJobSummary, ExplanationResult, PipelineCandidates, ModelRevision } from "./types";
 import { PipelineShapExplanation } from "./PipelineShapExplanation";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
+import { groupActivityFeatures } from "./ActivityFeatureGroups";
 import { formatObservedAt, jobStatusLabel } from "./display-format";
 
 type Candidate = PipelineCandidates["items"][number];
@@ -74,9 +75,10 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
 
 export function PipelineCandidateInvestigation({
   candidate, scoringResultId, modelRevisionId, canRun, canCancel, onOpenResource,
-  observationMode = false,
+  observationMode = false, scoreOrder,
 }: {
   candidate: Candidate; scoringResultId: string; modelRevisionId: string | null;
+  scoreOrder?: number;
   canRun: boolean; canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   observationMode?: boolean;
@@ -112,6 +114,8 @@ export function PipelineCandidateInvestigation({
     medians.length === model.features.length &&
     medians.every(v => typeof v === "number" && Number.isFinite(v))
     ? new Map(model.features.map((name, i) => [name, medians[i] as number])) : null;
+  // 집계 Feature의 표시 그룹이며, 모델 중요도나 원인 순위가 아니다.
+  const activityGroups = groupActivityFeatures(candidate.features);
   useEffect(() => {
     let active = true;
     setPreviousLookup("loading");
@@ -199,7 +203,9 @@ export function PipelineCandidateInvestigation({
   return <section className="pipeline-candidate-inspection" aria-label="선택한 후보 분석">
     <h5 id="pipeline-candidate-detail-heading" tabIndex={-1}>
       선택한 {subject} #{candidate.row_index.toLocaleString("ko-KR")}</h5>
-    <p>이상 점수 <strong>{format(candidate.anomaly_score)}</strong> · 높을수록 모델이 더 특이하게 본 관측치입니다.</p>
+    <p>이상 점수 <strong>{format(candidate.anomaly_score)}</strong>
+      {typeof scoreOrder === "number" ? ` · 점수순 ${scoreOrder.toLocaleString("ko-KR")}번째` : ""}
+      {" · "}높을수록 모델이 더 특이하게 본 관측치입니다.</p>
     <dl className="pipeline-candidate-observation">
       <div><dt>관측 시각</dt><dd title={candidate.observed_at ?? undefined}>{candidate.observed_at
         ? formatObservedAt(candidate.observed_at) : "이전 결과에 시각 근거 없음"}</dd></div>
@@ -209,7 +215,46 @@ export function PipelineCandidateInvestigation({
     <p className="hint">활동 Feature 관측치이며 원시 이벤트 한 건이라는 뜻은 아닙니다.
       시각은 고유 ID가 아니고 이상 점수는 실제 사건을 확정하지 않습니다.
       UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다.</p>
-    <details className="pipeline-feature-details" open={observationMode}>
+    {observationMode && <section className="observation-activity" aria-label="관측된 활동 특징">
+      <div className="observation-activity-heading">
+        <h6>이 관측값에서 확인된 활동 특징</h6>
+        <p>파일·프로세스·네트워크 등의 집계 Feature를 활동별로 묶었습니다.
+          모델 중요도 순위나 실제 로그의 프로세스·IP 정보가 아닙니다.</p>
+      </div>
+      <div className="observation-activity-groups">
+        {activityGroups.map(group => <section key={group.id} className="observation-activity-group">
+          <div className="observation-activity-group-heading">
+            <strong>{group.title}</strong><span>{group.entries.length}개 입력값</span>
+          </div>
+          <p>{group.description}</p>
+          <div className="observation-activity-figures">
+            {group.entries.slice(0, 3).map(([name, value]) =>
+              <div key={name} className="observation-activity-figure">
+                <span title={name}>{activityFeatureLabel(name)}</span>
+                <strong>{format(value)}</strong>
+                <small>Train 중앙값 {referenceMap?.has(name)
+                  ? format(referenceMap.get(name)) : "근거 없음"}</small>
+              </div>)}
+          </div>
+          {group.entries.length > 3 && <details className="observation-activity-extra">
+            <summary>나머지 {group.entries.length - 3}개 입력값 확인</summary>
+            <div className="table-scroll"><table>
+              <thead><tr><th>Feature</th><th>관측값</th><th>Train 중앙값</th></tr></thead>
+              <tbody>{group.entries.slice(3).map(([name, value]) => <tr key={name}>
+                <th title={name}>{activityFeatureLabel(name)}</th><td>{format(value)}</td>
+                <td>{referenceMap?.has(name) ? format(referenceMap.get(name)) : "근거 없음"}</td>
+              </tr>)}</tbody>
+            </table></div>
+          </details>}
+        </section>)}
+      </div>
+      <p className="hint">중앙값은 학습 입력과 비교하기 위한 기준일 뿐 정상 범위나 이상 원인을 의미하지 않습니다.
+        개별 모델의 설명을 확인하려면 아래 SHAP 계산 결과를 사용하세요.</p>
+    </section>}
+    <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
+      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
+      onOpenResource={onOpenResource} />
+    <details className="pipeline-feature-details">
       <summary>전체 {Object.keys(candidate.features).length}개 Feature 관측값·학습 참조값 비교</summary>
       <p className="hint">Train Feature별 중앙값은 비교 기준입니다.
         값의 차이만으로 원인이나 모델 기여도를 판단하지 않습니다.</p>
@@ -234,9 +279,6 @@ export function PipelineCandidateInvestigation({
             : !modelRevisionId ? "판본 없음" : !model ? "조회 중" : "근거 없음"}</td></tr>)}</tbody>
     </table></div>
     </details>
-    <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
-      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
-      onOpenResource={onOpenResource} />
     {previousLookup === "loading" && <p role="status">
       이 후보의 기존 설명 작업을 확인하고 있습니다.
     </p>}
