@@ -3,6 +3,8 @@ import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { MLScoringPanel } from "./MLScoringPanel";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
+import { ShapContributionChart } from "./PipelineShapExplanation";
+import { SensitivityChart } from "./PipelineCandidateInvestigation";
 import { MLDecisionPanel, type DecisionView } from "./MLDecisionPanel";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type {
@@ -164,8 +166,10 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
     })()}
     {kind === "explanation" && (() => {
       const r = data as ExplanationResult;
-      const values = Array.isArray(r.output.feature_sensitivities)
-        ? r.output.feature_sensitivities as Array<Record<string, unknown>> : [];
+      // 설명 방법별 결과 형태는 다른 계약이므로 치환 민감도와 SHAP을 혼용하지 않는다.
+      const supported = r.method === "permutation_shap_median_v1" ||
+        r.method === "median_reference_feature_replacement";
+      const methodConsistent = r.method === r.output.method;
       return <>
         <dl className="ml-resource-fields">
           <Field label="Scoring Result"><button className="secondary"
@@ -175,14 +179,14 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
           <Field label="방법">{r.method}</Field>
           <Field label="결과 내부 행 번호">{r.row_index}</Field>
         </dl>
-        <div className="table-scroll"><table><caption>Feature 참조 중앙값 치환에 따른 점수 민감도</caption>
-          <thead><tr><th>Feature</th><th>실제값</th><th>참조 중앙값</th><th>점수 변화</th></tr></thead>
-          <tbody>{values.map((x,i) => <tr key={i}><th>{String(x.feature)}</th>
-            <td>{amount(x.actual_value)}</td><td>{amount(x.reference_median)}</td>
-            <td>{amount(x.anomaly_score_delta)}</td></tr>)}</tbody>
-        </table></div>
-        <p className="hint">국소 점수 민감도이며 SHAP·LIME·인과적 원인·가법 기여도로 해석하지 않습니다.
-          행 번호는 Scoring Result 내부 순서이지 원본 관측치 ID가 아닙니다.</p>
+        {!supported
+          ? <p role="alert">이 설명 방법의 결과 표시는 아직 지원하지 않습니다. 계산 결과의 판본과 방법을 확인하세요.</p>
+          : !methodConsistent
+            ? <p role="alert">설명 결과의 방법과 계산 근거가 일치하지 않습니다. 내용을 표시하지 않습니다.</p>
+            : r.method === "permutation_shap_median_v1"
+              ? <ShapContributionChart result={r} />
+              : <SensitivityChart result={r} />}
+        <p className="hint">결과 행 번호는 Scoring Result 내부 순서이지 원본 관측치 ID가 아닙니다.</p>
       </>;
     })()}
   </section>;
