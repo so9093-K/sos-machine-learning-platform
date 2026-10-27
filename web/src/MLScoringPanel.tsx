@@ -236,10 +236,10 @@ export function MLScoringPanel({
       <details><summary>요청 오류와 복구 정보</summary><p>{error}</p></details>
     </div>}
     {selectedJob && <div className="result scoring-result-first" ref={resultRef}>
-      <h4>선택한 Dataset 분석 · {({
+      {!visibleResult && <h4>선택한 Dataset 분석 · {({
         Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
         Failed: "실패", Cancelled: "취소됨",
-      } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>
+      } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>}
       <p className="hint">실행에 사용한 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
         "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>
       {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
