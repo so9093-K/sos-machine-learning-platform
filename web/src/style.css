@@ -1070,6 +1070,8 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .observation-activity-heading p { font-size:12px; line-height:1.6;
   color:var(--sos-muted); margin:0; }
 .observation-activity-groups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+/* Scoring 오른쪽 상세는 부모 패널이 이미 좁으므로 카드 한 열을 사용한다. */
+.scoring-observation-detail .observation-activity-groups { grid-template-columns:minmax(0,1fr); }
 .observation-activity-group { display:grid; gap:9px; align-content:start; min-width:0;
   padding:13px; background:var(--sos-panel); border:1px solid var(--sos-border); border-radius:10px; }
 .observation-activity-group-heading { display:flex; flex-wrap:wrap; gap:6px;
