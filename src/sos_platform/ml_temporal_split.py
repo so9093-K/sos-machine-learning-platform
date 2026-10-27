@@ -40,7 +40,7 @@ def utc_observation_time(source: pl.LazyFrame, timestamp_column: str) -> pl.Expr
         parsed = pl.col(timestamp_column).dt.convert_time_zone("UTC")
     else:
         raise ValueError("Temporal split requires timezone-aware event timestamps")
-
+    return parsed
 
 
 def select_temporal_partition(
