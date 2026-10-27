@@ -116,6 +116,11 @@ export function PipelineCandidateInvestigation({
     ? new Map(model.features.map((name, i) => [name, medians[i] as number])) : null;
   // 집계 Feature의 표시 그룹이며, 모델 중요도나 원인 순위가 아니다.
   const activityGroups = groupActivityFeatures(candidate.features);
+  // 이 세 지표는 결과 화면의 고정 미리보기이며 중요도나 이상 원인 순위가 아니다.
+  const previewNames = ["io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create"]
+    .filter(name => Object.prototype.hasOwnProperty.call(candidate.features, name));
+  const previewFeatures = previewNames.length > 0
+    ? previewNames : Object.keys(candidate.features).slice(0, 3);
   function referenceLabel(name: string): string {
     if (referenceMap?.has(name)) return format(referenceMap.get(name));
     if (!modelRevisionId) return "모델 판본 없음";
@@ -220,7 +225,7 @@ export function PipelineCandidateInvestigation({
   }
   return <section className="pipeline-candidate-inspection" aria-label="선택한 후보 분석">
     <h5 id="pipeline-candidate-detail-heading" tabIndex={-1}>
-      선택한 {subject} #{candidate.row_index.toLocaleString("ko-KR")}</h5>
+      {observationMode ? "선택한 관측값" : `선택한 후보 #${candidate.row_index.toLocaleString("ko-KR")}`}</h5>
     <p>이상 점수 <strong>{format(candidate.anomaly_score)}</strong>
       {typeof scoreOrder === "number" ? ` · 점수순 ${scoreOrder.toLocaleString("ko-KR")}번째` : ""}
       {" · "}높을수록 모델이 더 특이하게 본 관측치입니다.</p>
@@ -235,10 +240,14 @@ export function PipelineCandidateInvestigation({
       UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다.</p>
     {observationMode && <section className="observation-activity" aria-label="관측된 활동 특징">
       <div className="observation-activity-heading">
-        <h6>이 관측값에서 확인된 활동 특징</h6>
-        <p>파일·프로세스·네트워크 등의 집계 Feature를 활동별로 묶었습니다.
-          각 그룹의 첫 항목은 대표적으로 고른 지표이며 모델 중요도 순위가 아닙니다.
-          실제 로그의 프로세스·IP 정보도 아닙니다.</p>
+        <h6>활동 특징</h6>
+        <p>실제 관측된 집계 Feature입니다. 다음 항목은 고정된 미리보기이며 모델 중요도나 이상 원인 순위가 아닙니다.</p>
+      </div>
+      <div className="observation-activity-highlights">
+        {previewFeatures.map(name => <div key={name} className="observation-activity-highlight">
+          <span title={name}>{activityFeatureLabel(name)}</span>
+          <strong>{format(candidate.features[name])}</strong>
+        </div>)}
       </div>
       {!modelRevisionId && <p className="hint">학습 모델 판본 참조가 없어 중앙값을 비교할 수 없습니다.</p>}
       {modelRevisionId && !model && !modelError &&
@@ -250,6 +259,8 @@ export function PipelineCandidateInvestigation({
         </button>
       </div>}
       {model && !referenceMap && <p className="hint">이 모델에는 비교 가능한 학습 중앙값이 없습니다.</p>}
+      <details className="scoring-activity-group-details">
+        <summary>전체 활동 지표 {Object.keys(candidate.features).length}개·학습 참조값 확인</summary>
       <div className="observation-activity-groups">
         {activityGroups.map(group => <section key={group.id} className="observation-activity-group">
           <div className="observation-activity-group-heading">
@@ -279,6 +290,7 @@ export function PipelineCandidateInvestigation({
           </details>}
         </section>)}
       </div>
+      </details>
       <p className="hint">중앙값 대비 차이는 같은 Feature의 실제 값과 학습 참조값을 뺀 수치입니다.
         정상 범위, Feature 중요도 또는 이상 원인을 의미하지 않습니다.
         모델 점수의 기여를 확인하려면 아래 SHAP 계산 결과를 사용하세요.</p>
@@ -286,7 +298,7 @@ export function PipelineCandidateInvestigation({
     {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
       onOpenResource={onOpenResource} />}
-    <details className="pipeline-feature-details">
+    {!observationMode && <details className="pipeline-feature-details">
       <summary>전체 {Object.keys(candidate.features).length}개 Feature 관측값·학습 참조값 비교</summary>
       <p className="hint">Train Feature별 중앙값은 비교 기준입니다.
         값의 차이만으로 원인이나 모델 기여도를 판단하지 않습니다.</p>
@@ -310,7 +322,7 @@ export function PipelineCandidateInvestigation({
             : modelError ? "조회 오류"
             : !modelRevisionId ? "판본 없음" : !model ? "조회 중" : "근거 없음"}</td></tr>)}</tbody>
     </table></div>
-    </details>
+    </details>}
     {!observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
       onOpenResource={onOpenResource} />}
