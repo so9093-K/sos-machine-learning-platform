@@ -229,15 +229,22 @@ export function PipelineCandidateInvestigation({
     <p>이상 점수 <strong>{format(candidate.anomaly_score)}</strong>
       {typeof scoreOrder === "number" ? ` · 점수순 ${scoreOrder.toLocaleString("ko-KR")}번째` : ""}
       {" · "}높을수록 모델이 더 특이하게 본 관측치입니다.</p>
-    <dl className="pipeline-candidate-observation">
-      <div><dt>관측 시각</dt><dd title={candidate.observed_at ?? undefined}>{candidate.observed_at
-        ? formatObservedAt(candidate.observed_at) : "이전 결과에 시각 근거 없음"}</dd></div>
-      <div><dt>관측치 ID (UUIDv4)</dt><dd>{candidate.observation_id ?? "연결된 ID 없음"}</dd></div>
-      <div><dt>결과 내부 행 번호</dt><dd>{candidate.row_index.toLocaleString("ko-KR")}</dd></div>
-    </dl>
-    <p className="hint">활동 Feature 관측치이며 원시 이벤트 한 건이라는 뜻은 아닙니다.
-      시각은 고유 ID가 아니고 이상 점수는 실제 사건을 확정하지 않습니다.
-      UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다.</p>
+    {observationMode && !candidate.observed_at && !candidate.observation_id
+      ? <p className="observation-source-missing">관측 시각·원본 관측치 ID 없음
+          <strong>결과 내부 행 #{candidate.row_index.toLocaleString("ko-KR")}</strong>
+          <small>이 번호는 해당 Scoring Result에서만 유효하며 원본 이벤트의 ID가 아닙니다.</small>
+        </p>
+      : <dl className="pipeline-candidate-observation">
+          <div><dt>관측 시각</dt><dd title={candidate.observed_at ?? undefined}>{candidate.observed_at
+            ? formatObservedAt(candidate.observed_at) : "시각 근거 없음"}</dd></div>
+          <div><dt>관측치 ID (UUIDv4)</dt><dd>{candidate.observation_id ?? "연결된 ID 없음"}</dd></div>
+          <div><dt>결과 내부 행 번호</dt><dd>{candidate.row_index.toLocaleString("ko-KR")}</dd></div>
+        </dl>}
+    {!observationMode && <p className="hint">활동 Feature 관측치는 원시 이벤트 한 건이라는 뜻이 아니며,
+      관측 시각은 고유 ID가 아닙니다. UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다.</p>}
+    {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
+      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
+      onOpenResource={onOpenResource} />}
     {observationMode && <section className="observation-activity" aria-label="관측된 활동 특징">
       <div className="observation-activity-heading">
         <h6>활동 특징</h6>
@@ -264,13 +271,18 @@ export function PipelineCandidateInvestigation({
         <span>전체 {Object.keys(candidate.features).length}개 · 아래 그룹별 실제값과 학습 참조값</span>
       </div>
       <div className="observation-activity-groups">
-        {activityGroups.map(group => <section key={group.id} className="observation-activity-group">
+        {activityGroups.map(group => {
+          // 상단 고정 지표와 각 그룹의 미리보기에 같은 Feature를 반복 노출하지 않는다.
+          const remainingGroup = group.entries.filter(([name]) => !previewFeatures.includes(name));
+          const shown = remainingGroup.slice(0, 1);
+          const hidden = remainingGroup.slice(1);
+          return <section key={group.id} className="observation-activity-group">
           <div className="observation-activity-group-heading">
             <strong>{group.title}</strong><span>{group.entries.length}개 입력값</span>
           </div>
           <p>{group.description}</p>
           <div className="observation-activity-figures">
-            {group.entries.slice(0, 3).map(([name, value]) =>
+            {shown.map(([name, value]) =>
               <div key={name} className="observation-activity-figure">
                 <span title={name}>{activityFeatureLabel(name)}</span>
                 <strong>{format(value)}</strong>
@@ -279,26 +291,22 @@ export function PipelineCandidateInvestigation({
                   <small className="observation-activity-difference">{referenceDifference(name, value)}</small>}
               </div>)}
           </div>
-          {group.entries.length > 3 && <details className="observation-activity-extra">
-            <summary>나머지 {group.entries.length - 3}개 입력값 확인</summary>
+          {hidden.length > 0 && <details className="observation-activity-extra">
+            <summary>추가 지표 {hidden.length}개 확인</summary>
             <div className="table-scroll"><table>
               <thead><tr><th>Feature</th><th>관측값</th><th>Train 중앙값</th><th>중앙값 대비</th></tr></thead>
-              <tbody>{group.entries.slice(3).map(([name, value]) => <tr key={name}>
+              <tbody>{hidden.map(([name, value]) => <tr key={name}>
                 <th title={name}>{activityFeatureLabel(name)}</th><td>{format(value)}</td>
                 <td>{referenceLabel(name)}</td>
                 <td>{referenceDifference(name, value) ?? "비교 불가"}</td>
               </tr>)}</tbody>
             </table></div>
           </details>}
-        </section>)}
+        </section>;
+        })}
       </div>
-      <p className="hint">중앙값 대비 차이는 같은 Feature의 실제 값과 학습 참조값을 뺀 수치입니다.
-        정상 범위, Feature 중요도 또는 이상 원인을 의미하지 않습니다.
-        모델 점수의 기여를 확인하려면 아래 SHAP 계산 결과를 사용하세요.</p>
+      <p className="hint">Train 중앙값과의 차이는 정상 범위·Feature 중요도·이상 원인을 의미하지 않습니다.</p>
     </section>}
-    {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
-      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
-      onOpenResource={onOpenResource} />}
     {!observationMode && <details className="pipeline-feature-details">
       <summary>전체 {Object.keys(candidate.features).length}개 Feature 관측값·학습 참조값 비교</summary>
       <p className="hint">Train Feature별 중앙값은 비교 기준입니다.
