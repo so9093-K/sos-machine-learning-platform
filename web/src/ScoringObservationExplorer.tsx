@@ -51,6 +51,11 @@ function distributionOption(summary: Record<string, unknown>, rowCount: number,
   };
 }
 
+/** 최초 상위 관측값의 기본 표시와 명시적 사용자 선택을 구별한다. */
+export function observationSelectionLabel(userSelected: boolean): string {
+  return userSelected ? "현재 선택" : "기본 표시";
+}
+
 export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenResource }: {
   result: ScoringResult;
   canRun: boolean;
@@ -169,7 +174,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           <p>점수가 높은 순 · 전체 {result.row_count.toLocaleString("ko-KR")}건 중
             {loaded ? ` ${loaded.items.length.toLocaleString("ko-KR")}건 조회` : " 조회 대기"}</p>
           {selected && <p className="scoring-observation-current" role="status">
-            {userSelected ? "현재 선택" : "기본 표시"} · 점수순 {scoreOrder?.toLocaleString("ko-KR")}번째 ·
+            {observationSelectionLabel(userSelected)} · 점수순 {scoreOrder?.toLocaleString("ko-KR")}번째 ·
             결과 행 #{selected.row_index.toLocaleString("ko-KR")} · 점수 {readable(selected.anomaly_score)}
           </p>}
         </div>
