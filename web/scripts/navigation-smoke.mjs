@@ -719,7 +719,7 @@ try {
   assert.match(playgroundHtml, /프로세스 실행 횟수/);
   assert.match(playgroundHtml, /파일 활동/);
   assert.match(playgroundHtml, /프로세스 활동/);
-  assert.match(playgroundHtml, /활동량·시간 특성|네트워크 활동/);
+  assert.doesNotMatch(playgroundHtml, /네트워크 활동/); // 입력에 없는 그룹은 만들지 않는다.
   assert.match(playgroundHtml, /입력 Feature와 Train 참조값 비교/);
   assert.match(playgroundHtml, /현재 입력값은 아직 계산하지 않았습니다/);
   assert.match(playgroundHtml, /실제 이상 점수 계산하기/);
