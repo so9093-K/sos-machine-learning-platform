@@ -127,6 +127,12 @@ DEFINITIONS = (
         "validation",
     ),
     spec(
+        "SOS-ML-MODEL-RUNTIME-INCOMPATIBLE",
+        "모델 실행 환경 불일치",
+        "이 모델을 학습한 실행 환경(Python minor·numpy·scikit-learn 버전)이 현재 Worker와 달라 모델을 불러올 수 없습니다. 현재 환경에서 다시 학습하세요.",
+        "precondition",
+    ),
+    spec(
         "SOS-ML-TRAIN-STAGE-LIMIT",
         "학습 임시 저장 공간 초과",
         "학습 표본 선택의 정렬 임시 파일이 실행 저장 공간 예산을 초과했습니다. 입력 범위나 실행 자원을 확인하세요.",

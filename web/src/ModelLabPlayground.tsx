@@ -234,7 +234,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
           {previousScore !== null && <div><span>이전 계산과의 차이</span>
             <strong>{(lastScore - previousScore) > 0 ? "+" : ""}{(lastScore - previousScore).toFixed(5)}</strong></div>}
         </div>}
-      {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error_code ?? "실행 오류"}</p>}
+      {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}
+        {job.error_code && <small> ({job.error_code})</small>}</p>}
       <p className="hint">점수가 높을수록 모델에서 이례적인 입력입니다. 확률이나 사건 판정은 아닙니다.</p>
     </div>}
     <details className="model-lab-playground-history" onToggle={event => {

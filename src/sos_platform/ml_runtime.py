@@ -13,6 +13,7 @@ import numpy as np
 import sklearn
 from sklearn.ensemble import IsolationForest
 
+from .errors import PlatformError
 from .ml_if_preprocessing import FittedIFMedianImputer
 from .ml_isolation_forest import IsolationForestConfig, TrainedIsolationForest
 
@@ -20,8 +21,23 @@ IF_BUNDLE_SCHEMA = "if_model_with_preprocessing_v1"
 from .object_store import ObjectStore
 
 
+def _python_minor(version: object) -> tuple[str, str] | None:
+    parts = version.split(".") if isinstance(version, str) else []
+    return (parts[0], parts[1]) if len(parts) >= 2 and all(p.isdigit() for p in parts[:2]) else None
+
+
 def assert_model_runtime_compatible(revision: dict) -> None:
-    """지원된 알고리즘·직렬화 형식 및 정확한 실행 버전을 확인한다."""
+    """지원된 알고리즘·직렬화 형식과 모델 복원에 영향을 주는 실행 버전을 확인한다.
+
+    joblib 복원 호환성은 numpy·scikit-learn 버전이 좌우하므로 두 라이브러리는 정확히
+    일치해야 한다. Python은 같은 minor 버전이면 허용한다. 패치 릴리스는 pickle 형식과
+    객체 구조를 바꾸지 않으므로, 베이스 이미지의 보안 패치만으로 기존 모델을 사용
+    불가로 만들지 않는다.
+
+    Raises:
+        ValueError: 지원하지 않는 알고리즘·직렬화 계약 또는 손상된 모델 서명.
+        PlatformError: 모델을 학습한 실행 버전이 현재 Worker와 호환되지 않음.
+    """
     runtime = revision["runtime"]
     if revision["algorithm"] != "isolation_forest":
         raise ValueError("Unsupported model algorithm")
@@ -32,13 +48,12 @@ def assert_model_runtime_compatible(revision: dict) -> None:
     if runtime.get("artifact_schema") == IF_BUNDLE_SCHEMA:
         if runtime.get("preprocessing_mode") != "train_median_v1":
             raise ValueError("Unknown model preprocessing contract")
-    required = {
-        "python": platform.python_version(),
-        "numpy": np.__version__,
-        "scikit_learn": sklearn.__version__,
-    }
-    if any(runtime.get(name) != value for name, value in required.items()):
-        raise ValueError("Model Runtime is incompatible with the current Worker")
+    if (
+        _python_minor(runtime.get("python")) != tuple(platform.python_version_tuple()[:2])
+        or runtime.get("numpy") != np.__version__
+        or runtime.get("scikit_learn") != sklearn.__version__
+    ):
+        raise PlatformError("SOS-ML-MODEL-RUNTIME-INCOMPATIBLE")
     if not isinstance(runtime.get("feature_dtypes"), list):
         raise ValueError("Model feature signature is unavailable")
     if len(runtime["feature_dtypes"]) != len(revision["features"]):

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Python 패치 업데이트로 다시 빌드한 뒤 기존 모델의 점수 계산·설명이 입력 오류(`SOS-ML-INPUT-INVALID`)로 실패하던 문제를 고쳤습니다. 모델 복원은 Python minor와 numpy·scikit-learn 정확한 버전으로 판단하고, Python 기반 이미지를 digest로 고정했으며, 실제 불일치는 `SOS-ML-MODEL-RUNTIME-INCOMPATIBLE`로 안내합니다.
+
 - 로컬 운영자 링크가 Compose의 Dagster·MLflow 포트 설정을 따르고, 분석·학습 화면에서 해당 Dagster Run과 MLflow Run으로 바로 이동합니다. Dagster Job·단계에 설명과 재실행 안내를 추가했습니다.
 
 - 새 MLflow 기록에 분석 단위 Run 이름·태그, 학습 입력 조건(Feature 개수·지문, 결측 정책, 입력 범위, 시간 분할), 연구 묶음 설명, 기본 모델 그룹 제목과 모델 버전 설명(무결성 태그 수정 금지 안내)을 남깁니다. 기존 이름·Registry 키는 변경하지 않습니다.

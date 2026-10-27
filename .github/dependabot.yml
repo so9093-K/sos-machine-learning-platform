@@ -4,3 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # 고정한 Python 베이스 이미지 digest를 리뷰 가능한 PR로만 갱신한다.
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /dagster
+    schedule:
+      interval: monthly

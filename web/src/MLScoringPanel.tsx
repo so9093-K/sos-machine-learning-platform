@@ -308,7 +308,8 @@ export function MLScoringPanel({
         <button className="secondary" onClick={() => void cancel()}>Scoring 취소 요청</button>}
       {selectedJob.cancel_requested && selectedJob.status === "Running" &&
         <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
-      {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error_code}</p>}
+      {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error ?? "실행 오류"}
+        {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
       {result && <div className="scoring-result-complete">
         {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&
           <p className="hint">학습에 사용한 동일 Dataset 판본의 결과입니다.
