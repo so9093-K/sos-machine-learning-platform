@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatError, request, submitJob, uploadFile } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
@@ -42,6 +42,7 @@ export function MLScoringPanel({
   const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
   const [previousJobNotice, setPreviousJobNotice] = useState(false);
   const [result, setResult] = useState<ScoringResult | null>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [historyError, setHistoryError] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -106,6 +107,10 @@ export function MLScoringPanel({
     }
     return () => { alive = false; };
   }, [selectedJob?.status, selectedJob?.result?.scoring_result_id]);
+
+  useEffect(() => {
+    if (selectedJob?.id) resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedJob?.id]);
 
   const checkedColumns = columnStatus === "ready" && columnsDatasetId === datasetId;
   const missingFeatures = checkedColumns
@@ -203,6 +208,42 @@ export function MLScoringPanel({
       <strong>모델 점수 계산 또는 상태 확인에 문제가 생겼습니다.</strong>
       <details><summary>요청 오류와 복구 정보</summary><p>{error}</p></details>
     </div>}
+    {selectedJob && <div className="result scoring-result-first" ref={resultRef}>
+      <h4>선택한 Dataset 분석 · {({
+        Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
+        Failed: "실패", Cancelled: "취소됨",
+      } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>
+      <p className="hint">실행에 사용한 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
+        "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>
+      {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
+        !selectedJob.cancel_requested &&
+        <button className="secondary" onClick={() => void cancel()}>Scoring 취소 요청</button>}
+      {selectedJob.cancel_requested && selectedJob.status === "Running" &&
+        <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
+      {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error ?? "실행 오류"}
+        {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
+      {result && <div className="scoring-result-complete">
+        {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&
+          <p className="hint">학습에 사용한 동일 Dataset 판본의 결과입니다.
+            독립된 Test 데이터에서 얻은 성능으로 해석하지 마세요.</p>}
+        <ScoringObservationExplorer key={result.id} result={result} canRun={canRun}
+          canCancel={canCancel} onOpenResource={onOpenResource} />
+        {(typeof result.ranking_metrics?.average_precision === "number" ||
+          typeof result.ranking_metrics?.roc_auc === "number") && <details>
+          <summary>정답 레이블 기반 순위 지표</summary>
+          {typeof result.ranking_metrics?.average_precision === "number" &&
+            <p>Average Precision · {value(result.ranking_metrics.average_precision)}</p>}
+          {typeof result.ranking_metrics?.roc_auc === "number" &&
+            <p>ROC-AUC · {value(result.ranking_metrics.roc_auc)}</p>}
+          <p className="hint">정답 레이블과 계산 조건이 충족된 경우에만 표시합니다.
+            판정 정책과 판정 정확도는 별도 평가 대상입니다.</p>
+        </details>}
+        <button type="button" className="secondary" onClick={() => onOpenResult(result.id)}>
+          모델·Dataset 판본과 기술 근거 열기 →
+        </button>
+      </div>}
+    </div>}
+    {result && <h4 className="scoring-next-input-heading">다른 Dataset 분석하기</h4>}
     {canUpload && onDatasetRegistered && <div className="scoring-file-input">
       <label>새 파일로 분석 준비
         <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
@@ -296,40 +337,6 @@ export function MLScoringPanel({
       </button>}
     </div>
     </details>
-    {selectedJob && <div className="result">
-      <h4>모델 점수 계산 · {({
-        Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
-        Failed: "실패", Cancelled: "취소됨",
-      } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>
-      <p className="hint">실행에 사용한 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
-        "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>
-      {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
-        !selectedJob.cancel_requested &&
-        <button className="secondary" onClick={() => void cancel()}>Scoring 취소 요청</button>}
-      {selectedJob.cancel_requested && selectedJob.status === "Running" &&
-        <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
-      {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error ?? "실행 오류"}
-        {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
-      {result && <div className="scoring-result-complete">
-        {result.dataset_id === model.dataset_id && result.dataset_version === model.dataset_version &&
-          <p className="hint">학습에 사용한 동일 Dataset 판본의 결과입니다.
-            독립된 Test 데이터에서 얻은 성능으로 해석하지 마세요.</p>}
-        <ScoringObservationExplorer key={result.id} result={result} canRun={canRun}
-          canCancel={canCancel} onOpenResource={onOpenResource} />
-        {(typeof result.ranking_metrics?.average_precision === "number" ||
-          typeof result.ranking_metrics?.roc_auc === "number") && <details>
-          <summary>정답 레이블 기반 순위 지표</summary>
-          {typeof result.ranking_metrics?.average_precision === "number" &&
-            <p>Average Precision · {value(result.ranking_metrics.average_precision)}</p>}
-          {typeof result.ranking_metrics?.roc_auc === "number" &&
-            <p>ROC-AUC · {value(result.ranking_metrics.roc_auc)}</p>}
-          <p className="hint">정답 레이블과 계산 조건이 충족된 경우에만 표시합니다.
-            판정 정책과 판정 정확도는 별도 평가 대상입니다.</p>
-        </details>}
-        <button type="button" className="secondary" onClick={() => onOpenResult(result.id)}>
-          모델·Dataset 판본과 기술 근거 열기 →
-        </button>
-      </div>}
-    </div>}
+
   </section>;
 }
