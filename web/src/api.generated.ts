@@ -2667,6 +2667,8 @@ export interface components {
             model_revision_id: string;
             /** Observation Id Column */
             observation_id_column?: string | null;
+            /** Observation Time Column */
+            observation_time_column?: string | null;
             temporal_scope?: components["schemas"]["MLScoringTemporalScope"] | null;
         };
         /**
