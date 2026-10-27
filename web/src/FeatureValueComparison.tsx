@@ -12,7 +12,7 @@ export function FeatureValueComparison({ actual, reference, actualLabel = "관�
   const referenceReady = valid(reference);
   const max = actualReady && referenceReady && actual >= 0 && reference >= 0
     ? Math.max(actual, reference) : 0;
-  const showBars = max > 0;
+  const showBars = max > 0 && referenceReady && reference > 0;
   const display = (value: number | null | undefined) => valid(value)
     ? value.toLocaleString("ko-KR", { maximumFractionDigits: 6 }) : "비교 기준 없음";
   return <div className="feature-reference-comparison">
