@@ -1,5 +1,5 @@
 # Scalar는 빌드 시에만 Node를 사용한다. Python 실행 이미지에는 번들만 복사한다.
-FROM node:24-bookworm-slim AS scalar-assets
+FROM node:26-bookworm-slim AS scalar-assets
 WORKDIR /build
 COPY tools/scalar-docs/ ./tools/scalar-docs/
 COPY scripts/build_scalar_assets.sh ./scripts/
