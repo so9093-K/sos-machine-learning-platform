@@ -1036,6 +1036,7 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 
 
 /* 모델 사용: 완료 결과를 입력 설정보다 먼저 확인하고 이전 실행은 인라인에서 조회한다. */
+.model-lab-playground .model-lab-history-list { grid-template-columns:minmax(0,1fr); }
 .scoring-result-first { scroll-margin-top:24px; display:grid; gap:14px; min-width:0; }
 .scoring-next-input-heading { margin:12px 0 0; font-size:16px; }
 .scoring-observation-detail { scroll-margin-top:22px; }
