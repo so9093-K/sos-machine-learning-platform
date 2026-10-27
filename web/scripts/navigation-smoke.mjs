@@ -453,7 +453,8 @@ try {
   assert.match(unverifiedShap, /검증에 실패했습니다/);
   assert.doesNotMatch(unverifiedShap, /실제 SOS 이상 점수 기준 Feature별/);
   assert.match(shapPreview, /전체 SHAP 값과 계산 근거/);
-  assert.match(candidateWithContext, /실제 사건을 확정하지 않습니다/);
+  assert.match(candidateWithContext, /활동 Feature 관측치는 원시 이벤트 한 건이라는 뜻이 아니며/);
+  assert.match(candidateWithContext, /UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다/);
   // 인접 점수 구간의 경계값은 한 구간에만 속해야 한다.
   const scoreItems = [
     { row_index: 1, anomaly_score: 0.1, features: {} },
