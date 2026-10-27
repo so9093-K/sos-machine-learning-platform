@@ -41,6 +41,13 @@ export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
       result.method !== result.output.method) return <p role="alert">
     설명 결과의 방법과 계산 근거가 일치하지 않습니다. 내용을 표시하지 않습니다.
   </p>;
+  // 불변 Explanation 결과의 외부 식별자와 계산 근거 안의 식별자가 일치해야 한다.
+  if (result.output.scoring_result_id !== result.scoring_result_id ||
+      result.output.model_revision_id !== result.model_revision_id ||
+      result.output.row_index !== result.row_index) return <p role="alert">
+    설명 결과의 Scoring·모델·관측 행 판본이 계산 근거와 일치하지 않습니다.
+    다른 분석의 설명으로 표시하지 않습니다.
+  </p>;
   if (result.method === "median_reference_feature_replacement") {
     const entries = result.output.feature_sensitivities;
     const valid = Array.isArray(entries) && entries.length > 0 && entries.every(item =>
