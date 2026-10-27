@@ -58,10 +58,12 @@ try {
   }));
   assert.match(resultView, /전체 이상 점수 분포/);
   assert.match(resultView, /분석한 관측값/);
-  assert.match(resultView, /Dataset 판본/);
-  assert.match(resultView, /전체 분석 참조 확인/);
+  assert.match(resultView, /선택 관측값 점수/);
+  assert.match(resultView, /이상 판정 정책/);
+  assert.match(resultView, /관측값 살펴보기/);
+  assert.match(resultView, /분석 판본과 식별자/);
   assert.match(resultView, /점수가 높은 관측값/);
-  assert.match(resultView, /점수는 확률이나 확정된 이상 사건이 아닙니다/);
+  assert.match(resultView, /점수는 확률이나 사건 판정이 아니며/);
 
   const { modelLabLabels, modelLabTree } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
   const grouped = modelLabTree([
