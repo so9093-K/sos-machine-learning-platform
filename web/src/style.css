@@ -906,6 +906,37 @@ button.surface-button[aria-pressed="true"] {
 @media(max-width:700px) { .model-lab-history-list { grid-template-columns:1fr; } }
 
 
+/* Scoring 결과 작업공간: 전체 맥락과 관측값 상세를 같은 위치에서 읽는다. */
+.scoring-workspace-heading { display:flex; justify-content:space-between; align-items:end; gap:12px 24px; flex-wrap:wrap; }
+.scoring-workspace-heading > div { display:grid; gap:6px; }
+.scoring-workspace-heading h3 { font-size:clamp(20px,2vw,26px); }
+.scoring-workspace-heading p { color:var(--sos-muted); font-size:13px; line-height:1.5; max-width:520px; }
+.scoring-distribution-stats { color:var(--sos-muted); font-size:12px; line-height:1.5; }
+.scoring-distribution-stats strong { color:var(--sos-text); font-weight:650; }
+.scoring-observation-list-panel { min-width:0; padding:clamp(12px,1.6vw,20px); border:1px solid var(--sos-border);
+  border-radius:12px; background:var(--sos-panel); display:grid; align-content:start; gap:12px; }
+.scoring-observation-list-heading { display:grid; gap:6px; }
+.scoring-observation-list-heading h4 { font-size:16px; }
+.scoring-observation-list-heading p { color:var(--sos-muted); font-size:12px; line-height:1.5; }
+.scoring-observation-choice[aria-pressed="true"] { background:var(--sos-accent-bg); border-color:var(--sos-accent); }
+.observation-activity-highlights { display:grid; gap:0; margin:12px 0; }
+.observation-activity-highlight { display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+  padding:10px 0; border-bottom:1px solid var(--sos-border); }
+.observation-activity-highlight span { font-size:12px; color:var(--sos-muted); overflow-wrap:anywhere; }
+.observation-activity-highlight strong { font-size:14px; font-variant-numeric:tabular-nums; text-align:right; }
+.scoring-activity-group-details { border-top:1px solid var(--sos-border); padding-top:12px; margin-top:10px; }
+.scoring-activity-group-details > summary { cursor:pointer; color:var(--sos-accent); font-size:13px; font-weight:650; }
+.scoring-activity-group-details[open] > summary { margin-bottom:14px; }
+.scoring-observation-detail .pipeline-candidate-observation { margin-top:8px; }
+@media(max-width:1080px) {
+  .scoring-workspace-heading { align-items:start; }
+  .scoring-observation-list-panel { padding:14px; }
+}
+@media(max-width:650px) {
+  .scoring-workspace-heading { flex-direction:column; }
+  .scoring-observation-list-panel { padding:12px; }
+}
+
 /* 독립 Scoring: 분포와 점수순 관측값을 결과 확인 직후 같은 문맥에서 조사한다. */
 .scoring-observation-explorer { display:grid; gap:18px; min-width:0; }
 .scoring-result-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
@@ -915,11 +946,11 @@ button.surface-button[aria-pressed="true"] {
 .scoring-result-summary strong { font-size:clamp(16px,1.6vw,22px); overflow-wrap:anywhere; }
 .scoring-distribution { border:1px solid var(--sos-border); border-radius:12px;
   padding:18px; min-width:0; display:grid; gap:8px; }
-.scoring-distribution .chart { height:320px; min-height:280px; }
+.scoring-distribution .chart { height:265px; min-height:240px; }
 .scoring-distribution .hint { margin:0; }
 .scoring-observation-workspace { display:grid; grid-template-columns:minmax(265px,.8fr) minmax(0,1.2fr);
   gap:16px; align-items:start; min-width:0; }
-.scoring-observation-list { display:grid; gap:8px; min-width:0; max-height:710px; overflow:auto; }
+.scoring-observation-list { display:grid; gap:8px; min-width:0; max-height:560px; overflow:auto; }
 button.scoring-observation-choice { display:flex; gap:10px; justify-content:space-between;
   align-items:center; min-width:0; width:100%; }
 .scoring-observation-rank { flex-shrink:0; font-size:12px; color:var(--sos-muted); }
@@ -929,7 +960,7 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .scoring-observation-score { display:grid; gap:5px; text-align:right; flex-shrink:0; }
 .scoring-observation-score strong { font-size:13px; }
 .scoring-observation-detail { min-width:0; border:1px solid var(--sos-border); border-radius:12px;
-  padding:clamp(14px,2vw,24px); }
+  background:var(--sos-panel); padding:clamp(14px,2vw,24px); }
 .scoring-observation-detail .pipeline-candidate-inspection { padding:0; margin:0; }
 @media(max-width:1080px) { .scoring-observation-workspace { grid-template-columns:minmax(0,1fr); }
   .scoring-observation-list { max-height:440px; } }
