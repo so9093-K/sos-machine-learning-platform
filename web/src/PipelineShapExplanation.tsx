@@ -6,6 +6,14 @@ import { formatError, request, submitJob } from "./api";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary } from "./types";
 
+/** ECharts 기본 HTML 툴팁에 Dataset/모델 Feature 이름을 직접 삽입하지 않는다. */
+export function escapeShapTooltipText(text: string): string {
+  const entities: Record<string, string> = {
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  };
+  return text.replace(/[&<>"']/g, char => entities[char]);
+}
+
 const METHOD = "permutation_shap_median_v1";
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 type JobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
@@ -57,7 +65,7 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
         const bar = bars[params[0]?.dataIndex ?? -1];
         if (!bar) return "";
         const name = bar.feature && bar.feature !== bar.label ? `${bar.label} (${bar.feature})` : bar.label;
-        return `${name}<br/>점수 기여 ${key(bar.value)}`;
+        return `${escapeShapTooltipText(name)}<br/>점수 기여 ${key(bar.value)}`;
       } },
       grid: { left: 240, right: 45, top: 20, bottom: 44 },
       xAxis: { type: "value" as const, name: "점수 기여", nameGap: 24,
