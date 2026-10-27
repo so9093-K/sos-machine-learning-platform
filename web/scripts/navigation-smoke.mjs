@@ -66,6 +66,12 @@ try {
   assert.match(resultView, /판정 정책 미적용/);
   assert.match(resultView, /관측값 살펴보기/);
   assert.match(resultView, /분석 판본과 식별자/);
+  assert.match(resultView, /evidence-facts-compact/);
+  assert.match(resultView, /Dataset 판본/);
+  assert.match(resultView, /Model Revision/);
+  assert.match(resultView, /Scoring Result/);
+  assert.match(resultView, /version-1/);
+  assert.match(resultView, /score-1/);
   assert.match(resultView, /점수가 높은 관측값/);
   assert.match(resultView, /이상 사건 판정이나 발생 확률을 뜻하지 않습니다/);
   // 히스토그램이 없는 이전 결과에는 분포나 선택 위치를 추정하지 않는다.
@@ -483,6 +489,21 @@ try {
   assert.match(unverifiedShap, /검증에 실패했습니다/);
   assert.doesNotMatch(unverifiedShap, /실제 SOS 이상 점수 기준 Feature별/);
   assert.match(shapPreview, /전체 SHAP 값과 계산 근거/);
+  assert.match(shapPreview, /설명 방법과 기준/);
+  assert.match(shapPreview, /설명 방법/);
+  assert.match(shapPreview, /Permutation SHAP/);
+  assert.match(shapPreview, /모델 점수 출력/);
+  assert.match(shapPreview, /-score_samples/);
+  assert.match(shapPreview, /합성 관측값 1개/);
+  assert.match(shapPreview, /실제 Train 관측 분포를 대표하지 않습니다/);
+  assert.match(shapPreview, /재현 설정/);
+  assert.match(shapPreview, /순열 반복/);
+  assert.match(shapPreview, /Seed/);
+  assert.match(shapPreview, /42/);
+  assert.match(shapPreview, /0[.]50[.]0/);
+  assert.ok(shapPreview.includes("<th>점수 기여</th>"));
+  assert.ok(shapPreview.indexOf("설명 방법과 기준") <
+    shapPreview.indexOf("재현 설정"));
   // 저장된 독립 Explanation도 SHAP/치환 민감도에 맞게 표시하며 다른 방법을 섞지 않는다.
   const { ExplanationEvidence } = await vite.ssrLoadModule("/src/MLResourcePages.tsx");
   const shapResult = {

@@ -91,6 +91,18 @@ tbody tr:hover{background:var(--sos-raised)}
 .analysis-evidence dt{color:var(--sos-muted);font-size:11px}
 .analysis-evidence dd{margin:3px 0 0;color:var(--sos-text);overflow-wrap:anywhere}
 
+/* 짧은 기술 사실을 줄바꿈 가능한 중립색 항목으로 표시한다. */
+.evidence-facts { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; min-width:0; margin:0; }
+.evidence-facts > div { display:grid; align-content:center; gap:5px; min-width:0; max-width:100%;
+  padding:9px 12px; background:var(--sos-raised); border:1px solid var(--sos-border);
+  border-radius:8px; }
+.evidence-facts dt { color:var(--sos-muted); font-size:11px; line-height:1.4; }
+.evidence-facts dd { margin:0; color:var(--sos-text); font-size:12px; font-weight:650;
+  font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.evidence-facts-compact > div { display:flex; flex-wrap:wrap; align-items:baseline;
+  gap:3px 8px; padding:7px 10px; }
+
+
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-bottom:28px}
 .stat{border:1px solid var(--sos-border);background:var(--sos-raised);padding:18px;border-radius:12px}
 .stat span{display:block;font-size:12px;color:var(--sos-muted)}
@@ -713,6 +725,13 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .pipeline-shap-recalculate { margin-top:4px; }
 .pipeline-shap-job-status { color:var(--sos-muted); }
 .pipeline-shap-result { display:grid; gap:12px; min-width:0; }
+.pipeline-shap-technical { min-width:0; }
+.pipeline-shap-technical > summary { cursor:pointer; }
+.pipeline-shap-technical > summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:3px; }
+.pipeline-shap-technical-content { display:grid; gap:15px; margin:14px 0 16px; }
+.pipeline-shap-technical-content section { display:grid; gap:9px; min-width:0; }
+.pipeline-shap-technical-content h6 { margin:0; font-size:12px; }
+.pipeline-shap-technical-content .hint { margin:0; line-height:1.6; }
 .pipeline-shap-result .chart,
 .pipeline-candidate-detail .pipeline-shap-result .chart { height:400px; min-height:350px; margin-top:0; }
 .pipeline-shap-legend { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:12px; font-weight:600; }
@@ -1174,14 +1193,16 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   justify-content:space-between; gap:8px 14px; }
 .scoring-distribution-heading > span { font-size:12px; color:var(--sos-muted); }
 .scoring-distribution-heading strong { color:var(--sos-text); }
-.scoring-result-provenance { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center;
-  border-bottom:1px solid var(--sos-border); padding:0 0 12px; min-width:0; }
-.scoring-result-provenance > span { display:flex; flex-wrap:wrap; gap:4px; font-size:12px;
-  color:var(--sos-muted); }
-.scoring-result-provenance strong { color:var(--sos-text); overflow-wrap:anywhere; }
-.scoring-result-provenance > details { flex-basis:100%; font-size:12px; overflow-wrap:anywhere; }
-.scoring-result-provenance summary { cursor:pointer; }
-.scoring-result-provenance details p { margin:8px 0 0; }
+.scoring-result-provenance { display:grid; gap:10px; min-width:0;
+  border-bottom:1px solid var(--sos-border); padding:0 0 12px; }
+.scoring-provenance-identifiers { min-width:0; font-size:12px; }
+.scoring-provenance-identifiers > summary { cursor:pointer; width:fit-content; }
+.scoring-provenance-identifiers > summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:3px; }
+.scoring-provenance-identifiers dl { display:grid; gap:10px; margin:12px 0 0; }
+.scoring-provenance-identifiers dl > div { min-width:0; }
+.scoring-provenance-identifiers dt { color:var(--sos-muted); font-size:11px; }
+.scoring-provenance-identifiers dd { margin:4px 0 0; overflow-wrap:anywhere;
+  font-variant-numeric:tabular-nums; }
 .observation-activity { display:grid; gap:13px; padding:15px;
   background:var(--sos-accent-bg); border:1px solid var(--sos-border); border-radius:12px; }
 .observation-activity-heading { display:grid; gap:5px; }
