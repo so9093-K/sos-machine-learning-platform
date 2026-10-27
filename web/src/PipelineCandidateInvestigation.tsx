@@ -219,7 +219,8 @@ export function PipelineCandidateInvestigation({
       <div className="observation-activity-heading">
         <h6>이 관측값에서 확인된 활동 특징</h6>
         <p>파일·프로세스·네트워크 등의 집계 Feature를 활동별로 묶었습니다.
-          모델 중요도 순위나 실제 로그의 프로세스·IP 정보가 아닙니다.</p>
+          각 그룹의 첫 항목은 대표적으로 고른 지표이며 모델 중요도 순위가 아닙니다.
+          실제 로그의 프로세스·IP 정보도 아닙니다.</p>
       </div>
       <div className="observation-activity-groups">
         {activityGroups.map(group => <section key={group.id} className="observation-activity-group">
@@ -251,9 +252,9 @@ export function PipelineCandidateInvestigation({
       <p className="hint">중앙값은 학습 입력과 비교하기 위한 기준일 뿐 정상 범위나 이상 원인을 의미하지 않습니다.
         개별 모델의 설명을 확인하려면 아래 SHAP 계산 결과를 사용하세요.</p>
     </section>}
-    <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
+    {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
-      onOpenResource={onOpenResource} />
+      onOpenResource={onOpenResource} />}
     <details className="pipeline-feature-details">
       <summary>전체 {Object.keys(candidate.features).length}개 Feature 관측값·학습 참조값 비교</summary>
       <p className="hint">Train Feature별 중앙값은 비교 기준입니다.
@@ -279,6 +280,9 @@ export function PipelineCandidateInvestigation({
             : !modelRevisionId ? "판본 없음" : !model ? "조회 중" : "근거 없음"}</td></tr>)}</tbody>
     </table></div>
     </details>
+    {!observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
+      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
+      onOpenResource={onOpenResource} />}
     {previousLookup === "loading" && <p role="status">
       이 후보의 기존 설명 작업을 확인하고 있습니다.
     </p>}
