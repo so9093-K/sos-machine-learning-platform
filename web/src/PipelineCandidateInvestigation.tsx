@@ -116,6 +116,13 @@ export function PipelineCandidateInvestigation({
     ? new Map(model.features.map((name, i) => [name, medians[i] as number])) : null;
   // 집계 Feature의 표시 그룹이며, 모델 중요도나 원인 순위가 아니다.
   const activityGroups = groupActivityFeatures(candidate.features);
+  function referenceLabel(name: string): string {
+    if (referenceMap?.has(name)) return format(referenceMap.get(name));
+    if (!modelRevisionId) return "모델 판본 없음";
+    if (modelError) return "조회 오류";
+    if (!model) return "조회 중";
+    return "비교 기준 없음";
+  }
   useEffect(() => {
     let active = true;
     setPreviousLookup("loading");
@@ -222,6 +229,16 @@ export function PipelineCandidateInvestigation({
           각 그룹의 첫 항목은 대표적으로 고른 지표이며 모델 중요도 순위가 아닙니다.
           실제 로그의 프로세스·IP 정보도 아닙니다.</p>
       </div>
+      {!modelRevisionId && <p className="hint">학습 모델 판본 참조가 없어 중앙값을 비교할 수 없습니다.</p>}
+      {modelRevisionId && !model && !modelError &&
+        <p role="status">학습 참조 중앙값을 조회하는 중입니다.</p>}
+      {modelError && <div className="pipeline-readiness-blocked" role="alert">
+        <p>학습 중앙값 조회 실패: {modelError}</p>
+        <button type="button" className="secondary" onClick={() => setModelReload(n => n + 1)}>
+          학습 참조값 다시 조회
+        </button>
+      </div>}
+      {model && !referenceMap && <p className="hint">이 모델에는 비교 가능한 학습 중앙값이 없습니다.</p>}
       <div className="observation-activity-groups">
         {activityGroups.map(group => <section key={group.id} className="observation-activity-group">
           <div className="observation-activity-group-heading">
@@ -233,8 +250,7 @@ export function PipelineCandidateInvestigation({
               <div key={name} className="observation-activity-figure">
                 <span title={name}>{activityFeatureLabel(name)}</span>
                 <strong>{format(value)}</strong>
-                <small>Train 중앙값 {referenceMap?.has(name)
-                  ? format(referenceMap.get(name)) : "근거 없음"}</small>
+                <small>Train 중앙값 {referenceLabel(name)}</small>
               </div>)}
           </div>
           {group.entries.length > 3 && <details className="observation-activity-extra">
@@ -243,7 +259,7 @@ export function PipelineCandidateInvestigation({
               <thead><tr><th>Feature</th><th>관측값</th><th>Train 중앙값</th></tr></thead>
               <tbody>{group.entries.slice(3).map(([name, value]) => <tr key={name}>
                 <th title={name}>{activityFeatureLabel(name)}</th><td>{format(value)}</td>
-                <td>{referenceMap?.has(name) ? format(referenceMap.get(name)) : "근거 없음"}</td>
+                <td>{referenceLabel(name)}</td>
               </tr>)}</tbody>
             </table></div>
           </details>}
