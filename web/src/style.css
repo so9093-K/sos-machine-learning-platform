@@ -940,8 +940,14 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-reference-item > strong { font-size:12px; overflow-wrap:anywhere; }
 .model-lab-input-state { border-left:3px solid var(--sos-accent); background:var(--sos-raised);
   padding:10px 12px; font-size:12px; line-height:1.6; margin:0; }
-.observation-activity-highlight .feature-reference-comparison,
-.observation-activity-figure .feature-reference-comparison { margin:8px 0 4px; }
+/* 기존 2열 활동 행에서 새 비교 요소가 자동 너비 열을 밀어내지 않게 전체 너비를 차지한다. */
+.observation-activity-highlight > .feature-reference-comparison,
+.observation-activity-figure > .feature-reference-comparison {
+  grid-column:1/-1; width:100%; min-width:0; margin:8px 0 4px;
+}
+.observation-activity-highlight .feature-reference-values strong {
+  text-align:left; font-size:13px;
+}
 .pipeline-shap-current-feature { border-left:3px solid var(--sos-accent); padding-left:10px; margin:0;
   font-size:12px; line-height:1.6; }
 @media(max-width:780px) {.model-lab-input-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }}
