@@ -917,6 +917,10 @@ button.surface-button[aria-pressed="true"] {
 .feature-reference-values { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 .feature-reference-values > div { display:grid; gap:3px; min-width:0; }
 .feature-reference-values span { font-size:11px; color:var(--sos-muted); }
+.feature-reference-values span i { display:inline-block; width:7px; height:7px; margin-right:5px;
+  border-radius:2px; vertical-align:middle; }
+.feature-reference-legend-actual { background:var(--sos-chart-bar); }
+.feature-reference-legend-train { background:var(--sos-chart-third); }
 .feature-reference-values strong { font-size:13px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .feature-reference-bars { display:grid; gap:6px; }
 .feature-reference-bars > span { display:block; height:7px; width:100%; border-radius:4px;
