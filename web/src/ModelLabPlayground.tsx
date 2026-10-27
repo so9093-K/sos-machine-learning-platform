@@ -58,6 +58,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [selectedHistory, setSelectedHistory] = useState<MLPlaygroundJob | null>(null);
+  const [historyDetailError, setHistoryDetailError] = useState("");
 
   async function loadHistory(append: boolean) {
     if (historyFetching.current || (append && !historyCursor)) return;
@@ -77,27 +79,24 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
   }
 
   async function reopenHistory(id: string) {
-    if (running) return;
-    setError("");
+    setHistoryDetailError("");
     try {
       const restored = await request<MLPlaygroundJob>(
         "/api/ml/playground/jobs/" + encodeURIComponent(id));
       if (restored.spec.model_revision_id !== model.id)
         throw new Error("현재 모델과 다른 실행 기록입니다.");
-      setJob(restored);
-      setLastScore(restored.status === "Succeeded" &&
-        typeof restored.result?.anomaly_score === "number"
-          ? restored.result.anomaly_score : null);
-      setPreviousScore(null);
-      const saved = restored.spec.features;
-      if (saved && typeof saved === "object" && !Array.isArray(saved)) {
-        const values = saved as Record<string, unknown>;
-        setFields(Object.fromEntries(model.features.map(name => [
-          name, values[name] == null ? "" : String(values[name]),
-        ])));
-        setMode("edit");
-      }
-    } catch (cause) { setError(formatError(cause)); }
+      // 과거 결과 조회는 현재 작업과 입력값을 변경하지 않는다.
+      setSelectedHistory(restored);
+    } catch (cause) { setHistoryDetailError(formatError(cause)); }
+  }
+
+  function useHistoryInput(restored: MLPlaygroundJob) {
+    if (running || !restored.spec.features) return;
+    const saved = restored.spec.features as Record<string, unknown>;
+    setFields(Object.fromEntries(model.features.map(name => [
+      name, saved[name] == null ? "" : String(saved[name]),
+    ])));
+    setMode("edit");
   }
 
   useEffect(() => {
@@ -243,20 +242,47 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     }}>
       <summary>이 모델의 이전 체험 결과 다시 보기</summary>
       <div className="model-lab-history-body">
-        <p className="hint">이전에 제출한 입력과 실제 Job 결과를 선택해 다시 확인할 수 있습니다.</p>
+        <p className="hint">과거 결과를 펼쳐 확인합니다. 조회만으로 현재 편집 중인 입력값은 변경되지 않습니다.</p>
         <button type="button" className="secondary" disabled={historyLoading}
           onClick={() => void loadHistory(false)}>실행 기록 새로고침</button>
         {historyError && <p role="alert">{historyError}</p>}
+        {historyDetailError && <p role="alert">선택한 실행 기록을 열지 못했습니다: {historyDetailError}</p>}
         {historyLoading && <p role="status">실행 기록 조회 중…</p>}
         {historyLoaded && history.length === 0 && <p className="hint">
           현재 조회한 실행 기록에는 이 모델의 결과가 없습니다.</p>}
         <div className="model-lab-history-list">
-          {history.map(item => <button type="button" className="surface-button"
-            key={item.id} disabled={running}
-            aria-pressed={job?.id === item.id} onClick={() => void reopenHistory(item.id)}>
-            <span>{new Date(item.created_at).toLocaleString("ko-KR")} · {jobStatusLabel(item.status)}</span>
-            <span>결과 보기 →</span>
-          </button>)}
+          {history.map(item => <div className="model-lab-history-entry" key={item.id}>
+            <button type="button" className="surface-button"
+              aria-expanded={selectedHistory?.id === item.id}
+              onClick={() => void reopenHistory(item.id)}>
+              <span>{new Date(item.created_at).toLocaleString("ko-KR")} · {jobStatusLabel(item.status)}</span>
+              <span>{selectedHistory?.id === item.id ? "상세 확인 중" : item.status === "Failed"
+                ? "실패 이유 확인" : "결과 확인"} ↓</span>
+            </button>
+            {selectedHistory?.id === item.id && <div className="model-lab-history-detail">
+              <strong>선택한 실행 · {jobStatusLabel(selectedHistory.status)}</strong>
+              {selectedHistory.status === "Succeeded" &&
+                typeof selectedHistory.result?.anomaly_score === "number" &&
+                <p>이상 점수 <strong>{selectedHistory.result.anomaly_score.toFixed(5)}</strong></p>}
+              {selectedHistory.status === "Failed" &&
+                <p role="status">실패 사유 · {selectedHistory.error ?? "실행 오류"}
+                  {selectedHistory.error_code && <small> ({selectedHistory.error_code})</small>}</p>}
+              {selectedHistory.status === "Cancelled" && <p>취소된 점수 계산입니다.</p>}
+              {!TERMINAL.has(selectedHistory.status) && <p>이 실행은 아직 완료되지 않았습니다.</p>}
+              <details>
+                <summary>제출 당시 Feature 입력값 {model.features.length}개 확인</summary>
+                <dl className="model-lab-history-features">
+                  {model.features.map(name => <div key={name}>
+                    <dt>{activityFeatureLabel(name)}</dt>
+                    <dd>{String((selectedHistory.spec.features as Record<string, unknown>)[name] ?? "값 없음")}</dd>
+                  </div>)}
+                </dl>
+              </details>
+              <button type="button" className="secondary"
+                disabled={running}
+                onClick={() => useHistoryInput(selectedHistory)}>이 입력으로 다시 계산 준비</button>
+            </div>}
+          </div>)}
         </div>
         {historyCursor && <button type="button" className="secondary"
           disabled={historyLoading} onClick={() => void loadHistory(true)}>
