@@ -194,8 +194,10 @@ export function MLScoringPanel({
 
   return <section className="panel" aria-label="독립 이상 점수 계산">
     <div className="panel-head"><div>
-      <h4>어떤 데이터에 모델을 적용할까요?</h4>
-      <p>선택한 Dataset에 학습 모델을 적용해 불변 Scoring Result를 생성합니다.</p>
+      <h4>{selectedJob ? "Dataset 분석 결과" : "어떤 데이터에 모델을 적용할까요?"}</h4>
+      <p>{selectedJob
+        ? "선택한 실행의 상태와 실제 결과를 먼저 확인합니다. 다른 Dataset도 아래에서 분석할 수 있습니다."
+        : "선택한 Dataset에 모델을 적용해 불변 Scoring Result를 생성합니다."}</p>
     </div></div>
     {previousJobNotice && <div role="status" className="pipeline-readiness-blocked">
       이전 Dataset에서 시작한 점수 계산 Job은 자동 취소되지 않습니다.
@@ -337,6 +339,5 @@ export function MLScoringPanel({
       </button>}
     </div>
     </details>
-
   </section>;
 }
