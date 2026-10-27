@@ -45,6 +45,8 @@ export function MLScoringPanel({
   const resultRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [historyError, setHistoryError] = useState("");
+  const [loadingHistoryId, setLoadingHistoryId] = useState<string | null>(null);
+  const historySelectionRequest = useRef(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const { items: history, nextCursor, refresh, loadMore } =
     usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
@@ -117,6 +119,8 @@ export function MLScoringPanel({
     ? model.features.filter(feature => !columns.some(col => col.name === feature)) : [];
   const inputReady = datasetId !== "" && checkedColumns && missingFeatures.length === 0;
   function chooseDataset(id: string) {
+    historySelectionRequest.current += 1;
+    setLoadingHistoryId(null);
     if (selectedJob && !TERMINAL.has(selectedJob.status)) setPreviousJobNotice(true);
     setDatasetId(id);
     setColumnStatus("idle");
@@ -145,6 +149,8 @@ export function MLScoringPanel({
 
   async function create() {
     if (submitted || uploading || !canRun || !inputReady) return;
+    historySelectionRequest.current += 1;
+    setLoadingHistoryId(null);
     setSubmitted(true);
     setError("");
     try {
@@ -164,13 +170,23 @@ export function MLScoringPanel({
   }
 
   async function selectHistory(id: string) {
-    setError("");
+    if (submitted || uploading) return;
+    const requestNumber = ++historySelectionRequest.current;
+    setLoadingHistoryId(id);
+    setHistoryError("");
     try {
-      setSelectedJob(await request<MLScoringJob>(
+      const restored = await request<MLScoringJob>(
         `/api/ml/scoring/jobs/${encodeURIComponent(id)}`,
-      ));
+      );
+      if (requestNumber !== historySelectionRequest.current) return;
+      if (restored.id !== id || restored.spec.model_revision_id !== model.id)
+        throw new Error("현재 모델 또는 선택한 실행 기록과 조회 결과가 다릅니다.");
+      setSelectedJob(restored);
+      setError("");
     } catch (e) {
-      setError(formatError(e));
+      if (requestNumber === historySelectionRequest.current) setHistoryError(formatError(e));
+    } finally {
+      if (requestNumber === historySelectionRequest.current) setLoadingHistoryId(null);
     }
   }
 
@@ -335,8 +351,11 @@ export function MLScoringPanel({
       {historyError && <p role="alert">이전 점수 계산 이력을 확인하지 못했습니다: {historyError}</p>}
       <strong>이 모델의 Scoring 이력</strong>
       {available.map(item => <button key={item.id} className="secondary"
+        type="button" disabled={submitted || uploading}
+        aria-pressed={selectedJob?.id === item.id}
         onClick={() => void selectHistory(item.id)}>
         {item.id.slice(0, 8)} · {jobStatusLabel(item.status)}
+        {loadingHistoryId === item.id ? " · 결과 조회 중…" : selectedJob?.id === item.id ? " · 선택됨" : " · 결과 확인"}
       </button>)}
       {available.length === 0 && <p className="hint">현재 조회한 이력에 이 모델의 Scoring Job이 없습니다.</p>}
       {nextCursor && <button className="secondary"
