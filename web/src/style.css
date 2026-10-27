@@ -906,6 +906,33 @@ button.surface-button[aria-pressed="true"] {
 @media(max-width:700px) { .model-lab-history-list { grid-template-columns:1fr; } }
 
 
+
+/* 모델 활용 결과에서는 기존 입력/모델 설정을 사용자 요청 시에만 다시 노출한다. */
+.model-lab-result-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+  padding:8px 0; border-bottom:1px solid var(--sos-border); }
+.model-lab-result-toolbar > span { color:var(--sos-muted); font-size:12px; }
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-back,
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-use-heading,
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-model-options,
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-current-model,
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-ready-hint,
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-usage-tabs,
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-use-footer { display:none; }
+.ml-scoring-panel.scoring-has-result { border:0; padding:0; background:transparent; }
+.scoring-has-result .scoring-result-first { margin-top:0; }
+.scoring-result-interpretation { margin:0; color:var(--sos-muted); font-size:12px; line-height:1.5; }
+.scoring-next-analysis { margin-top:20px; border-top:1px solid var(--sos-border); padding-top:14px; }
+.scoring-next-analysis > summary { cursor:pointer; font-size:14px; font-weight:650; }
+.scoring-next-analysis-body { display:grid; gap:12px; margin-top:16px; }
+.observation-source-missing { display:grid; gap:6px; margin:0; padding:10px 12px;
+  border:1px solid var(--sos-border); border-radius:8px; color:var(--sos-muted); font-size:12px; }
+.observation-source-missing strong { color:var(--sos-text); font-size:13px; font-variant-numeric:tabular-nums; }
+.observation-source-missing small { line-height:1.5; }
+@media(min-width:1081px) {
+  .scoring-observation-list-panel { position:sticky; top:18px; max-height:calc(100vh - 36px); }
+  .scoring-observation-list { max-height:min(560px, calc(100vh - 168px)); }
+}
+
 /* Scoring 결과 작업공간: 전체 맥락과 관측값 상세를 같은 위치에서 읽는다. */
 .scoring-workspace-heading { display:flex; justify-content:space-between; align-items:end; gap:12px 24px; flex-wrap:wrap; margin:0; }
 .scoring-workspace-heading > div { display:grid; gap:6px; }
