@@ -133,7 +133,12 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       <div><span>이상 점수 범위</span><strong>{readable(summary.score_min)} ~ {readable(summary.score_max)}</strong></div>
     </div>
     <section className="scoring-distribution" aria-label="전체 이상 점수 분포">
-      <h4>전체 이상 점수 분포</h4>
+      <div className="scoring-distribution-heading">
+        <h4>전체 이상 점수 분포</h4>
+        {selected && selectedScore !== null &&
+          <span role="status">선택 관측값: <strong>{readable(selectedScore)}</strong>
+            {scoreOrder !== undefined ? ` · 조회한 목록의 ${scoreOrder.toLocaleString("ko-KR")}번째` : ""}</span>}
+      </div>
       {histogram
         ? <DataChart option={histogram} ariaLabel="점수화한 전체 관측값의 이상 점수 구간별 관측 수" />
         : <p className="hint">이 결과에는 검증 가능한 전체 점수 분포가 없습니다.
