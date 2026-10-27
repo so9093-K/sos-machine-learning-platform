@@ -947,8 +947,9 @@ button.surface-button[aria-pressed="true"] {
 .scoring-observation-list-heading p { color:var(--sos-muted); font-size:12px; line-height:1.5; }
 .scoring-observation-choice[aria-pressed="true"] { background:var(--sos-accent-bg); border-color:var(--sos-accent); }
 .observation-activity-highlights { display:grid; gap:0; margin:12px 0; }
-.observation-activity-highlight { display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+.observation-activity-highlight { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; gap:4px 12px;
   padding:10px 0; border-bottom:1px solid var(--sos-border); }
+.observation-activity-highlight small { grid-column:1/-1; font-size:11px; color:var(--sos-muted); line-height:1.5; overflow-wrap:anywhere; }
 .observation-activity-highlight span { font-size:12px; color:var(--sos-muted); overflow-wrap:anywhere; }
 .observation-activity-highlight strong { font-size:14px; font-variant-numeric:tabular-nums; text-align:right; }
 .observation-activity-group-intro { border-top:1px solid var(--sos-border); padding-top:12px; display:grid; gap:5px; }
