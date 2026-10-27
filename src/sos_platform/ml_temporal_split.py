@@ -18,7 +18,7 @@ def utc_observation_time(source: pl.LazyFrame, timestamp_column: str) -> pl.Expr
     """
     schema = source.collect_schema()
     if timestamp_column not in schema:
-        raise ValueError("Temporal split timestamp column is missing")
+        raise ValueError("Observation timestamp column is missing")
     dtype = schema[timestamp_column]
     if dtype == pl.String:
         # 문자열을 암묵적으로 로컬 시각으로 해석하지 않는다.
@@ -39,7 +39,7 @@ def utc_observation_time(source: pl.LazyFrame, timestamp_column: str) -> pl.Expr
     elif isinstance(dtype, pl.Datetime) and dtype.time_zone:
         parsed = pl.col(timestamp_column).dt.convert_time_zone("UTC")
     else:
-        raise ValueError("Temporal split requires timezone-aware event timestamps")
+        raise ValueError("Observation time requires timezone-aware timestamps")
     return parsed
 
 
