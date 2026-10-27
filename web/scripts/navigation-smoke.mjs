@@ -385,12 +385,15 @@ try {
       scoringResultId: "score-1", modelRevisionId: null,
       canRun: false, canCancel: false, onOpenResource: () => {},
     }));
-  assert.match(groupedObservation, /이 관측값에서 확인된 활동 특징/);
+  assert.match(groupedObservation, /활동 특징/);
+  assert.match(groupedObservation, /observation-activity-highlights/);
+  assert.match(groupedObservation, /전체 활동 지표 3개/);
   assert.match(groupedObservation, /파일 활동/);
   assert.match(groupedObservation, /프로세스 활동/);
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
-  assert.match(groupedObservation, /모델 중요도 순위가 아닙니다/);
+  assert.match(groupedObservation, /모델 중요도나 이상 원인 순위가 아닙니다/);
+  assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
   assert.match(groupedObservation, /모델 판본 없음/);
   const pipelineViewOnly = renderToStaticMarkup(
     React.createElement(PipelineCandidateInvestigation, {
@@ -398,7 +401,7 @@ try {
       scoringResultId: "score-1", modelRevisionId: null,
       canRun: false, canCancel: false, onOpenResource: () => {},
     }));
-  assert.doesNotMatch(pipelineViewOnly, /이 관측값에서 확인된 활동 특징/);
+  assert.doesNotMatch(pipelineViewOnly, /observation-activity-highlights/);
   assert.ok(pipelineViewOnly.indexOf("전체 1개 Feature 관측값") <
     pipelineViewOnly.indexOf("모델 판단 근거 자세히 보기"));
   const { ShapContributionChart } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
