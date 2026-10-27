@@ -38,8 +38,8 @@ export function playgroundNumberValid(raw: string, dtype: string): boolean {
   return dtype === "Float64";
 }
 
-export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
-  model: ModelRevision; canRun: boolean; canCancel: boolean; onDataset: () => void;
+export function ModelLabPlayground({ model, canRun, canCancel }: {
+  model: ModelRevision; canRun: boolean; canCancel: boolean;
 }) {
   const reference = exampleValues(model);
   const [mode, setMode] = useState<"example" | "edit">(reference ? "example" : "edit");
@@ -182,7 +182,6 @@ export function ModelLabPlayground({ model, canRun, canCancel, onDataset }: {
     <div className="model-lab-playground-head">
       <div><h3>활동 한 건으로 모델 체험하기</h3>
         <p>기준 입력값을 그대로 적용하거나 숫자를 바꾸어 모델의 실제 점수 변화를 확인합니다.</p></div>
-      <button type="button" className="secondary" onClick={onDataset}>Dataset 전체에 적용 →</button>
     </div>
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
       <button type="button" aria-pressed={mode === "example"} className="secondary"
