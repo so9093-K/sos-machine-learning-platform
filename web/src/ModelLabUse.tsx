@@ -1,5 +1,5 @@
 /** 현재 Actor가 사용할 수 있는 Registry 모델 중 활동 이상 탐지 입력 계약에 맞는 모델만 사용한다. */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { MLScoringPanel } from "./MLScoringPanel";
 import { ModelLabPlayground } from "./ModelLabPlayground";
@@ -61,6 +61,11 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const [lookupFailures, setLookupFailures] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [usage, setUsage] = useState<"playground" | "dataset">("dataset");
+  const [resultFocusedModelId, setResultFocusedModelId] = useState<string | null>(null);
+  const [showResultSetup, setShowResultSetup] = useState(false);
+  const handleResultViewChange = useCallback((visible: boolean) => {
+    setResultFocusedModelId(visible ? selectedModelId : null);
+  }, [selectedModelId]);
   const openDataset = () => setUsage("dataset");
 
   useEffect(() => {
@@ -115,7 +120,18 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   }
 
   const selected = models.find(item => item.revision.id === selectedModelId) ?? null;
-  return <section className="model-lab-use" aria-labelledby="model-lab-use-heading">
+  // 모델 전환·Registry 재조회 중 과거 결과의 UI 상태가 새 모델 화면에 남지 않도록 한다.
+  const focusedResult = usage === "dataset" && selected !== null &&
+    resultFocusedModelId === selectedModelId;
+  return <section className={`model-lab-use${focusedResult ? " result-focused" : ""}${showResultSetup ? " show-setup" : ""}`}
+    aria-label="활동 이상 탐지 모델 사용">
+    {focusedResult && <div className="model-lab-result-toolbar">
+      <span>Isolation Forest · v{selected?.version.version ?? "?"} · Dataset 분석 결과</span>
+      <button type="button" className="secondary" aria-expanded={showResultSetup}
+        onClick={() => setShowResultSetup(value => !value)}>
+        {showResultSetup ? "모델·입력 방식 닫기" : "모델·입력 방식 변경"}
+      </button>
+    </div>}
     <button type="button" className="ghost model-lab-back" onClick={onBack}>
       ← 활동 이상 탐지 소개로
     </button>
@@ -202,7 +218,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         </div>
       </details>
     </div>}
-    {!loading && nextPage && <button type="button" className="secondary" disabled={moreLoading}
+    {!loading && nextPage && (!focusedResult || showResultSetup) && <button type="button" className="secondary model-lab-more-versions" disabled={moreLoading}
       onClick={() => void loadMore()}>{moreLoading ? "모델 확인 중…" : "다음 모델 버전 조회"}</button>}
     {!loading && !error && selectedModelId && !selected &&
       <div className="pipeline-readiness-blocked" role="status">
@@ -219,7 +235,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           onClick={() => onSelectModel(models[0].revision.id)}>모델 사용하기 →</button>
       </div>}
     {selected && <>
-      <p className="hint">사용할 모델이 준비됐습니다. Dataset 분석은 명시적으로 실행하며, 모델 선택만으로 작업을 시작하지 않습니다.</p>
+      <p className="hint model-lab-ready-hint">사용할 모델이 준비됐습니다. Dataset 분석은 명시적으로 실행하며, 모델 선택만으로 작업을 시작하지 않습니다.</p>
       <div className="model-lab-usage-tabs" role="group" aria-label="모델 적용 방식">
         <button type="button" className="secondary" aria-pressed={usage === "playground"}
           onClick={() => setUsage("playground")}>단일 입력 점수 계산</button>
@@ -236,7 +252,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
           onOpenResult={id => onOpenResource("scoring", id)}
           onOpenResource={onOpenResource}
-          canUpload={canUpload} onDatasetRegistered={onDatasetRegistered} />
+          canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
+          onResultViewChange={handleResultViewChange} />
       </div>
     </>}
     <div className="model-lab-use-footer">
