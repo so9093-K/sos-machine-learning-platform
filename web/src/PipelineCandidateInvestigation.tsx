@@ -259,8 +259,10 @@ export function PipelineCandidateInvestigation({
         </button>
       </div>}
       {model && !referenceMap && <p className="hint">이 모델에는 비교 가능한 학습 중앙값이 없습니다.</p>}
-      <details className="scoring-activity-group-details">
-        <summary>전체 활동 지표 {Object.keys(candidate.features).length}개·학습 참조값 확인</summary>
+      <div className="observation-activity-group-intro">
+        <strong>활동별 지표</strong>
+        <span>전체 {Object.keys(candidate.features).length}개 · 아래 그룹별 실제값과 학습 참조값</span>
+      </div>
       <div className="observation-activity-groups">
         {activityGroups.map(group => <section key={group.id} className="observation-activity-group">
           <div className="observation-activity-group-heading">
@@ -290,7 +292,6 @@ export function PipelineCandidateInvestigation({
           </details>}
         </section>)}
       </div>
-      </details>
       <p className="hint">중앙값 대비 차이는 같은 Feature의 실제 값과 학습 참조값을 뺀 수치입니다.
         정상 범위, Feature 중요도 또는 이상 원인을 의미하지 않습니다.
         모델 점수의 기여를 확인하려면 아래 SHAP 계산 결과를 사용하세요.</p>
