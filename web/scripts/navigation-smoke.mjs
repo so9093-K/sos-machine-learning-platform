@@ -475,14 +475,15 @@ try {
   assert.ok(playgroundNumberValid("1.75", "Float32"));
   const manualHtml = renderToStaticMarkup(React.createElement(ModelLabPlayground, {
     model: { ...exampleModel, runtime: { feature_dtypes: ["Int64", "Int64"] } },
-    canRun: true, canCancel: false, onDataset: () => {},
+    canRun: true, canCancel: false,
   }));
   assert.match(manualHtml, /직접 수정해보기/);
   assert.match(manualHtml, /기준값으로 체험/);
   assert.match(manualHtml, /이 모델 판본에는 초기 입력 기준값이 없어/);
   const playgroundHtml = renderToStaticMarkup(React.createElement(ModelLabPlayground, {
-    model: exampleModel, canRun: true, canCancel: true, onDataset: () => {},
+    model: exampleModel, canRun: true, canCancel: true,
   }));
+  assert.doesNotMatch(playgroundHtml, /Dataset 전체에 적용 →/);
   assert.match(playgroundHtml, /프로세스 실행 횟수/);
   assert.match(playgroundHtml, /실제 이상 점수 계산하기/);
   assert.match(playgroundHtml, /입력값과 결과가 권한이 적용되는 Job 이력에 보존/);
@@ -502,7 +503,7 @@ try {
     canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
     onOpenResource: () => {}, onBack: () => {}, onLearn: () => {},
   }));
-  assert.match(pendingUse, /준비된 모델로 바로 분석하기/);
+  assert.match(pendingUse, /준비된 모델로 데이터 분석하기/);
   assert.match(pendingUse, /사용 가능한 모델을 확인하는 중/);
   const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
   const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {
