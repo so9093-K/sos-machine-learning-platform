@@ -13,12 +13,19 @@ export function FeatureValueComparison({ actual, reference, actualLabel = "관�
   const max = actualReady && referenceReady && actual >= 0 && reference >= 0
     ? Math.max(actual, reference) : 0;
   const showBars = max > 0 && referenceReady && reference > 0;
-  const display = (value: number | null | undefined) => valid(value)
-    ? value.toLocaleString("ko-KR", { maximumFractionDigits: 6 }) : "비교 기준 없음";
+  const display = (value: number | null | undefined) => {
+    if (!valid(value)) return "비교 기준 없음";
+    // 표시 반올림으로 0과 혼동될 수 있는 작은 실제값은 지수 표기를 사용한다.
+    return value !== 0 && Math.abs(value) < 0.000001
+      ? value.toExponential(3)
+      : value.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
+  };
   return <div className="feature-reference-comparison">
     <div className="feature-reference-values">
-      <div><span>{actualLabel}</span><strong>{actualReady ? display(actual) : "유효한 값 없음"}</strong></div>
-      <div><span>Train 중앙값</span><strong>{display(reference)}</strong></div>
+      <div><span><i className="feature-reference-legend-actual" aria-hidden="true" />{actualLabel}</span>
+        <strong>{actualReady ? display(actual) : "유효한 값 없음"}</strong></div>
+      <div><span><i className="feature-reference-legend-train" aria-hidden="true" />Train 중앙값</span>
+        <strong>{display(reference)}</strong></div>
     </div>
     {showBars && <div className="feature-reference-bars" aria-hidden="true">
       <span><i style={{ width: `${actual! / max * 100}%` }} /></span>
