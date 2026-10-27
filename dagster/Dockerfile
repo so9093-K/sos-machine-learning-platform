@@ -1,5 +1,5 @@
 # Dagster Runtime을 SOS API·Worker 잠금 환경과 분리한다.
-FROM ghcr.io/astral-sh/uv:0.9.2 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6 AS uv
 # SOS 이미지와 같은 고정 Python 기반을 사용한다.
 FROM python:3.12.16-slim-bookworm@sha256:dbecf082dea1850bcd45039ab8658daf263620e5f662944a15dd508dc851f7a3
 COPY --from=uv /uv /uvx /usr/local/bin/
