@@ -63,6 +63,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const pendingMore = useRef(false);
+  const detailRef = useRef<HTMLElement>(null);
   const summary = result.score_summary as Record<string, unknown>;
   const selected = loaded?.items.find(item => item.row_index === selectedRow) ??
     (selectedRow === null ? loaded?.items[0] : undefined);
@@ -85,6 +86,20 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [result.id, retry]);
+
+  function chooseObservation(rowIndex: number) {
+    setSelectedRow(rowIndex);
+    // 나란히 보이는 넓은 화면은 위치를 유지한다. 세로 배치일 때만
+    // 사용자가 선택한 상세로 이동해 갱신 결과를 확인할 수 있게 한다.
+    if (window.matchMedia("(max-width: 1080px)").matches) {
+      window.requestAnimationFrame(() => {
+        detailRef.current?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+          block: "start",
+        });
+      });
+    }
+  }
 
   async function more() {
     if (!loaded?.next_cursor || pendingMore.current) return;
@@ -159,9 +174,8 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           {loaded?.items.map((item, index) =>
             <button key={item.row_index} type="button"
               className="surface-button scoring-observation-choice"
-              aria-label={`관측값 ${index + 1}, 이상 점수 ${readable(item.anomaly_score)}`}
               aria-pressed={selected?.row_index === item.row_index}
-              onClick={() => setSelectedRow(item.row_index)}>
+              onClick={() => chooseObservation(item.row_index)}>
               <span className="scoring-observation-rank">{index + 1}</span>
               <span className="scoring-observation-identity">
                 <strong title={item.observed_at ?? undefined}>{item.observed_at
@@ -180,7 +194,8 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           </button>}
         </div>
       </section>
-      <section className="scoring-observation-detail" aria-label="선택한 관측값 상세">
+      <section className="scoring-observation-detail" ref={detailRef} tabIndex={-1}
+        aria-label="선택한 관측값 상세">
         {selected
           ? <PipelineCandidateInvestigation
               key={result.id + ":" + selected.row_index}
