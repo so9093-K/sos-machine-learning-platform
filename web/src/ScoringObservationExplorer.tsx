@@ -190,7 +190,8 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           {loaded?.items.map((item, index) =>
             <button key={item.row_index} type="button"
               className="surface-button scoring-observation-choice"
-              aria-pressed={selected?.row_index === item.row_index}
+              aria-current={selected?.row_index === item.row_index ? "true" : undefined}
+              aria-pressed={userSelected && selected?.row_index === item.row_index}
               onClick={() => chooseObservation(item.row_index)}>
               <span className="scoring-observation-rank">{index + 1}</span>
               <span className="scoring-observation-identity">
