@@ -500,7 +500,7 @@ try {
   assert.match(shapPreview, /Seed/);
   assert.match(shapPreview, /42/);
   assert.match(shapPreview, /0[.]50[.]0/);
-  assert.match(shapPreview, /<th>점수 기여<\\/th>/);
+  assert.ok(shapPreview.includes("<th>점수 기여</th>"));
   assert.ok(shapPreview.indexOf("설명 방법과 기준") <
     shapPreview.indexOf("재현 설정"));
   // 저장된 독립 Explanation도 SHAP/치환 민감도에 맞게 표시하며 다른 방법을 섞지 않는다.
