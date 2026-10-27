@@ -162,8 +162,8 @@ export function MLScoringPanel({
         dataset_id: datasetId,
         label_column: labelColumn || null,
       });
+      // 선택한 Job/Result가 같으면 기존 결과를 유지한다. 새로운 판본은 위의 일치 검사로 격리한다.
       setSelectedJob(job);
-      setResult(null);
       if (historyOpen) void refresh().catch(e => setHistoryError(formatError(e)));
     } catch (e) {
       setError(formatError(e));
