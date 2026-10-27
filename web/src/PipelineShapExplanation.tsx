@@ -81,6 +81,9 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
         axisLabel: { width: 210, overflow: "truncate" as const, fontSize: 12 } },
       series: [{ type: "bar" as const, name: "기준 점수 대비 기여",
         data: bars.map(bar => bar.value),
+        selectedMode: "single" as const,
+        select: { label: { show: true, position: "right" as const, formatter: "●" },
+          itemStyle: { borderWidth: 2 } },
         itemStyle: { color: (params: { value: number }) =>
           params.value >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative },
         markLine: { silent: true, symbol: "none", label: { show: false },
@@ -91,6 +94,7 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
       yAxis: { axisLabel: { width: 127, overflow: "truncate" as const, fontSize: 11 } },
     } }],
   }), [bars]);
+  const selectedBarIndex = bars.findIndex(bar => bar.feature === selected?.feature);
   if (!isValid) {
     return <p role="alert">SHAP 설명 근거의 점수·기여도 검증에 실패했습니다.
       이 결과의 차트는 표시하지 않습니다. 설명 결과 판본을 확인하세요.</p>;
@@ -104,8 +108,8 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
       저장된 모델 점수와 가법적 설명 결과를 검증했습니다.</p>
     <p className="pipeline-shap-legend"><span className="pipeline-shap-positive">양수: 이상 점수를 높이는 방향</span>
       <span className="pipeline-shap-negative">음수: 이상 점수를 낮추는 방향</span></p>
-    <DataChart option={option}
-      ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature의 개별 양수·음수 Permutation SHAP 기여도`}
+    <DataChart option={option} selectedDataIndex={selectedBarIndex}
+      ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature의 개별 양수·음수 Permutation SHAP 기여도. 현재 살펴보는 Feature: ${activityFeatureLabel(selected.feature)}`}
       onDataClick={index => {
         const entry = bars[index];
         if (entry) setFeatureSelection({ resultId: result.id, feature: entry.feature });
@@ -120,6 +124,9 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
           </option>)}
         </select>
       </label>
+      <p className="pipeline-shap-current-feature" aria-live="polite">
+        현재 살펴보는 Feature: <strong>{activityFeatureLabel(selected.feature)}</strong>
+      </p>
       <div className="pipeline-shap-feature-values" aria-live="polite">
         <div><span>실제 관측값</span>
           <strong>{selected.missing_imputed ? "결측 대체" : key(selected.actual_value)}</strong></div>

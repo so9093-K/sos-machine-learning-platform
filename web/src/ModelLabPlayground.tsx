@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
+import { groupActivityFeatures } from "./ActivityFeatureGroups";
+import { FeatureValueComparison } from "./FeatureValueComparison";
 import { jobStatusLabel } from "./display-format";
 import type { MLPlaygroundJob, MLPlaygroundJobPage, MLPlaygroundJobSummary, ModelRevision } from "./types";
 
@@ -38,6 +40,43 @@ export function playgroundNumberValid(raw: string, dtype: string): boolean {
   return dtype === "Float64";
 }
 
+/** 현재 편집값이 실제로 성공한 Job에서 제출한 값과 일치하는지 확인한다. */
+export function playgroundInputMatchesResult(
+  fields: Record<string, string>, submitted: Record<string, unknown> | null | undefined,
+  names: readonly string[],
+): boolean {
+  return Boolean(submitted) && Object.keys(submitted!).length === names.length &&
+    names.every(name => {
+      const raw = fields[name]?.trim() ?? "";
+      const previous = submitted?.[name];
+      return raw !== "" && Number.isFinite(Number(raw)) &&
+        typeof previous === "number" && Number.isFinite(previous) &&
+        Number(raw) === previous;
+    });
+}
+
+/** 실패·취소·실행 중 상태는 마지막 성공 점수를 덮어쓰지 않는다. */
+export function playgroundLatestSuccessfulScore(
+  previous: number | null, completed: Pick<MLPlaygroundJob, "status" | "result">,
+): number | null {
+  const score = completed.result?.anomaly_score;
+  return completed.status === "Succeeded" && typeof score === "number" && Number.isFinite(score)
+    ? score : previous;
+}
+
+/** 숫자 표기의 차이가 아니라 실제 모델에 전달될 값의 차이를 찾는다. */
+export function playgroundChangedFeatures(
+  fields: Record<string, string>, reference: Record<string, string>, names: readonly string[],
+): string[] {
+  return names.filter(name => {
+    const current = fields[name]?.trim() ?? "";
+    const baseline = reference[name]?.trim() ?? "";
+    if (!current || !baseline || !Number.isFinite(Number(current)) ||
+        !Number.isFinite(Number(baseline))) return current !== baseline;
+    return Number(current) !== Number(baseline);
+  });
+}
+
 export function ModelLabPlayground({ model, canRun, canCancel }: {
   model: ModelRevision; canRun: boolean; canCancel: boolean;
 }) {
@@ -45,9 +84,9 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   const [mode, setMode] = useState<"example" | "edit">(reference ? "example" : "edit");
   const [fields, setFields] = useState<Record<string, string>>(() =>
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
-  const [expanded, setExpanded] = useState(false);
   const [job, setJob] = useState<MLPlaygroundJob | null>(null);
   const [lastScore, setLastScore] = useState<number | null>(null);
+  const [latestSuccessfulScore, setLatestSuccessfulScore] = useState<number | null>(null);
   const [previousScore, setPreviousScore] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -130,9 +169,10 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
           setJob(next);
           const value = next.result?.anomaly_score;
           if (next.status === "Succeeded") {
-            if (typeof value === "number" && Number.isFinite(value))
+            if (typeof value === "number" && Number.isFinite(value)) {
               setLastScore(value);
-            else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
+              setLatestSuccessfulScore(current => playgroundLatestSuccessfulScore(current, next));
+            } else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
           }
         }
       } catch (cause) {
@@ -147,6 +187,8 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
 
   const featureDtypes = Array.isArray(model.runtime.feature_dtypes)
     ? model.runtime.feature_dtypes as string[] : [];
+  const referenceMedians = Array.isArray(model.runtime.feature_reference_medians)
+    ? model.runtime.feature_reference_medians as number[] : [];
   const input = model.features.map((name, index) => {
     const raw = fields[name]?.trim() ?? "";
     const dtype = String(featureDtypes[index] ?? "");
@@ -155,11 +197,23 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   });
   const invalid = input.filter(item => !item.valid);
   const running = sending || Boolean(job && !TERMINAL.has(job.status));
+  const submittedFeatures = job?.spec.features;
+  const submittedInput = submittedFeatures && typeof submittedFeatures === "object" &&
+    !Array.isArray(submittedFeatures)
+    ? submittedFeatures as Record<string, unknown> : null;
+  const matchesCompletedInput = job?.status === "Succeeded" && lastScore !== null &&
+    playgroundInputMatchesResult(fields, submittedInput, model.features);
+  const editedNames = reference ? playgroundChangedFeatures(fields, reference, model.features) : [];
+  const comparisonNames = reference
+    ? (editedNames.length > 0 ? editedNames : model.features).slice(0, 3) : [];
+  const inputGroups = groupActivityFeatures(
+    Object.fromEntries(model.features.map(name => [name, null])));
+
   async function execute() {
     if (!canRun || running || invalid.length || submitting.current) return;
     submitting.current = true;
     setSending(true); setError("");
-    const comparisonScore = lastScore;
+    const comparisonScore = latestSuccessfulScore;
     try {
       const created = await submitJob<MLPlaygroundJob>("/api/ml/playground/jobs", {
         model_revision_id: model.id,
@@ -173,8 +227,10 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
       // 완료 응답을 Polling 전용 경로에만 기대하면 점수가 사라진다.
       if (created.status === "Succeeded") {
         const score = created.result?.anomaly_score;
-        if (typeof score === "number" && Number.isFinite(score)) setLastScore(score);
-        else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
+        if (typeof score === "number" && Number.isFinite(score)) {
+          setLastScore(score);
+          setLatestSuccessfulScore(current => playgroundLatestSuccessfulScore(current, created));
+        } else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
       }
     } catch (cause) { setError(formatError(cause)); }
     finally { submitting.current = false; setSending(false); }
@@ -186,8 +242,6 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
         { method: "POST" }));
     } catch (cause) { setError(formatError(cause)); }
   }
-  const shortNames = model.features.slice(0, 6);
-  const otherNames = model.features.slice(6);
   const featureField = (name: string) => <label className="model-lab-feature" key={name}>
     <span>{activityFeatureLabel(name)} <small>{name} · {
       featureDtypes[model.features.indexOf(name)] ?? "자료형 미확인"
@@ -204,12 +258,12 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
     </div>
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
       <button type="button" aria-pressed={mode === "example"} className="secondary"
-        disabled={!reference}
+        disabled={!reference || running}
         onClick={() => { setMode("example"); if (reference) setFields(reference); }}>
         기준값으로 체험
       </button>
       <button type="button" aria-pressed={mode === "edit"} className="secondary"
-        onClick={() => setMode("edit")}>직접 수정해보기</button>
+        disabled={running} onClick={() => setMode("edit")}>직접 수정해보기</button>
     </div>
     {reference ? <p className="hint">입력값은 이 모델의 학습 Feature 중앙값을 바탕으로 구성했습니다.
       정수 Feature는 정수로 조정했으며, 실제 관측치나 정상 활동의 판정값이 아닙니다.</p>
@@ -218,17 +272,61 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
     {mode === "edit" && <p className="hint">Isolation Forest는 학습 데이터 범위를 벗어난 값을 범위 끝의
       값과 비슷하게 다룹니다. 한 Feature에 아주 큰 값을 넣어도 점수가 크게 오르지 않을 수 있으며,
       여러 Feature가 함께 평소와 다를 때 점수 변화가 더 뚜렷해질 수 있습니다.</p>}
-    <div className="model-lab-input-grid">{shortNames.map(featureField)}</div>
-    {otherNames.length > 0 && <details open={expanded}
-      onToggle={event => setExpanded(event.currentTarget.open)}
-      className="model-lab-extra-features">
-      <summary>나머지 필수 입력값 {otherNames.length}개 {expanded ? "접기" : "확인"}</summary>
-      <div className="model-lab-input-grid">{otherNames.map(featureField)}</div>
-    </details>}
+    <div className="model-lab-feature-groups">
+      {inputGroups.map(group => {
+        const names = group.entries.map(([name]) => name);
+        const shown = names.slice(0, 3);
+        const remaining = names.slice(3);
+        const needsReview = names.filter(name => invalid.some(item => item.name === name)).length;
+        return <section className="model-lab-feature-group" key={group.id}>
+          <div className="model-lab-feature-group-heading">
+            <strong>{group.title}</strong><span>{names.length}개 Feature
+              {needsReview > 0 && ` · 입력 확인 ${needsReview}개`}</span>
+          </div>
+          <p className="hint">{group.description} · 모델 중요도 순위가 아닙니다.</p>
+          <div className="model-lab-input-grid">{shown.map(featureField)}</div>
+          {remaining.length > 0 && <details className="model-lab-extra-features">
+            <summary>이 그룹의 나머지 필수 입력값 {remaining.length}개 확인</summary>
+            <div className="model-lab-input-grid">{remaining.map(featureField)}</div>
+          </details>}
+        </section>;
+      })}
+    </div>
+    {reference && <section className="model-lab-input-comparison"
+      aria-label="입력 Feature와 Train 참조값 비교">
+      <div className="model-lab-feature-group-heading">
+        <strong>{editedNames.length > 0 ? "변경한 입력값과 학습 참조값" : "현재 입력값과 학습 참조값"}</strong>
+        <span>{editedNames.length > 0 ? `변경 ${editedNames.length}개` : "기준 입력"}</span>
+      </div>
+      <p className="hint">같은 Feature 안에서만 막대 길이를 비교합니다. 학습 중앙값은 정상 범위나
+        모델 기여도가 아닙니다. 중앙값이 0이거나 음수인 경우 등 비례 표현이 부적절하면 숫자로 표시합니다.</p>
+      <div className="model-lab-reference-grid">
+        {comparisonNames.map(name => <div key={name} className="model-lab-reference-item">
+          <strong>{activityFeatureLabel(name)}</strong>
+          <FeatureValueComparison actual={playgroundNumberValid(fields[name] ?? "",
+            featureDtypes[model.features.indexOf(name)] ?? "")
+            ? Number(fields[name]) : null}
+            reference={referenceMedians[model.features.indexOf(name)]}
+            actualLabel="현재 입력값" />
+        </div>)}
+      </div>
+      {editedNames.length > comparisonNames.length && <small className="hint">
+        변경한 나머지 {editedNames.length - comparisonNames.length}개 값은 위 Feature 입력에서 확인할 수 있습니다.
+      </small>}
+    </section>}
     {invalid.length > 0 && <p role="alert" className="model-lab-input-error">
       필수 입력값이나 자료형·정수 범위가 맞지 않는 Feature {invalid.length}개가 있습니다.
       {invalid.length <= 3 && " 확인: " + invalid.map(item => activityFeatureLabel(item.name)).join(", ")}
     </p>}
+    <p className="model-lab-input-state" role="status">{running
+      ? "제출한 입력을 모델에서 계산하는 중입니다."
+      : matchesCompletedInput
+        ? "현재 입력값은 최근 완료된 계산에 사용한 값과 일치합니다."
+        : job?.status === "Succeeded" && lastScore !== null
+          ? "입력값이 마지막 계산 이후 변경됐습니다. 아래 점수는 이전 입력의 결과이며 현재 입력은 아직 계산하지 않았습니다."
+          : job?.status === "Failed" || job?.status === "Cancelled"
+            ? "마지막 실행에서는 점수를 얻지 못했습니다. 현재 입력값을 계산하려면 다시 실행해 주세요."
+            : "현재 입력값은 아직 계산하지 않았습니다. 점수를 확인하려면 실행을 요청하세요."}</p>
     <p className="hint">입력 Feature {model.features.length}개가 실제 모델에 전달됩니다.
       실행을 요청하면 입력값과 결과가 권한이 적용되는 Job 이력에 보존됩니다.</p>
     {error && <p role="alert">{error}</p>}
@@ -247,8 +345,9 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
         Failed: "실패", Cancelled: "취소됨" } as Record<string, string>)[job.status] ?? job.status}</strong>
       {job.status === "Succeeded" && lastScore !== null &&
         <div className="model-lab-score-row">
-          <div><span>이번 입력의 이상 점수</span><strong>{lastScore.toFixed(5)}</strong></div>
-          {previousScore !== null && <div><span>이전 계산과의 차이</span>
+          <div><span>{matchesCompletedInput ? "현재 입력의 이상 점수" : "마지막 제출 입력의 이상 점수"}</span>
+            <strong>{lastScore.toFixed(5)}</strong></div>
+          {previousScore !== null && <div><span>이전 완료 계산과의 점수 차이</span>
             <strong>{(lastScore - previousScore) > 0 ? "+" : ""}{(lastScore - previousScore).toFixed(5)}</strong></div>}
         </div>}
       {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}

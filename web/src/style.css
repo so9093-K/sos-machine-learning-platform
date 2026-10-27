@@ -912,6 +912,44 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-score-row span { color:var(--sos-muted); font-size:12px; }
 .model-lab-score-row strong { font-size:25px; font-variant-numeric:tabular-nums; }
 .model-lab-input-error { color:var(--sos-danger); font-size:12px; }
+/* 같은 Feature에서만 비교하는 입력값·Train 중앙값 시각 근거. */
+.feature-reference-comparison { display:grid; gap:8px; min-width:0; }
+.feature-reference-values { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.feature-reference-values > div { display:grid; gap:3px; min-width:0; }
+.feature-reference-values span { font-size:11px; color:var(--sos-muted); }
+.feature-reference-values span i { display:inline-block; width:7px; height:7px; margin-right:5px;
+  border-radius:2px; vertical-align:middle; }
+.feature-reference-legend-actual { background:var(--sos-chart-bar); }
+.feature-reference-legend-train { background:var(--sos-chart-third); }
+.feature-reference-values strong { font-size:13px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.feature-reference-bars { display:grid; gap:6px; }
+.feature-reference-bars > span { display:block; height:7px; width:100%; border-radius:4px;
+  background:var(--sos-raised); overflow:hidden; }
+.feature-reference-bars i { display:block; height:100%; border-radius:4px; background:var(--sos-chart-bar); }
+.feature-reference-bars > span + span i { background:var(--sos-chart-third); }
+.model-lab-feature-groups { display:grid; gap:13px; min-width:0; }
+.model-lab-feature-group,.model-lab-input-comparison { display:grid; gap:12px; min-width:0; padding:14px;
+  border:1px solid var(--sos-border); border-radius:10px; }
+.model-lab-feature-group-heading { display:flex; flex-wrap:wrap; justify-content:space-between;
+  align-items:baseline; gap:6px 12px; }
+.model-lab-feature-group-heading > span { color:var(--sos-muted); font-size:12px; }
+.model-lab-feature-group > .hint,.model-lab-input-comparison > .hint { margin:0; }
+.model-lab-reference-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); gap:10px; }
+.model-lab-reference-item { display:grid; gap:10px; min-width:0; padding:11px; border-radius:8px;
+  background:var(--sos-raised); }
+.model-lab-reference-item > strong { font-size:12px; overflow-wrap:anywhere; }
+.model-lab-input-state { border-left:3px solid var(--sos-accent); background:var(--sos-raised);
+  padding:10px 12px; font-size:12px; line-height:1.6; margin:0; }
+/* 기존 2열 활동 행에서 새 비교 요소가 자동 너비 열을 밀어내지 않게 전체 너비를 차지한다. */
+.observation-activity-highlight > .feature-reference-comparison,
+.observation-activity-figure > .feature-reference-comparison {
+  grid-column:1/-1; width:100%; min-width:0; margin:8px 0 4px;
+}
+.observation-activity-highlight .feature-reference-values strong {
+  text-align:left; font-size:13px;
+}
+.pipeline-shap-current-feature { border-left:3px solid var(--sos-accent); padding-left:10px; margin:0;
+  font-size:12px; line-height:1.6; }
 @media(max-width:780px) {.model-lab-input-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }}
 @media(max-width:520px) {.model-lab-input-grid {grid-template-columns:1fr;} .model-lab-version-picker {width:100%;}}
 

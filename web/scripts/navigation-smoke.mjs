@@ -422,8 +422,10 @@ try {
   assert.match(defaultObservation, /2026-01-01 02:00:00 UTC/);
   assert.doesNotMatch(defaultObservation, /관측 시각·원본 관측치 ID 없음/);
   assert.match(groupedObservation, /활동 특징/);
-  // 상단 대표 Feature를 그룹에서 중복 제거해도 학습 참조값은 잃지 않아야 한다.
-  assert.match(groupedObservation, /Train 중앙값 모델 판본 없음/);
+  // 참조 모델이 없으면 비율을 추정하지 않고 비교 기준 없음으로 표시한다.
+  assert.match(groupedObservation, /Train 중앙값/);
+  assert.match(groupedObservation, /비교 기준 없음/);
+  assert.doesNotMatch(groupedObservation, /feature-reference-bars/);
   assert.match(groupedObservation, /observation-activity-highlights/);
   assert.match(groupedObservation, /전체 3개/);
   assert.match(groupedObservation, /관측 시각·원본 관측치 ID 없음/);
@@ -434,11 +436,11 @@ try {
   assert.match(groupedObservation, /프로세스 활동/);
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
-  assert.match(groupedObservation, /모델 중요도나 이상 원인 순위가 아닙니다/);
+  assert.match(groupedObservation, /중요도·정상 범위·원인 순위로 해석할 수 없습니다/);
   assert.ok(groupedObservation.indexOf("모델 판단 근거 자세히 보기") <
     groupedObservation.indexOf("활동별 지표"));
   assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
-  assert.match(groupedObservation, /모델 판본 없음/);
+  assert.match(groupedObservation, /학습 모델 판본 참조가 없어/);
   const pipelineViewOnly = renderToStaticMarkup(
     React.createElement(PipelineCandidateInvestigation, {
       candidate: { row_index: 2, anomaly_score: 0.2, features: { cnt_proc_exec: 2 } },
@@ -469,6 +471,7 @@ try {
   // 개별 SHAP 기여를 실제 관측값·Train 중앙값과 연결해 확인할 수 있어야 한다.
   assert.match(shapPreview, /선택한 SHAP Feature 근거/);
   assert.match(shapPreview, /Feature 살펴보기/);
+  assert.match(shapPreview, /현재 살펴보는 Feature/);
   assert.match(shapPreview, /<select[^>]*>/);
   assert.match(shapPreview, /실제 관측값/);
   assert.match(shapPreview, /Train 참조 중앙값/);
@@ -669,7 +672,51 @@ try {
   assert.equal(routeAt("/model-experience", "").tab, "overview");
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
-  const { ModelLabPlayground, exampleValues } = await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
+  const { ModelLabPlayground, exampleValues, playgroundInputMatchesResult,
+    playgroundLatestSuccessfulScore, playgroundChangedFeatures } =
+    await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
+  // 성공 -> 실패/취소 -> 성공 경로에서도 이전 성공 점수를 잃지 않는다.
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Failed", result: null }), 0.41);
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Cancelled", result: null }), 0.41);
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Running", result: null }), 0.41);
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Succeeded", result: { anomaly_score: 0.52 } }), 0.52);
+  assert.equal(playgroundLatestSuccessfulScore(0.41,
+    { status: "Succeeded", result: { anomaly_score: Number.NaN } }), 0.41);
+  assert.deepEqual(playgroundChangedFeatures(
+    { a: "1e3", b: "0.25", c: "5" }, { a: "1000", b: "0.25", c: "4" },
+    ["a", "b", "c"]), ["c"]);
+  assert.equal(playgroundInputMatchesResult({ a: "1e3", b: "0.25" },
+    { a: 1000, b: 0.25 }, ["a", "b"]), true);
+  assert.equal(playgroundInputMatchesResult({ a: "1001", b: "0.25" },
+    { a: 1000, b: 0.25 }, ["a", "b"]), false);
+  assert.equal(playgroundInputMatchesResult({ a: "", b: "0.25" },
+    { a: 1000, b: 0.25 }, ["a", "b"]), false);
+  assert.equal(playgroundInputMatchesResult({ a: "1000", b: "0.25" },
+    { a: 1000, b: 0.25, c: 1 }, ["a", "b"]), false);
+  const { FeatureValueComparison } = await vite.ssrLoadModule("/src/FeatureValueComparison.tsx");
+  const bars = renderToStaticMarkup(React.createElement(FeatureValueComparison,
+    { actual: 500, reference: 5, actualLabel: "현재 입력값" }));
+  assert.match(bars, /현재 입력값/);
+  assert.match(bars, /Train 중앙값/);
+  assert.match(bars, /width:100%/);
+  assert.match(bars, /width:1%/);
+  assert.match(bars, /feature-reference-legend-actual/);
+  assert.match(bars, /feature-reference-legend-train/);
+  const tinyValue = renderToStaticMarkup(React.createElement(FeatureValueComparison,
+    { actual: 0.0000000034, reference: 1 }));
+  assert.match(tinyValue, /3[.]400e-9/);
+  assert.doesNotMatch(tinyValue, /<strong>0<\/strong>/);
+  const noRatio = renderToStaticMarkup(React.createElement(FeatureValueComparison,
+    { actual: -5, reference: 0 }));
+  assert.doesNotMatch(noRatio, /feature-reference-bars/);
+  const zeroMedian = renderToStaticMarkup(React.createElement(FeatureValueComparison,
+    { actual: 1000, reference: 0 }));
+  assert.match(zeroMedian, /Train 중앙값/);
+  assert.doesNotMatch(zeroMedian, /feature-reference-bars/);
   const exampleModel = {
     id: "model-test", features: ["cnt_proc_exec", "cnt_file_del"],
     runtime: { feature_reference_medians: [12, 2], feature_dtypes: ["Int64", "Int64"] },
@@ -695,6 +742,11 @@ try {
   }));
   assert.doesNotMatch(playgroundHtml, /Dataset 전체에 적용 →/);
   assert.match(playgroundHtml, /프로세스 실행 횟수/);
+  assert.match(playgroundHtml, /파일 활동/);
+  assert.match(playgroundHtml, /프로세스 활동/);
+  assert.doesNotMatch(playgroundHtml, /네트워크 활동/); // 입력에 없는 그룹은 만들지 않는다.
+  assert.match(playgroundHtml, /입력 Feature와 Train 참조값 비교/);
+  assert.match(playgroundHtml, /현재 입력값은 아직 계산하지 않았습니다/);
   assert.match(playgroundHtml, /실제 이상 점수 계산하기/);
   assert.match(playgroundHtml, /입력값과 결과가 권한이 적용되는 Job 이력에 보존/);
   const { ModelLabUse, isActivityModelCompatible } =

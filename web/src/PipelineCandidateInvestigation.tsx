@@ -7,6 +7,7 @@ import type { MLExplanationJob, MLExplanationJobSummary, ExplanationResult, Pipe
 import { PipelineShapExplanation } from "./PipelineShapExplanation";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { groupActivityFeatures } from "./ActivityFeatureGroups";
+import { FeatureValueComparison } from "./FeatureValueComparison";
 import { formatObservedAt, jobStatusLabel } from "./display-format";
 
 type Candidate = PipelineCandidates["items"][number];
@@ -253,14 +254,17 @@ export function PipelineCandidateInvestigation({
     {observationMode && <section className="observation-activity" aria-label="관측된 활동 특징">
       <div className="observation-activity-heading">
         <h6>활동 특징</h6>
-        <p>실제 관측된 집계 Feature입니다. 다음 항목은 고정된 미리보기이며 모델 중요도나 이상 원인 순위가 아닙니다.</p>
+        <p>실제 관측된 집계 Feature입니다. 같은 Feature 안에서만 실제값·Train 중앙값의 막대 길이를 비교하며, 다른 Feature와 막대 길이를 비교하거나 중요도·정상 범위·원인 순위로 해석할 수 없습니다. 다음 항목은 고정 미리보기입니다.</p>
       </div>
       <div className="observation-activity-highlights">
         {previewFeatures.map(name => <div key={name} className="observation-activity-highlight">
           <span title={name}>{activityFeatureLabel(name)}</span>
-          <strong>{format(candidate.features[name])}</strong>
-          <small>Train 중앙값 {referenceLabel(name)}
-            {referenceDifference(name, candidate.features[name]) && ` · ${referenceDifference(name, candidate.features[name])}`}</small>
+          <FeatureValueComparison actual={candidate.features[name]}
+            reference={referenceMap?.get(name)} />
+          {referenceDifference(name, candidate.features[name]) &&
+            <small className="observation-activity-difference">
+              {referenceDifference(name, candidate.features[name])}
+            </small>}
         </div>)}
       </div>
       {!modelRevisionId && <p className="hint">학습 모델 판본 참조가 없어 중앙값을 비교할 수 없습니다.</p>}
@@ -293,8 +297,7 @@ export function PipelineCandidateInvestigation({
             {shown.map(([name, value]) =>
               <div key={name} className="observation-activity-figure">
                 <span title={name}>{activityFeatureLabel(name)}</span>
-                <strong>{format(value)}</strong>
-                <small>Train 중앙값 {referenceLabel(name)}</small>
+                <FeatureValueComparison actual={value} reference={referenceMap?.get(name)} />
                 {referenceDifference(name, value) &&
                   <small className="observation-activity-difference">{referenceDifference(name, value)}</small>}
               </div>)}
