@@ -131,8 +131,12 @@ export function MLScoringPanel({
     setColumnsDatasetId("");
     setColumns([]);
     setLabelColumn("");
-    setSelectedJob(null);
-    setResult(null);
+    // 완료된 결과를 조사하는 동안 다른 Dataset을 준비하더라도 기존 근거는 유지한다.
+    // 새 Job을 명시적으로 제출하거나 진행 중인 Job에서 전환할 때만 기존 선택을 해제한다.
+    if (!visibleResult) {
+      setSelectedJob(null);
+      setResult(null);
+    }
     setError("");
   }
   /** 파일 등록과 Scoring 제출은 서로 다른 완료 사건이다. */
