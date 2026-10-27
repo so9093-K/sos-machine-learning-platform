@@ -29,6 +29,18 @@ try {
     "파일 활동", "프로세스 활동", "네트워크 활동", "활동량·시간 특성", "그 밖의 입력 Feature",
   ]);
   assert.equal(activityGroups.flatMap(group => group.entries).length, 5);
+  const representativeGroups = groupActivityFeatures({
+    cnt_file_create: 0, cnt_file_write: 9, uniq_file_touched: 5, max_write_size: 12,
+    cnt_net_tcp: 4, ratio_outbound_traffic: 0.85, uniq_dest_ip: 7, net_bytes_per_sec: 20,
+  });
+  assert.deepEqual(representativeGroups.find(group => group.id === "network")
+    ?.entries.slice(0, 3).map(([name]) => name),
+  ["ratio_outbound_traffic", "uniq_dest_ip", "net_bytes_per_sec"]);
+  assert.deepEqual(representativeGroups.find(group => group.id === "file")
+    ?.entries.slice(0, 3).map(([name]) => name),
+  ["cnt_file_write", "uniq_file_touched", "max_write_size"]);
+  assert.equal(new Set(representativeGroups.flatMap(group =>
+    group.entries.map(([name]) => name))).size, 8);
   // 독립 Scoring 결과는 별도 접기·선택 없이 전체 근거를 바로 제공한다.
   const { ScoringObservationExplorer } =
     await vite.ssrLoadModule("/src/ScoringObservationExplorer.tsx");
@@ -376,7 +388,17 @@ try {
   assert.match(groupedObservation, /프로세스 활동/);
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
-  assert.match(groupedObservation, /모델 중요도 순위나 실제 로그의 프로세스/);
+  assert.match(groupedObservation, /모델 중요도 순위가 아닙니다/);
+  assert.match(groupedObservation, /모델 판본 없음/);
+  const pipelineViewOnly = renderToStaticMarkup(
+    React.createElement(PipelineCandidateInvestigation, {
+      candidate: { row_index: 2, anomaly_score: 0.2, features: { cnt_proc_exec: 2 } },
+      scoringResultId: "score-1", modelRevisionId: null,
+      canRun: false, canCancel: false, onOpenResource: () => {},
+    }));
+  assert.doesNotMatch(pipelineViewOnly, /이 관측값에서 확인된 활동 특징/);
+  assert.ok(pipelineViewOnly.indexOf("전체 1개 Feature 관측값") <
+    pipelineViewOnly.indexOf("모델 판단 근거 자세히 보기"));
   const { ShapContributionChart } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
   const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
