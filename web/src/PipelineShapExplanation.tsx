@@ -1,6 +1,7 @@
 /** 기존 독립 설명 Job을 SHAP 방법으로 요청하고 해당 결과를 탐구한다. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CHART_COLORS, DataChart } from "./DataChart";
+import { EvidenceFacts } from "./EvidenceFacts";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { formatError, request, submitJob } from "./api";
 import type { MLResourceKind } from "./PlatformNavigation";
@@ -135,10 +136,29 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
     </div>}
     <p className="hint">Train Feature 중앙값으로 구성한 합성 관측치 한 행을 기준으로 합니다.
       실제 이상 사건의 원인이나 확률을 의미하지 않습니다.</p>
-    <details><summary>전체 SHAP 값과 계산 근거</summary>
-      <p>방법: Permutation SHAP · 출력: -score_samples · 배경 행 {key(output.baseline_row_count)}개 ·
-        순열 반복 {key(output.permutation_rounds)}회 · Seed {key(output.sampling_seed)} ·
-        SHAP 라이브러리 {String(output.shap_version ?? "미정의")}</p>
+    <details className="pipeline-shap-technical">
+      <summary>전체 SHAP 값과 계산 근거</summary>
+      <div className="pipeline-shap-technical-content">
+        <section aria-label="SHAP 설명 방법과 기준">
+          <h6>설명 방법과 기준</h6>
+          <EvidenceFacts facts={[
+            { label: "설명 방법", value: "Permutation SHAP" },
+            { label: "모델 점수 출력", value: "-score_samples" },
+            { label: "기준 배경", value: `합성 관측값 ${key(output.baseline_row_count)}개` },
+          ]} />
+          <p className="hint">Train Feature 중앙값으로 구성한 합성 관측값을 기준으로 합니다.
+            실제 Train 관측 분포를 대표하지 않습니다.</p>
+        </section>
+        <section aria-label="SHAP 재현 설정">
+          <h6>재현 설정</h6>
+          <EvidenceFacts compact facts={[
+            { label: "순열 반복", value: typeof output.permutation_rounds === "number"
+              ? `${key(output.permutation_rounds)}회` : "미정의" },
+            { label: "Seed", value: key(output.sampling_seed) },
+            { label: "SHAP 라이브러리", value: String(output.shap_version ?? "미정의") },
+          ]} />
+        </section>
+      </div>
       <div className="table-scroll"><table>
         <thead><tr><th>Feature</th><th>관측값</th><th>Train 중앙값</th><th>점수 기여</th></tr></thead>
         <tbody>{contributions.map(item => <tr key={item.feature}>
