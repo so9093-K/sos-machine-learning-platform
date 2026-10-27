@@ -398,6 +398,8 @@ try {
       canRun: false, canCancel: false, onOpenResource: () => {},
     }));
   assert.match(groupedObservation, /활동 특징/);
+  // 상단 대표 Feature를 그룹에서 중복 제거해도 학습 참조값은 잃지 않아야 한다.
+  assert.match(groupedObservation, /Train 중앙값 모델 판본 없음/);
   assert.match(groupedObservation, /observation-activity-highlights/);
   assert.match(groupedObservation, /전체 3개/);
   assert.match(groupedObservation, /관측 시각·원본 관측치 ID 없음/);
