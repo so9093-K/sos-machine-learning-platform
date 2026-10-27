@@ -61,8 +61,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const [lookupFailures, setLookupFailures] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [usage, setUsage] = useState<"playground" | "dataset">("dataset");
-  const [datasetVisited, setDatasetVisited] = useState(true);
-  const openDataset = () => { setDatasetVisited(true); setUsage("dataset"); };
+  const openDataset = () => setUsage("dataset");
 
   useEffect(() => {
     let active = true;
@@ -232,12 +231,12 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           canRun={canRun} canCancel={canCancel} />
       </div>
       <div hidden={usage !== "dataset"}>
-        {datasetVisited && <MLScoringPanel key={selected.revision.id} model={selected.revision}
+        <MLScoringPanel key={selected.revision.id} model={selected.revision}
           datasets={datasets} hasMoreDatasets={hasMoreDatasets}
           onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
           onOpenResult={id => onOpenResource("scoring", id)}
           onOpenResource={onOpenResource}
-          canUpload={canUpload} onDatasetRegistered={onDatasetRegistered} />}
+          canUpload={canUpload} onDatasetRegistered={onDatasetRegistered} />
       </div>
     </>}
     <div className="model-lab-use-footer">
