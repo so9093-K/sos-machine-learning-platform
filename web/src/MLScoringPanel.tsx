@@ -206,6 +206,8 @@ export function MLScoringPanel({
     }
   }
 
+  const hasResultReference = typeof selectedJob?.result?.scoring_result_id === "string" &&
+    selectedJob.result.scoring_result_id.length > 0;
   const visibleResult = result && selectedJob?.status === "Succeeded" &&
     result.id === selectedJob.result?.scoring_result_id &&
     result.model_revision_id === model.id ? result : null;
@@ -248,15 +250,15 @@ export function MLScoringPanel({
       {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error ?? "실행 오류"}
         {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
       {selectedJob.status === "Succeeded" &&
-        !selectedJob.result?.scoring_result_id &&
+        !hasResultReference &&
         <p role="alert">Scoring Job은 완료됐지만 결과 참조가 없습니다. 작업 이력에서 실행 근거를 확인해 주세요.</p>}
-      {selectedJob.status === "Succeeded" && selectedJob.result?.scoring_result_id &&
+      {selectedJob.status === "Succeeded" && hasResultReference &&
         resultError && <div role="alert" className="pipeline-readiness-blocked">
           <p>점수 계산은 완료됐지만 결과를 불러오지 못했습니다: {resultError}</p>
           <button type="button" className="secondary"
             onClick={() => setResultRetry(current => current + 1)}>결과만 다시 조회</button>
         </div>}
-      {selectedJob.status === "Succeeded" && selectedJob.result?.scoring_result_id &&
+      {selectedJob.status === "Succeeded" && hasResultReference &&
         !visibleResult && !resultError &&
         <p role="status">완료된 분석의 결과 판본을 조회하는 중입니다.</p>}
       {visibleResult && <div className="scoring-result-complete">
