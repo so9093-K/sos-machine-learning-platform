@@ -89,7 +89,10 @@ def _perform(
         # 부모 Worker의 논리적 메모리 예약 안에서 실행되는 자식이다.
         store._execution_memory_reserved = True
         dataset = store.get_dataset(job["dataset_id"]) if job["dataset_id"] else None
-        if dataset is None and job["kind"] != "ml_playground":
+        if dataset is None and not (
+            job["kind"] == "ml_playground"
+            or (job["kind"] == "ml_explain" and job["spec"].get("playground_job_id"))
+        ):
             raise ValueError("Input dataset is missing")
         if job["kind"] == "ml_playground":
             stage = "processing"
