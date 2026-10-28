@@ -206,3 +206,83 @@ def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_p
         with pytest.raises(ValueError):
             ml_explanation.explain_scored_row(
                 store, {**spec, "method": "permutation_shap_median_v1"})
+
+
+def test_playground_explanation_api_checks_source_authority_and_status(tmp_path, monkeypatch):
+    """Playground 설명은 요청자가 접근 가능한 성공한 원본 Job만 받는다."""
+    import hashlib
+    from fastapi.testclient import TestClient
+    from sos_platform.api import create_app
+    from sos_platform.security import Actor, IdentitySettings
+    from sos_platform.store import Store
+
+    owner_token = "explanation-owner-credential"
+    other_token = "explanation-other-credential"
+    identity = IdentitySettings("token", {
+        hashlib.sha256(token.encode()).hexdigest():
+            Actor(actor, "human", frozenset({"researcher"}))
+        for token, actor in ((owner_token, "owner"), (other_token, "other"))
+    })
+    source = {
+        "id": "playground-success", "kind": "ml_playground", "status": "Succeeded",
+        "owner_actor": "owner",
+        "spec": {"model_revision_id": "model", "model_owner_actor": "owner",
+                 "features": {"first": 2}},
+        "result": {"anomaly_score": 0.5},
+    }
+    model = {"id": "model", "owner_actor": "owner", "lifecycle_state": "Active"}
+    calls = []
+    monkeypatch.setattr(Store, "get_job", lambda self, _: source)
+    monkeypatch.setattr(Store, "get_model_revision", lambda self, _: model)
+
+    def create_job(self, **kwargs):
+        calls.append(kwargs)
+        return {
+            "id": "explanation-job", "kind": kwargs["kind"],
+            "dataset_id": kwargs["dataset_id"], "spec": kwargs["spec"],
+            "status": "Queued", "cancel_requested": False,
+            "result": None, "error": None,
+            "request_id": kwargs.get("request_id"),
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z", "attempts": [],
+        }
+
+    monkeypatch.setattr(Store, "create_job", create_job)
+    client = TestClient(create_app(tmp_path, identity=identity))
+    headers = {"Authorization": f"Bearer {owner_token}",
+               "Idempotency-Key": "explain-test-id-1"}
+    payload = {"playground_job_id": source["id"],
+               "method": "permutation_shap_median_v1"}
+    response = client.post("/api/ml/explanations/jobs", json=payload, headers=headers)
+    assert response.status_code == 202, response.text
+    assert calls[-1]["dataset_id"] is None
+    assert calls[-1]["spec"] == {
+        "playground_job_id": source["id"], "source_owner_actor": "owner",
+        "method": "permutation_shap_median_v1",
+    }
+    assert client.post(
+        "/api/ml/explanations/jobs", json=payload,
+        headers={**headers, "Authorization": f"Bearer {other_token}"},
+    ).status_code == 404
+    for bad_status in ("Queued", "Running", "Failed", "Cancelled"):
+        source["status"] = bad_status
+        assert client.post(
+            "/api/ml/explanations/jobs", json=payload, headers=headers
+        ).status_code == 409
+    source["status"] = "Succeeded"
+    for bad_score in (float("nan"), float("inf"), True):
+        source["result"] = {"anomaly_score": bad_score}
+        assert client.post(
+            "/api/ml/explanations/jobs", json=payload, headers=headers
+        ).status_code == 409
+    source["result"] = {"anomaly_score": 0.5}
+    model["lifecycle_state"] = "Deleted"
+    assert client.post(
+        "/api/ml/explanations/jobs", json=payload, headers=headers
+    ).status_code == 409
+    model["lifecycle_state"] = "Active"
+    assert client.post(
+        "/api/ml/explanations/jobs",
+        json={**payload, "scoring_result_id": "invalid", "row_index": 0},
+        headers=headers,
+    ).status_code == 422
