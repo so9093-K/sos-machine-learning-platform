@@ -293,21 +293,25 @@ def connect_iceberg(
 ) -> dict:
     """기존 테이블의 지정 Snapshot을 Dataset으로 등록한다."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
-        raise InvalidRequestError("Invalid Iceberg table name")
+        raise InvalidRequestError("Iceberg 테이블 이름 형식이 올바르지 않습니다.")
     from pyiceberg.exceptions import NoSuchTableError
 
     try:
         table = iceberg_catalog(store).load_table(f"default.{table_name}")
     except NoSuchTableError as exc:
-        raise InvalidRequestError("Iceberg table does not exist") from exc
+        raise InvalidRequestError(
+            "Iceberg 테이블을 찾을 수 없습니다. 테이블 이름을 확인하세요."
+        ) from exc
     snapshots = {str(s.snapshot_id) for s in table.snapshots()}
     if snapshot_id is None:
         current = table.current_snapshot()
         if current is None:
-            raise InvalidRequestError("Iceberg table has no data snapshot")
+            raise InvalidRequestError("Iceberg 테이블에 데이터 Snapshot이 없습니다.")
         snapshot_id = str(current.snapshot_id)
     if snapshot_id not in snapshots:
-        raise InvalidRequestError("Iceberg snapshot is not available; it may have expired")
+        raise InvalidRequestError(
+            "Iceberg Snapshot을 사용할 수 없습니다. 만료됐을 수 있으니 Snapshot 목록을 다시 조회하세요."
+        )
     from .retention import ensure_tag
 
     dataset_id = str(uuid4())
@@ -327,7 +331,7 @@ def connect_iceberg(
 
 def iceberg_snapshots(store: Store, table_name: str) -> list[dict]:
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", table_name):
-        raise InvalidRequestError("Invalid Iceberg table name")
+        raise InvalidRequestError("Iceberg 테이블 이름 형식이 올바르지 않습니다.")
     table = iceberg_catalog(store).load_table(f"default.{table_name}")
     return [
         {"snapshot_id": str(s.snapshot_id), "timestamp_ms": s.timestamp_ms}
@@ -343,7 +347,9 @@ def scan_dataset(store: Store, dataset: dict) -> pl.LazyFrame:
         table = iceberg_catalog(store).load_table(dataset["location"])
         snapshot = int(dataset["version"])
         if snapshot not in {s.snapshot_id for s in table.snapshots()}:
-            raise InvalidRequestError("Iceberg snapshot is not available; it may have expired")
+            raise InvalidRequestError(
+                "Iceberg Snapshot을 사용할 수 없습니다. 만료됐을 수 있으니 Snapshot 목록을 다시 조회하세요."
+            )
         config = Settings.from_env()
         return pl.scan_iceberg(
             table,

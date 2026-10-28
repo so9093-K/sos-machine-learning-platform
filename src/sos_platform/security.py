@@ -101,14 +101,14 @@ class IdentitySettings:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(
                 status_code=401,
-                detail="Authentication required",
+                detail="인증이 필요합니다.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         token = authorization[7:]
         if len(token) < 32 or len(token) > 4096:
             raise HTTPException(
                 status_code=401,
-                detail="Invalid credentials",
+                detail="인증 정보를 확인하세요.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         fingerprint = hashlib.sha256(token.encode()).hexdigest()
@@ -116,7 +116,7 @@ class IdentitySettings:
             if secrets.compare_digest(fingerprint, expected):
                 return actor
         raise HTTPException(
-            status_code=401, detail="Invalid credentials", headers={"WWW-Authenticate": "Bearer"}
+            status_code=401, detail="인증 정보를 확인하세요.", headers={"WWW-Authenticate": "Bearer"}
         )
 
 
@@ -140,7 +140,7 @@ def current_actor(
         if peer not in ("127.0.0.1", "::1", "testclient") or any(
             header in request.headers for header in proxy_headers
         ):
-            raise HTTPException(status_code=403, detail="Development identity is local only")
+            raise HTTPException(status_code=403, detail="개발 신원은 로컬에서만 사용할 수 있습니다.")
     actor = request.app.state.identity.authenticate(request.headers.get("authorization"))
     request.state.actor = actor
     return actor
@@ -156,7 +156,7 @@ def require(action: str):
 
     def dependency(actor: Actor = CURRENT_ACTOR_DEP) -> Actor:
         if not actor.can(action):
-            raise HTTPException(status_code=403, detail="Permission denied")
+            raise HTTPException(status_code=403, detail="요청한 작업에 접근할 수 없습니다.")
         return actor
 
     return dependency
@@ -165,4 +165,4 @@ def require(action: str):
 def resource_allowed(actor: Actor, owner: str | None) -> None:
     """소유권이 없는 기존 데이터는 관리자를 제외하고 기본 거부한다."""
     if not actor.privileged and owner != actor.id:
-        raise HTTPException(status_code=404, detail="Resource not found")
+        raise HTTPException(status_code=404, detail="요청한 리소스를 찾을 수 없습니다.")

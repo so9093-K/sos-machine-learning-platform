@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { mergeById } from "./collections";
 import type * as echarts from "echarts";
 import { DataChart, CHART_COLORS } from "./DataChart";
@@ -8,7 +8,7 @@ import { histogram, needsTimeOrder } from "./feature-utils";
 import { useFeatureEditor } from "./useFeatureEditor";
 import { FeaturePanel } from "./FeaturePanel";
 import { useIcebergConnector } from "./useIcebergConnector";
-import { request, jsonPost, submitJob, formatError, uploadFile } from "./api";
+import { request, jsonPost, submitJob, formatError, uploadFile, describeError, type ErrorNotice } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
 import { DelimitedImport } from "./DelimitedImport";
 import { JobsPanel } from "./JobsPanel";
@@ -100,7 +100,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const [uploadPolicy, setUploadPolicy] = useState<UploadPolicy | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [pendingDelimited, setPendingDelimited] = useState<File | null>(null);
-  const [error, setError] = useState("");
+  const [error, setErrorNotice] = useState<ErrorNotice | null>(null);
+  // 빈 값은 안내를 닫고, 그 외에는 API 오류의 메시지·안내·참조 정보를 나눠 보관한다.
+  const setError = useCallback((cause: unknown) =>
+    setErrorNotice(cause === "" || cause == null ? null : describeError(cause)), []);
   const [notice, setNotice] = useState("");
   // 화면과 무관한 백그라운드 GET 실패를 전역 작업 실패로 표시하지 않는다.
   const [datasetReadError, setDatasetReadError] = useState("");
@@ -350,7 +353,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     feedbackRequests.current += 1;
     feedbackRevision.current += 1;
     setBusy(true); setError(""); setNotice("");
-    try { await action(); } catch (e) { setError(formatError(e)); }
+    try { await action(); } catch (e) { setError(e); }
     finally {
       feedbackRequests.current -= 1;
       setBusy(feedbackRequests.current > 0);
@@ -523,13 +526,12 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onConnectExisting={() => void connectExisting()}
           hasMore={Boolean(nextDatasetCursor)} onLoadMore={() => void loadMoreDatasets()} />}>
       {error && <div role="alert" className="alert error">
-        {error.includes("SOS-") || error.includes("요청 ID:")
-          ? <>
-            <strong>선택한 작업의 요청 또는 확인에 문제가 생겼습니다.</strong>
-            <details><summary>오류 진단 정보 및 복구 안내</summary>{error}</details>
-          </>
-          : <strong>{error}</strong>}
-        <button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
+        <div className="alert-body">
+          <strong>{error.message}</strong>
+          {error.guidance && <p>{error.guidance}</p>}
+          {error.reference && <small className="alert-reference">{error.reference}</small>}
+        </div>
+        <button onClick={() => setError(null)} aria-label="오류 닫기">×</button></div>}
       {datasetReadError && ["overview", "understanding", "preview", "profile", "preparation", "pipelines"].includes(tab) &&
         <div role="alert" className="alert error">
           Dataset 목록을 확인하지 못했습니다. 현재 화면의 데이터 선택이 제한될 수 있습니다.
@@ -585,7 +587,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         }}
         onOpenDataset={id => { showExamples.current = false; setSelected(id); setTab("understanding"); }} />}
       {tab === "pipelines" && !context.pipelineRunId && !context.datasetId &&
-        !context.pipelineView && <ModelLabHome
+        !context.pipelineView && <ModelLabHome canLearn={canRun}
           onUse={() => navigateWithContext("pipelines", { pipelineView: "use" })}
           onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
       {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
@@ -598,7 +600,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             modelGroupKey })}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
-          canUpload={canWrite} onDatasetRegistered={data => {
+          canLearn={canRun} canUpload={canWrite} onDatasetRegistered={data => {
             setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
             showExamples.current = false;
           }}
@@ -666,7 +668,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
               pipelineAnalysisSection: context.pipelineAnalysisSection,
             } : { datasetId: selected })}>
             {context.pipelineRunId ? "살펴보던 분석 결과로 돌아가기 →" :
-              selected ? "이 Dataset으로 모델 학습하기 →" : "모델 실험실로 돌아가기 →"}
+              selected ? "이 Dataset으로 모델 학습 →" : "모델 실험실로 돌아가기 →"}
           </button>
         </section>}
       {!dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="empty">
@@ -701,10 +703,13 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
                 이 Dataset으로 학습 →
               </button>}
             {canRun && tab === "preparation" && <>
-              <input aria-label="Iceberg 테이블명" value={importTableName}
-                onChange={e => setImportTableName(e.target.value)} placeholder="Iceberg table" />
-              <button disabled={busy} className="secondary" onClick={() => void importIceberg()}>
-                Iceberg에 추가
+              <label className="iceberg-append">적재할 Iceberg 테이블
+                <input value={importTableName} placeholder="예: sensor_data"
+                  onChange={e => setImportTableName(e.target.value)} />
+              </label>
+              <button disabled={busy || !importTableName.trim()} className="secondary"
+                onClick={() => void importIceberg()}>
+                Iceberg 테이블에 적재
               </button>
             </>}</div>
         </div>
@@ -726,7 +731,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         {tab === "preview" && <section className="panel" role="tabpanel"
           id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
           <div className="panel-head"><div><h3>데이터 조회</h3><p>최대 100행 · 전체 데이터가 아닌 일부입니다.</p></div>
-            <span className="chip">반환 {displayedPreview?.returned_rows ?? "…"}행 · 전체 일치 건수 미계산</span></div>
+            <span className="chip">반환 {displayedPreview?.returned_rows ?? "…"}행 · {currentQuery
+              ? "조건 일치 전체 건수 미계산"
+              : overview?.dataset_id === selected && overview.row_count != null
+                ? `전체 ${overview.row_count.toLocaleString("ko-KR")}행`
+                : "전체 행 수 미계산"}</span></div>
           {preview && <DatasetQueryPanel key={selected + ":" + reloadRevision} datasetId={selected}
             columns={columnNames} busy={busy} draft={queryDraft}
             onDraftChange={draft => setQueryDraftState({ datasetId: selected, draft })}
@@ -895,7 +904,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           preferredScoringId={context.scoringId ?? ""}
           onScoringSelected={scoringId => selectContext({ scoringId })}
           onNavigate={setTab} canRun={canRun} canCancel={canCancel}
-          onOpenResource={openResource} />}
+          onOpenResource={openResource} datasets={datasets} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
       {(tab === "jobs" || tab === "ml-jobs" || tab === "pipeline-jobs") && <ActivityWorkspace

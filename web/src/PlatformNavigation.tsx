@@ -364,11 +364,12 @@ export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
 }
 
 /** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
-export function PlatformNavigation({ active, onNavigate, canInspectStorage, canViewAudit }: {
+export function PlatformNavigation({ active, onNavigate, canInspectStorage, canViewAudit, canViewDataset = true }: {
   active: WorkspaceTab;
   onNavigate: (tab: WorkspaceTab) => void;
   canInspectStorage: boolean;
   canViewAudit: boolean;
+  canViewDataset?: boolean;
 }) {
   const [catalog, setCatalog] = useState<PipelineDefinition[]>([]);
   const [catalogError, setCatalogError] = useState(false);
@@ -376,6 +377,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
   const [catalogReload, setCatalogReload] = useState(0);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   useEffect(() => {
+    if (!canViewDataset) { setCatalogLoading(false); return; }
     let active = true;
     setCatalogError(false); setCatalogLoading(true);
     void request<PipelineDefinition[]>("/api/pipelines")
@@ -383,7 +385,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
       .catch(() => { if (active) { setCatalog([]); setCatalogError(true); } })
       .finally(() => { if (active) setCatalogLoading(false); });
     return () => { active = false; };
-  }, [catalogReload]);
+  }, [catalogReload, canViewDataset]);
   // 현재 웹에서 실행할 수 있는 등록 Pipeline만 연결한다. 미구현 주제 링크를 생성하지 않는다.
   const topics = modelLabTree(catalog.filter(item => item.id === "activity-anomaly-if"));
   const isExpanded = (key: string) => !collapsed[key];
@@ -394,7 +396,9 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
       : tab === "ml" ? isModelsArea(active)
       : tab === "jobs" ? ["jobs", "ml-jobs", "pipeline-jobs"].includes(active) : active === tab;
   return <nav className="global-nav platform-nav" aria-label="플랫폼 메뉴">
-    {groups.map(group => <div className="platform-nav-group" key={group.title}>
+    {groups.filter(group => canViewDataset || group.items.some(item =>
+      (item.tab === "storage" && canInspectStorage) || (item.tab === "audit" && canViewAudit)))
+      .map(group => <div className="platform-nav-group" key={group.title}>
       <span className={group.title === "모델 실험실" ? "section-title model-lab-tree-title" : "section-title"}>
         {group.title === "모델 실험실" && <svg viewBox="0 0 20 20" width="15" height="15"
           fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -468,6 +472,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
           </div>;
         })}
       </div> : group.items.filter(item =>
+        (canViewDataset || item.tab === "storage" || item.tab === "audit") &&
         (item.tab !== "storage" || canInspectStorage) && (item.tab !== "audit" || canViewAudit)
       ).map(item => <a key={item.tab} href={paths[item.tab]}
         className="workspace-link" aria-current={isCurrent(item.tab) ? "page" : undefined}

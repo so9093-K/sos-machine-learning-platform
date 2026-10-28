@@ -55,7 +55,16 @@ header p,.dataset-hero p{color:var(--sos-muted);font-size:13px}
 .environment,.chip{font-size:11px;color:var(--sos-muted);padding:8px 12px;background:var(--sos-accent-bg);border:1px solid var(--sos-border);border-radius:999px;white-space:nowrap}
 .dataset-hero,.panel{background:var(--sos-panel);border:1px solid var(--sos-border);border-radius:16px}
 .dataset-hero{padding:25px 28px;display:flex;justify-content:space-between;align-items:center;gap:24px}
-.dataset-hero h2{font-size:23px;margin:6px 0 7px;word-break:break-all}
+.dataset-hero h2{font-size:23px;margin:6px 0 7px;word-break:keep-all;overflow-wrap:anywhere}
+.iceberg-append{display:grid;gap:4px;font-size:12px;color:var(--sos-muted)}
+.audit-table td{padding:8px 12px;vertical-align:top}
+.audit-table td small{display:block;color:var(--sos-muted);font-size:12px;margin-top:2px;white-space:normal;overflow-wrap:anywhere}
+.audit-table tr.audit-flagged td:nth-child(3){color:var(--sos-danger);font-weight:600}
+.storage-panel h3{margin:24px 0 8px}
+.storage-panel .cards{margin:12px 0}
+.storage-panel > details{margin-top:12px}
+.storage-panel > .panel-head{margin-top:24px}
+.storage-panel > .panel-head:first-child{margin-top:0}
 .hero-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 input,select{background:var(--sos-field);border:1px solid var(--sos-border);border-radius:8px;padding:11px;color:var(--sos-text);min-width:0}
 input:focus,select:focus,button:focus-visible{outline:2px solid var(--sos-accent);outline-offset:2px}
@@ -67,7 +76,7 @@ button.ghost{padding:8px;color:var(--sos-muted);background:transparent;border-ra
 .tab.active{border-color:var(--sos-accent);color:var(--sos-text)}
 .panel{padding:25px 26px}
 .panel-head{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:22px}
-.panel-head h3{font-size:19px;letter-spacing:-.02em}
+.panel-head :is(h2,h3){font-size:19px;letter-spacing:-.02em}
 .panel-head p{color:var(--sos-muted);font-size:12px;margin-top:8px;max-width:630px}
 .table-scroll{width:100%;overflow:auto;border:1px solid var(--sos-border);border-radius:10px}
 .query-column-summary{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
@@ -123,7 +132,7 @@ tbody tr:hover{background:var(--sos-raised)}
 .result h4,.panel h4{margin-bottom:12px}
 .job-list{display:grid;gap:12px}
 .job{padding:17px;background:var(--sos-raised);border:1px solid var(--sos-border);border-radius:11px;display:grid;gap:12px}
-.job-title{display:flex;justify-content:space-between;gap:12px}
+.job-title{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .job-title strong{font-size:13px}
 .job-title small{display:block;color:var(--sos-muted);margin-top:5px;font-size:11px}
 .status{font-size:11px;padding:5px 9px;border-radius:99px;background:var(--sos-raised);color:var(--sos-accent);white-space:nowrap}
@@ -137,6 +146,9 @@ tbody tr:hover{background:var(--sos-raised)}
 .alert.error{background:var(--sos-danger-bg);border:1px solid var(--sos-danger-bg);color:var(--sos-danger)}
 .alert.success{background:var(--sos-success-bg);border:1px solid var(--sos-success-bg);color:var(--sos-success)}
 .alert button{border:0!important;background:transparent!important;padding:0!important;color:inherit!important;font-size:20px!important}
+.alert-body{display:grid;gap:4px;min-width:0}
+.alert-body p{margin:0;line-height:1.6}
+.alert-reference{font-size:12px;opacity:.85;overflow-wrap:anywhere}
 .empty{padding:100px 20px;text-align:center;border:1px dashed var(--sos-border);border-radius:14px}
 .empty h2{margin-bottom:14px}
 .empty p{color:var(--sos-muted);font-size:13px}
@@ -158,7 +170,7 @@ nav{flex-direction:row;overflow:auto;max-height:100px}
 .job details summary{cursor:pointer;color:var(--sos-text);font-size:12px;margin-bottom:8px}
 .job details:focus-within{outline-offset:4px}
 .step button.ghost{flex-shrink:0}
-.step span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.step span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:620px){.step{flex-wrap:wrap}
 .step span{flex-basis:100%}
 .step button.ghost{padding:9px 12px}}
@@ -414,6 +426,11 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
   justify-content:space-between; min-width:0; padding:10px 12px; border:1px solid var(--sos-border);
   border-radius:8px; font-size:13px; }
 .ml-resource-row span { min-width:0; overflow-wrap:anywhere; }
+.ml-resource-row-summary { display:grid; gap:2px; flex:1 1 240px; }
+.ml-resource-row-summary small { color:var(--sos-muted); font-size:12px; }
+.ml-resource-row-summary .ml-resource-row-error { color:var(--sos-danger); }
+.ml-resource-detail .resource-link { font-size:12px; }
+.evaluation-kind { margin:12px 0 0; font-size:13px; line-height:1.6; }
 @media(max-width:760px) { .ml-resource-fields { grid-template-columns:1fr; } }
 
 
@@ -440,14 +457,22 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .platform-dataset-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:20px; }
 .ml-activity { min-width:0; }
 .ml-activity-list { display:grid; gap:10px; }
-.ml-activity-row { display:grid; gap:7px; border-bottom:1px solid var(--sos-border);
-  padding:8px 0 12px; }
+/* 한 작업을 한 줄(내용 · 상태 · 이동)로 보여 목록을 훑기 쉽게 한다. */
+.ml-activity-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center;
+  gap:6px 12px; border-bottom:1px solid var(--sos-border); padding:8px 0; }
 .ml-activity-row:last-child { border-bottom:0; }
-.ml-activity-title { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
-.ml-activity-title strong { font-size:13px; }
-.ml-activity-meta { font-size:11px; color:var(--sos-muted); overflow-wrap:anywhere; }
-.ml-activity-actions { display:flex; flex-wrap:wrap; gap:8px; }
-.ml-activity-actions button { font-size:11px!important; padding:7px 10px!important; }
+.ml-activity-title { display:grid; gap:2px; min-width:0; }
+.ml-activity-title strong { font-size:13px; overflow-wrap:anywhere; }
+.ml-activity-title strong span { font-weight:500; }
+.ml-activity-meta { font-size:12px; color:var(--sos-muted); overflow-wrap:anywhere; }
+.ml-activity-error { font-size:12px; color:var(--sos-danger); overflow-wrap:anywhere; }
+.ml-activity-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
+.ml-activity-row > .ml-activity-details { grid-column:1 / -1; }
+@media(max-width:760px) {
+  .ml-activity-row { grid-template-columns:minmax(0,1fr) auto; }
+  .ml-activity-row > .ml-activity-actions { grid-column:1 / -1; justify-content:flex-start; }
+}
+.ml-activity-actions button { font-size:12px!important; padding:7px 10px!important; }
 .ml-activity-filter { display:grid; gap:6px; max-width:320px; margin-bottom:18px;
   color:var(--sos-muted); font-size:12px; }
 .platform-activity { display:grid; gap:18px; }
@@ -479,7 +504,7 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .model-lookup summary,.ml-resource-evidence summary { padding:10px 0; cursor:pointer; color:var(--sos-accent); }
 .model-lookup .model-history-filter { margin:12px 0; }
 .ml-resource-summary { display:grid; gap:9px; border-bottom:1px solid var(--sos-border); padding-bottom:17px; }
-.ml-resource-summary h4 { font-size:18px; }
+.ml-resource-summary h3 { font-size:18px; }
 .ml-resource-summary p { color:var(--sos-muted); font-size:13px; line-height:1.6; }
 .ml-resource-evidence { border-top:1px solid var(--sos-border); margin-top:15px; }
 .ml-resource-evidence .ml-resource-fields { margin-top:9px; }

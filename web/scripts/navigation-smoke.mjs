@@ -64,7 +64,7 @@ try {
   assert.match(resultView, /평균 이상 점수/);
   assert.doesNotMatch(resultView, /선택 관측값 점수/);
   assert.match(resultView, /판정 정책 미적용/);
-  assert.match(resultView, /관측값 살펴보기/);
+  assert.match(resultView, /점수 상위 관측값/);
   assert.match(resultView, /분석 판본과 식별자/);
   assert.match(resultView, /evidence-facts-compact/);
   assert.match(resultView, /Dataset 판본/);
@@ -431,15 +431,15 @@ try {
       canRun: true, canCancel: false, onOpenResource: () => {},
       onTryObservation: () => null,
     }));
-  assert.match(observationWithExperiment, /이 관측값으로 실험하기/);
-  assert.doesNotMatch(groupedObservation, /이 관측값으로 실험하기/);
+  assert.match(observationWithExperiment, /이 관측값으로 실험/);
+  assert.doesNotMatch(groupedObservation, /이 관측값으로 실험/);
   const noPermissionExperiment = renderToStaticMarkup(
     React.createElement(PipelineCandidateInvestigation, {
       candidate: { row_index: 9, anomaly_score: 0.71, features: { cnt_file_create: 3 } },
       observationMode: true, scoringResultId: "score-1", modelRevisionId: "model-1",
       canRun: false, canCancel: false, onOpenResource: () => {}, onTryObservation: () => null,
     }));
-  assert.doesNotMatch(noPermissionExperiment, /이 관측값으로 실험하기/);
+  assert.doesNotMatch(noPermissionExperiment, /이 관측값으로 실험/);
   // 참조 모델이 없으면 비율을 추정하지 않고 비교 기준 없음으로 표시한다.
   assert.match(groupedObservation, /Train 중앙값/);
   assert.match(groupedObservation, /비교 기준 없음/);
@@ -488,7 +488,7 @@ try {
   assert.match(shapPreview, /양수: 점수를 높이는 방향/);
   // 개별 SHAP 기여를 실제 관측값·Train 중앙값과 연결해 확인할 수 있어야 한다.
   assert.match(shapPreview, /선택한 SHAP Feature 근거/);
-  assert.match(shapPreview, /Feature 살펴보기/);
+  assert.match(shapPreview, /Feature 선택/);
   assert.match(shapPreview, /현재 살펴보는 Feature/);
   assert.match(shapPreview, /<select[^>]*>/);
   assert.match(shapPreview, /실제 관측값/);
@@ -703,7 +703,7 @@ try {
   assert.doesNotMatch(emptyJourney, /어떤 과정을 경험하나요|이해를 돕는 개념도|예제 구성 살펴보기/);
   assert.doesNotMatch(emptyJourney, /id="model-lab-example-preview"/);
   assert.doesNotMatch(emptyJourney, /학습 결과.*이상 후보.*다른 데이터에 적용/);
-  assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행하기/);
+  assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행/);
   const withoutPermission = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, hasPipelineExample: true, canCreateDataset: false, canRun: false,
   }));
@@ -835,8 +835,8 @@ try {
     model: { ...exampleModel, runtime: { feature_dtypes: ["Int64", "Int64"] } },
     canRun: true, canCancel: false,
   }));
-  assert.match(manualHtml, /직접 수정해보기/);
-  assert.match(manualHtml, /기준값으로 체험/);
+  assert.match(manualHtml, /직접 입력/);
+  assert.match(manualHtml, /학습 기준값 입력/);
   assert.match(manualHtml, /이 모델 판본에는 초기 입력 기준값이 없어/);
   const playgroundHtml = renderToStaticMarkup(React.createElement(ModelLabPlayground, {
     model: exampleModel, canRun: true, canCancel: true,
@@ -881,7 +881,7 @@ try {
   assert.match(zeroSensitivity, /전체 1개 Feature별 변경 결과/);
   assert.match(playgroundSensitivity, /치환 후 점수/);
   assert.match(playgroundSensitivity, /0[.]15/);
-  assert.match(playgroundHtml, /실제 이상 점수 계산하기/);
+  assert.match(playgroundHtml, /이상 점수 계산 →/);
   assert.match(playgroundHtml, /제출한 입력과 결과는 작업 이력에 보존/);
   const { ModelLabUse, isActivityModelCompatible } =
     await vite.ssrLoadModule("/src/ModelLabUse.tsx");
@@ -897,16 +897,16 @@ try {
   const pendingUse = renderToStaticMarkup(React.createElement(ModelLabUse, {
     datasets: [], hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
     canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
-    onOpenResource: () => {}, onBack: () => {}, onLearn: () => {},
+    onOpenResource: () => {}, onBack: () => {}, onLearn: () => {}, canLearn: true,
   }));
-  assert.match(pendingUse, /준비된 모델 사용하기/);
+  assert.match(pendingUse, /모델 적용/);
   assert.match(pendingUse, /사용 가능한 모델을 확인하는 중/);
   const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
   const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {
     onUse: () => {}, onLearn: () => {},
   }));
-  assert.match(labHome, /모델 사용해보기/);
-  assert.match(labHome, /모델 학습해보기/);
+  assert.match(labHome, /<h3>모델 적용<\/h3>/);
+  assert.match(labHome, /<h3>모델 학습<\/h3>/);
   assert.match(labHome, /시간대별 활동 패턴/);
   assert.doesNotMatch(labHome, /이해를 돕는 개념도|실제 결과가 아닙니다/);
   const { PlatformOverview } = await vite.ssrLoadModule("/src/PlatformOverview.tsx");
@@ -936,7 +936,7 @@ try {
   const useModel = renderToStaticMarkup(React.createElement(PipelineModelUsage, {
     modelId: "model-v1", datasets: [], canRun: true, canCancel: true, onOpenResource: () => {},
   }));
-  assert.match(useModel, /학습한 모델 사용해보기/);
+  assert.match(useModel, /학습 모델 적용/);
   const deepLinkedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
     ...props, initialRunId: "previous-run",
   }));
@@ -946,7 +946,7 @@ try {
   assert.doesNotMatch(deepLinkedJourney, /비지도 학습/);
   assert.doesNotMatch(deepLinkedJourney, /예제로 모델 학습 시작/);
   assert.doesNotMatch(deepLinkedJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
-  assert.match(deepLinkedJourney, /새 모델 학습하기/);
+  assert.match(deepLinkedJourney, /새 모델 학습 →/);
   assert.match(deepLinkedJourney, /선택한 실행/);
   assert.doesNotMatch(deepLinkedJourney, /aria-label="분석 이용 단계"/);
   assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
@@ -1036,7 +1036,7 @@ try {
     run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
     onSelectTestScoreRange: () => {}, onInvestigateCandidates: () => {},
   }));
-  assert.match(interactiveOverview, /이상 후보 확인하기/);
+  assert.match(interactiveOverview, /이상 후보 확인 →/);
   assert.match(interactiveOverview, /점수 분포와 판정 기준 자세히 보기/);
   assert.match(interactiveOverview, /이 구간 후보 보기/);
   assert.match(interactiveOverview, /후보 탐색/);
@@ -1050,7 +1050,7 @@ try {
     run: completedRun, evidence: resultEvidence, initialSection: "test",
     onInvestigateCandidates: () => {}, onOpenResource: () => {},
   }));
-  assert.match(testWithCandidates, /검토할 이상 후보 살펴보기/);
+  assert.match(testWithCandidates, /이상 후보 검토 →/);
   assert.match(testReport, /Test — 적용 결과/);
   assert.match(testReport, /15%/);
   assert.match(testReport, /Test 점수 구간별 전체 관측 수/);

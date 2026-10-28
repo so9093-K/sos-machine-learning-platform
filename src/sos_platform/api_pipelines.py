@@ -106,7 +106,7 @@ class PipelineStartRequest(BaseModel):
 
 def _visible(actor: Actor, item: dict | None) -> dict:
     if item is None:
-        raise HTTPException(status_code=404, detail="Resource not found")
+        raise HTTPException(status_code=404, detail="요청한 리소스를 찾을 수 없습니다.")
     resource_allowed(actor, item["owner_actor"])
     return item
 
@@ -127,7 +127,7 @@ def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None, row
     policy = store.get_decision_policy_revision(policy_id)
     if (not scoring or not policy or scoring["owner_actor"] != run["owner_actor"]
             or policy["owner_actor"] != run["owner_actor"]):
-        raise HTTPException(status_code=404, detail="Pipeline result unavailable")
+        raise HTTPException(status_code=404, detail="Pipeline 결과를 사용할 수 없습니다.")
     page = ranked_scoring_rows(
         store, scoring, limit, cursor, row_index=row_index, min_score=policy["threshold"],
     )
@@ -154,7 +154,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
     )
     def pipeline_detail(definition_id: str, actor: Actor = READ_DATASET):
         if definition_id != PIPELINE_ID:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
+            raise HTTPException(status_code=404, detail="Pipeline을 찾을 수 없습니다.")
         return definition()
 
     @router.get(
@@ -169,7 +169,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         actor: Actor = READ_DATASET,
     ):
         if definition_id != PIPELINE_ID:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
+            raise HTTPException(status_code=404, detail="Pipeline을 찾을 수 없습니다.")
         dataset = store.get_dataset(dataset_id)
         _visible(actor, dataset)
         return inspect_dataset(store, dataset)
@@ -193,11 +193,11 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         ),
     ):
         if definition_id != PIPELINE_ID:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
+            raise HTTPException(status_code=404, detail="Pipeline을 찾을 수 없습니다.")
         dataset = store.get_dataset(body.dataset_id)
         _visible(actor, dataset)
         if identity_mode == "token" and idempotency_key is None:
-            raise HTTPException(status_code=400, detail="Idempotency-Key required")
+            raise HTTPException(status_code=400, detail="Idempotency-Key 헤더가 필요합니다.")
         inspected = inspect_dataset(store, dataset)
         if not inspected["ready"]:
             raise HTTPException(status_code=422, detail=inspected["issues"])
@@ -250,7 +250,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
     ):
         run = _visible(actor, get_run(store, run_id))
         if run["status"] != "Succeeded":
-            raise HTTPException(status_code=409, detail="Pipeline run is not completed")
+            raise HTTPException(status_code=409, detail="Pipeline 실행이 완료되지 않았습니다.")
         return _candidate_rows(store, run, limit, cursor, row_index=row_index)
 
     return router

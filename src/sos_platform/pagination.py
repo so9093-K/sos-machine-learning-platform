@@ -23,7 +23,9 @@ def decode_cursor(token: str | None, resource: str) -> dict[str, str] | None:
         ):
             raise ValueError("Invalid cursor")
     except (ValueError, binascii.Error, UnicodeDecodeError) as exc:
-        raise InvalidRequestError(f"Invalid {resource} cursor") from exc
+        raise InvalidRequestError(
+            f"{resource} 목록의 페이지 위치가 올바르지 않습니다. 목록을 새로 조회하세요."
+        ) from exc
     return before
 
 

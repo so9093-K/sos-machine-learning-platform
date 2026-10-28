@@ -272,7 +272,8 @@ def source_connection(
                     snapshot = int(dataset["version"])
                     if snapshot not in {s.snapshot_id for s in table.snapshots()}:
                         raise InvalidRequestError(
-                            "Iceberg snapshot is not available; it may have expired"
+                            "Iceberg Snapshot을 사용할 수 없습니다. "
+                            "만료됐을 수 있으니 Snapshot 목록을 다시 조회하세요."
                         )
                     reader = table.scan(snapshot_id=snapshot).to_arrow_batch_reader()
                     connection.register("source", reader)
@@ -343,7 +344,7 @@ def overview(store: Store, dataset: dict) -> dict:
 
 def preview(store: Store, dataset: dict, limit: int = 30) -> dict:
     if not 1 <= limit <= 100:
-        raise InvalidRequestError("Preview limit must be between 1 and 100")
+        raise InvalidRequestError("미리보기 행 수는 1~100 사이여야 합니다.")
     with source_connection(store, dataset) as conn:
         schema = {c["name"]: c["dtype"] for c in _columns(conn)}
         raw = _records(conn.execute("SELECT * FROM source LIMIT ?", [limit]))
@@ -365,7 +366,7 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
         if query.order_by:
             referenced.append(query.order_by)
         if not set(referenced).issubset(available):
-            raise InvalidRequestError("Unknown Dataset query column")
+            raise InvalidRequestError("조회 조건의 컬럼이 Dataset에 없습니다.")
         where = []
         params = []
         for predicate in query.filters:
@@ -390,9 +391,7 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
             raw = _records(conn.execute(sql, [*params, query.limit]))
         except (duckdb.ConversionException, duckdb.BinderException) as exc:
             # 비교 자료형이 맞지 않는 사용자 입력은 Internal 500이 아닌 422다.
-            raise InvalidRequestError(
-                "Dataset query comparison is incompatible with the column type"
-            ) from exc
+            raise InvalidRequestError("조회 조건의 비교값이 컬럼 자료형과 맞지 않습니다.") from exc
     return {
         "schema": {name: available[name] for name in selected},
         "rows": [{key: _json_value(value) for key, value in row.items()} for row in raw],
@@ -403,7 +402,7 @@ def query_dataset(store: Store, dataset: dict, query) -> dict:
 def profile(store: Store, dataset: dict, sample: int | None = 1000) -> dict:
     policy = DiscoveryPolicy.from_env()
     if sample is not None and not 1 <= sample <= policy.max_sample:
-        raise InvalidRequestError("Invalid profile sample limit")
+        raise InvalidRequestError("프로파일 표본 행 수가 허용 범위를 벗어났습니다.")
     with source_connection(store, dataset, policy) as conn:
         schema = _columns(conn)
         scope = "source" if sample is None else "(SELECT * FROM source LIMIT ?) AS sampled_source"
@@ -470,7 +469,7 @@ def explore(
 ) -> dict:
     """동일 집계 정의로 제한된 대화형 샘플과 전체 Worker Job을 실행한다."""
     if scope not in ("sample", "full"):
-        raise InvalidRequestError("Invalid exploration scope")
+        raise InvalidRequestError("지원하지 않는 탐색 범위입니다.")
     policy = DiscoveryPolicy.from_env()
     expressions = {
         "count": lambda col: "COUNT(*)",
@@ -480,13 +479,13 @@ def explore(
         "max": lambda col: f"MAX({col})",
     }
     if metric not in expressions:
-        raise InvalidRequestError("Unsupported exploration metric")
+        raise InvalidRequestError("지원하지 않는 탐색 지표입니다.")
     with source_connection(store, dataset, policy) as conn:
         actual = {c["name"]: c for c in _columns(conn)}
         if column not in actual or (group_by is not None and group_by not in actual):
-            raise InvalidRequestError("Unknown exploration column")
+            raise InvalidRequestError("탐색할 컬럼이 Dataset에 없습니다.")
         if metric in ("mean", "min", "max") and not _numeric_type(actual[column]["sql_type"]):
-            raise InvalidRequestError("Numeric metric requires numeric column")
+            raise InvalidRequestError("수치 지표는 수치형 컬럼에만 계산할 수 있습니다.")
         value = expressions[metric](quoted(column))
         source = (
             f"(SELECT * FROM source LIMIT {policy.max_sample}) AS sample_source"

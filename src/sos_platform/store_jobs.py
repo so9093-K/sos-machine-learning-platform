@@ -231,9 +231,11 @@ class JobStoreMixin:
     ) -> list[dict]:
         """목록은 종류별 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
         if not 1 <= limit <= 101:
-            raise InvalidRequestError("Job query limit is out of range")
+            raise InvalidRequestError("Job 조회 개수가 허용 범위를 벗어났습니다.")
         if model_revision_id is not None and kind != "ml_playground":
-            raise InvalidRequestError("Model-filtered Job history requires Playground kind")
+            raise InvalidRequestError(
+                "모델별 Job 이력은 단일 입력 점수 계산에서만 조회할 수 있습니다."
+            )
         filters = []
         if before:
             filters.append("(created_at, id) < (:created_at, :id)")

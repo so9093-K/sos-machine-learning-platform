@@ -345,7 +345,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   </label>;
   return <section className="panel model-lab-playground" tabIndex={-1} aria-label="직접 모델 점수 계산">
     <div className="model-lab-playground-head">
-      <div><h3>값을 바꿔 모델 반응 살펴보기</h3>
+      <div><h3>단일 입력 점수 계산</h3>
         <p>입력값을 수정한 뒤 실제 점수를 계산하고, 이전 결과와 비교할 수 있습니다.</p></div>
     </div>
     {observationInput && appliedObservation.current !== observationInput.id && running &&
@@ -363,10 +363,10 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       <button type="button" aria-pressed={mode === "example"} className="secondary"
         disabled={!reference || running}
         onClick={() => { setMode("example"); setImportedSource(null); setImportedAfterJobId(null); if (reference) setFields(reference); }}>
-        학습 기준값으로 체험
+        학습 기준값 입력
       </button>
       <button type="button" aria-pressed={mode === "edit"} className="secondary"
-        disabled={running} onClick={() => setMode("edit")}>직접 수정해보기</button>
+        disabled={running} onClick={() => setMode("edit")}>직접 입력</button>
     </div>
     {importedSource
       ? <p className="hint">Dataset의 실제 관측 Feature를 가져왔습니다. 학습 참조값은 비교용이며,
@@ -447,7 +447,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     <div className="model-lab-playground-actions">
       <button type="button" onClick={() => void execute()}
         disabled={!canRun || running || invalid.length > 0}>
-        {running ? "모델 실행 중…" : "실제 이상 점수 계산하기 →"}
+        {running ? "모델 실행 중…" : "이상 점수 계산 →"}
       </button>
       {importedSource && observationEdits.length > 0 && <button type="button" className="secondary"
         onClick={() => setFields({ ...importedSource.fields })} disabled={running}>
@@ -485,7 +485,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
                   ? " 표시 자릿수에서는 점수 변화가 없습니다. 다른 Feature나 여러 값을 함께 바꿔 보세요."
                   : " 다른 Feature도 바꿔 보거나, 원래 관측값으로 복원해 다시 비교할 수 있습니다."}</p>}
           {observationEdits.length === 0 && <button type="button" className="secondary"
-            onClick={focusFirstInput}>Feature 값 바꿔보기 →</button>}
+            onClick={focusFirstInput}>Feature 값 변경 →</button>}
         </div>}
       {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}
         {job.error_code && <small> ({job.error_code})</small>}</p>}
@@ -493,7 +493,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       {matchesCompletedInput && reference && editedNames.length === 0 && mode === "example" &&
         <div className="model-lab-try-change">
           <p>학습 중앙값을 바탕으로 한 기준 입력의 점수입니다. 숫자를 바꾼 뒤 다시 계산해 모델 반응을 살펴보세요.</p>
-          <button type="button" className="secondary" onClick={() => setMode("edit")}>입력값 바꿔보기 →</button>
+          <button type="button" className="secondary" onClick={() => setMode("edit")}>입력값 변경 →</button>
         </div>}
     </div>}
     {showCurrentJob && job?.status === "Succeeded" && lastScore !== null && comparisonJob &&
@@ -530,7 +530,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     <details className="model-lab-playground-history" onToggle={event => {
       if (event.currentTarget.open && !historyLoaded) void loadHistory(false);
     }}>
-      <summary>이 모델의 이전 체험 결과 다시 보기</summary>
+      <summary>이 모델의 이전 계산 결과</summary>
       <div className="model-lab-history-body">
         <p className="hint">과거 결과를 펼쳐 확인합니다. 조회만으로 현재 편집 중인 입력값은 변경되지 않습니다.</p>
         <button type="button" className="secondary" disabled={historyLoading}

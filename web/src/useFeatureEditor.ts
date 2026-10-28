@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatError, jsonPost } from "./api";
+import { jsonPost } from "./api";
 import { createStep, needsTimeOrder, type FeatureStep } from "./feature-utils";
 import type { Preview } from "./types";
 
@@ -10,7 +10,7 @@ export function useFeatureEditor({
   datasetId: string;
   revision: number;
   preview: Preview | null;
-  onError: (message: string) => void;
+  onError: (cause: unknown) => void;
   withFeedback: (action: () => Promise<void>) => Promise<void>;
 }) {
   const [steps, setSteps] = useState<FeatureStep[]>([]);
@@ -46,8 +46,8 @@ export function useFeatureEditor({
         chosenColumns);
       setSteps(existing => editingStep === null ? [...existing, next]
         : existing.map((step, index) => index === editingStep ? next : step));
-      setEditingStep(null); setPreviewResult(null); onError("");
-    } catch (e) { onError(formatError(e)); }
+      setEditingStep(null); setPreviewResult(null); onError(null);
+    } catch (e) { onError(e); }
   }
   function editStep(index: number) {
     const step = steps[index];

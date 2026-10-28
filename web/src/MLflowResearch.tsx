@@ -141,7 +141,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
       onChanged={() => setRevision(x => x + 1)} />
     <section className="panel">
       <div className="panel-head">
-        <div><h3>실험·모델 자산 관리</h3>
+        <div><h2>실험·모델 자산 관리</h2>
           <p>MLflow가 연구 Experiment·Run·모델 버전을 관리하고 플랫폼이 모델 실행과 권한을 확인합니다.</p>
         </div>
         <div className="actions">
@@ -169,7 +169,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
       </label>
     </section>
     <section className="panel">
-      <h3>등록된 모델 버전</h3>
+      <h2>등록된 모델 버전</h2>
       {filteredModels.length === 0 && <p className="muted">등록된 모델이 없습니다. 학습 및 등록 후 표시됩니다.</p>}
       <div className="job-list">
         {filteredModels.map(item => <article className="ml-resource-row" key={item.name + "@" + item.version}>
@@ -194,7 +194,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
         onClick={() => void loadMore("models")}>모델 버전 더 보기</button>}
     </section>
     <section className="panel">
-      <h3>Run 검색 및 비교</h3>
+      <h2>Run 검색 및 비교</h2>
       <p className="hint">선택한 Experiment의 Run에서 최대 두 개를 비교합니다. Dataset·평가 조건이 다르면 성능 수치를 직접 비교할 수 없습니다.</p>
       {filteredRuns.length === 0 && <p className="muted">조회된 Run이 없습니다.</p>}
       <div className="job-list">
@@ -209,9 +209,9 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
       {runCursor && <button type="button" className="secondary" disabled={loadingMore}
         onClick={() => void loadMore("runs")}>Run 더 보기</button>}
       {compared.length > 0 && <>
-        <h4>선택 Run 비교</h4>
+        <h3>선택 Run 비교</h3>
         {(["params", "metrics"] as const).map(field => <div key={field}>
-          <h4>{field === "params" ? "실행 파라미터" : "기록된 지표"}</h4>
+          <h3>{field === "params" ? "실행 파라미터" : "기록된 지표"}</h3>
           <div className="table-scroll"><table>
             <thead><tr><th>항목</th>{compared.map(run => <th key={run.id}>{run.id.slice(0, 10)}</th>)}</tr></thead>
             <tbody>{comparableKeys(field).map(key => <tr key={key}>

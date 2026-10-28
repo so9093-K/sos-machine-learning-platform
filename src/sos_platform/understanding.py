@@ -67,7 +67,7 @@ def build_understanding(store: Store, dataset: dict, *, scope: str = "sample") -
     호출자가 전체 스캔의 Worker 예산을 적용해야 한다.
     """
     if scope not in ("sample", "full"):
-        raise InvalidRequestError("Unsupported understanding scope")
+        raise InvalidRequestError("지원하지 않는 데이터 이해 범위입니다.")
     # 고정 시드의 재현성은 DuckDB 단일 스레드에서만 보장된다.
     policy = DiscoveryPolicy.from_env()
     if scope == "sample":

@@ -219,7 +219,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
         hidden={listCollapsed}>
         <div className="scoring-observation-list-heading">
           <div className="scoring-observation-list-title">
-            <h4>관측값 살펴보기</h4>
+            <h4>점수 상위 관측값</h4>
             {selected && <button type="button" className="ghost" onClick={() => setListCollapsed(true)}>
               목록 접고 상세 넓게 보기</button>}
           </div>

@@ -249,7 +249,15 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             request_id=request.state.request_id,
             status=str(response.status_code),
         )
-        if response.status_code in (401, 403):
+        # 로그인 화면의 자격 증명 없는 신원 확인은 정상적인 초기 조회다.
+        # 잘못된 인증 헤더와 다른 API의 접근 거부는 계속 감사한다.
+        anonymous_identity_probe = (
+            request.method == "GET"
+            and request.url.path == "/api/v2/auth/me"
+            and "authorization" not in request.headers
+            and response.status_code == 401
+        )
+        if response.status_code in (401, 403) and not anonymous_identity_probe:
             actor = getattr(request.state, "actor", None)
             try:
                 # 거부 요청의 감사 DB 기록도 다른 API 요청을 막아서는 안 된다.
@@ -335,7 +343,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def existing(dataset_id: str, actor: Actor) -> dict:
         item = store.get_dataset(dataset_id)
         if not item:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+            raise HTTPException(status_code=404, detail="Dataset을 찾을 수 없습니다.")
         check_ownership(actor, item.get("owner_actor"), "dataset", dataset_id)
         return item
 
@@ -347,7 +355,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def existing_job(job_id: str, actor: Actor) -> dict:
         item = store.get_job(job_id)
         if not item:
-            raise HTTPException(status_code=404, detail="Job not found")
+            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         check_ownership(actor, item.get("owner_actor"), "job", job_id)
         return item
 
@@ -412,7 +420,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             raise
         except Exception as exc:
             raise HTTPException(
-                status_code=503, detail="Storage inventory is unavailable; no objects were deleted"
+                status_code=503, detail="저장소 객체 목록을 조회할 수 없습니다. 객체는 삭제되지 않았습니다."
             ) from exc
 
     @app.get(
@@ -437,7 +445,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         """기존 Dataset을 재확인하고 SOS 영구 보존 Tag를 생성한다."""
         item = store.get_dataset(dataset_id)
         if item is None or item["kind"] != "iceberg":
-            raise HTTPException(status_code=404, detail="Iceberg Dataset not found")
+            raise HTTPException(status_code=404, detail="Iceberg Dataset을 찾을 수 없습니다.")
         try:
             ensure_tag(
                 store,
@@ -476,7 +484,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         try:
             return use_example(store, example_id, owner_actor=actor.id)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail="Example not found") from exc
+            raise HTTPException(status_code=404, detail="예제를 찾을 수 없습니다.") from exc
 
     @app.get(
         "/api/datasets",
@@ -710,13 +718,13 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             )
         except PermissionError as exc:
             # 이름·소유권 충돌을 다른 Actor에게 노출하지 않는다.
-            raise HTTPException(status_code=404, detail="Iceberg table not found") from exc
+            raise HTTPException(status_code=404, detail="Iceberg 테이블을 찾을 수 없습니다.") from exc
 
     def check_table_access(table_name: str, actor: Actor) -> None:
         """테이블명 추측으로 타 사용자 Snapshot을 공개하거나 연결하지 않는다."""
         if not (actor.privileged or actor.can("storage.inspect")):
             if not store.owns_iceberg_table(table_name, actor.id):
-                raise HTTPException(status_code=404, detail="Iceberg table not found")
+                raise HTTPException(status_code=404, detail="Iceberg 테이블을 찾을 수 없습니다.")
 
     @app.post(
         "/api/datasets/iceberg",
@@ -819,10 +827,10 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         from .ml_playground import ordered_playground_input
         model = store.get_model_revision(body.model_revision_id)
         if model is None:
-            raise HTTPException(status_code=404, detail="Model Revision not found")
+            raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.")
         check_ownership(actor, model["owner_actor"], "model", model["id"])
         if not model.get("registry_version"):
-            raise HTTPException(status_code=409, detail="Model Registry registration is pending")
+            raise HTTPException(status_code=409, detail="모델 Registry 등록이 진행 중입니다. 잠시 후 다시 조회하세요.")
         try:
             verify_registered_version(_management_client(), model)
         except MLflowDeliveryError as exc:
@@ -873,7 +881,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def get_playground_job(job_id: str, actor: Actor = READ_JOB_DEP):
         job = existing_job(job_id, actor)
         if job["kind"] != "ml_playground":
-            raise HTTPException(status_code=404, detail="Playground Job not found")
+            raise HTTPException(status_code=404, detail="단일 입력 점수 계산 작업을 찾을 수 없습니다.")
         return job
 
     @app.post(
@@ -884,7 +892,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def cancel_playground_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
         job = existing_job(job_id, actor)
         if job["kind"] != "ml_playground":
-            raise HTTPException(status_code=404, detail="Playground Job not found")
+            raise HTTPException(status_code=404, detail="단일 입력 점수 계산 작업을 찾을 수 없습니다.")
         return store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
 
     @app.post(
@@ -910,10 +918,10 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         dataset = existing(body.dataset_id, actor)
         model = store.get_model_revision(body.model_revision_id)
         if model is None:
-            raise HTTPException(status_code=404, detail="Model Revision not found")
+            raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.")
         check_ownership(actor, model["owner_actor"], "model", model["id"])
         if not model.get("registry_version"):
-            raise HTTPException(status_code=409, detail="Model Registry registration is pending")
+            raise HTTPException(status_code=409, detail="모델 Registry 등록이 진행 중입니다. 잠시 후 다시 조회하세요.")
         try:
             verify_registered_version(_management_client(), model)
         except MLflowDeliveryError as exc:
@@ -943,7 +951,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def existing_scoring_job(job_id: str, actor: Actor) -> dict:
         item = existing_job(job_id, actor)
         if item["kind"] != "ml_score":
-            raise HTTPException(status_code=404, detail="Scoring Job not found")
+            raise HTTPException(status_code=404, detail="점수 계산 작업을 찾을 수 없습니다.")
         return item
 
     @app.get(
@@ -984,13 +992,13 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         existing_scoring_job(job_id, actor)
         item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         if item is None:
-            raise HTTPException(status_code=404, detail="Scoring Job not found")
+            raise HTTPException(status_code=404, detail="점수 계산 작업을 찾을 수 없습니다.")
         return item
 
     def required_scoring_result(result_id: str, actor: Actor) -> dict:
         scoring = store.get_scoring_result(result_id)
         if scoring is None:
-            raise HTTPException(status_code=404, detail="Scoring Result not found")
+            raise HTTPException(status_code=404, detail="점수 결과를 찾을 수 없습니다.")
         check_ownership(actor, scoring["owner_actor"], "scoring_result", result_id)
         return scoring
 
@@ -1053,7 +1061,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         if body.policy_revision_id:
             policy = store.get_decision_policy_revision(body.policy_revision_id)
             if policy is None:
-                raise HTTPException(status_code=404, detail="Decision Policy not found")
+                raise HTTPException(status_code=404, detail="판정 정책을 찾을 수 없습니다.")
             check_ownership(actor, policy["owner_actor"], "decision_policy", policy["id"])
             reference = required_scoring_result(policy["scoring_result_id"], actor)
             from .ml_decision import validate_policy_for_scoring
@@ -1083,7 +1091,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def ml_special_job(job_id: str, actor: Actor, kind: str) -> dict:
         item = existing_job(job_id, actor)
         if item["kind"] != kind:
-            raise HTTPException(status_code=404, detail="ML Job not found")
+            raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
         return item
 
     def list_ml_result_jobs(kind: str, limit: int, cursor: str | None, actor: Actor):
@@ -1153,7 +1161,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         ml_special_job(job_id, actor, "ml_policy")
         item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         if item is None:
-            raise HTTPException(status_code=404, detail="ML Job not found")
+            raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
         return item
 
     @app.get(
@@ -1175,7 +1183,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         ml_special_job(job_id, actor, "ml_evaluate")
         item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         if item is None:
-            raise HTTPException(status_code=404, detail="ML Job not found")
+            raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
         return item
 
     @app.get(
@@ -1187,7 +1195,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def get_policy_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
         item = store.get_decision_policy_revision(revision_id)
         if item is None:
-            raise HTTPException(status_code=404, detail="Decision Policy not found")
+            raise HTTPException(status_code=404, detail="판정 정책을 찾을 수 없습니다.")
         check_ownership(actor, item["owner_actor"], "decision_policy", revision_id)
         return item
 
@@ -1215,15 +1223,15 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             source = existing_job(body.playground_job_id, actor)
             if source["kind"] != "ml_playground" or source["status"] != "Succeeded":
                 raise HTTPException(
-                    status_code=409, detail="Explanation requires a successful Playground Job"
+                    status_code=409, detail="설명하려면 성공한 단일 입력 점수 계산 작업이 필요합니다."
                 )
             saved = source.get("result")
             score = saved.get("anomaly_score") if isinstance(saved, dict) else None
             if type(score) not in (float, int) or not math.isfinite(score):
-                raise HTTPException(status_code=409, detail="Playground score is unavailable")
+                raise HTTPException(status_code=409, detail="단일 입력 점수를 사용할 수 없습니다.")
             model = store.get_model_revision(source["spec"]["model_revision_id"])
             if model is None or model["lifecycle_state"] != "Active":
-                raise HTTPException(status_code=409, detail="Playground model is unavailable")
+                raise HTTPException(status_code=409, detail="단일 입력 계산에 사용한 모델을 사용할 수 없습니다.")
             check_ownership(actor, model["owner_actor"], "model", model["id"])
             dataset_id = None
             source_spec = {
@@ -1234,7 +1242,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         else:
             score = required_scoring_result(body.scoring_result_id, actor)
             if body.row_index >= score["row_count"]:
-                raise HTTPException(status_code=422, detail="Explanation row_index out of bounds")
+                raise HTTPException(status_code=422, detail="설명할 행 번호가 점수 결과의 범위를 벗어났습니다.")
             dataset_id = score["dataset_id"]
             source_spec = {
                 "scoring_result_id": score["id"],
@@ -1272,7 +1280,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         ml_special_job(job_id, actor, "ml_explain")
         item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         if item is None:
-            raise HTTPException(status_code=404, detail="ML Job not found")
+            raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
         return item
 
     @app.get(
@@ -1284,7 +1292,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def get_explanation_result(revision_id: str, actor: Actor = READ_JOB_DEP):
         item = store.get_explanation_result(revision_id)
         if item is None:
-            raise HTTPException(status_code=404, detail="Explanation not found")
+            raise HTTPException(status_code=404, detail="설명 결과를 찾을 수 없습니다.")
         check_ownership(actor, item["owner_actor"], "explanation", revision_id)
         return item
 
@@ -1297,7 +1305,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def get_evaluation_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
         item = store.get_evaluation_revision(revision_id)
         if item is None:
-            raise HTTPException(status_code=404, detail="Evaluation not found")
+            raise HTTPException(status_code=404, detail="평가 결과를 찾을 수 없습니다.")
         check_ownership(actor, item["owner_actor"], "evaluation", revision_id)
         return item
 
@@ -1310,7 +1318,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def get_scoring_result(result_id: str, actor: Actor = READ_JOB_DEP):
         item = store.get_scoring_result(result_id)
         if item is None:
-            raise HTTPException(status_code=404, detail="Scoring Result not found")
+            raise HTTPException(status_code=404, detail="점수 결과를 찾을 수 없습니다.")
         check_ownership(actor, item["owner_actor"], "scoring_result", result_id)
         return item
 
@@ -1323,7 +1331,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def get_mlflow_tracking_status(job_id: str, actor: Actor = READ_JOB_DEP):
         item = existing_job(job_id, actor)
         if item["kind"] not in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain"):
-            raise HTTPException(status_code=404, detail="ML Job not found")
+            raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
         status = store.tracking_status(job_id)
         return status or {"job_id": job_id, "state": "Disabled"}
 
@@ -1332,10 +1340,10 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             settings = MLflowSettings.from_env()
         except RuntimeConfigurationError as exc:
             raise HTTPException(
-                status_code=503, detail="MLflow management configuration is invalid"
+                status_code=503, detail="MLflow 관리 서비스 설정을 확인하세요."
             ) from exc
         if settings is None:
-            raise HTTPException(status_code=503, detail="MLflow management is unavailable")
+            raise HTTPException(status_code=503, detail="MLflow 관리 서비스를 사용할 수 없습니다.")
         return MLflowClient(settings)
 
     @app.get(
@@ -1402,7 +1410,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
         item = store.get_model_revision(revision_id)
         if item is None:
-            raise HTTPException(status_code=404, detail="Model revision not found")
+            raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.")
         check_ownership(actor, item["owner_actor"], "model", revision_id)
         return item
 
@@ -1472,7 +1480,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     def exploration_job(job_id: str, actor: Actor) -> dict:
         item = existing_job(job_id, actor)
         if item["kind"] != "exploration":
-            raise HTTPException(status_code=404, detail="Job not found")
+            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         return item
 
     @app.get(
@@ -1494,7 +1502,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         exploration_job(job_id, actor)
         result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         if result is None:
-            raise HTTPException(status_code=404, detail="Job not found")
+            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         return result
 
     @app.get("/api/jobs/{job_id}", tags=["Jobs"], summary="작업 상세 조회", response_model=JobOut)
@@ -1508,7 +1516,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             "ml_evaluate",
             "ml_explain",
         ):
-            raise HTTPException(status_code=404, detail="Job not found")
+            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         return item
 
     @app.post(
@@ -1528,13 +1536,13 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             "ml_evaluate",
             "ml_explain",
         ):
-            raise HTTPException(status_code=404, detail="Job not found")
+            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         try:
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         except IcebergCancellationConflict as exc:
             raise PlatformError("SOS-ICEBERG-CANCEL-409") from exc
         if result is None:
-            raise HTTPException(status_code=404, detail="Job not found")
+            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         return result
 
     # FastAPI 생성 명세를 그대로 사용하고 Scalar 탐색 그룹만 추가한다.

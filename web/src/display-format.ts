@@ -39,3 +39,34 @@ const basisLabels: Record<string, string> = {
 export function roleCandidateLabel(role: string, basis: string): string {
   return `${roleLabels[role] ?? role} (${basisLabels[basis] ?? basis} 기준)`;
 }
+
+/** 생성·수정 시각처럼 사용자가 읽는 기록 시각은 브라우저 지역 시간으로 보여준다. */
+export function formatRecordedAt(value: string): string {
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? value : new Date(time).toLocaleString("ko-KR");
+}
+
+const algorithmLabels: Record<string, string> = { isolation_forest: "Isolation Forest" };
+const explanationMethodLabels: Record<string, string> = {
+  permutation_shap_median_v1: "Feature별 점수 기여도 (SHAP)",
+  median_reference_feature_replacement: "Feature 치환 민감도",
+};
+const policyModeLabels: Record<string, string> = {
+  fixed: "고정 임계값", quantile: "경보 비율 기준 분위수",
+};
+const scoreDirectionLabels: Record<string, string> = {
+  higher_is_more_anomalous: "높을수록 이례적",
+};
+
+export function algorithmLabel(algorithm: string): string {
+  return algorithmLabels[algorithm] ?? algorithm;
+}
+export function explanationMethodLabel(method: string): string {
+  return explanationMethodLabels[method] ?? method;
+}
+export function policyModeLabel(mode: string): string {
+  return policyModeLabels[mode] ?? mode;
+}
+export function scoreDirectionLabel(direction: string): string {
+  return scoreDirectionLabels[direction] ?? direction;
+}

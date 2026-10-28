@@ -47,9 +47,9 @@ def begin_delete(store: Store, model_id: str, actor: Actor) -> dict:
             text("SELECT * FROM model_revisions WHERE id=:id FOR UPDATE"), {"id":model_id}
         ).mappings().one_or_none()
         if row is None:
-            raise HTTPException(status_code=404, detail="Model not found")
+            raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다.")
         if not actor.privileged and row["owner_actor"]!=actor.id:
-            raise HTTPException(status_code=404, detail="Model not found")
+            raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다.")
         if row["lifecycle_state"] == "Deleted":
             return dict(row)
         if row["lifecycle_state"] == "Active":
@@ -57,14 +57,14 @@ def begin_delete(store: Store, model_id: str, actor: Actor) -> dict:
                 "SELECT state FROM mlflow_exports WHERE job_id=:id"
             ), {"id":row["job_id"]}).scalar_one_or_none()
             if tracking != "Succeeded" or not row["registry_version"] or not row["registry_model"]:
-                raise HTTPException(status_code=409, detail="Registry publication has not completed")
+                raise HTTPException(status_code=409, detail="모델 Registry 등록이 완료되지 않았습니다.")
             if row["registry_model"] != registered_model_name(dict(row)):
-                raise HTTPException(status_code=409, detail="Registry publication has not completed")
+                raise HTTPException(status_code=409, detail="모델 Registry 등록이 완료되지 않았습니다.")
             # 단일 트랜잭션의 행 잠금은 새 사용 요청과 삭제 경합 시 직렬화에 사용한다.
             current = deletion_impact_transaction(db, model_id)
             if current["active_jobs"] or current["shared_artifacts"]:
                 raise HTTPException(status_code=409, detail={
-                    "message":"Active jobs or shared model artifacts prevent deletion",
+                    "message":"실행 중인 작업 또는 공유 중인 모델 파일이 있어 삭제할 수 없습니다.",
                     "impact":current,
                 })
             db.execute(text(
@@ -126,7 +126,7 @@ def model_deletion_router(store: Store) -> APIRouter:
     def impact(revision_id: str,actor:Actor=READ):
         item=store.get_model_revision(revision_id)
         if item is None or (not actor.privileged and item["owner_actor"]!=actor.id):
-            raise HTTPException(status_code=404,detail="Model not found")
+            raise HTTPException(status_code=404,detail="모델을 찾을 수 없습니다.")
         return {"model_id":revision_id,"lifecycle_state":item["lifecycle_state"],
                 "references":deletion_impact(store,revision_id)}
 
@@ -135,14 +135,14 @@ def model_deletion_router(store: Store) -> APIRouter:
         revision_id:str,confirm:bool=Query(default=False),actor:Actor=MANAGE,
     ):
         if not confirm:
-            raise HTTPException(status_code=422,detail="Deletion requires explicit confirmation")
+            raise HTTPException(status_code=422,detail="모델 삭제에는 명시적 확인이 필요합니다.")
         # 설정 오류로 삭제 의도만 Deleting에 남기지 않도록 먼저 확인한다.
         try:
             settings = MLflowSettings.from_env()
         except RuntimeConfigurationError as exc:
-            raise HTTPException(status_code=503, detail="MLflow configuration is invalid") from exc
+            raise HTTPException(status_code=503, detail="MLflow 연결 설정을 확인하세요.") from exc
         if settings is None:
-            raise HTTPException(status_code=503, detail="MLflow management is unavailable")
+            raise HTTPException(status_code=503, detail="MLflow 관리 서비스를 사용할 수 없습니다.")
         row=begin_delete(store,revision_id,actor)
         if row["lifecycle_state"]=="Deleted":
             return {"model_id":revision_id,"state":"Deleted"}
@@ -168,7 +168,7 @@ def model_deletion_router(store: Store) -> APIRouter:
         except (MLflowDeliveryError, ValueError, OSError, RuntimeError, BotoCoreError, ClientError) as exc:
             # 외부 시스템은 공통 트랜잭션이 아니므로 중단된 상태를 실패로 확정하지 않는다.
             # 같은 요청을 다시 보내 삭제를 재개한다. 비밀 정보는 응답에 노출하지 않는다.
-            raise HTTPException(status_code=503, detail="Model deletion incomplete; retry") from exc
+            raise HTTPException(status_code=503, detail="모델 삭제가 완료되지 않았습니다. 상태를 확인한 뒤 다시 요청하세요.") from exc
         finish_delete(store,revision_id,actor)
         return {"model_id":revision_id,"state":"Deleted"}
 

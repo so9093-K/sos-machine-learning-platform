@@ -136,7 +136,7 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
             }} />
           <div className="pipeline-shap-feature-focus" aria-label="선택한 SHAP Feature 근거">
             <label className="pipeline-shap-feature-picker">
-              <span>Feature 살펴보기</span>
+              <span>Feature 선택</span>
               <select value={selected.feature} onChange={event =>
                 setFeatureSelection({ resultId: result.id, feature: event.target.value })}>
                 {shown.map(item => <option key={item.feature} value={item.feature}>

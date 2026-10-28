@@ -38,15 +38,15 @@ def _client() -> MLflowClient:
     try:
         settings = MLflowSettings.from_env()
     except RuntimeConfigurationError as exc:
-        raise HTTPException(status_code=503, detail="MLflow configuration is invalid") from exc
+        raise HTTPException(status_code=503, detail="MLflow 연결 설정을 확인하세요.") from exc
     if settings is None:
-        raise HTTPException(status_code=503, detail="MLflow management is unavailable")
+        raise HTTPException(status_code=503, detail="MLflow 관리 서비스를 사용할 수 없습니다.")
     return MLflowClient(settings)
 
 
 def _name(actor_id: str, key: str) -> str:
     if not re.fullmatch(KEY_PATTERN, key):
-        raise HTTPException(status_code=422, detail="Invalid model group key")
+        raise HTTPException(status_code=422, detail="모델 그룹 키 형식이 올바르지 않습니다.")
     return registered_model_name({
         "owner_actor": actor_id, "algorithm": "isolation_forest", "registry_key": key,
     })
@@ -65,10 +65,10 @@ def _get_group(client: MLflowClient, name: str) -> dict:
         record = client.get("registered-models/get", {"name": name}).get("registered_model")
     except MLflowDeliveryError as exc:
         if str(exc).startswith("SOS-MLFLOW-HTTP-404"):
-            raise HTTPException(status_code=404, detail="Model group not found") from exc
+            raise HTTPException(status_code=404, detail="모델 그룹을 찾을 수 없습니다.") from exc
         raise
     if not isinstance(record, dict) or record.get("name") != name:
-        raise HTTPException(status_code=503, detail="Invalid Registry model response")
+        raise HTTPException(status_code=503, detail="모델 Registry 응답을 확인할 수 없습니다.")
     return record
 
 
@@ -80,9 +80,9 @@ def _view(actor_id: str, record: dict) -> dict:
     elif name.startswith(base + "-"):
         key = name[len(base)+1:]
         if not re.fullmatch(KEY_PATTERN, key):
-            raise HTTPException(status_code=503, detail="Invalid model group key")
+            raise HTTPException(status_code=503, detail="모델 그룹 키 형식이 올바르지 않습니다.")
     else:
-        raise HTTPException(status_code=404, detail="Model group not found")
+        raise HTTPException(status_code=404, detail="모델 그룹을 찾을 수 없습니다.")
     tags = _tags(record)
     return {
         "registry_key": key, "name": name,
@@ -110,7 +110,7 @@ def model_management_router(store: Store) -> APIRouter:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         records = result.get("registered_models") or []
         if not isinstance(records, list):
-            raise HTTPException(status_code=503, detail="Invalid Registry model response")
+            raise HTTPException(status_code=503, detail="모델 Registry 응답을 확인할 수 없습니다.")
         prefix = _name(actor.id, "default")
         visible = [
             _view(actor.id, record) for record in records
@@ -122,7 +122,7 @@ def model_management_router(store: Store) -> APIRouter:
     @router.post("/api/ml/registry/groups", tags=["Models"], status_code=201)
     def create_group(body: NewModelGroup, actor: Actor = MANAGE):
         if body.registry_key == "default":
-            raise HTTPException(status_code=409, detail="Default model group is reserved")
+            raise HTTPException(status_code=409, detail="기본 모델 그룹 키는 예약되어 있습니다.")
         client = _client()
         name = _name(actor.id, body.registry_key)
         try:
@@ -131,7 +131,7 @@ def model_management_router(store: Store) -> APIRouter:
             if exc.status_code != 404:
                 raise
         else:
-            raise HTTPException(status_code=409, detail="Model group already exists")
+            raise HTTPException(status_code=409, detail="이미 존재하는 모델 그룹입니다.")
         try:
             result = client.post("registered-models/create", {
                 "name": name,
@@ -177,7 +177,7 @@ def model_management_router(store: Store) -> APIRouter:
     def archive_version(registry_key: str, version: str, body: VersionArchiveUpdate,
                         actor: Actor = MANAGE):
         if not re.fullmatch(r"[1-9][0-9]*", version):
-            raise HTTPException(status_code=422, detail="Invalid version")
+            raise HTTPException(status_code=422, detail="모델 버전이 올바르지 않습니다.")
         name = _name(actor.id, registry_key)
         client = _client()
         try:
@@ -186,7 +186,7 @@ def model_management_router(store: Store) -> APIRouter:
                 "name": name, "version": version,
             }).get("model_version")
             if not isinstance(record, dict) or record.get("name") != name:
-                raise HTTPException(status_code=404, detail="Model version not found")
+                raise HTTPException(status_code=404, detail="모델 버전을 찾을 수 없습니다.")
             client.post("model-versions/set-tag", {
                 "name": name, "version": version, "key": "sos.archived",
                 "value": "true" if body.archived else "false",
@@ -199,7 +199,7 @@ def model_management_router(store: Store) -> APIRouter:
     @router.delete("/api/ml/registry/groups/{registry_key}", tags=["Models"])
     def delete_group(registry_key: str, actor: Actor = MANAGE):
         if registry_key == "default":
-            raise HTTPException(status_code=409, detail="Default model group cannot be deleted")
+            raise HTTPException(status_code=409, detail="기본 모델 그룹은 삭제할 수 없습니다.")
         name = _name(actor.id, registry_key)
         with store.connection() as db:
             in_use = db.execute(text(
@@ -207,7 +207,7 @@ def model_management_router(store: Store) -> APIRouter:
                 "WHERE owner_actor=:actor AND registry_key=:key AND lifecycle_state!='Deleted'"
             ), {"actor": actor.id, "key": registry_key}).scalar_one()
             if in_use:
-                raise HTTPException(status_code=409, detail="Model group still has managed versions")
+                raise HTTPException(status_code=409, detail="모델 그룹에 관리 중인 모델 버전이 남아 있습니다.")
             # 학습 Job이 아직 Model Revision을 게시하지 않았더라도 같은 그룹을
             # 삭제하면 전송 Worker가 그룹을 다시 만들 수 있다.
             pending_training = db.execute(text(
@@ -216,7 +216,7 @@ def model_management_router(store: Store) -> APIRouter:
                 "AND COALESCE(spec::jsonb->>'registry_key','default')=:key"
             ), {"actor": actor.id, "key": registry_key}).scalar_one()
             if pending_training:
-                raise HTTPException(status_code=409, detail="Model group has running training jobs")
+                raise HTTPException(status_code=409, detail="모델 그룹에 실행 중인 학습 작업이 있습니다.")
         client = _client()
         try:
             _get_group(client, name)
@@ -224,7 +224,7 @@ def model_management_router(store: Store) -> APIRouter:
                 "filter": f"name = '{name}'", "max_results": 1,
             }).get("model_versions") or []
             if versions:
-                raise HTTPException(status_code=409, detail="Delete model versions first")
+                raise HTTPException(status_code=409, detail="모델 버전을 먼저 삭제하세요.")
             client.delete("registered-models/delete", {"name": name})
         except MLflowDeliveryError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -24,7 +24,9 @@ def _position(cursor: str | None) -> tuple[str, str | None]:
         raw = base64.b64decode(cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True)
         position = json.loads(raw)
     except (ValueError, UnicodeError, binascii.Error) as exc:
-        raise InvalidRequestError("Invalid inventory cursor") from exc
+        raise InvalidRequestError(
+            "저장소 점검 목록의 페이지 위치가 올바르지 않습니다. 목록을 새로 조회하세요."
+        ) from exc
     if (
         not isinstance(position, dict)
         or set(position) != {"prefix", "token"}
@@ -34,7 +36,9 @@ def _position(cursor: str | None) -> tuple[str, str | None]:
             and (not isinstance(position["token"], str) or not position["token"])
         )
     ):
-        raise InvalidRequestError("Invalid inventory cursor")
+        raise InvalidRequestError(
+            "저장소 점검 목록의 페이지 위치가 올바르지 않습니다. 목록을 새로 조회하세요."
+        )
     return position["prefix"], position["token"]
 
 

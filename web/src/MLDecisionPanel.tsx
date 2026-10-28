@@ -6,7 +6,8 @@ import type {
   MLEvaluationJob, MLEvaluationJobSummary, MLExplanationJob,
   MLExplanationJobSummary, MLPolicyJob, MLPolicyJobSummary, ScoringResult,
 } from "./types";
-import { jobStatusLabel } from "./display-format";
+import { jobStatusLabel, policyModeLabel } from "./display-format";
+import { EvaluationSummary } from "./EvaluationSummary";
 
 export type DecisionView = "policy" | "evaluation" | "explanation";
 type Props = {
@@ -251,17 +252,17 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
   const sensitivities = Array.isArray(details?.feature_sensitivities)
     ? details.feature_sensitivities as Array<Record<string, unknown>> : [];
   return <div className="steps" role="region" aria-label="임계값 정책과 평가">
-    <h4>{view === "policy" ? "Decision Policy" : view === "evaluation" ? "Evaluation" : "Explanation"}</h4>
+    <h3>{view === "policy" ? "판정 정책" : view === "evaluation" ? "평가" : "설명"}</h3>
     {error && <p role="alert">{error}</p>}
-    <p className="hint">Scoring Result {scoring.id}의 점수를 재사용합니다. 모델 재학습이나 재점수화를 수행하지 않습니다.</p>
+    <p className="hint">선택한 점수 결과({scoring.row_count.toLocaleString("ko-KR")}건)를 재사용합니다. 모델 재학습이나 재점수화를 수행하지 않습니다.</p>
     {view === "policy" && <>
-    <p className="hint">분위수 정책은 선택한 Scoring 점수에서 임계값을 산정하며, 별도 보정·검증 데이터의 근거가 아닙니다.</p>
+    <p className="hint">분위수 정책은 선택한 점수 결과에서 임계값을 산정하며, 별도 보정·검증 데이터의 근거가 아닙니다.</p>
     <div className="form-row">
       <label>임계값 정책
         <select aria-label="임계값 정책" value={mode}
           onChange={e => setMode(e.target.value as "fixed" | "quantile")}>
           <option value="fixed">고정 임계값</option>
-          <option value="quantile">현재 Scoring 점수의 상위 분위수</option>
+          <option value="quantile">현재 점수 결과의 상위 분위수</option>
         </select>
       </label>
       {mode === "fixed" ? <label>고정 점수 경계
@@ -280,7 +281,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     </p>}
     {canCancel && policyJob && !DONE.has(policyJob.status) && !policyJob.cancel_requested &&
       <button className="secondary" onClick={() => void cancelPolicy()}>정책 취소 요청</button>}
-    {policyJob?.status === "Failed" && <p role="alert">정책 실패 · {policyJob.error_code}</p>}
+    {policyJob?.status === "Failed" && <p role="alert">정책 실패 · {policyJob.error ?? policyJob.error_code}</p>}
     <div className="job-list">
       <strong>이 점수의 정책 이력</strong>
       {policyHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
@@ -294,9 +295,8 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       </button>}
     </div>
     {policy && <div className="result">
-      <p>Decision Policy Revision · {policy.id}</p>
-      <p>적용 임계값: {metric(policy.threshold)} · 이상 판정 수:
-        {String(policy.decision_summary.predicted_anomalies ?? "—")}</p>
+      <p>{policyModeLabel(policy.mode)} · 적용 임계값 {metric(policy.threshold)} · 이상 판정
+        {" "}{String(policy.decision_summary.predicted_anomalies ?? "—")}건</p>
       <p className="hint">동점이 있으면 분위수로 설정한 경보 비율과 실제 판정 비율은 다를 수 있습니다.</p>
       <button type="button" className="secondary"
         onClick={() => onOpenResult("policy", policy.id)}>정책 판본 상세 보기 →</button>
@@ -320,9 +320,9 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       </select>
     </label>
     <div className="form-row">
-      <label>기존 정책 판본 ID (다른 Scoring의 정책도 입력 가능)
+      <label>기존 정책 판본 ID (다른 점수 결과의 정책도 입력 가능)
         <input aria-label="재사용할 정책 판본 ID" disabled={loadingPolicy} value={policyIdDraft}
-          placeholder="호환되는 Decision Policy Revision ID"
+          placeholder="호환되는 판정 정책 판본 ID"
           onChange={event => {
             setPolicyIdDraft(event.target.value);
             setPolicyJob(null);
@@ -341,18 +341,18 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       onClick={() => void policyHistory.loadMore().catch(e => setError(formatError(e)))}>
       이전 정책 더 보기
     </button>}
-    {policy && <p className="hint">선택한 정책: {policy.id} · 점수 경계 {metric(policy.threshold)}</p>}
+    {policy && <p className="hint" title={policy.id}>선택한 정책: {policyModeLabel(policy.mode)} · 점수 경계 {metric(policy.threshold)}</p>}
     <button disabled={!canRun || loadingPolicy || (policyJob !== null && policy === null) ||
       (evaluationJob !== null && !DONE.has(evaluationJob.status))}
-      onClick={() => void createEvaluation()}>Evaluation 판본 생성</button>
+      onClick={() => void createEvaluation()}>평가 판본 생성</button>
     {policyJob && !policy && <p role="status">선택한 정책 판본을 확인하는 중입니다.
       완료 전에는 평가를 제출할 수 없습니다.</p>}
-    {evaluationJob && <p role="status">Evaluation Job · {jobStatusLabel(evaluationJob.status)}
+    {evaluationJob && <p role="status">평가 작업 · {jobStatusLabel(evaluationJob.status)}
       {evaluationJob.cancel_requested && evaluationJob.status === "Running" && " · 취소 요청됨"}
     </p>}
     {canCancel && evaluationJob && !DONE.has(evaluationJob.status) && !evaluationJob.cancel_requested &&
       <button className="secondary" onClick={() => void cancelEvaluation()}>평가 취소 요청</button>}
-    {evaluationJob?.status === "Failed" && <p role="alert">평가 실패 · {evaluationJob.error_code}</p>}
+    {evaluationJob?.status === "Failed" && <p role="alert">평가 실패 · {evaluationJob.error ?? evaluationJob.error_code}</p>}
     <div className="job-list">
       <strong>이 점수의 평가 이력</strong>
       {evaluationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
@@ -366,23 +366,16 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       </button>}
     </div>
     {evaluation && <div className="result">
-      <p>Evaluation Revision · {evaluation.id} · 레이블 수준: {evaluation.label_coverage}</p>
-      <p className="hint">평가 기준 정책: {evaluation.policy_revision_id ?? "없음 (순위 점수만)"}
-        {evaluation.policy_revision_id && evaluation.policy_revision_id !== policy?.id &&
-          " · 현재 선택된 정책과 다를 수 있습니다."}
-      </p>
-      <div className="cards">
-        <div className="stat"><span>Precision</span><strong>{metric(evaluation.decision_metrics.precision)}</strong></div>
-        <div className="stat"><span>Recall</span><strong>{metric(evaluation.decision_metrics.recall)}</strong></div>
-        <div className="stat"><span>F1</span><strong>{metric(evaluation.decision_metrics.f1)}</strong></div>
-      </div>
+      <EvaluationSummary evaluation={evaluation} />
+      {evaluation.policy_revision_id && evaluation.policy_revision_id !== policy?.id &&
+        <p className="hint">이 평가의 기준 정책은 현재 선택된 정책과 다를 수 있습니다.</p>}
       <p className="hint">동일 평가 점수에서 임계값을 선택하고 평가한 지표는 독립 검증셋 성능을 보증하지 않습니다. 레이블이 없거나 정의할 수 없는 경우에는 미정의로 표시합니다.</p>
       <button type="button" className="secondary"
         onClick={() => onOpenResult("evaluation", evaluation.id)}>평가 판본 상세 보기 →</button>
     </div>}
     </>}
     {view === "explanation" && <>
-    <h4>개별 이상 점수 설명</h4>
+    <h3>개별 이상 점수 설명</h3>
     <label>결과 내 행 번호
       <input type="number" aria-label="설명할 행 번호" min="0"
         max={Math.max(0, scoring.row_count - 1)} value={rowIndex}
@@ -391,12 +384,12 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     <button disabled={!canRun || !Number.isInteger(rowIndex) || rowIndex < 0 ||
       rowIndex >= scoring.row_count || (explanationJob !== null && !DONE.has(explanationJob.status))}
       onClick={() => void createExplanation()}>점수 민감도 설명 실행</button>
-    {explanationJob && <p role="status">설명 Job · {jobStatusLabel(explanationJob.status)}
+    {explanationJob && <p role="status">설명 작업 · {jobStatusLabel(explanationJob.status)}
       {explanationJob.cancel_requested && explanationJob.status === "Running" && " · 취소 요청됨"}
     </p>}
     {canCancel && explanationJob && !DONE.has(explanationJob.status) && !explanationJob.cancel_requested &&
       <button className="secondary" onClick={() => void cancelExplanation()}>설명 취소 요청</button>}
-    {explanationJob?.status === "Failed" && <p role="alert">설명 실패 · {explanationJob.error_code}</p>}
+    {explanationJob?.status === "Failed" && <p role="alert">설명 실패 · {explanationJob.error ?? explanationJob.error_code}</p>}
     <div className="job-list">
       <strong>이 점수의 설명 이력</strong>
       {explanationHistory.items.filter(job => job.spec.scoring_result_id === scoring.id)
@@ -410,7 +403,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       </button>}
     </div>
     {explanation && <div className="result">
-      <p>Explanation · {explanation.id} · 기준 이상 점수 {metric(details?.score)}</p>
+      <p>설명 결과 · 기준 이상 점수 {metric(details?.score)}</p>
       <table>
         <caption>Feature를 학습 참조 중앙값으로 바꾸었을 때의 점수 변화</caption>
         <thead><tr><th>Feature</th><th>실제값</th><th>참조 중앙값</th>

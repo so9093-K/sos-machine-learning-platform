@@ -58,7 +58,7 @@ def training_router(
         try:
             IsolationForestConfig(**body.params.model_dump())
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail="Invalid training parameters") from exc
+            raise HTTPException(status_code=422, detail="학습 매개변수가 올바르지 않습니다.") from exc
         return store.create_job(
             kind="ml_train",
             dataset_id=dataset["id"],
@@ -86,7 +86,7 @@ def training_router(
     def existing_ml_training_job(job_id: str, actor: Actor) -> dict:
         item = existing_job(job_id, actor)
         if item["kind"] != "ml_train":
-            raise HTTPException(status_code=404, detail="Training Job not found")
+            raise HTTPException(status_code=404, detail="학습 작업을 찾을 수 없습니다.")
         return item
 
     @router.post(
@@ -111,10 +111,10 @@ def training_router(
     ):
         source = existing_ml_training_job(source_job_id, actor)
         if source["status"] != "Succeeded":
-            raise HTTPException(status_code=409, detail="Only completed training can be forked")
+            raise HTTPException(status_code=409, detail="완료된 학습 작업만 복제할 수 있습니다.")
         dataset = existing_dataset(source["dataset_id"], actor)
         if dataset["version"] != source["spec"]["dataset_version"]:
-            raise HTTPException(status_code=409, detail="Training Dataset revision unavailable")
+            raise HTTPException(status_code=409, detail="학습 Dataset 판본을 사용할 수 없습니다.")
         require_submission_key(idempotency_key)
         params = body.params.model_dump() if body.params is not None else source["spec"]["params"]
         from .ml_isolation_forest import IsolationForestConfig
@@ -122,7 +122,7 @@ def training_router(
         try:
             IsolationForestConfig(**params)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail="Invalid model parameters") from exc
+            raise HTTPException(status_code=422, detail="모델 매개변수가 올바르지 않습니다.") from exc
         return store.create_job(
             kind="ml_train",
             dataset_id=dataset["id"],
@@ -187,7 +187,7 @@ def training_router(
         existing_ml_training_job(job_id, actor)
         item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         if item is None:
-            raise HTTPException(status_code=404, detail="Training Job not found")
+            raise HTTPException(status_code=404, detail="학습 작업을 찾을 수 없습니다.")
         return item
 
     return router

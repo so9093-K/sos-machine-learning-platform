@@ -16,18 +16,40 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 
-  override toString() {
-    const reference = [this.code, this.requestId ? `요청 ID: ${this.requestId}` : null]
-      .filter(Boolean).join(" · ");
-    const message = reference ? `${this.message} (${reference})` : this.message;
+  /** 오류 코드와 요청 ID. 운영 문의·로그 대조에 쓰는 참조 정보다. */
+  get reference(): string | null {
+    return [this.code, this.requestId ? `요청 ID: ${this.requestId}` : null]
+      .filter(Boolean).join(" · ") || null;
+  }
+
+  /** 서버 재시도 정책에 따른 다음 행동 안내. */
+  get guidance(): string | null {
     if (this.retryPolicy === "manual_verification_required") {
-      return `${message} · 작업의 실행·커밋 상태를 확인하기 전에는 동일 요청을 다시 제출하지 마세요.`;
+      return "작업의 실행·커밋 상태를 확인하기 전에는 동일 요청을 다시 제출하지 마세요.";
     }
     if (this.retryPolicy === "after_refresh") {
-      return `${message} · 현재 상태를 새로 조회한 뒤 재시도 여부를 판단하세요.`;
+      return "현재 상태를 새로 조회한 뒤 재시도 여부를 판단하세요.";
     }
-    return message;
+    return null;
   }
+
+  override toString() {
+    const message = this.reference ? `${this.message} (${this.reference})` : this.message;
+    return this.guidance ? `${message} · ${this.guidance}` : message;
+  }
+}
+
+/** 화면 오류 안내의 구성: 사용자가 읽을 메시지, 다음 행동, 운영 참조 정보. */
+export type ErrorNotice = { message: string; guidance: string | null; reference: string | null };
+
+/** 오류를 문자열로 합치지 않고 메시지·안내·참조 정보를 나눠 전달한다. */
+export function describeError(error: unknown): ErrorNotice {
+  if (error instanceof ApiError) {
+    return { message: error.message, guidance: error.guidance, reference: error.reference };
+  }
+  // 화면에서 직접 만든 입력 검증 메시지는 문자열로 전달된다.
+  const message = typeof error === "string" ? error : formatError(error);
+  return { message, guidance: null, reference: null };
 }
 
 /** UI에서 요청 ID·오류 코드를 보존하되 임의 예외의 원문은 추가하지 않는다. */

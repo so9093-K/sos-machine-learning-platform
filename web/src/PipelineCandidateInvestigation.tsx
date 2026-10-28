@@ -41,7 +41,7 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
       Math.abs(numeric(a.anomaly_score_delta)!)).slice(0, 12);
   if (!ranked.length) return <p>시각화 가능한 점수 민감도 근거가 없습니다.</p>;
   const shown = [...ranked].reverse();
-  const option = {
+  const option = { baseOption: {
     aria: { enabled: true },
     // 비교에 필요한 정밀도만 보이고 원래 정밀도는 아래 표에서 확인한다.
     tooltip: { trigger: "axis", formatter: (params: Array<{ dataIndex: number }>) => {
@@ -53,14 +53,18 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
       return `${label}${label !== name ? ` (${name})` : ""}<br/>기준값 치환 시 점수 변화 ${
         delta === null ? "미정의" : (delta > 0 ? "+" : "") + delta.toLocaleString("ko-KR", { maximumFractionDigits: 6 })}`;
     } },
-    grid: { left: "24%", right: "8%", top: 18, bottom: 32 },
+    // SHAP 차트와 같은 라벨 폭을 써서 한국어 Feature 이름이 잘리지 않게 한다.
+    grid: { left: 240, right: 45, top: 18, bottom: 40 },
     xAxis: { type: "value" as const, name: "점수 변화" },
     yAxis: { type: "category" as const,
       data: shown.map(x => activityFeatureLabel(String(x.feature))),
-      axisLabel: { width: 120, overflow: "truncate" as const } },
+      axisLabel: { width: 210, overflow: "truncate" as const, fontSize: 12 } },
     series: [{ type: "bar" as const, name: "기준값 치환 시 점수 변화",
       data: shown.map(x => numeric(x.anomaly_score_delta)) }],
-  };
+  }, media: [{ query: { maxWidth: 620 }, option: {
+    grid: { left: 153, right: 20, top: 18, bottom: 48 },
+    yAxis: { axisLabel: { width: 127, overflow: "truncate" as const, fontSize: 11 } },
+  } }] };
   return <>
     <DataChart option={option} ariaLabel="선택한 후보의 Feature별 참조 중앙값 치환에 따른 이상 점수 민감도" />
     <p className="hint">실제 모델에서 각 Feature를 Train 참조 중앙값으로 하나씩 치환했을 때의 점수 차이입니다.
@@ -275,7 +279,7 @@ export function PipelineCandidateInvestigation({
       <button type="button" className="secondary" onClick={() => {
         setExperimentError(onTryObservation(candidate.features, candidate.row_index,
           candidate.anomaly_score) ?? "");
-      }}>이 관측값으로 실험하기 →</button>
+      }}>이 관측값으로 실험 →</button>
       {experimentError && <p role="alert">{experimentError}</p>}
     </div>}
     {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
@@ -417,7 +421,7 @@ export function PipelineCandidateInvestigation({
     {error && <div role="alert" className="pipeline-readiness-blocked">{error}
       {job && <button className="secondary" type="button" onClick={() => {
         setError(""); setRetry(n => n + 1);
-      }}>설명 근거 다시 조회하기</button>}</div>}
+      }}>설명 근거 다시 조회</button>}</div>}
     {result && <>
       <SensitivityChart result={result} />
       <button type="button" className="secondary" onClick={() =>

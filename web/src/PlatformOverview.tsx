@@ -59,7 +59,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
           <p>준비된 예제로 모델 학습을 시작하고, 실제 학습 결과와 이상 후보를 탐구합니다.</p>
           <p className="hint">모델을 이해한 뒤 다른 데이터에 적용할 수도 있습니다.</p>
           <button type="button" onClick={() => onNavigate("pipelines")}>
-            모델 학습해 보기 →
+            모델 학습 →
           </button>
         </article>
       </div>
@@ -100,7 +100,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
           {datasets.slice(0, 5).map(dataset => <button key={dataset.id} type="button"
             className="platform-list-link ghost" onClick={() => onOpenDataset(dataset.id)}>
             <span className="platform-resource-name">{dataset.name}</span>
-            <small>{dataset.kind} · 탐색하기 →</small>
+            <small>{dataset.kind} · 탐색 →</small>
           </button>)}
         </div>}
     </section>

@@ -33,7 +33,7 @@ def _cursor(value: str | None) -> tuple[float, int] | None:
     if value is None:
         return None
     if len(value) > 160:
-        raise HTTPException(status_code=422, detail="Invalid cursor")
+        raise HTTPException(status_code=422, detail="페이지 위치가 올바르지 않습니다. 목록을 새로 조회하세요.")
     try:
         item = json.loads(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)))
         if not isinstance(item, list) or len(item) != 2:
@@ -43,7 +43,7 @@ def _cursor(value: str | None) -> tuple[float, int] | None:
             raise ValueError
         return (float(score), index)
     except (ValueError, TypeError, json.JSONDecodeError, binascii.Error):
-        raise HTTPException(status_code=422, detail="Invalid cursor") from None
+        raise HTTPException(status_code=422, detail="페이지 위치가 올바르지 않습니다. 목록을 새로 조회하세요.") from None
 
 
 def _encode_cursor(rank: tuple[float, int]) -> str:
@@ -62,7 +62,7 @@ def ranked_scoring_rows(
     임계값을 명시적으로 전달한다. 두 경우 모두 결과 원본을 수정하지 않는다.
     """
     if row_index is not None and cursor is not None:
-        raise HTTPException(status_code=422, detail="Observation row lookup cannot use a page cursor")
+        raise HTTPException(status_code=422, detail="개별 관측값 조회에는 페이지 커서를 사용할 수 없습니다.")
     after = _cursor(cursor)
     cache_entry = {
         "kind": "file", "version": scoring["sha256"],
@@ -145,7 +145,7 @@ def scoring_observations_router(
     ):
         scoring = store.get_scoring_result(result_id)
         if scoring is None:
-            raise HTTPException(status_code=404, detail="Scoring Result not found")
+            raise HTTPException(status_code=404, detail="점수 결과를 찾을 수 없습니다.")
         check_ownership(actor, scoring["owner_actor"], "scoring_result", result_id)
         return ranked_scoring_rows(store, scoring, limit, cursor, row_index=row_index)
 

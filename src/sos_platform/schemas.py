@@ -505,6 +505,7 @@ class MLTrainRequest(BaseModel):
 
 
 class ModelRevisionOut(BaseModel):
+    registry_version: str | None = None
     lifecycle_state: Literal["Active", "Deleting", "Deleted"] = "Active"
     id: str
     job_id: str

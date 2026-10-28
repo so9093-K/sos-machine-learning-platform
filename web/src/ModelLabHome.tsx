@@ -24,8 +24,8 @@ function useModelAvailability(): ModelAvailability {
 }
 
 /** 활동 이상 탐지 주제: 처리 단계가 아니라 모델의 목적과 실제 사용 행동을 보여준다. */
-export function ModelLabHome({ onUse, onLearn }: {
-  onUse: () => void; onLearn: () => void;
+export function ModelLabHome({ onUse, onLearn, canLearn = true }: {
+  onUse: () => void; onLearn: () => void; canLearn?: boolean;
 }) {
   const availability = useModelAvailability();
   // 사용할 모델이 없으면 새 학습을, 있으면 모델 사용을 주요 행동으로 둔다. 확인 전에는 어느 쪽도 강조하지 않는다.
@@ -35,7 +35,7 @@ export function ModelLabHome({ onUse, onLearn }: {
     <div className="model-lab-home-lead">
       <div className="model-lab-home-copy">
         <span className="eyebrow">비지도 학습 · 이상 탐지 · Isolation Forest</span>
-        <h2 id="model-lab-home-heading">평소와 달라지는 활동 찾기</h2>
+        <h2 id="model-lab-home-heading">평소와 다른 활동 탐지</h2>
         <p>시간대별 사용자·호스트 활동의 특징을 모델이 점수로 평가합니다.
           점수가 높은 관측치를 찾아 상세 활동 특징을 확인할 수 있습니다.</p>
       </div>
@@ -68,18 +68,19 @@ export function ModelLabHome({ onUse, onLearn }: {
     <div className="model-lab-home-choices" aria-label="활동 이상 탐지 시작">
       <article className="model-lab-choice">
         <span className="model-lab-choice-icon" aria-hidden="true">↗</span>
-        <h3>모델 사용해보기</h3>
+        <h3>모델 적용</h3>
         <p>이미 학습한 모델을 데이터에 적용해 이상 점수와 검토할 관측치를 확인합니다.</p>
-        <button type="button" className={useClass} onClick={onUse}>모델 사용하기 →</button>
+        <button type="button" className={useClass} onClick={onUse}>모델 적용 →</button>
       </article>
       <article className="model-lab-choice">
         <span className="model-lab-choice-icon" aria-hidden="true">✳</span>
-        <h3>모델 학습해보기</h3>
+        <h3>모델 학습</h3>
         <p>준비된 예제 또는 내 데이터로 모델을 학습하고, 생성된 모델과 Test 결과를 살펴봅니다.</p>
-        <button type="button" className={learnClass} onClick={onLearn}>모델 학습하기 →</button>
+        {canLearn ? <button type="button" className={learnClass} onClick={onLearn}>모델 학습 →</button>
+          : <p>현재 계정에는 모델 학습 권한이 없습니다. 등록된 모델과 이전 결과를 조회할 수 있습니다.</p>}
       </article>
     </div>
-    {availability !== "available" && <p className="model-lab-home-note">{availability === "none"
+    {canLearn && availability !== "available" && <p className="model-lab-home-note">{availability === "none"
       ? "기본 모델 그룹에 사용할 수 있는 모델이 아직 없습니다. 먼저 예제로 모델을 학습해 보세요."
       : "이미 학습한 모델이 없어도 괜찮습니다. 먼저 예제로 모델을 학습할 수 있습니다."}</p>}
   </section>;

@@ -362,7 +362,7 @@ export function MLScoringPanel({
         void onLoadMoreDatasets().catch(e => setError(formatError(e)))
           .finally(() => setLoadingMoreDatasets(false));
       }}>
-      {loadingMoreDatasets ? "Dataset 불러오는 중…" : "다른 Dataset 더 찾아보기"}
+      {loadingMoreDatasets ? "Dataset 불러오는 중…" : "Dataset 더 보기"}
     </button>}
     {columnStatus === "loading" && <p role="status">Dataset의 입력 컬럼을 확인하는 중입니다.</p>}
     {columnStatus === "error" && <p role="alert">입력 컬럼을 조회하지 못했습니다: {columnError}</p>}
@@ -425,7 +425,7 @@ export function MLScoringPanel({
         setHistoryError("");
         void refresh().catch(cause => setHistoryError(formatError(cause)));
       }
-    }}><summary>이 모델의 이전 점수 계산 보기</summary>
+    }}><summary>이 모델의 이전 점수 계산</summary>
     <div className="steps">
       {historyError && <p role="alert">이전 점수 계산 이력을 확인하지 못했습니다: {historyError}</p>}
       <strong>이 모델의 점수 계산 이력</strong>
@@ -446,7 +446,7 @@ export function MLScoringPanel({
       </div>;
       return selectedJob
         ? <details key={visibleResult ? "completed" : "selected"} className="scoring-next-analysis">
-            <summary>다른 Dataset 분석하기</summary>{form}</details>
+            <summary>다른 Dataset 분석</summary>{form}</details>
         : form;
     })()}
   </section>;

@@ -7,6 +7,17 @@ import { jobStatusLabel } from "./display-format";
 
 type AnyJobSummary = JobSummary | ExplorationJobSummary;
 
+/** 데이터 이해 Job은 Profile Job 인프라를 재사용하므로 spec으로 실제 작업을 구분한다. */
+function dataJobLabel(job: AnyJobSummary): string {
+  if (job.kind === "profile") {
+    if (job.spec.mode !== "understanding") return "전체 EDA 프로파일";
+    return job.spec.scope === "full" ? "데이터 이해 · 전체 행" : "데이터 이해 · 표본";
+  }
+  if (job.kind === "iceberg_import") return "Iceberg 적재";
+  if (job.kind === "exploration") return "전체 데이터 탐색 분석";
+  return "Feature 변환";
+}
+
 /** Discovery 전체 분석 결과는 일반 사용자에게 표로 우선 제공한다. */
 function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
   if (!Array.isArray(result.rows)) return null;
@@ -96,13 +107,11 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discove
       <h3>데이터·탐색 작업</h3>
       <p>모든 데이터셋의 작업을 조회합니다. 취소 요청과 실제 취소 완료는 구분합니다.</p>
     </div><button className="secondary" onClick={onRefresh}>새로고침</button></div>
-    {jobs.length === 0 && <p className="muted">아직 제출된 작업이 없습니다. 데이터셋을 선택해 EDA 또는 Feature Job을 실행하세요.</p>}
+    {jobs.length === 0 && <p className="muted">아직 제출된 작업이 없습니다. Dataset을 선택해 데이터 이해 또는 Feature 변환을 실행하세요.</p>}
     <div className="job-list">
       {jobs.map(job => <article className="job" key={job.id}>
         <div className="job-title"><div>
-          <strong>{job.kind === "profile" ? "Full EDA Profile" :
-            job.kind === "iceberg_import" ? "Iceberg Import" :
-            job.kind === "exploration" ? "Full Discovery Analysis" : "Feature Transform"}</strong>
+          <strong>{dataJobLabel(job)}</strong>
           <small>{job.id}</small>
         </div><span className={`status ${job.status.toLowerCase()}`}>
           {jobStatusLabel(job.status)}{job.cancel_requested ? " · 취소 요청 중" : ""}
