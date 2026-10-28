@@ -68,6 +68,13 @@ export function observationInputForPlayground(
   return { fields: invalid.length ? null : fields, invalid };
 }
 
+/** 관측값을 가져오기 전의 Job을 새 실험 결과처럼 노출하지 않는다. */
+export function playgroundJobVisibleAfterImport(
+  source: ObservationExperiment | null, jobAtImport: string | null, currentJobId: string | null,
+): boolean {
+  return source === null || (currentJobId !== null && currentJobId !== jobAtImport);
+}
+
 /** 현재 편집값이 실제로 성공한 Job에서 제출한 값과 일치하는지 확인한다. */
 export function playgroundInputMatchesResult(
   fields: Record<string, string>, submitted: Record<string, unknown> | null | undefined,
@@ -258,8 +265,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const highlightedChanges = importedSource ? observationEdits : editedNames;
   const comparisonNames = reference
     ? (highlightedChanges.length > 0 ? highlightedChanges : model.features).slice(0, 3) : [];
-  const newJobAfterImport = Boolean(importedSource && job && job.id !== importedAfterJobId);
-  const showCurrentJob = !importedSource || newJobAfterImport;
+  const showCurrentJob = playgroundJobVisibleAfterImport(importedSource, importedAfterJobId, job?.id ?? null);
+  const newJobAfterImport = Boolean(importedSource && showCurrentJob);
   const inputGroups = groupActivityFeatures(
     Object.fromEntries(model.features.map(name => [name, null])));
   const explanationAvailable = referenceMedians.length === model.features.length &&
