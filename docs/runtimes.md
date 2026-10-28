@@ -23,6 +23,17 @@ Dataset 캐시는 재사용 가능한 로컬 복사본이며 원본 S3 객체·�
 
 MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·Alias의 정본은 MLflow이지만 SOS는 신뢰된 Worker가 발급한 모델 위치·SHA-256·Feature·Runtime·권한을 검증한 뒤 실행한다. 외부 Registry 등록만으로 임의 직렬화 파일을 신뢰하지 않는다. 인증정보는 서버 측에만 제공한다. 연결 상태의 의미는 [Workflows](workflows.md)를 따른다.
 
+## Feast 전문 Runtime
+
+등록 Feature의 Historical Retrieval에는 Feast 0.67.0 전용 Worker 이미지를 사용한다.
+Feast SQL Registry는 SOS 메타데이터 DB와 분리된 PostgreSQL 서비스에 보관한다.
+API는 Feast SDK를 설치하지 않고 Dataset·Actor 권한을 검증해 Job을 제출하며,
+Worker는 Feature를 조회하고 결과를 기존 SOS 불변 Dataset으로 게시한다.
+현재는 게시 Parquet Feature Source, UTC Event Timestamp, Entity 시점 Dataset만
+지원한다. Online Serving과 Iceberg SQL Catalog 직접 Feature Source 조회는 지원하지
+않는다. Feast 확장 의존성은 기본 uv.lock 기반 이미지 위에서 추가 설치되므로
+확장 Runtime의 완전한 잠금과 의존성 충돌은 배포 검증이 필요하다.
+
 ## 현재 구현의 범위
 
 등록형 Workflow 정의·스케줄·상태의 Dagster OSS Runtime은 별도 Python 이미지와 Code Location·Daemon·Webserver·메타데이터 DB를 사용하되 SOS와 동일한 uv.lock의 Dagster dependency group에서 설치한다. PostgreSQL 드라이버는 현재 dagster-postgres의 upstream psycopg2 의존성과 맞추어 유지한다. Dagster가 독립 SOS Worker의 자원 격리·ML 계산·결과 게시 책임을 대신하지 않는다. Dagster Run 실패·취소 후 진행 중인 SOS Job 취소는 Dagster 상태 센서가 요청하며, 실제 중단 확정은 SOS Job/Attempt의 계약이다.

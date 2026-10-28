@@ -6,6 +6,26 @@ SOS의 로컬 개발 환경을 실행하고 첫 Dataset 탐색과 ML 학습을 �
 
 관리자는 Web 사이드바에서 **제품명 설정**과 **인스턴스 표시명 설정**을 각각 변경할 수 있습니다. 제품명은 로그인 전 화면에도 표시되며, 별도로 설정하지 않은 인스턴스의 기본 제품명은 **SOS**입니다. 표시명 변경은 내부 API·Worker·데이터 식별자를 바꾸지 않습니다.
 
+## Feast 등록 Feature 조회
+
+SOS API `POST /api/features/retrieval/jobs`로 접근 가능한 Feature Parquet Dataset과
+Entity 시점 Dataset, 지속적인 Entity Key, UTC Event Timestamp와 숫자형 Feature
+목록을 제출한다. 성공한 Job이 게시한 Dataset은 기존 모델 학습에 사용한다.
+
+```json
+{
+  "feature_dataset_id": "<published-parquet-source-id>",
+  "entity_dataset_id": "<entity-events-dataset-id>",
+  "entity_column": "host_id",
+  "timestamp_column": "event_timestamp",
+  "features": ["file_changes_1h", "network_connections_1h"],
+  "ttl_seconds": 2592000
+}
+```
+
+현재는 Entity 요청 100,000개까지 처리하고 초과 요청은 잘라내지 않고 실패한다.
+Online Serving과 현재 Iceberg SQL Catalog의 직접 조회는 지원하지 않는다.
+
 ## 실행 준비
 
 Docker Compose와 GNU Make가 필요하다. 개발용 Compose는 Token 인증이 필수이므로, 저장소 루트에서 `.env.example`을 복사한 후 관리자 토큰을 생성한다. 아래 명령에는 Python 3가 필요하다.

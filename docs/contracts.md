@@ -2,6 +2,15 @@
 
 플랫폼의 공통 개념과 컴포넌트 사이의 의미를 정의한다. **정확한 필드명·타입·기본값은 구현된 코드, 스키마 및 자동 생성된 API 명세**가 원본이며 여기서 복제하지 않는다. 계약은 특정 프레임워크나 서비스 제품의 내부 객체에 종속되지 않는다.
 
+## 등록 Feature 정본과 조회 결과
+
+Feast가 등록 Entity·Feature View·Feature Service와 Historical Retrieval의 정본이다.
+SOS Dataset 판본·Actor 권한·Job/Attempt·실제 게시한 조회 결과는 SOS 정본이다.
+지속적 Entity Key와 Dataset 판본 내부의 `sos_observation_id`는 다르다.
+Feature 정의·원본 Dataset 판본·Entity 시점 Dataset·TTL·Schema·실제 Retrieval 결과를
+함께 고정한다. Registry의 최신 정의가 과거 데이터 보존을 대신하지 못한다.
+[ADR 0018](adr/0018-feast-feature-ownership.md)을 따른다.
+
 ## 핵심 개념
 
 | 개념 | 의미와 경계 |
