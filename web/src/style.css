@@ -895,6 +895,30 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-usage-tabs button[aria-pressed="true"],.model-lab-mode-tabs button[aria-pressed="true"] {
   box-shadow:inset 0 -3px var(--sos-accent); border-color:var(--sos-accent); }
 .model-lab-playground { display:grid; gap:15px; }
+.model-lab-workspace { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr);
+  gap:16px; align-items:start; min-width:0; }
+.model-lab-input-pane,.model-lab-results-pane { display:grid; gap:15px; min-width:0; }
+.model-lab-results-pane { border:1px solid var(--sos-border); border-radius:12px; padding:16px; }
+.model-lab-results-pane > h4 { margin:0; font-size:16px; }
+.model-lab-run-comparison,.playground-explanations,.playground-explanation-method {
+  display:grid; gap:12px; min-width:0; padding-top:14px; border-top:1px solid var(--sos-border); }
+.model-lab-run-comparison h5,.playground-explanations h4 { margin:0; }
+.playground-explanation-method > .hint,.playground-explanations > .hint { margin:0; }
+.playground-explanation-detail { display:grid; gap:12px; min-width:0; }
+.playground-sensitivity-bars { display:grid; gap:9px; }
+.playground-sensitivity-bars > div { display:grid; grid-template-columns:minmax(0,1fr) auto;
+  gap:6px 12px; font-size:12px; }
+.playground-sensitivity-bars > div > span { overflow-wrap:anywhere; }
+.playground-sensitivity-bars strong { font-variant-numeric:tabular-nums; }
+.playground-sensitivity-track { grid-column:1/-1; height:6px; background:var(--sos-raised);
+  border-radius:3px; overflow:hidden; }
+.playground-sensitivity-track i { display:block; height:100%; border-radius:3px;
+  background:var(--sos-chart-bar); }
+@media(max-width:1050px) {
+  .model-lab-workspace { display:flex; flex-direction:column; }
+  .model-lab-results-pane { order:-1; width:100%; box-sizing:border-box; }
+  .model-lab-input-pane { width:100%; }
+}
 .model-lab-playground-head { display:flex; justify-content:space-between; gap:16px; align-items:center; flex-wrap:wrap; }
 .model-lab-playground-head h3 { font-size:20px; margin-bottom:6px; }
 .model-lab-playground-head p { font-size:12px; color:var(--sos-muted); }
