@@ -1,0 +1,12 @@
+# 운영자용 Feast Catalog UI: SOS Worker의 sos_features Registry만 읽는다.
+# DB 계정은 별도 초기화 Job이 설정하며 DDL 및 Feature 등록·삭제 권한이 없다.
+project: sos_features
+provider: local
+registry:
+  registry_type: sql
+  path: ${SOS_FEAST_UI_REGISTRY_URL}
+  schema_mode: skip
+  cache_ttl_seconds: 5
+offline_store:
+  type: duckdb
+online_store: null
