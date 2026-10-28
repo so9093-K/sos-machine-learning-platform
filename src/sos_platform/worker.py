@@ -217,8 +217,11 @@ def _perform(
         outcome = {"result": result}
     except Exception as exc:
         code = (
-            "SOS-ML-INPUT-INVALID"
-            if job["kind"] in ("feature_register", "feature_retrieve", "feature_retire", "ml_pipeline_preflight", "ml_train", "ml_score", "ml_playground", "ml_policy", "ml_evaluate", "ml_explain")
+            "SOS-FEATURE-INPUT-INVALID"
+            if job["kind"] in ("feature_register", "feature_retrieve", "feature_retire")
+            and isinstance(exc, ValueError)
+            else "SOS-ML-INPUT-INVALID"
+            if job["kind"] in ("ml_pipeline_preflight", "ml_train", "ml_score", "ml_playground", "ml_policy", "ml_evaluate", "ml_explain")
             and isinstance(exc, ValueError)
             else "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"

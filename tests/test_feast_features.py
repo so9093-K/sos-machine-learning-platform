@@ -127,3 +127,11 @@ def test_running_feature_retirement_cannot_be_cancelled_as_ordinary_job():
 
     with pytest.raises(FeatureRetirementCancellationConflict):
         StoreStub().request_cancel("running-retirement")
+
+
+def test_feature_runtime_errors_are_not_reported_as_model_training_errors():
+    from sos_platform.errors import ERRORS
+
+    assert ERRORS["SOS-FEATURE-INPUT-INVALID"].category == "validation"
+    assert "Feature" in ERRORS["SOS-FEATURE-INPUT-INVALID"].message
+    assert ERRORS["SOS-FEATURE-RETIRE-CANCEL-409"].category == "commit_uncertain"

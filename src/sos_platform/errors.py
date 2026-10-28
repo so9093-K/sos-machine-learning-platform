@@ -120,6 +120,13 @@ DEFINITIONS = (
         "manual_verification_required",
     ),
     spec(
+        "SOS-FEATURE-INPUT-INVALID",
+        "Feature 등록·조회 입력 불일치",
+        "Feature 정의·Source 판본·Entity 및 UTC 시각 컬럼을 확인하세요. "
+        "Registry 정의가 변경됐다면 등록·조회 이력을 확인하세요.",
+        "validation",
+    ),
+    spec(
         "SOS-FEATURE-RETIRE-CANCEL-409",
         "Feature 정의 폐기 취소 불가",
         "Registry 객체 정리가 진행 중입니다. 완료·복구 상태를 확인하세요.",
