@@ -8,18 +8,36 @@ SOS의 로컬 개발 환경을 실행하고 첫 Dataset 탐색과 ML 학습을 �
 
 ## Feast 등록 Feature 조회
 
-SOS API `POST /api/features/retrieval/jobs`로 접근 가능한 Feature Parquet Dataset과
-Entity 시점 Dataset, 지속적인 Entity Key, UTC Event Timestamp와 숫자형 Feature
-목록을 제출한다. 성공한 Job이 게시한 Dataset은 기존 모델 학습에 사용한다.
+Feature Service 등록과 조회는 별개의 사용자 행동이다. SOS 모델 학습 화면에서
+기존 등록 Service를 선택하거나 새로 등록할 수 있다. 두 API 모두 Actor·Dataset 권한과
+Job/Attempt 계약을 적용한다.
 
+1. `POST /api/features/services/jobs`: Feature Source Dataset, 지속적 Entity Key,
+   원본 UTC Event Timestamp와 숫자형 Feature 목록을 제출한다. 성공한 Job 결과에
+   Feast `feature_service` 이름과 고정 Source 판본을 남긴다.
+2. `GET /api/features/services/registrations`: 본인 등록 Job 이력만 읽는다.
+   이 이력은 현재 Feast Registry의 실시간 가용성 판정을 대신하지 않는다.
+3. `POST /api/features/retrieval/jobs`: 등록 성공 Job ID·조회 시점 Dataset·UTC 시간
+   컬럼을 제출한다. 동일 Feature Service를 조회마다 재사용하며 새 정의를 등록하지 않는다.
+4. 조회 성공 Job의 결과 `dataset_id`를 기존 SOS 모델 학습에 사용한다.
+
+등록 요청:
 ```json
 {
   "feature_dataset_id": "<published-parquet-source-id>",
-  "entity_dataset_id": "<entity-events-dataset-id>",
   "entity_column": "host_id",
   "timestamp_column": "event_timestamp",
   "features": ["file_changes_1h", "network_connections_1h"],
   "ttl_seconds": 2592000
+}
+```
+
+조회 요청:
+```json
+{
+  "registration_job_id": "<successful-feature-register-job-id>",
+  "entity_dataset_id": "<entity-events-dataset-id>",
+  "timestamp_column": "prediction_time"
 }
 ```
 

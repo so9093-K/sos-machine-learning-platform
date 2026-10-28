@@ -44,10 +44,12 @@ ML Job을 관리하지만 독립적인 Feature Registry·Historical Retrieval의
 
 ## 구현 경계와 제한
 
-- 첫 등록된 Feature Retriever는 SOS가 이미 게시한 **Parquet Feature Dataset**을
-  Feast FileSource로 읽고 별도 Entity 시점 Dataset에 Point-in-Time Join한다.
-  조회 결과는 기존 SOS Worker의 Attempt별 불변 Parquet Dataset으로 게시한다.
-  일반 데이터 준비와 기존 독립 학습은 변경하지 않는다.
+- Feature 등록 Job은 SOS가 게시한 **Parquet Feature Dataset**에 고정된
+  Entity·Feature View·Feature Service 정의를 Feast Registry에 등록하고, Job 결과에는
+  등록 이름 및 원본 판본만 남긴다. 조회 Job은 성공한 등록 Job을 명시적으로 참조하며
+  이미 등록된 Service를 재사용하고 Registry를 수정하지 않는다.
+  별도 Entity 시점 Dataset과 Point-in-Time Join한 결과는 기존 SOS Worker의
+  Attempt별 불변 Parquet Dataset으로 게시한다. Data Preparation과 독립 ML 학습은 유지한다.
 - 기존 Iceberg SQL Catalog가 Feast Iceberg REST Catalog와 동일하지 않으므로
   직접 Iceberg FeatureSource로 간주하지 않는다. Iceberg Snapshot을 명시적으로
   고정해 게시한 Parquet를 사용하거나 검증된 별도 지원 경로를 선택한다.

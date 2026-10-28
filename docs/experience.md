@@ -48,6 +48,17 @@ Builder / Operator는 모델·실행·평가·배포를 관리하고, Consumer /
 
 첫 참조 Pipeline은 활동 Feature의 이름·자료형과 UTC 시간을 요구하며 서로 다른 사용자 데이터로 새 모델을 학습한다. 입력 오류를 무단 보정하지 않고 원본 데이터와 타인의 결과를 공유하지 않는다. 다른 연구·학습·Scoring 기능은 Pipeline 없이도 실행할 수 있다. 이 경험의 장기 개념적 책임 관계는 [Platform Identity](vision/PLATFORM_IDENTITY.md#pipeline-경험과-공통-실행-경계)를 따른다.
 
+## 등록 Feature 재사용 경험
+
+사용자는 기존 Dataset에서 안정적인 Entity·시간 기준과 숫자형 Feature를 선택해
+Feature Service를 등록할 수 있다. 등록 결과는 SOS Job 이력에서 확인하며
+기존 등록 Feature Service를 다른 조회 시점 Dataset에도 재사용한다.
+Feature 정의 등록과 조회는 별개 Job이고, 조회는 Registry의 정의를 수정하지 않는다.
+성공한 조회 결과는 불변 Dataset으로 확정해 사용자가 명시적으로 모델 학습에 사용할 수 있다.
+Feature 계산·조회·학습·온라인 Serving을 한 단계의 자동 작업으로 오인시키지 않는다.
+미지원 자료형·UTC 시간 부재·Registry 연결 실패·권한 부족은 완료 결과와 구별한다.
+Feature Service 등록 이력은 실제 Feast Registry의 현재 가용성을 보장하지 않는다.
+
 ## 연구·실행의 목표 경험
 
 모델 자산 탐색에서는 그룹 설정 편집보다 사용할 버전 선택·학습 데이터·학습 시각을 먼저 제공한다. 그룹 생성과 학습된 버전 생성을 구분하고, 선택 그룹은 독립 학습·적용 이동과 직접 URL·새로고침에서도 유지한다. 실행 비교는 같은 종류의 실행에서 시작하며 Dataset 판본·입력 범위 등 기록된 비교 조건을 지표와 함께 확인한다. 기록이 없는 조건을 추정하지 않는다.

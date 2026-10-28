@@ -31,8 +31,8 @@ API는 Feast SDK를 설치하지 않고 Dataset·Actor 권한을 검증해 Job�
 Worker는 Feature를 조회하고 결과를 기존 SOS 불변 Dataset으로 게시한다.
 현재는 게시 Parquet Feature Source, UTC Event Timestamp, Entity 시점 Dataset만
 지원한다. Online Serving과 Iceberg SQL Catalog 직접 Feature Source 조회는 지원하지
-않는다. Feast 확장 의존성은 기본 uv.lock 기반 이미지 위에서 추가 설치되므로
-확장 Runtime의 완전한 잠금과 의존성 충돌은 배포 검증이 필요하다.
+않는다. Feast 전문 Worker는 API와 동일한 uv.lock의 별도 `feast` dependency group으로
+설치한다. 별도 `pip install` 덧씌우기나 숨은 의존성 해석을 수행하지 않는다.
 
 ## 현재 구현의 범위
 
