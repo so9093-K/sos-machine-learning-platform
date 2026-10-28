@@ -102,7 +102,7 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
       이 결과의 차트는 표시하지 않습니다. 설명 결과 판본을 확인하세요.</p>;
   }
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
-    <h6>점수 변화에 기여한 주요 Feature {shown.length}개 (SHAP)</h6>
+    <h6>모델 점수에 기여한 주요 Feature {shown.length}개 (SHAP)</h6>
     <p>기준 점수 <strong>{key(baseline)}</strong> +
       Feature 기여도 합 <strong>{key(shapSum)}</strong> =
       이상 점수 <strong>{key(score)}</strong></p>
