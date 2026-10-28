@@ -7,7 +7,30 @@ import type { Dataset, DatasetColumns, Job } from "./types";
 const NUMERIC = /^(?:Int(?:32|64)|Float(?:32|64))$/;
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
-/** 등록 Feature 조회는 기존 학습과 독립된 SOS Job으로 실행·게시된다. */
+function usePolledJob() {
+  const [job, setJob] = useState<Job | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!job || TERMINAL.has(job.status)) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const item = await request<Job>(`/api/jobs/${encodeURIComponent(job.id)}`);
+        if (active) setJob(item);
+      } catch (exc) {
+        if (active) setError(formatError(exc));
+      } finally {
+        if (active) timer = setTimeout(() => void poll(), 2000);
+      }
+    };
+    timer = setTimeout(() => void poll(), 1000);
+    return () => { active = false; if (timer) clearTimeout(timer); };
+  }, [job?.id, job?.status]);
+  return { job, setJob, error, setError };
+}
+
+/** Feast는 Feature 정의 정본, SOS는 등록·조회 Job과 불변 Dataset의 정본이다. */
 export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   datasets: Dataset[];
   canCreate: boolean;
@@ -16,144 +39,198 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const [featureDataset, setFeatureDataset] = useState("");
   const [entityDataset, setEntityDataset] = useState("");
   const [entityColumn, setEntityColumn] = useState("host_id");
-  const [timestampColumn, setTimestampColumn] = useState("event_timestamp");
+  const [sourceTimestamp, setSourceTimestamp] = useState("event_timestamp");
+  const [entityTimestamp, setEntityTimestamp] = useState("event_timestamp");
   const [ttlDays, setTtlDays] = useState(30);
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [job, setJob] = useState<Job | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [registrations, setRegistrations] = useState<Job[]>([]);
+  const [registrationId, setRegistrationId] = useState("");
+  const [registerBusy, setRegisterBusy] = useState(false);
+  const [retrievalBusy, setRetrievalBusy] = useState(false);
+  const [listError, setListError] = useState("");
+  const registration = usePolledJob();
+  const retrieval = usePolledJob();
   const numeric = useMemo(() => columns.filter(c => NUMERIC.test(c.dtype)), [columns]);
   const sources = datasets.filter(d => d.kind === "file" && d.name.toLowerCase().endsWith(".parquet"));
 
   useEffect(() => {
     let active = true;
-    setColumns([]);
-    setSelected([]);
+    setColumns([]); setSelected([]);
     if (!featureDataset) return () => { active = false; };
     void request<DatasetColumns>(`/api/datasets/${encodeURIComponent(featureDataset)}/columns`)
       .then(value => { if (active) setColumns(value.columns); })
-      .catch(exc => { if (active) setError(formatError(exc)); });
+      .catch(exc => { if (active) setListError(formatError(exc)); });
     return () => { active = false; };
   }, [featureDataset]);
 
   useEffect(() => {
-    if (!job || TERMINAL.has(job.status)) return;
     let active = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      try {
-        const value = await request<Job>(`/api/jobs/${encodeURIComponent(job.id)}`);
-        if (active) setJob(value);
-      } catch (exc) {
-        if (active) setError(formatError(exc));
-      } finally {
-        if (active) timer = setTimeout(() => void poll(), 2500);
-      }
-    };
-    timer = setTimeout(() => void poll(), 1200);
-    return () => { active = false; if (timer) clearTimeout(timer); };
-  }, [job?.id, job?.status]);
+    void request<Job[]>("/api/features/services/registrations")
+      .then(items => {
+        if (active) setRegistrations(items.filter(item =>
+          item.status === "Succeeded" && typeof item.result?.feature_service === "string"));
+      })
+      .catch(exc => { if (active) setListError(formatError(exc)); });
+    return () => { active = false; };
+  }, [registration.job?.status]);
 
-  async function submit() {
-    if (!canCreate || !featureDataset || !entityDataset || !entityColumn.trim() ||
-        !timestampColumn.trim() || selected.length === 0 || submitting ||
+  useEffect(() => {
+    if (registration.job?.status === "Succeeded") setRegistrationId(registration.job.id);
+  }, [registration.job?.id, registration.job?.status]);
+
+  async function createRegistration() {
+    if (!canCreate || !featureDataset || !selected.length || registerBusy ||
+        !entityColumn.trim() || !sourceTimestamp.trim() ||
         !Number.isSafeInteger(ttlDays) || ttlDays < 1 || ttlDays > 3650) return;
-    setSubmitting(true);
-    setError("");
-    setJob(null);
+    setRegisterBusy(true);
+    registration.setError("");
     try {
-      const value = await submitJob<Job>("/api/features/retrieval/jobs", {
+      registration.setJob(await submitJob<Job>("/api/features/services/jobs", {
         feature_dataset_id: featureDataset,
-        entity_dataset_id: entityDataset,
         entity_column: entityColumn.trim(),
-        timestamp_column: timestampColumn.trim(),
+        timestamp_column: sourceTimestamp.trim(),
         features: selected,
         ttl_seconds: ttlDays * 86400,
-      });
-      setJob(value);
-    } catch (exc) {
-      setError(formatError(exc));
-    } finally {
-      setSubmitting(false);
-    }
+      }));
+    } catch (exc) { registration.setError(formatError(exc)); }
+    finally { setRegisterBusy(false); }
   }
 
-  async function cancel() {
-    if (!job) return;
+  async function createRetrieval() {
+    if (!canCreate || !registrationId || !entityDataset || !entityTimestamp.trim() ||
+        retrievalBusy) return;
+    setRetrievalBusy(true);
+    retrieval.setError(""); retrieval.setJob(null);
+    try {
+      retrieval.setJob(await submitJob<Job>("/api/features/retrieval/jobs", {
+        registration_job_id: registrationId,
+        entity_dataset_id: entityDataset,
+        timestamp_column: entityTimestamp.trim(),
+      }));
+    } catch (exc) { retrieval.setError(formatError(exc)); }
+    finally { setRetrievalBusy(false); }
+  }
+
+  async function cancel(job: Job, setJob: (value: Job) => void, setError: (value: string) => void) {
     try {
       setJob(await request<Job>(`/api/jobs/${encodeURIComponent(job.id)}/cancel`, {
         method: "POST",
       }));
-    } catch (exc) {
-      setError(formatError(exc));
-    }
+    } catch (exc) { setError(formatError(exc)); }
   }
 
-  const publishedId = job?.status === "Succeeded" && job.result &&
-    typeof job.result.dataset_id === "string" ? job.result.dataset_id : null;
+  const published = retrieval.job?.status === "Succeeded" && retrieval.job.result &&
+    typeof retrieval.job.result.dataset_id === "string" ? retrieval.job.result.dataset_id : null;
 
   return <details className="panel">
     <summary>등록 Feature로 학습 Dataset 구성 · Feast</summary>
-    <p className="hint">소스의 기존 Feature를 Entity와 시점에 맞춰 조회합니다. Feature 계산이나
-      모델 학습은 자동 실행하지 않습니다. 게시된 Dataset을 직접 학습에 사용할 수 있습니다.</p>
-    <div className="form-row">
-      <label>Feature 원본 Dataset
-        <select aria-label="Feast Feature 원본 Dataset" value={featureDataset}
-          onChange={e => setFeatureDataset(e.target.value)} disabled={!canCreate}>
-          <option value="">Parquet Dataset 선택</option>
-          {sources.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+    <p className="hint">재사용할 Feature Service를 먼저 등록한 뒤 조회 시점 Dataset에 연결합니다.
+      등록 정의의 정본은 Feast이며, 실제 조회·학습은 독립 Job입니다.</p>
+    <div className="steps">
+      <strong>1. 등록 Feature Service</strong>
+      <label>등록된 Feature Service
+        <select aria-label="Feast 등록 Feature Service" value={registrationId}
+          onChange={e => setRegistrationId(e.target.value)} disabled={!canCreate}>
+          <option value="">새로 등록하거나 기존 등록을 선택하세요</option>
+          {registration.job?.status === "Succeeded" &&
+            !registrations.some(r => r.id === registration.job?.id) &&
+            <option value={registration.job.id}>방금 등록한 Feature · {registration.job.id.slice(0,8)}</option>}
+          {registrations.map(j => <option key={j.id} value={j.id}>
+            {String(j.result?.feature_service ?? j.id)} · {j.id.slice(0,8)}
+          </option>)}
         </select>
       </label>
-      <label>조회 시점 Dataset
-        <select aria-label="Feast 조회 시점 Dataset" value={entityDataset}
-          onChange={e => setEntityDataset(e.target.value)} disabled={!canCreate}>
-          <option value="">Dataset 선택</option>
-          {datasets.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-      </label>
+      <details>
+        <summary>새 Feature Service 정의·등록</summary>
+        <div className="form-row">
+          <label>Feature Source Dataset
+            <select aria-label="Feast Feature Source Dataset" value={featureDataset}
+              onChange={e => setFeatureDataset(e.target.value)} disabled={!canCreate}>
+              <option value="">Parquet Dataset 선택</option>
+              {sources.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </label>
+          <label>지속적 Entity 키 컬럼
+            <input value={entityColumn} onChange={e => setEntityColumn(e.target.value)}
+              maxLength={256} disabled={!canCreate} aria-label="Feast Source Entity 키" />
+          </label>
+          <label>Feature 원본 UTC 시각 컬럼
+            <input value={sourceTimestamp} onChange={e => setSourceTimestamp(e.target.value)}
+              maxLength={256} disabled={!canCreate} aria-label="Feast Source UTC 시각" />
+          </label>
+          <label>Feature TTL (일)
+            <input type="number" min={1} max={3650} step={1} value={ttlDays}
+              onChange={e => setTtlDays(Number(e.target.value))}
+              disabled={!canCreate} aria-label="Feast Source TTL" />
+          </label>
+        </div>
+        {featureDataset && <div className="steps">
+          <strong>숫자형 Feature · {selected.length}개</strong>
+          <FeatureSelector columns={numeric} selected={selected} disabled={!canCreate}
+            onChange={setSelected} />
+          {numeric.length === 0 && <p className="hint">등록 가능한 숫자형 Feature가 없습니다.</p>}
+        </div>}
+        <div className="actions">
+          <button type="button" disabled={!canCreate || !featureDataset || !selected.length ||
+            !entityColumn.trim() || !sourceTimestamp.trim() || registerBusy ||
+            !Number.isInteger(ttlDays) || ttlDays < 1 || ttlDays > 3650}
+            onClick={() => void createRegistration()}>
+            {registerBusy ? "등록 접수 중…" : "Feature Service 등록 Job 제출"}
+          </button>
+        </div>
+        {registration.job && <div role="status">
+          <strong>등록 · {jobStatusLabel(registration.job.status)}</strong>
+          {registration.job.status === "Failed" && <p role="alert">{registration.job.error ?? "등록 실패"}</p>}
+          {canCreate && ["Queued","Running"].includes(registration.job.status) &&
+            !registration.job.cancel_requested &&
+            <button type="button" className="secondary"
+              onClick={() => void cancel(registration.job!, registration.setJob, registration.setError)}>
+              취소 요청
+            </button>}
+        </div>}
+        {registration.error && <p role="alert">{registration.error}</p>}
+      </details>
     </div>
-    <div className="form-row">
-      <label>지속적 Entity 키 컬럼
-        <input value={entityColumn} onChange={e => setEntityColumn(e.target.value)}
-          maxLength={256} disabled={!canCreate} aria-label="Feast Entity 키 컬럼" />
-      </label>
-      <label>UTC 시간 컬럼
-        <input value={timestampColumn} onChange={e => setTimestampColumn(e.target.value)}
-          maxLength={256} disabled={!canCreate} aria-label="Feast UTC 시간 컬럼" />
-      </label>
-      <label>Feature 유효 기간 (일)
-        <input type="number" min={1} max={3650} step={1} value={ttlDays}
-          onChange={e => setTtlDays(Number(e.target.value))}
-          disabled={!canCreate} aria-label="Feast Feature TTL" />
-      </label>
+    <div className="steps">
+      <strong>2. 등록 Feature 조회</strong>
+      <div className="form-row">
+        <label>조회 시점 Dataset
+          <select aria-label="Feast 조회 시점 Dataset" value={entityDataset}
+            onChange={e => setEntityDataset(e.target.value)} disabled={!canCreate}>
+            <option value="">Dataset 선택</option>
+            {datasets.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </label>
+        <label>조회 시점 UTC 시간 컬럼
+          <input value={entityTimestamp} onChange={e => setEntityTimestamp(e.target.value)}
+            maxLength={256} disabled={!canCreate} aria-label="Feast 조회 시점 UTC 컬럼" />
+        </label>
+      </div>
+      <p className="hint">조회 시점 Dataset에는 등록한 서비스의 동일 Entity 키와 UTC 시각이
+        필요합니다. 원본 Feature 계산과 모델 학습은 자동 실행하지 않습니다.</p>
+      <div className="actions">
+        <button type="button" disabled={!canCreate || !registrationId || !entityDataset ||
+          !entityTimestamp.trim() || retrievalBusy} onClick={() => void createRetrieval()}>
+          {retrievalBusy ? "접수 중…" : "Point-in-Time Feature 조회 Job 제출"}
+        </button>
+      </div>
+      {retrieval.job && <div role="status">
+        <strong>조회 · {jobStatusLabel(retrieval.job.status)}</strong>
+        {retrieval.job.status === "Failed" &&
+          <p role="alert">{retrieval.job.error ?? "조회에 실패했습니다."}</p>}
+        {canCreate && ["Queued","Running"].includes(retrieval.job.status) &&
+          !retrieval.job.cancel_requested &&
+          <button type="button" className="secondary"
+            onClick={() => void cancel(retrieval.job!, retrieval.setJob, retrieval.setError)}>
+            취소 요청
+          </button>}
+        {published && <button type="button" onClick={() => onDatasetReady(published)}>
+          게시된 Feature Dataset으로 학습 준비
+        </button>}
+      </div>}
+      {retrieval.error && <p role="alert">{retrieval.error}</p>}
     </div>
-    <p className="hint">Entity 키는 관측치 UUID와 다르며, 같은 대상에 대해 시점별로
-      유지되는 식별자입니다. 두 Dataset에는 같은 Entity 키 컬럼 및 UTC Datetime 컬럼이 필요합니다.</p>
-    {featureDataset && <div className="steps">
-      <strong>등록할 숫자형 Feature · {selected.length}개</strong>
-      <FeatureSelector columns={numeric} selected={selected} disabled={!canCreate}
-        onChange={setSelected} />
-      {numeric.length === 0 && <p className="hint">등록 가능한 숫자형 컬럼이 없습니다.</p>}
-    </div>}
-    <div className="actions">
-      <button type="button" disabled={!canCreate || submitting || !featureDataset ||
-        !entityDataset || !selected.length || !entityColumn.trim() ||
-        !timestampColumn.trim() || !Number.isInteger(ttlDays) || ttlDays < 1 || ttlDays > 3650}
-        onClick={() => void submit()}>
-        {submitting ? "접수 중…" : "Feature 조회 Job 제출"}
-      </button>
-    </div>
-    {error && <p role="alert">{error}</p>}
-    {job && <div role="status" className="panel">
-      <strong>Feature 조회 · {jobStatusLabel(job.status)}</strong>
-      <p className="hint">조회는 별도 Job이며 원본 Dataset을 수정하지 않습니다.</p>
-      {job.status === "Failed" && <p role="alert">{job.error ?? "조회에 실패했습니다."}</p>}
-      {canCreate && ["Queued", "Running"].includes(job.status) && !job.cancel_requested &&
-        <button type="button" className="secondary" onClick={() => void cancel()}>취소 요청</button>}
-      {publishedId && <button type="button" onClick={() => onDatasetReady(publishedId)}>
-        게시된 Feature Dataset으로 학습 준비
-      </button>}
-    </div>}
+    {listError && <p role="alert">{listError}</p>}
   </details>;
 }

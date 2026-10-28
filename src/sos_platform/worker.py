@@ -35,7 +35,7 @@ from .ml_explanation import explain_scored_row
 from .ml_scoring import cleanup_scoring_stage, run_dataset_scoring, scoring_stage_bytes
 from .ml_playground import run_playground_scoring
 from .ml_training import train_dataset
-from .feast_features import retrieve_features
+from .feast_features import register_feature_service, retrieve_features
 from .ml_training_staging import (
     cleanup_training_stage,
     training_stage_bytes,
@@ -129,15 +129,29 @@ def _perform(
                 "input_dataset_version": dataset["version"],
                 **evidence,
             }
+        elif job["kind"] == "feature_register":
+            stage = "processing"
+            if dataset["owner_actor"] != job["owner_actor"]:
+                raise ValueError("Feature Source ownership changed")
+            result = register_feature_service(store, dataset, job["spec"])
         elif job["kind"] == "feature_retrieve":
             stage = "processing"
+            registered_job = store.get_job(job["spec"]["registration_job_id"])
             entity = store.get_dataset(job["spec"]["entity_dataset_id"])
-            if entity is None:
-                raise ValueError("Entity Dataset does not exist")
-            # 등록 권한과 조회 권한을 Worker에서도 다시 확인한다.
+            if (
+                registered_job is None
+                or registered_job["kind"] != "feature_register"
+                or registered_job["status"] != "Succeeded"
+                or registered_job["dataset_id"] != dataset["id"]
+                or registered_job["owner_actor"] != job["owner_actor"]
+                or entity is None
+            ):
+                raise ValueError("Registered Feature Service or Entity Dataset is unavailable")
             if dataset["owner_actor"] != job["owner_actor"] or entity["owner_actor"] != job["owner_actor"]:
                 raise ValueError("Feature Dataset ownership changed")
-            result = retrieve_features(store, dataset, entity, job["spec"], pending)
+            result = retrieve_features(
+                store, dataset, entity, registered_job["result"], job["spec"], pending
+            )
         elif job["kind"] == "ml_pipeline_preflight":
             stage = "processing"
             if job["spec"]["dataset_version"] != dataset["version"]:
@@ -189,7 +203,7 @@ def _perform(
     except Exception as exc:
         code = (
             "SOS-ML-INPUT-INVALID"
-            if job["kind"] in ("feature_retrieve", "ml_pipeline_preflight", "ml_train", "ml_score", "ml_playground", "ml_policy", "ml_evaluate", "ml_explain")
+            if job["kind"] in ("feature_register", "feature_retrieve", "ml_pipeline_preflight", "ml_train", "ml_score", "ml_playground", "ml_policy", "ml_evaluate", "ml_explain")
             and isinstance(exc, ValueError)
             else "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
