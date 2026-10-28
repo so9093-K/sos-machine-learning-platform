@@ -168,8 +168,9 @@ function MethodExplanation({ source, method, canRun, canCancel }: {
   </section>;
 }
 
-export function PlaygroundExplanations({ source, canRun, canCancel }: {
+export function PlaygroundExplanations({ source, canRun, canCancel, shapSupported = true }: {
   source: MLPlaygroundJob; canRun: boolean; canCancel: boolean;
+  shapSupported?: boolean;
 }) {
   if (source.status !== "Succeeded" || typeof source.result?.anomaly_score !== "number")
     return null;
@@ -177,8 +178,11 @@ export function PlaygroundExplanations({ source, canRun, canCancel }: {
     <h4>이 입력의 모델 설명</h4>
     <p className="hint">실제 완료된 입력 Job을 기준으로 계산합니다. 값을 편집해도 과거 설명을
       현재 입력의 설명으로 취급하지 않습니다. 두 방법은 서로 다른 질문에 답합니다.</p>
-    <MethodExplanation key={source.id + "-shap"} source={source}
-      method="permutation_shap_median_v1" canRun={canRun} canCancel={canCancel} />
+    {shapSupported
+      ? <MethodExplanation key={source.id + "-shap"} source={source}
+          method="permutation_shap_median_v1" canRun={canRun} canCancel={canCancel} />
+      : <p className="hint">현재 Permutation SHAP은 최대 64개 Feature를 지원합니다.
+          이 모델에서는 Feature 치환 민감도를 사용할 수 있습니다.</p>}
     <MethodExplanation key={source.id + "-sensitivity"} source={source}
       method="median_reference_feature_replacement" canRun={canRun} canCancel={canCancel} />
   </section>;
