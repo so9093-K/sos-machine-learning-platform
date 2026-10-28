@@ -64,6 +64,7 @@ def test_feature_job_responses_match_the_real_store_shapes():
     }
     assert JobOut.model_validate(full).kind == "feature_register"
     assert JobOut.model_validate({**full, "kind": "feature_retrieve"}).kind == "feature_retrieve"
+    assert JobOut.model_validate({**full, "kind": "feature_retire"}).kind == "feature_retire"
     summary = {
         **{key: value for key, value in full.items() if key != "attempts"},
         "attempt_count": 1,
@@ -85,7 +86,9 @@ def test_feature_openapi_contract_uses_summary_for_registration_listing(tmp_path
     assert feature_paths["/api/features/services/registrations"]["get"]["responses"]["200"][
         "content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/FeatureRegistrationPageOut"
     page = schema["components"]["schemas"]["FeatureRegistrationPageOut"]
-    assert page["properties"]["items"]["items"]["$ref"] == "#/components/schemas/JobSummaryOut"
+    assert page["properties"]["items"]["items"]["$ref"] == "#/components/schemas/FeatureRegistrationSummaryOut"
+    assert feature_paths["/api/features/services/{registration_job_id}/retirement/jobs"][
+        "post"]["responses"]["202"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/JobOut"
     assert feature_paths["/api/features/retrieval/jobs"]["post"]["responses"]["202"][
         "content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/JobOut"
 
