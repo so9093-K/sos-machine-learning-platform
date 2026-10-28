@@ -40,7 +40,11 @@ def feast_router(
         return store.create_job(
             kind="feature_register",
             dataset_id=source["id"],
-            spec={**body.model_dump(mode="json"), "feature_dataset_version": source["version"]},
+            spec={
+                **body.model_dump(mode="json"),
+                "feature_dataset_version": source["version"],
+                "feature_source_owner": source.get("owner_actor"),
+            },
             owner_actor=actor.id, actor_type=actor.kind,
             request_id=request.state.request_id, idempotency_key=idempotency_key,
         )
@@ -87,7 +91,9 @@ def feast_router(
             dataset_id=source["id"],
             spec={**body.model_dump(mode="json"),
                   "feature_dataset_version": source["version"],
-                  "entity_dataset_version": entity["version"]},
+                  "entity_dataset_version": entity["version"],
+                  "feature_source_owner": source.get("owner_actor"),
+                  "entity_dataset_owner": entity.get("owner_actor")},
             owner_actor=actor.id, actor_type=actor.kind,
             request_id=request.state.request_id, idempotency_key=idempotency_key,
         )

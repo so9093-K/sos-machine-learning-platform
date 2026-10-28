@@ -35,7 +35,7 @@ from .ml_explanation import explain_scored_row
 from .ml_scoring import cleanup_scoring_stage, run_dataset_scoring, scoring_stage_bytes
 from .ml_playground import run_playground_scoring
 from .ml_training import train_dataset
-from .feast_features import register_feature_service, retrieve_features
+from .feast_features import register_feature_service, retrieve_features, verify_pinned_owner
 from .ml_training_staging import (
     cleanup_training_stage,
     training_stage_bytes,
@@ -131,8 +131,7 @@ def _perform(
             }
         elif job["kind"] == "feature_register":
             stage = "processing"
-            if dataset["owner_actor"] != job["owner_actor"]:
-                raise ValueError("Feature Source ownership changed")
+            verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
             result = register_feature_service(store, dataset, job["spec"])
         elif job["kind"] == "feature_retrieve":
             stage = "processing"
@@ -147,8 +146,8 @@ def _perform(
                 or entity is None
             ):
                 raise ValueError("Registered Feature Service or Entity Dataset is unavailable")
-            if dataset["owner_actor"] != job["owner_actor"] or entity["owner_actor"] != job["owner_actor"]:
-                raise ValueError("Feature Dataset ownership changed")
+            verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
+            verify_pinned_owner(entity, job["spec"], "entity_dataset_owner")
             result = retrieve_features(
                 store, dataset, entity, registered_job["result"], job["spec"], pending
             )

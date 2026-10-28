@@ -76,6 +76,16 @@ def _feature_schema(source: pl.LazyFrame, spec: FeatureDefinitionRequest):
     return schema
 
 
+def verify_pinned_owner(dataset: dict, spec: dict, owner_field: str) -> None:
+    """신뢰된 API가 제출 당시 검사한 소유자 ID가 Worker 실행 때도 유지되어야 한다.
+
+    관리자에게 다른 Actor의 Dataset 접근을 허용하는 SOS 표준 권한을 유지하면서
+    Dataset 소유자가 바뀐 경우에는 Job을 조용히 계속하지 않는다.
+    """
+    if owner_field not in spec or dataset.get("owner_actor") != spec[owner_field]:
+        raise ValueError("Feature Dataset ownership evidence changed")
+
+
 def _utc_timestamp(schema, column: str):
     if column not in schema:
         raise ValueError("Timestamp column is missing")

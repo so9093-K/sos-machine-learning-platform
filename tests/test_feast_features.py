@@ -86,3 +86,16 @@ def test_feature_openapi_contract_uses_summary_for_registration_listing(tmp_path
         "content"]["application/json"]["schema"]["items"]["$ref"] == "#/components/schemas/JobSummaryOut"
     assert feature_paths["/api/features/retrieval/jobs"]["post"]["responses"]["202"][
         "content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/JobOut"
+
+
+def test_pinned_owner_allows_admin_authorized_foreign_source_but_rejects_changes():
+    from sos_platform.feast_features import verify_pinned_owner
+
+    source = {"id": "source", "owner_actor": "researcher-a"}
+    spec = {"feature_source_owner": "researcher-a"}
+    # API의 resource_allowed()가 관리자에게 허용한 다른 Actor Source도 Worker가 유지한다.
+    verify_pinned_owner(source, spec, "feature_source_owner")
+    with pytest.raises(ValueError):
+        verify_pinned_owner({**source, "owner_actor": "researcher-b"}, spec, "feature_source_owner")
+    with pytest.raises(ValueError):
+        verify_pinned_owner(source, {}, "feature_source_owner")
