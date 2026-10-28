@@ -454,6 +454,27 @@ class JobStoreMixin:
             if status == "Succeeded" and model_publish is not None:
                 if row["kind"] != "ml_train" or not write_id or publish is not None:
                     raise ValueError("Invalid model publication request")
+                runtime = dict(model_publish["runtime"])
+                # 조회 결과 Dataset의 원본 등록·조회 Job은 SOS가 이미 보존한다.
+                # MLflow/Feast Registry를 복제하지 않고 Model Revision에 불변 출처만 연결한다.
+                feature_origin = db.execute(
+                    text(
+                        "SELECT id,result FROM jobs WHERE kind='feature_retrieve' "
+                        "AND status='Succeeded' AND result::jsonb ->> 'dataset_id'=:dataset_id "
+                        "ORDER BY created_at DESC LIMIT 1"
+                    ),
+                    {"dataset_id": row["dataset_id"]},
+                ).mappings().first()
+                if feature_origin:
+                    provenance = json.loads(feature_origin["result"])
+                    runtime["feature_retrieval"] = {
+                        "retrieval_job_id": feature_origin["id"],
+                        "registration_job_id": provenance["registration_job_id"],
+                        "feature_service": provenance["feature_service"],
+                        "feature_view": provenance["feature_view"],
+                        "source_dataset_id": provenance["feature_dataset_id"],
+                        "source_dataset_version": provenance["feature_dataset_version"],
+                    }
                 item = {
                     "id": str(uuid4()),
                     "job_id": job_id,
@@ -469,7 +490,7 @@ class JobStoreMixin:
                     "training_score_summary": json.dumps(
                         model_publish["training_score_summary"], allow_nan=False
                     ),
-                    "runtime": json.dumps(model_publish["runtime"], allow_nan=False),
+                    "runtime": json.dumps(runtime, allow_nan=False),
                     "owner_actor": row["owner_actor"],
                     "created_at": now(),
                 }
