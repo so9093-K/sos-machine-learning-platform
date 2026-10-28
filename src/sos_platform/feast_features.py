@@ -115,17 +115,49 @@ def _feature_store():
 
 
 def _semantic_spec(obj) -> dict:
-    """Feast 원본 Proto의 의미적 정의만 비교한다. 생성·갱신 시각은 제외한다."""
+    """Feast가 자동 채우는 시각·추론 필드가 아닌 정의 소유 계약을 비교한다."""
     from google.protobuf.json_format import MessageToDict
 
-    def normalize(value):
-        if isinstance(value, dict):
-            return {k: normalize(v) for k, v in value.items() if k != "meta"}
-        if isinstance(value, list):
-            return [normalize(v) for v in value]
-        return value
-
-    return normalize(MessageToDict(obj.to_proto(), preserving_proto_field_name=True)["spec"])
+    spec = MessageToDict(obj.to_proto(), preserving_proto_field_name=True)["spec"]
+    kind = type(obj).__name__
+    if kind == "Entity":
+        return {
+            "kind": "entity", "name": spec["name"],
+            "join_key": spec["join_key"], "value_type": spec["value_type"],
+        }
+    if kind == "FeatureView":
+        source = spec["batch_source"]
+        return {
+            "kind": "feature_view", "name": spec["name"],
+            "entities": spec["entities"],
+            "features": [
+                {"name": field["name"], "value_type": field["value_type"]}
+                for field in spec["features"]
+            ],
+            "ttl": spec.get("ttl", "0s"),
+            "source": {
+                "name": source.get("name"),
+                "timestamp_field": source["timestamp_field"],
+                "created_timestamp_column": source.get("created_timestamp_column", ""),
+                "file_uri": source.get("file_options", {}).get("uri"),
+            },
+            "online": bool(getattr(obj, "online", False)),
+        }
+    if kind == "FeatureService":
+        return {
+            "kind": "feature_service", "name": spec["name"],
+            "views": [
+                {
+                    "name": view["feature_view_name"],
+                    "features": [
+                        {"name": f["name"], "value_type": f["value_type"]}
+                        for f in view.get("feature_columns", [])
+                    ],
+                }
+                for view in spec["features"]
+            ],
+        }
+    raise ValueError("Expected Feast Entity, FeatureView or FeatureService")
 
 
 def definition_digest(objects: list) -> str:
