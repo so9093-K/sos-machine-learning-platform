@@ -213,10 +213,36 @@ def retrieve_features(
     # 과거 결과를 새 정의로 조용히 재생성하지 않고 명확히 실패한다.
     feast = _feature_store()
     service = feast.get_feature_service(registered["feature_service"])
-    output = feast.get_historical_features(
-        entity_df=entity_rows,
-        features=service,
-    ).to_df()
+    # Feast 0.67 DuckDB Offline Store는 Ibis의 기본 DuckDB Backend를 사용하며,
+    # FileSource.s3_endpoint_override만으로 그 Backend에 S3 URL/인증 설정이 전달되지 않는다.
+    # 각 격리된 Worker 자식의 Backend를 SOS S3 호환 엔드포인트로 명시 구성한다.
+    import ibis
+    from urllib.parse import urlsplit
+
+    settings = Settings.from_env()
+    endpoint = urlsplit(settings.s3_endpoint)
+    if (
+        endpoint.scheme not in {"http", "https"} or not endpoint.hostname
+        or endpoint.path not in {"", "/"} or endpoint.query or endpoint.fragment
+        or endpoint.username or endpoint.password
+    ):
+        raise ValueError("Feast S3 endpoint must be a plain HTTP(S) host")
+    prior_backend = ibis.options.default_backend
+    try:
+        ibis.options.default_backend = ibis.duckdb.connect(
+            s3_endpoint=endpoint.netloc,
+            s3_use_ssl=(endpoint.scheme == "https"),
+            s3_url_style="path",
+            s3_region=settings.s3_region,
+            s3_access_key_id=settings.s3_access_key,
+            s3_secret_access_key=settings.s3_secret_key,
+        )
+        output = feast.get_historical_features(
+            entity_df=entity_rows,
+            features=service,
+        ).to_df()
+    finally:
+        ibis.options.default_backend = prior_backend
     required = [key, "event_timestamp", *registered["feature_names"]]
     if "sos_observation_id" in entity_rows.columns:
         required.append("sos_observation_id")
