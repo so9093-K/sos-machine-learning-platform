@@ -464,7 +464,7 @@ try {
       ],
     } },
   }));
-  assert.match(shapPreview, /점수 변화에 기여한 주요 Feature 1개 \(SHAP\)/);
+  assert.match(shapPreview, /모델 점수에 기여한 주요 Feature 1개 \(SHAP\)/);
   assert.match(shapPreview, /Feature 기여도 합/);
   assert.match(shapPreview, /주요 Feature 1개/);
   assert.match(shapPreview, /양수: 이상 점수를 높이는 방향/);
@@ -474,6 +474,18 @@ try {
   assert.match(shapPreview, /현재 살펴보는 Feature/);
   assert.match(shapPreview, /<select[^>]*>/);
   assert.match(shapPreview, /실제 관측값/);
+  const shapForPlayground = renderToStaticMarkup(React.createElement(
+    ShapContributionChart, { result: { id: "playground-explanation", output: {
+      method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
+      reconstructed_score: 0.5, additivity_residual: 0,
+      additive_attribution: true, model_output: "negative_sklearn_score_samples",
+      baseline_row_count: 1, feature_contributions: [{
+        feature: "outbound_traffic", shap_value: 0.2, actual_value: 4,
+        reference_median: 1, missing_imputed: false,
+      }],
+    } }, valueLabel: "제출한 입력값", inputLabel: "이 제출 입력" }));
+  assert.match(shapForPlayground, /제출한 입력값/);
+  assert.doesNotMatch(shapForPlayground, /실제 관측값/);
   assert.match(shapPreview, /Train 참조 중앙값/);
   assert.match(shapPreview, /SHAP 점수 기여/);
   assert.match(shapPreview, /outbound_traffic/);
@@ -507,7 +519,8 @@ try {
   assert.ok(shapPreview.indexOf("설명 방법과 기준") <
     shapPreview.indexOf("재현 설정"));
   // 저장된 독립 Explanation도 SHAP/치환 민감도에 맞게 표시하며 다른 방법을 섞지 않는다.
-  const { ExplanationEvidence } = await vite.ssrLoadModule("/src/MLResourcePages.tsx");
+  const { ExplanationEvidence, explanationSourceMatches } =
+    await vite.ssrLoadModule("/src/MLResourcePages.tsx");
   const shapResult = {
     method: "permutation_shap_median_v1",
     scoring_result_id: "score-v1", model_revision_id: "model-v1", row_index: 7,
@@ -525,6 +538,25 @@ try {
       ],
     },
   };
+  assert.equal(explanationSourceMatches(shapResult), true);
+  const playgroundResult = {
+    ...shapResult,
+    scoring_result_id: null, row_index: null, playground_job_id: "playground-job",
+    output: { ...shapResult.output, scoring_result_id: null, row_index: null,
+      playground_job_id: "playground-job" },
+  };
+  assert.equal(explanationSourceMatches(playgroundResult), true);
+  assert.equal(explanationSourceMatches({
+    ...playgroundResult, output: { ...playgroundResult.output,
+      playground_job_id: "different-job" },
+  }), false);
+  assert.equal(explanationSourceMatches({
+    ...playgroundResult, scoring_result_id: "score-v1",
+  }), false);
+  assert.equal(explanationSourceMatches({
+    ...shapResult, output: { ...shapResult.output,
+      playground_job_id: "unexpected-playground-job" },
+  }), false);
   const detailShap = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
     result: shapResult,
   }));
@@ -747,6 +779,28 @@ try {
   assert.doesNotMatch(playgroundHtml, /네트워크 활동/); // 입력에 없는 그룹은 만들지 않는다.
   assert.match(playgroundHtml, /입력 Feature와 Train 참조값 비교/);
   assert.match(playgroundHtml, /현재 입력값은 아직 계산하지 않았습니다/);
+  assert.match(playgroundHtml, /model-lab-workspace/);
+  assert.match(playgroundHtml, /계산과 결과/);
+  const { PlaygroundExplanations, PlaygroundSensitivity, formatPlaygroundSensitivity } =
+    await vite.ssrLoadModule("/src/PlaygroundExplanations.tsx");
+  assert.equal(formatPlaygroundSensitivity(0.00000000052), "5.200e-10");
+  const explained = renderToStaticMarkup(React.createElement(PlaygroundExplanations, {
+    source: { id: "completed-job", status: "Succeeded", spec: { model_revision_id: "model-1" },
+      result: { anomaly_score: 0.45 } },
+    canRun: true, canCancel: true,
+  }));
+  assert.match(explained, /SHAP 기여도/);
+  assert.match(explained, /Feature 치환 민감도/);
+  const playgroundSensitivity = renderToStaticMarkup(React.createElement(PlaygroundSensitivity, {
+    result: { id: "explanation-1", output: {
+      feature_sensitivities: [
+        { feature: "file_create_count", actual_value: 6, reference_median: 2,
+          score_if_replaced: 0.3, anomaly_score_delta: 0.15 },
+      ],
+    } },
+  }));
+  assert.match(playgroundSensitivity, /치환 후 점수/);
+  assert.match(playgroundSensitivity, /0[.]15/);
   assert.match(playgroundHtml, /실제 이상 점수 계산하기/);
   assert.match(playgroundHtml, /입력값과 결과가 권한이 적용되는 Job 이력에 보존/);
   const { ModelLabUse, isActivityModelCompatible } =

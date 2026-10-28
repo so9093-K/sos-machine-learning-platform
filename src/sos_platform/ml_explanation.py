@@ -10,6 +10,7 @@ from importlib.metadata import version
 import numpy as np
 
 from .ml_decision import _verified_scoring_row
+from .ml_playground import ordered_playground_input
 from .ml_runtime import load_trusted_isolation_forest
 
 
@@ -29,6 +30,8 @@ def explain_scored_row(store, spec: dict) -> dict:
     method = spec.get("method", "median_reference_feature_replacement")
     if method not in ("median_reference_feature_replacement", "permutation_shap_median_v1"):
         raise ValueError("Unsupported explanation method")
+    if spec.get("playground_job_id"):
+        return explain_playground_job(store, spec)
     scoring = store.get_scoring_result(spec["scoring_result_id"])
     if scoring is None or scoring["owner_actor"] != spec["source_owner_actor"]:
         raise ValueError("Scoring Result is unavailable")
@@ -52,33 +55,13 @@ def explain_scored_row(store, spec: dict) -> dict:
         raise ValueError("Scoring Result and model output disagree")
     if method == "permutation_shap_median_v1":
         result = _permutation_shap_result(
-            scoring, model, selected, original, reference, saved_score, model_runtime
+            scoring["id"], model, selected, original, reference, saved_score, model_runtime
         )
     else:
-        changed = np.tile(original, (len(names), 1))
-        changed[np.arange(len(names)), np.arange(len(names))] = reference
-        adjusted_scores = model_runtime.score_anomalies(changed)
-        items = [
-            {
-                "feature": name,
-                "actual_value": None if np.isnan(original[index]) else float(original[index]),
-                "missing_imputed": bool(np.isnan(original[index])),
-                "reference_median": float(reference[index]),
-                "score_if_replaced": float(adjusted_scores[index]),
-                "anomaly_score_delta": float(saved_score - adjusted_scores[index]),
-            }
-            for index, name in enumerate(names)
-        ]
-        result = {
-            "scoring_result_id": scoring["id"],
-            "model_revision_id": model["id"],
-            "row_index": selected,
-            "method": "median_reference_feature_replacement",
-            "score": saved_score,
-            "feature_sensitivities": items,
-            "baseline_source": "model_training_feature_medians",
-            "additive_attribution": False,
-        }
+        result = _median_reference_result(
+            model, original, reference, saved_score, model_runtime,
+            scoring_result_id=scoring["id"], row_index=selected,
+        )
     identity = scoring.get("score_summary", {}).get("observation_identity")
     if identity is not None:
         if (
@@ -97,8 +80,99 @@ def explain_scored_row(store, spec: dict) -> dict:
     return result
 
 
+
+def _median_reference_result(
+    model: dict, original: np.ndarray, reference: list[float],
+    saved_score: float, model_runtime, *,
+    scoring_result_id: str | None = None, row_index: int | None = None,
+) -> dict:
+    """원본 점수에서 Feature 하나씩 학습 중앙값으로 바꾼 실제 반응을 계산한다."""
+    names = model["features"]
+    changed = np.tile(original, (len(names), 1))
+    changed[np.arange(len(names)), np.arange(len(names))] = reference
+    adjusted_scores = model_runtime.score_anomalies(changed)
+    return {
+        "scoring_result_id": scoring_result_id,
+        "model_revision_id": model["id"],
+        "row_index": row_index,
+        "method": "median_reference_feature_replacement",
+        "score": saved_score,
+        "feature_sensitivities": [
+            {
+                "feature": name,
+                "actual_value": None if np.isnan(original[index]) else float(original[index]),
+                "missing_imputed": bool(np.isnan(original[index])),
+                "reference_median": float(reference[index]),
+                "score_if_replaced": float(adjusted_scores[index]),
+                "anomaly_score_delta": float(saved_score - adjusted_scores[index]),
+            }
+            for index, name in enumerate(names)
+        ],
+        "baseline_source": "model_training_feature_medians",
+        "additive_attribution": False,
+    }
+
+
+def explain_playground_job(store, spec: dict) -> dict:
+    """성공한 독립 점수화 Job의 불변 입력·실제 점수로 설명을 계산한다.
+
+    화면의 편집값 대신 원본 Job을 다시 조회하며, 출처·모델·점수 일치성을 검증한다.
+    """
+    source = store.get_job(spec["playground_job_id"])
+    if (
+        source is None or source["kind"] != "ml_playground"
+        or source["status"] != "Succeeded"
+        or source["owner_actor"] != spec["source_owner_actor"]
+    ):
+        raise ValueError("Playground explanation source is unavailable")
+    model = store.get_model_revision(source["spec"]["model_revision_id"])
+    if (
+        model is None or model["owner_actor"] != source["spec"]["model_owner_actor"]
+        or model["lifecycle_state"] != "Active"
+    ):
+        raise ValueError("Playground explanation model is unavailable")
+    reference = model["runtime"].get("feature_reference_medians")
+    names = model["features"]
+    if not isinstance(reference, list) or len(reference) != len(names):
+        raise ValueError("Model training reference values are unavailable")
+    if any(not isinstance(x, (int, float)) or not math.isfinite(x) for x in reference):
+        raise ValueError("Model reference values are invalid")
+
+    original = np.asarray(
+        ordered_playground_input(model, source["spec"]["features"]), dtype=np.float64
+    )
+    saved_result = source.get("result")
+    if not isinstance(saved_result, dict) or (
+        saved_result.get("model_revision_id") != model["id"]
+        or saved_result.get("score_direction") != "higher_is_more_anomalous"
+        or saved_result.get("score_scale") != "negative_sklearn_score_samples"
+        or saved_result.get("feature_count") != len(names)
+    ):
+        raise ValueError("Playground score provenance and model revision disagree")
+    score = saved_result.get("anomaly_score")
+    if type(score) not in (int, float) or not math.isfinite(score):
+        raise ValueError("Playground stored model score is unavailable")
+    model_runtime = load_trusted_isolation_forest(model, store.home / "cache")
+    recalculated = float(model_runtime.score_anomalies(original.reshape(1, -1))[0])
+    if not math.isclose(float(score), recalculated, rel_tol=1e-9, abs_tol=1e-10):
+        raise ValueError("Playground result and model output disagree")
+
+    method = spec.get("method", "median_reference_feature_replacement")
+    if method == "permutation_shap_median_v1":
+        result = _permutation_shap_result(
+            None, model, None, original, reference, float(score), model_runtime
+        )
+    elif method == "median_reference_feature_replacement":
+        result = _median_reference_result(
+            model, original, reference, float(score), model_runtime
+        )
+    else:
+        raise ValueError("Unsupported explanation method")
+    return {**result, "playground_job_id": source["id"]}
+
+
 def _permutation_shap_result(
-    scoring: dict, model: dict, row_index: int, original: np.ndarray,
+    scoring_result_id: str | None, model: dict, row_index: int | None, original: np.ndarray,
     reference: list[float], saved_score: float, model_runtime,
 ) -> dict:
     """고정 Train 중앙값 기준에서 실제 SOS 점수의 Permutation SHAP 값을 계산한다.
@@ -134,7 +208,7 @@ def _permutation_shap_result(
     if not math.isclose(saved_score, reconstructed_score, abs_tol=1e-7, rel_tol=1e-7):
         raise ValueError("Permutation SHAP does not reconstruct SOS anomaly score")
     return {
-        "scoring_result_id": scoring["id"],
+        "scoring_result_id": scoring_result_id,
         "model_revision_id": model["id"],
         "row_index": row_index,
         "method": "permutation_shap_median_v1",

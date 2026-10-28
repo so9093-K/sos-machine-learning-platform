@@ -31,8 +31,11 @@ class JobStoreMixin:
         reserve_iceberg_table: str | None = None,
     ) -> dict:
         """중복 제출을 PostgreSQL 유일성 제약과 같은 트랜잭션으로 처리한다."""
-        if dataset_id is None and kind != "ml_playground":
-            raise ValueError("Only Playground Jobs may omit a Dataset")
+        if dataset_id is None and not (
+            kind == "ml_playground"
+            or (kind == "ml_explain" and spec.get("playground_job_id"))
+        ):
+            raise ValueError("Only Playground or Playground Explanation Jobs may omit a Dataset")
         if idempotency_key is not None and owner_actor is None:
             raise ValueError("Idempotent Job requires an actor")
         if reserve_iceberg_table is not None and (kind != "iceberg_import" or not owner_actor):
@@ -66,13 +69,20 @@ class JobStoreMixin:
                 if state != "Active":
                     raise PlatformError("SOS-ML-MODEL-INVALID")
             if kind == "ml_explain":
-                # 설명 계산은 과거 Scoring Result를 읽고 모델 파일을 재로딩한다.
-                # 삭제와 경합하지 않도록 실제 Model Revision에 공유 잠금을 건다.
-                model_state = db.execute(text(
-                    "SELECT m.lifecycle_state FROM model_revisions m "
-                    "JOIN scoring_results s ON s.model_revision_id=m.id "
-                    "WHERE s.id=:scoring_id FOR SHARE OF m"
-                ), {"scoring_id": spec.get("scoring_result_id")}).scalar_one_or_none()
+                # 설명 대상의 모델 파일이 삭제되는 상황과 계산 접수를 직렬화한다.
+                if spec.get("playground_job_id"):
+                    model_state = db.execute(text(
+                        "SELECT m.lifecycle_state FROM model_revisions m "
+                        "JOIN jobs j ON j.spec::jsonb ->> 'model_revision_id'=m.id "
+                        "WHERE j.id=:job_id AND j.kind='ml_playground' "
+                        "AND j.status='Succeeded' FOR SHARE OF m"
+                    ), {"job_id": spec["playground_job_id"]}).scalar_one_or_none()
+                else:
+                    model_state = db.execute(text(
+                        "SELECT m.lifecycle_state FROM model_revisions m "
+                        "JOIN scoring_results s ON s.model_revision_id=m.id "
+                        "WHERE s.id=:scoring_id FOR SHARE OF m"
+                    ), {"scoring_id": spec.get("scoring_result_id")}).scalar_one_or_none()
                 if model_state != "Active":
                     raise PlatformError("SOS-ML-MODEL-INVALID")
             is_understanding = (
@@ -586,9 +596,10 @@ class JobStoreMixin:
                     "id": str(uuid4()),
                     "job_id": job_id,
                     "attempt_id": attempt_id,
-                    "scoring_result_id": explanation_publish["scoring_result_id"],
+                    "scoring_result_id": explanation_publish.get("scoring_result_id"),
+                    "playground_job_id": explanation_publish.get("playground_job_id"),
                     "model_revision_id": explanation_publish["model_revision_id"],
-                    "row_index": explanation_publish["row_index"],
+                    "row_index": explanation_publish.get("row_index"),
                     "method": explanation_publish["method"],
                     "output": json.dumps(explanation_publish, allow_nan=False),
                     "owner_actor": row["owner_actor"],
@@ -597,9 +608,9 @@ class JobStoreMixin:
                 db.execute(
                     text(
                         "INSERT INTO explanation_results "
-                        "(id,job_id,attempt_id,scoring_result_id,model_revision_id,"
-                        "row_index,method,output,owner_actor,created_at) "
-                        "VALUES (:id,:job_id,:attempt_id,:scoring_result_id,"
+                        "(id,job_id,attempt_id,scoring_result_id,playground_job_id,"
+                        "model_revision_id,row_index,method,output,owner_actor,created_at) "
+                        "VALUES (:id,:job_id,:attempt_id,:scoring_result_id,:playground_job_id,"
                         ":model_revision_id,:row_index,:method,:output,:owner_actor,:created_at)"
                     ),
                     item,

@@ -22,7 +22,7 @@ def test_permutation_shap_reconstructs_actual_sos_score():
     row = np.asarray([4.0, 3.0, 1.0])
     score = runtime.score_anomalies(row.reshape(1, -1))[0]
     args = (
-        {"id": "scoring"},
+        "scoring",
         {"id": "model", "features": ["first", "second", "third"]},
         4, row, [0.0, 0.0, 0.0], score, runtime,
     )
@@ -59,7 +59,7 @@ def test_permutation_shap_reconstructs_real_isolation_forest_score():
     reference = np.median(training, axis=0).tolist()
     score = model.score_anomalies(values.reshape(1, -1))[0]
     result = _permutation_shap_result(
-        {"id": "scoring"}, {"id": "model", "features": [f"f{i}" for i in range(44)]},
+        "scoring", {"id": "model", "features": [f"f{i}" for i in range(44)]},
         4, values, reference, score, model,
     )
     assert len(result["feature_contributions"]) == 44
@@ -74,7 +74,7 @@ def test_permutation_shap_includes_missing_value_preprocessing():
     row = np.asarray([float("nan"), 2.0, 2.0])
     score = runtime.score_anomalies(row.reshape(1, -1))[0]
     result = _permutation_shap_result(
-        {"id": "s"}, {"id": "m", "features": ["x", "y", "z"]},
+        "s", {"id": "m", "features": ["x", "y", "z"]},
         0, row, [0.0, 0.0, 0.0], score, runtime,
     )
     assert result["feature_contributions"][0]["missing_imputed"] is True
@@ -126,3 +126,163 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
         "id_column": "sos_observation_id",
         "observation_id": row["observation_id"],
     }
+
+
+def test_explanation_request_requires_exactly_one_input_source():
+    from pydantic import ValidationError
+    assert MLExplanationRequest(playground_job_id="job-1").row_index is None
+    assert MLExplanationRequest(scoring_result_id="scoring-1", row_index=0).playground_job_id is None
+    for invalid in (
+        {},
+        {"scoring_result_id": "s"},
+        {"playground_job_id": "p", "row_index": 0},
+        {"playground_job_id": "p", "scoring_result_id": "s", "row_index": 0},
+    ):
+        with pytest.raises(ValidationError):
+            MLExplanationRequest(**invalid)
+
+
+def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_path):
+    from sos_platform import ml_explanation
+    runtime = _LinearRuntime()
+    model = {
+        "id": "model", "owner_actor": "actor-1", "lifecycle_state": "Active",
+        "features": ["first", "second", "third"],
+        "runtime": {
+            "feature_dtypes": ["Float64", "Float64", "Float64"],
+            "feature_reference_medians": [0.0, 0.0, 0.0],
+            "artifact_schema": "if_model_with_preprocessing_v1",
+        },
+    }
+    features = {"third": 1.0, "first": 4.0, "second": 3.0}
+    expected = runtime.score_anomalies(np.asarray([[4.0, 3.0, 1.0]]))[0]
+    job = {
+        "id": "pg-job", "kind": "ml_playground", "status": "Succeeded",
+        "owner_actor": "actor-1",
+        "spec": {
+            "model_revision_id": "model", "model_owner_actor": "actor-1",
+            "features": features,
+        },
+        "result": {
+            "model_revision_id": "model",
+            "anomaly_score": expected,
+            "score_direction": "higher_is_more_anomalous",
+            "score_scale": "negative_sklearn_score_samples",
+            "feature_count": 3,
+        },
+    }
+    store = SimpleNamespace(
+        get_job=lambda _: job,
+        get_model_revision=lambda _: model,
+        home=tmp_path,
+    )
+    monkeypatch.setattr(ml_explanation, "load_trusted_isolation_forest", lambda *_: runtime)
+    spec = {"playground_job_id": "pg-job", "source_owner_actor": "actor-1"}
+    shap = ml_explanation.explain_scored_row(
+        store, {**spec, "method": "permutation_shap_median_v1"})
+    sensitivity = ml_explanation.explain_scored_row(
+        store, {**spec, "method": "median_reference_feature_replacement"})
+    assert shap["playground_job_id"] == sensitivity["playground_job_id"] == "pg-job"
+    assert shap["scoring_result_id"] is None and shap["row_index"] is None
+    assert shap["reconstructed_score"] == pytest.approx(expected, abs=1e-7)
+    assert shap["baseline_score"] + sum(
+        x["shap_value"] for x in shap["feature_contributions"]
+    ) == pytest.approx(expected)
+    assert len(sensitivity["feature_sensitivities"]) == 3
+    assert sensitivity["feature_sensitivities"][0]["anomaly_score_delta"] == pytest.approx(2.0)
+    assert sensitivity["additive_attribution"] is False
+
+    for invalid in (
+        {**job, "status": "Running"},
+        {**job, "kind": "ml_score"},
+        {**job, "owner_actor": "another"},
+        {**job, "result": {**job["result"], "anomaly_score": expected + 1}},
+        {**job, "result": {**job["result"], "model_revision_id": "another"}},
+        {**job, "result": {**job["result"], "score_scale": "incompatible"}},
+        {**job, "result": {**job["result"], "score_direction": "lower_is_more_anomalous"}},
+        {**job, "result": {**job["result"], "feature_count": 2}},
+    ):
+        store.get_job = lambda _, item=invalid: item
+        with pytest.raises(ValueError):
+            ml_explanation.explain_scored_row(
+                store, {**spec, "method": "permutation_shap_median_v1"})
+
+
+def test_playground_explanation_api_checks_source_authority_and_status(tmp_path, monkeypatch):
+    """Playground 설명은 요청자가 접근 가능한 성공한 원본 Job만 받는다."""
+    import hashlib
+    from fastapi.testclient import TestClient
+    from sos_platform.api import create_app
+    from sos_platform.security import Actor, IdentitySettings
+    from sos_platform.store import Store
+
+    owner_token = "explanation-owner-credential-verified-2026"
+    other_token = "explanation-other-credential-verified-2026"
+    identity = IdentitySettings("token", {
+        hashlib.sha256(token.encode()).hexdigest():
+            Actor(actor, "human", frozenset({"researcher"}))
+        for token, actor in ((owner_token, "owner"), (other_token, "other"))
+    })
+    source = {
+        "id": "playground-success", "kind": "ml_playground", "status": "Succeeded",
+        "owner_actor": "owner",
+        "spec": {"model_revision_id": "model", "model_owner_actor": "owner",
+                 "features": {"first": 2}},
+        "result": {"anomaly_score": 0.5},
+    }
+    model = {"id": "model", "owner_actor": "owner", "lifecycle_state": "Active"}
+    calls = []
+    monkeypatch.setattr(Store, "get_job", lambda self, _: source)
+    monkeypatch.setattr(Store, "get_model_revision", lambda self, _: model)
+
+    def create_job(self, **kwargs):
+        calls.append(kwargs)
+        return {
+            "id": "explanation-job", "kind": kwargs["kind"],
+            "dataset_id": kwargs["dataset_id"], "spec": kwargs["spec"],
+            "status": "Queued", "cancel_requested": False,
+            "result": None, "error": None,
+            "request_id": kwargs.get("request_id"),
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z", "attempts": [],
+        }
+
+    monkeypatch.setattr(Store, "create_job", create_job)
+    client = TestClient(create_app(tmp_path, identity=identity))
+    headers = {"Authorization": f"Bearer {owner_token}",
+               "Idempotency-Key": "explain-test-id-1"}
+    payload = {"playground_job_id": source["id"],
+               "method": "permutation_shap_median_v1"}
+    response = client.post("/api/ml/explanations/jobs", json=payload, headers=headers)
+    assert response.status_code == 202, response.text
+    assert calls[-1]["dataset_id"] is None
+    assert calls[-1]["spec"] == {
+        "playground_job_id": source["id"], "source_owner_actor": "owner",
+        "method": "permutation_shap_median_v1",
+    }
+    assert client.post(
+        "/api/ml/explanations/jobs", json=payload,
+        headers={**headers, "Authorization": f"Bearer {other_token}"},
+    ).status_code == 404
+    for bad_status in ("Queued", "Running", "Failed", "Cancelled"):
+        source["status"] = bad_status
+        assert client.post(
+            "/api/ml/explanations/jobs", json=payload, headers=headers
+        ).status_code == 409
+    source["status"] = "Succeeded"
+    for bad_score in (float("nan"), float("inf"), True):
+        source["result"] = {"anomaly_score": bad_score}
+        assert client.post(
+            "/api/ml/explanations/jobs", json=payload, headers=headers
+        ).status_code == 409
+    source["result"] = {"anomaly_score": 0.5}
+    model["lifecycle_state"] = "Deleted"
+    assert client.post(
+        "/api/ml/explanations/jobs", json=payload, headers=headers
+    ).status_code == 409
+    model["lifecycle_state"] = "Active"
+    assert client.post(
+        "/api/ml/explanations/jobs",
+        json={**payload, "scoring_result_id": "invalid", "row_index": 0},
+        headers=headers,
+    ).status_code == 422

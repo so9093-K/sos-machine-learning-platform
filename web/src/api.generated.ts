@@ -621,7 +621,7 @@ export interface paths {
         put?: never;
         /**
          * 모델 설명 작업 제출
-         * @description 선택한 Scoring 결과의 설명을 계산합니다. Feature 민감도와 SHAP은 실제 이상 사건의 인과 원인이 아닙니다.
+         * @description Scoring 결과 행 또는 성공한 단일 입력 Job을 설명합니다. Feature 민감도와 SHAP은 실제 이상 사건의 인과 원인이 아닙니다.
          */
         post: operations["create_explanation_job_api_ml_explanations_jobs_post"];
         delete?: never;
@@ -1745,9 +1745,11 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Row Index */
-            row_index: number;
+            /** Playground Job Id */
+            playground_job_id?: string | null;
+            row_index?: number | null;
             /** Scoring Result Id */
-            scoring_result_id: string;
+            scoring_result_id?: string | null;
         };
         /**
          * ExplorationJobOut
@@ -2327,7 +2329,10 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
-        /** MLExplanationRequest */
+        /**
+         * MLExplanationRequest
+         * @description Scoring 행 또는 완료된 Playground Job 하나만 설명 대상으로 지정한다.
+         */
         MLExplanationRequest: {
             /**
              * Method
@@ -2335,10 +2340,12 @@ export interface components {
              * @enum {string}
              */
             method: "median_reference_feature_replacement" | "permutation_shap_median_v1";
+            /** Playground Job Id */
+            playground_job_id?: string | null;
             /** Row Index */
-            row_index: number;
+            row_index?: number | null;
             /** Scoring Result Id */
-            scoring_result_id: string;
+            scoring_result_id?: string | null;
         };
         /**
          * MLForkRequest

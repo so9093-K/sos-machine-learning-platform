@@ -4,6 +4,7 @@ import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { groupActivityFeatures } from "./ActivityFeatureGroups";
 import { FeatureValueComparison } from "./FeatureValueComparison";
+import { PlaygroundExplanations } from "./PlaygroundExplanations";
 import { jobStatusLabel } from "./display-format";
 import type { MLPlaygroundJob, MLPlaygroundJobPage, MLPlaygroundJobSummary, ModelRevision } from "./types";
 
@@ -87,6 +88,8 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   const [job, setJob] = useState<MLPlaygroundJob | null>(null);
   const [lastScore, setLastScore] = useState<number | null>(null);
   const [latestSuccessfulScore, setLatestSuccessfulScore] = useState<number | null>(null);
+  const [latestSuccessfulJob, setLatestSuccessfulJob] = useState<MLPlaygroundJob | null>(null);
+  const [comparisonJob, setComparisonJob] = useState<MLPlaygroundJob | null>(null);
   const [previousScore, setPreviousScore] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -172,6 +175,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
             if (typeof value === "number" && Number.isFinite(value)) {
               setLastScore(value);
               setLatestSuccessfulScore(current => playgroundLatestSuccessfulScore(current, next));
+              setLatestSuccessfulJob(next);
             } else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
           }
         }
@@ -208,12 +212,23 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
     ? (editedNames.length > 0 ? editedNames : model.features).slice(0, 3) : [];
   const inputGroups = groupActivityFeatures(
     Object.fromEntries(model.features.map(name => [name, null])));
+  const explanationAvailable = referenceMedians.length === model.features.length &&
+    referenceMedians.every(value => typeof value === "number" && Number.isFinite(value));
+  const comparedFeatures = comparisonJob && job?.status === "Succeeded" &&
+    lastScore !== null && comparisonJob.id !== job.id &&
+    comparisonJob.spec.model_revision_id === job.spec.model_revision_id
+    ? model.features.filter(name => {
+      const before = (comparisonJob.spec.features as Record<string, unknown>)[name];
+      const after = (job.spec.features as Record<string, unknown>)[name];
+      return before !== after;
+    }) : [];
 
   async function execute() {
     if (!canRun || running || invalid.length || submitting.current) return;
     submitting.current = true;
     setSending(true); setError("");
     const comparisonScore = latestSuccessfulScore;
+    const previousCompletedJob = latestSuccessfulJob;
     try {
       const created = await submitJob<MLPlaygroundJob>("/api/ml/playground/jobs", {
         model_revision_id: model.id,
@@ -221,6 +236,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
       });
       // 제출이 실패한 경우에는 이전 결과와 비교 문맥을 잃지 않는다.
       setPreviousScore(comparisonScore);
+      setComparisonJob(previousCompletedJob);
       setLastScore(null);
       setJob(created);
       // 동일 멱등 키 재제출 시 이미 성공한 Job이 응답할 수 있다.
@@ -230,6 +246,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
         if (typeof score === "number" && Number.isFinite(score)) {
           setLastScore(score);
           setLatestSuccessfulScore(current => playgroundLatestSuccessfulScore(current, created));
+          setLatestSuccessfulJob(created);
         } else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
       }
     } catch (cause) { setError(formatError(cause)); }
@@ -256,6 +273,8 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
       <div><h3>활동 한 건으로 모델 체험하기</h3>
         <p>기준 입력값을 그대로 적용하거나 숫자를 바꾸어 모델의 실제 점수 변화를 확인합니다.</p></div>
     </div>
+    <div className="model-lab-workspace">
+      <div className="model-lab-input-pane">
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
       <button type="button" aria-pressed={mode === "example"} className="secondary"
         disabled={!reference || running}
@@ -318,6 +337,9 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
       필수 입력값이나 자료형·정수 범위가 맞지 않는 Feature {invalid.length}개가 있습니다.
       {invalid.length <= 3 && " 확인: " + invalid.map(item => activityFeatureLabel(item.name)).join(", ")}
     </p>}
+      </div>
+      <aside className="model-lab-results-pane" aria-label="단일 입력 계산과 결과">
+    <h4>계산과 결과</h4>
     <p className="model-lab-input-state" role="status">{running
       ? "제출한 입력을 모델에서 계산하는 중입니다."
       : matchesCompletedInput
@@ -354,6 +376,37 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
         {job.error_code && <small> ({job.error_code})</small>}</p>}
       <p className="hint">점수가 높을수록 모델에서 이례적인 입력입니다. 확률이나 사건 판정은 아닙니다.</p>
     </div>}
+    {job?.status === "Succeeded" && lastScore !== null && comparisonJob &&
+      comparedFeatures.length > 0 && <section className="model-lab-run-comparison"
+        aria-label="이전 실행과 이번 실행 비교">
+        <h5>두 완료 계산의 입력·점수 차이</h5>
+        <p className="hint">같은 모델 판본으로 완료한 두 Job의 실제 제출값입니다.
+          이 차이는 변경 Feature의 인과적 기여도를 뜻하지 않습니다.</p>
+        <div className="model-lab-score-row">
+          <div><span>이전 점수</span><strong>{typeof comparisonJob.result?.anomaly_score === "number"
+            ? comparisonJob.result.anomaly_score.toFixed(5) : "없음"}</strong></div>
+          <div><span>이번 점수</span><strong>{lastScore.toFixed(5)}</strong></div>
+        </div>
+        <p className="hint">바뀐 Feature {comparedFeatures.length}개</p>
+        <div className="table-scroll"><table>
+          <thead><tr><th>Feature</th><th>이전 실행</th><th>이번 실행</th></tr></thead>
+          <tbody>{comparedFeatures.map(name => <tr key={name}>
+            <td>{activityFeatureLabel(name)}</td>
+            <td>{String((comparisonJob.spec.features as Record<string, unknown>)[name] ?? "결측")}</td>
+            <td>{String((job.spec.features as Record<string, unknown>)[name] ?? "결측")}</td>
+          </tr>)}</tbody>
+        </table></div>
+      </section>}
+    {job?.status === "Succeeded" && (explanationAvailable
+      ? <details className="model-lab-explanation-toggle">
+          <summary>이 입력 설명하기 · SHAP / Feature 치환 민감도</summary>
+          <PlaygroundExplanations key={job.id} source={job} canRun={canRun}
+            canCancel={canCancel} shapSupported={model.features.length <= 64} />
+        </details>
+      : <p className="hint">이 모델에는 학습 Feature 중앙값이 없어 현재 설명 방법을 계산할 수 없습니다.
+          점수 계산 결과는 정상적으로 이용할 수 있습니다.</p>)}
+      </aside>
+    </div>
     <details className="model-lab-playground-history" onToggle={event => {
       if (event.currentTarget.open && !historyLoaded) void loadHistory(false);
     }}>
@@ -400,6 +453,13 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
               <button type="button" className="secondary"
                 disabled={running}
                 onClick={() => useHistoryInput(selectedHistory)}>이 입력으로 다시 계산 준비</button>
+              {selectedHistory.status === "Succeeded" && explanationAvailable &&
+                <details className="model-lab-explanation-toggle">
+                  <summary>이전 실행의 SHAP / Feature 민감도 확인</summary>
+                  <PlaygroundExplanations key={selectedHistory.id} source={selectedHistory}
+                    canRun={canRun} canCancel={canCancel}
+                    shapSupported={model.features.length <= 64} />
+                </details>}
               </>}
             </div>}
           </div>)}
