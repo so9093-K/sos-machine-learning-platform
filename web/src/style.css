@@ -1306,3 +1306,6 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   padding:14px 16px; background:var(--sos-raised); border-radius:10px; }
 .observation-try-experiment p { margin:0; color:var(--sos-muted); font-size:13px; line-height:1.6; }
 .observation-try-experiment p[role="alert"] { color:var(--sos-danger); }
+
+/* 완료된 Dataset 결과에서는 입력 선택 대신 분석 결과를 먼저 보여준다. */
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-start-choice { display:none; }
