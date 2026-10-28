@@ -42,7 +42,10 @@ ML Job을 관리하지만 독립적인 Feature Registry·Historical Retrieval의
 9. **Feast 외부 커밋·폐기:** 등록 정의의 이름을 요청과 Source 판본으로 결정하고,
    Entity·View·Service의 의미적 지문을 Registry의 실제 상태와 비교한다.
    같은 정의의 재시도는 기존 등록을 사용하고, 내용이 다른 충돌은 덮어쓰지 않는다.
-   Worker 중단 뒤 부분 등록은 확인·재조정한다. 실패·취소·성공 등록의 폐기는 별도
+   Worker 중단 뒤 부분 등록은 확인·재조정한다. 신규 Retrieval Job·폐기 Job은
+   동일 등록 Job 행 잠금 아래에서 접수하고 폐기 접수 즉시 신규 조회를 차단한다.
+   폐기 이전에 승인된 Queued Retrieval은 참조 보호 대상이며 정상 완료를 허용한다.
+   실패·취소·성공 등록의 폐기는 별도
    SOS Job으로 요청한다. 다른 활성 등록이나 과거/진행 중 Retrieval이 참조하는
    정의는 Registry에 유지하되 해당 등록의 신규 조회는 막는다.
    참조가 없는 경우에만 정의와 연결된 Registry 객체를 실제 삭제한다.

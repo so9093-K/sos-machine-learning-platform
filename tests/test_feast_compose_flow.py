@@ -117,9 +117,16 @@ def test_registered_feature_to_model_revision():
 
 
     # 과거 모델·조회가 참조하는 정의는 폐기 후에도 Registry에 안전하게 보존한다.
+    accepted_before_retirement = submit("/api/features/retrieval/jobs", {
+        "registration_job_id": registration["id"],
+        "entity_dataset_id": entity_source["id"],
+        "timestamp_column": "prediction_time",
+    })
     retirement_request = submit(
         f"/api/features/services/{registration['id']}/retirement/jobs", {},
     )
+    # 폐기 접수 전 정상 승인된 조회는 실행 순서와 무관하게 보호된다.
+    assert completed(accepted_before_retirement)["result"]["dataset_id"]
     # 폐기 실행이 아직 Queued/Running이라도 신규 조회를 접수하면 안 된다.
     no_late_retrieval = client.post("/api/features/retrieval/jobs", json={
         "registration_job_id": registration["id"],
