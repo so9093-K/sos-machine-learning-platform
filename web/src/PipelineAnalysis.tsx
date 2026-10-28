@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { DataChart } from "./DataChart";
+import { EvaluationSummary } from "./EvaluationSummary";
+import { formatObservedAt } from "./display-format";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type {
   PipelineRun, ModelRevision, ScoringResult, DecisionPolicyRevision, EvaluationRevision,
@@ -127,8 +129,8 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
     aria: { enabled: true },
     tooltip: { trigger: "item" },
     grid: { left: 58, right: 28, top: 32, bottom: 57 },
-    xAxis: { type: "value" as const, name: "이상 점수",
-      axisLabel: { formatter: (value: number) => value.toFixed(3) },
+    xAxis: { type: "value" as const, name: "이상 점수", nameLocation: "middle" as const, nameGap: 32,
+      axisLabel: { hideOverlap: true, formatter: (value: number) => value.toFixed(3) },
       min: threshold === undefined ? edges[0] : Math.min(edges[0], threshold),
       max: threshold === undefined ? edges[edges.length - 1]
         : Math.max(edges[edges.length - 1], threshold) },
@@ -186,7 +188,7 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
     grid: { left: 72, right: 35, top: 36, bottom: 75 },
     xAxis: { type: "category" as const, data: ["Train", "Calibration", "Test"] },
     yAxis: { type: "value" as const, scale: true, name: "이상 점수",
-      axisLabel: { formatter: (value: number) => value.toFixed(3) } },
+      axisLabel: { hideOverlap: true, formatter: (value: number) => value.toFixed(3) } },
     series: keys.map((key, i) => ({
       type: "scatter" as const,
       name: labels[i],
@@ -204,21 +206,16 @@ function ScoreRangeChart({ evidence }: { evidence: Evidence }) {
     <p className="pipeline-threshold-note">Calibration 임계값
       <strong>{evidence.policy.threshold.toPrecision(6)}</strong> · 점선은 Test에 적용한 기준입니다.</p>
     <p className="hint">위 비교 그래프는 세 구간의 최솟값·평균·최댓값만 표현합니다.
-      전체 점수 분포는 아래의 단계별 히스토그램에서 확인할 수 있습니다.
+      전체 점수 분포는 Test 그래프와 학습·검토 기준의 상세에서 확인할 수 있습니다.
       표시된 임계값은 Calibration에서 정해 Test에 적용한 기준입니다.</p>
   </div>;
 }
 
 /** 불변 결과의 실제 의미와 출처를 확인한 뒤 단계별 분석 근거를 제공한다. */
 export type PipelineAnalysisSection = "overview" | "training" | "calibration" | "test";
-export const PIPELINE_ANALYSIS_SECTIONS: Array<{ id: PipelineAnalysisSection; label: string; description: string }> = [
-  { id: "overview", label: "결과 요약", description: "학습·탐지 점수 비교" },
-  { id: "training", label: "학습 점수 분포", description: "학습 데이터의 점수" },
-  { id: "calibration", label: "판정 기준", description: "검토 기준의 근거" },
-  { id: "test", label: "후보 점수 이해", description: "다른 시간 구간의 점수" },
-];
 export function PipelineEvidenceView({ evidence, run, onOpenResource,
-  initialSection = "overview", onSectionChange, onInvestigateCandidates, onSelectTestScoreRange }: {
+  initialSection = "overview", onSectionChange, onInvestigateCandidates, onSelectTestScoreRange,
+}: {
   evidence: Evidence; run: PipelineRun; onOpenResource: OpenResult;
   initialSection?: PipelineAnalysisSection;
   onSectionChange?: (section: PipelineAnalysisSection) => void;
@@ -228,133 +225,86 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
   const [section, setSection] = useState<PipelineAnalysisSection>(initialSection);
   useEffect(() => { setSection(initialSection); }, [initialSection]);
   const { model, calibration, test, policy, evaluation } = evidence;
-  const train = model.training_score_summary;
-  const cal = calibration.score_summary;
-  const scored = test.score_summary;
+  const plan = run.input_plan;
   const decision = evaluation.decision_metrics;
-  const trainRows = run.input_plan?.partition_sizes.train;
-  const calibrationRows = run.input_plan?.partition_sizes.calibration;
-  const testRows = run.input_plan?.partition_sizes.test;
-  return <div className="pipeline-analysis-report" aria-label="Pipeline 결과 분석">
-    <nav className="pipeline-analysis-nav" aria-label="현재 분석 근거 탐색">
-      {PIPELINE_ANALYSIS_SECTIONS.map(item => <button key={item.id} type="button"
-        className={section === item.id ? "pipeline-analysis-nav-item active" : "pipeline-analysis-nav-item"}
-        aria-pressed={section === item.id} onClick={() => {
-          setSection(item.id);
-          onSectionChange?.(item.id);
-        }}>
-        <strong>{item.label}</strong><small>{item.description}</small>
-      </button>)}
-    </nav>
-    {section === "overview" && <section className="pipeline-analysis-overview" aria-label="점수 요약 비교">
-      <div className="pipeline-lab-summary">
-        <div><span>학습 모델</span><strong>Isolation Forest</strong></div>
-        <div><span>학습 관측치</span><strong>{format(trainRows)}건</strong></div>
-        <div><span>Test 데이터</span><strong>{format(testRows)}건</strong></div>
-        <div><span>검토할 후보</span><strong>{format(metric(decision, "predicted_anomalies"))}건</strong></div>
+  const candidates = metric(decision, "predicted_anomalies");
+  const rate = metric(decision, "alert_rate");
+  const unlabeled = evaluation.label_coverage === "none" || decision.evaluation_kind === "unlabeled";
+  const toggle = (id: PipelineAnalysisSection, open: boolean) => {
+    if (open && section !== id) { setSection(id); onSectionChange?.(id); }
+    else if (!open && section === id) { setSection("overview"); onSectionChange?.("overview"); }
+  };
+  return <article className="pipeline-analysis-report training-report" aria-label="학습 및 검토 결과">
+    <header className="training-report-heading">
+      <div><span className="eyebrow">학습 모델</span>
+        <h4>Isolation Forest{model.registry_version ? ` · v${model.registry_version}` : ""}</h4>
+        <p>학습에 사용한 {format(plan?.partition_sizes.train)}건으로 모델을 만들고,
+          이후 시간 구간의 {format(test.row_count)}건에 검토 기준을 적용했습니다.</p>
       </div>
-      {metric(decision, "predicted_anomalies") === 0 && <p className="hint">
-        Test 데이터에는 현재 판정 기준을 넘은 후보가 없습니다.</p>}
-      {onInvestigateCandidates && (metric(decision, "predicted_anomalies") ?? 0) > 0 &&
-        <div className="pipeline-overview-next">
-          <button type="button" onClick={onInvestigateCandidates}>
-            이상 후보 확인 →
-          </button>
-        </div>}
-      <details className="pipeline-distribution-details">
-        <summary>점수 분포와 판정 기준 자세히 보기</summary>
-        <p>Calibration에서 결정한 판정 점수 기준: {format(policy.threshold)}</p>
-        <ScoreRangeChart evidence={evidence} />
-      <div className="pipeline-lab-distributions">
-        <section><h5>학습 데이터 점수 분포</h5>
-          <ScoreHistogram summary={train} title="Training" /></section>
-        <section><h5>기준을 정한 데이터의 분포</h5>
-          <ScoreHistogram summary={cal} title="Calibration" threshold={policy.threshold} /></section>
-        <section><h5>다른 시간 구간의 점수 분포</h5>
-          <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} onSelectRange={onSelectTestScoreRange} /></section>
+    </header>
+    <div className="training-report-outcome">
+      <div><span>Test 구간의 검토 대상</span><strong>{format(candidates)}건</strong>
+        <span>{format(test.row_count)}건 중 {rate === null ? "비율 미확인" : `${format(rate * 100)}%`}</span></div>
+      <div>
+        <p>{candidates === 0 ? "정한 점수 기준 이상인 관측값이 없습니다."
+          : "정한 점수 기준 이상인 관측값입니다. 실제 활동과 점수 근거를 조사해 보세요."}</p>
+        {candidates !== null && candidates > 0 && onInvestigateCandidates
+          ? <button type="button" onClick={onInvestigateCandidates}>검토 대상 탐색 →</button>
+          : <button type="button" className="secondary" onClick={() => onOpenResource("scoring", test.id)}>Test 관측값 탐색 →</button>}
       </div>
-      </details>
-    </section>}
-    <div className="pipeline-analysis-phases">
-      {section === "training" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-training-evidence">
-        <h5 id="pipeline-training-evidence">01 · Training — 학습 내용</h5>
-        <dl>
-          <div><dt>학습 구간</dt><dd>{format(trainRows)}행</dd></div>
-          <div><dt>알고리즘</dt><dd>{model.algorithm}</dd></div>
-          <div><dt>입력 Feature</dt><dd>{model.features.length}개</dd></div>
-          <div><dt>결측값 처리</dt><dd>{model.runtime.preprocessing_mode === "train_median_v1"
-            ? "Train 중앙값 대체" : "별도 모델 판본 근거 확인"}</dd></div>
-          <div><dt>학습 점수 범위</dt><dd>{format(metric(train, "score_min"))} ~ {format(metric(train, "score_max"))}</dd></div>
-          <div><dt>학습 평균 점수</dt><dd>{format(metric(train, "score_mean"))}</dd></div>
-        </dl>
-        <ScoreHistogram summary={train} title="Training" />
-        <p className="hint">학습에 사용한 데이터의 점수입니다. 독립 검증 성능을 나타내지 않습니다.</p>
-        <details className="training-settings-summary"><summary>학습 설정</summary>
-          <dl>{Object.entries(model.params).map(([name, value]) => <div key={name}>
+    </div>
+    <div className="training-report-basis">
+      <span>검토 기준</span>
+      <p>기준을 정한 Calibration {format(calibration.row_count)}건의 상위 {policy.alert_fraction === null
+        ? "미확인" : format(policy.alert_fraction * 100) + "%"} 점수로 경계를 정했습니다.
+        Test에는 같은 경계 <strong>{format(policy.threshold)}</strong>를 적용했습니다.</p>
+    </div>
+    <section className="training-test-distribution" aria-label="검토 기준과 Test 점수 분포">
+      <h4>Test 점수 분포</h4>
+      {metric(model.training_score_summary, "score_mean") !== null && metric(test.score_summary, "score_mean") !== null &&
+        <p className="training-score-comparison">평균 이상 점수 · 학습 {format(metric(model.training_score_summary, "score_mean"))}
+          {" → "}Test {format(metric(test.score_summary, "score_mean"))}</p>}
+      <ScoreHistogram summary={test.score_summary} title="Test" threshold={policy.threshold} onSelectRange={onSelectTestScoreRange} />
+    </section>
+    <p className="training-report-limitation">{unlabeled
+      ? "정답 레이블이 없어 실제 사건 검출 정확도와 오탐 여부는 알 수 없습니다. 검토 대상 건수는 확인된 사건 수가 아닙니다."
+      : decision.evaluation_kind === "labeled"
+        ? "레이블과 비교한 평가입니다. 이 시간 구간의 지표가 다른 데이터에서의 성능을 보장하지는 않습니다."
+        : "평가에서 확인한 범위와 레이블 유무는 아래 평가 근거에서 확인할 수 있습니다."}</p>
+    <div className="training-report-details">
+      <details open={section === "training"} onToggle={event => toggle("training", event.currentTarget.open)}>
+        <summary>학습 데이터·설정</summary>
+        <dl className="training-report-facts">
+          <div><dt>학습 입력</dt><dd>{format(plan?.partition_sizes.train)}건 · Feature {model.features.length}개</dd></div>
+          <div><dt>학습 종료 시각</dt><dd>{plan?.train_end ? formatObservedAt(plan.train_end) : "미확인"}</dd></div>
+          <div><dt>결측값 처리</dt><dd>{model.runtime.preprocessing_mode === "train_median_v1" ? "학습 중앙값 대체" : "모델 판본 근거 확인"}</dd></div>
+          {Object.entries(model.params).map(([name, value]) => <div key={name}>
             <dt>{{ n_estimators: "트리 수", max_samples: "트리별 표본 수", max_features: "트리별 Feature 범위",
               bootstrap: "복원 추출", random_state: "난수 Seed" }[name] ?? name}</dt>
             <dd>{value === "auto" ? "자동" : typeof value === "boolean" ? value ? "사용" : "사용 안 함" : String(value)}</dd>
-          </div>)}</dl>
-        </details>
-        <button type="button" className="secondary" onClick={() =>
-          onOpenResource("model", model.id)}>모델 판본 열기 →</button>
-      </section>}
-      {section === "calibration" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-calibration-evidence">
-        <h5 id="pipeline-calibration-evidence">02 · Calibration — 판정 기준 근거</h5>
-        <dl>
-          <div><dt>Calibration 구간</dt><dd>{format(calibrationRows)}행</dd></div>
-          <div><dt>방법</dt><dd>{policy.mode === "quantile" ? "점수 분위수" : policy.mode}</dd></div>
-          <div><dt>기준 상위 비율</dt><dd>{policy.alert_fraction === null
-            ? "해당 없음" : format(policy.alert_fraction * 100) + "%"}</dd></div>
-          <div><dt>적용 임계값</dt><dd>{format(policy.threshold)}</dd></div>
-          <div><dt>Calibration 점수 범위</dt>
-            <dd>{format(metric(cal, "score_min"))} ~ {format(metric(cal, "score_max"))}</dd></div>
-          <div><dt>Calibration 평균 점수</dt><dd>{format(metric(cal, "score_mean"))}</dd></div>
-          <div><dt>Calibration 후보 수</dt>
-            <dd>{format(metric(policy.decision_summary, "predicted_anomalies"))}건</dd></div>
+          </div>)}
         </dl>
-        <ScoreHistogram summary={cal} title="Calibration" threshold={policy.threshold} />
-        <p className="hint">현재 IF Pipeline은 EVT/POT가 아닌 Calibration 점수의
-          선형 보간 분위수로 경계를 정합니다. 동점 때문에 실제 후보 비율은 설정값과 다를 수 있습니다.</p>
-        <div className="pipeline-actions">
-          <button type="button" className="secondary" onClick={() =>
-            onOpenResource("policy", policy.id)}>판정 정책 열기 →</button>
-          <button type="button" className="secondary" onClick={() =>
-            onOpenResource("scoring", calibration.id)}>Calibration 점수 근거 →</button>
-        </div>
-      </section>}
-      {section === "test" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-test-evidence">
-        <h5 id="pipeline-test-evidence">03 · Test — 적용 결과</h5>
-        <dl>
-          <div><dt>Test 구간</dt><dd>{format(testRows)}행</dd></div>
-          <div><dt>Test 점수 범위</dt><dd>{format(metric(scored, "score_min"))} ~ {format(metric(scored, "score_max"))}</dd></div>
-          <div><dt>Test 평균 점수</dt><dd>{format(metric(scored, "score_mean"))}</dd></div>
-          <div><dt>검토 후보</dt><dd>{format(metric(decision, "predicted_anomalies"))}건</dd></div>
-          <div><dt>실제 Test 후보 비율</dt><dd>{metric(decision, "alert_rate") === null
-            ? "미계산" : format(metric(decision, "alert_rate")! * 100) + "%"}</dd></div>
-          <div><dt>정답 레이블</dt><dd>{evaluation.label_coverage === "none" ? "없음" : evaluation.label_coverage}</dd></div>
-          <div><dt>Calibration/Test 시간 구간</dt><dd>{
-            decision.temporal_nonoverlap_confirmed === true ? "비중복 확인" : "근거 미확인"
-          }</dd></div>
-        </dl>
-        <ScoreHistogram summary={scored} title="Test" threshold={policy.threshold} onSelectRange={onSelectTestScoreRange} />
-        <p className="hint">Calibration에서 정한 정책을 별도 Test 시간 구간에 적용합니다.
-          검토 후보는 실제 이상 사건이 아니며, 레이블이 없는 결과에는 정확도·Precision·Recall을 부여하지 않습니다.</p>
-        <div className="pipeline-actions">
-          {onInvestigateCandidates && <button type="button" onClick={onInvestigateCandidates}>
-            이상 후보 검토 →
-          </button>}
-          <button type="button" className="secondary" onClick={() =>
-            onOpenResource("scoring", test.id)}>Test 점수 결과 →</button>
-          <button type="button" className="secondary" onClick={() =>
-            onOpenResource("evaluation", evaluation.id)}>평가 판본 열기 →</button>
-        </div>
-      </section>}
+        {section === "training" && <ScoreHistogram summary={model.training_score_summary} title="Training" />}
+        <button type="button" className="secondary" onClick={() => onOpenResource("model", model.id)}>모델 판본 열기 →</button>
+      </details>
+      <details open={section === "calibration"} onToggle={event => toggle("calibration", event.currentTarget.open)}>
+        <summary>검토 기준 산정</summary>
+        <p>Calibration 구간의 선형 보간 분위수로 점수 경계를 정했습니다. 동점 때문에 실제 비율은 설정 비율과 다를 수 있습니다.</p>
+        {section === "calibration" && <ScoreHistogram summary={calibration.score_summary} title="Calibration" threshold={policy.threshold} />}
+        <div className="actions"><button type="button" className="secondary" onClick={() => onOpenResource("policy", policy.id)}>판정 정책 열기 →</button>
+          <button type="button" className="secondary" onClick={() => onOpenResource("scoring", calibration.id)}>Calibration 점수 결과 →</button></div>
+      </details>
+      <details open={section === "test"} onToggle={event => toggle("test", event.currentTarget.open)}>
+        <summary>평가 범위·근거</summary>
+        <EvaluationSummary evaluation={evaluation} />
+        {section === "test" && <ScoreRangeChart evidence={evidence} />}
+        <div className="actions"><button type="button" className="secondary" onClick={() => onOpenResource("evaluation", evaluation.id)}>평가 판본 열기 →</button>
+          <button type="button" className="secondary" onClick={() => onOpenResource("scoring", test.id)}>Test 점수 결과 →</button></div>
+      </details>
     </div>
-  </div>;
+  </article>;
 }
 
-/** URL Run이 변경되면 이전 응답을 폐기하며, 어떤 결과도 섞지 않는다. */
 export function PipelineAnalysis({
   run, onOpenResource, initialSection, onSectionChange, onInvestigateCandidates,
   onSelectTestScoreRange,

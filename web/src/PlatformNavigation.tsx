@@ -75,7 +75,7 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   }
   if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "",
     ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
-  if (tab === "scoring") return { modelId: params.get("model") ?? "",
+  if (tab === "scoring") return { ...resourceContext(search), modelId: params.get("model") ?? "",
     ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
   if (isDecisionTab(tab)) return {
     scoringId: params.get("scoring") ?? "",
@@ -117,7 +117,7 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
       params.set("section", context.pipelineAnalysisSection);
   }
   if ((tab === "understanding" || tab === "preparation" || tab === "preview" ||
-        tab === "profile" || tab === "jobs") && context.pipelineReturn) {
+        tab === "profile" || tab === "jobs" || tab === "scoring") && context.pipelineReturn) {
     params.set("from", "pipeline");
     if (context.datasetId) params.set("dataset", context.datasetId);
     if (context.pipelineRunId) {
@@ -134,7 +134,7 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
       context.modelGroupKey && context.modelGroupKey !== "default")
     params.set("group", context.modelGroupKey);
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
-  if (isDecisionTab(tab) && context.modelLabReturn && context.modelId) {
+  if ((isDecisionTab(tab) || tab === "scoring") && context.modelLabReturn && context.modelId) {
     params.set("from", "model-lab");
     params.set("model", context.modelId);
     if (context.modelGroupKey && context.modelGroupKey !== "default")
@@ -304,7 +304,7 @@ export function useWorkspaceNavigation() {
     if (!id) return;
     const previous = current.current;
     // Pipeline에서 열었던 결과 판본은 직접 링크·새로고침에서도 원래 Run에 돌아갈 수 있다.
-    const fromPipeline = (previous.tab === "pipelines" || previous.resource !== null)
+    const fromPipeline = (previous.tab === "pipelines" || previous.context.pipelineReturn === true || previous.resource !== null)
       && previous.context.pipelineReturn !== false;
     const fromLabUse = (previous.tab === "pipelines" && previous.context.pipelineView === "use") ||
       previous.context.modelLabReturn === true;

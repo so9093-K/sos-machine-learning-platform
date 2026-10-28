@@ -4,7 +4,6 @@
 export const activityFeatureGroups = [
   {
     id: "file", title: "파일 활동", description: "파일 생성·수정·접근·이름 변경",
-    featured: ["cnt_file_write", "uniq_file_touched", "max_write_size"],
     features: [
       "cnt_file_create", "cnt_file_del", "cnt_file_write", "cnt_file_rename",
       "cnt_large_write", "cnt_rename_ext_change", "max_write_size",
@@ -18,7 +17,6 @@ export const activityFeatureGroups = [
   },
   {
     id: "process", title: "프로세스 활동", description: "실행·종료·명령 및 활동 패턴",
-    featured: ["cnt_proc_exec", "uniq_proc_image", "ratio_no_ui"],
     features: [
       "cnt_proc_exec", "cnt_proc_completed_in_batch", "uniq_proc_image",
       "velocity_proc_exec", "max_cmd_len", "ratio_no_ui", "ratio_proc_churn",
@@ -26,7 +24,6 @@ export const activityFeatureGroups = [
   },
   {
     id: "network", title: "네트워크 활동", description: "통신량·연결·목적지·송신 비율",
-    featured: ["ratio_outbound_traffic", "uniq_dest_ip", "net_bytes_per_sec"],
     features: [
       "net_bytes_per_sec", "cnt_net_tcp", "cnt_net_udp", "velocity_net_conn",
       "uniq_dest_port", "uniq_dest_ip", "ratio_private_ip", "max_url_len",
@@ -36,7 +33,6 @@ export const activityFeatureGroups = [
   },
   {
     id: "other", title: "활동량·시간 특성", description: "입출력 및 관측 구간의 활동 특성",
-    featured: ["ratio_offhour_activity", "io_bytes_per_sec"],
     features: ["io_bytes_per_sec", "ratio_offhour_activity"],
   },
 ] as const;
@@ -46,10 +42,7 @@ export function groupActivityFeatures(features: Record<string, number | null>) {
   const seen = new Set<string>();
   const groups: Array<{ id: string; title: string; description: string;
     entries: Array<readonly [string, number | null]> }> = activityFeatureGroups.map(group => {
-    // 미리보기의 대표 지표를 명시적으로 고른다. 값이 크거나 이상 원인이라는 순위가 아니다.
-    const available = group.features.filter(name => Object.prototype.hasOwnProperty.call(features, name));
-    const ordered = [...group.featured.filter(name => available.some(item => item === name)),
-      ...available.filter(name => !group.featured.some(item => item === name))];
+    const ordered = group.features.filter(name => Object.prototype.hasOwnProperty.call(features, name));
     const entries = ordered.map(name => { seen.add(name); return [name, features[name]] as const; });
     return { id: group.id, title: group.title, description: group.description, entries };
   }).filter(group => group.entries.length > 0);

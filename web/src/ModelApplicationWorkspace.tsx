@@ -1,0 +1,76 @@
+import { useEffect, useRef, useState } from "react";
+import { MLScoringPanel } from "./MLScoringPanel";
+import { ModelLabPlayground, observationInputForPlayground, type ObservationExperiment } from "./ModelLabPlayground";
+import { activityFeatureLabel } from "./ActivityFeatureLabels";
+import type { MLResourceKind } from "./PlatformNavigation";
+import type { Dataset, ModelRevision } from "./types";
+
+/** 진입 위치와 관계없이 같은 모델 적용·관측값 실험·결과 복귀 경험을 사용한다. */
+export function ModelApplicationWorkspace({ model, datasets, canRun, canCancel, onOpenResource,
+  hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered, onResultViewChange }: {
+  model: ModelRevision; datasets: Dataset[]; canRun: boolean; canCancel: boolean;
+  onOpenResource: (kind: MLResourceKind, id: string) => void;
+  hasMoreDatasets?: boolean; onLoadMoreDatasets?: () => Promise<void>;
+  canUpload?: boolean; onDatasetRegistered?: (dataset: Dataset) => void;
+  onResultViewChange?: (visible: boolean) => void;
+}) {
+  const [usage, setUsage] = useState<"dataset" | "playground">("dataset");
+  const [observationInput, setObservationInput] = useState<ObservationExperiment | null>(null);
+  const [resultVisible, setResultVisible] = useState(false);
+  const requestNumber = useRef(0);
+  const playgroundPanel = useRef<HTMLDivElement>(null);
+  const datasetPanel = useRef<HTMLDivElement>(null);
+  const resultHandler = useRef(onResultViewChange);
+  resultHandler.current = onResultViewChange;
+  const focused = usage === "dataset" && resultVisible;
+  useEffect(() => { resultHandler.current?.(focused); }, [focused]);
+  useEffect(() => {
+    if (usage !== "playground" || !observationInput) return;
+    const frame = requestAnimationFrame(() => {
+      const target = playgroundPanel.current?.querySelector<HTMLElement>(".model-lab-playground");
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [usage, observationInput?.id]);
+  function backToObservation() {
+    setUsage("dataset");
+    requestAnimationFrame(() => {
+      const target = datasetPanel.current?.querySelector<HTMLElement>(".scoring-observation-detail");
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    });
+  }
+  function tryObservation(features: Record<string, number | null>, rowIndex: number, score: number,
+    scoringResultId: string, modelRevisionId: string): string | null {
+    if (modelRevisionId !== model.id) return "선택한 관측값과 모델 판본이 일치하지 않습니다.";
+    const prepared = observationInputForPlayground(model, features);
+    if (!prepared.fields) return `실험에 사용할 수 없는 입력 ${prepared.invalid.length}개: ` +
+      prepared.invalid.slice(0, 3).map(activityFeatureLabel).join(", ");
+    setObservationInput({ id: `${scoringResultId}:${rowIndex}:${++requestNumber.current}`,
+      modelRevisionId, scoringResultId, rowIndex, originalScore: score, fields: prepared.fields });
+    setUsage("playground");
+    return null;
+  }
+  return <div className={`model-application${focused ? " result-focused" : ""}`}>
+    <div className="model-lab-start-choice">
+      <div className="model-lab-usage-tabs" role="group" aria-label="분석할 데이터">
+        <button type="button" className="secondary" aria-pressed={usage === "dataset"}
+          onClick={() => setUsage("dataset")}>Dataset 분석</button>
+        <button type="button" className="secondary" aria-pressed={usage === "playground"}
+          onClick={() => setUsage("playground")}>값 직접 입력</button>
+      </div>
+    </div>
+    <div hidden={usage !== "playground"} ref={playgroundPanel}>
+      <ModelLabPlayground model={model} canRun={canRun} canCancel={canCancel}
+        observationInput={observationInput} onBackToAnalysis={backToObservation} />
+    </div>
+    <div hidden={usage !== "dataset"} ref={datasetPanel}>
+      <MLScoringPanel model={model} datasets={datasets} hasMoreDatasets={hasMoreDatasets}
+        onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
+        onOpenResult={id => onOpenResource("scoring", id)} onOpenResource={onOpenResource}
+        canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
+        onResultViewChange={setResultVisible} onTryObservation={tryObservation} />
+    </div>
+  </div>;
+}

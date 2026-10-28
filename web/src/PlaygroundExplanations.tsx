@@ -1,7 +1,7 @@
 /** 완료된 Playground 입력의 두 설명 방법을 독립 Job으로 탐구한다. */
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
-import { SensitivityChart } from "./PipelineCandidateInvestigation";
+import { SensitivityChart } from "./FeatureSensitivity";
 import { ShapContributionChart } from "./PipelineShapExplanation";
 import { jobStatusLabel } from "./display-format";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary, MLPlaygroundJob } from "./types";
@@ -137,19 +137,18 @@ export function PlaygroundExplanations({ source, canRun, canCancel, shapSupporte
   source: MLPlaygroundJob; canRun: boolean; canCancel: boolean;
   shapSupported?: boolean;
 }) {
-  const [selectedMethod, setSelectedMethod] = useState<Method>(shapSupported
-    ? "permutation_shap_median_v1" : "median_reference_feature_replacement");
+  const [sensitivityVisited, setSensitivityVisited] = useState(false);
   if (source.status !== "Succeeded" || typeof source.result?.anomaly_score !== "number")
     return null;
   return <section className="playground-explanations" aria-label="단일 입력 모델 설명">
-    <div className="playground-explanation-tabs" role="group" aria-label="설명 방법">
-      {shapSupported && <button type="button" className="secondary"
-        aria-pressed={selectedMethod === "permutation_shap_median_v1"}
-        onClick={() => setSelectedMethod("permutation_shap_median_v1")}>SHAP 기여도</button>}
-      <button type="button" className="secondary" aria-pressed={selectedMethod === "median_reference_feature_replacement"}
-        onClick={() => setSelectedMethod("median_reference_feature_replacement")}>Feature 치환 민감도</button>
-    </div>
-    <MethodExplanation key={source.id + selectedMethod} source={source}
-      method={selectedMethod} canRun={canRun} canCancel={canCancel} />
+    {shapSupported && <MethodExplanation key={source.id + ":shap"} source={source}
+      method="permutation_shap_median_v1" canRun={canRun} canCancel={canCancel} />}
+    <details className="observation-secondary-analysis" onToggle={event => {
+      if (event.currentTarget.open) setSensitivityVisited(true);
+    }}>
+      <summary>추가 실험 · 기준값 치환</summary>
+      {sensitivityVisited && <MethodExplanation key={source.id + ":sensitivity"} source={source}
+        method="median_reference_feature_replacement" canRun={canRun} canCancel={canCancel} />}
+    </details>
   </section>;
 }

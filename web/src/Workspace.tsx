@@ -85,7 +85,12 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const { tab, resource, context, navigate: setTab, navigateWithContext,
     selectContext, openResource } = useWorkspaceNavigation();
   function startScoring(modelId: string, modelGroupKey = context.modelGroupKey) {
-    navigateWithContext("scoring", { modelId, modelGroupKey });
+    navigateWithContext("scoring", { modelId, modelGroupKey,
+      ...(context.pipelineRunId ? { pipelineReturn: true, pipelineRunId: context.pipelineRunId,
+        datasetId: context.datasetId, candidateRowIndex: context.candidateRowIndex,
+        pipelineAnalysisSection: context.pipelineAnalysisSection } : context.modelLabReturn
+          ? { modelLabReturn: true } : {}),
+    });
   }
   function startDecision(view: DecisionView, scoringId: string) {
     navigateWithContext(
@@ -621,6 +626,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         examplesLoading={examplesLoading}
         examplesError={examplesError}
         onRetryExamples={() => setExamplesReload(value => value + 1)}
+        onApplyModel={startScoring}
         onUseExample={usePipelineExample}
         initialDatasetId={context.datasetId ?? ""}
         initialRunId={context.pipelineRunId ?? ""}
@@ -870,19 +876,19 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onOpenModel={id => openResource("model", id)}
           canTrain={canRun} canCancel={canCancel}
           canInspectOperations={canInspectStorage || canViewAudit} />}
-      {resource && context.pipelineReturn && context.pipelineRunId &&
+      {(resource || tab === "scoring") && context.pipelineReturn && context.pipelineRunId &&
         <section className="pipeline-return" role="status">
-          <div><strong>모델 실험실에서 열린 결과입니다.</strong>
-            <p>원래 Pipeline의 분석 결과와 별도로 생성한 모델·점수 결과를 구분해 확인할 수 있습니다.</p>
+          <div><strong>학습 결과에서 이어진 작업</strong>
+            <p>새 분석은 별도로 실행되며 원래 학습 결과는 유지됩니다.</p>
           </div>
           <button type="button" className="secondary" onClick={() =>
             navigateWithContext("pipelines", {
               datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
               candidateRowIndex: context.candidateRowIndex,
               pipelineAnalysisSection: context.pipelineAnalysisSection,
-            })}>원래 Pipeline Run으로 돌아가기 →</button>
+            })}>학습 결과 복귀 →</button>
         </section>}
-      {(resource || (["policies", "evaluations", "explanations"] as Tab[]).includes(tab)) &&
+      {(resource || (["scoring", "policies", "evaluations", "explanations"] as Tab[]).includes(tab)) &&
         context.modelLabReturn && context.modelId &&
         <section className="pipeline-return" role="status">
           <div><strong>활동 이상 탐지에서 열린 결과입니다.</strong>
@@ -901,6 +907,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "scoring" && !resource && <ScoringWorkspace
         modelGroupKey={context.modelGroupKey ?? "default"}
         datasets={datasets} preferredModelId={context.modelId ?? ""}
+        hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
+        canUpload={canWrite} onDatasetRegistered={data => {
+          setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+          showExamples.current = false;
+        }}
         onModelSelected={modelId => selectContext({ ...context, modelId })} onNavigate={setTab}
         canRun={canRun} canCancel={canCancel} onOpenResource={openResource} />}
       {(["policies","evaluations","explanations"] as Tab[]).includes(tab) && !resource &&

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsCoreOption } from "echarts";
 import { formatError, request } from "./api";
 import { DataChart } from "./DataChart";
+import { verifiedScoreHistogram } from "./ModelScoreContext";
 import { EvidenceFacts } from "./EvidenceFacts";
 import { formatObservedAt } from "./display-format";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
@@ -21,29 +22,10 @@ function readable(value: unknown): string {
   return number === null ? "근거 없음" : number.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
 }
 
-/** 결과에 보존된 정확한 히스토그램만 인정한다. 검증되지 않은 분포는 추정하지 않는다. */
-function verifiedHistogram(summary: Record<string, unknown>, rowCount: number):
-  { edges: number[]; counts: number[] } | null {
-  const histogram = summary.histogram;
-  if (!histogram || typeof histogram !== "object") return null;
-  const data = histogram as Record<string, unknown>;
-  const edges = data.bin_edges;
-  const counts = data.bin_counts;
-  if (data.method !== "equal_width_exact_v1" || !Array.isArray(edges) ||
-      !Array.isArray(counts) || counts.length === 0 || counts.length > 128 ||
-      edges.length !== counts.length + 1 || data.score_count !== rowCount ||
-      !edges.every((value: unknown, index: number) =>
-        typeof value === "number" && Number.isFinite(value) &&
-        (index === 0 || value > edges[index - 1])) ||
-      !counts.every((value: unknown) => typeof value === "number" && Number.isInteger(value) && value >= 0) ||
-      counts.reduce((sum: number, value: number) => sum + value, 0) !== rowCount) return null;
-  return { edges: edges as number[], counts: counts as number[] };
-}
-
 /** 실제 결과의 검증된 전체 히스토그램만 표시한다. 추정 분포를 만들지 않는다. */
 function distributionOption(summary: Record<string, unknown>, rowCount: number,
   selectedScore: number | null): EChartsCoreOption | null {
-  const verified = verifiedHistogram(summary, rowCount);
+  const verified = verifiedScoreHistogram(summary, rowCount);
   if (!verified) return null;
   const { edges, counts } = verified;
   return {
