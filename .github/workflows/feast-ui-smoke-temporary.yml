@@ -1,0 +1,40 @@
+name: Temporary Feast UI focused smoke
+on:
+  push:
+    branches: [feat/feast-ui-catalog]
+permissions:
+  contents: read
+concurrency:
+  group: feast-ui-smoke
+  cancel-in-progress: true
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build only Feast UI and readonly Registry dependency
+        run: docker compose --profile app up --build -d --wait feast-ui
+      - name: Verify UI server and catalog configuration
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:9608/health
+          curl --fail --silent --show-error http://127.0.0.1:9608/projects-list.json | python -m json.tool
+          curl --fail --silent --show-error http://127.0.0.1:9608/ > /tmp/feast-ui-index.html
+          grep -qi 'Feast' /tmp/feast-ui-index.html
+      - name: Verify SQL viewer is query-only
+        run: |
+          docker compose --profile app exec -T feast-postgres sh -ec '
+            export PGPASSWORD=feast-ui-dev-only
+            psql -h 127.0.0.1 -U feast_ui -d sos_feast -Atc "SELECT count(*) FROM feast_metadata" >/dev/null
+            if psql -h 127.0.0.1 -U feast_ui -d sos_feast -v ON_ERROR_STOP=1 -c "DELETE FROM feast_metadata" >/tmp/readonly-check.log 2>&1; then
+              echo "ERROR: Feast UI role can modify registry" >&2
+              exit 1
+            fi
+            cat /tmp/readonly-check.log
+          '
+      - name: Logs on failure
+        if: failure()
+        run: docker compose --profile app logs --tail 140 feast-ui-access feast-ui feast-postgres
+      - name: Stop isolated services
+        if: always()
+        run: docker compose --profile app down || true
