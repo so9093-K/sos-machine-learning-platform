@@ -109,6 +109,8 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
       이 결과의 차트는 표시하지 않습니다. 설명 결과 판본을 확인하세요.</p>;
   }
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
+    <p className="explanation-baseline">비교 기준: 학습 Feature별 중앙값을 모은 합성 입력 1개.
+      학습 데이터의 실제 분포나 정상 범위를 나타내지 않습니다.</p>
     <h6>{zeroContributions ? "SHAP 기준 점수와 일치하는 결과" :
       `모델 점수에 기여한 주요 Feature ${shown.length}개 (SHAP)`}</h6>
     {zeroContributions
@@ -158,8 +160,7 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
             <small>전체 기여도 합에 포함되며 단일 Feature의 기여도가 아닙니다.</small>
           </div>}
         </>}
-    <p className="hint">저장된 모델 점수와 SHAP 설명의 재구성 오차 {key(residual)}를 확인했습니다.
-      기여도는 사고의 원인이나 확률을 의미하지 않습니다.</p>
+    <p className="hint">기여도는 이 입력의 모델 점수에 대한 근사 설명입니다. 사고 원인이나 발생 확률을 뜻하지 않습니다.</p>
     <details className="pipeline-shap-technical">
       <summary>SHAP 상세 계산 근거</summary>
       <div className="pipeline-shap-technical-content">
@@ -170,8 +171,7 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
             { label: "모델 점수 출력", value: "-score_samples" },
             { label: "기준 배경", value: `합성 관측값 ${key(output.baseline_row_count)}개` },
           ]} />
-          <p className="hint">Train Feature 중앙값으로 구성한 합성 관측값을 기준으로 합니다.
-            실제 Train 관측 분포를 대표하지 않습니다.</p>
+          <p className="hint">점수 재구성 오차: {key(residual)}. 합산 관계를 확인하는 값이며, 개별 기여도 추정의 정확도를 측정한 값이 아닙니다.</p>
         </section>
         <section aria-label="SHAP 재현 설정">
           <h6>재현 설정</h6>
@@ -307,8 +307,9 @@ export function PipelineShapExplanation({
 
   return <div className="pipeline-shap-explanation">
     <h6>Feature별 점수 기여도 <small>SHAP</small></h6>
-    <p className="hint">실제 모델 이상 점수를 Feature별 기여도로 나눠 봅니다.
-      요청할 때만 계산하며, 아래 치환 민감도와는 다른 질문에 답하는 방법입니다.</p>
+    <p className="hint">기준 입력에서 이 관측값으로 바뀌면서 모델 점수가 얼마나 달라졌는지 Feature별로 설명합니다.</p>
+    {!result && <p className="explanation-baseline">비교 기준: 학습 Feature별 중앙값을 모은 합성 입력 1개.
+      학습 데이터의 실제 분포나 정상 범위를 나타내지 않습니다.</p>}
     {lookup === "loading" && <p role="status">이 후보의 기존 SHAP 결과를 찾고 있습니다.</p>}
     {lookup === "error" && <div role="alert">
       <p>이전 SHAP 작업을 확인하지 못했습니다.</p>

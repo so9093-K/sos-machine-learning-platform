@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { MLScoringPanel } from "./MLScoringPanel";
@@ -273,12 +273,14 @@ function JobRowSummary({ job, subject }: { job: JobRow; subject: string }) {
 
 /** 특정 학습 화면을 거치지 않고 Model Revision과 Dataset으로 Scoring한다. */
 export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel,
-  onOpenResource, onModelSelected, onNavigate }: {
+  onOpenResource, onModelSelected, onNavigate, modelGroupKey = "default" }: {
+  modelGroupKey?: string;
   datasets: Dataset[]; preferredModelId: string; canRun: boolean; canCancel: boolean;
   onOpenResource: OpenResource; onModelSelected: (id: string) => void;
   onNavigate: (tab: "ml" | "scoring") => void;
 }) {
   const [registeredModels, setRegisteredModels] = useState<MLflowModelVersionPage["items"]>([]);
+  const modelPageRequest = useRef(0);
   const [nextModelPage, setNextModelPage] = useState<string | null>(null);
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const [modelId, setModelId] = useState(preferredModelId);
@@ -292,7 +294,10 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
   }, [preferredModelId]);
   useEffect(() => {
     let active = true;
-    void request<MLflowModelVersionPage>("/api/ml/registry/models")
+    modelPageRequest.current += 1;
+    setError("");
+    setRegisteredModels([]); setNextModelPage(null);
+    void request<MLflowModelVersionPage>("/api/ml/registry/models?registry_key=" + encodeURIComponent(modelGroupKey))
       .then(page => {
         if (active) {
           setRegisteredModels(page.items);
@@ -302,7 +307,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
       .catch(e => { if (active) setError(formatError(e)); });
     void scores.refresh().catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
-  }, []);
+  }, [modelGroupKey]);
   useEffect(() => {
     let active = true;
     setModel(null);
@@ -322,11 +327,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
         목록은 MLflow Registry에서 현재 Actor가 이용할 수 있는 모델을 조회합니다.</p>
       {error && <p role="alert">{error}</p>}
       <div className="form-row">
-        <label>모델 판본 ID
-          <input value={modelId} onChange={event => setModelId(event.target.value)}
-            placeholder="기존 모델 버전 ID" aria-label="점수화 대상 모델 버전 ID"/>
-        </label>
-        <label>MLflow 등록 모델 버전
+        <label>등록된 모델 버전
           <select value={available.includes(modelId) ? modelId : ""}
             aria-label="조회된 모델 버전 선택" onChange={event => {
               setModelId(event.target.value);
@@ -335,30 +336,42 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
             }}>
             <option value="">모델 선택</option>
             {registeredModels.map(item => <option key={item.name + item.version} value={item.model_id}>
-              {item.name} · v{item.version}
+              v{item.version} · {datasets.find(d => d.id === item.dataset_id)?.name ?? "학습 Dataset 정보 없음"}
+              {item.created_at ? " · " + formatRecordedAt(item.created_at) : ""}
             </option>)}
           </select>
         </label>
+        <details className="resource-id-lookup"><summary>모델 판본 ID로 직접 선택</summary>
+          <label>모델 판본 ID
+            <input value={modelId} onChange={event => setModelId(event.target.value)}
+              placeholder="기존 모델 버전 ID" aria-label="점수화 대상 모델 버전 ID"/>
+          </label>
+          <button type="button" className="secondary" disabled={!modelId.trim()}
+            onClick={() => {
+              const identifier = modelId.trim();
+              if (identifier === loadedModelId) retryModelLookup(n => n + 1);
+              else setLoadedModelId(identifier);
+              onModelSelected(identifier);
+            }}>모델 버전 조회</button>
+          {modelId.trim() !== loadedModelId && <p className="hint">
+            모델 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
+        </details>
       </div>
       {nextModelPage && <button type="button" className="secondary" onClick={() => {
         const token = nextModelPage;
+        const generation = modelPageRequest.current;
         setNextModelPage(null);
         void request<MLflowModelVersionPage>(
-          `/api/ml/registry/models?page_token=${encodeURIComponent(token)}`,
+          `/api/ml/registry/models?registry_key=${encodeURIComponent(modelGroupKey)}&page_token=${encodeURIComponent(token)}`,
         ).then(page => {
+          if (generation !== modelPageRequest.current) return;
           setRegisteredModels(old => [...old, ...page.items]);
           setNextModelPage(page.next_page_token ?? null);
-        }).catch(e => { setNextModelPage(token); setError(formatError(e)); });
+        }).catch(e => {
+          if (generation !== modelPageRequest.current) return;
+          setNextModelPage(token); setError(formatError(e));
+        });
       }}>모델 버전 더 보기</button>}
-      <button type="button" className="secondary" disabled={!modelId.trim()}
-        onClick={() => {
-          const identifier = modelId.trim();
-          if (identifier === loadedModelId) retryModelLookup(n => n + 1);
-          else setLoadedModelId(identifier);
-          onModelSelected(identifier);
-        }}>모델 버전 조회</button>
-      {modelId.trim() !== loadedModelId && <p className="hint">
-        모델 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
       {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
         modelId.trim() === loadedModelId &&
         <p className="hint">선택 모델: {model.registry_version ? `v${model.registry_version} · ` : ""}{algorithmLabel(model.algorithm)} · 학습 {formatRecordedAt(model.created_at)}
@@ -452,10 +465,6 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
       <p className="hint">이미 계산된 점수 결과를 재사용합니다. 학습이나 재점수화 없이 실행할 수 있습니다.</p>
       {error && <p role="alert">{error}</p>}
       <div className="form-row">
-        <label>점수 결과 ID
-          <input value={scoringId} aria-label="선택할 점수 결과 ID"
-            onChange={event => setScoringId(event.target.value)} placeholder="기존 결과 ID"/>
-        </label>
         <label>조회된 점수 결과
           <select aria-label="조회된 점수 결과 선택" value={available.has(scoringId) ? scoringId : ""}
             onChange={event => {
@@ -467,18 +476,24 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
             {[...available].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
           </select>
         </label>
+        <details className="resource-id-lookup"><summary>점수 결과 ID로 직접 선택</summary>
+          <label>점수 결과 ID
+            <input value={scoringId} aria-label="선택할 점수 결과 ID"
+              onChange={event => setScoringId(event.target.value)} placeholder="기존 결과 ID"/>
+          </label>
+          <button type="button" className="secondary" disabled={!scoringId.trim()}
+            onClick={() => {
+              const identifier = scoringId.trim();
+              if (identifier === loadedScoringId) retryScoringLookup(n => n + 1);
+              else setLoadedScoringId(identifier);
+              onScoringSelected(identifier);
+            }}>점수 결과 조회</button>
+          {scoringId.trim() !== loadedScoringId && <p className="hint">
+            점수 결과 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
+        </details>
       </div>
       {scores.nextCursor && <button className="secondary"
         onClick={() => void scores.loadMore().catch(e => setError(formatError(e)))}>이전 점수 결과 더 보기</button>}
-      <button type="button" className="secondary" disabled={!scoringId.trim()}
-        onClick={() => {
-          const identifier = scoringId.trim();
-          if (identifier === loadedScoringId) retryScoringLookup(n => n + 1);
-          else setLoadedScoringId(identifier);
-          onScoringSelected(identifier);
-        }}>점수 결과 조회</button>
-      {scoringId.trim() !== loadedScoringId && <p className="hint">
-        점수 결과 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
       {scoring && scoring.id === loadedScoringId && preferredScoringId === loadedScoringId &&
         scoringId.trim() === loadedScoringId &&
         <p>점수화된 행 {scoring.row_count.toLocaleString("ko-KR")}건 · 생성 {formatRecordedAt(scoring.created_at)}</p>}
@@ -492,9 +507,11 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
     </section>
     {scoring && scoring.id === loadedScoringId && preferredScoringId === loadedScoringId &&
       scoringId.trim() === loadedScoringId && <section className="panel">
+      {view === "explanation" ? <ScoringObservationExplorer key={scoring.id} result={scoring}
+        canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} /> :
       <MLDecisionPanel key={scoring.id + view} scoring={scoring} view={view}
         canRun={canRun} canCancel={canCancel}
-        onOpenResult={(kind,id) => onOpenResource(kind,id)} />
+        onOpenResult={(kind,id) => onOpenResource(kind,id)} />}
     </section>}
     <section className="panel">
       <div className="panel-head"><div><h2>{config.title} 작업 이력</h2>

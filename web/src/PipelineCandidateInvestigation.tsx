@@ -282,23 +282,16 @@ export function PipelineCandidateInvestigation({
       }}>이 관측값으로 실험 →</button>
       {experimentError && <p role="alert">{experimentError}</p>}
     </div>}
-    {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
-      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
-      onOpenResource={onOpenResource} />}
     {observationMode && <section className="observation-activity" aria-label="관측된 활동 특징">
       <div className="observation-activity-heading">
-        <h6>활동 특징</h6>
-        <p>선택한 관측값의 실제 활동 지표입니다. 학습 중앙값은 비교 기준이며 정상 범위나 사고 원인을 의미하지 않습니다.</p>
+        <h6>관측된 입력값</h6>
+        <p>기본 활동 지표와 학습 중앙값을 비교합니다. 아래는 기본 미리보기이며 점수 기여도 순위가 아닙니다.</p>
       </div>
       <div className="observation-activity-highlights">
         {previewFeatures.map(name => <div key={name} className="observation-activity-highlight">
           <span title={name}>{activityFeatureLabel(name)}</span>
-          <FeatureValueComparison actual={candidate.features[name]}
+          <FeatureValueComparison feature={name} actual={candidate.features[name]}
             reference={referenceMap?.get(name)} />
-          {referenceDifference(name, candidate.features[name]) &&
-            <small className="observation-activity-difference">
-              {referenceDifference(name, candidate.features[name])}
-            </small>}
         </div>)}
       </div>
       {!modelRevisionId && <p className="hint">학습 모델 판본 참조가 없어 중앙값을 비교할 수 없습니다.</p>}
@@ -333,15 +326,13 @@ export function PipelineCandidateInvestigation({
             {shown.map(([name, value]) =>
               <div key={name} className="observation-activity-figure">
                 <span title={name}>{activityFeatureLabel(name)}</span>
-                <FeatureValueComparison actual={value} reference={referenceMap?.get(name)} />
-                {referenceDifference(name, value) &&
-                  <small className="observation-activity-difference">{referenceDifference(name, value)}</small>}
+                <FeatureValueComparison feature={name} actual={value} reference={referenceMap?.get(name)} />
               </div>)}
           </div>
           {hidden.length > 0 && <details className="observation-activity-extra">
             <summary>추가 지표 {hidden.length}개 확인</summary>
             <div className="table-scroll"><table>
-              <thead><tr><th>Feature</th><th>관측값</th><th>Train 중앙값</th><th>중앙값 대비</th></tr></thead>
+              <thead><tr><th>Feature</th><th>관측값</th><th>학습 중앙값</th><th>중앙값 대비</th></tr></thead>
               <tbody>{hidden.map(([name, value]) => <tr key={name}>
                 <th title={name}>{activityFeatureLabel(name)}</th><td>{format(value)}</td>
                 <td>{referenceLabel(name)}</td>
@@ -355,6 +346,9 @@ export function PipelineCandidateInvestigation({
       <p className="hint">학습 중앙값과의 차이는 정상 범위·Feature 중요도·이상 원인을 의미하지 않습니다.</p>
       </details>
     </section>}
+    {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
+      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
+      onOpenResource={onOpenResource} />}
     {!observationMode && <details className="pipeline-feature-details">
       <summary>전체 {Object.keys(candidate.features).length}개 Feature 관측값·학습 참조값 비교</summary>
       <p className="hint">Train Feature별 중앙값은 비교 기준입니다.

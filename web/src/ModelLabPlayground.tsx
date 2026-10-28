@@ -408,12 +408,12 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
           ? observationEdits.length > 0 ? `수정 ${observationEdits.length}개` : "원본 입력 유지"
           : editedNames.length > 0 ? `변경 ${editedNames.length}개` : "기준 입력"}</span>
       </div>
-      <p className="hint">같은 Feature 안에서만 막대 길이를 비교합니다. 학습 중앙값은 정상 범위나
-        모델 기여도가 아닙니다. 중앙값이 0이거나 음수인 경우 등 비례 표현이 부적절하면 숫자로 표시합니다.</p>
+      <p className="hint">현재 입력값과 학습 중앙값을 비교합니다. 참조값이 양수일 때는 배율을,
+        그 외에는 차이를 표시합니다. 모델의 점수 변화는 실제 계산 후 확인할 수 있습니다.</p>
       <div className="model-lab-reference-grid">
         {comparisonNames.map(name => <div key={name} className="model-lab-reference-item">
           <strong>{activityFeatureLabel(name)}</strong>
-          <FeatureValueComparison actual={playgroundNumberValid(fields[name] ?? "",
+          <FeatureValueComparison feature={name} actual={playgroundNumberValid(fields[name] ?? "",
             featureDtypes[model.features.indexOf(name)] ?? "")
             ? Number(fields[name]) : null}
             reference={referenceMedians[model.features.indexOf(name)]}

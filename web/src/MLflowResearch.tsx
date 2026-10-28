@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request } from "./api";
-import { ModelRegistryManager, ModelVersionManagement } from "./ModelRegistryManager";
+import { ModelRegistryManager, ModelVersionManagement, type ModelGroup } from "./ModelRegistryManager";
 import type {
   MLflowExperiment, MLflowExperimentPage, MLflowModelVersion,
-  MLflowModelVersionPage, MLflowRun, MLflowRunPage,
+  MLflowModelVersionPage, MLflowRun, MLflowRunPage, Dataset,
 } from "./types";
+
+import { formatRecordedAt } from "./display-format";
+
+const runLabels: Record<string, string> = {
+  ml_train: "모델 학습", ml_score: "점수 계산", ml_policy: "판정 정책",
+  ml_evaluate: "평가", ml_explain: "설명", ml_playground: "단일 입력 점수 계산",
+};
+const comparisonConditions: Record<string, string> = {
+  "sos.dataset_id": "Dataset", "sos.dataset_version": "데이터 판본",
+  "sos.feature_count": "Feature 개수", "sos.feature_set_sha256": "Feature 구성 지문",
+  "sos.training_input_mode": "학습 입력 범위", "sos.training_input_rows": "학습 표본 상한",
+  "sos.missing_policy": "결측 처리", "sos.train_end": "학습 종료 시각",
+  "sos.calibration_end": "판정 기준 산정 종료 시각",
+};
 
 function url(path: string, params: Record<string, string | null>) {
   const query = new URLSearchParams();
@@ -13,11 +27,13 @@ function url(path: string, params: Record<string, string | null>) {
 }
 
 /** 연구 묶음·Run·모델 버전의 정본은 MLflow다. 실행 권한은 SOS API에서 판단한다. */
-export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }: {
+export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage, canTrain,
+  datasets, registryKey, onSelectGroup }: {
   onOpenModel: (id: string) => void;
-  onScoreModel: (id: string) => void;
-  onTrain: () => void;
-  canManage: boolean;
+  onScoreModel: (id: string, group: string) => void;
+  onTrain: (group: string) => void;
+  canManage: boolean; canTrain: boolean;
+  datasets: Dataset[]; registryKey: string; onSelectGroup: (key: string) => void;
 }) {
   const [experiments, setExperiments] = useState<MLflowExperiment[]>([]);
   const [models, setModels] = useState<MLflowModelVersion[]>([]);
@@ -29,38 +45,33 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
   const [selected, setSelected] = useState<string[]>([]);
   const [term, setTerm] = useState("");
   const [revision, setRevision] = useState(0);
-  const [registryKey, setRegistryKey] = useState("default");
-  const [groupArchived, setGroupArchived] = useState(false);
+  const [currentGroup, setCurrentGroup] = useState<ModelGroup | null>(null);
+  const group = currentGroup?.registry_key === registryKey ? currentGroup : null;
+  const groupTitle = group?.title ?? (registryKey === "default" ? "기본 활동 이상 탐지" : registryKey);
+  const groupArchived = group?.archived ?? false;
+  const [modelSelectionKey, setModelSelectionKey] = useState(registryKey);
+  const [runKind, setRunKind] = useState("ml_train");
+  const [runTerm, setRunTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [experimentError, setExperimentError] = useState("");
+  const [runError, setRunError] = useState("");
+  const [runsLoading, setRunsLoading] = useState(true);
   // 연구 선택·새로고침 이후 도착한 이전 페이지가 현재 목록을 오염시키지 않는다.
   const activeSelection = useRef({ experimentId, revision, registryKey });
   activeSelection.current = { experimentId, revision, registryKey };
 
   useEffect(() => {
     let active = true;
-    void request<{items: Array<{registry_key: string; archived: boolean}>}>(
-      "/api/ml/registry/groups",
-    ).then(page => {
-      if (active) setGroupArchived(
-        page.items.some(item => item.registry_key === registryKey && item.archived));
-    }).catch(() => { if (active) setGroupArchived(false); });
-    return () => { active = false; };
-  }, [registryKey, revision]);
-
-  useEffect(() => {
-    let active = true;
     setLoading(true);
     setError("");
-    void Promise.all([
-      request<MLflowExperimentPage>("/api/ml/experiments"),
-      request<MLflowModelVersionPage>(url("/api/ml/registry/models", {
-        registry_key: registryKey, include_archived: "true",
-      })),
-    ]).then(([exp, model]) => {
+    setModelCursor(null);
+    void request<MLflowModelVersionPage>(url("/api/ml/registry/models", {
+      registry_key: registryKey, include_archived: "true",
+    })).then(model => {
       if (!active) return;
-      setExperiments(exp.items); setExperimentCursor(exp.next_page_token ?? null);
+      setModelSelectionKey(registryKey);
       setModels(model.items); setModelCursor(model.next_page_token ?? null);
     }).catch(exc => { if (active) setError(formatError(exc)); })
       .finally(() => { if (active) setLoading(false); });
@@ -69,6 +80,17 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
 
   useEffect(() => {
     let active = true;
+    setExperimentError("");
+    void request<MLflowExperimentPage>("/api/ml/experiments").then(page => {
+      if (!active) return;
+      setExperiments(page.items); setExperimentCursor(page.next_page_token ?? null);
+    }).catch(exc => { if (active) setExperimentError(formatError(exc)); });
+    return () => { active = false; };
+  }, [revision]);
+
+  useEffect(() => {
+    let active = true;
+    setRunsLoading(true); setRunError("");
     setRuns([]); setRunCursor(null); setSelected([]);
     void request<MLflowRunPage>(url("/api/ml/experiments/runs", {
       experiment_id: experimentId, page_token: null,
@@ -76,7 +98,8 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
       if (!active) return;
       setRuns(page.items);
       setRunCursor(page.next_page_token ?? null);
-    }).catch(exc => { if (active) setError(formatError(exc)); });
+    }).catch(exc => { if (active) setRunError(formatError(exc)); })
+      .finally(() => { if (active) setRunsLoading(false); });
     return () => { active = false; };
   }, [revision, experimentId]);
 
@@ -86,7 +109,8 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
       kind === "models" ? modelCursor : runCursor;
     if (!cursor) return;
     const selection = { experimentId, revision, registryKey };
-    setLoadingMore(true); setError("");
+    const reportError = kind === "models" ? setError : kind === "runs" ? setRunError : setExperimentError;
+    setLoadingMore(true); reportError("");
     try {
       if (kind === "experiments") {
         const page = await request<MLflowExperimentPage>(url("/api/ml/experiments", { page_token: cursor }));
@@ -113,105 +137,139 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
         setRunCursor(page.next_page_token ?? null);
       }
     } catch (exc) {
-      setError(formatError(exc));
+      if (activeSelection.current.revision === selection.revision &&
+          (kind !== "models" || activeSelection.current.registryKey === selection.registryKey) &&
+          (kind !== "runs" || activeSelection.current.experimentId === selection.experimentId)) {
+        reportError(formatError(exc));
+      }
     } finally {
       setLoadingMore(false);
     }
   }
 
   const filter = term.trim().toLowerCase();
-  const filteredModels = useMemo(() => models.filter(item =>
-    [item.name, item.version, item.job_id].some(value => value.toLowerCase().includes(filter))),
-    [models, filter]);
+  const datasetName = (id: string | null | undefined) => datasets.find(item => item.id === id)?.name ??
+    (id ? "현재 목록 외 Dataset" : "Dataset 정보 없음");
+  const filteredModels = modelSelectionKey !== registryKey ? [] : models.filter(item =>
+    [groupTitle, item.version, datasetName(item.dataset_id), item.job_id]
+      .some(value => value.toLowerCase().includes(filter)));
   const filteredRuns = useMemo(() => runs.filter(item =>
-    [item.id, item.job_id, item.job_kind].some(value => value.toLowerCase().includes(filter))),
-    [runs, filter]);
+    (runKind === "all" || item.job_kind === runKind) &&
+    [item.id, item.job_id, runLabels[item.job_kind] ?? item.job_kind,
+      datasets.find(d => d.id === item.params["sos.dataset_id"])?.name ?? ""]
+      .some(value => value.toLowerCase().includes(runTerm.trim().toLowerCase()))),
+    [runs, runKind, runTerm, datasets]);
   const compared = selected.map(id => runs.find(item => item.id === id))
     .filter((item): item is MLflowRun => item !== undefined);
   const comparableKeys = (field: "metrics" | "params") =>
     [...new Set(compared.flatMap(item => Object.keys(item[field])))].sort();
   function toggleRun(id: string) {
-    setSelected(current => current.includes(id)
-      ? current.filter(value => value !== id) : [...current.slice(-1), id]);
+    const next = runs.find(run => run.id === id);
+    setSelected(current => current.includes(id) ? current.filter(value => value !== id)
+      : current.length >= 2 || (compared.length > 0 && compared[0].job_kind !== next?.job_kind)
+        ? current : [...current, id]);
   }
 
   return <div className="ml-resource-workspace">
-    <ModelRegistryManager activeKey={registryKey} onSelect={setRegistryKey}
-      canManage={canManage}
+    <ModelRegistryManager activeKey={registryKey} onSelect={onSelectGroup}
+      canManage={canManage} onGroupResolved={setCurrentGroup}
       onChanged={() => setRevision(x => x + 1)} />
-    <section className="panel">
-      <div className="panel-head">
-        <div><h2>실험·모델 자산 관리</h2>
-          <p>MLflow가 연구 Experiment·Run·모델 버전을 관리하고 플랫폼이 모델 실행과 권한을 확인합니다.</p>
-        </div>
+    <section className="panel model-version-panel">
+      <div className="panel-head"><div><h2>{groupTitle} · 모델 버전</h2>
+        <p>학습 데이터와 시각을 확인하고 사용할 버전을 선택하세요.</p></div>
         <div className="actions">
-          <button type="button" onClick={onTrain}>새 학습 →</button>
-          <button type="button" className="secondary" onClick={() => setRevision(x => x + 1)}>
-            새로고침
-          </button>
+          {canTrain && <button type="button" disabled={groupArchived}
+            onClick={() => onTrain(registryKey)}>이 그룹에 새 버전 학습 →</button>}
+          <button type="button" className="secondary" onClick={() => setRevision(x => x + 1)}>새로고침</button>
         </div>
       </div>
-      {loading && <p role="status">MLflow 기록을 조회하고 있습니다.</p>}
-      {error && <p role="alert">{error}</p>}
-      <label>연구 Experiment
-        <select value={experimentId} onChange={event => setExperimentId(event.target.value)}
-          aria-label="연구 Experiment 선택">
-          <option value="">기본 실험</option>
-          {experiments.filter(item => item.name !== "기본 실험").map(item =>
-            <option value={item.id} key={item.id}>{item.name}</option>)}
-        </select>
-      </label>
-      {experimentCursor && <button type="button" className="secondary"
-        disabled={loadingMore} onClick={() => void loadMore("experiments")}>Experiment 더 보기</button>}
-      <label>모델 및 Run 검색
+      <label className="model-search">버전 검색
         <input value={term} onChange={event => setTerm(event.target.value)}
-          placeholder="모델 이름·버전·Job/Run ID" aria-label="모델과 Run 검색"/>
+          placeholder="버전·학습 Dataset" aria-label="모델 버전 검색" />
       </label>
-    </section>
-    <section className="panel">
-      <h2>등록된 모델 버전</h2>
-      {filteredModels.length === 0 && <p className="muted">등록된 모델이 없습니다. 학습 및 등록 후 표시됩니다.</p>}
-      <div className="job-list">
-        {filteredModels.map(item => <article className="ml-resource-row" key={item.name + "@" + item.version}>
-          <div><strong>{item.name} · v{item.version}</strong>
-            <p className="hint">상태 {item.status} · 생성 Job {item.job_id.slice(0, 12)}
-              {item.aliases?.length ? " · Alias " + item.aliases.join(", ") : ""}
-              {item.archived ? " · 보관됨" : ""}</p>
+      {loading && <p role="status">모델 버전을 조회하고 있습니다.</p>}
+      {error && <p role="alert">{error}</p>}
+      {!loading && !error && filteredModels.length === 0 && <p className="muted">
+        {term.trim() ? "검색 조건과 일치하는 버전이 없습니다." : "이 그룹에 등록된 모델 버전이 없습니다. 새 학습으로 첫 버전을 등록할 수 있습니다."}</p>}
+      <div className="model-version-list">
+        {filteredModels.map(item => <article className="model-version-row" key={item.name + "@" + item.version}>
+          <div className="model-version-identity"><h3>{groupTitle} · v{item.version}</h3>
+            <p>{datasetName(item.dataset_id)}</p>
+            <small>{item.created_at ? formatRecordedAt(item.created_at) : "학습 시각 정보 없음"}
+              {item.archived ? " · 보관됨" : " · 등록 완료"}</small>
           </div>
           <div className="model-index-actions">
-            <button type="button" className="secondary" onClick={() => onOpenModel(item.model_id)}>
-              모델 근거 확인
-            </button>
             <button type="button" disabled={item.archived || groupArchived}
-              onClick={() => onScoreModel(item.model_id)}>Scoring →</button>
-            <ModelVersionManagement model={item} registryKey={registryKey}
-              canManage={canManage}
-              onChanged={() => setRevision(x => x + 1)}/>
+              onClick={() => onScoreModel(item.model_id, registryKey)}>데이터에 적용 →</button>
+            <button type="button" className="secondary" onClick={() => onOpenModel(item.model_id)}>모델 상세</button>
+            <details className="model-version-settings"><summary>버전 관리·식별자</summary>
+              <p className="hint">Registry {item.name} · Job {item.job_id}</p>
+              {(item.aliases?.length ?? 0) > 0 && <p>Alias: {item.aliases?.join(", ")}</p>}
+              <ModelVersionManagement model={item} registryKey={registryKey} canManage={canManage}
+                onChanged={() => setRevision(x => x + 1)} />
+            </details>
           </div>
         </article>)}
       </div>
       {modelCursor && <button type="button" className="secondary" disabled={loadingMore}
         onClick={() => void loadMore("models")}>모델 버전 더 보기</button>}
     </section>
-    <section className="panel">
-      <h2>Run 검색 및 비교</h2>
-      <p className="hint">선택한 Experiment의 Run에서 최대 두 개를 비교합니다. Dataset·평가 조건이 다르면 성능 수치를 직접 비교할 수 없습니다.</p>
-      {filteredRuns.length === 0 && <p className="muted">조회된 Run이 없습니다.</p>}
-      <div className="job-list">
+    <details className="panel research-history">
+      <summary>실험 실행 이력·비교</summary>
+      <div className="research-history-body">
+      <p>같은 종류의 실행을 최대 두 개 선택해 설정과 기록된 지표를 비교합니다.</p>
+      {experimentError && <p role="alert">실험 목록 조회 실패: {experimentError}</p>}
+      {runError && <p role="alert">실행 이력 조회 실패: {runError}</p>}
+      <div className="form-row">
+        <label>연구 실험
+          <select value={experimentId} onChange={event => setExperimentId(event.target.value)} aria-label="연구 Experiment 선택">
+            <option value="">기본 실험</option>
+            {experiments.filter(item => item.name !== "기본 실험").map(item =>
+              <option value={item.id} key={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label>작업 종류
+          <select value={runKind} onChange={event => { setRunKind(event.target.value); setSelected([]); }}>
+            <option value="all">모든 작업</option>
+            {Object.entries(runLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select>
+        </label>
+        <label>실행 검색
+          <input value={runTerm} onChange={event => setRunTerm(event.target.value)} placeholder="Dataset·작업·Run ID" />
+        </label>
+      </div>
+      {experimentCursor && <button type="button" className="secondary" disabled={loadingMore}
+        onClick={() => void loadMore("experiments")}>실험 더 보기</button>}
+      {runsLoading && <p role="status">실행 이력을 조회하고 있습니다.</p>}
+      {!runsLoading && !runError && filteredRuns.length === 0 && <p className="muted">조회된 페이지에서 조건에 맞는 실행을 찾지 못했습니다.</p>}
+      <div className="research-run-list">
         {filteredRuns.map(item => <label className="ml-resource-row" key={item.id}>
           <input type="checkbox" checked={selected.includes(item.id)}
+            disabled={!selected.includes(item.id) && (selected.length >= 2 ||
+              (compared.length > 0 && compared[0].job_kind !== item.job_kind))}
             onChange={() => toggleRun(item.id)}/>
-          <span>{item.job_kind} · {item.id.slice(0, 12)} · {item.status}
-            <small className="muted"> · Job {item.job_id.slice(0, 12)}</small>
-          </span>
+          <span>{runLabels[item.job_kind] ?? item.job_kind} · {datasetName(item.params["sos.dataset_id"])}
+            <small>{item.start_time ? formatRecordedAt(new Date(item.start_time).toISOString()) : ""}
+              {" · "}{item.status === "FINISHED" ? "완료" : item.status ?? "상태 미상"}
+              {" · Run "}{item.id.slice(0, 10)}</small></span>
         </label>)}
       </div>
       {runCursor && <button type="button" className="secondary" disabled={loadingMore}
-        onClick={() => void loadMore("runs")}>Run 더 보기</button>}
-      {compared.length > 0 && <>
-        <h3>선택 Run 비교</h3>
-        {(["params", "metrics"] as const).map(field => <div key={field}>
-          <h3>{field === "params" ? "실행 파라미터" : "기록된 지표"}</h3>
+        onClick={() => void loadMore("runs")}>이전 실행 더 보기</button>}
+      {compared.length > 0 && <section className="run-comparison">
+        <h3>선택 실행 비교</h3>
+        <p className="hint">Dataset·판본·모델 및 평가 조건을 먼저 확인하세요. 학습 데이터의 점수는 독립 검증 성능을 나타내지 않습니다.</p>
+        <div className="table-scroll"><table><thead><tr><th>비교 조건</th>
+          {compared.map(run => <th key={run.id}>Run {run.id.slice(0, 10)}</th>)}</tr></thead>
+          <tbody>{Object.entries(comparisonConditions).filter(([key]) =>
+            key === "sos.dataset_id" || key === "sos.dataset_version" ||
+            compared.some(run => run.params[key] !== undefined)).map(([key, label]) =>
+            <tr key={key}><th>{label}</th>
+              {compared.map(run => <td key={run.id}>{key === "sos.dataset_id"
+                ? datasetName(run.params[key]) : run.params[key] ?? "기록 없음"}</td>)}</tr>)}</tbody>
+        </table></div>
+        {(["params", "metrics"] as const).map(field => <details key={field} open={field === "metrics"}>
+          <summary>{field === "params" ? "실행 설정" : "기록된 지표"}</summary>
           <div className="table-scroll"><table>
             <thead><tr><th>항목</th>{compared.map(run => <th key={run.id}>{run.id.slice(0, 10)}</th>)}</tr></thead>
             <tbody>{comparableKeys(field).map(key => <tr key={key}>
@@ -220,8 +278,9 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage }
               </td>)}
             </tr>)}</tbody>
           </table></div>
-        </div>)}
-      </>}
-    </section>
+        </details>)}
+      </section>}
+      </div>
+    </details>
   </div>;
 }

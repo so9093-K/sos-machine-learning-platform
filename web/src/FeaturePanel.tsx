@@ -59,7 +59,10 @@ export function FeaturePanel({
             {editingStep !== null && <button className="ghost" onClick={cancelEdit}>
               수정 취소</button>}
           </div>
-          <div className="form-row">
+          {(op === "lag" || op === "rolling_mean" || steps.some(step => step.op === "lag" || step.op === "rolling_mean")) &&
+          <div className="window-transform-settings">
+            <p className="hint">시간·그룹 기준은 이 변환의 모든 Lag·Rolling 단계에 공통으로 적용합니다.</p>
+            <div className="form-row">
             <label>시간·정렬 컬럼 <select aria-label="시간·정렬 컬럼" value={orderBy} onChange={e => {
               const next = e.target.value;
               setOrderBy(next);
@@ -81,7 +84,8 @@ export function FeaturePanel({
               </label>)}
             </fieldset>
             <p className="hint">Lag / Rolling은 시간 정렬 후 그룹별 계산합니다. Rolling Mean에는 현재 행이 포함됩니다.</p>
-          </div>
+            </div>
+          </div>}
           <div className="steps">{steps.length === 0 && <p className="muted">아직 변환 단계가 없습니다.</p>}
             {steps.map((step, i) => <div className="step" key={i}>
               <strong>{i + 1}. {opLabels[step.op] ?? step.op}</strong>

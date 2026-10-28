@@ -63,7 +63,7 @@ try {
   assert.match(resultView, /최고 이상 점수/);
   assert.match(resultView, /평균 이상 점수/);
   assert.doesNotMatch(resultView, /선택 관측값 점수/);
-  assert.match(resultView, /판정 정책 미적용/);
+  assert.match(resultView, /점수순 조회/);
   assert.match(resultView, /점수 상위 관측값/);
   assert.match(resultView, /분석 판본과 식별자/);
   assert.match(resultView, /evidence-facts-compact/);
@@ -73,7 +73,7 @@ try {
   assert.match(resultView, /version-1/);
   assert.match(resultView, /score-1/);
   assert.match(resultView, /점수가 높은 관측값/);
-  assert.match(resultView, /이상 사건 판정이나 발생 확률을 뜻하지 않습니다/);
+  assert.match(resultView, /사건 발생 확률을 뜻하지 않습니다/);
   // 히스토그램이 없는 이전 결과에는 분포나 선택 위치를 추정하지 않는다.
   const resultWithoutHistogram = renderToStaticMarkup(React.createElement(ScoringObservationExplorer, {
     result: {
@@ -125,6 +125,17 @@ try {
   assert.equal(contextPath("training", nextNavigationContext(routeAt(
     "/models", "?dataset=data-v1"), "training")), "/training?dataset=data-v1");
 
+  const groupTraining = routeAt("/training", "?dataset=data-v1&group=research-team");
+  assert.equal(contextPath("ml", nextNavigationContext(groupTraining, "ml")),
+    "/models?dataset=data-v1&group=research-team");
+  assert.equal(contextPath("scoring", nextNavigationContext(
+    routeAt("/models", "?group=research-team"), "scoring")), "/scoring?group=research-team");
+  const groupModel = resourcePath("model", "model-v1", { modelGroupKey: "research-team" });
+  assert.equal(groupModel, "/models/model-v1?group=research-team");
+  assert.equal(contextPath("scoring", nextNavigationContext(
+    routeAt("/models/model-v1", "?group=research-team"), "scoring")),
+    "/scoring?model=model-v1&group=research-team");
+  assert.equal(routeAt("/training", "?group=invalid!").context.modelGroupKey, undefined);
   assert.equal(routeAt("/scoring", "?model=model-v1").context.modelId, "model-v1");
   assert.equal(contextPath("pipelines", { pipelineView: "learn" }), "/pipelines?view=learn");
   assert.equal(contextPath("pipelines", { pipelineView: "use" }), "/pipelines?view=use");
@@ -263,6 +274,7 @@ try {
   const trainingForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
     datasets: [{ id: "data-v1", name: "Example Dataset", kind: "file" }],
     initialDatasetId: "data-v1", onDatasetSelected: () => {},
+    registryKey: "default", onRegistryGroupSelected: () => {},
     canTrain: false, canCancel: false, onOpenModel: () => {},
   }));
   assert.match(trainingForm, /<option value="data-v1" selected=""/);
@@ -285,6 +297,7 @@ try {
 
   const pagedDatasetForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
     datasets: [], initialDatasetId: "data-not-on-first-page",
+    registryKey: "default", onRegistryGroupSelected: () => {},
     onDatasetSelected: () => {}, canTrain: false, canCancel: false,
     onOpenModel: () => {},
   }));
@@ -421,7 +434,7 @@ try {
   assert.match(defaultObservation, /기본 표시 관측값 분석/);
   assert.match(defaultObservation, /2026-01-01 02:00:00 UTC/);
   assert.doesNotMatch(defaultObservation, /관측 시각·원본 관측치 ID 없음/);
-  assert.match(groupedObservation, /활동 특징/);
+  assert.match(groupedObservation, /관측된 입력값/);
   const observationWithExperiment = renderToStaticMarkup(
     React.createElement(PipelineCandidateInvestigation, {
       candidate: {
@@ -441,7 +454,7 @@ try {
     }));
   assert.doesNotMatch(noPermissionExperiment, /이 관측값으로 실험/);
   // 참조 모델이 없으면 비율을 추정하지 않고 비교 기준 없음으로 표시한다.
-  assert.match(groupedObservation, /Train 중앙값/);
+  assert.match(groupedObservation, /학습 중앙값/);
   assert.match(groupedObservation, /비교 기준 없음/);
   assert.doesNotMatch(groupedObservation, /feature-reference-bars/);
   assert.match(groupedObservation, /observation-activity-highlights/);
@@ -454,9 +467,9 @@ try {
   assert.match(groupedObservation, /프로세스 활동/);
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
-  assert.match(groupedObservation, /학습 중앙값은 비교 기준이며 정상 범위나 사고 원인을 의미하지 않습니다/);
-  assert.ok(groupedObservation.indexOf("Feature별 점수 기여도") <
-    groupedObservation.indexOf("활동별 지표"));
+  assert.match(groupedObservation, /기본 미리보기이며 점수 기여도 순위가 아닙니다/);
+  assert.ok(groupedObservation.indexOf("관측된 입력값") <
+    groupedObservation.indexOf("Feature별 점수 기여도"));
   assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
   assert.match(groupedObservation, /학습 모델 판본 참조가 없어/);
   const pipelineViewOnly = renderToStaticMarkup(
@@ -554,7 +567,7 @@ try {
   assert.match(shapPreview, /모델 점수 출력/);
   assert.match(shapPreview, /-score_samples/);
   assert.match(shapPreview, /합성 관측값 1개/);
-  assert.match(shapPreview, /실제 Train 관측 분포를 대표하지 않습니다/);
+  assert.match(shapPreview, /학습 데이터의 실제 분포나 정상 범위를 나타내지 않습니다/);
   assert.match(shapPreview, /재현 설정/);
   assert.match(shapPreview, /순열 반복/);
   assert.match(shapPreview, /Seed/);
@@ -782,25 +795,26 @@ try {
   assert.equal(playgroundInputMatchesResult({ a: "1000", b: "0.25" },
     { a: 1000, b: 0.25, c: 1 }, ["a", "b"]), false);
   const { FeatureValueComparison } = await vite.ssrLoadModule("/src/FeatureValueComparison.tsx");
-  const bars = renderToStaticMarkup(React.createElement(FeatureValueComparison,
+  const numericComparison = renderToStaticMarkup(React.createElement(FeatureValueComparison,
     { actual: 500, reference: 5, actualLabel: "현재 입력값" }));
-  assert.match(bars, /현재 입력값/);
-  assert.match(bars, /Train 중앙값/);
-  assert.match(bars, /width:100%/);
-  assert.match(bars, /width:1%/);
-  assert.match(bars, /feature-reference-legend-actual/);
-  assert.match(bars, /feature-reference-legend-train/);
+  assert.match(numericComparison, /현재 입력값/);
+  assert.match(numericComparison, /학습 중앙값/);
+  assert.match(numericComparison, /500/);
+  assert.match(numericComparison, /약 100배/);
+  assert.doesNotMatch(numericComparison, /feature-reference-bars|width:/);
   const tinyValue = renderToStaticMarkup(React.createElement(FeatureValueComparison,
     { actual: 0.0000000034, reference: 1 }));
   assert.match(tinyValue, /3[.]400e-9/);
   assert.doesNotMatch(tinyValue, /<strong>0<\/strong>/);
   const noRatio = renderToStaticMarkup(React.createElement(FeatureValueComparison,
     { actual: -5, reference: 0 }));
-  assert.doesNotMatch(noRatio, /feature-reference-bars/);
+  assert.match(noRatio, /-5/);
+  assert.doesNotMatch(noRatio, /약 .*배|Infinity|NaN/);
   const zeroMedian = renderToStaticMarkup(React.createElement(FeatureValueComparison,
     { actual: 1000, reference: 0 }));
-  assert.match(zeroMedian, /Train 중앙값/);
-  assert.doesNotMatch(zeroMedian, /feature-reference-bars/);
+  assert.match(zeroMedian, /학습 중앙값/);
+  assert.match(zeroMedian, /\+1,000/);
+  assert.doesNotMatch(zeroMedian, /약 .*배|Infinity|NaN/);
   const exampleModel = {
     id: "model-test", features: ["cnt_proc_exec", "cnt_file_del"],
     runtime: { feature_reference_medians: [12, 2], feature_dtypes: ["Int64", "Int64"] },

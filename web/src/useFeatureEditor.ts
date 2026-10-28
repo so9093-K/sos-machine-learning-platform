@@ -32,8 +32,8 @@ export function useFeatureEditor({
   }, [datasetId]);
   const transform = {
     steps,
-    ...(orderBy ? { order_by: orderBy } : {}),
-    ...(groupBy.length ? { group_by: groupBy } : {}),
+    ...(needsTimeOrder(steps) && orderBy ? { order_by: orderBy } : {}),
+    ...(needsTimeOrder(steps) && groupBy.length ? { group_by: groupBy } : {}),
   };
   // 늦게 돌아온 변환 응답도 원본과 실제 Recipe가 일치할 때만 보인다.
   const signature = JSON.stringify({ dataset_id: datasetId, revision, transform });

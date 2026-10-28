@@ -2902,6 +2902,10 @@ export interface components {
              * @default false
              */
             archived: boolean;
+            /** Created At */
+            created_at?: string | null;
+            /** Dataset Id */
+            dataset_id?: string | null;
             /** Job Id */
             job_id: string;
             /** Model Id */
