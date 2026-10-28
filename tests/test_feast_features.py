@@ -50,3 +50,39 @@ def test_retrieval_requires_registered_job_reference():
         registration_job_id="registered", entity_dataset_id="entity",
         timestamp_column="event_time"
     ).registration_job_id == "registered"
+
+
+def test_feature_job_responses_match_the_real_store_shapes():
+    from sos_platform.schemas import JobOut, JobSummaryOut
+
+    full = {
+        "id": "reg-job", "kind": "feature_register", "dataset_id": "source",
+        "spec": {"feature_dataset_id": "source"}, "status": "Succeeded",
+        "cancel_requested": False, "result": {"feature_service": "sos_fs_123"},
+        "error": None, "created_at": "2026-10-28T00:00:00+00:00",
+        "updated_at": "2026-10-28T00:01:00+00:00", "attempts": [],
+    }
+    assert JobOut.model_validate(full).kind == "feature_register"
+    assert JobOut.model_validate({**full, "kind": "feature_retrieve"}).kind == "feature_retrieve"
+    summary = {
+        **{key: value for key, value in full.items() if key != "attempts"},
+        "attempt_count": 1,
+        "latest_attempt": None,
+    }
+    assert JobSummaryOut.model_validate(summary).kind == "feature_register"
+    assert JobSummaryOut.model_validate({**summary, "kind": "feature_retrieve"}).kind == "feature_retrieve"
+
+
+def test_feature_openapi_contract_uses_summary_for_registration_listing(tmp_path):
+    from sos_platform.api import create_app
+    from sos_platform.security import IdentitySettings
+
+    app = create_app(tmp_path, identity=IdentitySettings("development", {}))
+    schema = app.openapi()
+    feature_paths = schema["paths"]
+    assert feature_paths["/api/features/services/jobs"]["post"]["responses"]["202"]["content"][
+        "application/json"]["schema"]["$ref"] == "#/components/schemas/JobOut"
+    assert feature_paths["/api/features/services/registrations"]["get"]["responses"]["200"][
+        "content"]["application/json"]["schema"]["items"]["$ref"] == "#/components/schemas/JobSummaryOut"
+    assert feature_paths["/api/features/retrieval/jobs"]["post"]["responses"]["202"][
+        "content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/JobOut"
