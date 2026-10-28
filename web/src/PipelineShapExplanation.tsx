@@ -97,54 +97,69 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
     } }],
   }), [bars]);
   const selectedBarIndex = bars.findIndex(bar => bar.feature === selected?.feature);
+  // 학습 중앙값 기준 입력을 그대로 설명하면 유효한 SHAP 결과도 모두 0이다.
+  // 설명의 근거를 숨기지 않되 값이 없는 차트를 일반 기여도 순위처럼 보여주지 않는다.
+  const zeroContributions = isValid && values.every(item => item.shap_value === 0);
+  // 기여도가 모두 0이어도 실제 입력 Feature가 기준 입력과 같다고 추론할 수는 없다.
+  const sameAsMedianReference = zeroContributions && values.every(item =>
+    !item.missing_imputed && numeric(item.actual_value) &&
+    item.actual_value === item.reference_median);
   if (!isValid) {
     return <p role="alert">SHAP 설명 근거의 점수·기여도 검증에 실패했습니다.
       이 결과의 차트는 표시하지 않습니다. 설명 결과 판본을 확인하세요.</p>;
   }
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
-    <h6>모델 점수에 기여한 주요 Feature {shown.length}개 (SHAP)</h6>
-    <p>기준 점수 <strong>{key(baseline)}</strong> +
-      Feature 기여도 합 <strong>{key(shapSum)}</strong> =
-      이상 점수 <strong>{key(score)}</strong></p>
-    <p className="hint">계산 결과의 재구성 오차 {key(residual)} ·
-      저장된 모델 점수와 가법적 설명 결과를 검증했습니다.</p>
-    <p className="pipeline-shap-legend"><span className="pipeline-shap-positive">양수: 이상 점수를 높이는 방향</span>
-      <span className="pipeline-shap-negative">음수: 이상 점수를 낮추는 방향</span></p>
-    <DataChart option={option} selectedDataIndex={selectedBarIndex}
-      ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature의 개별 양수·음수 Permutation SHAP 기여도. 현재 살펴보는 Feature: ${activityFeatureLabel(selected.feature)}`}
-      onDataClick={index => {
-        const entry = bars[index];
-        if (entry) setFeatureSelection({ resultId: result.id, feature: entry.feature });
-      }} />
-    <div className="pipeline-shap-feature-focus" aria-label="선택한 SHAP Feature 근거">
-      <label className="pipeline-shap-feature-picker">
-        <span>Feature 살펴보기</span>
-        <select value={selected.feature} onChange={event =>
-          setFeatureSelection({ resultId: result.id, feature: event.target.value })}>
-          {shown.map(item => <option key={item.feature} value={item.feature}>
-            {activityFeatureLabel(item.feature)}
-          </option>)}
-        </select>
-      </label>
-      <p className="pipeline-shap-current-feature" aria-live="polite">
-        현재 살펴보는 Feature: <strong>{activityFeatureLabel(selected.feature)}</strong>
-      </p>
-      <div className="pipeline-shap-feature-values" aria-live="polite">
-        <div><span>{valueLabel}</span>
-          <strong>{selected.missing_imputed ? "결측 대체" : key(selected.actual_value)}</strong></div>
-        <div><span>Train 참조 중앙값</span><strong>{key(selected.reference_median)}</strong></div>
-        <div><span>SHAP 점수 기여</span><strong>{key(selected.shap_value)}</strong></div>
-      </div>
-      <p className="hint">막대를 누르거나 목록에서 Feature를 선택하면 {inputLabel}의 수치와
-        실제 모델 점수에 대한 기여도가 함께 바뀝니다. 참조값과의 차이는 이상 원인을 뜻하지 않습니다.</p>
-    </div>
-    {rest.length > 0 && <div className="pipeline-shap-remainder">
-      <span>나머지 {rest.length}개 Feature 기여도 합계</span>
-      <strong>{key(restSum)}</strong>
-      <small>전체 Feature 기여도 합에 포함된 값이며 단일 Feature의 기여도가 아닙니다.</small>
-    </div>}
-    <p className="hint">Train Feature 중앙값으로 구성한 합성 관측치 한 행을 기준으로 합니다.
-      실제 이상 사건의 원인이나 확률을 의미하지 않습니다.</p>
+    <h6>{zeroContributions ? "SHAP 기준 점수와 일치하는 결과" :
+      `모델 점수에 기여한 주요 Feature ${shown.length}개 (SHAP)`}</h6>
+    {zeroContributions
+      ? <div className="pipeline-shap-zero" role="status">
+          <strong>이 입력의 SHAP 기여도는 모두 0입니다.</strong>
+          <p>기준 점수 <strong>{key(baseline)}</strong> · 실제 점수 <strong>{key(score)}</strong>:
+            계산 허용 오차 내에서 같습니다.</p>
+          {sameAsMedianReference
+            ? <p>모든 실제 입력 Feature가 학습 참조 중앙값과 일치합니다.</p>
+            : <p>기여도가 모두 0이어도 입력 Feature가 학습 중앙값과 같다는 뜻은 아닙니다.</p>}
+          <p>다른 입력이나 관측값을 점수화하면 그 결과의 기여도를 살펴볼 수 있습니다.
+            입력을 바꾼다고 반드시 점수가 달라지는 것은 아닙니다.</p>
+        </div>
+      : <>
+          <p className="pipeline-shap-summary">기준 점수 <strong>{key(baseline)}</strong> +
+            Feature 기여도 합 <strong>{key(shapSum)}</strong> =
+            실제 이상 점수 <strong>{key(score)}</strong></p>
+          <p className="pipeline-shap-legend"><span className="pipeline-shap-positive">양수: 점수를 높이는 방향</span>
+            <span className="pipeline-shap-negative">음수: 점수를 낮추는 방향</span></p>
+          <DataChart option={option} selectedDataIndex={selectedBarIndex}
+            ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature의 개별 양수·음수 Permutation SHAP 기여도. 현재 살펴보는 Feature: ${activityFeatureLabel(selected.feature)}`}
+            onDataClick={index => {
+              const entry = bars[index];
+              if (entry) setFeatureSelection({ resultId: result.id, feature: entry.feature });
+            }} />
+          <div className="pipeline-shap-feature-focus" aria-label="선택한 SHAP Feature 근거">
+            <label className="pipeline-shap-feature-picker">
+              <span>Feature 살펴보기</span>
+              <select value={selected.feature} onChange={event =>
+                setFeatureSelection({ resultId: result.id, feature: event.target.value })}>
+                {shown.map(item => <option key={item.feature} value={item.feature}>
+                  {activityFeatureLabel(item.feature)}
+                </option>)}
+              </select>
+            </label>
+            <div className="pipeline-shap-feature-values" aria-live="polite">
+              <div><span>{valueLabel}</span>
+                <strong>{selected.missing_imputed ? "결측 대체" : key(selected.actual_value)}</strong></div>
+              <div><span>학습 참조 중앙값</span><strong>{key(selected.reference_median)}</strong></div>
+              <div><span>SHAP 점수 기여</span><strong>{key(selected.shap_value)}</strong></div>
+            </div>
+            <p className="hint">차트 막대 또는 목록에서 Feature를 선택하면 {inputLabel}의 값과 점수 기여를 비교할 수 있습니다.</p>
+          </div>
+          {rest.length > 0 && <div className="pipeline-shap-remainder">
+            <span>나머지 {rest.length}개 Feature 기여도 합계</span>
+            <strong>{key(restSum)}</strong>
+            <small>전체 기여도 합에 포함되며 단일 Feature의 기여도가 아닙니다.</small>
+          </div>}
+        </>}
+    <p className="hint">저장된 모델 점수와 SHAP 설명의 재구성 오차 {key(residual)}를 확인했습니다.
+      기여도는 사고의 원인이나 확률을 의미하지 않습니다.</p>
     <details className="pipeline-shap-technical">
       <summary>전체 SHAP 값과 계산 근거</summary>
       <div className="pipeline-shap-technical-content">

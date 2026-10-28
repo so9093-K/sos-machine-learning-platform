@@ -25,10 +25,15 @@ export function PlaygroundSensitivity({ result }: { result: PlaygroundResult }) 
     .filter(entry => Number.isFinite(entry.anomaly_score_delta))
     .sort((a, b) => Math.abs(b.anomaly_score_delta) - Math.abs(a.anomaly_score_delta));
   const max = Math.max(0, ...rows.map(entry => Math.abs(entry.anomaly_score_delta)));
+  const allZero = rows.length > 0 && rows.every(entry => entry.anomaly_score_delta === 0);
   return <div className="playground-explanation-detail">
     <p className="hint">현재 점수에서 특정 Feature 하나만 Train 중앙값으로 바꿔 다시 점수화한 실제 변화입니다.
       기여도 합이나 인과관계가 아니며, 다른 Feature는 그대로 유지합니다.</p>
-    <div className="playground-sensitivity-bars">
+    {allZero ? <div className="pipeline-shap-zero" role="status">
+      <strong>Feature를 학습 중앙값으로 바꿔도 점수가 달라지지 않습니다.</strong>
+      <p>현재 입력이 학습 중앙값으로 구성된 기준 입력이라면 자연스러운 결과입니다.
+        다른 입력값으로 계산한 뒤 민감도를 다시 살펴볼 수 있습니다.</p>
+    </div> : <div className="playground-sensitivity-bars">
       {rows.slice(0, 8).map(item => <div
         key={item.feature} className={item.anomaly_score_delta < 0 ? "negative" : "positive"}>
         <span>{activityFeatureLabel(item.feature)}</span>
@@ -37,7 +42,7 @@ export function PlaygroundSensitivity({ result }: { result: PlaygroundResult }) 
           <i style={{ width: max ? `${Math.abs(item.anomaly_score_delta) / max * 100}%` : "0%" }} />
         </div>
       </div>)}
-    </div>
+    </div>}
     <details><summary>전체 {rows.length}개 Feature별 변경 결과</summary>
       <div className="table-scroll"><table>
         <thead><tr><th>Feature</th><th>원래 값</th><th>Train 중앙값</th>

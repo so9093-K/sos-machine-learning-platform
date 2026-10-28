@@ -303,10 +303,39 @@ export function MLScoringPanel({
     </div>}
     <details key={visibleResult ? "completed" : "prepare"} className="scoring-next-analysis"
       open={!visibleResult}>
-      <summary>{visibleResult ? "다른 Dataset 분석하기" : "모델에 적용할 Dataset 선택"}</summary>
+      <summary>{visibleResult ? "다른 Dataset 분석하기" : "분석할 데이터 선택"}</summary>
       <div className="scoring-next-analysis-body">
+    <div className="form-row">
+      <label>기존 Dataset 선택
+        <select aria-label="모델에 적용할 Dataset" value={datasetId}
+          disabled={submitted || uploading}
+          onChange={e => chooseDataset(e.target.value)}>
+          <option value="">분석할 Dataset 선택</option>
+          {datasets.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
+        </select>
+      </label>
+      <label>정답 레이블 (선택)
+        <select aria-label="Scoring 정답 레이블" value={labelColumn}
+          disabled={submitted || uploading}
+          onChange={e => setLabelColumn(e.target.value)}>
+          <option value="">레이블 없음</option>
+          {columns.filter(col => !model.features.includes(col.name)).map(col =>
+            <option key={col.name} value={col.name}>{col.name} ({col.dtype})</option>)}
+        </select>
+      </label>
+      {checkedColumns && <label>관측 시각 (선택)
+        <select aria-label="Scoring 관측 시각 컬럼" value={timeColumn}
+          disabled={submitted || uploading}
+          onChange={e => setTimeColumnChoice(e.target.value)}>
+          <option value="">관측 시각 보존 안 함</option>
+          {timeColumns.map(col => <option key={col.name} value={col.name}>
+            {col.name} ({col.dtype})
+          </option>)}
+        </select>
+      </label>}
+    </div>
     {canUpload && onDatasetRegistered && <div className="scoring-file-input">
-      <label>새 파일로 분석 준비
+      <label>새 파일 등록해서 분석하기
         <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
           onChange={event => {
             const file = event.currentTarget.files?.[0];
@@ -329,35 +358,6 @@ export function MLScoringPanel({
         <details><summary>오류 진단 정보</summary><p>{uploadError}</p></details>
       </div>}
     </div>}
-    <div className="form-row">
-      <label>모델에 적용할 Dataset
-        <select aria-label="모델에 적용할 Dataset" value={datasetId}
-          disabled={submitted || uploading}
-          onChange={e => chooseDataset(e.target.value)}>
-          <option value="">Dataset 선택</option>
-          {datasets.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
-        </select>
-      </label>
-      <label>정답 레이블 (선택)
-        <select aria-label="Scoring 정답 레이블" value={labelColumn}
-          disabled={submitted || uploading}
-          onChange={e => setLabelColumn(e.target.value)}>
-          <option value="">레이블 없음</option>
-          {columns.filter(col => !model.features.includes(col.name)).map(col =>
-            <option key={col.name} value={col.name}>{col.name} ({col.dtype})</option>)}
-        </select>
-      </label>
-      {checkedColumns && <label>관측 시각 컬럼 (선택)
-        <select aria-label="Scoring 관측 시각 컬럼" value={timeColumn}
-          disabled={submitted || uploading}
-          onChange={e => setTimeColumnChoice(e.target.value)}>
-          <option value="">관측 시각 보존 안 함</option>
-          {timeColumns.map(col => <option key={col.name} value={col.name}>
-            {col.name} ({col.dtype})
-          </option>)}
-        </select>
-      </label>}
-    </div>
     {hasMoreDatasets && onLoadMoreDatasets && <button type="button" className="secondary"
       disabled={loadingMoreDatasets} onClick={() => {
         setLoadingMoreDatasets(true);
@@ -376,18 +376,24 @@ export function MLScoringPanel({
         <p>학습 모델과 호환되는 Dataset을 선택하세요.</p>
       </div>}
     {checkedColumns && missingFeatures.length === 0 && <p role="status">
-      필수 Feature {model.features.length}개 이름을 확인했습니다. 자료형과 결측 조건은 실행 시에도 검증합니다.
+      모델 입력 Feature {model.features.length}개 이름이 일치합니다. 자료형·결측 조건은 실행 중에도 검증합니다.
     </p>}
-    <p className="hint">학습 모델의 Feature 이름·자료형이 맞아야 합니다. 이상 점수는 사건 확률이 아닙니다.
-      정답 레이블을 지정한 경우에만 지원되는 순위 지표를 계산합니다.
-      관측 시각은 원본 Dataset의 명시적 시간대가 있는 시간값만 새 Scoring 결과에 보존하며,
-      시간 구간 선택이나 Test 평가를 실행한다는 뜻이 아닙니다. 입력값은 실행 시 검증합니다.</p>
+    <details className="scoring-input-guidance">
+      <summary>입력 조건과 결과 해석 안내</summary>
+      <p className="hint">모델 학습 때의 Feature 이름·자료형이 일치해야 합니다. 실제 값은 실행 시 검증합니다.
+        결과 레이블을 지정한 경우에만 지원되는 순위 지표를 계산합니다.
+        원본의 명시적 시간대가 있는 관측 시각만 결과에 보존하며,
+        관측 시각의 보존만으로 시간 분할이나 독립 Test 평가를 의미하지 않습니다.
+        이상 점수는 사건 확률이 아닙니다.</p>
+    </details>
     {datasetId === model.dataset_id && <p className="hint">
-      학습 시 사용한 Dataset과 ID가 같습니다. Dataset 판본을 확인하세요.
-      동일 학습 판본에 적용한 점수는 독립적인 Test 성능이 아닙니다.
+      모델 학습에 사용한 Dataset과 같은 ID입니다. 판본이 같다면 해당 점수는 독립 Test 성능이 아닙니다.
     </p>}
+    {!datasetId && <p className="scoring-action-hint">분석할 Dataset을 먼저 선택하세요.</p>}
+    {datasetId && !inputReady && columnStatus === "loading" && <p className="scoring-action-hint">Dataset의 입력 조건을 확인하는 중입니다.</p>}
+    {!canRun && <p className="scoring-action-hint">현재 계정에는 점수 계산 실행 권한이 없습니다.</p>}
     <button disabled={!canRun || submitted || uploading || !inputReady} onClick={() => void create()}>
-      {submitted ? "점수 계산 요청 중…" : "이 Dataset으로 모델 사용하기 →"}
+      {submitted ? "점수 계산 요청 중…" : "이 Dataset 분석 시작 →"}
     </button>
     <details className="pipeline-scoring-history" onToggle={event => {
       setHistoryOpen(event.currentTarget.open);

@@ -436,7 +436,7 @@ try {
   assert.match(groupedObservation, /프로세스 활동/);
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
-  assert.match(groupedObservation, /중요도·정상 범위·원인 순위로 해석할 수 없습니다/);
+  assert.match(groupedObservation, /학습 중앙값은 비교 기준이며 정상 범위나 사고 원인을 의미하지 않습니다/);
   assert.ok(groupedObservation.indexOf("모델 판단 근거 자세히 보기") <
     groupedObservation.indexOf("활동별 지표"));
   assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
@@ -467,7 +467,7 @@ try {
   assert.match(shapPreview, /모델 점수에 기여한 주요 Feature 1개 \(SHAP\)/);
   assert.match(shapPreview, /Feature 기여도 합/);
   assert.match(shapPreview, /주요 Feature 1개/);
-  assert.match(shapPreview, /양수: 이상 점수를 높이는 방향/);
+  assert.match(shapPreview, /양수: 점수를 높이는 방향/);
   // 개별 SHAP 기여를 실제 관측값·Train 중앙값과 연결해 확인할 수 있어야 한다.
   assert.match(shapPreview, /선택한 SHAP Feature 근거/);
   assert.match(shapPreview, /Feature 살펴보기/);
@@ -486,10 +486,37 @@ try {
     } }, valueLabel: "제출한 입력값", inputLabel: "이 제출 입력" }));
   assert.match(shapForPlayground, /제출한 입력값/);
   assert.doesNotMatch(shapForPlayground, /실제 관측값/);
-  assert.match(shapPreview, /Train 참조 중앙값/);
+  assert.match(shapPreview, /학습 참조 중앙값/);
   assert.match(shapPreview, /SHAP 점수 기여/);
   assert.match(shapPreview, /outbound_traffic/);
   assert.match(shapPreview, /<strong>0[.]2<\/strong>/);
+  const zeroShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
+    result: { id: "reference-input", output: {
+      method: "permutation_shap_median_v1", baseline_score: 0.3279, score: 0.3279,
+      reconstructed_score: 0.3279, additivity_residual: 0,
+      additive_attribution: true, model_output: "negative_sklearn_score_samples",
+      baseline_row_count: 1, feature_contributions: [{
+        feature: "outbound_traffic", shap_value: 0, actual_value: 1,
+        reference_median: 1, missing_imputed: false,
+      }],
+    } },
+  }));
+  assert.match(zeroShap, /이 입력의 SHAP 기여도는 모두 0입니다/);
+  assert.doesNotMatch(zeroShap, /role="img"/); // SSR 차트 컨테이너 자체가 없어야 한다.
+  assert.match(zeroShap, /전체 SHAP 값과 계산 근거/);
+  assert.match(zeroShap, /모든 실제 입력 Feature가 학습 참조 중앙값과 일치합니다/);
+  const zeroShapWithDifferentInput = renderToStaticMarkup(React.createElement(
+    ShapContributionChart, { result: { id: "zero-but-different", output: {
+      method: "permutation_shap_median_v1", baseline_score: 0.3279, score: 0.3279,
+      reconstructed_score: 0.3279, additivity_residual: 0,
+      additive_attribution: true, model_output: "negative_sklearn_score_samples",
+      baseline_row_count: 1, feature_contributions: [{
+        feature: "outbound_traffic", shap_value: 0, actual_value: 20,
+        reference_median: 1, missing_imputed: false,
+      }],
+    } } }));
+  assert.match(zeroShapWithDifferentInput, /기여도가 모두 0이어도 입력 Feature가 학습 중앙값과 같다는 뜻은 아닙니다/);
+  assert.doesNotMatch(zeroShapWithDifferentInput, /모든 실제 입력 Feature가 학습 참조 중앙값과 일치합니다/);
   const unverifiedShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
       method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
@@ -799,10 +826,21 @@ try {
       ],
     } },
   }));
+  const zeroSensitivity = renderToStaticMarkup(React.createElement(PlaygroundSensitivity, {
+    result: { id: "zero-sensitivity", output: {
+      feature_sensitivities: [
+        { feature: "file_create_count", actual_value: 2, reference_median: 2,
+          score_if_replaced: 0.3, anomaly_score_delta: 0 },
+      ],
+    } },
+  }));
+  assert.match(zeroSensitivity, /점수가 달라지지 않습니다/);
+  assert.doesNotMatch(zeroSensitivity, /playground-sensitivity-bars/);
+  assert.match(zeroSensitivity, /전체 1개 Feature별 변경 결과/);
   assert.match(playgroundSensitivity, /치환 후 점수/);
   assert.match(playgroundSensitivity, /0[.]15/);
   assert.match(playgroundHtml, /실제 이상 점수 계산하기/);
-  assert.match(playgroundHtml, /입력값과 결과가 권한이 적용되는 Job 이력에 보존/);
+  assert.match(playgroundHtml, /제출한 입력과 결과는 작업 이력에 보존/);
   const { ModelLabUse, isActivityModelCompatible } =
     await vite.ssrLoadModule("/src/ModelLabUse.tsx");
   assert.equal(isActivityModelCompatible(
@@ -819,7 +857,7 @@ try {
     canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
     onOpenResource: () => {}, onBack: () => {}, onLearn: () => {},
   }));
-  assert.match(pendingUse, /준비된 모델로 데이터 분석하기/);
+  assert.match(pendingUse, /준비된 모델 사용하기/);
   assert.match(pendingUse, /사용 가능한 모델을 확인하는 중/);
   const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
   const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {
