@@ -212,6 +212,8 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
     ? (editedNames.length > 0 ? editedNames : model.features).slice(0, 3) : [];
   const inputGroups = groupActivityFeatures(
     Object.fromEntries(model.features.map(name => [name, null])));
+  const explanationAvailable = referenceMedians.length === model.features.length &&
+    referenceMedians.every(value => typeof value === "number" && Number.isFinite(value));
   const comparedFeatures = comparisonJob && job?.status === "Succeeded" &&
     lastScore !== null && comparisonJob.id !== job.id &&
     comparisonJob.spec.model_revision_id === job.spec.model_revision_id
@@ -395,8 +397,14 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
           </tr>)}</tbody>
         </table></div>
       </section>}
-    {job?.status === "Succeeded" && <PlaygroundExplanations key={job.id}
-      source={job} canRun={canRun} canCancel={canCancel} />}
+    {job?.status === "Succeeded" && (explanationAvailable
+      ? <details className="model-lab-explanation-toggle">
+          <summary>이 입력 설명하기 · SHAP / Feature 치환 민감도</summary>
+          <PlaygroundExplanations key={job.id} source={job} canRun={canRun}
+            canCancel={canCancel} shapSupported={model.features.length <= 64} />
+        </details>
+      : <p className="hint">이 모델에는 학습 Feature 중앙값이 없어 현재 설명 방법을 계산할 수 없습니다.
+          점수 계산 결과는 정상적으로 이용할 수 있습니다.</p>)}
       </aside>
     </div>
     <details className="model-lab-playground-history" onToggle={event => {
@@ -445,9 +453,13 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
               <button type="button" className="secondary"
                 disabled={running}
                 onClick={() => useHistoryInput(selectedHistory)}>이 입력으로 다시 계산 준비</button>
-              {selectedHistory.status === "Succeeded" && <PlaygroundExplanations
-                key={selectedHistory.id} source={selectedHistory}
-                canRun={canRun} canCancel={canCancel} />}
+              {selectedHistory.status === "Succeeded" && explanationAvailable &&
+                <details className="model-lab-explanation-toggle">
+                  <summary>이전 실행의 SHAP / Feature 민감도 확인</summary>
+                  <PlaygroundExplanations key={selectedHistory.id} source={selectedHistory}
+                    canRun={canRun} canCancel={canCancel}
+                    shapSupported={model.features.length <= 64} />
+                </details>}
               </>}
             </div>}
           </div>)}
