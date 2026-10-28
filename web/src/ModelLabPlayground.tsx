@@ -41,6 +41,33 @@ export function playgroundNumberValid(raw: string, dtype: string): boolean {
   return dtype === "Float64";
 }
 
+/** Dataset 관측값은 새로운 Job을 만들지 않고 편집 초깃값으로만 전달한다. */
+export type ObservationExperiment = {
+  id: string;
+  modelRevisionId: string;
+  scoringResultId: string;
+  rowIndex: number;
+  originalScore: number;
+  fields: Record<string, string>;
+};
+
+/** 관측값 전체가 선택 모델의 Playground 입력 계약에 맞을 때에만 전달한다. */
+export function observationInputForPlayground(
+  model: ModelRevision, values: Record<string, number | null>,
+): { fields: Record<string, string> | null; invalid: string[] } {
+  const dtypes = model.runtime?.feature_dtypes;
+  const invalid: string[] = [];
+  const fields: Record<string, string> = {};
+  model.features.forEach((name, index) => {
+    const value = values[name];
+    const dtype = Array.isArray(dtypes) ? String(dtypes[index] ?? "") : "";
+    const raw = typeof value === "number" && Number.isFinite(value) ? String(value) : "";
+    if (!playgroundNumberValid(raw, dtype)) invalid.push(name);
+    else fields[name] = raw;
+  });
+  return { fields: invalid.length ? null : fields, invalid };
+}
+
 /** 현재 편집값이 실제로 성공한 Job에서 제출한 값과 일치하는지 확인한다. */
 export function playgroundInputMatchesResult(
   fields: Record<string, string>, submitted: Record<string, unknown> | null | undefined,
@@ -78,11 +105,15 @@ export function playgroundChangedFeatures(
   });
 }
 
-export function ModelLabPlayground({ model, canRun, canCancel }: {
+export function ModelLabPlayground({ model, canRun, canCancel, observationInput, onBackToAnalysis }: {
   model: ModelRevision; canRun: boolean; canCancel: boolean;
+  observationInput?: ObservationExperiment | null;
+  onBackToAnalysis?: () => void;
 }) {
   const reference = exampleValues(model);
   const [mode, setMode] = useState<"example" | "edit">(reference ? "example" : "edit");
+  const [importedSource, setImportedSource] = useState<ObservationExperiment | null>(null);
+  const appliedObservation = useRef<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>(() =>
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
   const [job, setJob] = useState<MLPlaygroundJob | null>(null);
@@ -158,6 +189,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
       name, saved[name] == null ? "" : String(saved[name]),
     ])));
     setMode("edit");
+    setImportedSource(null);
   }
 
   useEffect(() => {
@@ -201,6 +233,15 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   });
   const invalid = input.filter(item => !item.valid);
   const running = sending || Boolean(job && !TERMINAL.has(job.status));
+  useEffect(() => {
+    if (!observationInput || observationInput.modelRevisionId !== model.id ||
+        appliedObservation.current === observationInput.id || running) return;
+    // 실행 중 입력을 바꾸지 않으며, 새 관측값을 가져와도 Job은 자동 제출하지 않는다.
+    appliedObservation.current = observationInput.id;
+    setFields(observationInput.fields);
+    setMode("edit");
+    setImportedSource(observationInput);
+  }, [observationInput, model.id, running]);
   const submittedFeatures = job?.spec.features;
   const submittedInput = submittedFeatures && typeof submittedFeatures === "object" &&
     !Array.isArray(submittedFeatures)
@@ -270,21 +311,33 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   </label>;
   return <section className="panel model-lab-playground" aria-label="직접 모델 점수 계산">
     <div className="model-lab-playground-head">
-      <div><h3>한 건의 입력으로 모델 반응 시험하기</h3>
-        <p>기준 입력에서 시작해 숫자를 바꾸고, 이전 계산과 점수가 어떻게 달라지는지 살펴보세요.</p></div>
+      <div><h3>값을 바꿔 모델 반응 살펴보기</h3>
+        <p>입력값을 수정한 뒤 실제 점수를 계산하고, 이전 결과와 비교할 수 있습니다.</p></div>
+    </div>
+    {observationInput && appliedObservation.current !== observationInput.id && running &&
+      <p className="hint" role="status">진행 중인 점수 계산이 끝나면 선택한 관측값을 입력에 가져옵니다.</p>}
+    {importedSource && <div className="model-lab-observation-source" role="status">
+      <strong>Dataset 관측값에서 가져온 입력</strong>
+      <p>원래 결과 행 #{importedSource.rowIndex.toLocaleString("ko-KR")} · 저장된 이상 점수 {importedSource.originalScore.toFixed(6)}.
+        현재 입력은 별도로 수정할 수 있으며, 점수 계산은 직접 요청해야 합니다.</p>
+      {onBackToAnalysis && <button type="button" className="secondary"
+        onClick={onBackToAnalysis}>원래 Dataset 분석으로 돌아가기 →</button>}
     </div>
     <div className="model-lab-workspace">
       <div className="model-lab-input-pane">
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
       <button type="button" aria-pressed={mode === "example"} className="secondary"
         disabled={!reference || running}
-        onClick={() => { setMode("example"); if (reference) setFields(reference); }}>
+        onClick={() => { setMode("example"); setImportedSource(null); if (reference) setFields(reference); }}>
         기준값으로 체험
       </button>
       <button type="button" aria-pressed={mode === "edit"} className="secondary"
         disabled={running} onClick={() => setMode("edit")}>직접 수정해보기</button>
     </div>
-    {reference ? <p className="hint">입력값은 이 모델의 학습 Feature 중앙값을 바탕으로 구성했습니다.
+    {importedSource
+      ? <p className="hint">Dataset의 실제 관측 Feature를 가져왔습니다. 학습 참조값은 비교용이며,
+          새 실행은 원래 Dataset 결과를 변경하지 않습니다.</p>
+      : reference ? <p className="hint">입력값은 이 모델의 학습 Feature 중앙값을 바탕으로 구성했습니다.
       정수 Feature는 정수로 조정했으며, 실제 관측치나 정상 활동의 판정값이 아닙니다.</p>
       : <p className="hint" role="status">이 모델 판본에는 초기 입력 기준값이 없어 자동으로 채우지 않았습니다.
         직접 수정 모드에서 모든 필수 Feature 값을 입력해 주세요.</p>}
@@ -357,7 +410,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
         {running ? "모델 실행 중…" : "실제 이상 점수 계산하기 →"}
       </button>
       {reference && <button type="button" className="secondary"
-        onClick={() => setFields(reference)} disabled={running}>기준값으로 초기화</button>}
+        onClick={() => { setFields(reference); setImportedSource(null); }} disabled={running}>기준값으로 초기화</button>}
       {job && !TERMINAL.has(job.status) && canCancel &&
         <button type="button" className="secondary" onClick={() => void cancel()}>취소 요청</button>}
     </div>
