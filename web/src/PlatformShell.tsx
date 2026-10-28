@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
-import { dagsterUrl, isLocalOperatorHost, mlflowUrl } from "./operator-tools";
+import { dagsterUrl, feastUrl, isLocalOperatorHost, mlflowUrl } from "./operator-tools";
 import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
   type WorkspaceTab, type MLNavigationContext, type ResourceRoute } from "./PlatformNavigation";
 
@@ -81,6 +81,9 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
         </a>
         <a href={mlflowUrl()} target="_blank" rel="noopener noreferrer">
           MLflow · 연구 Run/모델 Registry ↗
+        </a>
+        <a href={feastUrl()} target="_blank" rel="noopener noreferrer">
+          Feast · Feature Catalog/Lineage ↗
         </a>
         <small>운영자용 별도 관리 UI입니다. 같은 PC에서만 접속할 수 있으며
           SOS 로그인 권한이 이 도구에 적용되는 것은 아닙니다.</small>

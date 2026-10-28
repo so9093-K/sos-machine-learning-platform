@@ -1,8 +1,8 @@
-/** 같은 PC의 로컬 운영 도구(Dagster·MLflow) 주소. SOS 권한을 대신하지 않는 별도 UI다. */
+/** 같은 PC의 로컬 운영 도구(Dagster·MLflow·Feast) 주소. SOS 권한을 대신하지 않는다. */
 
 // Vite 설정이 Compose의 공개 포트만 주입한다. 설정 없이 모듈을 불러오는 검증 환경에서는 기본 포트를 쓴다.
-declare const __SOS_OPERATOR_PORTS__: { dagster: string; mlflow: string } | undefined;
-const DEFAULT_PORTS = { dagster: "9607", mlflow: "9606" };
+declare const __SOS_OPERATOR_PORTS__: { dagster: string; mlflow: string; feast: string } | undefined;
+const DEFAULT_PORTS = { dagster: "9607", mlflow: "9606", feast: "9608" };
 
 function ports() {
   return typeof __SOS_OPERATOR_PORTS__ === "undefined" ? DEFAULT_PORTS : __SOS_OPERATOR_PORTS__;
@@ -23,6 +23,10 @@ export function dagsterUrl(): string {
 
 export function mlflowUrl(): string {
   return origin(ports().mlflow);
+}
+
+export function feastUrl(): string {
+  return origin(ports().feast);
 }
 
 /** SOS 분석 ID는 Dagster Run의 sos/submission_id 태그와 같다. */
