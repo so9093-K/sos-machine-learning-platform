@@ -374,7 +374,10 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     <div className="playground-input-heading">
       <h4>입력값</h4>
       {reference && <button type="button" className="ghost" disabled={running}
-        onClick={() => { setFields(reference); setImportedSource(null); setImportedAfterJobId(null); }}>
+        onClick={() => {
+          setFields(reference); setImportedSource(null); setImportedAfterJobId(null);
+          setInputSearch(""); setInputFilter("all"); setInputPage(0);
+        }}>
         학습 기준값으로 초기화</button>}
     </div>
     <p className="hint">{importedSource ? "가져온 관측값에서 바꿀 항목을 고르세요."
