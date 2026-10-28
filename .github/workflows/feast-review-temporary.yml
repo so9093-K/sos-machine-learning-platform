@@ -18,6 +18,8 @@ jobs:
           uv sync --locked --group dev --group feast
       - name: Run registration, PIT and API contract regression
         run: uv run --locked --group dev --group feast pytest -q tests/test_feast_features.py tests/test_feast_live.py
+      - name: Run original SOS Python product validation
+        run: python scripts/validate.py run all
       - name: Start actual SeaweedFS and PostgreSQL
         run: |
           docker compose up -d --wait storage
@@ -43,6 +45,9 @@ jobs:
         run: npm ci --no-audit
       - name: Regenerate API types
         run: bash scripts/generate_api_types.sh
+      - name: Build web TypeScript and Vite with regenerated contracts
+        working-directory: web
+        run: npm run build
       - name: Commit generated types only
         run: |
           if ! git diff --quiet -- web/src/api.generated.ts; then
