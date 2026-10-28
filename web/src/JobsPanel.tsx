@@ -3,25 +3,27 @@ import { request, formatError } from "./api";
 import { explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
 import { AnalysisEvidence, analysisScopeLabel, dataSelectionLabel } from "./AnalysisEvidence";
 import type { Dataset, Job, JobSummary, ExplorationJob, ExplorationJobSummary } from "./types";
-import { jobStatusLabel } from "./display-format";
+import { formatRecordedAt, jobStatusLabel } from "./display-format";
 
 type AnyJobSummary = JobSummary | ExplorationJobSummary;
+type AnyJob = Job | ExplorationJob;
+type JobKind = "data" | "exploration";
+const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
-/** 데이터 이해 Job은 Profile Job 인프라를 재사용하므로 spec으로 실제 작업을 구분한다. */
-function dataJobLabel(job: AnyJobSummary): string {
-  if (job.kind === "profile") {
-    if (job.spec.mode !== "understanding") return "전체 EDA 프로파일";
-    return job.spec.scope === "full" ? "데이터 이해 · 전체 행" : "데이터 이해 · 표본";
-  }
-  if (job.kind === "iceberg_import") return "Iceberg 적재";
-  if (job.kind === "exploration") return "전체 데이터 탐색 분석";
-  return "Feature 변환";
+export function dataJobLabel(job: Pick<AnyJobSummary, "kind" | "spec">): string {
+  if (job.kind === "profile") return job.spec.mode === "understanding"
+    ? job.spec.scope === "full" ? "데이터 이해 · 전체 행" : "데이터 이해 · 표본" : "전체 데이터 프로파일";
+  return ({ iceberg_import: "Iceberg 적재", exploration: "전체 집계", transform: "데이터 변환",
+    feature_register: "Feature Service 등록", feature_retrieve: "Feature 시점 조회",
+    feature_retire: "Feature Service 폐기", ml_playground: "단일 입력 점수 계산" } as Record<string, string>)[job.kind] ?? job.kind;
 }
 
 /** Discovery 전체 분석 결과는 일반 사용자에게 표로 우선 제공한다. */
 function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
+  const [page, setPage] = useState(0);
   if (!Array.isArray(result.rows)) return null;
   const rows = result.rows as Array<{ category: unknown; value: unknown }>;
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / 12) - 1));
   const metric = String(result.metric);
   const metricLabel = ["mean", "min", "max", "count", "null_count"].includes(metric)
     ? explorationMetricLabel(metric as Parameters<typeof explorationMetricLabel>[0])
@@ -49,130 +51,144 @@ function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
       ]}
     />
     <div className="table-scroll"><table><thead><tr><th>그룹</th><th>집계값</th></tr></thead>
-      <tbody>{rows.map((row, index) => <tr key={index}>
+      <tbody>{rows.slice(currentPage * 12, (currentPage + 1) * 12).map((row, index) => <tr key={index}>
         <td>{explorationCategory(row.category, typeof result.group_by === "string" ? result.group_by : null)}</td>
         <td>{explorationValue(row.value as number | string | null)}</td>
       </tr>)}</tbody></table></div>
+    {rows.length > 12 && <div className="feature-result-pages">
+      <span>{rows.length}개 그룹 중 {currentPage * 12 + 1}–{Math.min(rows.length, (currentPage + 1) * 12)}개</span>
+      <button type="button" className="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>이전 그룹</button>
+      <button type="button" className="secondary" disabled={(currentPage + 1) * 12 >= rows.length} onClick={() => setPage(currentPage + 1)}>다음 그룹</button>
+    </div>}
     {rows.length === 0 && <p className="muted">표시 가능한 그룹이 없습니다.</p>}
   </section>;
 }
-type Props = { jobs: AnyJobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean;
+type Props = {
+  jobs: AnyJobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean;
+  selectedJobId?: string; selectedJobKind?: JobKind;
+  loading?: boolean; readError?: boolean;
   nextCursor: string | null; discoveryNextCursor: string | null;
   onRefresh: () => void; onLoadMore: () => void; onLoadMoreDiscovery: () => void;
-  onCancel: (id: string) => void; onOpen: (id: string) => void; };
+  onSelectJob: (id: string, kind: JobKind) => void; onOpen: (id: string) => void;
+};
 
-export function JobsPanel({ jobs, datasets, busy, canCancel, nextCursor, discoveryNextCursor,
-  onRefresh, onLoadMore, onLoadMoreDiscovery, onCancel, onOpen }: Props) {
-  const [detailById, setDetailById] = useState<Record<string, Job | ExplorationJob>>({});
-  const [detailErrors, setDetailErrors] = useState<Record<string, string>>({});
-  const pending = useRef(new Set<string>());
-  const expanded = useRef(new Set<string>());
-  const refreshedRevision = useRef(new Map<string, string>());
-
-  async function loadDetails(jobId: string) {
-    if (pending.current.has(jobId)) return;
-    pending.current.add(jobId);
-    setDetailErrors(current => ({ ...current, [jobId]: "" }));
-    try {
-      const path = jobs.find(item => item.id === jobId)?.kind === "exploration"
-        ? `/api/explorations/jobs/${jobId}` : `/api/jobs/${jobId}`;
-      const result = await request<Job | ExplorationJob>(path);
-      setDetailById(current => ({ ...current, [jobId]: result }));
-    } catch (error) {
-      setDetailErrors(current => ({
-        ...current,
-        [jobId]: formatError(error),
-      }));
-    } finally {
-      pending.current.delete(jobId);
-    }
-  }
-  // 펼친 상세는 목록에서 관측한 더 새로운 Job/Attempt 판본을 따라간다.
-  // 한 목록 판본에서 상세 응답이 뒤처지더라도 무한 재요청하지 않는다.
+/** 목록은 짧게 탐색하고 선택한 작업의 상태·결과는 직접 주소에서도 독립적으로 조회한다. */
+export function JobsPanel({ jobs, datasets, busy, canCancel, selectedJobId, selectedJobKind = "data",
+  loading = false, readError = false, nextCursor, discoveryNextCursor,
+  onRefresh, onLoadMore, onLoadMoreDiscovery, onSelectJob, onOpen }: Props) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [retry, setRetry] = useState(0);
+  const [cancelling, setCancelling] = useState(false);
+  const key = selectedJobKind + ":" + (selectedJobId ?? "");
+  const endpoint = selectedJobKind === "exploration" ? "/api/explorations/jobs" : "/api/jobs";
+  const [detail, setDetail] = useState<{ key: string; job: AnyJob | null; error: string } | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const job = detail?.key === key ? detail.job : null;
+  const error = detail?.key === key ? detail.error : "";
   useEffect(() => {
-    for (const job of jobs) {
-      if (!expanded.current.has(job.id) || pending.current.has(job.id) || detailErrors[job.id]) continue;
-      const detail = detailById[job.id];
-      if (detail && detail.updated_at >= job.updated_at
-          && detail.attempts.length >= job.attempt_count) continue;
-      const revision = [job.updated_at, job.status, job.attempt_count, job.cancel_requested].join(":");
-      if (refreshedRevision.current.get(job.id) === revision) continue;
-      refreshedRevision.current.set(job.id, revision);
-      void loadDetails(job.id);
+    if (!selectedJobId) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    setDetail(previous => previous?.key === key ? { ...previous, error: "" } : { key, job: null, error: "" });
+    async function load() {
+      try {
+        const next = await request<AnyJob>(endpoint + "/" + encodeURIComponent(selectedJobId!));
+        if (!active) return;
+        if (next.id !== selectedJobId || (next.kind === "exploration") !== (selectedJobKind === "exploration"))
+          throw new Error("조회한 작업과 선택한 작업의 종류·식별자가 일치하지 않습니다.");
+        setDetail({ key, job: next, error: "" });
+        if (!TERMINAL.has(next.status)) timer = setTimeout(() => void load(), 2000);
+      } catch (cause) {
+        if (active) setDetail(previous => ({ key, job: previous?.key === key ? previous.job : null, error: formatError(cause) }));
+      }
     }
-  }, [jobs, detailById, detailErrors]);
-
+    void load();
+    return () => { active = false; if (timer) clearTimeout(timer); };
+  }, [key, retry]);
+  useEffect(() => {
+    if (!selectedJobId) return;
+    const frame = requestAnimationFrame(() => {
+      heading.current?.focus({ preventScroll: true });
+      const bounds = heading.current?.getBoundingClientRect();
+      if (bounds && (bounds.top < 0 || bounds.top > innerHeight - 150))
+        heading.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [key]);
+  async function cancel() {
+    if (!job || !canCancel || TERMINAL.has(job.status) || job.cancel_requested || cancelling || job.kind === "feature_retire") return;
+    setCancelling(true);
+    try {
+      const updated = await request<AnyJob>(endpoint + "/" + encodeURIComponent(job.id) + "/cancel", { method: "POST" });
+      setDetail(previous => previous?.key === key ? { key, job: updated, error: "" } : previous);
+      setRetry(value => value + 1); onRefresh();
+    } catch (cause) { setDetail(previous => previous?.key === key ? { ...previous, error: formatError(cause) } : previous); }
+    finally { setCancelling(false); }
+  }
+  const datasetName = (id: string | null) => datasets.find(item => item.id === id)?.name ?? "현재 목록 밖의 Dataset";
+  const filtered = jobs.filter(item => [dataJobLabel(item), datasetName(item.dataset_id), jobStatusLabel(item.status), item.id]
+    .some(value => value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())));
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 8) - 1));
   return <section className="panel" aria-label="실행 작업">
-    <div className="panel-head"><div>
-      <h3>데이터·탐색 작업</h3>
-      <p>모든 데이터셋의 작업을 조회합니다. 취소 요청과 실제 취소 완료는 구분합니다.</p>
-    </div><button className="secondary" onClick={onRefresh}>새로고침</button></div>
-    {jobs.length === 0 && <p className="muted">아직 제출된 작업이 없습니다. Dataset을 선택해 데이터 이해 또는 Feature 변환을 실행하세요.</p>}
-    <div className="job-list">
-      {jobs.map(job => <article className="job" key={job.id}>
-        <div className="job-title"><div>
-          <strong>{dataJobLabel(job)}</strong>
-          <small>{job.id}</small>
-        </div><span className={`status ${job.status.toLowerCase()}`}>
-          {jobStatusLabel(job.status)}{job.cancel_requested ? " · 취소 요청 중" : ""}
-        </span></div>
-        <div className="job-metadata">
-          <span>입력 데이터 · {datasets.find(d => d.id === job.dataset_id)?.name ?? job.dataset_id}</span>
-          <span>등록 · {new Date(job.created_at).toLocaleString("ko-KR")}</span>
-        </div>
-        {job.error && <div className="job-error" role="alert">
-          <p>{job.error}</p>
-          {job.error_code && <small>오류 코드 · {job.error_code}</small>}
-          {job.failure_stage && <small> · 단계 · {job.failure_stage}</small>}
-          {job.retry_policy === "manual_verification_required" &&
-            <p>커밋·Snapshot 상태를 확인하기 전에는 동일 작업을 다시 실행하지 마세요.</p>}
-          {job.request_id && <p className="muted">요청 ID · {job.request_id}</p>}
+    <div className="panel-head"><div><h3>데이터·탐색 작업</h3><p>작업 선택 후 실행 상태와 결과를 확인합니다.</p></div>
+      <button type="button" className="secondary" disabled={busy || loading} onClick={() => { onRefresh(); setRetry(value => value + 1); }}>새로고침</button></div>
+    <div className="data-job-workspace">
+      <div className="data-job-list">
+        <label className="data-job-search">작업 검색<input type="search" aria-label="데이터 작업 검색" value={search}
+          placeholder="작업·데이터·상태" onChange={event => { setSearch(event.target.value); setPage(0); }} /></label>
+        {loading && <p role="status">작업 목록을 불러오는 중입니다.</p>}
+        {!loading && !readError && jobs.length === 0 && <p className="muted">제출한 데이터·탐색 작업이 없습니다.</p>}
+        {!loading && jobs.length > 0 && filtered.length === 0 && <p className="muted">검색 조건에 맞는 작업이 없습니다.</p>}
+        {filtered.slice(currentPage * 8, (currentPage + 1) * 8).map(item => <button type="button" key={item.id}
+          className="secondary data-job-choice" aria-pressed={item.id === selectedJobId}
+          onClick={() => onSelectJob(item.id, item.kind === "exploration" ? "exploration" : "data")}>
+          <strong>{dataJobLabel(item)}</strong><span className={`status ${item.status.toLowerCase()}`}>{jobStatusLabel(item.status)}</span>
+          <span>{datasetName(item.dataset_id)}</span><small>{formatRecordedAt(item.created_at)}</small>
+        </button>)}
+        {filtered.length > 8 && <div className="feature-result-pages">
+          <span>{filtered.length}건 중 {currentPage * 8 + 1}–{Math.min(filtered.length, (currentPage + 1) * 8)}건</span>
+          <button type="button" className="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>이전 작업</button>
+          <button type="button" className="secondary" disabled={(currentPage + 1) * 8 >= filtered.length} onClick={() => setPage(currentPage + 1)}>다음 작업</button>
         </div>}
-        {job.result && "row_count" in job.result && typeof job.result.row_count === "number" &&
-          <p className="muted">분석한 행 · {job.result.row_count.toLocaleString("ko-KR")}</p>}
-        {job.kind === "exploration" && job.result &&
-          <DiscoveryJobResult result={job.result} />}
-        {job.result && <details><summary>실행 결과 상세</summary>
-          <pre>{JSON.stringify(job.result, null, 2)}</pre></details>}
-        <details onToggle={event => {
-          if (event.currentTarget.open) {
-            expanded.current.add(job.id);
-            void loadDetails(job.id);
-          } else {
-            expanded.current.delete(job.id);
-          }
-        }}>
-          <summary>작업 설정 및 실행 시도 · {job.attempt_count}회</summary>
-          <pre>{JSON.stringify(job.spec, null, 2)}</pre>
-          {detailErrors[job.id] && <div>
-            <p role="alert">{detailErrors[job.id]}</p>
-            <button type="button" className="secondary"
-              onClick={() => void loadDetails(job.id)}>상세 다시 시도</button>
+        {(nextCursor || discoveryNextCursor) && <div className="actions">
+          {nextCursor && <button type="button" className="secondary" disabled={busy} onClick={onLoadMore}>이전 데이터 작업 조회</button>}
+          {discoveryNextCursor && <button type="button" className="secondary" disabled={busy} onClick={onLoadMoreDiscovery}>이전 집계 작업 조회</button>}
+        </div>}
+      </div>
+      <section className="data-job-detail" aria-label="선택한 작업 상세">
+        <h4 ref={heading} tabIndex={-1}>선택 작업{job ? " · " + dataJobLabel(job) : ""}</h4>
+        {!selectedJobId && <p className="muted">목록에서 작업을 선택하세요.</p>}
+        {selectedJobId && !job && !error && <p role="status">선택한 작업을 불러오는 중입니다.</p>}
+        {error && <div role="alert"><p>작업 상태 조회 실패 · {error}</p>
+          {job && <p className="hint">아래는 마지막으로 조회한 상태입니다.</p>}
+          <button type="button" className="secondary" onClick={() => setRetry(value => value + 1)}>선택 작업 다시 조회</button></div>}
+        {job && <>
+          <p className={`status ${job.status.toLowerCase()}`} role="status">{jobStatusLabel(job.status)}{job.cancel_requested ? " · 취소 요청됨" : ""}</p>
+          <p className="hint">{datasetName(job.dataset_id)} · {formatRecordedAt(job.created_at)}</p>
+          {job.error && <div role="alert"><p>{job.error}</p>
+            {job.error_code && <small>{job.error_code}</small>}
+            {job.retry_policy === "manual_verification_required" && <p>커밋 상태 확인 후 재실행이 필요합니다.</p>}
           </div>}
-          {!detailById[job.id] && !detailErrors[job.id] && <p role="status">상세 이력을 확인하고 있습니다.</p>}
-          {detailById[job.id]?.attempts.map(attempt => <p key={attempt.id} className="muted">
-            #{attempt.number} {jobStatusLabel(attempt.status)} · {attempt.started_at}
-            {attempt.error ? ` · ${attempt.error}` : ""}
-            {attempt.error_code ? ` · ${attempt.error_code}` : ""}
-            {attempt.failure_stage ? ` · 단계: ${attempt.failure_stage}` : ""}
-            <small> · 실행 ID: {attempt.id}</small></p>)}
-        </details>
-        {job.kind !== "exploration" && typeof job.result?.dataset_id === "string" &&
-          <button className="secondary" onClick={() => onOpen(job.result!.dataset_id as string)}>
-            결과 데이터 열기 →
-          </button>}
-        {job.kind === "iceberg_import" && job.status === "Running" &&
-          <p className="muted">Iceberg 적재는 외부 커밋이 진행될 수 있어 실행 중 취소할 수 없습니다.</p>}
-        {canCancel && ["Queued", "Running"].includes(job.status) &&
-          !(job.kind === "iceberg_import" && job.status === "Running") &&
-          <button className="secondary" disabled={busy || job.cancel_requested}
-            onClick={() => onCancel(job.id)}>작업 취소</button>}
-      </article>)}
+          {job.status === "Succeeded" && job.result && <>
+            {"row_count" in job.result && typeof job.result.row_count === "number" && <p>분석한 행 · {job.result.row_count.toLocaleString("ko-KR")}</p>}
+            {job.kind === "exploration" && <DiscoveryJobResult key={job.id} result={job.result} />}
+            {typeof job.result.dataset_id === "string" && <button type="button" onClick={() => onOpen(job.result!.dataset_id as string)}>
+              {job.kind === "profile" || job.kind === "exploration" ? "분석 원본 데이터 조회 →" : "결과 데이터 조회 →"}</button>}
+            {job.kind === "feature_register" && typeof job.result.feature_service === "string" && <p>등록 Feature Service · {job.result.feature_service}</p>}
+            {job.kind === "feature_retire" && <p>Feature Service 등록 폐기 완료</p>}
+          </>}
+          {canCancel && !TERMINAL.has(job.status) && job.kind !== "feature_retire" &&
+            !(job.kind === "iceberg_import" && job.status === "Running") &&
+            <button type="button" className="secondary" disabled={cancelling || job.cancel_requested} onClick={() => void cancel()}>취소 요청</button>}
+          {job.kind === "feature_retire" && !TERMINAL.has(job.status) && <p className="hint">등록 폐기는 취소할 수 없습니다. 작업 상태를 확인하세요.</p>}
+          <details><summary>작업 설정·결과·실행 근거</summary>
+            <dl className="evidence-facts"><div><dt>작업 ID</dt><dd>{job.id}</dd></div></dl>
+            <pre>{JSON.stringify({ spec: job.spec, result: job.result, attempts: job.attempts,
+              error_code: job.error_code, failure_stage: job.failure_stage, request_id: job.request_id }, null, 2)}</pre>
+          </details>
+        </>}
+      </section>
     </div>
-    {nextCursor && <button className="secondary" disabled={busy} onClick={onLoadMore}>
-      이전 작업 더 보기 →
-    </button>}
-    {discoveryNextCursor && <button className="secondary" disabled={busy}
-      onClick={onLoadMoreDiscovery}>이전 Discovery 작업 더 보기 →</button>}
   </section>;
 }

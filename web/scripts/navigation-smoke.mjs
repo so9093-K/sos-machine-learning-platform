@@ -315,7 +315,23 @@ try {
     routeAt("/data", "?from=pipeline&dataset=dataset-1"), "preparation"),
     { pipelineReturn: true, datasetId: "dataset-1" });
   assert.equal(routeAt("/data", "?from=pipeline&dataset=dataset-1").context.datasetId, "dataset-1");
-  assert.equal(routeAt("/data", "?dataset=ignored").context.datasetId, "");
+  assert.equal(routeAt("/data", "?dataset=chosen").context.datasetId, "chosen");
+  for (const [tab, path] of [["understanding", "/data"], ["preview", "/data/query"],
+      ["profile", "/data/profile"], ["preparation", "/data/prepare"]]) {
+    const target = contextPath(tab, { datasetId: "data / one" });
+    assert.equal(routeAt(path, target.slice(target.indexOf("?"))).context.datasetId, "data / one");
+  }
+  assert.deepEqual(nextNavigationContext(routeAt("/data", "?dataset=one"), "preview"),
+    { pipelineReturn: false, datasetId: "one" });
+  const jobContext = { datasetId: "one", dataJobId: "job / one", dataJobKind: "exploration" };
+  const jobPath = contextPath("jobs", jobContext);
+  assert.deepEqual(routeAt("/activity/jobs", jobPath.slice(jobPath.indexOf("?"))).context,
+    { pipelineReturn: false, ...jobContext });
+  assert.equal(nextNavigationContext(routeAt("/activity/jobs", jobPath.slice(jobPath.indexOf("?"))), "preview").dataJobId, undefined);
+  const { dataJobLabel } = await vite.ssrLoadModule("/src/JobsPanel.tsx");
+  assert.equal(dataJobLabel({ kind: "feature_register", spec: {} }), "Feature Service 등록");
+  assert.equal(dataJobLabel({ kind: "feature_retrieve", spec: {} }), "Feature 시점 조회");
+  assert.equal(dataJobLabel({ kind: "feature_retire", spec: {} }), "Feature Service 폐기");
   assert.equal(contextPath("jobs", { pipelineReturn: true, datasetId: "dataset-1" }),
     "/activity/jobs?from=pipeline&dataset=dataset-1");
   assert.deepEqual(nextNavigationContext(

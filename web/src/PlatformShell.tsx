@@ -7,17 +7,17 @@ import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
 
 const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: "WORKSPACE", title: "Workspace", description: "데이터 탐색 · 활동 이상 탐지 · 이전 분석 재개" },
-  understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
-  preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
-  profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
-  preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "Dataset · Recipe · Transform" },
+  understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
+  preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
+  profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
+  preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "원본 선택 · 변환 편집 · 결과 Dataset" },
   pipelines: { eyebrow: "모델 실험실", title: "활동 이상 탐지", description: "활동 패턴을 이해하고, 모델을 사용하거나 직접 학습합니다." },
   ml: { eyebrow: "MODELS", title: "모델 버전", description: "불변 모델 판본 · 학습 이력 · 비교" },
-  training: { eyebrow: "TRAINING", title: "모델 학습", description: "Dataset · Feature · Training Job" },
-  scoring: { eyebrow: "SCORING", title: "점수 결과", description: "모델 판본 · 점수화 · 결과 조회" },
+  training: { eyebrow: "TRAINING", title: "모델 학습", description: "입력 데이터 · 학습 설정 · 실행 결과" },
+  scoring: { eyebrow: "SCORING", title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
   policies: { eyebrow: "DECISION POLICY", title: "판정 정책", description: "점수 결과 · 정책 판본 · 재사용" },
   evaluations: { eyebrow: "EVALUATION", title: "평가 결과", description: "평가 근거 · 레이블 · 지표" },
-  explanations: { eyebrow: "EXPLANATION", title: "점수 설명", description: "관측 결과 · 국소 민감도" },
+  explanations: { eyebrow: "EXPLANATION", title: "점수 설명", description: "관측값 · 점수 기여도 · 기준값 치환" },
   jobs: { eyebrow: "ACTIVITY & JOBS", title: "작업 이력", description: "Data · Exploration · ML 실행 현황" },
   "ml-jobs": { eyebrow: "ACTIVITY & JOBS", title: "ML 작업 이력", description: "학습 · Scoring · 정책 · 평가 · 설명" },
   "pipeline-jobs": { eyebrow: "ACTIVITY & JOBS", title: "모델 실험실 분석 이력", description: "이전에 수행한 모델 학습과 이상 탐지 결과" },
@@ -49,7 +49,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
   const [localOperatorHost, setLocalOperatorHost] = useState(false);
   // 좁은 화면에서는 메뉴가 업무 화면을 밀어내지 않도록 접어 두고, 화면 이동 후 다시 접는다.
   const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => { setMenuOpen(false); }, [section]);
+  useEffect(() => { setMenuOpen(false); }, [section, modelContext.datasetId, modelContext.modelId, modelContext.pipelineRunId, modelContext.dataJobId, modelResource?.id]);
   useEffect(() => {
     setLocalOperatorHost(isLocalOperatorHost());
   }, []);
@@ -99,7 +99,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
         <div className="header-meta">
           <span className="environment">{actor.mode === "development" ? "로컬 인증" : "토큰 인증"}</span>
           <div className="auth-status">
-            <span>{actor.actor_id} · {actor.roles.join(", ")}</span>
+            <span>{actor.actor_id} · {actor.roles.map(role => ({ administrator: "관리자", researcher: "연구자", viewer: "조회 사용자", operator: "운영자" }[role] ?? role)).join(" · ")}</span>
             {actor.mode !== "development" &&
               <button type="button" className="ghost" onClick={onSignOut}>인증 해제</button>}
           </div>
@@ -108,7 +108,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
       {isModelsArea(section) && <ModelAreaNavigation active={section}
         context={modelContext} resource={modelResource} onNavigate={onNavigate} />}
       {children}
-      <footer>{brandName} · {label.eyebrow}<span>Dataset · Job · Artifact</span></footer>
+      <footer>{brandName} · {label.eyebrow}<span>데이터 · 모델 · 분석 결과</span></footer>
     </main>
   </div>;
 }

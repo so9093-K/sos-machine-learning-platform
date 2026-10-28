@@ -807,7 +807,7 @@ class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: Literal["profile", "transform", "iceberg_import", "ml_playground", "feature_register", "feature_retrieve"]
+    kind: Literal["profile", "transform", "iceberg_import", "ml_playground", "feature_register", "feature_retrieve", "feature_retire"]
     dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]

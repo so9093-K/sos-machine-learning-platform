@@ -4,6 +4,8 @@ import type { Dataset, UploadPolicy } from "./types";
 type SnapshotChoice = { snapshot_id: string | number; timestamp_ms: number };
 type Props = {
   datasets: Dataset[];
+  loading?: boolean;
+  readError?: boolean;
   selected: string;
   canWrite: boolean;
   busy: boolean;
@@ -29,7 +31,7 @@ const mebibytes = (size: number) => (size / (1024 * 1024)).toFixed(2);
 /** 데이터 등록·선택 조작은 데이터 영역에서만 제공한다. */
 export function DataSourceSidebar(props: Props) {
   const {
-    datasets, selected, canWrite, busy, uploadRef, uploadPolicy,
+    datasets, selected, canWrite, busy, loading = false, readError = false, uploadRef, uploadPolicy,
     onFile, onExample, onChoose, existingTableName, onChangeExistingName,
     snapshots, snapshotId, onSnapshotId, snapshotsLoading,
     onLoadSnapshots, onConnectExisting, hasMore, onLoadMore,
@@ -37,7 +39,8 @@ export function DataSourceSidebar(props: Props) {
   return <div className="data-sidebar">
     <div className="section-title">DATASETS</div>
     <nav className="dataset-nav" aria-label="데이터셋 목록">
-      {datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
+      {loading && <p className="muted" role="status">Dataset 조회 중…</p>}
+      {!loading && !readError && datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
       {datasets.map(item => <button key={item.id}
         className={`dataset ${selected === item.id ? "active" : ""}`}
         onClick={() => onChoose(item.id)}>

@@ -47,8 +47,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
         <article className="panel platform-destination">
           <span className="eyebrow">DATA EXPLORER</span>
           <h4>데이터 탐색</h4>
-          <p>Dataset을 등록하고 구조·분포·품질을 확인하며 제한된 EDA를 이용합니다.
-            분석 Pipeline을 실행하지 않고도 사용할 수 있습니다.</p>
+          <p>Dataset을 등록하고 구조·품질·분포를 확인합니다.</p>
           <button type="button" onClick={() => onNavigate("understanding")}>
             데이터 탐색 시작 →
           </button>
@@ -56,10 +55,9 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
         <article className="panel platform-destination">
           <span className="eyebrow">모델 실험실</span>
           <h4>활동 이상 탐지</h4>
-          <p>준비된 예제로 모델 학습을 시작하고, 실제 학습 결과와 이상 후보를 탐구합니다.</p>
-          <p className="hint">모델을 이해한 뒤 다른 데이터에 적용할 수도 있습니다.</p>
+          <p>등록 모델 적용과 새 모델 학습을 선택하고 분석 결과를 살펴봅니다.</p>
           <button type="button" onClick={() => onNavigate("pipelines")}>
-            모델 학습 →
+            활동 이상 탐지 →
           </button>
         </article>
       </div>

@@ -66,7 +66,7 @@ header p,.dataset-hero p{color:var(--sos-muted);font-size:13px}
 .storage-panel > .panel-head{margin-top:24px}
 .storage-panel > .panel-head:first-child{margin-top:0}
 .hero-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-input,select{background:var(--sos-field);border:1px solid var(--sos-border);border-radius:8px;padding:11px;color:var(--sos-text);min-width:0}
+input,select{background:var(--sos-field);border:1px solid var(--sos-border);border-radius:8px;padding:11px;color:var(--sos-text);min-width:0;max-width:100%}
 input:focus,select:focus,button:focus-visible{outline:2px solid var(--sos-accent);outline-offset:2px}
 button:not(.dataset):not(.tab):not(.ghost):not(.surface-button){background:var(--sos-accent);border:1px solid var(--sos-accent);padding:10px 15px;color:var(--sos-sidebar);border-radius:9px;font-weight:700;font-size:12px}
 button.secondary:not(.dataset):not(.tab):not(.ghost){background:var(--sos-raised);border-color:var(--sos-border);color:var(--sos-text)}
@@ -121,6 +121,7 @@ tbody tr:hover{background:var(--sos-raised)}
 .chart-controls label,.form-row label{color:var(--sos-muted);font-size:12px;display:flex;flex-direction:column;gap:7px}
 .chart{height:320px;width:100%;margin-top:15px}
 .form-row{display:flex;gap:15px;align-items:end;flex-wrap:wrap;margin:16px 0}
+.form-row > label{min-width:0;max-width:100%}
 .form-row .hint{margin:0}
 .steps{padding:14px 0;display:grid;gap:7px}
 .step{display:flex;align-items:center;gap:15px;padding:12px;background:var(--sos-raised);border-radius:9px;font-size:12px}
@@ -1390,4 +1391,40 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 @media(max-width:520px) {
   .playground-input-tools { grid-template-columns:1fr; }
   .feature-result-toolbar input { flex-basis:100%; max-width:none; }
+}
+
+/* 데이터 선택과 결과 조사는 좁은 화면에서도 본문에서 이어진다. */
+.dataset-switcher { display:flex; align-items:end; flex-wrap:wrap; gap:12px; margin:0 0 16px; min-width:0; }
+.dataset-switcher > label { display:grid; gap:7px; font-size:13px; min-width:0; width:min(100%,520px); }
+.dataset-switcher select { width:100%; }
+.data-job-workspace { display:grid; grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr); gap:24px; min-width:0; align-items:start; }
+.data-job-list,.data-job-detail { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; min-width:0; }
+.data-job-search { display:grid; gap:7px; font-size:13px; }
+.data-job-choice { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 12px; text-align:left; width:100%; min-width:0; }
+.data-job-choice > span:not(.status),.data-job-choice small { grid-column:1/-1; color:var(--sos-muted); font-weight:400; overflow-wrap:anywhere; }
+.data-job-choice[aria-pressed="true"] { border-color:var(--sos-accent)!important; box-shadow:inset 3px 0 var(--sos-accent); }
+.data-job-choice .status { padding:3px 7px; font-size:11px; }
+.data-job-detail { border-left:1px solid var(--sos-border); padding-left:24px; }
+.data-job-detail > h4 { margin:0; font-size:16px; scroll-margin-top:24px; }
+.data-job-detail > .status,.data-job-detail > button { justify-self:start; }
+.data-job-detail p { font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.data-job-detail pre { max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+.data-job-detail details { min-width:0; }
+.data-job-detail summary { cursor:pointer; font-size:13px; color:var(--sos-muted); }
+.discovery-job-result { min-width:0; }
+.data-profile-details { min-width:0; padding-top:20px; margin-top:20px; border-top:1px solid var(--sos-border); }
+.data-profile-details > summary { cursor:pointer; font-weight:650; font-size:15px; }
+.data-profile-details[open] > summary { margin-bottom:18px; }
+.profile-column-tools { display:flex; align-items:end; flex-wrap:wrap; gap:12px; margin:20px 0 10px; }
+.profile-column-tools > h4 { margin-right:auto; }
+.profile-column-tools label { display:grid; gap:6px; font-size:12px; }
+.profile-column-tools span { font-size:12px; color:var(--sos-muted); }
+.feast-feature-panel > summary { cursor:pointer; font-weight:650; }
+.feast-feature-panel > .hint { margin-top:14px; }
+.feast-feature-panel label:not(.feature-selector-item) { display:grid; gap:6px; font-size:13px; min-width:0; }
+.feast-feature-panel select { max-width:100%; }
+.feast-feature-panel .hint { line-height:1.65; }
+@media(max-width:1050px) {
+  .data-job-workspace { grid-template-columns:minmax(0,1fr); }
+  .data-job-detail { border-left:0; padding:18px 0 0; border-top:1px solid var(--sos-border); }
 }

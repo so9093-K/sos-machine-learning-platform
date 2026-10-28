@@ -109,7 +109,8 @@ export function DatasetQueryPanel({
         <label>비교 연산 <select aria-label="비교 연산" value={filterOp}
           onChange={event => edit({ filterOp: event.target.value as FilterOp })}>
           {["eq", "ne", "lt", "lte", "gt", "gte", "is_null", "is_not_null"].map(op =>
-            <option key={op} value={op}>{op}</option>)}
+            <option key={op} value={op}>{{ eq: "같음 (=)", ne: "다름 (≠)", lt: "미만 (<)", lte: "이하 (≤)",
+              gt: "초과 (>)", gte: "이상 (≥)", is_null: "결측값", is_not_null: "결측값 제외" }[op]}</option>)}
         </select></label>
         {filterColumn && !["is_null", "is_not_null"].includes(filterOp) &&
           <label>비교 값 <input aria-label="비교 값" value={filterValue}
