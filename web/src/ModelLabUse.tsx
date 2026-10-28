@@ -55,6 +55,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const [groups, setGroups] = useState<ModelGroup[]>([]);
   const [groupError, setGroupError] = useState("");
   const registryKey = selectedGroupKey;
+  const groupTitle = groups.find(group => group.registry_key === registryKey)?.title ??
+    (registryKey === "default" ? "기본 활동 이상 탐지" : registryKey);
   const [definition, setDefinition] = useState<PipelineDefinition | null>(null);
   const [nextPage, setNextPage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -186,7 +188,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       <select value={registryKey} onChange={event => {
         onSelectGroup(event.target.value);
       }}>
-        <option value="default">기본 활동 이상 탐지</option>
+        <option value="default">{groups.find(group => group.registry_key === "default")?.title ?? "기본 활동 이상 탐지"}</option>
         {registryKey !== "default" && !groups.some(g => g.registry_key === registryKey) &&
           <option value={registryKey}>현재 선택한 모델 그룹</option>}
         {groups.filter(g => g.registry_key !== "default").map(g =>
@@ -252,8 +254,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     </div>}
     {selected && <div className="model-lab-current-model">
       <div><span className="eyebrow">현재 선택한 모델</span>
-        <h3>Isolation Forest · v{selected.version.version}</h3>
-        <p>학습 시각 {new Date(selected.revision.created_at).toLocaleString("ko-KR")}
+        <h3>{groupTitle} · v{selected.version.version}</h3>
+        <p>Isolation Forest · 학습 시각 {new Date(selected.revision.created_at).toLocaleString("ko-KR")}
           · 입력 Feature {selected.revision.features.length}개</p></div>
       <div className="model-lab-model-actions">
       <details className="model-lab-version-picker">
@@ -262,7 +264,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           {models.map(({ revision, version }) => <button key={revision.id} type="button"
             className="surface-button model-lab-model-choice" aria-pressed={selectedModelId === revision.id}
             onClick={() => onSelectModel(revision.id)}>
-            <span><strong>Isolation Forest · v{version.version}</strong>
+            <span><strong>{groupTitle} · v{version.version}</strong>
               <small>학습 {new Date(revision.created_at).toLocaleString("ko-KR")}</small>
               <small>{datasets.find(item => item.id === revision.dataset_id)?.name ??
                 "현재 목록 외의 Dataset"} · Feature {revision.features.length}개</small></span>

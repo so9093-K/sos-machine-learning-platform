@@ -291,6 +291,8 @@ class MLflowRunPageOut(BaseModel):
 
 
 class MLflowModelVersionOut(BaseModel):
+    dataset_id: str | None = None
+    created_at: str | None = None
     archived: bool = False
     name: str
     version: str

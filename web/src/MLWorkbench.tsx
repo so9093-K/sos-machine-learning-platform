@@ -16,6 +16,8 @@ type Props = {
   canInspectOperations?: boolean;
   onOpenModel: (id: string) => void;
   initialDatasetId: string;
+  registryKey: string;
+  onRegistryGroupSelected: (key: string) => void;
   onDatasetSelected: (id: string) => void;
 };
 
@@ -26,7 +28,7 @@ function statistic(value: unknown): string {
 
 /** 독립 Training은 SOS 실행 계약, 모델 자산 탐색은 MLflowResearch가 책임진다. */
 export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperations = false,
-  onOpenModel, initialDatasetId, onDatasetSelected }: Props) {
+  onOpenModel, initialDatasetId, onDatasetSelected, registryKey = "default", onRegistryGroupSelected }: Props) {
   const selectedId = initialDatasetId;
   const [localOperatorHost, setLocalOperatorHost] = useState(false);
   useEffect(() => { setLocalOperatorHost(isLocalOperatorHost()); }, []);
@@ -35,7 +37,6 @@ export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperation
   const [featureEditorOpen, setFeatureEditorOpen] = useState(true);
   const [nEstimators, setNEstimators] = useState(100);
   const [experimentTitle, setExperimentTitle] = useState("기본 실험");
-  const [registryKey, setRegistryKey] = useState("default");
   const [modelGroups, setModelGroups] = useState<Array<{
     registry_key: string; title: string; archived: boolean;
   }>>([]);
@@ -220,24 +221,11 @@ export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperation
         </label>
         <label>등록할 모델 그룹
           <select aria-label="학습 결과 모델 그룹" value={registryKey}
-            onChange={event => setRegistryKey(event.target.value)}>
-            <option value="default">기본 활동 이상 탐지</option>
-            {modelGroups.filter(g => g.registry_key !== "default").map(g =>
+            onChange={event => onRegistryGroupSelected(event.target.value)}>
+            {!modelGroups.some(g => g.registry_key === registryKey) &&
+              <option value={registryKey}>{registryKey === "default" ? "기본 활동 이상 탐지" : registryKey}</option>}
+            {modelGroups.map(g =>
               <option key={g.registry_key} value={g.registry_key}>{g.title}</option>)}
-          </select>
-        </label>
-        <label>트리 개수
-          <input type="number" aria-label="Isolation Forest 트리 개수"
-            min={1} max={2000} value={nEstimators}
-            onChange={event => setNEstimators(Number(event.target.value))} />
-        </label>
-        <label>트리별 표본 수
-          <select aria-label="트리별 학습 표본 수" value={maxSamples} onChange={event => setMaxSamples(event.target.value)}>
-            <option value="auto">자동 (최대 256행)</option>
-            <option value="16">16행</option>
-            <option value="64">64행</option>
-            <option value="256">256행</option>
-            <option value="1024">1,024행</option>
           </select>
         </label>
       </div>
@@ -299,7 +287,25 @@ export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperation
           </details>
         </>}
       </div>
-      <p className="hint">사용자가 선택한 숫자형 Feature와 결측 정책을 사용합니다. 숫자형 컬럼이 모델에 의미 있는 입력인지는 별도로 판단해야 합니다. 비유한값·정밀도·실행 예산 문제는 여전히 실패할 수 있습니다. 학습 점수는 독립 검증 성능이 아닙니다.</p>
+      <details className="training-algorithm-settings"><summary>알고리즘 설정 · Isolation Forest</summary>
+        <div className="form-row">
+        <label>트리 개수
+          <input type="number" aria-label="Isolation Forest 트리 개수"
+            min={1} max={2000} value={nEstimators}
+            onChange={event => setNEstimators(Number(event.target.value))} />
+        </label>
+        <label>트리별 표본 수
+          <select aria-label="트리별 학습 표본 수" value={maxSamples} onChange={event => setMaxSamples(event.target.value)}>
+            <option value="auto">자동 (최대 256행)</option>
+            <option value="16">16행</option>
+            <option value="64">64행</option>
+            <option value="256">256행</option>
+            <option value="1024">1,024행</option>
+          </select>
+        </label>
+        </div>
+        <p className="hint">트리별 표본 수는 위에서 선택한 학습 입력 범위 안에서 각 트리를 구성할 때 사용하는 행 수입니다.</p>
+      </details>
       <div className="actions">
         {selectedId && !loadingColumns && numericColumns.length > 0 && features.length === 0 &&
           <p className="hint" role="status">학습 Job을 제출하려면 위에서 Feature를 선택해야 합니다.</p>}

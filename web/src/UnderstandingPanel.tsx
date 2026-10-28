@@ -125,15 +125,25 @@ export function UnderstandingPanel({
           ? "행 수는 등록할 때 파일 전체를 검사해 확인했습니다."
           : "이 Dataset은 등록 시 행 수를 기록하지 않아 원본 행 수를 계산하지 않았습니다."}
         {" · "}{profile ? "원본 규모와 분석 결과의 범위는 구별합니다." : "분포와 역할 후보는 별도 분석에서 계산됩니다."}</p>
-      {!profile && <><h4>기본 스키마</h4>
+      {!profile && <details className="dataset-schema"><summary>전체 컬럼·자료형 ({overview.column_count}개)</summary>
       <div className="table-scroll"><table><thead><tr>
         <th>컬럼</th><th>자료형</th>
       </tr></thead><tbody>{overview.columns.map(col => <tr key={col.name}>
         <td>{col.name}</td><td title={col.dtype}>{formatDtype(col.dtype)}</td>
-      </tr>)}</tbody></table></div></>}
+      </tr>)}</tbody></table></div></details>}
     </>}
     <div className="panel-head"><div><h3>데이터 프로파일</h3>
-      <p>통계·역할 후보는 별도 분석 결과이며 원본을 변경하지 않습니다.</p></div></div>
+      <p>분포·결측·컬럼 특성을 확인합니다 · 기본 분석은 최대 1,000행, 전체 분석은 모든 행을 대상으로 합니다.</p></div>
+    {canCreate && <div className="actions">
+      <button className="secondary" disabled={busy || !state || !!error ||
+        state.job_status === "Queued" || state.job_status === "Running"}
+        onClick={() => void start("sample")}>{profile ? "기본 분석 다시 실행" :
+          state?.job_status === "Failed" ? "기본 분석 재시도" : "기본 분석 실행"}</button>
+      <button disabled={busy || !state || !!error ||
+        state.job_status === "Queued" || state.job_status === "Running"}
+        onClick={() => void start("full")}>전체 데이터 분석 실행</button>
+    </div>}
+    </div>
     {!state && !error && <p role="status">분석 실행 상태를 확인하는 중입니다.</p>}
     {error && <div role="alert">{error} <button onClick={() => setRevision(n => n + 1)}>다시 조회</button></div>}
     {state && <p className="hint">원본 판본 {state.version.slice(0, 12)} · 분석 상태 {
@@ -235,15 +245,6 @@ export function UnderstandingPanel({
         </button>
       </article>)}</div>
     </>}
-    {canCreate && <div className="actions">
-      <button className="secondary" disabled={busy || !state || !!error ||
-        state.job_status === "Queued" || state.job_status === "Running"}
-        onClick={() => void start("sample")}>{profile ? "기본 분석 다시 실행" :
-          state?.job_status === "Failed" ? "기본 분석 재시도" : "기본 분석 실행"}</button>
-      <button disabled={busy || !state || !!error ||
-        state.job_status === "Queued" || state.job_status === "Running"}
-        onClick={() => void start("full")}>전체 데이터 분석 실행</button>
-    </div>}
     {jobError && <p role="alert">{jobError}</p>}
   </section>;
 }

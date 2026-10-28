@@ -168,6 +168,7 @@ def read_model_versions(client, store, actor_id: str, *, page_token: str | None 
             continue
         visible.append({
             "name": name, "version": version["version"],
+            "dataset_id": model.get("dataset_id"), "created_at": model.get("created_at"),
             "model_id": model_id, "run_id": version.get("run_id"),
             "status": version.get("status"), "job_id": job_id,
             "aliases": version.get("aliases") or [],

@@ -40,22 +40,6 @@ function verifiedHistogram(summary: Record<string, unknown>, rowCount: number):
   return { edges: edges as number[], counts: counts as number[] };
 }
 
-/** 점수 범위 상위 1/4 구간에 실제로 있는 관측 수. 히스토그램 구간 경계를 그대로 쓰므로 정확한 집계다. */
-function upperScoreShare(summary: Record<string, unknown>, rowCount: number):
-  { lower: number; count: number; share: number } | null {
-  const histogram = verifiedHistogram(summary, rowCount);
-  if (!histogram || rowCount === 0) return null;
-  const start = Math.floor(histogram.counts.length * 0.75);
-  if (start <= 0 || start >= histogram.counts.length) return null;
-  const count = histogram.counts.slice(start).reduce((sum, value) => sum + value, 0);
-  return { lower: histogram.edges[start], count, share: count / rowCount };
-}
-
-function percent(share: number): string {
-  if (share > 0 && share < 0.0001) return "0.01% 미만";
-  return (share * 100).toLocaleString("ko-KR", { maximumFractionDigits: 2 }) + "%";
-}
-
 /** 실제 결과의 검증된 전체 히스토그램만 표시한다. 추정 분포를 만들지 않는다. */
 function distributionOption(summary: Record<string, unknown>, rowCount: number,
   selectedScore: number | null): EChartsCoreOption | null {
@@ -100,11 +84,18 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [rowLimit, setRowLimit] = useState(25);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const pendingMore = useRef(false);
+  const pageRequest = useRef(0);
   const detailRef = useRef<HTMLElement>(null);
   const summary = result.score_summary as Record<string, unknown>;
+  const scope = summary.temporal_scope && typeof summary.temporal_scope === "object"
+    ? summary.temporal_scope as Record<string, unknown> : null;
+  const partitionLabel = scope?.partition === "test" ? "Test 시간 구간"
+    : scope?.partition === "calibration" ? "판정 기준 산정 시간 구간"
+    : scope?.partition === "train" ? "학습 시간 구간" : null;
   const selected = loaded?.items.find(item => item.row_index === selectedRow) ??
     (selectedRow === null ? loaded?.items[0] : undefined);
   const userSelected = selectedRow !== null && selected?.row_index === selectedRow;
@@ -113,7 +104,6 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     ? loaded.items.findIndex(item => item.row_index === selected.row_index) + 1 : undefined;
   const histogram = useMemo(() => distributionOption(summary, result.row_count, selectedScore),
     [summary, result.row_count, selectedScore]);
-  const upper = useMemo(() => upperScoreShare(summary, result.row_count), [summary, result.row_count]);
   // 상세 분석에 넓은 공간이 필요할 때 사용자가 목록을 접는다. 자동으로 숨기지 않는다.
   const [listCollapsed, setListCollapsed] = useState(false);
   const loadedItems = loaded?.items ?? [];
@@ -122,10 +112,11 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const nextItem = selectedIndex >= 0 ? loadedItems[selectedIndex + 1] ?? null : null;
 
   useEffect(() => {
+    pageRequest.current += 1;
     let active = true;
     setLoaded(null); setSelectedRow(null); setLoading(true); setError("");
     void request<ScoringObservations>(
-      "/api/ml/scoring/results/" + encodeURIComponent(result.id) + "/observations?limit=25",
+      "/api/ml/scoring/results/" + encodeURIComponent(result.id) + "/observations?limit=" + rowLimit,
     ).then(page => {
       if (!active) return;
       if (page.result_id !== result.id) throw new Error("조회 결과 판본이 일치하지 않습니다.");
@@ -133,7 +124,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     }).catch(cause => { if (active) setError(formatError(cause)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [result.id, retry]);
+  }, [result.id, retry, rowLimit]);
 
   function chooseObservation(rowIndex: number) {
     // 기본으로 보이는 첫 행을 직접 눌러도 명시적 선택으로 상태가 바뀐다.
@@ -156,18 +147,20 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
 
   async function more() {
     if (!loaded?.next_cursor || pendingMore.current) return;
+    const generation = pageRequest.current;
     pendingMore.current = true; setLoadingMore(true); setError("");
     try {
       const next = await request<ScoringObservations>(
         "/api/ml/scoring/results/" + encodeURIComponent(result.id) +
-        "/observations?limit=25&cursor=" + encodeURIComponent(loaded.next_cursor),
+        "/observations?limit=" + rowLimit + "&cursor=" + encodeURIComponent(loaded.next_cursor),
       );
       if (next.result_id !== result.id) throw new Error("조회 결과 판본이 변경됐습니다.");
+      if (generation !== pageRequest.current) return;
       setLoaded(previous => previous?.result_id === result.id ? {
         ...next, items: [...previous.items,
           ...next.items.filter(item => !previous.items.some(old => old.row_index === item.row_index))],
       } : previous);
-    } catch (cause) { setError(formatError(cause)); }
+    } catch (cause) { if (generation === pageRequest.current) setError(formatError(cause)); }
     finally { pendingMore.current = false; setLoadingMore(false); }
   }
 
@@ -175,22 +168,19 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     <header className="scoring-workspace-heading">
       <div>
         <span className="eyebrow">모델 적용 완료</span>
-        <h3>활동 데이터 분석 결과</h3>
+        <h3>데이터 점수 결과</h3>
       </div>
-      <p>실제 데이터의 전체 점수 분포와 관측값별 활동 특징을 함께 살펴봅니다.</p>
+      <p>점수를 계산한 관측값의 분포와 개별 입력값을 확인합니다.</p>
     </header>
+    {partitionLabel && <p className="scoring-scope">계산 범위: {partitionLabel} · {result.row_count.toLocaleString("ko-KR")}건</p>}
+    {summary.training_data_reused === true && <p className="hint">학습에 사용한 Dataset 판본의 점수입니다. 독립 검증 데이터의 성능을 나타내지 않습니다.</p>}
     <div className="scoring-result-summary" aria-label="분석 결과 요약">
       <div><span>분석한 관측값</span><strong>{result.row_count.toLocaleString("ko-KR")}건</strong></div>
       <div><span>최고 이상 점수</span><strong>{readable(summary.score_max)}</strong></div>
       <div><span>평균 이상 점수</span><strong>{readable(summary.score_mean)}</strong></div>
     </div>
-    <p className="scoring-result-interpretation">{upper
-      ? <>점수 <strong>{readable(upper.lower)}</strong> 이상(점수 범위의 상위 1/4 구간)인 관측값은{" "}
-          <strong>{upper.count.toLocaleString("ko-KR")}건({percent(upper.share)})</strong>입니다.{" "}
-          {upper.share <= 0.05 ? "높은 점수 쪽 관측값은 소수이므로 아래 목록의 상위 관측값부터 살펴보세요."
-            : "아래 목록에서 점수가 높은 관측값의 실제 활동 특성을 살펴보세요."}</>
-      : "전체 분포에서 점수가 높은 관측값을 선택해 실제 활동 특성을 살펴보세요."}
-      <small>판정 정책 미적용 · 점수순 위치는 이상 사건 판정이나 발생 확률을 뜻하지 않습니다.</small></p>
+    <p className="scoring-result-interpretation">점수가 높은 관측값부터 실제 입력값과 모델의 반응을 확인할 수 있습니다.
+      <small>점수순 조회 · 이 목록은 판정 정책에 따른 이상 판정을 표시하지 않습니다. 점수는 사건 발생 확률을 뜻하지 않습니다.</small></p>
     <section className="scoring-distribution" aria-label="전체 이상 점수 분포">
       <div className="scoring-distribution-heading">
         <h4>전체 관측값의 점수 분포</h4>
@@ -220,6 +210,11 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
         <div className="scoring-observation-list-heading">
           <div className="scoring-observation-list-title">
             <h4>점수 상위 관측값</h4>
+            <label className="observation-page-size">조회 단위
+              <select aria-label="관측값 조회 단위" value={rowLimit} onChange={event => setRowLimit(Number(event.target.value))}>
+                {[25, 50, 100].map(n => <option key={n} value={n}>{n}건</option>)}
+              </select>
+            </label>
             {selected && <button type="button" className="ghost" onClick={() => setListCollapsed(true)}>
               목록 접고 상세 넓게 보기</button>}
           </div>
@@ -260,7 +255,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
             </button>)}
           {loaded?.next_cursor && <button type="button" className="secondary"
             disabled={loadingMore} onClick={() => void more()}>
-            {loadingMore ? "다음 관측값 불러오는 중…" : "다음 관측값 25건 불러오기"}
+            {loadingMore ? "다음 관측값 불러오는 중…" : `다음 관측값 ${rowLimit}건 불러오기`}
           </button>}
         </div>
       </section>

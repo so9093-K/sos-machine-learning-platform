@@ -970,21 +970,12 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-score-row span { color:var(--sos-muted); font-size:12px; }
 .model-lab-score-row strong { font-size:25px; font-variant-numeric:tabular-nums; }
 .model-lab-input-error { color:var(--sos-danger); font-size:12px; }
-/* 같은 Feature에서만 비교하는 입력값·Train 중앙값 시각 근거. */
+/* 관측값·학습 참조값·차이를 같은 행에서 읽는다. */
 .feature-reference-comparison { display:grid; gap:8px; min-width:0; }
-.feature-reference-values { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.feature-reference-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 .feature-reference-values > div { display:grid; gap:3px; min-width:0; }
 .feature-reference-values span { font-size:12px; color:var(--sos-muted); }
-.feature-reference-values span i { display:inline-block; width:7px; height:7px; margin-right:5px;
-  border-radius:2px; vertical-align:middle; }
-.feature-reference-legend-actual { background:var(--sos-chart-bar); }
-.feature-reference-legend-train { background:var(--sos-chart-third); }
 .feature-reference-values strong { font-size:13px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-.feature-reference-bars { display:grid; gap:6px; }
-.feature-reference-bars > span { display:block; height:7px; width:100%; border-radius:4px;
-  background:var(--sos-raised); overflow:hidden; }
-.feature-reference-bars i { display:block; height:100%; border-radius:4px; background:var(--sos-chart-bar); }
-.feature-reference-bars > span + span i { background:var(--sos-chart-third); }
 .model-lab-feature-groups { display:grid; gap:13px; min-width:0; }
 .model-lab-feature-group,.model-lab-input-comparison { display:grid; gap:12px; min-width:0; padding:14px;
   border:1px solid var(--sos-border); border-radius:10px; }
@@ -998,14 +989,6 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-reference-item > strong { font-size:12px; overflow-wrap:anywhere; }
 .model-lab-input-state { border-left:3px solid var(--sos-accent); background:var(--sos-raised);
   padding:10px 12px; font-size:12px; line-height:1.6; margin:0; }
-/* 기존 2열 활동 행에서 새 비교 요소가 자동 너비 열을 밀어내지 않게 전체 너비를 차지한다. */
-.observation-activity-highlight > .feature-reference-comparison,
-.observation-activity-figure > .feature-reference-comparison {
-  grid-column:1/-1; width:100%; min-width:0; margin:8px 0 4px;
-}
-.observation-activity-highlight .feature-reference-values strong {
-  text-align:left; font-size:13px;
-}
 .pipeline-shap-current-feature { border-left:3px solid var(--sos-accent); padding-left:10px; margin:0;
   font-size:12px; line-height:1.6; }
 @media(max-width:780px) {.model-lab-input-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }}
@@ -1316,7 +1299,6 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .observation-activity-all { border-top:1px solid var(--sos-border); padding-top:14px; }
 .observation-activity-all > summary { cursor:pointer; font-size:13px; font-weight:650; }
 .observation-activity-all[open] > summary { margin-bottom:14px; }
-.feature-reference-scale-note { color:var(--sos-muted); font-size:12px; line-height:1.5; }
 .model-lab-home-illustration-note { font-size:11px; color:var(--sos-muted); margin:5px 0 2px; }
 
 /* Model Lab: 데이터 선택은 하나의 시작 경험, 관측값 실험은 같은 분석의 다음 행동이다. */
@@ -1370,3 +1352,56 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .pipeline-sensitivity > button { justify-self:start; }
 .ml-scoring-panel > .scoring-next-analysis-body { margin-top:0; }
 .scoring-input-ready { margin:0; font-size:13px; color:var(--sos-success); }
+
+/* 사용자 작업에 필요한 선택·결과를 먼저 배치한다. */
+.model-group-panel > label,.model-search,.group-edit-form label { display:grid; gap:7px; max-width:540px; font-size:13px; }
+.model-group-panel > .panel-head { margin-bottom:14px; }
+.model-group-panel > label select { width:100%; }
+.model-group-description { color:var(--sos-muted); margin-top:10px; font-size:13px; }
+.model-group-settings { margin-top:12px; font-size:13px; }
+.model-group-settings summary,.research-history > summary,.model-version-settings > summary,
+.training-algorithm-settings > summary,.dataset-schema > summary,.resource-id-lookup > summary { cursor:pointer; }
+.group-edit-form { display:grid; gap:14px; padding:16px 0 4px; }
+.group-edit-form textarea { background:var(--sos-field); color:var(--sos-text); border:1px solid var(--sos-border);
+  border-radius:8px; padding:11px; font:inherit; resize:vertical; width:100%; }
+.group-edit-form textarea:focus { outline:2px solid var(--sos-accent); outline-offset:2px; }
+.group-edit-form .actions { justify-content:flex-start; margin:0; flex-wrap:wrap; }
+.model-version-list { display:grid; }
+.model-version-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px;
+  padding:20px 0; border-bottom:1px solid var(--sos-border); align-items:start; }
+.model-version-row:last-child { border-bottom:0; }
+.model-version-identity { min-width:0; display:grid; gap:7px; }
+.model-version-identity h3 { font-size:17px; overflow-wrap:anywhere; }
+.model-version-identity p,.model-version-identity small { font-size:13px; color:var(--sos-muted); overflow-wrap:anywhere; }
+.model-version-settings { flex-basis:100%; text-align:right; font-size:12px; }
+.model-version-settings[open] { max-width:460px; text-align:left; overflow-wrap:anywhere; }
+.model-version-settings .model-version-management { margin-top:12px; }
+.model-version-panel > .model-search { margin-bottom:6px; }
+.research-history > summary { font-size:16px; font-weight:600; }
+.research-history-body { display:grid; gap:18px; margin-top:18px; }
+.research-run-list { display:grid; gap:8px; max-height:420px; overflow:auto; }
+.research-run-list .ml-resource-row { justify-content:flex-start; }
+.research-run-list small { display:block; margin-top:4px; font-size:12px; color:var(--sos-muted); }
+.run-comparison { display:grid; gap:14px; min-width:0; }
+.explanation-baseline { padding:12px 14px; margin:12px 0; border-left:3px solid var(--sos-accent);
+  background:var(--sos-raised); font-size:13px; line-height:1.7; }
+.pipeline-shap-explanation { margin-top:22px; padding-top:20px; border-top:1px solid var(--sos-border); }
+.observation-activity-highlight,.observation-activity-figure { grid-template-columns:1fr; align-items:center; gap:8px; }
+.observation-activity-highlight > .feature-reference-comparison,.observation-activity-figure > .feature-reference-comparison { min-width:0; width:100%; }
+.observation-activity-highlight .feature-reference-values strong { text-align:left; }
+.observation-page-size { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--sos-muted); }
+.observation-page-size select { padding:6px 9px; }
+.dataset-schema { margin:16px 0 24px; }
+.dataset-schema .table-scroll { margin-top:12px; max-height:360px; overflow:auto; }
+.window-transform-settings { padding:14px; margin:16px 0; background:var(--sos-raised); border-radius:10px; }
+.window-transform-settings > p { margin:0 0 12px; }
+.window-transform-settings fieldset.column-picks { flex:1 1 100%; }
+.training-algorithm-settings { margin:20px 0; font-size:13px; }
+.training-algorithm-settings > .form-row { margin-top:14px; }
+.resource-id-lookup { font-size:13px; color:var(--sos-muted); }
+.resource-id-lookup label { display:grid; gap:6px; margin-top:10px; }
+@media(max-width:760px) {
+  .model-version-row { grid-template-columns:1fr; }
+  .model-version-row > .model-index-actions { justify-content:flex-start; }
+  .model-version-settings { text-align:left; }
+}

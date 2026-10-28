@@ -84,8 +84,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const [reloadRevision, setReloadRevision] = useState(0);
   const { tab, resource, context, navigate: setTab, navigateWithContext,
     selectContext, openResource } = useWorkspaceNavigation();
-  function startScoring(modelId: string) {
-    navigateWithContext("scoring", { modelId });
+  function startScoring(modelId: string, modelGroupKey = context.modelGroupKey) {
+    navigateWithContext("scoring", { modelId, modelGroupKey });
   }
   function startDecision(view: DecisionView, scoringId: string) {
     navigateWithContext(
@@ -855,14 +855,18 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         </>}
 
       </>}
-      {tab === "ml" && !resource && <MLflowResearch canManage={canManageModels}
+      {tab === "ml" && !resource && <MLflowResearch canManage={canManageModels} canTrain={canRun}
+        datasets={datasets} registryKey={context.modelGroupKey ?? "default"}
+        onSelectGroup={modelGroupKey => selectContext({ ...context, modelGroupKey })}
         onOpenModel={id => openResource("model", id)}
         onScoreModel={startScoring}
-        onTrain={() => setTab("training")} />}
+        onTrain={modelGroupKey => navigateWithContext("training", { ...context, modelGroupKey })} />}
       {tab === "training" && !resource &&
         <MLWorkbench datasets={datasets}
           initialDatasetId={context.datasetId ?? ""}
-          onDatasetSelected={datasetId => selectContext({ datasetId })}
+          registryKey={context.modelGroupKey ?? "default"}
+          onRegistryGroupSelected={modelGroupKey => selectContext({ ...context, modelGroupKey })}
+          onDatasetSelected={datasetId => selectContext({ ...context, datasetId })}
           onOpenModel={id => openResource("model", id)}
           canTrain={canRun} canCancel={canCancel}
           canInspectOperations={canInspectStorage || canViewAudit} />}
@@ -895,14 +899,15 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         canRun={canRun} canCancel={canCancel}
         onScoring={startScoring} onDecision={startDecision} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
+        modelGroupKey={context.modelGroupKey ?? "default"}
         datasets={datasets} preferredModelId={context.modelId ?? ""}
-        onModelSelected={modelId => selectContext({ modelId })} onNavigate={setTab}
+        onModelSelected={modelId => selectContext({ ...context, modelId })} onNavigate={setTab}
         canRun={canRun} canCancel={canCancel} onOpenResource={openResource} />}
       {(["policies","evaluations","explanations"] as Tab[]).includes(tab) && !resource &&
         <DecisionWorkspace
           key={tab} view={tab === "policies" ? "policy" : tab === "evaluations" ? "evaluation" : "explanation"}
           preferredScoringId={context.scoringId ?? ""}
-          onScoringSelected={scoringId => selectContext({ scoringId })}
+          onScoringSelected={scoringId => selectContext({ ...context, scoringId })}
           onNavigate={setTab} canRun={canRun} canCancel={canCancel}
           onOpenResource={openResource} datasets={datasets} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}

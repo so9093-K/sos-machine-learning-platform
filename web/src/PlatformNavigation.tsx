@@ -73,8 +73,10 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
         ...(analysisSectionAt(params) ? { pipelineAnalysisSection: analysisSectionAt(params) } : {}),
       } : {}) };
   }
-  if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "" };
-  if (tab === "scoring") return { modelId: params.get("model") ?? "" };
+  if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "",
+    ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
+  if (tab === "scoring") return { modelId: params.get("model") ?? "",
+    ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
   if (isDecisionTab(tab)) return {
     scoringId: params.get("scoring") ?? "",
     ...(params.get("from") === "model-lab" && params.get("model")
@@ -128,6 +130,9 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
     params.set("dataset", context.datasetId);
   }
   if (tab === "scoring" && context.modelId) params.set("model", context.modelId);
+  if ((tab === "ml" || tab === "training" || tab === "scoring") &&
+      context.modelGroupKey && context.modelGroupKey !== "default")
+    params.set("group", context.modelGroupKey);
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
   if (isDecisionTab(tab) && context.modelLabReturn && context.modelId) {
     params.set("from", "model-lab");
@@ -160,7 +165,9 @@ export function resourcePath(kind: MLResourceKind, id: string, context: MLNaviga
       ...(context.modelGroupKey && context.modelGroupKey !== "default"
         ? { group: context.modelGroupKey } : {}) });
   }
-  if (!context.pipelineReturn || !context.pipelineRunId) return path;
+  if (!context.pipelineReturn || !context.pipelineRunId) return path +
+    (context.modelGroupKey && context.modelGroupKey !== "default"
+      ? "?" + new URLSearchParams({ group: context.modelGroupKey }) : "");
   const params = new URLSearchParams({ from: "pipeline", run: context.pipelineRunId });
   if (context.datasetId) params.set("dataset", context.datasetId);
   if (context.candidateRowIndex !== undefined)
@@ -175,7 +182,8 @@ function resourceContext(search: string): MLNavigationContext {
   if (params.get("from") === "model-lab" && params.get("model"))
     return { modelLabReturn: true, modelId: params.get("model")!,
       ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
-  if (params.get("from") !== "pipeline" || !params.get("run")) return {};
+  if (params.get("from") !== "pipeline" || !params.get("run")) return modelGroupAt(params)
+    ? { modelGroupKey: modelGroupAt(params) } : {};
   return { pipelineReturn: true, pipelineRunId: params.get("run")!,
     datasetId: params.get("dataset") ?? "",
     ...(candidateRowAt(params) !== undefined ? { candidateRowIndex: candidateRowAt(params) } : {}),
@@ -210,7 +218,8 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
     return { scoringId: previous.resource.id };
   }
   if (previous.resource?.kind === "model" && tab === "scoring") {
-    return { modelId: previous.resource.id };
+    return { modelId: previous.resource.id,
+      ...(previous.context.modelGroupKey ? { modelGroupKey: previous.context.modelGroupKey } : {}) };
   }
   if (["understanding", "preparation", "preview", "profile", "jobs"].includes(tab) &&
       ["understanding", "preparation", "preview", "profile", "jobs"].includes(previous.tab)) {
@@ -233,9 +242,10 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
             modelGroupKey: previous.context.modelGroupKey } : {}),
     };
   }
-  if ((tab === "training" || tab === "ml") &&
-      (previous.tab === "training" || previous.tab === "ml")) {
-    return { datasetId: previous.context.datasetId };
+  if ((tab === "training" || tab === "ml" || tab === "scoring") &&
+      (previous.tab === "training" || previous.tab === "ml" || previous.tab === "scoring")) {
+    return { ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}),
+      ...(previous.context.modelGroupKey ? { modelGroupKey: previous.context.modelGroupKey } : {}) };
   }
   return {};
 }
@@ -305,7 +315,8 @@ export function useWorkspaceNavigation() {
           pipelineAnalysisSection: previous.context.pipelineAnalysisSection }
       : fromLabUse && previous.context.modelId
         ? { modelLabReturn: true, modelId: previous.context.modelId,
-            modelGroupKey: previous.context.modelGroupKey } : {};
+            modelGroupKey: previous.context.modelGroupKey }
+        : previous.context.modelGroupKey ? { modelGroupKey: previous.context.modelGroupKey } : {};
     update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context },
       resourcePath(kind, id, context));
   }, [update]);

@@ -27,11 +27,12 @@ function body(method: string, value: unknown): RequestInit {
   };
 }
 
-export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage }: {
+export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage, onGroupResolved }: {
   activeKey: string;
   onSelect: (key: string) => void;
   onChanged: () => void;
   canManage: boolean;
+  onGroupResolved: (group: ModelGroup | null) => void;
 }) {
   const [groups, setGroups] = useState<ModelGroup[]>([]);
   const [groupCursor, setGroupCursor] = useState<string | null>(null);
@@ -48,6 +49,7 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const current = groups.find(g => g.registry_key === activeKey);
+  useEffect(() => { onGroupResolved(current ?? null); }, [current, onGroupResolved]);
   useEffect(() => {
     let active = true;
     void Promise.all([
@@ -95,16 +97,18 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
     finally { setPending(false); }
   }
 
-  return <section className="panel" aria-label="모델 그룹 관리">
+  return <section className="panel model-group-panel" aria-label="모델 그룹 관리">
     <div className="panel-head">
-      <div><h3>내 모델 관리</h3>
-        <p className="hint">목적별 모델을 만들고, 각 모델의 학습 버전을 관리합니다.</p></div>
+      <div><h2>모델 선택</h2>
+        <p>모델 그룹을 선택한 뒤 아래에서 학습된 버전을 비교하거나 데이터에 적용합니다.</p></div>
     </div>
     {error && <p role="alert">{error}</p>}
     <label>모델 그룹 선택
       <select value={activeKey} onChange={e => onSelect(e.target.value)}>
-        <option value="default">기본 활동 이상 탐지</option>
-        {groups.filter(g => g.registry_key !== "default").map(g =>
+        {!groups.some(g => g.registry_key === activeKey) && <option value={activeKey}>
+          {activeKey === "default" ? "기본 활동 이상 탐지" : activeKey}
+        </option>}
+        {groups.map(g =>
           <option key={g.registry_key} value={g.registry_key}>
             {g.title}{g.archived ? " (보관됨)" : ""}
           </option>)}
@@ -114,13 +118,16 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
       disabled={loadingMoreGroups} onClick={() => void loadMoreGroups()}>
       {loadingMoreGroups ? "모델 그룹 조회 중…" : "모델 그룹 더 보기"}
     </button>}
-    {canManage && current && <div className="steps">
-      <label>모델 표시 이름
+    {current?.description && <p className="model-group-description">{current.description}</p>}
+    {canManage && current && <details className="model-group-settings">
+      <summary>그룹 이름·설명 및 보관 설정</summary>
+      <div className="group-edit-form">
+      <label>그룹 표시 이름
         <input value={editTitle} maxLength={80}
           onChange={e => setEditTitle(e.target.value)} />
       </label>
       <label>설명
-        <input value={editDescription} maxLength={1000}
+        <textarea value={editDescription} maxLength={1000} rows={2}
           onChange={e => setEditDescription(e.target.value)} />
       </label>
       <div className="actions">
@@ -145,7 +152,8 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
               });
             }}>빈 그룹 삭제</button>}
       </div>
-    </div>}
+      </div>
+    </details>}
     {canManage && pendingDeletes.length > 0 && <div className="pipeline-readiness-blocked">
       <h4>영구 삭제 완료 대기</h4>
       <p>S3 또는 Registry 작업이 끝나지 않은 모델입니다. 완료 전에는 다시 사용할 수 없습니다.</p>
@@ -160,14 +168,15 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
         }}>삭제 재시도</button>
       </div>)}
     </div>}
-    {canManage && <details>
-      <summary>새 모델 그룹 만들기</summary>
-      <div className="steps">
-        <label>모델 키 (영문 소문자·숫자·하이픈)
+    {canManage && <details className="model-group-settings">
+      <summary>새 모델 그룹 생성</summary>
+      <p className="hint">같은 목적의 모델 버전을 담는 빈 그룹을 만듭니다. 학습은 그룹을 선택한 뒤 시작합니다.</p>
+      <div className="group-edit-form">
+        <label>그룹 키 (영문 소문자·숫자·하이픈)
           <input value={key} maxLength={40} placeholder="activity-risk"
             onChange={e => setKey(e.target.value)} />
         </label>
-        <label>모델 표시 이름
+        <label>그룹 표시 이름
           <input value={title} maxLength={80} placeholder="활동 이상 탐지 실험 A"
             onChange={e => setTitle(e.target.value)} />
         </label>
@@ -183,10 +192,9 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
             }));
             onSelect(key);
             setKey(""); setTitle(""); setDescription("");
-          })}>새 모델 만들기</button>
+          })}>빈 모델 그룹 생성</button>
       </div>
     </details>}
-    <p className="hint">새 그룹을 만든 뒤 모델 학습 화면의 '등록할 모델 그룹'에서 선택하면 그 그룹의 새 버전으로 등록됩니다.</p>
   </section>;
 }
 
