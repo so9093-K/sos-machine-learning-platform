@@ -45,7 +45,11 @@ def test_registered_feature_to_model_revision():
     def completed(job: dict) -> dict:
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
-            response = client.get(f"/api/jobs/{job['id']}")
+            endpoint = (
+                f"/api/ml/train/jobs/{job['id']}"
+                if job["kind"] == "ml_train" else f"/api/jobs/{job['id']}"
+            )
+            response = client.get(endpoint)
             assert response.status_code == 200, response.text[:1000]
             result = response.json()
             if result["status"] == "Succeeded":
