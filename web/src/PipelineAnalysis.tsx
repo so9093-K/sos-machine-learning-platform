@@ -100,6 +100,7 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
   summary: Record<string, unknown>; title: string; threshold?: number;
   onSelectRange?: (range: PipelineScoreRange) => void;
 }) {
+  const [selectedBin, setSelectedBin] = useState<number | null>(null);
   const raw = summary.histogram;
   const hist = raw && typeof raw === "object" ? raw as Record<string, unknown> : null;
   const edges = hist && Array.isArray(hist.bin_edges) ? hist.bin_edges : [];
@@ -116,6 +117,12 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
     ? "저장된 점수 분포 집계의 경계·건수가 검증되지 않아 그래프를 표시하지 않습니다."
     : "이 분석에는 전체 점수 분포 집계가 저장돼 있지 않습니다."}
     기존 최솟값·평균·최댓값 근거는 위 비교 그래프에서 확인할 수 있습니다.</p>;
+  const bin = selectedBin === null ? null : Math.min(selectedBin, counts.length - 1);
+  function selectBin(index: number) {
+    if (index < 0 || index >= counts.length) return;
+    setSelectedBin(index);
+    onSelectRange?.({ lower: edges[index], upper: edges[index + 1], includeUpper: index === counts.length - 1 });
+  }
   const option = {
     aria: { enabled: true },
     tooltip: { trigger: "item" },
@@ -139,36 +146,27 @@ function ScoreHistogram({ summary, title, threshold, onSelectRange }: {
   return <div className="pipeline-score-chart">
     <DataChart option={option} ariaLabel={title + " 점수 구간별 전체 관측 수" +
       (threshold === undefined ? "" : " 및 Calibration 임계값")}
-      onDataClick={onSelectRange ? index => {
-        if (index >= 0 && index < counts.length) {
-          onSelectRange({
-            lower: edges[index], upper: edges[index + 1],
-            includeUpper: index === counts.length - 1,
-          });
-        }
-      } : undefined} />
+      onDataClick={selectBin} />
     {threshold !== undefined && <p className="pipeline-threshold-note">
       Calibration 임계값 <strong>{threshold.toPrecision(6)}</strong> · 점선은 기준 점수입니다.
     </p>}
-    {onSelectRange && <p className="hint">그래프 막대나 아래 집계 표에서 점수 구간을 선택하면
+    {onSelectRange && <p className="hint">그래프 막대나 아래 목록에서 점수 구간을 선택하면
       현재 불러온 이상 후보를 해당 범위로 좁혀볼 수 있습니다.</p>}
-    <p className="hint">{title}의 실제 점수를 전체 조회해 집계한 {counts.length}개 고정 폭 구간입니다.
-      {hist?.constant_scores ? "모든 점수가 같아 그래프 표시 범위만 확장했습니다. " : ""}
-      임계값 경계에 걸친 단일 막대는 후보 수를 의미하지 않습니다.</p>
-    <details>
-      <summary>{title} 구간별 관측 수 확인</summary>
-      <div className="table-scroll"><table>
-        <thead><tr><th>점수 시작 (포함)</th><th>점수 끝 (마지막 구간 포함)</th><th>행 수</th>{onSelectRange && <th>후보 탐색</th>}</tr></thead>
-        <tbody>{counts.map((n, i) => <tr key={i}>
-          <td>{edges[i].toPrecision(8)}</td><td>{edges[i + 1].toPrecision(8)}</td>
-          <td>{Number(n).toLocaleString("ko-KR")}</td>
-          {onSelectRange && <td><button type="button" className="secondary"
-            onClick={() => onSelectRange({
-              lower: edges[i], upper: edges[i + 1], includeUpper: i === counts.length - 1,
-            })}>이 구간 후보 보기</button></td>}
-        </tr>)}</tbody>
-      </table></div>
-    </details>
+    <p className="hint">전체 {format(Number(hist?.score_count))}건의 점수 분포입니다.
+      {hist?.constant_scores ? "모든 점수가 같습니다." : ""}</p>
+    <div className="histogram-bin-picker">
+      <label>점수 구간
+        <select aria-label={title + " 점수 구간"} value={bin ?? ""} onChange={event => selectBin(Number(event.target.value))}>
+          <option value="" disabled>구간 선택</option>
+          {counts.map((_, index) => <option key={index} value={index}>
+            {edges[index].toPrecision(4)} ~ {edges[index + 1].toPrecision(4)}
+          </option>)}
+        </select>
+      </label>
+      {bin !== null && <p role="status">이 구간 <strong>{Number(counts[bin]).toLocaleString("ko-KR")}건</strong>
+        <small>{edges[bin].toPrecision(8)} 이상 · {edges[bin + 1].toPrecision(8)}{bin === counts.length - 1 ? " 이하" : " 미만"}</small>
+      </p>}
+    </div>
   </div>;
 }
 
@@ -290,11 +288,13 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
           <div><dt>학습 평균 점수</dt><dd>{format(metric(train, "score_mean"))}</dd></div>
         </dl>
         <ScoreHistogram summary={train} title="Training" />
-        <p className="hint">학습 점수는 Train 데이터 내부 진단이며 독립적인 탐지 정확도가 아닙니다.
-          Isolation Forest에는 epoch별 loss/accuracy 곡선이 정의되어 있지 않습니다.</p>
-        <details><summary>학습 설정·Feature 계약 확인</summary>
-          <pre>{JSON.stringify(model.params, null, 2)}</pre>
-          <p>Feature: {model.features.join(" · ")}</p>
+        <p className="hint">학습에 사용한 데이터의 점수입니다. 독립 검증 성능을 나타내지 않습니다.</p>
+        <details className="training-settings-summary"><summary>학습 설정</summary>
+          <dl>{Object.entries(model.params).map(([name, value]) => <div key={name}>
+            <dt>{{ n_estimators: "트리 수", max_samples: "트리별 표본 수", max_features: "트리별 Feature 범위",
+              bootstrap: "복원 추출", random_state: "난수 Seed" }[name] ?? name}</dt>
+            <dd>{value === "auto" ? "자동" : typeof value === "boolean" ? value ? "사용" : "사용 안 함" : String(value)}</dd>
+          </div>)}</dl>
         </details>
         <button type="button" className="secondary" onClick={() =>
           onOpenResource("model", model.id)}>모델 판본 열기 →</button>

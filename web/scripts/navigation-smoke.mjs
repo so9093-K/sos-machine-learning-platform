@@ -407,7 +407,7 @@ try {
     })
   );
   assert.match(candidateWithContext, /2026-01-01T02:00:00Z/);
-  assert.match(candidateWithContext, /Train 참조 중앙값/);
+  assert.match(candidateWithContext, /학습 중앙값/);
   assert.match(candidateWithContext, /전체 1개 Feature 관측값/);
   assert.match(candidateWithContext, /Feature별 점수 기여도/);
   const groupedObservation = renderToStaticMarkup(
@@ -458,14 +458,10 @@ try {
   assert.match(groupedObservation, /비교 기준 없음/);
   assert.doesNotMatch(groupedObservation, /feature-reference-bars/);
   assert.match(groupedObservation, /observation-activity-highlights/);
-  assert.match(groupedObservation, /전체 3개/);
+  assert.match(groupedObservation, /입력값 확인 · 3개 항목/);
   assert.match(groupedObservation, /관측 시각·원본 관측치 ID 없음/);
   assert.match(groupedObservation, /결과 내부 행 #9/);
-  assert.match(groupedObservation, /활동별 지표/);
   assert.doesNotMatch(groupedObservation, /scoring-activity-group-details/);
-  assert.match(groupedObservation, /파일 활동/);
-  assert.match(groupedObservation, /프로세스 활동/);
-  assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
   assert.match(groupedObservation, /기본 미리보기이며 점수 기여도 순위가 아닙니다/);
   assert.ok(groupedObservation.indexOf("관측된 입력값") <
@@ -636,8 +632,8 @@ try {
   const detailSensitivity = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
     result: sensitivityResult,
   }));
-  assert.match(detailSensitivity, /점수 민감도/);
-  assert.match(detailSensitivity, /전체 Feature의 실제 값/);
+  assert.match(detailSensitivity, /점수 변화가 큰 항목/);
+  assert.match(detailSensitivity, /개별 값 확인 · 1개 항목/);
   assert.doesNotMatch(detailSensitivity, /SHAP 모델 점수 기여도/);
   const unsupportedExplanation = renderToStaticMarkup(React.createElement(ExplanationEvidence, {
     result: { method: "unknown_method_v1", output: { method: "unknown_method_v1" } },
@@ -680,8 +676,10 @@ try {
         reference_median: 1, missing_imputed: false,
       })) } },
   }));
-  assert.match(groupShap, /나머지 2개 Feature 기여도 합계/);
+  assert.match(groupShap, /나머지 5개 Feature 기여도 합계/);
   assert.match(groupShap, /단일 Feature의 기여도가 아닙니다/);
+  assert.match(groupShap, /주요 Feature 5개/);
+  assert.equal((groupShap.match(/<tbody>[\s\S]*?<\/tbody>/)?.[0].match(/<tr>/g) ?? []).length, 6);
   assert.doesNotMatch(groupShap, /실제 모델 이상 점수 기준 주요 8개 Feature와 나머지 합/);
   assert.match(candidateWithContext, /활동 Feature 관측치는 원시 이벤트 한 건이라는 뜻이 아니며/);
   assert.match(candidateWithContext, /UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다/);
@@ -849,9 +847,9 @@ try {
     model: { ...exampleModel, runtime: { feature_dtypes: ["Int64", "Int64"] } },
     canRun: true, canCancel: false,
   }));
-  assert.match(manualHtml, /직접 입력/);
-  assert.match(manualHtml, /학습 기준값 입력/);
-  assert.match(manualHtml, /이 모델 판본에는 초기 입력 기준값이 없어/);
+  assert.match(manualHtml, /단일 입력 점수 계산/);
+  assert.match(manualHtml, /초기 기준값이 없는 모델/);
+  assert.match(manualHtml, /입력 확인 2개/);
   const playgroundHtml = renderToStaticMarkup(React.createElement(ModelLabPlayground, {
     model: exampleModel, canRun: true, canCancel: true,
   }));
@@ -860,13 +858,15 @@ try {
   assert.match(playgroundHtml, /파일 활동/);
   assert.match(playgroundHtml, /프로세스 활동/);
   assert.doesNotMatch(playgroundHtml, /네트워크 활동/); // 입력에 없는 그룹은 만들지 않는다.
-  assert.match(playgroundHtml, /입력 Feature와 Train 참조값 비교/);
-  assert.match(playgroundHtml, /현재 입력값은 아직 계산하지 않았습니다/);
+  assert.match(playgroundHtml, /학습 기준값을 채웠습니다/);
+  assert.doesNotMatch(playgroundHtml, /model-lab-reference-grid|model-lab-feature-groups/);
+  assert.match(playgroundHtml, /입력값을 준비한 뒤 점수를 계산하세요/);
   assert.match(playgroundHtml, /model-lab-workspace/);
   assert.match(playgroundHtml, /계산과 결과/);
-  const { PlaygroundExplanations, PlaygroundSensitivity, formatPlaygroundSensitivity } =
+  const { PlaygroundExplanations, PlaygroundSensitivity } =
     await vite.ssrLoadModule("/src/PlaygroundExplanations.tsx");
-  assert.equal(formatPlaygroundSensitivity(0.00000000052), "5.200e-10");
+  const { formatSensitivityValue } = await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
+  assert.equal(formatSensitivityValue(0.00000000052), "5.200e-10");
   const explained = renderToStaticMarkup(React.createElement(PlaygroundExplanations, {
     source: { id: "completed-job", status: "Succeeded", spec: { model_revision_id: "model-1" },
       result: { anomaly_score: 0.45 } },
@@ -892,11 +892,13 @@ try {
   }));
   assert.match(zeroSensitivity, /점수가 달라지지 않습니다/);
   assert.doesNotMatch(zeroSensitivity, /playground-sensitivity-bars/);
-  assert.match(zeroSensitivity, /전체 1개 Feature별 변경 결과/);
+  assert.match(zeroSensitivity, /개별 값 확인 · 1개 항목/);
+  assert.doesNotMatch(zeroSensitivity, /role="img"/);
   assert.match(playgroundSensitivity, /치환 후 점수/);
   assert.match(playgroundSensitivity, /0[.]15/);
   assert.match(playgroundHtml, /이상 점수 계산 →/);
-  assert.match(playgroundHtml, /제출한 입력과 결과는 작업 이력에 보존/);
+  assert.match(playgroundHtml, /항목 찾기/);
+  assert.match(playgroundHtml, /표시 항목/);
   const { ModelLabUse, isActivityModelCompatible } =
     await vite.ssrLoadModule("/src/ModelLabUse.tsx");
   assert.equal(isActivityModelCompatible(
@@ -1052,9 +1054,9 @@ try {
   }));
   assert.match(interactiveOverview, /이상 후보 확인 →/);
   assert.match(interactiveOverview, /점수 분포와 판정 기준 자세히 보기/);
-  assert.match(interactiveOverview, /이 구간 후보 보기/);
-  assert.match(interactiveOverview, /후보 탐색/);
-  assert.match(interactiveOverview, /그래프 막대나 아래 집계 표에서 점수 구간을 선택/);
+  assert.match(interactiveOverview, /aria-label="Test 점수 구간"/);
+  assert.match(interactiveOverview, /value="" disabled="" selected="">구간 선택/);
+  assert.match(interactiveOverview, /그래프 막대나 아래 목록에서 점수 구간을 선택/);
   const calibrationReport = reportFor("calibration");
   assert.match(calibrationReport, /Calibration — 판정 기준 근거/);
   assert.match(calibrationReport, /0.5%/);
@@ -1073,7 +1075,7 @@ try {
       { feature: "f1", anomaly_score_delta: 0.12 },
     ] } },
   }));
-  assert.match(sensitivity, /SHAP·가법 기여도·원인 판정이 아닙니다/);
+  assert.match(sensitivity, /인과적 기여도는 아닙니다/);
   const explanationJobSummary = (id, scoring_result_id, row_index, created_at) => ({
     id, spec: { scoring_result_id, row_index }, created_at,
   });
