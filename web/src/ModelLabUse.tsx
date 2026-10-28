@@ -65,12 +65,33 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const [usage, setUsage] = useState<"playground" | "dataset">("dataset");
   const [observationInput, setObservationInput] = useState<ObservationExperiment | null>(null);
   const observationRequest = useRef(0);
+  const playgroundPanel = useRef<HTMLDivElement>(null);
+  const datasetPanel = useRef<HTMLDivElement>(null);
   const [resultFocusedModelId, setResultFocusedModelId] = useState<string | null>(null);
   const [showResultSetup, setShowResultSetup] = useState(false);
   const handleResultViewChange = useCallback((visible: boolean) => {
     setResultFocusedModelId(visible ? selectedModelId : null);
   }, [selectedModelId]);
   const openDataset = () => setUsage("dataset");
+  const backToObservation = () => {
+    setUsage("dataset");
+    window.requestAnimationFrame(() => {
+      const detail = datasetPanel.current?.querySelector<HTMLElement>(".scoring-observation-detail");
+      detail?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto" : "smooth", block: "start" });
+    });
+  };
+
+  useEffect(() => {
+    if (usage !== "playground" || !observationInput) return;
+    const id = window.requestAnimationFrame(() => {
+      playgroundPanel.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto" : "smooth", block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [usage, observationInput?.id]);
 
   useEffect(() => {
     let active = true;
@@ -268,14 +289,14 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
             onClick={() => setUsage("playground")}>값 직접 입력</button>
         </div>
       </div>
-      <div hidden={usage !== "playground"}>
+      <div hidden={usage !== "playground"} ref={playgroundPanel}>
         <ModelLabPlayground key={selected.revision.id} model={selected.revision}
           canRun={canRun} canCancel={canCancel}
           observationInput={observationInput?.modelRevisionId === selected.revision.id
             ? observationInput : null}
-          onBackToAnalysis={openDataset} />
+          onBackToAnalysis={backToObservation} />
       </div>
-      <div hidden={usage !== "dataset"}>
+      <div hidden={usage !== "dataset"} ref={datasetPanel}>
         <MLScoringPanel key={selected.revision.id} model={selected.revision}
           datasets={datasets} hasMoreDatasets={hasMoreDatasets}
           onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
