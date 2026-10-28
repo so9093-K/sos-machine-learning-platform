@@ -29,6 +29,47 @@ const statusLabel: Record<Run["status"], string> = {
 };
 const count = (value: number) => value.toLocaleString("ko-KR");
 
+/** 실패한 SOS 단계만 지목한다. Workflow만 실패한 경우 단계 원인을 추정하지 않는다. */
+export function pipelineFailureEvidence(run: Run) {
+  const failed = run.stages?.find(stage => stage.job.status === "Failed");
+  const code = failed?.job.error_code ?? run.error_code;
+  return {
+    stage: failed ? stageLabel[failed.name] ?? failed.name
+      : code === "SOS-MLFLOW-NOT-CONFIGURED" ? "모델 등록" : null,
+    jobId: failed?.job.id,
+    code,
+    message: failed?.job.error || (code === "SOS-MLFLOW-NOT-CONFIGURED"
+      ? "모델 Registry가 구성되지 않아 후속 분석을 진행할 수 없습니다."
+      : "실행 실패의 상세 원인을 확인하지 못했습니다. 실행 상태와 운영 로그를 확인하세요."),
+    retryPolicy: failed?.job.retry_policy,
+    inputIssue: code === "SOS-ML-INPUT-INVALID" || code === "SOS-DATASET-UNREADABLE",
+  };
+}
+
+export function PipelineFailureNotice({ run, operatorLinks, onInspectInput, onRefresh }: {
+  run: Run; operatorLinks: boolean; onInspectInput: () => void; onRefresh: () => void;
+}) {
+  const evidence = pipelineFailureEvidence(run);
+  return <section className="pipeline-readiness-blocked pipeline-failure-notice" role="alert" aria-label="분석 실패와 복구">
+    <h3>{evidence.stage ? `실패 지점 · ${evidence.stage}` : "Workflow 실행 실패 · 단계 미확인"}</h3>
+    <p>{evidence.message}</p>
+    <p>{evidence.retryPolicy === "manual_verification_required"
+      ? "실행·커밋 상태 확인이 필요합니다. 운영자가 확인하기 전에는 같은 작업을 다시 제출하지 마세요."
+      : evidence.inputIssue ? "입력 조건을 수정한 뒤 새 분석을 시작할 수 있습니다."
+      : "현재 실행 상태를 다시 확인하고 오류를 해결한 뒤 새 분석 여부를 판단하세요."}</p>
+    <div className="actions">
+      <button type="button" className={evidence.inputIssue ? "secondary" : undefined} onClick={onRefresh}>실행 상태 다시 조회</button>
+      {evidence.inputIssue && <button type="button" onClick={onInspectInput}>입력 Dataset 확인 →</button>}
+      {operatorLinks && <a href={dagsterRunsForAnalysis(run.id)} target="_blank" rel="noopener noreferrer">운영자용 단계 로그 확인 ↗</a>}
+    </div>
+    <details><summary>오류 코드·실행 근거</summary><p>{evidence.code ?? "오류 코드 미확인"}</p>
+      {evidence.jobId && <p>실패한 작업 · {evidence.jobId}</p>}
+      <p>분석 · {run.id}</p>
+      {operatorLinks && <p>Dagster 재실행은 같은 제출의 단계 Job을 재사용합니다. 새 분석은 SOS에서 별도로 제출합니다.</p>}
+    </details>
+  </section>;
+}
+
 /** Pipeline과 Training Job의 상태가 모두 일치할 때에만 Registry 대기로 본다. */
 export function isRegistrationPending(run: Run | null): boolean {
   return run?.status === "Running" && run.current_stage === "training" &&
@@ -623,6 +664,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <button type="button" className="secondary" disabled={exampleBusy}
           onClick={() => selectRun("")}>새 모델 학습 →</button>
       </div>
+        {run.status === "Failed" && <PipelineFailureNotice run={run}
+          operatorLinks={Boolean(canInspectOperations && localOperatorHost)}
+          onInspectInput={() => onNavigate("understanding", run.dataset_id)}
+          onRefresh={() => setRunReload(value => value + 1)} />}
       {run && <div className="pipeline-context-facts">
         <div><span>실행 상태</span><strong>{
           runLoadError ? "마지막 확인: " + statusLabel[run.status] : statusLabel[run.status]
@@ -636,7 +681,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           </dl>
         </details>
       </div>}
-      {run && <PipelineStageProgress run={run} stages={current?.stages ?? DEFAULT_STAGES} />}
+      {run.status === "Failed" ? <details className="pipeline-failed-stages">
+        <summary>단계별 실행 상태</summary>
+        <PipelineStageProgress run={run} stages={current?.stages ?? DEFAULT_STAGES} />
+      </details> : <PipelineStageProgress run={run} stages={current?.stages ?? DEFAULT_STAGES} />}
       {run && runLoadError && <div className="pipeline-context-error" role="alert">
         <p>실행 상태를 다시 확인하지 못했습니다: {runLoadError}</p>
         <button type="button" className="secondary"
@@ -700,16 +748,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           아래의 이전 학습 결과를 열어 보세요.</p>}
       </div>}
       {run && <>
-        {run.error_code && <p className="pipeline-run-failure-code" role="alert">
-          실패 코드: {run.error_code}</p>}
-        {run.status === "Failed" && <div className="pipeline-readiness-blocked" role="alert">
-          <strong>분석이 완료되지 않았습니다.</strong>
-          <p>실패한 단계와 오류 코드를 먼저 확인하세요. 입력 조건의 오류라면 Dataset을 수정할 수 있고,
-            실행 서버·모델 등록 오류라면 운영 상태를 확인해야 합니다. 이미 접수된 실행을 무조건 다시 제출하지 마세요.</p>
-          <button type="button" className="secondary" onClick={() => onNavigate("understanding", run.dataset_id)}>
-            입력 Dataset 확인 →
-          </button>
-        </div>}
         {run.status === "Cancelled" && <p className="pipeline-next-step" role="status">
           실행 취소가 확정되었습니다. 기존 기록은 보존되며 필요하다면 새 Run을 실행할 수 있습니다.
           {(run.stages ?? []).some(stage => stage.name === "training" && stage.job?.status === "Succeeded") &&
@@ -730,7 +768,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
                 MLflow의 Run ID 및 Registered Model Version과 대조할 수 있습니다.</p>
               <div className="actions">
                 <a href={dagsterRunsForAnalysis(run.id)} target="_blank" rel="noopener noreferrer">
-                  Dagster에서 이 분석 열기 ↗
+                  운영자용 단계 로그 확인 ↗
                 </a>
                 <a href={mlflowRegistryUrl()} target="_blank" rel="noopener noreferrer">
                   MLflow 모델 Registry 열기 ↗
@@ -869,9 +907,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <summary>단계별 실행 상태·분할 범위·기술 근거</summary>
           {canInspectOperations && localOperatorHost && <p className="hint">
             운영자 확인: <a href={dagsterRunsForAnalysis(run.id)} target="_blank"
-              rel="noopener noreferrer">Dagster에서 이 분석의 Run 열기 ↗</a>
+              rel="noopener noreferrer">운영자용 단계 로그 확인 ↗</a>
             {" "}(태그 sos/submission_id = {run.id})
           </p>}
+          {canInspectOperations && localOperatorHost && <p className="hint">Dagster 재실행은 같은 제출의 단계 Job을 재사용합니다. 새 실험은 SOS에서 새 분석으로 제출합니다.</p>}
           {run.input_plan && <div className="steps">
             <strong>Worker가 확정한 실제 시간 분할</strong>
             <p>Train 종료: {new Date(run.input_plan.train_end).toLocaleString("ko-KR")} ·

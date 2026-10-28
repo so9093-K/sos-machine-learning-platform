@@ -1,11 +1,12 @@
 """신뢰된 등록형 Pipeline의 API-first 진입점."""
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, Field
 from typing import Literal
 
-from .scoring_observations import ranked_scoring_rows
-from .pipeline_reference import PIPELINE_ID, definition, inspect_dataset
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from pydantic import BaseModel, Field
+
 from .dagster_workflows import cancel_run, create_run, get_run, list_runs
+from .pipeline_reference import PIPELINE_ID, definition, inspect_dataset
+from .scoring_observations import ranked_scoring_rows
 from .security import Actor, require, resource_allowed
 from .store import Store
 
@@ -62,6 +63,8 @@ class PipelineJobOut(BaseModel):
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
     cancel_requested: bool
     error_code: str | None = None
+    error: str | None = None
+    retry_policy: str | None = None
     result: dict[str, object] | None
 
 

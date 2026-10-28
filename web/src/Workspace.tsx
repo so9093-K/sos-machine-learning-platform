@@ -880,6 +880,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       </>}
       {tab === "ml" && !resource && <MLflowResearch canManage={canManageModels} canTrain={canRun}
         datasets={datasets} registryKey={context.modelGroupKey ?? "default"}
+        onOpenResource={openResource} canInspectOperations={canInspectStorage || canViewAudit}
         onSelectGroup={modelGroupKey => selectContext({ ...context, modelGroupKey })}
         onOpenModel={id => openResource("model", id)}
         onScoreModel={startScoring}

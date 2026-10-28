@@ -2034,6 +2034,11 @@ export interface components {
         FeatureRegistrationSummaryOut: {
             /** Attempt Count */
             attempt_count: number;
+            /**
+             * Blocked
+             * @description SOS 폐기 정책에 따라 신규 Feature 조회가 차단된 상태
+             */
+            blocked: boolean;
             /** Cancel Requested */
             cancel_requested: boolean;
             /** Created At */
@@ -3261,6 +3266,8 @@ export interface components {
         PipelineJobOut: {
             /** Cancel Requested */
             cancel_requested: boolean;
+            /** Error */
+            error?: string | null;
             /** Error Code */
             error_code?: string | null;
             /** Id */
@@ -3271,6 +3278,8 @@ export interface components {
             result: {
                 [key: string]: unknown;
             } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
             /**
              * Status
              * @enum {string}

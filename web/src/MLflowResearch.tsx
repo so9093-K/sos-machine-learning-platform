@@ -6,18 +6,15 @@ import type {
   MLflowModelVersionPage, MLflowRun, MLflowRunPage, Dataset,
 } from "./types";
 
+import { RunComparison } from "./RunComparison";
+import { ResearchRunDetails } from "./ResearchRunDetails";
+import { isLocalOperatorHost, mlflowRunUrl } from "./operator-tools";
+import type { MLResourceKind } from "./PlatformNavigation";
 import { formatRecordedAt } from "./display-format";
 
 const runLabels: Record<string, string> = {
   ml_train: "모델 학습", ml_score: "점수 계산", ml_policy: "판정 정책",
   ml_evaluate: "평가", ml_explain: "설명", ml_playground: "단일 입력 점수 계산",
-};
-const comparisonConditions: Record<string, string> = {
-  "sos.dataset_id": "Dataset", "sos.dataset_version": "데이터 판본",
-  "sos.feature_count": "Feature 개수", "sos.feature_set_sha256": "Feature 구성 지문",
-  "sos.training_input_mode": "학습 입력 범위", "sos.training_input_rows": "학습 표본 상한",
-  "sos.missing_policy": "결측 처리", "sos.train_end": "학습 종료 시각",
-  "sos.calibration_end": "판정 기준 산정 종료 시각",
 };
 
 function url(path: string, params: Record<string, string | null>) {
@@ -28,13 +25,18 @@ function url(path: string, params: Record<string, string | null>) {
 
 /** 연구 묶음·Run·모델 버전의 정본은 MLflow다. 실행 권한은 SOS API에서 판단한다. */
 export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage, canTrain,
-  datasets, registryKey, onSelectGroup }: {
+  datasets, registryKey, onSelectGroup, onOpenResource, canInspectOperations = false }: {
   onOpenModel: (id: string) => void;
+  onOpenResource: (kind: MLResourceKind, id: string) => void;
+  canInspectOperations?: boolean;
   onScoreModel: (id: string, group: string) => void;
   onTrain: (group: string) => void;
   canManage: boolean; canTrain: boolean;
   datasets: Dataset[]; registryKey: string; onSelectGroup: (key: string) => void;
 }) {
+  const [localOperatorHost, setLocalOperatorHost] = useState(false);
+  useEffect(() => { setLocalOperatorHost(isLocalOperatorHost()); }, []);
+  const operatorLinks = canInspectOperations && localOperatorHost;
   const [experiments, setExperiments] = useState<MLflowExperiment[]>([]);
   const [models, setModels] = useState<MLflowModelVersion[]>([]);
   const [runs, setRuns] = useState<MLflowRun[]>([]);
@@ -161,8 +163,6 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage, 
     [runs, runKind, runTerm, datasets]);
   const compared = selected.map(id => runs.find(item => item.id === id))
     .filter((item): item is MLflowRun => item !== undefined);
-  const comparableKeys = (field: "metrics" | "params") =>
-    [...new Set(compared.flatMap(item => Object.keys(item[field])))].sort();
   function toggleRun(id: string) {
     const next = runs.find(run => run.id === id);
     setSelected(current => current.includes(id) ? current.filter(value => value !== id)
@@ -187,10 +187,11 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage, 
         <input value={term} onChange={event => setTerm(event.target.value)}
           placeholder="버전·학습 Dataset" aria-label="모델 버전 검색" />
       </label>
+      <p className="hint">현재 불러온 모델 버전에서 검색합니다.{modelCursor ? " 이전 버전은 더 보기를 통해 조회할 수 있습니다." : ""}</p>
       {loading && <p role="status">모델 버전을 조회하고 있습니다.</p>}
       {error && <p role="alert">{error}</p>}
       {!loading && !error && filteredModels.length === 0 && <p className="muted">
-        {term.trim() ? "검색 조건과 일치하는 버전이 없습니다." : "이 그룹에 등록된 모델 버전이 없습니다. 새 학습으로 첫 버전을 등록할 수 있습니다."}</p>}
+        {term.trim() ? "현재 불러온 버전에서 검색 조건과 일치하는 결과가 없습니다." : modelCursor ? "현재 페이지에 표시할 버전이 없습니다. 이전 버전을 더 조회할 수 있습니다." : "이 그룹에 등록된 모델 버전이 없습니다. 새 학습으로 첫 버전을 등록할 수 있습니다."}</p>}
       <div className="model-version-list">
         {filteredModels.map(item => <article className="model-version-row" key={item.name + "@" + item.version}>
           <div className="model-version-identity"><h3>{groupTitle} · v{item.version}</h3>
@@ -202,6 +203,7 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage, 
             <button type="button" disabled={item.archived || groupArchived}
               onClick={() => onScoreModel(item.model_id, registryKey)}>데이터에 적용 →</button>
             <button type="button" className="secondary" onClick={() => onOpenModel(item.model_id)}>모델 상세</button>
+            {operatorLinks && item.run_id && <a href={mlflowRunUrl(item.run_id)} target="_blank" rel="noopener noreferrer">학습 Run 운영 상세 ↗</a>}
             <details className="model-version-settings"><summary>버전 관리·식별자</summary>
               <p className="hint">Registry {item.name} · Job {item.job_id}</p>
               {(item.aliases?.length ?? 0) > 0 && <p>Alias: {item.aliases?.join(", ")}</p>}
@@ -214,14 +216,16 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage, 
       {modelCursor && <button type="button" className="secondary" disabled={loadingMore}
         onClick={() => void loadMore("models")}>모델 버전 더 보기</button>}
     </section>
-    <details className="panel research-history">
-      <summary>실험 실행 이력·비교</summary>
+    <section className="panel research-history" aria-label="연구 실행 비교">
+      <div className="panel-head"><div><h2>연구 실행 비교</h2>
+        <p>연구 목적별 실행의 조건·설정·기록된 지표 차이를 확인합니다.</p></div></div>
+      <details><summary>연구 묶음·비교 대상 선택</summary>
       <div className="research-history-body">
-      <p>같은 종류의 실행을 최대 두 개 선택해 설정과 기록된 지표를 비교합니다.</p>
+      <p>연구 묶음은 실험 목적을, 모델 그룹은 사용할 모델 버전의 묶음을 나타냅니다. 같은 종류의 실행을 최대 두 개 비교할 수 있습니다.</p>
       {experimentError && <p role="alert">실험 목록 조회 실패: {experimentError}</p>}
       {runError && <p role="alert">실행 이력 조회 실패: {runError}</p>}
       <div className="form-row">
-        <label>연구 실험
+        <label>연구 묶음
           <select value={experimentId} onChange={event => setExperimentId(event.target.value)} aria-label="연구 Experiment 선택">
             <option value="">기본 실험</option>
             {experiments.filter(item => item.name !== "기본 실험").map(item =>
@@ -242,45 +246,28 @@ export function MLflowResearch({ onOpenModel, onScoreModel, onTrain, canManage, 
         onClick={() => void loadMore("experiments")}>실험 더 보기</button>}
       {runsLoading && <p role="status">실행 이력을 조회하고 있습니다.</p>}
       {!runsLoading && !runError && filteredRuns.length === 0 && <p className="muted">조회된 페이지에서 조건에 맞는 실행을 찾지 못했습니다.</p>}
+      <p className="hint">현재 불러온 실행에서 검색합니다.{runCursor ? " 이전 실행은 더 보기로 조회할 수 있습니다." : ""}</p>
       <div className="research-run-list">
-        {filteredRuns.map(item => <label className="ml-resource-row" key={item.id}>
+        {filteredRuns.map(item => <article className="research-run-row" key={item.id}>
+          <label className="research-run-choice">
           <input type="checkbox" checked={selected.includes(item.id)}
             disabled={!selected.includes(item.id) && (selected.length >= 2 ||
               (compared.length > 0 && compared[0].job_kind !== item.job_kind))}
             onChange={() => toggleRun(item.id)}/>
           <span>{runLabels[item.job_kind] ?? item.job_kind} · {datasetName(item.params["sos.dataset_id"])}
             <small>{item.start_time ? formatRecordedAt(new Date(item.start_time).toISOString()) : ""}
-              {" · "}{item.status === "FINISHED" ? "완료" : item.status ?? "상태 미상"}
+              {" · MLflow 기록 "}{{ FINISHED: "완료", RUNNING: "진행 중", FAILED: "실패", KILLED: "종료" }[item.status ?? ""] ?? "상태 미확인"}
               {" · Run "}{item.id.slice(0, 10)}</small></span>
-        </label>)}
+          </label>
+          <ResearchRunDetails key={item.id + ":" + item.job_id} run={item} onOpenResource={onOpenResource} />
+          {operatorLinks && <a href={mlflowRunUrl(item.id)} target="_blank" rel="noopener noreferrer">MLflow Run 운영 상세 ↗</a>}
+        </article>)}
       </div>
       {runCursor && <button type="button" className="secondary" disabled={loadingMore}
         onClick={() => void loadMore("runs")}>이전 실행 더 보기</button>}
-      {compared.length > 0 && <section className="run-comparison">
-        <h3>선택 실행 비교</h3>
-        <p className="hint">Dataset·판본·모델 및 평가 조건을 먼저 확인하세요. 학습 데이터의 점수는 독립 검증 성능을 나타내지 않습니다.</p>
-        <div className="table-scroll"><table><thead><tr><th>비교 조건</th>
-          {compared.map(run => <th key={run.id}>Run {run.id.slice(0, 10)}</th>)}</tr></thead>
-          <tbody>{Object.entries(comparisonConditions).filter(([key]) =>
-            key === "sos.dataset_id" || key === "sos.dataset_version" ||
-            compared.some(run => run.params[key] !== undefined)).map(([key, label]) =>
-            <tr key={key}><th>{label}</th>
-              {compared.map(run => <td key={run.id}>{key === "sos.dataset_id"
-                ? datasetName(run.params[key]) : run.params[key] ?? "기록 없음"}</td>)}</tr>)}</tbody>
-        </table></div>
-        {(["params", "metrics"] as const).map(field => <details key={field} open={field === "metrics"}>
-          <summary>{field === "params" ? "실행 설정" : "기록된 지표"}</summary>
-          <div className="table-scroll"><table>
-            <thead><tr><th>항목</th>{compared.map(run => <th key={run.id}>{run.id.slice(0, 10)}</th>)}</tr></thead>
-            <tbody>{comparableKeys(field).map(key => <tr key={key}>
-              <td>{key}</td>{compared.map(run => <td key={run.id}>
-                {run[field][key] === undefined ? "—" : String(run[field][key])}
-              </td>)}
-            </tr>)}</tbody>
-          </table></div>
-        </details>)}
-      </section>}
+      {compared.length > 0 && <RunComparison runs={compared} datasets={datasets} />}
       </div>
-    </details>
+      </details>
+    </section>
   </div>;
 }
