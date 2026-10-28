@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { MLScoringPanel } from "./MLScoringPanel";
+import { FeatureResultDetails } from "./FeatureResultDetails";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
 import { ShapContributionChart } from "./PipelineShapExplanation";
 import { SensitivityChart } from "./PipelineCandidateInvestigation";
@@ -169,12 +170,16 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
         <details className="ml-resource-evidence">
           <summary>모델 입력·학습 Job·Runtime 근거</summary>
           <dl className="ml-resource-fields">
-            <Field label="전체 Feature 및 순서">{m.features.join(", ")}</Field>
             <Field label="모델 판본 ID">{m.id}</Field>
             <Field label="Dataset ID · 판본">{m.dataset_id} · {m.dataset_version}</Field>
             <Field label="학습 Job">{m.job_id}</Field>
             <Field label="Runtime">{String(m.runtime.scikit_learn ?? "상세 근거 미확인")}</Field>
           </dl>
+          <FeatureResultDetails key={m.id} summary={`입력 항목 확인 · ${m.features.length}개`}
+            columns={["입력 순서", "자료형"]} rows={m.features.map((feature, index) => ({
+              feature, values: [index + 1, Array.isArray(m.runtime.feature_dtypes)
+                ? String(m.runtime.feature_dtypes[index] ?? "미확인") : "미확인"],
+            }))} />
         </details>
       </>;
     })()}

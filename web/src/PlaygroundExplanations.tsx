@@ -1,7 +1,7 @@
 /** 완료된 Playground 입력의 두 설명 방법을 독립 Job으로 탐구한다. */
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
-import { activityFeatureLabel } from "./ActivityFeatureLabels";
+import { SensitivityChart } from "./PipelineCandidateInvestigation";
 import { ShapContributionChart } from "./PipelineShapExplanation";
 import { jobStatusLabel } from "./display-format";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary, MLPlaygroundJob } from "./types";
@@ -10,54 +10,8 @@ type Method = "permutation_shap_median_v1" | "median_reference_feature_replaceme
 type PlaygroundResult = ExplanationResult & { playground_job_id?: string | null };
 type JobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
-export const formatPlaygroundSensitivity = (value: number) =>
-  value !== 0 && Math.abs(value) < 1e-8
-    ? value.toExponential(3)
-    : value.toLocaleString("ko-KR", { maximumFractionDigits: 8 });
-type Sensitivity = {
-  feature: string; actual_value: number | null; reference_median: number;
-  score_if_replaced: number; anomaly_score_delta: number;
-};
-
-/** 부호는 원래 점수 - 한 Feature만 기준값으로 치환한 점수다. */
 export function PlaygroundSensitivity({ result }: { result: PlaygroundResult }) {
-  const rows = (Array.isArray(result.output.feature_sensitivities)
-    ? result.output.feature_sensitivities as Sensitivity[] : [])
-    .filter(entry => Number.isFinite(entry.anomaly_score_delta))
-    .sort((a, b) => Math.abs(b.anomaly_score_delta) - Math.abs(a.anomaly_score_delta));
-  const max = Math.max(0, ...rows.map(entry => Math.abs(entry.anomaly_score_delta)));
-  const allZero = rows.length > 0 && rows.every(entry => entry.anomaly_score_delta === 0);
-  return <div className="playground-explanation-detail">
-    <p className="hint">현재 점수에서 특정 Feature 하나만 Train 중앙값으로 바꿔 다시 점수화한 실제 변화입니다.
-      기여도 합이나 인과관계가 아니며, 다른 Feature는 그대로 유지합니다.</p>
-    {allZero ? <div className="pipeline-shap-zero" role="status">
-      <strong>Feature를 학습 중앙값으로 바꿔도 점수가 달라지지 않습니다.</strong>
-      <p>현재 입력이 학습 중앙값으로 구성된 기준 입력이라면 자연스러운 결과입니다.
-        다른 입력값으로 계산한 뒤 민감도를 다시 살펴볼 수 있습니다.</p>
-    </div> : <div className="playground-sensitivity-bars">
-      {rows.slice(0, 8).map(item => <div
-        key={item.feature} className={item.anomaly_score_delta < 0 ? "negative" : "positive"}>
-        <span>{activityFeatureLabel(item.feature)}</span>
-        <strong>{item.anomaly_score_delta > 0 ? "+" : ""}{formatPlaygroundSensitivity(item.anomaly_score_delta)}</strong>
-        <div className="playground-sensitivity-track" aria-hidden="true">
-          <i style={{ width: max ? `${Math.abs(item.anomaly_score_delta) / max * 100}%` : "0%" }} />
-        </div>
-      </div>)}
-    </div>}
-    <details><summary>전체 {rows.length}개 Feature별 변경 결과</summary>
-      <div className="table-scroll"><table>
-        <thead><tr><th>Feature</th><th>원래 값</th><th>Train 중앙값</th>
-          <th>치환 후 점수</th><th>원래 점수 − 치환 점수</th></tr></thead>
-        <tbody>{rows.map(item => <tr key={item.feature}>
-          <td>{activityFeatureLabel(item.feature)}</td>
-          <td>{item.actual_value === null ? "결측" : formatPlaygroundSensitivity(item.actual_value)}</td>
-          <td>{formatPlaygroundSensitivity(item.reference_median)}</td>
-          <td>{formatPlaygroundSensitivity(item.score_if_replaced)}</td>
-          <td>{formatPlaygroundSensitivity(item.anomaly_score_delta)}</td>
-        </tr>)}</tbody>
-      </table></div>
-    </details>
-  </div>;
+  return <SensitivityChart result={result} />;
 }
 
 function MethodExplanation({ source, method, canRun, canCancel }: {
@@ -183,18 +137,19 @@ export function PlaygroundExplanations({ source, canRun, canCancel, shapSupporte
   source: MLPlaygroundJob; canRun: boolean; canCancel: boolean;
   shapSupported?: boolean;
 }) {
+  const [selectedMethod, setSelectedMethod] = useState<Method>(shapSupported
+    ? "permutation_shap_median_v1" : "median_reference_feature_replacement");
   if (source.status !== "Succeeded" || typeof source.result?.anomaly_score !== "number")
     return null;
   return <section className="playground-explanations" aria-label="단일 입력 모델 설명">
-    <h4>이 입력의 모델 설명</h4>
-    <p className="hint">실제 완료된 입력 Job을 기준으로 계산합니다. 값을 편집해도 과거 설명을
-      현재 입력의 설명으로 취급하지 않습니다. 두 방법은 서로 다른 질문에 답합니다.</p>
-    {shapSupported
-      ? <MethodExplanation key={source.id + "-shap"} source={source}
-          method="permutation_shap_median_v1" canRun={canRun} canCancel={canCancel} />
-      : <p className="hint">현재 Permutation SHAP은 최대 64개 Feature를 지원합니다.
-          이 모델에서는 Feature 치환 민감도를 사용할 수 있습니다.</p>}
-    <MethodExplanation key={source.id + "-sensitivity"} source={source}
-      method="median_reference_feature_replacement" canRun={canRun} canCancel={canCancel} />
+    <div className="playground-explanation-tabs" role="group" aria-label="설명 방법">
+      {shapSupported && <button type="button" className="secondary"
+        aria-pressed={selectedMethod === "permutation_shap_median_v1"}
+        onClick={() => setSelectedMethod("permutation_shap_median_v1")}>SHAP 기여도</button>}
+      <button type="button" className="secondary" aria-pressed={selectedMethod === "median_reference_feature_replacement"}
+        onClick={() => setSelectedMethod("median_reference_feature_replacement")}>Feature 치환 민감도</button>
+    </div>
+    <MethodExplanation key={source.id + selectedMethod} source={source}
+      method={selectedMethod} canRun={canRun} canCancel={canCancel} />
   </section>;
 }
