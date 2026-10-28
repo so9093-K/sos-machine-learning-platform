@@ -76,9 +76,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
       "/api/features/services/registrations?limit=100",
     ).then(page => {
         if (active) {
-          setRegistrations(page.items.filter(item =>
-            item.status === "Succeeded" && !item.retired &&
-            typeof item.result?.feature_service === "string"));
+          setRegistrations(page.items);
           setRegistrationCursor(page.next_cursor);
         }
       })
@@ -105,9 +103,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
       );
       setRegistrations(current => {
         const known = new Set(current.map(item => item.id));
-        return [...current, ...page.items.filter(item =>
-          !known.has(item.id) && item.status === "Succeeded" && !item.retired &&
-          typeof item.result?.feature_service === "string")];
+        return [...current, ...page.items.filter(item => !known.has(item.id))];
       });
       setRegistrationCursor(page.next_cursor);
     } catch (exc) {
@@ -186,7 +182,8 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
           {registration.job?.status === "Succeeded" &&
             !registrations.some(r => r.id === registration.job?.id) &&
             <option value={registration.job.id}>방금 등록한 Feature · {registration.job.id.slice(0,8)}</option>}
-          {registrations.map(j => <option key={j.id} value={j.id}>
+          {registrations.filter(j => j.status === "Succeeded" && !j.retired &&
+            typeof j.result?.feature_service === "string").map(j => <option key={j.id} value={j.id}>
             {String(j.result?.feature_service ?? j.id)} · {j.id.slice(0,8)}
           </option>)}
         </select>
