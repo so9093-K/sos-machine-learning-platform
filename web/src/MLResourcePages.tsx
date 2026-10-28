@@ -30,6 +30,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div className="ml-resource-field"><dt>{label}</dt><dd>{children}</dd></div>;
 }
 
+/** 설명 결과의 외부 출처와 실제 계산 입력 출처가 정확히 하나로 일치해야 한다. */
+export function explanationSourceMatches(result: ExplanationResult): boolean {
+  const scoringId = result.scoring_result_id ?? null;
+  const playgroundId = result.playground_job_id ?? null;
+  const row = result.row_index ?? null;
+  if ((scoringId === null) === (playgroundId === null)) return false;
+  if (scoringId !== null) {
+    return row !== null && result.output.scoring_result_id === scoringId &&
+      result.output.row_index === row && result.output.playground_job_id == null;
+  }
+  return row === null && result.output.playground_job_id === playgroundId &&
+    result.output.scoring_result_id == null && result.output.row_index == null;
+}
+
 /** 설명 방법별 출력 계약에 따라 동일한 결과 판본을 표시한다. */
 export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
   const supported = result.method === "permutation_shap_median_v1" ||
@@ -42,11 +56,8 @@ export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
     설명 결과의 방법과 계산 근거가 일치하지 않습니다. 내용을 표시하지 않습니다.
   </p>;
   // 불변 Explanation 결과의 외부 식별자와 계산 근거 안의 식별자가 일치해야 한다.
-  if (result.output.scoring_result_id !== (result.scoring_result_id ?? null) ||
-      result.output.playground_job_id !== (result.playground_job_id ?? undefined) &&
-        result.playground_job_id != null ||
-      result.output.model_revision_id !== result.model_revision_id ||
-      result.output.row_index !== (result.row_index ?? null)) return <p role="alert">
+  if (!explanationSourceMatches(result) ||
+      result.output.model_revision_id !== result.model_revision_id) return <p role="alert">
     설명 결과의 Scoring·모델·관측 행 판본이 계산 근거와 일치하지 않습니다.
     다른 분석의 설명으로 표시하지 않습니다.
   </p>;
