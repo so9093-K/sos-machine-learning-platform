@@ -24,7 +24,10 @@ Job/Attempt 계약을 적용한다.
 5. `POST /api/features/services/{registration_job_id}/retirement/jobs`: 성공·실패·
    취소된 등록을 명시적으로 폐기한다. `registry_deleted`는 실제 Registry 객체
    제거 여부이며 `false`인 경우 다른 활성 등록·과거 조회의 참조가 유지된 것이다.
-   폐기된 등록은 새 조회에 사용할 수 없고 과거 Dataset·모델 근거는 유지한다.
+   폐기 중이거나 폐기 완료된 등록은 새 조회에 사용할 수 없고
+   과거 Dataset·모델 근거는 유지한다. 실행 중인 폐기 Job은 외부 삭제 커밋
+   정합성을 위해 취소할 수 없다. 부분 실패한 폐기는 새 폐기 Job으로
+   재시도하여 실제 Registry 상태를 확인해야 한다.
 
 등록 요청:
 ```json

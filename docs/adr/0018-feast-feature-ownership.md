@@ -45,6 +45,10 @@ ML Job을 관리하지만 독립적인 Feature Registry·Historical Retrieval의
    Worker 중단 뒤 부분 등록은 확인·재조정한다. 신규 Retrieval Job·폐기 Job은
    동일 등록 Job 행 잠금 아래에서 접수하고 폐기 접수 즉시 신규 조회를 차단한다.
    폐기 이전에 승인된 Queued Retrieval은 참조 보호 대상이며 정상 완료를 허용한다.
+   실행 중 Registry 삭제는 취소를 거부한다. 일부 삭제된 후 실패하면
+   새 조회의 접수를 막고, 폐기 Job 재시도에서 실제 Registry 객체를 검증한다.
+   조회/모델 참조가 남아 있으면 누락된 정의를 원래 계약으로 복구·검증한 뒤
+   보존 결과를 확정한다.
    실패·취소·성공 등록의 폐기는 별도
    SOS Job으로 요청한다. 다른 활성 등록이나 과거/진행 중 Retrieval이 참조하는
    정의는 Registry에 유지하되 해당 등록의 신규 조회는 막는다.

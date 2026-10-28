@@ -104,3 +104,26 @@ def test_pinned_owner_allows_admin_authorized_foreign_source_but_rejects_changes
         verify_pinned_owner({**source, "owner_actor": "researcher-b"}, spec, "feature_source_owner")
     with pytest.raises(ValueError):
         verify_pinned_owner(source, {}, "feature_source_owner")
+
+
+def test_running_feature_retirement_cannot_be_cancelled_as_ordinary_job():
+    from contextlib import contextmanager
+    from sos_platform.store_jobs import (
+        JobStoreMixin, FeatureRetirementCancellationConflict,
+    )
+
+    class Database:
+        def execute(self, _sql, _params):
+            return self
+        def mappings(self):
+            return self
+        def first(self):
+            return {"status": "Running", "kind": "feature_retire"}
+
+    class StoreStub(JobStoreMixin):
+        @contextmanager
+        def connection(self):
+            yield Database()
+
+    with pytest.raises(FeatureRetirementCancellationConflict):
+        StoreStub().request_cancel("running-retirement")
