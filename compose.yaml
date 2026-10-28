@@ -103,6 +103,56 @@ services:
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
 
+  # UI 전용 계정은 기존 Registry를 한 번 준비한 뒤 SELECT만 허용한다.
+  # 모든 기존 볼륨에도 적용되므로 첫 설치 전용 initdb 스크립트에 의존하지 않는다.
+  feast-ui-access:
+    logging: *sos-logging
+    profiles: [app]
+    image: ${SOS_FEAST_WORKER_IMAGE:-sos-platform-feast-worker:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SOS_WITH_FEAST: "1"
+    environment:
+      SOS_FEAST_REGISTRY_URL: postgresql+psycopg2://feast:${SOS_FEAST_DB_PASSWORD:-feast-dev-only}@feast-postgres:5432/sos_feast
+      SOS_FEAST_UI_DB_PASSWORD: ${SOS_FEAST_UI_DB_PASSWORD:-feast-ui-dev-only}
+    command: ["python", "-m", "sos_platform.feast_ui_access"]
+    depends_on:
+      feast-postgres:
+        condition: service_healthy
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  # 공식 Feast 0.67 UI: SOS의 기존 Registry를 탐색하는 별도 운영 도구.
+  # localhost 전용 포트, 읽기 전용 SQL 역할. SOS Actor 권한이 자동 적용되지 않는다.
+  feast-ui:
+    logging: *sos-logging
+    profiles: [app]
+    image: ${SOS_FEAST_WORKER_IMAGE:-sos-platform-feast-worker:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SOS_WITH_FEAST: "1"
+    environment:
+      SOS_FEAST_UI_REGISTRY_URL: postgresql+psycopg2://feast_ui:${SOS_FEAST_UI_DB_PASSWORD:-feast-ui-dev-only}@feast-postgres:5432/sos_feast
+    command: ["feast", "--chdir", "/app/feast-ui", "ui", "--host", "0.0.0.0", "--port", "8888"]
+    volumes:
+      - ./feast-ui:/app/feast-ui:ro
+    ports:
+      - "127.0.0.1:${SOS_FEAST_UI_PORT:-9608}:8888"
+    depends_on:
+      feast-ui-access:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/health', timeout=3).close()"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
   web:
     logging: *sos-logging
     profiles: [app]
@@ -116,6 +166,7 @@ services:
       # 브라우저의 로컬 운영 도구 링크가 실제 공개 포트를 따르도록 전달한다.
       SOS_DAGSTER_PORT: ${SOS_DAGSTER_PORT:-9607}
       SOS_MLFLOW_PORT: ${SOS_MLFLOW_PORT:-9606}
+      SOS_FEAST_UI_PORT: ${SOS_FEAST_UI_PORT:-9608}
     ports:
       - "127.0.0.1:${SOS_WEB_PORT:-9601}:9601"
     depends_on:

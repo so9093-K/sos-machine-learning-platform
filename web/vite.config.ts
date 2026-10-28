@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
   const operatorPorts = {
     dagster: port(env.SOS_DAGSTER_PORT, "9607"),
     mlflow: port(env.SOS_MLFLOW_PORT, "9606"),
+    feast: port(env.SOS_FEAST_UI_PORT, "9608"),
   };
   return {
     plugins: [react()],
