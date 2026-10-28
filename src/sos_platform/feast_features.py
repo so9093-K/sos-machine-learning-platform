@@ -266,8 +266,8 @@ def register_feature_service(store, source_dataset: dict, raw_spec: dict) -> dic
             raise ValueError("Feast 등록 내용의 무결성 검사가 실패했습니다.")
 
     return {
-        "feature_service": service_name,
-        "feature_view": view_name,
+        "feature_service": names[2],
+        "feature_view": names[1],
         "feature_dataset_id": source_dataset["id"],
         "feature_dataset_version": source_dataset["version"],
         "entity_column": spec.entity_column,
