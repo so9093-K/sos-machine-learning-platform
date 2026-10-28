@@ -41,13 +41,6 @@ jobs:
       - name: Install web dependencies
         working-directory: web
         run: npm ci --no-audit
-      # PR 작업 중 API 응답·요청 타입을 실제 생성기로 대조하는 임시 단계.
-      - uses: astral-sh/setup-uv@v7
-      - name: Install Python for OpenAPI generation
-        run: uv python install 3.12 && uv sync --locked --group dev
-      - name: Inspect generated TypeScript API diff
-        working-directory: web
-        run: npm run generate:types && git diff -- src/api.generated.ts
       - name: Validate ML navigation context
         working-directory: web
         run: npm run test:navigation
