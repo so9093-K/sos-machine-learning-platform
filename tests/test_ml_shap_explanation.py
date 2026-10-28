@@ -216,8 +216,8 @@ def test_playground_explanation_api_checks_source_authority_and_status(tmp_path,
     from sos_platform.security import Actor, IdentitySettings
     from sos_platform.store import Store
 
-    owner_token = "explanation-owner-credential"
-    other_token = "explanation-other-credential"
+    owner_token = "explanation-owner-credential-verified-2026"
+    other_token = "explanation-other-credential-verified-2026"
     identity = IdentitySettings("token", {
         hashlib.sha256(token.encode()).hexdigest():
             Actor(actor, "human", frozenset({"researcher"}))
