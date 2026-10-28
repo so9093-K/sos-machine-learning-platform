@@ -314,7 +314,7 @@ export function MLScoringPanel({
           {datasets.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
         </select>
       </label>
-      <label>결과 레이블 (선택)
+      <label>정답 레이블 (선택)
         <select aria-label="Scoring 정답 레이블" value={labelColumn}
           disabled={submitted || uploading}
           onChange={e => setLabelColumn(e.target.value)}>
