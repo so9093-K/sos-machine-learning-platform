@@ -22,7 +22,7 @@ def test_permutation_shap_reconstructs_actual_sos_score():
     row = np.asarray([4.0, 3.0, 1.0])
     score = runtime.score_anomalies(row.reshape(1, -1))[0]
     args = (
-        {"id": "scoring"},
+        "scoring",
         {"id": "model", "features": ["first", "second", "third"]},
         4, row, [0.0, 0.0, 0.0], score, runtime,
     )
@@ -59,7 +59,7 @@ def test_permutation_shap_reconstructs_real_isolation_forest_score():
     reference = np.median(training, axis=0).tolist()
     score = model.score_anomalies(values.reshape(1, -1))[0]
     result = _permutation_shap_result(
-        {"id": "scoring"}, {"id": "model", "features": [f"f{i}" for i in range(44)]},
+        "scoring", {"id": "model", "features": [f"f{i}" for i in range(44)]},
         4, values, reference, score, model,
     )
     assert len(result["feature_contributions"]) == 44
@@ -74,7 +74,7 @@ def test_permutation_shap_includes_missing_value_preprocessing():
     row = np.asarray([float("nan"), 2.0, 2.0])
     score = runtime.score_anomalies(row.reshape(1, -1))[0]
     result = _permutation_shap_result(
-        {"id": "s"}, {"id": "m", "features": ["x", "y", "z"]},
+        "s", {"id": "m", "features": ["x", "y", "z"]},
         0, row, [0.0, 0.0, 0.0], score, runtime,
     )
     assert result["feature_contributions"][0]["missing_imputed"] is True
@@ -163,7 +163,13 @@ def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_p
             "model_revision_id": "model", "model_owner_actor": "actor-1",
             "features": features,
         },
-        "result": {"anomaly_score": expected},
+        "result": {
+            "model_revision_id": "model",
+            "anomaly_score": expected,
+            "score_direction": "higher_is_more_anomalous",
+            "score_scale": "negative_sklearn_score_samples",
+            "feature_count": 3,
+        },
     }
     store = SimpleNamespace(
         get_job=lambda _: job,
@@ -190,7 +196,11 @@ def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_p
         {**job, "status": "Running"},
         {**job, "kind": "ml_score"},
         {**job, "owner_actor": "another"},
-        {**job, "result": {"anomaly_score": expected + 1}},
+        {**job, "result": {**job["result"], "anomaly_score": expected + 1}},
+        {**job, "result": {**job["result"], "model_revision_id": "another"}},
+        {**job, "result": {**job["result"], "score_scale": "incompatible"}},
+        {**job, "result": {**job["result"], "score_direction": "lower_is_more_anomalous"}},
+        {**job, "result": {**job["result"], "feature_count": 2}},
     ):
         store.get_job = lambda _, item=invalid: item
         with pytest.raises(ValueError):
