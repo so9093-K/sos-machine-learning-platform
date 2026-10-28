@@ -375,8 +375,12 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     {reference && <section className="model-lab-input-comparison"
       aria-label="입력 Feature와 Train 참조값 비교">
       <div className="model-lab-feature-group-heading">
-        <strong>{editedNames.length > 0 ? "변경한 입력값과 학습 참조값" : "현재 입력값과 학습 참조값"}</strong>
-        <span>{editedNames.length > 0 ? `변경 ${editedNames.length}개` : "기준 입력"}</span>
+        <strong>{importedSource
+          ? observationEdits.length > 0 ? "관측값에서 수정한 입력과 학습 참조값" : "가져온 관측값과 학습 참조값"
+          : editedNames.length > 0 ? "변경한 입력값과 학습 참조값" : "현재 입력값과 학습 참조값"}</strong>
+        <span>{importedSource
+          ? observationEdits.length > 0 ? `수정 ${observationEdits.length}개` : "원본 입력 유지"
+          : editedNames.length > 0 ? `변경 ${editedNames.length}개` : "기준 입력"}</span>
       </div>
       <p className="hint">같은 Feature 안에서만 막대 길이를 비교합니다. 학습 중앙값은 정상 범위나
         모델 기여도가 아닙니다. 중앙값이 0이거나 음수인 경우 등 비례 표현이 부적절하면 숫자로 표시합니다.</p>
