@@ -113,6 +113,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const reference = exampleValues(model);
   const [mode, setMode] = useState<"example" | "edit">("edit");
   const [importedSource, setImportedSource] = useState<ObservationExperiment | null>(null);
+  const [importedAfterJobId, setImportedAfterJobId] = useState<string | null>(null);
   const appliedObservation = useRef<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>(() =>
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
@@ -190,6 +191,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     ])));
     setMode("edit");
     setImportedSource(null);
+    setImportedAfterJobId(null);
   }
 
   useEffect(() => {
@@ -241,7 +243,9 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     setFields(observationInput.fields);
     setMode("edit");
     setImportedSource(observationInput);
-  }, [observationInput, model.id, running]);
+    // 과거 Job 결과를 새 관측값 실험의 결과로 표시하지 않는다.
+    setImportedAfterJobId(job?.id ?? null);
+  }, [observationInput, model.id, running, job?.id]);
   const submittedFeatures = job?.spec.features;
   const submittedInput = submittedFeatures && typeof submittedFeatures === "object" &&
     !Array.isArray(submittedFeatures)
@@ -249,8 +253,12 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const matchesCompletedInput = job?.status === "Succeeded" && lastScore !== null &&
     playgroundInputMatchesResult(fields, submittedInput, model.features);
   const editedNames = reference ? playgroundChangedFeatures(fields, reference, model.features) : [];
+  const observationEdits = importedSource
+    ? playgroundChangedFeatures(fields, importedSource.fields, model.features) : [];
+  const highlightedChanges = importedSource ? observationEdits : editedNames;
   const comparisonNames = reference
-    ? (editedNames.length > 0 ? editedNames : model.features).slice(0, 3) : [];
+    ? (highlightedChanges.length > 0 ? highlightedChanges : model.features).slice(0, 3) : [];
+  const newJobAfterImport = Boolean(importedSource && job && job.id !== importedAfterJobId);
   const inputGroups = groupActivityFeatures(
     Object.fromEntries(model.features.map(name => [name, null])));
   const explanationAvailable = referenceMedians.length === model.features.length &&
@@ -328,7 +336,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
       <button type="button" aria-pressed={mode === "example"} className="secondary"
         disabled={!reference || running}
-        onClick={() => { setMode("example"); setImportedSource(null); if (reference) setFields(reference); }}>
+        onClick={() => { setMode("example"); setImportedSource(null); setImportedAfterJobId(null); if (reference) setFields(reference); }}>
         기준값으로 체험
       </button>
       <button type="button" aria-pressed={mode === "edit"} className="secondary"
@@ -382,8 +390,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
             actualLabel="현재 입력값" />
         </div>)}
       </div>
-      {editedNames.length > comparisonNames.length && <small className="hint">
-        변경한 나머지 {editedNames.length - comparisonNames.length}개 값은 위 Feature 입력에서 확인할 수 있습니다.
+      {highlightedChanges.length > comparisonNames.length && <small className="hint">
+        변경한 나머지 {highlightedChanges.length - comparisonNames.length}개 값은 위 Feature 입력에서 확인할 수 있습니다.
       </small>}
     </section>}
     {invalid.length > 0 && <p role="alert" className="model-lab-input-error">
@@ -396,7 +404,9 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     <p className="model-lab-input-state" role="status">{running
       ? "제출한 입력을 모델에서 계산하는 중입니다."
       : matchesCompletedInput
-        ? "현재 입력값은 최근 완료된 계산에 사용한 값과 일치합니다."
+        ? importedSource && !newJobAfterImport
+          ? "관측값을 가져왔습니다. 같은 입력의 이전 실행 기록이 있지만 이 관측값으로 새로 계산하지는 않았습니다."
+          : "현재 입력값은 최근 완료된 계산에 사용한 값과 일치합니다."
         : job?.status === "Succeeded" && lastScore !== null
           ? "입력값이 마지막 계산 이후 변경됐습니다. 아래 점수는 이전 입력의 결과이며 현재 입력은 아직 계산하지 않았습니다."
           : job?.status === "Failed" || job?.status === "Cancelled"
@@ -410,7 +420,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
         {running ? "모델 실행 중…" : "실제 이상 점수 계산하기 →"}
       </button>
       {reference && <button type="button" className="secondary"
-        onClick={() => { setFields(reference); setImportedSource(null); }} disabled={running}>기준값으로 초기화</button>}
+        onClick={() => { setFields(reference); setImportedSource(null); setImportedAfterJobId(null); }} disabled={running}>기준값으로 초기화</button>}
       {job && !TERMINAL.has(job.status) && canCancel &&
         <button type="button" className="secondary" onClick={() => void cancel()}>취소 요청</button>}
     </div>
@@ -419,11 +429,12 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
         Failed: "실패", Cancelled: "취소됨" } as Record<string, string>)[job.status] ?? job.status}</strong>
       {job.status === "Succeeded" && lastScore !== null &&
         <div className="model-lab-score-row">
-          <div><span>{matchesCompletedInput ? "현재 입력의 이상 점수" : "마지막 제출 입력의 이상 점수"}</span>
+          <div><span>{matchesCompletedInput && (!importedSource || newJobAfterImport)
+            ? "현재 입력의 이상 점수" : "마지막 제출 입력의 이상 점수"}</span>
             <strong>{lastScore.toFixed(5)}</strong></div>
           {previousScore !== null && <div><span>이전 완료 계산과의 점수 차이</span>
             <strong>{(lastScore - previousScore) > 0 ? "+" : ""}{(lastScore - previousScore).toFixed(5)}</strong></div>}
-          {importedSource && matchesCompletedInput && <div>
+          {importedSource && newJobAfterImport && matchesCompletedInput && <div>
             <span>원래 Dataset 관측값 점수 대비 차이</span>
             <strong>{lastScore - importedSource.originalScore > 0 ? "+" : ""}{(lastScore - importedSource.originalScore).toFixed(5)}</strong>
           </div>}
