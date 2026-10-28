@@ -1,39 +1,17 @@
-name: Temporary Feast Registry contract inspection
+name: Temporary Feast lifecycle integration
 on:
   push:
     branches: [feat/feast-feature-ownership]
 permissions:
   contents: read
 jobs:
-  inspect:
+  lifecycle:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: |
           uv python install 3.12
-          uv sync --locked --group feast
-      - name: Inspect Feast 0.67 exact object models
-        run: |
-          uv run --locked --group feast python - <<'PY'
-          import tempfile, pathlib
-          from feast import FeatureStore, RepoConfig, Entity, FeatureView, FeatureService, Field, FileSource
-          from feast.types import Float64
-          from feast.value_type import ValueType
-          from datetime import timedelta
-          import polars as pl
-          from google.protobuf.json_format import MessageToDict
-          p=pathlib.Path(tempfile.mkdtemp())
-          file=p/'features.parquet'
-          pl.DataFrame({"host_id":["x"],"event_timestamp":[__import__('datetime').datetime(2026,10,1,tzinfo=__import__('datetime').timezone.utc)],"amount":[1.0]}).write_parquet(file)
-          f=FeatureStore(config=RepoConfig(project="sos_features", registry={"registry_type":"sql","path":f"sqlite:///{p/'registry.db'}","cache_ttl_seconds":0},provider="local",offline_store={"type":"duckdb"},online_store=None))
-          source=FileSource(name="s_source",path=str(file),timestamp_field="event_timestamp")
-          e=Entity(name="sos_entity_demo",value_type=ValueType.STRING,join_keys=["host_id"])
-          view=FeatureView(name="sos_fv_demo",entities=[e],ttl=timedelta(days=1),schema=[Field(name="amount",dtype=Float64)],source=source,online=False)
-          service=FeatureService(name="sos_fs_demo",features=[view])
-          f.apply([e,view,service])
-          for name,item in [("expected_entity",e),("actual_entity",f.get_entity(e.name)),("expected_view",view),("actual_view",f.get_feature_view(view.name)),("expected_service",service),("actual_service",f.get_feature_service(service.name))]:
-             print(name, "attributes:",sorted(k for k in vars(item) if not k.startswith('_')))
-             print(name,"proto:",str(MessageToDict(item.to_proto(),preserving_proto_field_name=True))[:5500])
-          print("raw source:",vars(f.get_feature_view(view.name).batch_source))
-          PY
+          uv sync --locked --group feast --group dev
+      - name: Feast actual SQL Registry recovery and PIT
+        run: uv run --locked --group feast --group dev pytest -q tests/test_feast_live.py tests/test_feast_features.py
