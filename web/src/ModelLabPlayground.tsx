@@ -317,7 +317,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       onChange={event => setFields(current => ({ ...current, [name]: event.target.value }))}
       aria-label={activityFeatureLabel(name) + " 입력값"} />
   </label>;
-  return <section className="panel model-lab-playground" aria-label="직접 모델 점수 계산">
+  return <section className="panel model-lab-playground" tabIndex={-1} aria-label="직접 모델 점수 계산">
     <div className="model-lab-playground-head">
       <div><h3>값을 바꿔 모델 반응 살펴보기</h3>
         <p>입력값을 수정한 뒤 실제 점수를 계산하고, 이전 결과와 비교할 수 있습니다.</p></div>
