@@ -38,7 +38,8 @@ export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource
       </button>
     </nav>
     {active === "data" ? children : active === "ml" ?
-      <MLActivityPanel onNavigate={onNavigate} onOpenResource={onOpenResource} canCancel={canCancel} /> :
+      <MLActivityPanel onNavigate={onNavigate} onOpenResource={onOpenResource} canCancel={canCancel}
+        datasets={datasets} /> :
       <PipelineHistoryPanel datasets={datasets} onOpenRun={onOpenPipelineRun}
         onStart={() => onNavigate("pipelines")} />}
   </div>;

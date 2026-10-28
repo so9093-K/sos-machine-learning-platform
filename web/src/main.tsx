@@ -4,12 +4,35 @@ import { ApiError, request, setAccessToken, formatError } from "./api";
 import { Workspace } from "./Workspace";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
+import { PlatformShell } from "./PlatformShell";
+import { useWorkspaceNavigation } from "./PlatformNavigation";
 import type { Identity } from "./types";
 import type { components } from "./api.generated";
 
 import "./style.css";
 
 type BrandingSettings = components["schemas"]["BrandingSettingsOut"];
+
+function OperatorWorkspace({ actor, brandName, brandReady, brandLoadError, onBrandRetry, onSignOut }: {
+  actor: Identity; brandName: string; brandReady: boolean; brandLoadError: string;
+  onBrandRetry: () => void; onSignOut: () => void;
+}) {
+  const { tab, navigate } = useWorkspaceNavigation();
+  const canInspectStorage = actor.capabilities.includes("storage.inspect");
+  const canViewAudit = actor.capabilities.includes("audit.read");
+  const section = tab === "audit" && canViewAudit ? "audit"
+    : canInspectStorage ? "storage" : "audit";
+  useEffect(() => { if (tab !== section) navigate(section); }, [tab, section, navigate]);
+  return <PlatformShell actor={actor} section={section} onNavigate={navigate}
+    modelContext={{}} modelResource={null} onSignOut={onSignOut}
+    canConfigure={false} brandName={brandName} brandReady={brandReady}
+    brandLoadError={brandLoadError} onBrandRetry={onBrandRetry} onBrandChange={() => {}}
+    canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}>
+    {section === "storage" && canInspectStorage && <StoragePanel />}
+    {section === "audit" && canViewAudit && <AuditPanel />}
+    {!canInspectStorage && !canViewAudit && <p>현재 계정에서 조회할 수 있는 운영 화면이 없습니다.</p>}
+  </PlatformShell>;
+}
 
 function App() {
   const [actor, setActor] = useState<Identity | null>(null);
@@ -105,20 +128,13 @@ function App() {
     </section>
   </main>;
   const canViewDataset = actor.capabilities.includes("dataset.read");
-  const canInspectStorage = actor.capabilities.includes("storage.inspect");
-  const canViewAudit = actor.capabilities.includes("audit.read");
   return <>
     {canViewDataset ? <Workspace actor={actor}
       brandName={brandName} brandReady={branding !== null} brandLoadError={brandingError}
       onBrandChange={applyBrand}
       onBrandRetry={reloadBranding} onSignOut={signOut} /> :
-      <main className="main"><h1>{brandName} · 운영 진단</h1>
-        {actor.mode !== "development" &&
-          <button type="button" className="ghost" onClick={signOut}>인증 해제</button>}
-        {canInspectStorage && <StoragePanel />}
-        {canViewAudit && <AuditPanel />}
-        {brandingError && <p role="alert">브랜드 정보 조회 실패: {brandingError}</p>}
-      </main>}
+      <OperatorWorkspace actor={actor} brandName={brandName} brandReady={branding !== null}
+        brandLoadError={brandingError} onBrandRetry={reloadBranding} onSignOut={signOut} />}
   </>;
 }
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);

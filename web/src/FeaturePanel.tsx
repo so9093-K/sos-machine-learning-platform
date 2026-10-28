@@ -1,4 +1,11 @@
 import type { useFeatureEditor } from "./useFeatureEditor";
+import { formatDtype } from "./display-format";
+
+const opLabels: Record<string, string> = {
+  select: "컬럼 선택", filter_not_null: "결측 행 제외", fill_null: "결측값 대체",
+  cast: "실수형(Float64) 변환", lag: "이전 행 값 (Lag)", rolling_mean: "이동 평균 (Rolling Mean)",
+};
+const MAX_GROUP_COLUMNS = 4;
 
 /** UI만 담당하며 Feature 초안·변환 계산 상태는 editor가 소유한다. */
 export function FeaturePanel({
@@ -23,12 +30,8 @@ export function FeaturePanel({
           </div></div>
           <div className="form-row">
             <label>변환 연산 <select aria-label="변환 연산" value={op} onChange={e => setOp(e.target.value)}>
-              <option value="select">컬럼 선택</option>
-              <option value="filter_not_null">결측 행 제외</option>
-              <option value="fill_null">결측값 대체</option>
-              <option value="cast">Float64 변환</option>
-              <option value="lag">Lag 1</option>
-              <option value="rolling_mean">Rolling Mean 3</option>
+              {Object.entries(opLabels).map(([key, label]) =>
+                <option key={key} value={key}>{label}</option>)}
             </select></label>
             {op === "select" && <fieldset className="column-picks">
               <legend>유지할 컬럼</legend>
@@ -57,23 +60,35 @@ export function FeaturePanel({
               수정 취소</button>}
           </div>
           <div className="form-row">
-            <label>시간·정렬 컬럼 <select aria-label="시간·정렬 컬럼" value={orderBy} onChange={e => setOrderBy(e.target.value)}>
+            <label>시간·정렬 컬럼 <select aria-label="시간·정렬 컬럼" value={orderBy} onChange={e => {
+              const next = e.target.value;
+              setOrderBy(next);
+              // 정렬 컬럼은 그룹 키가 될 수 없다.
+              setGroupBy(current => current.filter(item => item !== next));
+            }}>
               <option value="">정렬하지 않음</option>
               {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
             </select></label>
-            <label>그룹 컬럼 (최대 4개) <select aria-label="그룹 컬럼" multiple size={Math.min(5, Math.max(2, columnNames.length))}
-              value={groupBy} onChange={e => setGroupBy(Array.from(e.target.selectedOptions, option => option.value)
-                .filter(Boolean).slice(0, 4))}>
-              <option value="">그룹 없음</option>
-              {columnNames.filter(c => c !== orderBy).map(c => <option key={c} value={c}>{c}</option>)}
-            </select></label>
+            <fieldset className="column-picks">
+              <legend>그룹 컬럼 (선택, 최대 {MAX_GROUP_COLUMNS}개)</legend>
+              {columnNames.filter(c => c !== orderBy).map(name => <label key={name}>
+                <input type="checkbox" checked={groupBy.includes(name)}
+                  disabled={!groupBy.includes(name) && groupBy.length >= MAX_GROUP_COLUMNS}
+                  onChange={event => setGroupBy(event.target.checked
+                    ? [...groupBy, name].slice(0, MAX_GROUP_COLUMNS)
+                    : groupBy.filter(item => item !== name))} />
+                {name}
+              </label>)}
+            </fieldset>
             <p className="hint">Lag / Rolling은 시간 정렬 후 그룹별 계산합니다. Rolling Mean에는 현재 행이 포함됩니다.</p>
           </div>
           <div className="steps">{steps.length === 0 && <p className="muted">아직 변환 단계가 없습니다.</p>}
             {steps.map((step, i) => <div className="step" key={i}>
-              <strong>{i + 1}. {step.op}</strong>
-              <span>{step.column} {step.periods ? `· 이전 ${step.periods}행` : ""}
-                {step.window ? `· ${step.window}행` : ""}</span>
+              <strong>{i + 1}. {opLabels[step.op] ?? step.op}</strong>
+              <span>{step.op === "select" ? (step.columns ?? []).join(", ") : step.column}
+                {step.op === "fill_null" ? ` · ${String(step.value)}(으)로 대체` : ""}
+                {step.periods ? ` · ${step.periods}행 이전` : ""}
+                {step.window ? ` · ${step.window}행 평균` : ""}</span>
               <button className="ghost" aria-label={`${i + 1}번째 단계 위로 이동`}
                 disabled={i === 0} onClick={() => moveStep(i, -1)}>↑</button>
               <button className="ghost" aria-label={`${i + 1}번째 단계 아래로 이동`}
@@ -91,7 +106,7 @@ export function FeaturePanel({
           {featurePreview && <div className="result"><h4>변환 미리보기 · 전체 입력 기준 연산</h4>
              <p className="hint">입력을 표본 추출하는 것이 아니라 실제 변환 순서를 적용한 결과를 최대 30행 반환합니다. 단순 변환은 필요한 행만 읽고, 전역 Window는 동기 예산 초과 시 전체 Job을 안내합니다.</p>
             <div className="table-scroll"><table><thead><tr>{Object.entries(featurePreview.schema).map(
-              ([c, t]) => <th key={c}>{c}<small>{t}</small></th>
+              ([c, t]) => <th key={c}>{c}<small>{formatDtype(t)}</small></th>
             )}</tr></thead><tbody>{featurePreview.rows.map((r, i) => <tr key={i}>
               {Object.keys(featurePreview.schema).map(c => <td key={c}>{r[c] == null ? "—" : String(r[c])}</td>)}
             </tr>)}</tbody></table></div></div>}

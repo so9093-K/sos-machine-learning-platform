@@ -260,7 +260,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
       {onInvestigateCandidates && (metric(decision, "predicted_anomalies") ?? 0) > 0 &&
         <div className="pipeline-overview-next">
           <button type="button" onClick={onInvestigateCandidates}>
-            이상 후보 확인하기 →
+            이상 후보 확인 →
           </button>
         </div>}
       <details className="pipeline-distribution-details">
@@ -342,7 +342,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
           검토 후보는 실제 이상 사건이 아니며, 레이블이 없는 결과에는 정확도·Precision·Recall을 부여하지 않습니다.</p>
         <div className="pipeline-actions">
           {onInvestigateCandidates && <button type="button" onClick={onInvestigateCandidates}>
-            검토할 이상 후보 살펴보기 →
+            이상 후보 검토 →
           </button>}
           <button type="button" className="secondary" onClick={() =>
             onOpenResource("scoring", test.id)}>Test 점수 결과 →</button>

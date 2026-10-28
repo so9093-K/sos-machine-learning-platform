@@ -200,7 +200,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperation
     </section>}
     <section className="panel">
       <div className="panel-head"><div>
-        <h3>Isolation Forest 실험</h3>
+        <h2>Isolation Forest 실험</h2>
         <p>Feature와 입력 정책을 직접 선택하는 독립 실험입니다. Dataset 판본과 모델 결과는 변경할 수 없습니다.</p>
       </div></div>
       <div className="form-row">
@@ -314,7 +314,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperation
       </div>
     </section>
     {selectedJob && <section className="panel" aria-label="ML 학습 Job 상태">
-      <div className="panel-head"><div><h3>학습 Job 상태</h3>
+      <div className="panel-head"><div><h2>학습 Job 상태</h2>
         <p>Job {selectedJob.id} · {jobStatusLabel(selectedJob.status)}</p>
       </div></div>
       {selectedJob.cancel_requested && selectedJob.status === "Running" &&
@@ -342,7 +342,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperation
           onClick={() => void forkTraining()}>동일 조건 Fork·Reproduce</button>
       </>}
       {model && <div className="result">
-        <h4>모델 실행 근거 · {model.id}</h4>
+        <h3>모델 실행 근거 · {model.id}</h3>
         <p className="hint">Dataset 판본 {model.dataset_version} · 입력 Feature {model.features.join(", ")}</p>
         <p>학습 대상 {statistic(model.training_score_summary.score_count)}행 · 이상 점수 평균
           {" "}{statistic(model.training_score_summary.score_mean)} (확률·검증 성능 아님)</p>

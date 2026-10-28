@@ -1744,9 +1744,9 @@ export interface components {
             output: {
                 [key: string]: unknown;
             };
-            /** Row Index */
             /** Playground Job Id */
             playground_job_id?: string | null;
+            /** Row Index */
             row_index?: number | null;
             /** Scoring Result Id */
             scoring_result_id?: string | null;
@@ -2989,6 +2989,8 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
+            /** Registry Version */
+            registry_version?: string | null;
             /** Runtime */
             runtime: {
                 [key: string]: unknown;

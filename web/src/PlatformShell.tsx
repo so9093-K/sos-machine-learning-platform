@@ -6,7 +6,7 @@ import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
   type WorkspaceTab, type MLNavigationContext, type ResourceRoute } from "./PlatformNavigation";
 
 const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; description: string }> = {
-  overview: { eyebrow: "WORKSPACE", title: "Workspace", description: "데이터 탐색 · 활동 이상 탐지 · 이전 분석 이어하기" },
+  overview: { eyebrow: "WORKSPACE", title: "Workspace", description: "데이터 탐색 · 활동 이상 탐지 · 이전 분석 재개" },
   understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "Dataset · Profile · Exploration" },
@@ -71,7 +71,8 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
       </div>
       <div id="sos-sidebar-menu" className={"sidebar-menu" + (menuOpen ? " open" : "")}>
       <PlatformNavigation active={section} onNavigate={onNavigate}
-        canInspectStorage={canInspectStorage} canViewAudit={canViewAudit} />
+        canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
+        canViewDataset={actor.capabilities.includes("dataset.read")} />
       {dataSidebar}
       {localOperatorHost && (canInspectStorage || canViewAudit) && <div className="operator-tools">
         <span className="eyebrow">로컬 운영 도구</span>

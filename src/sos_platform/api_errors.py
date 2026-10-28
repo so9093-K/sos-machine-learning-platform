@@ -12,6 +12,42 @@ from .errors import ERRORS, InvalidRequestError, PlatformError, RuntimeConfigura
 from .observability import emit
 
 
+def validation_message(kind: str) -> str:
+    """검증 유형만 번역하며 입력값·정규식·검증기 예외 원문은 공개하지 않는다."""
+    messages = {
+        "missing": "필수 입력값입니다.",
+        "extra_forbidden": "허용되지 않는 입력 항목입니다.",
+        "string_pattern_mismatch": "입력 형식이 올바르지 않습니다.",
+        "string_too_short": "입력값이 최소 길이보다 짧습니다.",
+        "string_too_long": "입력값이 최대 길이를 초과했습니다.",
+        "greater_than": "허용된 최솟값보다 커야 합니다.",
+        "greater_than_equal": "허용된 최솟값 이상이어야 합니다.",
+        "less_than": "허용된 최댓값보다 작아야 합니다.",
+        "less_than_equal": "허용된 최댓값 이하여야 합니다.",
+        "multiple_of": "허용된 단위의 배수여야 합니다.",
+        "finite_number": "유한한 수를 입력하세요.",
+        "literal_error": "허용된 선택값을 입력하세요.",
+        "enum": "허용된 선택값을 입력하세요.",
+        "too_short": "입력 항목 수가 최소 개수보다 적습니다.",
+        "too_long": "입력 항목 수가 최대 개수를 초과했습니다.",
+        "json_invalid": "JSON 형식이 올바르지 않습니다.",
+        "model_attributes_type": "입력 항목을 JSON 객체로 전달하세요.",
+    }
+    if kind in messages:
+        return messages[kind]
+    for prefix, message in (
+        ("string_", "문자열을 입력하세요."),
+        ("int_", "정수를 입력하세요."),
+        ("float_", "숫자를 입력하세요."),
+        ("bool_", "참 또는 거짓 값을 입력하세요."),
+        ("list_", "목록을 입력하세요."),
+        ("dict_", "JSON 객체를 입력하세요."),
+    ):
+        if kind.startswith(prefix):
+            return message
+    return "입력값을 확인하세요."
+
+
 def problem_response(
     request: Request, code: str, status: int, detail: object, headers: dict | None = None
 ) -> JSONResponse:
@@ -44,7 +80,7 @@ def register_error_handlers(app: FastAPI) -> None:
         elif exc.status_code == 401:
             code = (
                 "SOS-AUTH-REQUIRED"
-                if exc.detail == "Authentication required"
+                if exc.detail == ERRORS["SOS-AUTH-REQUIRED"].message
                 else "SOS-AUTH-INVALID"
             )
         else:
@@ -63,25 +99,11 @@ def register_error_handlers(app: FastAPI) -> None:
         fields = []
         for issue in exc.errors():
             kind = issue.get("type", "")
-            safe_kind = kind.startswith(
-                (
-                    "missing",
-                    "string_",
-                    "int_",
-                    "float_",
-                    "bool_",
-                    "list_",
-                    "greater_",
-                    "less_",
-                    "literal_",
-                    "extra_",
-                )
-            )
             fields.append(
                 {
                     "loc": list(issue.get("loc", [])),
                     "type": kind,
-                    "msg": issue.get("msg", "") if safe_kind else "입력값을 확인하세요.",
+                    "msg": validation_message(kind),
                 }
             )
         return problem_response(request, "SOS-API-VALIDATION", 422, fields)

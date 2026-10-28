@@ -37,7 +37,7 @@ async function compatiblePage(page: MLflowModelVersionPage, definition: Pipeline
 
 export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, canRun, canCancel,
   selectedModelId, selectedGroupKey, onSelectModel, onSelectGroup, onOpenResource, onBack, onLearn,
-  canUpload, onDatasetRegistered }: {
+  canLearn, canUpload, onDatasetRegistered }: {
   datasets: Dataset[];
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
@@ -48,7 +48,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   onSelectGroup: (group: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onBack: () => void; onLearn: () => void;
-  canUpload: boolean;
+  canLearn: boolean; canUpload: boolean;
   onDatasetRegistered: (dataset: Dataset) => void;
 }) {
   const [models, setModels] = useState<RegisteredActivityModel[]>([]);
@@ -210,7 +210,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     </button>
     <header className="model-lab-use-heading">
       <div>
-        <h2 id="model-lab-use-heading">준비된 모델 사용하기</h2>
+        <h2 id="model-lab-use-heading">모델 적용</h2>
         <p>데이터를 분석하고, 궁금한 관측값은 직접 바꿔 모델의 반응을 살펴봅니다.</p>
       </div>
     </header>
@@ -239,14 +239,16 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         ? "등록된 모델 버전이 더 있습니다. 다음 페이지를 확인하면 사용할 모델이 나올 수 있습니다."
         : lookupFailures
           ? "일부 모델 정보를 확인하지 못해 사용 가능한 모델이 없는지 판단할 수 없습니다. 다시 조회해 주세요."
-          : "이 그룹에는 사용할 수 있는 모델이 없습니다. 다른 모델 그룹을 확인하거나 새 모델을 학습해 보세요."}</p>
+          : canLearn
+            ? "이 그룹에는 사용할 수 있는 모델이 없습니다. 다른 모델 그룹을 확인하거나 새 모델을 학습해 주세요."
+            : "이 그룹에는 사용할 수 있는 모델이 없습니다. 현재 계정에는 모델 학습(Job 실행) 권한이 없어, 학습 권한이 있는 사용자가 모델을 등록하면 이곳에서 적용할 수 있습니다."}</p>
       {!nextPage && !lookupFailures && groups.some(group => group.registry_key !== registryKey) &&
         <button type="button" className="secondary"
           onClick={() => onSelectGroup(groups.find(group => group.registry_key !== registryKey)!.registry_key)}>
-          다른 모델 그룹 확인하기 →
+          다른 모델 그룹 확인 →
         </button>}
-      {!nextPage && !lookupFailures &&
-        <button type="button" onClick={onLearn}>예제로 모델 학습하기 →</button>}
+      {!nextPage && !lookupFailures && canLearn &&
+        <button type="button" onClick={onLearn}>모델 학습 →</button>}
     </div>}
     {selected && <div className="model-lab-current-model">
       <div><span className="eyebrow">현재 선택한 모델</span>
@@ -279,13 +281,13 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           다음 모델 판본을 조회하거나 목록을 새로고침해 주세요.</p>
         <button type="button" className="secondary"
           onClick={() => onSelectModel(models[0]?.revision.id ?? "")}>
-          {models.length > 0 ? "조회된 모델 사용하기" : "선택 해제"}</button>
+          {models.length > 0 ? "조회된 모델 적용" : "선택 해제"}</button>
       </div>}
     {!loading && !selected && !selectedModelId && models.length > 0 &&
       <div className="pipeline-readiness-blocked">
-        <p>사용 가능한 모델이 확인됐습니다. 이 모델로 바로 체험할 수 있습니다.</p>
+        <p>사용 가능한 모델이 확인됐습니다. 이 모델을 바로 적용할 수 있습니다.</p>
         <button type="button" className="secondary"
-          onClick={() => onSelectModel(models[0].revision.id)}>모델 사용하기 →</button>
+          onClick={() => onSelectModel(models[0].revision.id)}>이 모델 적용 →</button>
       </div>}
     {selected && <>
       <div className="model-lab-start-choice">
@@ -317,8 +319,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           onResultViewChange={handleResultViewChange} onTryObservation={tryObservation} />
       </div>
     </>}
-    <div className="model-lab-use-footer">
-      <button type="button" className="ghost" onClick={onLearn}>새 모델 학습해보기 →</button>
-    </div>
+    {canLearn && <div className="model-lab-use-footer">
+      <button type="button" className="ghost" onClick={onLearn}>새 모델 학습 →</button>
+    </div>}
   </section>;
 }

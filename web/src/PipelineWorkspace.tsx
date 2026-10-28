@@ -614,7 +614,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <p>필수 Feature와 시간 컬럼의 구조가 일치합니다. 전체 시간 값과
           Train·Calibration·Test의 실제 분할 가능성은 실행 Worker가 검사합니다.</p>
         <button type="button" disabled={!canRun || busy || exampleBusy} onClick={() => void start()}>
-          {busy ? "제출 중…" : "이 데이터로 분석 실행하기 →"}
+          {busy ? "제출 중…" : "이 데이터로 분석 실행 →"}
         </button>
         {!canRun && <p>현재 계정은 Job 제출 권한이 없습니다.</p>}
       </div>}
@@ -630,7 +630,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           }</h3>
         </div>
         <button type="button" className="secondary" disabled={exampleBusy}
-          onClick={() => selectRun("")}>새 모델 학습하기 →</button>
+          onClick={() => selectRun("")}>새 모델 학습 →</button>
       </div>
       {run && <div className="pipeline-context-facts">
         <div><span>실행 상태</span><strong>{
@@ -663,7 +663,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           {modelRevisionId && <button type="button" className="secondary"
             aria-controls="pipeline-model-try" aria-expanded={showModelUsage}
             onClick={() => { setModelUsageVisited(true); setShowModelUsage(value => !value); }}>
-            {showModelUsage ? "모델 사용 접기" : "학습한 모델 사용하기 →"}
+            {showModelUsage ? "모델 적용 접기" : "학습 모델 적용 →"}
           </button>}
           <button type="button" className="secondary" disabled={exampleBusy}
             onClick={() => selectRun("")}>새 모델 학습</button>
@@ -705,15 +705,15 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <p>{runLoadError}</p>
           <div className="pipeline-actions">
             <button type="button" className="secondary" onClick={() =>
-              setRunReload(n => n + 1)}>이 분석 다시 조회하기</button>
+              setRunReload(n => n + 1)}>이 분석 다시 조회</button>
             <button type="button" className="secondary" disabled={exampleBusy} onClick={() => selectRun("")}>
-              새 분석 준비하기 →
+              새 분석 준비 →
             </button>
           </div>
         </>}
         {runId && !runLoadError && <button type="button" className="secondary"
           disabled={exampleBusy} onClick={() => selectRun("")}>
-          새 모델 학습하기 →
+          새 모델 학습 →
         </button>}
         {!runId && <p>위에서 Dataset을 선택하고 입력 구조를 확인한 뒤 명시적으로 실행하거나,
           아래의 이전 학습 결과를 열어 보세요.</p>}
@@ -774,7 +774,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <p>Test 데이터에서 판정 기준을 넘은 관측치입니다. 하나를 선택하면 실제 Feature 값을 확인할 수 있습니다.</p>
           <div className="pipeline-actions">
             <button type="button" className="secondary" onClick={() =>
-              onNavigate("understanding", run.dataset_id)}>분석에 사용한 데이터 살펴보기 →</button>
+              onNavigate("understanding", run.dataset_id)}>분석 데이터 보기 →</button>
           </div>
           {candidateScoreRange && <div className="pipeline-next-step" role="status">
             <strong>선택한 점수 범위: {candidateScoreRange.lower.toPrecision(4)} ~ {candidateScoreRange.upper.toPrecision(4)}</strong>
@@ -789,7 +789,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
             <button type="button" className="secondary" onClick={() => {
               setCandidateError("");
               setCandidateReload(current => current + 1);
-            }}>후보 다시 조회하기</button>
+            }}>후보 다시 조회</button>
           </div>}
           {!rows && !candidateError && <p role="status">
             완료된 Run의 후보를 불러오는 중입니다.

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { formatError, jsonPost, request, submitJob } from "./api";
+import { jsonPost, request, submitJob } from "./api";
 import type { Dataset, Job, Snapshot } from "./types";
 
 /** Iceberg 조회·연결과 선택 Dataset 적재를 독립 상태로 관리한다. */
@@ -7,7 +7,7 @@ export function useIcebergConnector({
   selected, onError, withFeedback, onConnected, onImported,
 }: {
   selected: string;
-  onError: (message: string) => void;
+  onError: (cause: unknown) => void;
   withFeedback: (action: () => Promise<void>) => Promise<void>;
   onConnected: (dataset: Dataset, success: string, stale: string) => Promise<void>;
   onImported: (job: Job, message: string) => Promise<void>;
@@ -28,7 +28,7 @@ export function useIcebergConnector({
     if (!existingTableName.trim()) return;
     const version = ++snapshotRequestVersion.current;
     setSnapshotsLoading(true);
-    onError("");
+    onError(null);
     try {
       const items = await request<Snapshot[]>(
         `/api/iceberg/${encodeURIComponent(existingTableName)}/snapshots`);
@@ -38,7 +38,7 @@ export function useIcebergConnector({
     } catch (cause) {
       if (version !== snapshotRequestVersion.current) return;
       setSnapshots([]); setSnapshotId("");
-      onError(formatError(cause));
+      onError(cause);
     } finally {
       if (version === snapshotRequestVersion.current) setSnapshotsLoading(false);
     }

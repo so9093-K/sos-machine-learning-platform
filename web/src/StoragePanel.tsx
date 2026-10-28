@@ -66,9 +66,9 @@ export function StoragePanel() {
     return total;
   }, {} as Record<string, number>);
 
-  return <section className="panel" aria-label="저장소 상태">
+  return <section className="panel storage-panel" aria-label="저장소 상태">
     <div className="panel-head">
-      <div><h3>Storage Health</h3>
+      <div><h2>저장소 객체·보존 상태</h2>
         <p>객체 참조·보존 상태를 진단합니다. 이 화면과 API는 객체를 삭제하지 않습니다.</p>
       </div>
       <button className="secondary" disabled={loading} onClick={() => void inspect()}>
@@ -78,7 +78,7 @@ export function StoragePanel() {
     {error && <p className="job-error" role="alert">검사 실패 · {error} · 삭제는 수행되지 않았습니다.{pages.length > 0 ? " 아래 결과는 마지막 성공 시점의 기록이며 현재 상태가 아닙니다." : ""}</p>}
     {loading && <p role="status">저장소 상태를 확인하고 있습니다.</p>}
     {policy && <>
-      <h4>적용 중인 보존 정책</h4>
+      <h3>적용 중인 보존 정책</h3>
       <p className="hint">환경 설정을 변경하면 다음 실행부터 반영됩니다. 안전 검증 조건은 해제할 수 없습니다.</p>
       <div className="cards">
         <div className="stat"><span>자동 삭제</span><strong>비활성화</strong></div>
@@ -101,7 +101,7 @@ export function StoragePanel() {
           이 화면에서는 설정을 변경하거나 삭제를 실행할 수 없습니다.</p>
       </details>
     </>}
-    <h4>객체 대조 · 조회한 페이지 기준</h4>
+    <h3>객체 대조 · 조회한 페이지 기준</h3>
     {current && <p className="hint" role="status">마지막 성공 확인: {new Date(current.inspected_at).toLocaleString("ko-KR")} ·
       {pages.length}개 페이지의 부분 결과입니다. 검토 후보는 삭제 대상이 아닙니다.</p>}
     <div className="cards">
@@ -124,7 +124,7 @@ export function StoragePanel() {
     {cursor && <button className="secondary" disabled={loading} onClick={() => void inspect(cursor)}>
       다음 객체 페이지 확인 →
     </button>}
-    <div className="panel-head"><div><h4>Iceberg Snapshot 참조</h4>
+    <div className="panel-head"><div><h3>Iceberg Snapshot 참조</h3>
       <p>Snapshot을 읽을 수 있는지와 플랫폼 보존 Tag가 확인됐는지를 구별합니다.</p></div>
       <button className="secondary" disabled={loading} onClick={() => void inspectSnapshots()}>
         Snapshot 검사

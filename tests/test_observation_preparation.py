@@ -99,9 +99,9 @@ def test_preparation_must_be_standalone_transform_spec():
 
 def test_no_ephemeral_uuid_from_preview_or_processing():
     spec = Transform(steps=[], observation_id_column="observation_uuid")
-    with pytest.raises(InvalidRequestError, match="published Transform Job"):
+    with pytest.raises(InvalidRequestError, match="완료된 변환 Job"):
         bounded_feature_preview(_frame(), spec)
-    with pytest.raises(InvalidRequestError, match="published Transform Job"):
+    with pytest.raises(InvalidRequestError, match="완료된 변환 Job"):
         transform(_frame(), spec)
 
 

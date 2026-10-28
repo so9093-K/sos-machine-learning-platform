@@ -176,7 +176,7 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
         """권한을 확인한 운영자에게만 정제된 원인 유형·실행 단계를 제공한다."""
         item = store.get_job(job_id)
         if item is None:
-            raise HTTPException(status_code=404, detail="Job not found")
+            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         return {
             "job_id": item["id"],
             "request_id": item.get("request_id"),

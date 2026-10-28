@@ -3,17 +3,19 @@ import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 import type {
-  MLTrainingJobSummary, MLScoringJobSummary, MLPolicyJobSummary,
+  Dataset, MLTrainingJobSummary, MLScoringJobSummary, MLPolicyJobSummary,
   MLEvaluationJobSummary, MLExplanationJobSummary,
 } from "./types";
-import { jobStatusLabel } from "./display-format";
+import { formatRecordedAt, jobStatusLabel } from "./display-format";
 
 type Kind = "training" | "scoring" | "policy" | "evaluation" | "explanation";
 type JobLike = {
   id: string;
   status: string;
   created_at: string;
+  dataset_id?: string | null;
   result?: object | null;
+  error?: string | null;
   error_code?: string | null;
   cancel_requested?: boolean;
 };
@@ -21,19 +23,22 @@ const operations: Record<Kind, {
   label: string; tab: WorkspaceTab; resource: MLResourceKind; field: string; endpoint: string;
 }> = {
   training: { label: "모델 학습", tab: "training", resource: "model", field: "model_revision_id", endpoint: "/api/ml/train/jobs" },
-  scoring: { label: "점수화", tab: "scoring", resource: "scoring", field: "scoring_result_id", endpoint: "/api/ml/scoring/jobs" },
+  scoring: { label: "점수 계산", tab: "scoring", resource: "scoring", field: "scoring_result_id", endpoint: "/api/ml/scoring/jobs" },
   policy: { label: "판정 정책", tab: "policies", resource: "policy", field: "policy_revision_id", endpoint: "/api/ml/policies/jobs" },
   evaluation: { label: "평가", tab: "evaluations", resource: "evaluation", field: "evaluation_revision_id", endpoint: "/api/ml/evaluations/jobs" },
   explanation: { label: "설명", tab: "explanations", resource: "explanation", field: "explanation_result_id", endpoint: "/api/ml/explanations/jobs" },
 };
 type Activity = { id: string; kind: Kind; status: string; created: string;
-  resultId: string | null; error: string | null; cancelRequested: boolean };
+  datasetId: string | null; resultId: string | null; error: string | null; errorCode: string | null;
+  cancelRequested: boolean };
 function toActivity(job: JobLike, kind: Kind): Activity {
   const result = job.result as Record<string, unknown> | null | undefined;
   const value = result?.[operations[kind].field];
   return { id: job.id, kind, status: job.status, created: job.created_at,
+    datasetId: job.dataset_id ?? null,
     resultId: typeof value === "string" ? value : null,
-    error: job.error_code ?? null, cancelRequested: job.cancel_requested === true };
+    error: job.error ?? null, errorCode: job.error_code ?? null,
+    cancelRequested: job.cancel_requested === true };
 }
 
 type JobDetail = {
@@ -90,7 +95,7 @@ function ActivityJobDetails({ job, canCancel, onChanged }: {
       <button className="secondary" onClick={() => void loadDetails()}>다시 조회</button></div>}
     {notice && <p role="status">{notice}</p>}
     {detail && <>
-      <p className="hint">마지막 상세 조회 상태: {detail.status}
+      <p className="hint">마지막 상세 조회 상태: {jobStatusLabel(detail.status)}
         {detail.cancel_requested ? " · 취소 요청 중" : ""}
         {detail.error_code ? ` · 오류 코드 ${detail.error_code}` : ""}</p>
       {detail.error && <p role="alert">{detail.error}</p>}
@@ -110,9 +115,11 @@ function ActivityJobDetails({ job, canCancel, onChanged }: {
 }
 
 /** 조회된 Job 페이지에 있는 활동만 보여준다. 전체 Job 수나 완료 진행률을 추정하지 않는다. */
-export function MLActivityPanel({ compact = false, canCancel = false, onNavigate, onOpenResource, onViewAll }: {
+export function MLActivityPanel({ compact = false, canCancel = false, datasets = [], onNavigate,
+  onOpenResource, onViewAll }: {
   compact?: boolean;
   canCancel?: boolean;
+  datasets?: Dataset[];
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onViewAll?: () => void;
@@ -145,7 +152,7 @@ export function MLActivityPanel({ compact = false, canCancel = false, onNavigate
       <h3 id={compact ? "recent-ml-heading" : "ml-activity-heading"}>
         {compact ? "최근 ML 실행" : "ML 실행 이력"}
       </h3>
-      <p>학습·점수화·정책·평가·설명 Job의 조회된 페이지 범위입니다.</p>
+      <p>학습·점수 계산·정책·평가·설명 Job의 조회된 페이지 범위입니다.</p>
     </div>
       {compact
         ? <button className="secondary" onClick={onViewAll ?? (() => onNavigate("ml-jobs"))}>작업 이력 →</button>
@@ -164,14 +171,16 @@ export function MLActivityPanel({ compact = false, canCancel = false, onNavigate
     <div className="ml-activity-list">
       {items.map(job => <article className="ml-activity-row" key={job.kind + ":" + job.id}>
         <div className="ml-activity-title">
-          <strong>{operations[job.kind].label}</strong>
-          <span className={`status ${job.status.toLowerCase()}`}>
-            {jobStatusLabel(job.status)}{job.cancelRequested ? " · 취소 요청 중" : ""}
-          </span>
+          <strong>{operations[job.kind].label}
+            {job.datasetId && <span> · {datasets.find(d => d.id === job.datasetId)?.name ??
+              "Dataset " + job.datasetId.slice(0, 8)}</span>}</strong>
+          <span className="ml-activity-meta" title={"Job " + job.id}>
+            {formatRecordedAt(job.created)}</span>
+          {job.status === "Failed" && <span className="ml-activity-error" title={job.errorCode ?? undefined}>
+            {job.error ?? job.errorCode ?? "작업 실패"}</span>}
         </div>
-        <span className="ml-activity-meta">
-          {new Date(job.created).toLocaleString("ko-KR")} · Job {job.id.slice(0, 12)}
-          {job.error ? ` · 오류 코드 ${job.error}` : ""}
+        <span className={`status ${job.status.toLowerCase()}`}>
+          {jobStatusLabel(job.status)}{job.cancelRequested ? " · 취소 요청 중" : ""}
         </span>
         <div className="ml-activity-actions">
           {job.resultId && <button className="secondary"
