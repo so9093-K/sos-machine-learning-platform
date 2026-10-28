@@ -138,13 +138,12 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     <header className="model-lab-use-heading">
       <div>
         <span className="eyebrow">활동 이상 탐지 · 모델 활용</span>
-        <h2 id="model-lab-use-heading">준비된 모델로 데이터 분석하기</h2>
-        <p>모델을 Dataset에 적용해 점수 분포와 주요 관측값을 확인합니다.
-          한 건의 수치 입력으로 점수를 계산하는 기능도 별도로 사용할 수 있습니다.</p>
+        <h2 id="model-lab-use-heading">준비된 모델 사용하기</h2>
+        <p>한 건의 입력을 시험하거나 Dataset 전체의 점수 분포와 관측값을 조사합니다.</p>
       </div>
     </header>
     <details className="model-lab-model-options">
-      <summary>사용 모델 변경 · 모델 목록 관리</summary>
+      <summary>모델 그룹 관리 · 목록 새로고침</summary>
       {groupError && <p role="status" className="hint">
         다른 모델 그룹을 불러오지 못했습니다. 현재 선택한 모델 그룹의 사용 가능 여부는 별도로 확인합니다.
         <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}>
@@ -204,7 +203,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         <p>학습 시각 {new Date(selected.revision.created_at).toLocaleString("ko-KR")}
           · 입력 Feature {selected.revision.features.length}개</p></div>
       <details className="model-lab-version-picker">
-        <summary>사용할 모델 선택</summary>
+        <summary>다른 모델 버전 선택</summary>
         <div className="model-lab-model-list">
           {models.map(({ revision, version }) => <button key={revision.id} type="button"
             className="surface-button model-lab-model-choice" aria-pressed={selectedModelId === revision.id}
@@ -235,12 +234,12 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           onClick={() => onSelectModel(models[0].revision.id)}>모델 사용하기 →</button>
       </div>}
     {selected && <>
-      <p className="hint model-lab-ready-hint">사용할 모델이 준비됐습니다. Dataset 분석은 명시적으로 실행하며, 모델 선택만으로 작업을 시작하지 않습니다.</p>
+      <p className="hint model-lab-ready-hint">모델이 준비됐습니다. 아래에서 시험할 입력 방식만 선택하세요. 모델 선택만으로 계산을 시작하지 않습니다.</p>
       <div className="model-lab-usage-tabs" role="group" aria-label="모델 적용 방식">
         <button type="button" className="secondary" aria-pressed={usage === "playground"}
-          onClick={() => setUsage("playground")}>단일 입력 점수 계산</button>
+          onClick={() => setUsage("playground")}>한 건 시험하기</button>
         <button type="button" className="secondary" aria-pressed={usage === "dataset"}
-          onClick={openDataset}>Dataset 분석</button>
+          onClick={openDataset}>전체 데이터 분석</button>
       </div>
       <div hidden={usage !== "playground"}>
         <ModelLabPlayground key={selected.revision.id} model={selected.revision}
