@@ -76,7 +76,7 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
 
 export function PipelineCandidateInvestigation({
   candidate, scoringResultId, modelRevisionId, canRun, canCancel, onOpenResource,
-  observationMode = false, scoreOrder, isDefaultObservation = false,
+  observationMode = false, scoreOrder, isDefaultObservation = false, onTryObservation,
 }: {
   candidate: Candidate; scoringResultId: string; modelRevisionId: string | null;
   scoreOrder?: number;
@@ -84,10 +84,14 @@ export function PipelineCandidateInvestigation({
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   observationMode?: boolean;
   isDefaultObservation?: boolean;
+  onTryObservation?: (
+    features: Record<string, number | null>, rowIndex: number, score: number,
+  ) => string | null;
 }) {
   const subject = observationMode ? "관측치" : "후보";
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [modelError, setModelError] = useState("");
+  const [experimentError, setExperimentError] = useState("");
   const [modelReload, setModelReload] = useState(0);
   const [job, setJob] = useState<MLExplanationJob | null>(null);
   const [result, setResult] = useState<ExplanationResult | null>(null);
@@ -248,6 +252,14 @@ export function PipelineCandidateInvestigation({
         </dl>}
     {!observationMode && <p className="hint">활동 Feature 관측치는 원시 이벤트 한 건이라는 뜻이 아니며,
       관측 시각은 고유 ID가 아닙니다. UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다.</p>}
+    {observationMode && onTryObservation && <div className="observation-try-experiment">
+      <p>이 관측값의 Feature를 가져와 숫자를 바꿔보세요. 원래 분석 결과는 그대로 유지됩니다.</p>
+      <button type="button" className="secondary" onClick={() => {
+        setExperimentError(onTryObservation(candidate.features, candidate.row_index,
+          candidate.anomaly_score) ?? "");
+      }}>이 관측값으로 실험하기 →</button>
+      {experimentError && <p role="alert">{experimentError}</p>}
+    </div>}
     {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
       onOpenResource={onOpenResource} />}
