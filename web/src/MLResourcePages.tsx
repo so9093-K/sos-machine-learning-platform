@@ -188,9 +188,8 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
       const r = data as EvaluationRevision;
       return <>
         <dl className="ml-resource-fields">
-          {r.scoring_result_id ? <Field label="Scoring Result"><button className="secondary"
-            onClick={() => onOpenResource("scoring", r.scoring_result_id!)}>{r.scoring_result_id} ↗</button></Field>
-            : <Field label="단일 입력 Job">{r.playground_job_id ?? "출처 없음"}</Field>}
+          <Field label="Scoring Result"><button className="secondary"
+            onClick={() => onOpenResource("scoring", r.scoring_result_id)}>{r.scoring_result_id} ↗</button></Field>
           <Field label="적용 정책">{r.policy_revision_id
             ? <button className="secondary" onClick={() => onOpenResource("policy", r.policy_revision_id!)}>
               {r.policy_revision_id} ↗</button> : "없음 (순위 평가만)"}</Field>
@@ -207,8 +206,9 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
       const r = data as ExplanationResult;
       return <>
         <dl className="ml-resource-fields">
-          <Field label="Scoring Result"><button className="secondary"
-            onClick={() => onOpenResource("scoring", r.scoring_result_id)}>{r.scoring_result_id} ↗</button></Field>
+          {r.scoring_result_id ? <Field label="Scoring Result"><button className="secondary"
+            onClick={() => onOpenResource("scoring", r.scoring_result_id!)}>{r.scoring_result_id} ↗</button></Field>
+            : <Field label="단일 입력 Job">{r.playground_job_id ?? "출처 없음"}</Field>}
           <Field label="모델 버전"><button className="secondary"
             onClick={() => onOpenResource("model", r.model_revision_id)}>{r.model_revision_id} ↗</button></Field>
           <Field label="방법">{r.method}</Field>
