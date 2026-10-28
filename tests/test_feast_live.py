@@ -28,6 +28,12 @@ def test_registered_service_reused_for_historical_point_in_time(tmp_path, monkey
     pl.DataFrame({
         "host_id": ["a", "a", "a", "a"],
         "event_timestamp": [utc(8, 30), utc(9, 30), utc(10, 30), utc(11, 30)],
+        "sos_observation_id": [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002",
+            "00000000-0000-4000-8000-000000000003",
+            "00000000-0000-4000-8000-000000000004",
+        ],
     }).write_parquet(events)
     source_dataset = {
         "id": "source", "kind": "file", "location": str(source), "version": "v1"
@@ -71,3 +77,9 @@ def test_registered_service_reused_for_historical_point_in_time(tmp_path, monkey
     records = pl.read_parquet(output).sort("event_timestamp")
     assert records["file_changes_1h"].to_list()[1:] == [10.0, 20.0, 30.0]
     assert records["file_changes_1h"].is_null().to_list()[0]
+    assert records["sos_observation_id"].to_list() == [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "00000000-0000-4000-8000-000000000003",
+        "00000000-0000-4000-8000-000000000004",
+    ]

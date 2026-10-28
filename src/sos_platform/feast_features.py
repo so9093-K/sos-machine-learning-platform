@@ -196,7 +196,10 @@ def retrieve_features(
             raise ValueError("Entity key dtype differs from registered Feature Source")
         # DuckDB .to_df() is materialized in memory: fail instead of sampling silently.
         limit = 100_000
-        rows = source.select([key, request.timestamp_column]).head(limit + 1).collect()
+        selected_columns = [key, request.timestamp_column]
+        if "sos_observation_id" in schema:
+            selected_columns.append("sos_observation_id")
+        rows = source.select(selected_columns).head(limit + 1).collect()
         if rows.height == 0:
             raise ValueError("Entity Dataset is empty")
         if rows.height > limit:
@@ -215,6 +218,8 @@ def retrieve_features(
         features=service,
     ).to_df()
     required = [key, "event_timestamp", *registered["feature_names"]]
+    if "sos_observation_id" in entity_rows.columns:
+        required.append("sos_observation_id")
     if any(name not in output.columns for name in required):
         raise ValueError("Feast returned a Feature schema different from registration")
     if len(output) != len(entity_rows):

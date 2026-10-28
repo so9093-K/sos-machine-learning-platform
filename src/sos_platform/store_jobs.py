@@ -436,11 +436,15 @@ class JobStoreMixin:
                     version=publish["version"],
                     created_at=now(),
                     owner_actor=row["owner_actor"],
+                    parse_options=(
+                        json.dumps({"feature_retrieval_job_id": job_id})
+                        if row["kind"] == "feature_retrieve" else None
+                    ),
                 )
                 db.execute(
                     text(
-                        "INSERT INTO datasets(id,name,kind,location,version,created_at,owner_actor) "
-                        "VALUES(:id,:name,:kind,:location,:version,:created_at,:owner_actor)"
+                        "INSERT INTO datasets(id,name,kind,location,version,created_at,owner_actor,parse_options) "
+                        "VALUES(:id,:name,:kind,:location,:version,:created_at,:owner_actor,:parse_options)"
                     ),
                     item,
                 )
@@ -457,14 +461,24 @@ class JobStoreMixin:
                 runtime = dict(model_publish["runtime"])
                 # 조회 결과 Dataset의 원본 등록·조회 Job은 SOS가 이미 보존한다.
                 # MLflow/Feast Registry를 복제하지 않고 Model Revision에 불변 출처만 연결한다.
-                feature_origin = db.execute(
-                    text(
-                        "SELECT id,result FROM jobs WHERE kind='feature_retrieve' "
-                        "AND status='Succeeded' AND result::jsonb ->> 'dataset_id'=:dataset_id "
-                        "ORDER BY created_at DESC LIMIT 1"
-                    ),
-                    {"dataset_id": row["dataset_id"]},
-                ).mappings().first()
+                origin_options = db.execute(
+                    text("SELECT parse_options FROM datasets WHERE id=:id"),
+                    {"id": row["dataset_id"]},
+                ).scalar_one_or_none()
+                origin_id = (
+                    json.loads(origin_options).get("feature_retrieval_job_id")
+                    if origin_options else None
+                )
+                feature_origin = (
+                    db.execute(
+                        text(
+                            "SELECT id,result FROM jobs "
+                            "WHERE id=:id AND kind='feature_retrieve' AND status='Succeeded'"
+                        ),
+                        {"id": origin_id},
+                    ).mappings().first()
+                    if origin_id else None
+                )
                 if feature_origin:
                     provenance = json.loads(feature_origin["result"])
                     runtime["feature_retrieval"] = {
