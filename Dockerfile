@@ -24,11 +24,12 @@ COPY src/ ./src/
 COPY --from=scalar-assets /build/src/sos_platform/static/scalar.js ./src/sos_platform/static/scalar.js
 COPY migrations/ ./migrations/
 COPY alembic.ini ./
-RUN uv sync --locked --no-dev --no-editable --python /usr/local/bin/python
-# Feast는 등록 Feature 조회를 수행하는 전문 Worker 이미지에만 설치한다.
+# API와 Feast Worker는 공통 lock에서 선택하는 의존성 그룹만 다르다.
 ARG SOS_WITH_FEAST=0
 RUN if [ "$SOS_WITH_FEAST" = "1" ]; then \
-      uv pip install --python /app/.venv/bin/python "feast[duckdb]==0.67.0"; \
+      uv sync --locked --no-dev --no-editable --group feast --python /usr/local/bin/python; \
+    else \
+      uv sync --locked --no-dev --no-editable --python /usr/local/bin/python; \
     fi
 RUN groupadd --gid 10001 sos && useradd --uid 10001 --gid sos --create-home sos \
     && mkdir -p /var/lib/sos && chown sos:sos /var/lib/sos
