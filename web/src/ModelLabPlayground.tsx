@@ -259,6 +259,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const comparisonNames = reference
     ? (highlightedChanges.length > 0 ? highlightedChanges : model.features).slice(0, 3) : [];
   const newJobAfterImport = Boolean(importedSource && job && job.id !== importedAfterJobId);
+  const showCurrentJob = !importedSource || newJobAfterImport;
   const inputGroups = groupActivityFeatures(
     Object.fromEntries(model.features.map(name => [name, null])));
   const explanationAvailable = referenceMedians.length === model.features.length &&
@@ -407,10 +408,10 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     <h4>계산과 결과</h4>
     <p className="model-lab-input-state" role="status">{running
       ? "제출한 입력을 모델에서 계산하는 중입니다."
-      : matchesCompletedInput
-        ? importedSource && !newJobAfterImport
-          ? "관측값을 가져왔습니다. 같은 입력의 이전 실행 기록이 있지만 이 관측값으로 새로 계산하지는 않았습니다."
-          : "현재 입력값은 최근 완료된 계산에 사용한 값과 일치합니다."
+      : importedSource && !newJobAfterImport
+        ? "Dataset 관측값을 가져왔습니다. 이 입력에 대한 새로운 점수 계산은 아직 요청하지 않았습니다."
+        : matchesCompletedInput
+          ? "현재 입력값은 최근 완료된 계산에 사용한 값과 일치합니다."
         : job?.status === "Succeeded" && lastScore !== null
           ? "입력값이 마지막 계산 이후 변경됐습니다. 아래 점수는 이전 입력의 결과이며 현재 입력은 아직 계산하지 않았습니다."
           : job?.status === "Failed" || job?.status === "Cancelled"
@@ -428,7 +429,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       {job && !TERMINAL.has(job.status) && canCancel &&
         <button type="button" className="secondary" onClick={() => void cancel()}>취소 요청</button>}
     </div>
-    {job && <div className="model-lab-playground-result" aria-live="polite">
+    {job && showCurrentJob && <div className="model-lab-playground-result" aria-live="polite">
       <strong>점수 계산 · {({ Queued: "대기 중", Running: "실행 중", Succeeded: "완료",
         Failed: "실패", Cancelled: "취소됨" } as Record<string, string>)[job.status] ?? job.status}</strong>
       {job.status === "Succeeded" && lastScore !== null &&
@@ -452,7 +453,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
           <button type="button" className="secondary" onClick={() => setMode("edit")}>입력값 바꿔보기 →</button>
         </div>}
     </div>}
-    {job?.status === "Succeeded" && lastScore !== null && comparisonJob &&
+    {showCurrentJob && job?.status === "Succeeded" && lastScore !== null && comparisonJob &&
       comparedFeatures.length > 0 && <section className="model-lab-run-comparison"
         aria-label="이전 실행과 이번 실행 비교">
         <h5>두 완료 계산의 입력·점수 차이</h5>
@@ -473,7 +474,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
           </tr>)}</tbody>
         </table></div>
       </section>}
-    {job?.status === "Succeeded" && (explanationAvailable
+    {showCurrentJob && job?.status === "Succeeded" && (explanationAvailable
       ? <details className="model-lab-explanation-toggle">
           <summary>이 입력 설명하기 · SHAP / Feature 치환 민감도</summary>
           <PlaygroundExplanations key={job.id} source={job} canRun={canRun}
