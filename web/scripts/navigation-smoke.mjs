@@ -504,6 +504,19 @@ try {
   assert.match(zeroShap, /이 입력의 SHAP 기여도는 모두 0입니다/);
   assert.doesNotMatch(zeroShap, /<canvas/);
   assert.match(zeroShap, /전체 SHAP 값과 계산 근거/);
+  assert.match(zeroShap, /모든 실제 입력 Feature가 학습 참조 중앙값과 일치합니다/);
+  const zeroShapWithDifferentInput = renderToStaticMarkup(React.createElement(
+    ShapContributionChart, { result: { id: "zero-but-different", output: {
+      method: "permutation_shap_median_v1", baseline_score: 0.3279, score: 0.3279,
+      reconstructed_score: 0.3279, additivity_residual: 0,
+      additive_attribution: true, model_output: "negative_sklearn_score_samples",
+      baseline_row_count: 1, feature_contributions: [{
+        feature: "outbound_traffic", shap_value: 0, actual_value: 20,
+        reference_median: 1, missing_imputed: false,
+      }],
+    } } }));
+  assert.match(zeroShapWithDifferentInput, /기여도가 모두 0이어도 입력 Feature가 학습 중앙값과 같다는 뜻은 아닙니다/);
+  assert.doesNotMatch(zeroShapWithDifferentInput, /모든 실제 입력 Feature가 학습 참조 중앙값과 일치합니다/);
   const unverifiedShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
       method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
