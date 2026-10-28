@@ -750,7 +750,8 @@ try {
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
   const { ModelLabPlayground, exampleValues, playgroundInputMatchesResult,
-    playgroundLatestSuccessfulScore, playgroundChangedFeatures, observationInputForPlayground } =
+    playgroundLatestSuccessfulScore, playgroundChangedFeatures,
+    observationInputForPlayground, playgroundJobVisibleAfterImport } =
     await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
   // 성공 -> 실패/취소 -> 성공 경로에서도 이전 성공 점수를 잃지 않는다.
   assert.equal(playgroundLatestSuccessfulScore(0.41,
@@ -763,6 +764,12 @@ try {
     { status: "Succeeded", result: { anomaly_score: 0.52 } }), 0.52);
   assert.equal(playgroundLatestSuccessfulScore(0.41,
     { status: "Succeeded", result: { anomaly_score: Number.NaN } }), 0.41);
+  const imported = { id: "source-1", modelRevisionId: "model-1", scoringResultId: "sc-1",
+    rowIndex: 12, originalScore: 0.7, fields: { a: "2" } };
+  assert.equal(playgroundJobVisibleAfterImport(imported, "job-old", "job-old"), false);
+  assert.equal(playgroundJobVisibleAfterImport(imported, null, null), false);
+  assert.equal(playgroundJobVisibleAfterImport(imported, "job-old", "job-new"), true);
+  assert.equal(playgroundJobVisibleAfterImport(null, "job-old", "job-old"), true);
   assert.deepEqual(playgroundChangedFeatures(
     { a: "1e3", b: "0.25", c: "5" }, { a: "1000", b: "0.25", c: "4" },
     ["a", "b", "c"]), ["c"]);
