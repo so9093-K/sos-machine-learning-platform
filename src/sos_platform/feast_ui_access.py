@@ -14,8 +14,14 @@ def main() -> None:
     """Registry 스키마 준비 및 기존·향후 테이블의 UI 읽기 권한을 적용한다."""
     from sos_platform.feast_features import _feature_store
 
-    # 관리 권한으로 단 한 번 Registry를 준비한다. 이미 사용 중인 Registry는 변경하지 않는다.
-    _feature_store().registry
+    # SQL Registry는 최초 생성 시 메타데이터 행을 프로젝트 목록보다 먼저 만들 수 있다.
+    # UI는 그 간극을 읽기 전용 계정으로 복구할 수 없으므로 관리 Job에서 완결한다.
+    from feast.project import Project
+
+    store = _feature_store()
+    registry = store.registry
+    if not any(project.name == store.project for project in registry.list_projects(allow_cache=False)):
+        registry.apply_project(Project(name=store.project))
 
     registry_url = os.environ["SOS_FEAST_REGISTRY_URL"]
     password = os.environ["SOS_FEAST_UI_DB_PASSWORD"]
