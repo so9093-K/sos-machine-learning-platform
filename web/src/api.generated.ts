@@ -367,6 +367,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/features/retrieval/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 등록 Feast Feature Service의 역사적 조회 Dataset 게시 */
+        post: operations["create_feature_retrieval_api_features_retrieval_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/features/services/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 재사용 가능한 Feast Feature Service 등록 */
+        post: operations["create_feature_service_api_features_services_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/features/services/registrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내 Feature Service 등록 Job 이력 조회
+         * @description SOS Job 이력을 반환합니다. Feast Registry의 현재 사용 가능 상태를 대체하지 않습니다.
+         */
+        get: operations["list_feature_registrations_api_features_services_registrations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/features/services/{registration_job_id}/retirement/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Feature Service 등록 폐기 및 안전한 Registry 정리 */
+        post: operations["retire_feature_registration_api_features_services__registration_job_id__retirement_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1906,6 +1977,25 @@ export interface components {
              */
             metric: "count" | "null_count" | "mean" | "min" | "max";
         };
+        /**
+         * FeatureDefinitionRequest
+         * @description 안정적인 Source 판본에 고정되는 Feast Feature Service 정의.
+         */
+        FeatureDefinitionRequest: {
+            /** Entity Column */
+            entity_column: string;
+            /** Feature Dataset Id */
+            feature_dataset_id: string;
+            /** Features */
+            features: string[];
+            /** Timestamp Column */
+            timestamp_column: string;
+            /**
+             * Ttl Seconds
+             * @default 2592000
+             */
+            ttl_seconds: number;
+        };
         /** FeaturePreview */
         FeaturePreview: {
             /** Dataset Id */
@@ -1926,6 +2016,80 @@ export interface components {
             schema: {
                 [key: string]: string;
             };
+        };
+        /**
+         * FeatureRegistrationPageOut
+         * @description Feast Feature Service 등록 Job의 재사용 가능한 키셋 목록.
+         */
+        FeatureRegistrationPageOut: {
+            /** Items */
+            items: components["schemas"]["FeatureRegistrationSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * FeatureRegistrationSummaryOut
+         * @description 등록 Job의 실행 상태와 현재 SOS 폐기 상태를 구별한다.
+         */
+        FeatureRegistrationSummaryOut: {
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string | null;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "profile" | "transform" | "iceberg_import" | "ml_playground" | "feature_register" | "feature_retrieve";
+            latest_attempt: components["schemas"]["AttemptOut"] | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Retired
+             * @default false
+             */
+            retired: boolean;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /**
+         * FeatureRetrievalRequest
+         * @description 기존 등록 Feature Service를 재사용하는 Entity 시점 조회 요청.
+         */
+        FeatureRetrievalRequest: {
+            /** Entity Dataset Id */
+            entity_dataset_id: string;
+            /** Registration Job Id */
+            registration_job_id: string;
+            /** Timestamp Column */
+            timestamp_column: string;
         };
         /**
          * HealthOut
@@ -2056,7 +2220,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import" | "ml_playground";
+            kind: "profile" | "transform" | "iceberg_import" | "ml_playground" | "feature_register" | "feature_retrieve" | "feature_retire";
             /** Request Id */
             request_id?: string | null;
             /** Result */
@@ -2112,7 +2276,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import" | "ml_playground";
+            kind: "profile" | "transform" | "iceberg_import" | "ml_playground" | "feature_register" | "feature_retrieve";
             latest_attempt: components["schemas"]["AttemptOut"] | null;
             /** Request Id */
             request_id?: string | null;
@@ -4254,6 +4418,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeaturePreviewOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_feature_retrieval_api_features_retrieval_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureRetrievalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_feature_service_api_features_services_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureDefinitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_feature_registrations_api_features_services_registrations_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureRegistrationPageOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    retire_feature_registration_api_features_services__registration_job_id__retirement_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                registration_job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Structured API error */

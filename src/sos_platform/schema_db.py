@@ -31,6 +31,8 @@ datasets = Table(
     Column("row_count", BigInteger),
     Column("created_at", Text, nullable=False),
     Column("owner_actor", Text),
+    Column("source_job_id", String(36), ForeignKey("jobs.id"), nullable=True),
+    Index("ix_datasets_source_job", "source_job_id"),
     Index("ix_datasets_created_at_id", "created_at", "id"),
     Index("ix_datasets_owner_created_at_id", "owner_actor", "created_at", "id"),
 )

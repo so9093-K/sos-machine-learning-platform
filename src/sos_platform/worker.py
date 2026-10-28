@@ -35,6 +35,7 @@ from .ml_explanation import explain_scored_row
 from .ml_scoring import cleanup_scoring_stage, run_dataset_scoring, scoring_stage_bytes
 from .ml_playground import run_playground_scoring
 from .ml_training import train_dataset
+from .feast_features import register_feature_service, retrieve_features, retire_feature_service, verify_pinned_owner
 from .ml_training_staging import (
     cleanup_training_stage,
     training_stage_bytes,
@@ -128,6 +129,44 @@ def _perform(
                 "input_dataset_version": dataset["version"],
                 **evidence,
             }
+        elif job["kind"] == "feature_register":
+            stage = "processing"
+            verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
+            result = register_feature_service(store, dataset, job["spec"])
+        elif job["kind"] == "feature_retire":
+            stage = "processing"
+            registration = store.get_job(job["spec"]["registration_job_id"])
+            if (
+                registration is None
+                or registration["kind"] != "feature_register"
+                or registration["status"] not in ("Succeeded", "Failed", "Cancelled")
+                or registration["owner_actor"] != job["owner_actor"]
+                or registration["dataset_id"] != dataset["id"]
+            ):
+                raise ValueError("등록 폐기 대상의 상태·소유권이 바뀌었습니다.")
+            verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
+            result = retire_feature_service(store, dataset, registration)
+        elif job["kind"] == "feature_retrieve":
+            stage = "processing"
+            registered_job = store.get_job(job["spec"]["registration_job_id"])
+            entity = store.get_dataset(job["spec"]["entity_dataset_id"])
+            if (
+                registered_job is None
+                or registered_job["kind"] != "feature_register"
+                or registered_job["status"] != "Succeeded"
+                or registered_job["dataset_id"] != dataset["id"]
+                or registered_job["owner_actor"] != job["owner_actor"]
+                or entity is None
+            ):
+                raise ValueError("Registered Feature Service or Entity Dataset is unavailable")
+            # 조회 Job은 등록 행 잠금 아래에서 폐기 접수 전에 승인된다.
+            # 폐기 이후 신규 제출은 Store에서 거부하지만, 그 이전에 Queued였던
+            # 조회는 보존된 Feast 정의로 완료해야 하므로 실행 시점에 재차 거부하지 않는다.
+            verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
+            verify_pinned_owner(entity, job["spec"], "entity_dataset_owner")
+            result = retrieve_features(
+                store, dataset, entity, registered_job["result"], job["spec"], pending
+            )
         elif job["kind"] == "ml_pipeline_preflight":
             stage = "processing"
             if job["spec"]["dataset_version"] != dataset["version"]:
@@ -178,7 +217,10 @@ def _perform(
         outcome = {"result": result}
     except Exception as exc:
         code = (
-            "SOS-ML-INPUT-INVALID"
+            "SOS-FEATURE-INPUT-INVALID"
+            if job["kind"] in ("feature_register", "feature_retrieve", "feature_retire")
+            and isinstance(exc, ValueError)
+            else "SOS-ML-INPUT-INVALID"
             if job["kind"] in ("ml_pipeline_preflight", "ml_train", "ml_score", "ml_playground", "ml_policy", "ml_evaluate", "ml_explain")
             and isinstance(exc, ValueError)
             else "SOS-ICEBERG-UNCERTAIN"

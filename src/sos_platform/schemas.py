@@ -754,7 +754,7 @@ class AttemptOut(BaseModel):
 
 class JobOut(BaseModel):
     id: str
-    kind: Literal["profile", "transform", "iceberg_import", "ml_playground"]
+    kind: Literal["profile", "transform", "iceberg_import", "ml_playground", "feature_register", "feature_retrieve", "feature_retire"]
     dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -807,7 +807,7 @@ class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: Literal["profile", "transform", "iceberg_import", "ml_playground"]
+    kind: Literal["profile", "transform", "iceberg_import", "ml_playground", "feature_register", "feature_retrieve"]
     dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -822,6 +822,19 @@ class JobSummaryOut(BaseModel):
     updated_at: str
     attempt_count: int
     latest_attempt: AttemptOut | None
+
+
+class FeatureRegistrationSummaryOut(JobSummaryOut):
+    """등록 Job의 실행 상태와 현재 SOS 폐기 상태를 구별한다."""
+
+    retired: bool = False
+
+
+class FeatureRegistrationPageOut(BaseModel):
+    """Feast Feature Service 등록 Job의 재사용 가능한 키셋 목록."""
+
+    items: list[FeatureRegistrationSummaryOut]
+    next_cursor: str | None = None
 
 
 class MLExplanationJobSummaryOut(JobSummaryOut):

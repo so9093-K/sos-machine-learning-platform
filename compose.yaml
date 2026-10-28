@@ -78,20 +78,27 @@ services:
   worker:
     logging: *sos-logging
     profiles: [app]
-    image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
-    build: *sos-python-build
+    image: ${SOS_FEAST_WORKER_IMAGE:-sos-platform-feast-worker:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SOS_WITH_FEAST: "1"
     environment:
       <<: *sos-storage-env
       # MLflow는 설정되지 않으면 연결하지 않는다. 자격 증명은 Worker에만 전달한다.
       SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-http://mlflow:5000}
       SOS_MLFLOW_TOKEN: ${SOS_MLFLOW_TOKEN:-}
       SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
+      SOS_FEAST_REGISTRY_URL: postgresql+psycopg2://feast:${SOS_FEAST_DB_PASSWORD:-feast-dev-only}@feast-postgres:5432/sos_feast
+      SOS_FEAST_MAX_ENTITY_ROWS: ${SOS_FEAST_MAX_ENTITY_ROWS:-100000}
     command: ["python", "-m", "sos_platform.worker"]
     volumes:
       - worker_state:/var/lib/sos
     depends_on:
       init:
         condition: service_completed_successfully
+    # Registry 장애가 일반 Data/ML Job Worker 시작을 차단하지 않게 한다.
     stop_grace_period: 35s
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
@@ -186,6 +193,24 @@ services:
       start_period: 10s
       retries: 30
 
+
+  feast-postgres:
+    logging: *sos-logging
+    profiles: [app]
+    image: postgres:17
+    environment:
+      POSTGRES_USER: feast
+      POSTGRES_PASSWORD: ${SOS_FEAST_DB_PASSWORD:-feast-dev-only}
+      POSTGRES_DB: sos_feast
+    volumes:
+      - feast_registry_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feast -d sos_feast"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
 
   dagster-postgres:
     logging: *sos-logging
@@ -288,5 +313,6 @@ volumes:
   api_state:
   worker_state:
   mlflow_data:
+  feast_registry_data:
   dagster_postgres_data:
   dagster_data:

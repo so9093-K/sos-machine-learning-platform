@@ -2,6 +2,35 @@
 
 플랫폼의 공통 개념과 컴포넌트 사이의 의미를 정의한다. **정확한 필드명·타입·기본값은 구현된 코드, 스키마 및 자동 생성된 API 명세**가 원본이며 여기서 복제하지 않는다. 계약은 특정 프레임워크나 서비스 제품의 내부 객체에 종속되지 않는다.
 
+## 등록 Feature 정본과 조회 결과
+
+Feast가 등록 Entity·Feature View·Feature Service와 Historical Retrieval의 정본이다.
+SOS Dataset 판본·Actor 권한·Job/Attempt·실제 게시한 조회 결과는 SOS 정본이다.
+지속적 Entity Key와 Dataset 판본 내부의 `sos_observation_id`는 다르다.
+Feature 정의 등록과 Retrieval은 별개의 Job이다. 성공한 등록 Job은 Feast의
+Service 이름 및 고정 Source 판본을 참조하고, 조회 Job은 등록 Job·Entity 시점 Dataset·
+UTC 시각 컬럼을 결합해 동일 Feature Service를 재사용한다. 조회 시 Registry에
+새 Feature 정의를 게시하지 않는다. 파싱 옵션과 분리된 Dataset `source_job_id`가 불변 조회 Job 출처를 기록하며,
+Entity 시점 Dataset에 `sos_observation_id`가 있으면 조회 결과에도 보존한다.
+조회 결과 Dataset으로 학습한 Model Revision은
+Feature 등록·조회 Job ID, Feature Service·정의 지문과 원본 Dataset 판본을
+불변 Runtime 근거에 연결한다.
+등록 과정은 Feast 외부 커밋과 SOS Job 확정을 별개로 판단한다. 동일 정의 재시도 시
+Registry의 Entity·Feature View·Feature Service와 실제 Source 의미를 대조하고,
+부분 등록은 동일 정의만 재조정한다. 내용 불일치·소실이 있으면 조회를 거부한다.
+폐기는 독립 Job으로 수행하며 동일 등록에 대한 조회·폐기 Job의 접수를
+PostgreSQL 등록 행 잠금으로 직렬화한다. 폐기 접수 이후의 신규 조회는 거부하되,
+그 전에 승인된 Queued 조회는 보호된 Feast 정의로 정상 완료할 수 있다.
+Registry 삭제가 시작된 폐기 Job은 임의로 취소하지 않으며, 외부 삭제 실패 이후에는
+재조정이 완료되기 전까지 신규 조회를 차단한다. 실패한 폐기 Job은 동일 등록에
+대한 새 폐기 Job으로 재시도할 수 있고, 과거 조회가 참조하는 정의는 복구·검증한
+경우에만 보존 완료로 확정한다.
+과거/대기 중 조회나 다른 활성 등록이 참조하는
+Registry 객체는 유지한다. 사용자가 폐기한 등록의 신규 조회는 거부하되 과거
+조회 Dataset·모델 판본은 삭제하지 않는다. 이 참조가 Feast Registry의 현재 상태나
+과거 데이터의 물리적 보존을 대신하지는 못한다.
+[ADR 0018](adr/0018-feast-feature-ownership.md)을 따른다.
+
 ## 핵심 개념
 
 | 개념 | 의미와 경계 |

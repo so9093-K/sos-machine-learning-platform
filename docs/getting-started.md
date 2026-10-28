@@ -6,6 +6,55 @@ SOS의 로컬 개발 환경을 실행하고 첫 Dataset 탐색과 ML 학습을 �
 
 관리자는 Web 사이드바에서 **제품명 설정**과 **인스턴스 표시명 설정**을 각각 변경할 수 있습니다. 제품명은 로그인 전 화면에도 표시되며, 별도로 설정하지 않은 인스턴스의 기본 제품명은 **SOS**입니다. 표시명 변경은 내부 API·Worker·데이터 식별자를 바꾸지 않습니다.
 
+## Feast 등록 Feature 조회
+
+Feature Service 등록과 조회는 별개의 사용자 행동이다. SOS 모델 학습 화면에서
+기존 등록 Service를 선택하거나 새로 등록할 수 있다. 두 API 모두 Actor·Dataset 권한과
+Job/Attempt 계약을 적용한다.
+
+1. `POST /api/features/services/jobs`: Feature Source Dataset, 지속적 Entity Key,
+   원본 UTC Event Timestamp와 숫자형 Feature 목록을 제출한다. 성공한 Job 결과에
+   Feast `feature_service` 이름과 고정 Source 판본을 남긴다.
+2. `GET /api/features/services/registrations?limit=100&cursor=...`: 본인 등록 Job
+   이력을 기존 키셋 커서 계약으로 페이지 조회한다.
+   이 이력은 현재 Feast Registry의 실시간 가용성 판정을 대신하지 않는다.
+3. `POST /api/features/retrieval/jobs`: 등록 성공 Job ID·조회 시점 Dataset·UTC 시간
+   컬럼을 제출한다. 동일 Feature Service를 조회마다 재사용하며 새 정의를 등록하지 않는다.
+4. 조회 성공 Job의 결과 `dataset_id`를 기존 SOS 모델 학습에 사용한다.
+5. `POST /api/features/services/{registration_job_id}/retirement/jobs`: 성공·실패·
+   취소된 등록을 명시적으로 폐기한다. `registry_deleted`는 실제 Registry 객체
+   제거 여부이며 `false`인 경우 다른 활성 등록·과거 조회의 참조가 유지된 것이다.
+   폐기 중이거나 폐기 완료된 등록은 새 조회에 사용할 수 없고
+   과거 Dataset·모델 근거는 유지한다. 실행 중인 폐기 Job은 외부 삭제 커밋
+   정합성을 위해 취소할 수 없다. 부분 실패한 폐기는 새 폐기 Job으로
+   재시도하여 실제 Registry 상태를 확인해야 한다.
+
+등록 요청:
+```json
+{
+  "feature_dataset_id": "<published-parquet-source-id>",
+  "entity_column": "host_id",
+  "timestamp_column": "event_timestamp",
+  "features": ["file_changes_1h", "network_connections_1h"],
+  "ttl_seconds": 2592000
+}
+```
+
+조회 요청:
+```json
+{
+  "registration_job_id": "<successful-feature-register-job-id>",
+  "entity_dataset_id": "<entity-events-dataset-id>",
+  "timestamp_column": "prediction_time"
+}
+```
+
+현재 DuckDB Runtime의 기본 Entity 조회 상한은 100,000개이며
+`SOS_FEAST_MAX_ENTITY_ROWS`로 조정한다. 초과 요청은 잘라내지 않고 실패한다.
+동일 정의를 재등록하면 Registry의 기존 내용을 대조하고 안전하게 재사용하며
+변경·부분 소실 상태는 무조건 덮어쓰지 않는다.
+Online Serving과 현재 Iceberg SQL Catalog의 직접 조회는 지원하지 않는다.
+
 ## 실행 준비
 
 Docker Compose와 GNU Make가 필요하다. 개발용 Compose는 Token 인증이 필수이므로, 저장소 루트에서 `.env.example`을 복사한 후 관리자 토큰을 생성한다. 아래 명령에는 Python 3가 필요하다.

@@ -16,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from .api_control import control_router
+from .api_features import feast_router
 from .api_errors import problem_response, register_error_handlers
 from .api_ml_training import training_router
 from .api_pipelines import pipeline_router
@@ -109,7 +110,7 @@ from .schemas import (
 )
 from .security import Actor, IdentitySettings, require, resource_allowed
 from .store import Store
-from .store_jobs import IcebergCancellationConflict
+from .store_jobs import IcebergCancellationConflict, FeatureRetirementCancellationConflict
 
 # Depends 객체는 요청마다 재생성하지 않고 안정적으로 재사용한다.
 READ_DATASET_DEP = Depends(require("dataset.read"))
@@ -160,6 +161,7 @@ OPENAPI_TAGS = [
     {"name": "Datasets", "description": "데이터 파일·합성 예제·Dataset 판본 등록과 조회"},
     {"name": "Data Exploration", "description": "Dataset 구조·프로파일·데이터 조회 및 탐색 실행"},
     {"name": "Data Preparation", "description": "Feature 변환과 분석용 입력 데이터 준비"},
+    {"name": "Features", "description": "Feast 등록 Feature와 Point-in-Time Historical Retrieval"},
     {"name": "Iceberg", "description": "Iceberg 데이터 적재·연결 및 Snapshot 조회"},
     {"name": "Experiments", "description": "MLflow Experiment·Run 조회 및 외부 기록 상태"},
     {"name": "Training", "description": "독립 ML 학습·복제·취소 및 작업 이력"},
@@ -180,7 +182,7 @@ OPENAPI_TAG_GROUPS = [
     {"name": "Platform", "tags": ["System", "Identity"]},
     {
         "name": "Data",
-        "tags": ["Datasets", "Data Exploration", "Data Preparation", "Iceberg"],
+        "tags": ["Datasets", "Data Exploration", "Data Preparation", "Features", "Iceberg"],
     },
     {
         "name": "Research & ML",
@@ -797,6 +799,8 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
 
     app.include_router(model_management_router(store))
     app.include_router(model_deletion_router(store))
+
+    app.include_router(feast_router(store, existing_dataset=existing, require_submission_key=require_job_submission_key))
 
     app.include_router(
         training_router(
@@ -1541,6 +1545,8 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         except IcebergCancellationConflict as exc:
             raise PlatformError("SOS-ICEBERG-CANCEL-409") from exc
+        except FeatureRetirementCancellationConflict as exc:
+            raise PlatformError("SOS-FEATURE-RETIRE-CANCEL-409") from exc
         if result is None:
             raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         return result

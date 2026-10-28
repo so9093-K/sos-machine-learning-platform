@@ -26,6 +26,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+feast = [
+  "feast[duckdb]==0.67.0",
+]
 dagster = [
   "dagster==1.13.26",
   "dagster-webserver==1.13.26",
