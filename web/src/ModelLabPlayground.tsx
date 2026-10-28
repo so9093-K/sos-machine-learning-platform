@@ -322,7 +322,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
         현재 입력은 별도로 수정할 수 있으며, 점수 계산은 직접 요청해야 합니다.</p>
       {onBackToAnalysis && <button type="button" className="secondary"
         onClick={onBackToAnalysis}>원래 Dataset 분석으로 돌아가기 →</button>}
-    </div>
+    </div>}
     <div className="model-lab-workspace">
       <div className="model-lab-input-pane">
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
