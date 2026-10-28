@@ -367,6 +367,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/features/retrieval/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Feast Point-in-Time Feature 조회와 불변 Dataset 게시 */
+        post: operations["create_feature_retrieval_api_features_retrieval_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1926,6 +1943,27 @@ export interface components {
             schema: {
                 [key: string]: string;
             };
+        };
+        /**
+         * FeatureRetrievalRequest
+         * @description 서로 다른 Feature Source와 조회 시점 Dataset을 명시한다.
+         */
+        FeatureRetrievalRequest: {
+            /** Entity Column */
+            entity_column: string;
+            /** Entity Dataset Id */
+            entity_dataset_id: string;
+            /** Feature Dataset Id */
+            feature_dataset_id: string;
+            /** Features */
+            features: string[];
+            /** Timestamp Column */
+            timestamp_column: string;
+            /**
+             * Ttl Seconds
+             * @default 2592000
+             */
+            ttl_seconds: number;
         };
         /**
          * HealthOut
@@ -4254,6 +4292,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeaturePreviewOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_feature_retrieval_api_features_retrieval_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureRetrievalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Structured API error */
