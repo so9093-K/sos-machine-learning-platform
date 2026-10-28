@@ -3,7 +3,6 @@ import { ApiError, formatError, request, submitJob } from "./api";
 import { PipelineAnalysis } from "./PipelineAnalysis";
 import type { PipelineAnalysisSection, PipelineScoreRange } from "./PipelineAnalysis";
 import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
-import { PipelineModelUsage } from "./PipelineModelUsage";
 import { ModelLabIntroduction } from "./ModelLabIntroduction";
 import { MLTrackingStatus } from "./MLTrackingStatus";
 import { formatObservedAt, jobStatusLabel } from "./display-format";
@@ -87,7 +86,7 @@ export function filterCandidatesByScoreRange(
 }
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, examplesError, onRetryExamples, onUseExample, canInspectOperations }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, onApplyModel, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, examplesError, onRetryExamples, onUseExample, canInspectOperations }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
   initialCandidateRowIndex?: number;
   initialAnalysisSection?: PipelineAnalysisSection;
@@ -97,6 +96,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   onSelectRun: (runId: string, datasetId: string) => void;
   onSelectCandidate: (rowIndex: number) => void;
   onSelectAnalysisSection: (section: PipelineAnalysisSection) => void;
+  onApplyModel: (modelId: string) => void;
   canRun: boolean; canCancel: boolean;
   canInspectOperations?: boolean;
   canCreateDataset?: boolean;
@@ -141,8 +141,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   } | null>(null);
   const [candidateReload, setCandidateReload] = useState(0);
   const [candidateScoreRange, setCandidateScoreRange] = useState<PipelineScoreRange | null>(null);
-  const [showModelUsage, setShowModelUsage] = useState(false);
-  const [modelUsageVisited, setModelUsageVisited] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<number | null>(initialCandidateRowIndex ?? null);
   const [busy, setBusy] = useState(false);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
@@ -183,8 +181,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       setCandidateLookupStatus("idle");
       setCandidateLookupError("");
       setCandidateScoreRange(null);
-      setShowModelUsage(false);
-      setModelUsageVisited(false);
       // URL의 Run과 선택 후보는 하나의 탐색 상태다. 이전 Run의 행만 지운 채
       // 이미 URL에 있는 새 Run의 후보 선택을 잃어버리지 않는다.
       setSelectedCandidate(initialCandidateRowIndex ?? null);
@@ -287,11 +283,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     pendingRunFocus.current = null;
     moveFocusTo(run.status === "Succeeded" ? "pipeline-analysis-first-heading" : "pipeline-current-run-heading");
   }, [run?.id, run?.status]);
-  useEffect(() => {
-    if (showModelUsage && run?.status === "Succeeded") {
-      moveFocusTo("pipeline-model-usage-title");
-    }
-  }, [showModelUsage, run?.id, run?.status]);
+
   function moveFocusTo(targetId: string) {
     requestAnimationFrame(() => {
       const target = document.getElementById(targetId);
@@ -326,7 +318,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
     selectedRunId.current = id;
     pendingRunFocus.current = id || null;
     setRunId(id); setRun(null); setRows(null); setSelectedCandidate(null); setError(""); setBusy(false); setCandidateScoreRange(null);
-    setShowModelUsage(false); setModelUsageVisited(false);
     setCandidateError("");
     setCandidateLookupError("");
     setCandidateLookupStatus("idle");
@@ -656,15 +647,11 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       aria-labelledby="pipeline-analysis-first-heading">
       <div className="pipeline-section-heading">
         <div>
-          <span className="eyebrow">학습 완료</span>
-          <h3 id="pipeline-analysis-first-heading" tabIndex={-1}>모델과 Test 결과</h3>
+          <h3 id="pipeline-analysis-first-heading" tabIndex={-1}>학습 결과</h3>
         </div>
         <div className="pipeline-results-actions">
           {modelRevisionId && <button type="button" className="secondary"
-            aria-controls="pipeline-model-try" aria-expanded={showModelUsage}
-            onClick={() => { setModelUsageVisited(true); setShowModelUsage(value => !value); }}>
-            {showModelUsage ? "모델 적용 접기" : "학습 모델 적용 →"}
-          </button>}
+            onClick={() => onApplyModel(modelRevisionId)}>이 모델로 다른 데이터 분석 →</button>}
           <button type="button" className="secondary" disabled={exampleBusy}
             onClick={() => selectRun("")}>새 모델 학습</button>
         </div>
@@ -682,12 +669,6 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           setCandidateScoreRange(range);
           moveFocusTo("pipeline-candidates-heading");
         }} />
-      {modelRevisionId && <div id="pipeline-model-try" hidden={!showModelUsage}>
-        {modelUsageVisited && <PipelineModelUsage key={modelRevisionId} modelId={modelRevisionId}
-          datasets={datasets} hasMoreDatasets={hasMoreDatasets}
-          onLoadMoreDatasets={onLoadMoreDatasets}
-          canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
-      </div>}
     </section>}
     {hasActiveAnalysis && <section className="panel pipeline-results"
       aria-label={run?.status === "Succeeded" ? "이상 후보 탐구 및 실행 근거"
@@ -771,7 +752,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         </div>}
         {run.status === "Succeeded" && <section className="pipeline-candidates" aria-labelledby="pipeline-candidates-heading">
           <h4 id="pipeline-candidates-heading" tabIndex={-1}>검토할 이상 후보</h4>
-          <p>Test 데이터에서 판정 기준을 넘은 관측치입니다. 하나를 선택하면 실제 Feature 값을 확인할 수 있습니다.</p>
+          <p>Test 데이터에서 점수가 판정 기준 이상인 관측치입니다. 하나를 선택하면 실제 Feature 값을 확인할 수 있습니다.</p>
           <div className="pipeline-actions">
             <button type="button" className="secondary" onClick={() =>
               onNavigate("understanding", run.dataset_id)}>분석 데이터 보기 →</button>

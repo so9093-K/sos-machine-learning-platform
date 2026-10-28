@@ -17,7 +17,7 @@ export function UnderstandingPanel({
   datasetId: string;
   canCreate: boolean;
   onJobCreated: (job: Job) => void;
-  onViewJobs: () => void;
+  onViewJobs: (jobId: string) => void;
   overview: DatasetOverview | null;
   overviewStatus: "loading" | "ready" | "error";
   overviewError: string;
@@ -149,8 +149,8 @@ export function UnderstandingPanel({
     {state && <p className="hint">원본 판본 {state.version.slice(0, 12)} · 분석 상태 {
       state.job_status ? jobStatusLabel(state.job_status) : profile ? "완료" : "미실행"
     }{state.job_id && <> · 작업 <code title={state.job_id}>{state.job_id.slice(0, 8)}</code></>}</p>}
-    {state?.job_id && <button className="secondary" onClick={onViewJobs}>
-      전체 Jobs에서 진행 확인 ↗
+    {state?.job_id && <button className="secondary" onClick={() => onViewJobs(state.job_id!)}>
+      분석 작업 상세 →
     </button>}
     {state?.job_status === "Failed" && <p role="alert">
       최근 분석에 실패했습니다. Dataset과 이전 완료 결과는 그대로 사용할 수 있습니다.

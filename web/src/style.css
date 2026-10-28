@@ -66,7 +66,7 @@ header p,.dataset-hero p{color:var(--sos-muted);font-size:13px}
 .storage-panel > .panel-head{margin-top:24px}
 .storage-panel > .panel-head:first-child{margin-top:0}
 .hero-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-input,select{background:var(--sos-field);border:1px solid var(--sos-border);border-radius:8px;padding:11px;color:var(--sos-text);min-width:0}
+input,select{background:var(--sos-field);border:1px solid var(--sos-border);border-radius:8px;padding:11px;color:var(--sos-text);min-width:0;max-width:100%}
 input:focus,select:focus,button:focus-visible{outline:2px solid var(--sos-accent);outline-offset:2px}
 button:not(.dataset):not(.tab):not(.ghost):not(.surface-button){background:var(--sos-accent);border:1px solid var(--sos-accent);padding:10px 15px;color:var(--sos-sidebar);border-radius:9px;font-weight:700;font-size:12px}
 button.secondary:not(.dataset):not(.tab):not(.ghost){background:var(--sos-raised);border-color:var(--sos-border);color:var(--sos-text)}
@@ -121,6 +121,7 @@ tbody tr:hover{background:var(--sos-raised)}
 .chart-controls label,.form-row label{color:var(--sos-muted);font-size:12px;display:flex;flex-direction:column;gap:7px}
 .chart{height:320px;width:100%;margin-top:15px}
 .form-row{display:flex;gap:15px;align-items:end;flex-wrap:wrap;margin:16px 0}
+.form-row > label{min-width:0;max-width:100%}
 .form-row .hint{margin:0}
 .steps{padding:14px 0;display:grid;gap:7px}
 .step{display:flex;align-items:center;gap:15px;padding:12px;background:var(--sos-raised);border-radius:9px;font-size:12px}
@@ -622,43 +623,41 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 
 
 /* Pipeline Run의 불변 결과를 분석하는 패널: 기능별 분석 근거를 고유하게 표현한다. */
-.pipeline-analysis-report { display: grid; gap: 1.2rem; margin: 1.1rem 0 1.5rem; }
+.pipeline-analysis-report { display: grid; grid-template-columns:minmax(0,1fr); gap: 1.2rem; margin: 1.1rem 0 1.5rem; }
 .pipeline-analysis-report h4 { margin: 0; }
+.training-report { min-width:0; }
+.training-report-heading { display:block; margin:0; }
+.training-report-details { min-width:0; }
+.training-report-heading h4 { font-size:20px; margin:8px 0; }
+.training-report-heading p,.training-report-basis p { margin:0; line-height:1.7; }
+.training-report-outcome { display:grid; grid-template-columns:minmax(150px,.55fr) minmax(0,1fr);
+  gap:20px; align-items:center; padding:20px 0; border-block:1px solid var(--sos-border); }
+.training-report-outcome > div:first-child { display:grid; gap:7px; }
+.training-report-outcome span,.training-report-basis > span { font-size:13px; color:var(--sos-muted); }
+.training-report-outcome strong { font-size:32px; font-variant-numeric:tabular-nums; }
+.training-report-outcome p { margin:0 0 12px; line-height:1.65; }
+.training-report-basis { display:grid; gap:6px; }
+.training-test-distribution { display:grid; gap:12px; min-width:0; }
+.training-test-distribution h4 { font-size:16px; }
+.training-score-comparison { margin:0; font-size:13px; color:var(--sos-muted); }
+.training-report-limitation { margin:0; padding-left:12px; border-left:3px solid var(--sos-accent);
+  color:var(--sos-muted); font-size:13px; line-height:1.65; }
+.training-report-details > details { padding:14px 0; border-bottom:1px solid var(--sos-border); min-width:0; }
+.training-report-details summary { cursor:pointer; font-size:14px; font-weight:600; }
+.training-report-details > details[open] > summary { margin-bottom:16px; }
+.training-report-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 24px; }
+.training-report-facts div { min-width:0; }
+.training-report-facts dt { font-size:12px; color:var(--sos-muted); }
+.training-report-facts dd { margin:4px 0; overflow-wrap:anywhere; }
+@media(max-width:620px) {
+  .training-report-outcome,.training-report-facts { grid-template-columns:minmax(0,1fr); }
+}
 .pipeline-score-chart { min-width: 0; }
 .pipeline-score-chart .chart { min-height: 320px; }
-.pipeline-analysis-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 1rem; }
-.pipeline-analysis-phase { min-width: 0; padding: 1.1rem; border: 1px solid var(--sos-border); border-radius: 12px; display: grid; gap: .75rem; align-content: start; }
-.pipeline-analysis-phase h5 { margin: 0; font-size: 1rem; }
-.pipeline-analysis-phase dl { display: grid; gap: .45rem; margin: 0; }
-.pipeline-analysis-phase dl > div { display: flex; gap: 1rem; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--sos-border); padding-bottom: .4rem; }
-.pipeline-analysis-phase dt { color: var(--sos-muted); }
-.pipeline-analysis-phase dd { text-align: right; margin: 0; overflow-wrap: anywhere; }
-.pipeline-analysis-phase pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .78rem; }
-.pipeline-analysis-phase details { min-width: 0; overflow-wrap: anywhere; }
-.pipeline-analysis-phase .pipeline-actions { align-self: end; }
-
-.pipeline-candidate-inspection { display: grid; gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--sos-border); border-radius: 12px; }
+.pipeline-candidate-inspection { display: grid; grid-template-columns:minmax(0,1fr); gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--sos-border); border-radius: 12px; }
 .pipeline-candidate-inspection h5 { margin: 0; font-size: 1rem; }
 .pipeline-candidate-inspection .chart { min-height: 400px; }
 .pipeline-candidate-inspection .table-scroll { max-height: 320px; }
-
-/* 첫 IF Pipeline은 모델·보정·검토 결과를 넓은 분석 작업 공간에서 선택적으로 제공한다. */
-.pipeline-analysis-nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:0; margin:0 0 16px; }
-.pipeline-analysis-nav-item { display:grid; gap:5px; text-align:left; background:var(--sos-raised)!important;
-  border:1px solid var(--sos-border)!important; color:var(--sos-text)!important; padding:13px!important; min-width:0; }
-.pipeline-analysis-nav-item small { color:var(--sos-muted); font-weight:400; line-height:1.4; }
-.pipeline-analysis-nav-item.active { border-color:var(--sos-accent)!important; box-shadow:inset 0 -3px var(--sos-accent); }
-.pipeline-analysis-overview { min-width:0; }
-.pipeline-analysis-phases { grid-template-columns:minmax(0,1fr); }
-.pipeline-analysis-phase .pipeline-score-chart { width:100%; }
-.pipeline-analysis-phase .chart { height:390px; }
-.pipeline-analysis-phase dl { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 16px; }
-.pipeline-analysis-phase dl>div { min-width:0; gap:10px; }
-.pipeline-analysis-phase dl dd { font-weight:600; }
-@media(max-width:760px) {
-  .pipeline-analysis-nav { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .pipeline-analysis-phase dl { grid-template-columns:minmax(0,1fr); }
-}
 
 /* Run을 먼저 확인하고, 선택한 후보와 상세 근거를 함께 검토한다. */
 .pipeline-run-context { display:grid; gap:14px; }
@@ -766,7 +765,6 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .pipeline-threshold-note strong { color:var(--sos-chart-threshold); }
 @media(max-width:620px) {
   .pipeline-candidate-detail .pipeline-candidate-inspection { padding:14px; }
-  .pipeline-analysis-nav { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .pipeline-shap-result .chart,
   .pipeline-candidate-detail .pipeline-shap-result .chart { height:370px; }
 }
@@ -922,9 +920,42 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-playground { display:grid; grid-template-columns:minmax(0,1fr); gap:15px; }
 .model-lab-workspace { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr);
   gap:16px; align-items:start; min-width:0; }
-.model-lab-input-pane,.model-lab-results-pane { display:grid; gap:15px; min-width:0; }
+.model-lab-input-pane,.model-lab-results-pane { display:grid; grid-template-columns:minmax(0,1fr); gap:15px; min-width:0; }
 .model-lab-results-pane { border:1px solid var(--sos-border); border-radius:12px; padding:16px; }
 .model-lab-results-pane > h4 { margin:0; font-size:16px; }
+.playground-result { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; min-width:0; border-top:1px solid var(--sos-border); padding-top:16px; }
+.playground-result > h4 { margin:0; font-size:17px; }
+.experiment-score-comparison { display:flex; flex-wrap:wrap; gap:14px 22px; }
+.experiment-score-comparison > div { display:grid; gap:6px; min-width:0; }
+.experiment-score-comparison span { font-size:12px; color:var(--sos-muted); }
+.experiment-score-comparison strong { font-size:23px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.experiment-finding { margin:0; font-size:14px; line-height:1.65; }
+.experiment-input-changes > p { margin:0 0 6px; font-size:13px; color:var(--sos-muted); }
+.experiment-input-changes ul { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+.experiment-input-changes li { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 12px; }
+.experiment-input-changes li button { text-align:left; padding:0; font-size:13px; }
+.experiment-input-changes li span { font-size:13px; font-variant-numeric:tabular-nums; }
+.experiment-next-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.model-score-context { min-width:0; border-top:1px solid var(--sos-border); padding-top:16px; }
+.model-score-context h5 { margin:0 0 10px; font-size:15px; }
+.model-score-context p { font-size:13px; line-height:1.65; }
+.model-score-context .chart { height:230px; min-height:230px; }
+.result-stale { margin:0; font-size:13px; color:var(--sos-muted); }
+.model-application { min-width:0; }
+.model-lab-use.result-focused:not(.show-setup) .model-application > .model-lab-start-choice { display:none; }
+.observation-title { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 16px; }
+.observation-title > span { font-size:13px; color:var(--sos-muted); }
+.observation-score { display:flex; align-items:baseline; gap:14px; }
+.observation-score > span { font-size:13px; color:var(--sos-muted); }
+.observation-score > strong { font-size:26px; font-variant-numeric:tabular-nums; }
+.observation-activity-picker { display:flex; flex-wrap:wrap; gap:12px; }
+.observation-activity-picker label { display:grid; gap:6px; min-width:0; max-width:100%; font-size:13px; }
+.observation-activity-picker select { max-width:100%; }
+.observation-selected-feature { display:grid; gap:12px; padding-top:8px; }
+.observation-selected-feature > strong { font-size:14px; }
+.observation-secondary-analysis { padding-top:14px; border-top:1px solid var(--sos-border); min-width:0; }
+.observation-secondary-analysis > summary { cursor:pointer; font-size:13px; color:var(--sos-muted); line-height:1.5; }
+.observation-secondary-analysis[open] > summary { margin-bottom:12px; }
 .model-lab-explanation-toggle { display:grid; gap:12px; border-top:1px solid var(--sos-border);
   padding-top:14px; min-width:0; }
 .model-lab-explanation-toggle > summary { cursor:pointer; font-size:13px;
@@ -948,11 +979,6 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-feature small { display:block; color:var(--sos-muted); font-size:11px; font-weight:400; }
 .model-lab-feature input { width:100%; }
 .model-lab-playground-actions { display:flex; gap:10px; flex-wrap:wrap; }
-.model-lab-playground-result { display:grid; gap:12px; padding:18px; border:1px solid var(--sos-border); border-radius:12px; }
-.model-lab-score-row { display:flex; gap:24px; flex-wrap:wrap; }
-.model-lab-score-row > div { display:grid; gap:5px; }
-.model-lab-score-row span { color:var(--sos-muted); font-size:12px; }
-.model-lab-score-row strong { font-size:25px; font-variant-numeric:tabular-nums; }
 .model-lab-input-error { color:var(--sos-danger); font-size:12px; }
 /* 관측값·학습 참조값·차이를 같은 행에서 읽는다. */
 .feature-reference-comparison { display:grid; gap:8px; min-width:0; }
@@ -1050,12 +1076,6 @@ button.surface-button[aria-pressed="true"] {
   border-left:3px solid var(--sos-accent); background:var(--sos-raised); border-radius:5px;
   color:var(--sos-text); font-size:12px; font-variant-numeric:tabular-nums; }
 .scoring-observation-choice[aria-current="true"] { background:var(--sos-accent-bg); border-color:var(--sos-accent); }
-.observation-activity-highlights { display:grid; gap:0; margin:12px 0; }
-.observation-activity-highlight { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; gap:4px 12px;
-  padding:10px 0; border-bottom:1px solid var(--sos-border); }
-.observation-activity-highlight small { grid-column:1/-1; font-size:12px; color:var(--sos-muted); line-height:1.5; overflow-wrap:anywhere; }
-.observation-activity-highlight span { font-size:12px; color:var(--sos-muted); overflow-wrap:anywhere; }
-.observation-activity-highlight strong { font-size:14px; font-variant-numeric:tabular-nums; text-align:right; }
 .scoring-observation-detail .pipeline-candidate-observation { margin-top:8px; }
 @media(max-width:1080px) {
   .scoring-workspace-heading { align-items:start; }
@@ -1067,14 +1087,14 @@ button.surface-button[aria-pressed="true"] {
 }
 
 /* 독립 Scoring: 분포와 점수순 관측값을 결과 확인 직후 같은 문맥에서 조사한다. */
-.scoring-observation-explorer { display:grid; gap:18px; min-width:0; }
+.scoring-observation-explorer { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; min-width:0; }
 .scoring-result-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 .scoring-result-summary > div { display:grid; gap:8px; min-width:0; padding:16px;
   border:1px solid var(--sos-border); background:var(--sos-raised); border-radius:10px; }
 .scoring-result-summary span { color:var(--sos-muted); font-size:12px; }
 .scoring-result-summary strong { font-size:clamp(16px,1.6vw,22px); overflow-wrap:anywhere; }
 .scoring-distribution { border:1px solid var(--sos-border); border-radius:12px;
-  padding:18px; min-width:0; display:grid; gap:8px; }
+  padding:18px; min-width:0; display:grid; grid-template-columns:minmax(0,1fr); gap:8px; }
 .scoring-distribution .chart { height:265px; min-height:240px; }
 .scoring-distribution .hint { margin:0; }
 .scoring-observation-workspace { display:grid; grid-template-columns:minmax(265px,.8fr) minmax(0,1.2fr);
@@ -1090,7 +1110,7 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .scoring-observation-score strong { font-size:13px; }
 .scoring-observation-detail { min-width:0; border:1px solid var(--sos-border); border-radius:12px;
   background:var(--sos-panel); padding:clamp(14px,2vw,24px); }
-.scoring-observation-detail .pipeline-candidate-inspection { padding:0; margin:0; }
+.scoring-observation-detail .pipeline-candidate-inspection { padding:0; margin:0; border:0; }
 @media(max-width:1080px) { .scoring-observation-workspace { grid-template-columns:minmax(0,1fr); }
   .scoring-observation-list { max-height:440px; } }
 @media(max-width:650px) { .scoring-result-summary { grid-template-columns:minmax(0,1fr); }
@@ -1110,7 +1130,7 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .scoring-file-input label { display:grid; gap:10px; font-weight:650; }
 .scoring-file-input input[type="file"] { display:block; max-width:100%; font-size:13px; }
 .scoring-file-input .hint { margin:0; }
-.scoring-result-complete { display:grid; gap:18px; min-width:0; }
+.scoring-result-complete { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; min-width:0; }
 
 /* 자유 학습에서는 대량 Feature를 요약하고 선택할 때만 펼친다. */
 .training-feature-guidance { margin:10px 0 0; padding:10px 12px; border:1px solid var(--sos-border);
@@ -1223,22 +1243,19 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .scoring-provenance-identifiers dt { color:var(--sos-muted); font-size:11px; }
 .scoring-provenance-identifiers dd { margin:4px 0 0; overflow-wrap:anywhere;
   font-variant-numeric:tabular-nums; }
-.observation-activity { display:grid; gap:13px; padding:15px;
-  background:var(--sos-accent-bg); border:1px solid var(--sos-border); border-radius:12px; }
+.observation-activity { display:grid; grid-template-columns:minmax(0,1fr); gap:13px;
+  padding:14px 0; border-top:1px solid var(--sos-border); }
 .observation-activity-heading { display:grid; gap:5px; }
 .observation-activity-heading h6 { font-size:15px; margin:0; }
 .observation-activity-heading p { font-size:12px; line-height:1.6;
   color:var(--sos-muted); margin:0; }
 .observation-activity > .hint { margin:0; }
-@media(max-width:560px) { .observation-activity { padding:10px; } }
 
 /* 모델 실험실 UX: 요약을 먼저, 근거와 전체 Feature는 선택적으로 제공한다. */
 .pipeline-shap-zero { display:grid; gap:8px; padding:14px 16px; border:1px solid var(--sos-border); background:var(--sos-raised); border-radius:10px; line-height:1.6; }
 .pipeline-shap-zero strong { font-size:14px; }
 .pipeline-shap-zero p { margin:0; color:var(--sos-muted); font-size:13px; }
 .pipeline-shap-summary { font-size:14px; line-height:1.6; }
-.model-lab-try-change { display:grid; justify-items:start; gap:10px; margin-top:10px; padding-top:12px; border-top:1px solid var(--sos-border); }
-.model-lab-try-change p { margin:0; color:var(--sos-muted); font-size:13px; line-height:1.6; }
 .scoring-action-hint { margin:0; color:var(--sos-muted); font-size:12px; }
 .scoring-input-guidance { color:var(--sos-muted); font-size:12px; }
 .scoring-input-guidance > summary { cursor:pointer; }
@@ -1255,16 +1272,11 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   padding:15px 18px; background:var(--sos-raised); border:1px solid var(--sos-accent);
   border-radius:10px; }
 .model-lab-observation-source p { margin:0; font-size:13px; line-height:1.6; color:var(--sos-muted); }
-.observation-try-experiment { display:grid; justify-items:start; gap:10px; margin:14px 0;
-  padding:14px 16px; background:var(--sos-raised); border-radius:10px; }
+.observation-try-experiment { display:grid; justify-items:start; gap:8px; margin:4px 0; }
 .observation-try-experiment p { margin:0; color:var(--sos-muted); font-size:13px; line-height:1.6; }
 .observation-try-experiment p[role="alert"] { color:var(--sos-danger); }
 
-/* 완료된 Dataset 결과에서는 입력 선택 대신 분석 결과를 먼저 보여준다. */
-.model-lab-use.result-focused:not(.show-setup) > .model-lab-start-choice { display:none; }
-
 /* 모델 활용 시작: 모델 카드 바로 아래에서 분석할 데이터를 고른다. */
-.model-lab-start-label { font-size:13px; font-weight:650; }
 .model-lab-model-actions { display:grid; gap:4px; justify-items:end; min-width:min(100%,320px); }
 .model-lab-current-model .model-lab-model-options { border:0; padding:0; background:transparent; }
 .model-lab-current-model .model-lab-model-options > summary { color:var(--sos-accent); font-weight:500; padding:4px 0; }
@@ -1379,4 +1391,40 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 @media(max-width:520px) {
   .playground-input-tools { grid-template-columns:1fr; }
   .feature-result-toolbar input { flex-basis:100%; max-width:none; }
+}
+
+/* 데이터 선택과 결과 조사는 좁은 화면에서도 본문에서 이어진다. */
+.dataset-switcher { display:flex; align-items:end; flex-wrap:wrap; gap:12px; margin:0 0 16px; min-width:0; }
+.dataset-switcher > label { display:grid; gap:7px; font-size:13px; min-width:0; width:min(100%,520px); }
+.dataset-switcher select { width:100%; }
+.data-job-workspace { display:grid; grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr); gap:24px; min-width:0; align-items:start; }
+.data-job-list,.data-job-detail { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; min-width:0; }
+.data-job-search { display:grid; gap:7px; font-size:13px; }
+.data-job-choice { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 12px; text-align:left; width:100%; min-width:0; }
+.data-job-choice > span:not(.status),.data-job-choice small { grid-column:1/-1; color:var(--sos-muted); font-weight:400; overflow-wrap:anywhere; }
+.data-job-choice[aria-pressed="true"] { border-color:var(--sos-accent)!important; box-shadow:inset 3px 0 var(--sos-accent); }
+.data-job-choice .status { padding:3px 7px; font-size:11px; }
+.data-job-detail { border-left:1px solid var(--sos-border); padding-left:24px; }
+.data-job-detail > h4 { margin:0; font-size:16px; scroll-margin-top:24px; }
+.data-job-detail > .status,.data-job-detail > button { justify-self:start; }
+.data-job-detail p { font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.data-job-detail pre { max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+.data-job-detail details { min-width:0; }
+.data-job-detail summary { cursor:pointer; font-size:13px; color:var(--sos-muted); }
+.discovery-job-result { min-width:0; }
+.data-profile-details { min-width:0; padding-top:20px; margin-top:20px; border-top:1px solid var(--sos-border); }
+.data-profile-details > summary { cursor:pointer; font-weight:650; font-size:15px; }
+.data-profile-details[open] > summary { margin-bottom:18px; }
+.profile-column-tools { display:flex; align-items:end; flex-wrap:wrap; gap:12px; margin:20px 0 10px; }
+.profile-column-tools > h4 { margin-right:auto; }
+.profile-column-tools label { display:grid; gap:6px; font-size:12px; }
+.profile-column-tools span { font-size:12px; color:var(--sos-muted); }
+.feast-feature-panel > summary { cursor:pointer; font-weight:650; }
+.feast-feature-panel > .hint { margin-top:14px; }
+.feast-feature-panel label:not(.feature-selector-item) { display:grid; gap:6px; font-size:13px; min-width:0; }
+.feast-feature-panel select { max-width:100%; }
+.feast-feature-panel .hint { line-height:1.65; }
+@media(max-width:1050px) {
+  .data-job-workspace { grid-template-columns:minmax(0,1fr); }
+  .data-job-detail { border-left:0; padding:18px 0 0; border-top:1px solid var(--sos-border); }
 }

@@ -2052,7 +2052,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import" | "ml_playground" | "feature_register" | "feature_retrieve";
+            kind: "profile" | "transform" | "iceberg_import" | "ml_playground" | "feature_register" | "feature_retrieve" | "feature_retire";
             latest_attempt: components["schemas"]["AttemptOut"] | null;
             /** Request Id */
             request_id?: string | null;
@@ -2276,7 +2276,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import" | "ml_playground" | "feature_register" | "feature_retrieve";
+            kind: "profile" | "transform" | "iceberg_import" | "ml_playground" | "feature_register" | "feature_retrieve" | "feature_retire";
             latest_attempt: components["schemas"]["AttemptOut"] | null;
             /** Request Id */
             request_id?: string | null;

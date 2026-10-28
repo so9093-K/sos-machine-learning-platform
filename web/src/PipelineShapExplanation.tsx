@@ -303,7 +303,7 @@ export function PipelineShapExplanation({
   }
 
   return <div className="pipeline-shap-explanation">
-    <h6>Feature별 점수 기여도 <small>SHAP</small></h6>
+    <h6>점수 기여도 <small>SHAP</small></h6>
     <p className="hint">기준 입력에서 이 관측값으로 바뀌면서 모델 점수가 얼마나 달라졌는지 Feature별로 설명합니다.</p>
     {!result && <p className="explanation-baseline">비교 기준: 학습 Feature별 중앙값을 모은 합성 입력 1개.
       학습 데이터의 실제 분포나 정상 범위를 나타내지 않습니다.</p>}
