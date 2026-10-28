@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 공식 Feast 0.67.0 Feature Catalog UI를 로컬 Compose에서 상시 실행하고 기존 PostgreSQL Registry를 읽기 전용 계정으로 탐색하도록 연결했습니다. SOS의 로컬 운영 도구에서 Entity·Feature View·Service·Source·Lineage를 확인할 수 있으며, Feature 등록·조회·폐기는 기존 SOS Job 흐름을 유지합니다.
+
 - 단일 입력 화면에서 항목을 검색·분류해 짧게 편집하고, 중복 비교 카드와 반복 안내를 줄였습니다. SHAP·치환 민감도는 변화가 있는 상위 5개를 그래프로 비교하며, 전체 수치는 검색·페이지로 확인합니다. 학습 설정의 JSON·Feature 이름 나열과 점수 구간 전체 표도 간결한 설정·구간 선택으로 바꿨습니다.
 
 - Feast를 등록 Feature 정의·Feature Service·역사적 시점 조회의 정본으로 채택하고 전용 Worker·PostgreSQL Registry를 연결했습니다. 불변 Parquet Feature Source에 대한 등록 Job·재사용 가능한 시점 조회 Job·명시적 폐기 Job을 분리했습니다. Feast 정의 지문 검증과 중단 이후 등록 재조정, 참조 중인 과거 정의 보존·미사용 Registry 객체 정리를 지원합니다. 조회 결과는 SOS 불변 Dataset으로 게시해 기존 모델 학습·Scoring에 사용할 수 있고, 이를 사용하는 모델 판본에 Feature Service·등록·조회 Job 출처를 고정합니다. 일반 Data Preparation·직접 학습 경로는 유지합니다.

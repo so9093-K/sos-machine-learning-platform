@@ -80,7 +80,7 @@ PY
 ## 플랫폼 실행과 접속
 
 ```bash
-make up       # API·Worker·Web·Dagster·PostgreSQL·객체 저장소 기동 및 Ready 확인
+make up       # API·Worker·Web·Feast UI·Dagster·MLflow 등 개발 서비스 상시 기동 및 Ready 확인
 make status   # 컨테이너 상태 확인
 make doctor   # 설정·준비 상태 진단
 ```
@@ -88,6 +88,7 @@ make doctor   # 설정·준비 상태 진단
 - Web UI: `http://localhost:9601`
 - API: `http://localhost:9602`
 - API Reference: `http://localhost:9602/docs`
+- Feast 공식 Feature Catalog UI: `http://localhost:9608` (Entity·Feature View·Service·Source·Lineage 탐색, 운영자 전용)
 - 로컬 MLflow 운영자 관리 UI: `http://localhost:9606` (연구 Run·Registered Model/Version 확인, 사용자별 권한 격리 없음)
 - 학습 완료 후 등록 대기 중에는 SOS의 MLflow Run ID·재시도 상태를 확인하고, 로컬 운영자라면 Dagster Runs와 MLflow Registry를 대조한다. Dagster Code Location `Loaded` 또는 MLflow Run `Finished`만으로 전체 Pipeline의 완료를 판단하지 않는다.
 - Dagster OSS 운영자 UI: `http://localhost:9607` (localhost 전용, 사용자 인증 기능 없음)
@@ -99,6 +100,13 @@ make doctor   # 설정·준비 상태 진단
 - Dagster는 SOS 사용자용 학습 화면이 아니라 **로컬 운영자의 Workflow Run·단계·이벤트 확인 도구**입니다.
   실행과 결과는 SOS 웹에서 확인하며, Dagster 접속은 같은 PC의 브라우저에서만 가능합니다.
   API 컨테이너의 내부 GraphQL 주소는 `http://dagster-webserver:3000/graphql`입니다.
+- Feast UI는 SOS의 `sos_features` SQL Registry를 **읽기 전용 DB 계정**으로 탐색합니다.
+  `make up` 때 기존 Registry를 준비하고 읽기 권한을 설정합니다. 처음 기동할 때 등록된 Feature가 없으면 빈 Catalog가 정상입니다.
+  SOS에서 Feature Service 등록 Job이 완료된 후 페이지를 다시 열면 해당 Entity·View·Service와 연결 Source를 탐색할 수 있습니다.
+  UI에는 SOS Actor 권한이 적용되지 않으므로 localhost 외부로 공개하거나 일반 사용자에게 전달하지 마세요.
+  Feast UI가 Registry 변경 기능을 표시하더라도 읽기 전용 DB 권한 때문에 변경할 수 없습니다.
+  UI가 표시하는 Feast 관계는 SOS의 조회 Job·모델 계보를 대신하지 않습니다.
+  UI 포트와 DB 계정 암호는 각각 `SOS_FEAST_UI_PORT`, `SOS_FEAST_UI_DB_PASSWORD`로 조정할 수 있습니다.
 - `make doctor`는 Dagster Run 검색 계약까지 검사하지 않습니다.
   별도의 읽기 전용 `make doctor-dagster`는 SOS가 실제 사용하는 제출 태그 Run 검색을 확인합니다.
   정상적인 미존재 제출 ID는 `None`을 출력합니다.

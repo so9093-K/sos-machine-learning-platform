@@ -50,6 +50,14 @@ Builder / Operator는 모델·실행·평가·배포를 관리하고, Consumer /
 
 ## 등록 Feature 재사용 경험
 
+로컬 운영자는 SOS의 별도 운영 도구 링크에서 상시 실행 중인 공식 Feast UI를 열어
+Entity·Feature View·Feature Service·Source 관계를 확인한다. Feature 정의 탐색은
+Feast가 담당하며 SOS는 Feature 사용·조회 Job·Dataset·모델 근거에 집중한다.
+공식 UI의 Catalog 정보가 SOS Actor별 접근을 보장하지 않으므로 사용자의 일반
+작업 진입점으로 노출하지 않는다. 공식 UI에서 직접 Registry를 변경하지 않고,
+정의 등록·폐기는 SOS Job 계약을 따른다.
+
+
 사용자는 기존 Dataset에서 안정적인 Entity·시간 기준과 숫자형 Feature를 선택해
 Feature Service를 등록할 수 있다. 등록 결과는 SOS Job 이력에서 확인하며
 기존 등록 Feature Service를 다른 조회 시점 Dataset에도 재사용한다.

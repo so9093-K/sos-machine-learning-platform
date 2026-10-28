@@ -41,6 +41,16 @@ advisory lock을 사용해 외부 변경을 직렬화한다. Feast Registry가 �
 않는다. Feast 전문 Worker는 API와 동일한 uv.lock의 별도 `feast` dependency group으로
 설치한다. 별도 `pip install` 덧씌우기나 숨은 의존성 해석을 수행하지 않는다.
 
+공식 Feast 0.67.0 UI는 로컬 개발 Compose에서 독립 서비스로 상시 실행한다.
+SOS Worker의 `sos_features` PostgreSQL Registry를 공유하고 별도 Registry를
+만들지 않는다. UI 전용 `feast_ui` SQL 역할에는 기존·향후 Registry 테이블
+SELECT만 허용하며, DDL·Feature 적용·폐기 권한을 주지 않는다. 최초 시작 및
+기존 볼륨 재시작 시 짧은 초기화 Job이 Registry 스키마를 준비하고 조회 권한을
+적용한다. UI 서버의 Registry REST API는 변경 경로도 노출하므로 SQL 권한과
+127.0.0.1 포트 바인딩을 함께 유지한다. SOS Actor 권한이 자동 상속되지 않으므로
+일반 사용자·외부 네트워크에 직접 공개하지 않는다. Feast UI는 관리용 정의
+탐색이며 Dataset·Job·Model 사용자 동작은 기존 SOS API로 수행한다.
+
 ## 현재 구현의 범위
 
 등록형 Workflow 정의·스케줄·상태의 Dagster OSS Runtime은 별도 Python 이미지와 Code Location·Daemon·Webserver·메타데이터 DB를 사용하되 SOS와 동일한 uv.lock의 Dagster dependency group에서 설치한다. PostgreSQL 드라이버는 현재 dagster-postgres의 upstream psycopg2 의존성과 맞추어 유지한다. Dagster가 독립 SOS Worker의 자원 격리·ML 계산·결과 게시 책임을 대신하지 않는다. Dagster Run 실패·취소 후 진행 중인 SOS Job 취소는 Dagster 상태 센서가 요청하며, 실제 중단 확정은 SOS Job/Attempt의 계약이다.
