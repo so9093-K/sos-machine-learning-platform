@@ -161,6 +161,7 @@ OPENAPI_TAGS = [
     {"name": "Datasets", "description": "데이터 파일·합성 예제·Dataset 판본 등록과 조회"},
     {"name": "Data Exploration", "description": "Dataset 구조·프로파일·데이터 조회 및 탐색 실행"},
     {"name": "Data Preparation", "description": "Feature 변환과 분석용 입력 데이터 준비"},
+    {"name": "Features", "description": "Feast 등록 Feature와 Point-in-Time Historical Retrieval"},
     {"name": "Iceberg", "description": "Iceberg 데이터 적재·연결 및 Snapshot 조회"},
     {"name": "Experiments", "description": "MLflow Experiment·Run 조회 및 외부 기록 상태"},
     {"name": "Training", "description": "독립 ML 학습·복제·취소 및 작업 이력"},
@@ -181,7 +182,7 @@ OPENAPI_TAG_GROUPS = [
     {"name": "Platform", "tags": ["System", "Identity"]},
     {
         "name": "Data",
-        "tags": ["Datasets", "Data Exploration", "Data Preparation", "Iceberg"],
+        "tags": ["Datasets", "Data Exploration", "Data Preparation", "Features", "Iceberg"],
     },
     {
         "name": "Research & ML",

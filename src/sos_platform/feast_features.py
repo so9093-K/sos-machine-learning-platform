@@ -96,12 +96,12 @@ def retrieve_features(store, feature_dataset: dict, entity_dataset: dict, raw_sp
         entity_schema = _schema(source, spec, feature_source=False)
         if entity_schema[spec.entity_column] != source_schema[spec.entity_column]:
             raise ValueError("Entity join key types differ")
-        if source.select(pl.len()).collect().item() == 0:
-            raise ValueError("Entity Dataset is empty")
         # DuckDB의 RetrievalJob.to_df()는 결과를 메모리에 물질화한다.
         # 조용히 일부만 선택하지 않고 초과 요청을 정확히 거부한다.
         limit = 100_000
         df = source.select([spec.entity_column, spec.timestamp_column]).head(limit + 1).collect()
+        if df.height == 0:
+            raise ValueError("Entity Dataset is empty")
         if df.height > limit:
             raise ValueError("Feature retrieval exceeds the current 100,000-row execution limit")
         entity_rows = df.to_pandas().rename(columns={spec.timestamp_column: "event_timestamp"})
