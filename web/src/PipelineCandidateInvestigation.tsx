@@ -243,7 +243,7 @@ export function PipelineCandidateInvestigation({
       : <dl className="pipeline-candidate-observation">
           <div><dt>관측 시각</dt><dd title={candidate.observed_at ?? undefined}>{candidate.observed_at
             ? formatObservedAt(candidate.observed_at) : "시각 근거 없음"}</dd></div>
-          <div><dt>관측치 ID (UUIDv4)</dt><dd>{candidate.observation_id ?? "연결된 ID 없음"}</dd></div>
+          <div><dt>관측치 ID (UUIDv4)</dt><dd>{candidate.observation_id ?? "별도 관측치 ID 없음"}</dd></div>
           <div><dt>결과 내부 행 번호</dt><dd>{candidate.row_index.toLocaleString("ko-KR")}</dd></div>
         </dl>}
     {!observationMode && <p className="hint">활동 Feature 관측치는 원시 이벤트 한 건이라는 뜻이 아니며,
@@ -254,7 +254,7 @@ export function PipelineCandidateInvestigation({
     {observationMode && <section className="observation-activity" aria-label="관측된 활동 특징">
       <div className="observation-activity-heading">
         <h6>활동 특징</h6>
-        <p>실제 관측된 집계 Feature입니다. 같은 Feature 안에서만 실제값·Train 중앙값의 막대 길이를 비교하며, 다른 Feature와 막대 길이를 비교하거나 중요도·정상 범위·원인 순위로 해석할 수 없습니다. 다음 항목은 고정 미리보기입니다.</p>
+        <p>선택한 관측값의 실제 활동 지표입니다. 학습 중앙값은 비교 기준이며 정상 범위나 사고 원인을 의미하지 않습니다.</p>
       </div>
       <div className="observation-activity-highlights">
         {previewFeatures.map(name => <div key={name} className="observation-activity-highlight">
@@ -277,6 +277,8 @@ export function PipelineCandidateInvestigation({
         </button>
       </div>}
       {model && !referenceMap && <p className="hint">이 모델에는 비교 가능한 학습 중앙값이 없습니다.</p>}
+      <details className="observation-activity-all">
+      <summary>전체 {Object.keys(candidate.features).length}개 활동 Feature 살펴보기</summary>
       <div className="observation-activity-group-intro">
         <strong>활동별 지표</strong>
         <span>전체 {Object.keys(candidate.features).length}개 · 아래 그룹별 실제값과 학습 참조값</span>
@@ -316,7 +318,8 @@ export function PipelineCandidateInvestigation({
         </section>;
         })}
       </div>
-      <p className="hint">Train 중앙값과의 차이는 정상 범위·Feature 중요도·이상 원인을 의미하지 않습니다.</p>
+      <p className="hint">학습 중앙값과의 차이는 정상 범위·Feature 중요도·이상 원인을 의미하지 않습니다.</p>
+      </details>
     </section>}
     {!observationMode && <details className="pipeline-feature-details">
       <summary>전체 {Object.keys(candidate.features).length}개 Feature 관측값·학습 참조값 비교</summary>
