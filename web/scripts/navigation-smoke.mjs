@@ -433,6 +433,13 @@ try {
     }));
   assert.match(observationWithExperiment, /이 관측값으로 실험하기/);
   assert.doesNotMatch(groupedObservation, /이 관측값으로 실험하기/);
+  const noPermissionExperiment = renderToStaticMarkup(
+    React.createElement(PipelineCandidateInvestigation, {
+      candidate: { row_index: 9, anomaly_score: 0.71, features: { cnt_file_create: 3 } },
+      observationMode: true, scoringResultId: "score-1", modelRevisionId: "model-1",
+      canRun: false, canCancel: false, onOpenResource: () => {}, onTryObservation: () => null,
+    }));
+  assert.doesNotMatch(noPermissionExperiment, /이 관측값으로 실험하기/);
   // 참조 모델이 없으면 비율을 추정하지 않고 비교 기준 없음으로 표시한다.
   assert.match(groupedObservation, /Train 중앙값/);
   assert.match(groupedObservation, /비교 기준 없음/);
@@ -795,6 +802,11 @@ try {
   assert.deepEqual(observationInputForPlayground(exampleModel,
     { cnt_proc_exec: 7, cnt_file_del: 3 }),
     { fields: { cnt_proc_exec: "7", cnt_file_del: "3" }, invalid: [] });
+  // 학습 참조값과 다르다고 사용자가 관측값을 수정한 것은 아니다.
+  assert.deepEqual(playgroundChangedFeatures({ cnt_proc_exec: "7", cnt_file_del: "3" },
+    { cnt_proc_exec: "7", cnt_file_del: "3" }, exampleModel.features), []);
+  assert.deepEqual(playgroundChangedFeatures({ cnt_proc_exec: "8", cnt_file_del: "3" },
+    { cnt_proc_exec: "7", cnt_file_del: "3" }, exampleModel.features), ["cnt_proc_exec"]);
   assert.deepEqual(observationInputForPlayground(exampleModel,
     { cnt_proc_exec: 7, cnt_file_del: null }),
     { fields: null, invalid: ["cnt_file_del"] });
