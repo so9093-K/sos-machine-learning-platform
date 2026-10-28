@@ -2001,6 +2001,16 @@ export interface components {
             };
         };
         /**
+         * FeatureRegistrationPageOut
+         * @description Feast Feature Service 등록 Job의 재사용 가능한 키셋 목록.
+         */
+        FeatureRegistrationPageOut: {
+            /** Items */
+            items: components["schemas"]["JobSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
          * FeatureRetrievalRequest
          * @description 기존 등록 Feature Service를 재사용하는 Entity 시점 조회 요청.
          */
@@ -4424,7 +4434,10 @@ export interface operations {
     };
     list_feature_registrations_api_features_services_registrations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4437,7 +4450,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobSummaryOut"][];
+                    "application/json": components["schemas"]["FeatureRegistrationPageOut"];
                 };
             };
             /** @description Structured API error */
