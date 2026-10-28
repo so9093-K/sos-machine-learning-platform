@@ -920,6 +920,9 @@ button.surface-button[aria-pressed="true"] {
   border-radius:3px; overflow:hidden; }
 .playground-sensitivity-track i { display:block; height:100%; border-radius:3px;
   background:var(--sos-chart-bar); }
+.playground-sensitivity-bars .negative .playground-sensitivity-track i {
+  background:var(--sos-chart-negative);
+}
 @media(max-width:1050px) {
   .model-lab-workspace { display:flex; flex-direction:column; }
   .model-lab-results-pane { order:-1; width:100%; box-sizing:border-box; }
