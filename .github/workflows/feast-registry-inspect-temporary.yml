@@ -1,17 +1,46 @@
-name: Temporary Feast lifecycle integration
+name: Temporary Feast lifecycle and API validation
 on:
   push:
     branches: [feat/feast-feature-ownership]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: feast-lifecycle-api
+  cancel-in-progress: true
 jobs:
   lifecycle:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
       - uses: astral-sh/setup-uv@v7
       - run: |
           uv python install 3.12
           uv sync --locked --group feast --group dev
-      - name: Feast actual SQL Registry recovery and PIT
+      - name: Feast real SDK registration recovery and contract
         run: uv run --locked --group feast --group dev pytest -q tests/test_feast_live.py tests/test_feast_features.py
+      - name: SOS full Python validation
+        run: python scripts/validate.py run python
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Web dependencies
+        working-directory: web
+        run: npm ci --no-audit
+      - name: Regenerate API contracts
+        run: bash scripts/generate_api_types.sh
+      - name: Web TypeScript and Vite build
+        working-directory: web
+        run: npm run build
+      - name: Commit generated API types
+        run: |
+          if ! git diff --quiet -- web/src/api.generated.ts; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add web/src/api.generated.ts
+            git commit -m "chore(api): Feast 폐기 Job·등록 상태의 생성 타입 갱신"
+            git push origin HEAD:feat/feast-feature-ownership
+          fi
