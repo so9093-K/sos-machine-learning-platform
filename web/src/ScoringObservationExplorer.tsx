@@ -168,12 +168,12 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       <div><span>최고 이상 점수</span><strong>{readable(summary.score_max)}</strong></div>
       <div><span>평균 이상 점수</span><strong>{readable(summary.score_mean)}</strong></div>
     </div>
-    <p className="scoring-result-interpretation">판정 정책 미적용 · 점수순 위치는 모델의 순위이며
-      이상 사건 판정이나 발생 확률을 뜻하지 않습니다.</p>
+    <p className="scoring-result-interpretation">전체 분포에서 점수가 높은 관측값을 선택해 실제 활동 특성을 살펴보세요.
+      판정 정책이 적용되지 않았으므로 순위는 사건 판정이나 발생 확률을 뜻하지 않습니다.</p>
     <section className="scoring-distribution" aria-label="전체 이상 점수 분포">
       <div className="scoring-distribution-heading">
         <h4>전체 관측값의 점수 분포</h4>
-        {selected && selectedScore !== null && <span role="status">{userSelected ? "선택한 관측값" : "기본 표시 관측값"} <strong>{readable(selectedScore)}</strong></span>}
+        {selected && selectedScore !== null && <span role="status">{userSelected ? "선택한 관측값" : "기본 미리보기"} <strong>{readable(selectedScore)}</strong></span>}
       </div>
       {histogram
         ? <DataChart option={histogram} ariaLabel="점수화한 전체 관측값의 이상 점수 구간별 관측 수" />
@@ -181,14 +181,14 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       <p className="scoring-distribution-stats">평균 점수 <strong>{readable(summary.score_mean)}</strong>
         <span aria-hidden="true"> · </span>점수 범위 <strong>{readable(summary.score_min)} ~ {readable(summary.score_max)}</strong></p>
       <p className="hint">점수가 높을수록 이 모델에서 이례적인 입력입니다.
-        {histogram && selectedScore !== null ? " 점선은 현재 표시 중인 관측값의 위치입니다." : ""}</p>
+        {histogram && selectedScore !== null ? " 점선은 현재 표시 중인 관측값의 위치이며 판정 임계값이 아닙니다." : ""}</p>
     </section>
     <div className="scoring-observation-workspace">
       <section className="scoring-observation-list-panel" aria-label="점수가 높은 관측값 목록">
         <div className="scoring-observation-list-heading">
           <h4>관측값 살펴보기</h4>
-          <p>점수가 높은 순 · 전체 {result.row_count.toLocaleString("ko-KR")}건 중
-            {loaded ? ` ${loaded.items.length.toLocaleString("ko-KR")}건 조회` : " 조회 대기"}</p>
+          <p>점수가 높은 관측값 · 전체 {result.row_count.toLocaleString("ko-KR")}건 중
+            {loaded ? ` 상위 ${loaded.items.length.toLocaleString("ko-KR")}건 조회` : " 조회 대기"}</p>
           {selected && <p className="scoring-observation-current" role="status">
             {observationSelectionLabel(userSelected)} · 점수순 {scoreOrder?.toLocaleString("ko-KR")}번째 ·
             결과 행 #{selected.row_index.toLocaleString("ko-KR")} · 점수 {readable(selected.anomaly_score)}
