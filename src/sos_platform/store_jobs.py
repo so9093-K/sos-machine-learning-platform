@@ -129,6 +129,40 @@ class JobStoreMixin:
                     previous_id = previous["job_id"]
                     # get_job은 새 트랜잭션으로 기존 확정 Job을 조회한다.
                     return self.get_job(previous_id)
+            # Feature 조회·폐기의 접수는 같은 등록 Job 행 잠금으로 직렬화한다.
+            # 폐기가 Queued인 순간부터 신규 조회를 차단하므로 Registry 삭제가
+            # 이미 접수된 조회를 놓치거나 삭제 중 새 조회가 유입되는 경합을 없앤다.
+            if kind in ("feature_retrieve", "feature_retire"):
+                registration_id = spec["registration_job_id"]
+                registration = db.execute(
+                    text(
+                        "SELECT kind,status,dataset_id,owner_actor FROM jobs "
+                        "WHERE id=:id FOR UPDATE"
+                    ),
+                    {"id": registration_id},
+                ).mappings().first()
+                required_statuses = (
+                    ("Succeeded",) if kind == "feature_retrieve"
+                    else ("Succeeded", "Failed", "Cancelled")
+                )
+                if (
+                    registration is None
+                    or registration["kind"] != "feature_register"
+                    or registration["status"] not in required_statuses
+                    or registration["dataset_id"] != dataset_id
+                    or registration["owner_actor"] != owner_actor
+                ):
+                    raise PlatformError("SOS-API-CONFLICT")
+                retirement_exists = db.execute(
+                    text(
+                        "SELECT 1 FROM jobs WHERE kind='feature_retire' "
+                        "AND status IN ('Queued','Running','Succeeded') "
+                        "AND spec::jsonb->>'registration_job_id'=:registration_id LIMIT 1"
+                    ),
+                    {"registration_id": registration_id},
+                ).first()
+                if retirement_exists:
+                    raise PlatformError("SOS-API-CONFLICT")
             # 실패한 멱등성 요청의 새 테이블 예약은 DB에 남기지 않는다.
             if reserve_iceberg_table is not None:
                 self._reserve_iceberg_table_in_transaction(db, reserve_iceberg_table, owner_actor)
@@ -217,6 +251,18 @@ class JobStoreMixin:
                 ).mappings()
             ]
             return item
+
+    def blocked_feature_registration_ids(self, job_ids: list[str]) -> set[str]:
+        """접수 중·실행 중·완료된 폐기는 신규 조회를 허용하지 않는다."""
+        if not job_ids:
+            return set()
+        statement = text(
+            "SELECT spec::jsonb->>'registration_job_id' FROM jobs "
+            "WHERE kind='feature_retire' AND status IN ('Queued','Running','Succeeded') "
+            "AND spec::jsonb->>'registration_job_id' IN :ids"
+        ).bindparams(bindparam("ids", expanding=True))
+        with self.connection() as db:
+            return set(db.execute(statement, {"ids": job_ids}).scalars())
 
     def retired_feature_registration_ids(self, job_ids: list[str]) -> set[str]:
         """SOS에서 명시적으로 확정된 Feast 등록 폐기 Job만 인정한다."""
