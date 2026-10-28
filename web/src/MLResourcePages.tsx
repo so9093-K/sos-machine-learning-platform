@@ -108,7 +108,7 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
   }, [key, retry]);
   const current = state?.key === key ? state : null;
   if (current?.error) return <section className="panel" role="alert">
-    <h3>결과를 열 수 없습니다.</h3><p>{current.error}</p>
+    <h3>결과 열기 실패</h3><p>{current.error}</p>
     <p className="hint">판본 ID, 접근 권한 또는 서비스 상태를 확인하세요.</p>
     <button className="secondary" onClick={() => setRetry(value => value + 1)}>다시 조회</button>
   </section>;

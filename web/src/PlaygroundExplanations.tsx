@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { ShapContributionChart } from "./PipelineShapExplanation";
+import { jobStatusLabel } from "./display-format";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary, MLPlaygroundJob } from "./types";
 
 type Method = "permutation_shap_median_v1" | "median_reference_feature_replacement";
@@ -147,7 +148,7 @@ function MethodExplanation({ source, method, canRun, canCancel }: {
   }
   return <section className="playground-explanation-method">
     <div className="model-lab-feature-group-heading"><strong>{title}</strong>
-      <span>{job ? job.status : "선택적으로 계산"}</span></div>
+      <span>{job ? jobStatusLabel(job.status) : "선택적으로 계산"}</span></div>
     <p className="hint">{method === "permutation_shap_median_v1"
       ? "실제 점수에 대한 기여도를 한 개의 합성 Train 중앙값 입력을 기준으로 설명합니다. 사건 원인이나 확률이 아닙니다."
       : "Feature 하나를 참조 중앙값으로 치환할 때 점수가 어떻게 달라지는지 측정합니다."}</p>
@@ -159,7 +160,7 @@ function MethodExplanation({ source, method, canRun, canCancel }: {
         Boolean(job && !terminal.has(job.status))}
         onClick={() => void run()}>{busy ? "설명 요청 중…" : `${title} 계산`}</button>}
     {!canRun && !job && <p className="hint">설명 계산 권한이 없습니다.</p>}
-    {job && !terminal.has(job.status) && <p role="status">{title} · {job.status}
+    {job && !terminal.has(job.status) && <p role="status">{title} · {jobStatusLabel(job.status)}
       {job.cancel_requested ? " · 취소 요청됨" : ""}</p>}
     {job && !terminal.has(job.status) && canCancel && <button type="button" className="secondary"
       disabled={busy || job.cancel_requested} onClick={() => void cancel()}>

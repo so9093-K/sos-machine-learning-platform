@@ -37,7 +37,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
   return <div className="platform-home">
     <section className="platform-intro">
       <span className="eyebrow">{brandName} · EXPLORE · EXPERIMENT · UNDERSTAND · EVOLVE</span>
-      <h2>무엇을 시작할까요?</h2>
+      <h2>작업 시작</h2>
       <p>현재 사용할 수 있는 데이터를 살펴보거나 준비된 활동 이상 탐지 분석을 이용할 수 있습니다.
         각 기능은 독립적으로 시작할 수 있습니다.</p>
     </section>
