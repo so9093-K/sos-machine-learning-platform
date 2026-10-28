@@ -161,7 +161,7 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
     <p className="hint">저장된 모델 점수와 SHAP 설명의 재구성 오차 {key(residual)}를 확인했습니다.
       기여도는 사고의 원인이나 확률을 의미하지 않습니다.</p>
     <details className="pipeline-shap-technical">
-      <summary>전체 SHAP 값과 계산 근거</summary>
+      <summary>SHAP 상세 계산 근거</summary>
       <div className="pipeline-shap-technical-content">
         <section aria-label="SHAP 설명 방법과 기준">
           <h6>설명 방법과 기준</h6>
@@ -306,9 +306,9 @@ export function PipelineShapExplanation({
   }
 
   return <div className="pipeline-shap-explanation">
-    <h6>모델 판단 근거 자세히 보기 (SHAP)</h6>
-    <p className="hint">실제 모델 이상 점수에 대한 선택적 SHAP 분석입니다.
-      계산은 요청할 때만 수행하며 기존 점수 민감도와는 다른 설명 방법입니다.</p>
+    <h6>Feature별 점수 기여도 <small>SHAP</small></h6>
+    <p className="hint">실제 모델 이상 점수를 Feature별 기여도로 나눠 봅니다.
+      요청할 때만 계산하며, 아래 치환 민감도와는 다른 질문에 답하는 방법입니다.</p>
     {lookup === "loading" && <p role="status">이 후보의 기존 SHAP 결과를 찾고 있습니다.</p>}
     {lookup === "error" && <div role="alert">
       <p>이전 SHAP 작업을 확인하지 못했습니다.</p>

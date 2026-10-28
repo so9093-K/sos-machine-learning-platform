@@ -6,7 +6,7 @@ import type { MLResourceKind } from "./PlatformNavigation";
 import type {
   Dataset, DatasetColumns, MLScoringJob, MLScoringJobSummary, ModelRevision, ScoringResult,
 } from "./types";
-import { jobStatusLabel } from "./display-format";
+import { formatDtype, jobStatusLabel } from "./display-format";
 
 type Props = {
   model: ModelRevision;
@@ -241,12 +241,6 @@ export function MLScoringPanel({
     ? n.toLocaleString("ko-KR", { maximumFractionDigits: 5 }) : "미정의";
 
   return <section className={`panel ml-scoring-panel${visibleResult ? " scoring-has-result" : ""}`} aria-label="독립 이상 점수 계산">
-    {!visibleResult && <div className="panel-head"><div>
-      <h4>{selectedJob ? "Dataset 분석 결과" : "어떤 데이터에 모델을 적용할까요?"}</h4>
-      <p>{selectedJob
-        ? "선택한 실행의 상태와 실제 결과를 먼저 확인합니다. 다른 Dataset도 아래에서 분석할 수 있습니다."
-        : "선택한 Dataset에 모델을 적용해 불변 Scoring Result를 생성합니다."}</p>
-    </div></div>}
     {previousJobNotice && <div role="status" className="pipeline-readiness-blocked">
       이전 Dataset에서 시작한 점수 계산 Job은 자동 취소되지 않습니다.
       완료 여부는 작업 이력에서 확인할 수 있습니다.
@@ -259,22 +253,22 @@ export function MLScoringPanel({
       <details><summary>요청 오류와 복구 정보</summary><p>{error}</p></details>
     </div>}
     {selectedJob && <div className="result scoring-result-first" ref={resultRef}>
-      {!visibleResult && <h4>선택한 Dataset 분석 · {({
-        Queued: "대기 중", Running: "진행 중", Succeeded: "완료",
-        Failed: "실패", Cancelled: "취소됨",
-      } as Record<string, string>)[selectedJob.status] ?? selectedJob.status}</h4>}
-      {!visibleResult && <p className="hint">실행에 사용한 Dataset: {datasets.find(d => d.id === selectedJob.spec.dataset_id)?.name ??
-        "현재 목록 밖의 Dataset"} · 해당 Job의 입력과 결과를 표시합니다.</p>}
+      {!visibleResult && <h4>Dataset 분석 · {jobStatusLabel(selectedJob.status)}</h4>}
+      {!visibleResult && <p className="hint">분석 중인 Dataset: <strong>{
+        datasets.find(d => d.id === selectedJob.dataset_id)?.name ?? "현재 목록 밖의 Dataset"}</strong></p>}
+      {!TERMINAL.has(selectedJob.status) && <p className="scoring-result-preview">
+        완료되면 이 자리에 전체 관측값의 점수 분포와 점수가 높은 관측값이 표시됩니다.</p>}
       {canCancel && ["Queued", "Running"].includes(selectedJob.status) &&
         !selectedJob.cancel_requested &&
-        <button className="secondary" onClick={() => void cancel()}>Scoring 취소 요청</button>}
+        <button type="button" className="secondary scoring-cancel" onClick={() => void cancel()}>
+          점수 계산 취소 요청</button>}
       {selectedJob.cancel_requested && selectedJob.status === "Running" &&
         <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
-      {selectedJob.status === "Failed" && <p role="alert">Scoring 실패 · {selectedJob.error ?? "실행 오류"}
+      {selectedJob.status === "Failed" && <p role="alert">점수 계산 실패 · {selectedJob.error ?? "실행 오류"}
         {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
       {selectedJob.status === "Succeeded" &&
         !hasResultReference &&
-        <p role="alert">Scoring Job은 완료됐지만 결과 참조가 없습니다. 작업 이력에서 실행 근거를 확인해 주세요.</p>}
+        <p role="alert">점수 계산은 완료됐지만 결과 참조가 없습니다. 작업 이력에서 실행 근거를 확인해 주세요.</p>}
       {selectedJob.status === "Succeeded" && hasResultReference &&
         resultError && <div role="alert" className="pipeline-readiness-blocked">
           <p>점수 계산은 완료됐지만 결과를 불러오지 못했습니다: {resultError}</p>
@@ -305,10 +299,8 @@ export function MLScoringPanel({
         </button>
       </div>}
     </div>}
-    <details key={visibleResult ? "completed" : "prepare"} className="scoring-next-analysis"
-      open={!visibleResult}>
-      <summary>{visibleResult ? "다른 Dataset 분석하기" : "분석할 데이터 선택"}</summary>
-      <div className="scoring-next-analysis-body">
+    {(() => {
+      const form = <div className="scoring-next-analysis-body">
     <div className="form-row">
       <label>기존 Dataset 선택
         <select aria-label="모델에 적용할 Dataset" value={datasetId}
@@ -324,7 +316,7 @@ export function MLScoringPanel({
           onChange={e => setLabelColumn(e.target.value)}>
           <option value="">레이블 없음</option>
           {columns.filter(col => !model.features.includes(col.name)).map(col =>
-            <option key={col.name} value={col.name}>{col.name} ({col.dtype})</option>)}
+            <option key={col.name} value={col.name}>{col.name} ({formatDtype(col.dtype)})</option>)}
         </select>
       </label>
       {checkedColumns && <label>관측 시각 (선택)
@@ -333,13 +325,15 @@ export function MLScoringPanel({
           onChange={e => setTimeColumnChoice(e.target.value)}>
           <option value="">관측 시각 보존 안 함</option>
           {timeColumns.map(col => <option key={col.name} value={col.name}>
-            {col.name} ({col.dtype})
+            {col.name} ({formatDtype(col.dtype)})
           </option>)}
         </select>
       </label>}
     </div>
-    {canUpload && onDatasetRegistered && <div className="scoring-file-input">
-      <label>새 파일 등록해서 분석하기
+    {datasets.length === 0 && canUpload && onDatasetRegistered && <details className="scoring-file-input"
+      open={datasets.length === 0 || uploading || Boolean(uploadError) || undefined}>
+      <summary>새 파일 등록해서 분석하기 (CSV·Parquet)</summary>
+      <label>등록할 파일
         <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
           onChange={event => {
             const file = event.currentTarget.files?.[0];
@@ -361,7 +355,7 @@ export function MLScoringPanel({
         <p>파일 형식과 크기, 연결 상태를 확인해 주세요. 등록 여부가 불확실하면 Dataset 목록에서 먼저 확인해 주세요.</p>
         <details><summary>오류 진단 정보</summary><p>{uploadError}</p></details>
       </div>}
-    </div>}
+    </details>}
     {hasMoreDatasets && onLoadMoreDatasets && <button type="button" className="secondary"
       disabled={loadingMoreDatasets} onClick={() => {
         setLoadingMoreDatasets(true);
@@ -379,17 +373,9 @@ export function MLScoringPanel({
           {missingFeatures.length > 6 ? " 외 " + (missingFeatures.length - 6) + "개" : ""}</p>
         <p>학습 모델과 호환되는 Dataset을 선택하세요.</p>
       </div>}
-    {checkedColumns && missingFeatures.length === 0 && <p role="status">
-      모델 입력 Feature {model.features.length}개 이름이 일치합니다. 자료형·결측 조건은 실행 중에도 검증합니다.
+    {checkedColumns && missingFeatures.length === 0 && <p role="status" className="scoring-input-ready">
+      ✓ 모델 입력 Feature {model.features.length}개 이름이 일치합니다. 자료형·결측 조건은 실행할 때 검증합니다.
     </p>}
-    <details className="scoring-input-guidance">
-      <summary>입력 조건과 결과 해석 안내</summary>
-      <p className="hint">모델 학습 때의 Feature 이름·자료형이 일치해야 합니다. 실제 값은 실행 시 검증합니다.
-        결과 레이블을 지정한 경우에만 지원되는 순위 지표를 계산합니다.
-        원본의 명시적 시간대가 있는 관측 시각만 결과에 보존하며,
-        관측 시각의 보존만으로 시간 분할이나 독립 Test 평가를 의미하지 않습니다.
-        이상 점수는 사건 확률이 아닙니다.</p>
-    </details>
     {datasetId === model.dataset_id && <p className="hint">
       모델 학습에 사용한 Dataset과 같은 ID입니다. 판본이 같다면 해당 점수는 독립 Test 성능이 아닙니다.
     </p>}
@@ -399,6 +385,40 @@ export function MLScoringPanel({
     <button disabled={!canRun || submitted || uploading || !inputReady} onClick={() => void create()}>
       {submitted ? "점수 계산 요청 중…" : "이 Dataset 분석 시작 →"}
     </button>
+    {datasets.length > 0 && canUpload && onDatasetRegistered && <details className="scoring-file-input"
+      open={datasets.length === 0 || uploading || Boolean(uploadError) || undefined}>
+      <summary>새 파일 등록해서 분석하기 (CSV·Parquet)</summary>
+      <label>등록할 파일
+        <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
+          onChange={event => {
+            const file = event.currentTarget.files?.[0];
+            if (file) void addDataset(file);
+            event.currentTarget.value = "";
+          }} />
+      </label>
+      <p className="hint">CSV·Parquet 파일을 Dataset으로 등록한 뒤 입력 조건을 확인합니다.
+        등록이 끝나도 점수 계산은 자동 제출하지 않습니다. 원시 로그의 활동 Feature 자동 변환은 아직 지원하지 않습니다.</p>
+      {uploading && <div role="status" className="scoring-upload-status">
+        <p>{uploadProgress?.phase === "registering"
+          ? "파일 전송 완료 · 서버에서 검증하고 Dataset을 등록하고 있습니다."
+          : `파일 전송 중 · ${uploadProgress?.total ? Math.floor(100 * uploadProgress.loaded / uploadProgress.total) : 0}%`}</p>
+        {uploadProgress?.phase === "transferring" && uploadProgress.total > 0 &&
+          <progress max={uploadProgress.total} value={uploadProgress.loaded} aria-label="파일 전송 진행률" />}
+      </div>}
+      {uploadError && <div role="alert" className="pipeline-readiness-blocked">
+        <strong>파일을 등록하지 못했습니다.</strong>
+        <p>파일 형식과 크기, 연결 상태를 확인해 주세요. 등록 여부가 불확실하면 Dataset 목록에서 먼저 확인해 주세요.</p>
+        <details><summary>오류 진단 정보</summary><p>{uploadError}</p></details>
+      </div>}
+    </details>}
+    <details className="scoring-input-guidance">
+      <summary>입력 조건과 결과 해석 안내</summary>
+      <p className="hint">모델 학습 때의 Feature 이름·자료형이 일치해야 합니다. 실제 값은 실행 시 검증합니다.
+        결과 레이블을 지정한 경우에만 지원되는 순위 지표를 계산합니다.
+        원본의 명시적 시간대가 있는 관측 시각만 결과에 보존하며,
+        관측 시각의 보존만으로 시간 분할이나 독립 Test 평가를 의미하지 않습니다.
+        이상 점수는 사건 확률이 아닙니다.</p>
+    </details>
     <details className="pipeline-scoring-history" onToggle={event => {
       setHistoryOpen(event.currentTarget.open);
       if (event.currentTarget.open) {
@@ -408,7 +428,7 @@ export function MLScoringPanel({
     }}><summary>이 모델의 이전 점수 계산 보기</summary>
     <div className="steps">
       {historyError && <p role="alert">이전 점수 계산 이력을 확인하지 못했습니다: {historyError}</p>}
-      <strong>이 모델의 Scoring 이력</strong>
+      <strong>이 모델의 점수 계산 이력</strong>
       {available.map(item => <button key={item.id} className="secondary"
         type="button" disabled={submitted || uploading}
         aria-pressed={selectedJob?.id === item.id}
@@ -416,14 +436,18 @@ export function MLScoringPanel({
         {item.id.slice(0, 8)} · {jobStatusLabel(item.status)}
         {loadingHistoryId === item.id ? " · 결과 조회 중…" : selectedJob?.id === item.id ? " · 선택됨" : " · 결과 확인"}
       </button>)}
-      {available.length === 0 && <p className="hint">현재 조회한 이력에 이 모델의 Scoring Job이 없습니다.</p>}
+      {available.length === 0 && <p className="hint">현재 조회한 이력에 이 모델의 점수 계산 기록이 없습니다.</p>}
       {nextCursor && <button className="secondary"
         onClick={() => void loadMore().catch(e => setHistoryError(formatError(e)))}>
-        이전 Scoring 더 보기
+        이전 점수 계산 더 보기
       </button>}
     </div>
     </details>
-      </div>
-    </details>
+      </div>;
+      return selectedJob
+        ? <details key={visibleResult ? "completed" : "selected"} className="scoring-next-analysis">
+            <summary>다른 Dataset 분석하기</summary>{form}</details>
+        : form;
+    })()}
   </section>;
 }

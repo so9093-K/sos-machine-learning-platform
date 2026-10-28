@@ -670,7 +670,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           </button>
         </section>}
       {!dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <div className="empty">
-        <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터를 탐색해 보세요"}</h2>
+        <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터 탐색"}</h2>
         <p>{tab === "preparation"
           ? "Data Preparation은 Explorer 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
           : "CSV·Parquet·탭 구분 TSV/TXT, Iceberg 테이블 또는 합성 예제로 시작하세요."}</p>

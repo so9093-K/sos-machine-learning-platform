@@ -9,6 +9,15 @@ import { jobStatusLabel } from "./display-format";
 import type { MLPlaygroundJob, MLPlaygroundJobPage, MLPlaygroundJobSummary, ModelRevision } from "./types";
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
+// 저장된 관측값 점수와 새 계산 점수를 같은 자릿수로 비교한다.
+const SCORE_DIGITS = 6;
+const formatScore = (value: number) => value.toFixed(SCORE_DIGITS);
+function formatScoreDelta(delta: number): string {
+  // 표시 자릿수에서 0이 되는 차이는 부호 없이 보여주고 의미를 따로 안내한다.
+  if (Math.abs(delta) < 0.5 * 10 ** -SCORE_DIGITS) return formatScore(0);
+  return (delta > 0 ? "+" : "") + formatScore(delta);
+}
+const sameAtDisplay = (delta: number) => Math.abs(delta) < 0.5 * 10 ** -SCORE_DIGITS;
 
 export function exampleValues(model: ModelRevision): Record<string, string> | null {
   const medians = model.runtime?.feature_reference_medians;
@@ -316,6 +325,15 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
         { method: "POST" }));
     } catch (cause) { setError(formatError(cause)); }
   }
+  const inputPane = useRef<HTMLDivElement>(null);
+  /** 재계산 결과에서 다음 행동으로 첫 Feature 입력에 바로 이동한다. */
+  function focusFirstInput() {
+    setMode("edit");
+    const first = inputPane.current?.querySelector<HTMLInputElement>("input:not([disabled])");
+    first?.scrollIntoView({ block: "center",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    first?.focus({ preventScroll: true });
+  }
   const featureField = (name: string) => <label className="model-lab-feature" key={name}>
     <span>{activityFeatureLabel(name)} <small>{name} · {
       featureDtypes[model.features.indexOf(name)] ?? "자료형 미확인"
@@ -334,18 +352,18 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       <p className="hint" role="status">진행 중인 점수 계산이 끝나면 선택한 관측값을 입력에 가져옵니다.</p>}
     {importedSource && <div className="model-lab-observation-source" role="status">
       <strong>Dataset 관측값에서 가져온 입력</strong>
-      <p>원래 결과 행 #{importedSource.rowIndex.toLocaleString("ko-KR")} · 저장된 이상 점수 {importedSource.originalScore.toFixed(6)}.
-        현재 입력은 별도로 수정할 수 있으며, 점수 계산은 직접 요청해야 합니다.</p>
+      <p>원래 결과 행 #{importedSource.rowIndex.toLocaleString("ko-KR")} · 저장된 이상 점수 {formatScore(importedSource.originalScore)}.
+        값을 바꿔 다시 계산해도 원래 Dataset 결과는 바뀌지 않습니다.</p>
       {onBackToAnalysis && <button type="button" className="secondary"
         onClick={onBackToAnalysis}>원래 Dataset 분석으로 돌아가기 →</button>}
     </div>}
     <div className="model-lab-workspace">
-      <div className="model-lab-input-pane">
+      <div className="model-lab-input-pane" ref={inputPane}>
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
       <button type="button" aria-pressed={mode === "example"} className="secondary"
         disabled={!reference || running}
         onClick={() => { setMode("example"); setImportedSource(null); setImportedAfterJobId(null); if (reference) setFields(reference); }}>
-        기준값으로 체험
+        학습 기준값으로 체험
       </button>
       <button type="button" aria-pressed={mode === "edit"} className="secondary"
         disabled={running} onClick={() => setMode("edit")}>직접 수정해보기</button>
@@ -431,25 +449,43 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
         disabled={!canRun || running || invalid.length > 0}>
         {running ? "모델 실행 중…" : "실제 이상 점수 계산하기 →"}
       </button>
-      {reference && <button type="button" className="secondary"
-        onClick={() => { setFields(reference); setImportedSource(null); setImportedAfterJobId(null); }} disabled={running}>기준값으로 초기화</button>}
+      {importedSource && observationEdits.length > 0 && <button type="button" className="secondary"
+        onClick={() => setFields({ ...importedSource.fields })} disabled={running}>
+        원래 관측값으로 복원</button>}
+      {reference && <button type="button" className="ghost"
+        title={importedSource ? "가져온 관측값 대신 학습 중앙값 기준 입력으로 바꿉니다." : undefined}
+        onClick={() => { setFields(reference); setImportedSource(null); setImportedAfterJobId(null); }} disabled={running}>
+        학습 기준값으로 초기화</button>}
       {job && !TERMINAL.has(job.status) && canCancel &&
         <button type="button" className="secondary" onClick={() => void cancel()}>취소 요청</button>}
     </div>
     {job && showCurrentJob && <div className="model-lab-playground-result" aria-live="polite">
-      <strong>점수 계산 · {({ Queued: "대기 중", Running: "실행 중", Succeeded: "완료",
-        Failed: "실패", Cancelled: "취소됨" } as Record<string, string>)[job.status] ?? job.status}</strong>
+      <strong>점수 계산 · {jobStatusLabel(job.status)}</strong>
       {job.status === "Succeeded" && lastScore !== null &&
         <div className="model-lab-score-row">
           <div><span>{matchesCompletedInput && (!importedSource || newJobAfterImport)
             ? "현재 입력의 이상 점수" : "마지막 제출 입력의 이상 점수"}</span>
-            <strong>{lastScore.toFixed(5)}</strong></div>
-          {previousScore !== null && <div><span>이전 완료 계산과의 점수 차이</span>
-            <strong>{(lastScore - previousScore) > 0 ? "+" : ""}{(lastScore - previousScore).toFixed(5)}</strong></div>}
-          {importedSource && newJobAfterImport && matchesCompletedInput && <div>
-            <span>원래 Dataset 관측값 점수 대비 차이</span>
-            <strong>{lastScore - importedSource.originalScore > 0 ? "+" : ""}{(lastScore - importedSource.originalScore).toFixed(5)}</strong>
-          </div>}
+            <strong>{formatScore(lastScore)}</strong></div>
+          {importedSource && newJobAfterImport && matchesCompletedInput ? <div>
+            <span>원래 관측값 점수({formatScore(importedSource.originalScore)}) 대비</span>
+            <strong>{formatScoreDelta(lastScore - importedSource.originalScore)}</strong>
+          </div> : previousScore !== null && <div><span>이전 완료 계산과의 점수 차이</span>
+            <strong>{formatScoreDelta(lastScore - previousScore)}</strong></div>}
+        </div>}
+      {job.status === "Succeeded" && lastScore !== null && importedSource && newJobAfterImport &&
+        matchesCompletedInput && <div className="model-lab-try-change" role="status">
+          {observationEdits.length === 0
+            ? <p><strong>원래 관측값을 그대로 다시 계산한 결과입니다.</strong>{" "}
+                {sameAtDisplay(lastScore - importedSource.originalScore)
+                  ? "같은 입력에서 저장된 점수와 같은 결과를 확인했습니다."
+                  : "저장된 점수와 차이가 있으니 모델 판본과 입력값을 확인해 주세요."}
+                {" "}이제 Feature 값을 바꿔 다시 계산하면 모델 반응을 비교할 수 있습니다.</p>
+            : <p>원래 관측값에서 Feature {observationEdits.length}개를 바꾼 결과입니다.
+                {sameAtDisplay(lastScore - importedSource.originalScore)
+                  ? " 표시 자릿수에서는 점수 변화가 없습니다. 다른 Feature나 여러 값을 함께 바꿔 보세요."
+                  : " 다른 Feature도 바꿔 보거나, 원래 관측값으로 복원해 다시 비교할 수 있습니다."}</p>}
+          {observationEdits.length === 0 && <button type="button" className="secondary"
+            onClick={focusFirstInput}>Feature 값 바꿔보기 →</button>}
         </div>}
       {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}
         {job.error_code && <small> ({job.error_code})</small>}</p>}
@@ -468,8 +504,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
           이 차이는 변경 Feature의 인과적 기여도를 뜻하지 않습니다.</p>
         <div className="model-lab-score-row">
           <div><span>이전 점수</span><strong>{typeof comparisonJob.result?.anomaly_score === "number"
-            ? comparisonJob.result.anomaly_score.toFixed(5) : "없음"}</strong></div>
-          <div><span>이번 점수</span><strong>{lastScore.toFixed(5)}</strong></div>
+            ? formatScore(comparisonJob.result.anomaly_score) : "없음"}</strong></div>
+          <div><span>이번 점수</span><strong>{formatScore(lastScore)}</strong></div>
         </div>
         <p className="hint">바뀐 Feature {comparedFeatures.length}개</p>
         <div className="table-scroll"><table>
@@ -519,7 +555,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
               <strong>선택한 실행 · {jobStatusLabel(selectedHistory.status)}</strong>
               {selectedHistory.status === "Succeeded" &&
                 typeof selectedHistory.result?.anomaly_score === "number" &&
-                <p>이상 점수 <strong>{selectedHistory.result.anomaly_score.toFixed(5)}</strong></p>}
+                <p>이상 점수 <strong>{formatScore(selectedHistory.result.anomaly_score)}</strong></p>}
               {selectedHistory.status === "Failed" &&
                 <p role="status">실패 사유 · {selectedHistory.error ?? "실행 오류"}
                   {selectedHistory.error_code && <small> ({selectedHistory.error_code})</small>}</p>}
