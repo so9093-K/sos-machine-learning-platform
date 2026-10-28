@@ -79,6 +79,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     setUsage("dataset");
     window.requestAnimationFrame(() => {
       const detail = datasetPanel.current?.querySelector<HTMLElement>(".scoring-observation-detail");
+      detail?.focus({ preventScroll: true });
       detail?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
         ? "auto" : "smooth", block: "start" });
     });
@@ -87,7 +88,9 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   useEffect(() => {
     if (usage !== "playground" || !observationInput) return;
     const id = window.requestAnimationFrame(() => {
-      playgroundPanel.current?.scrollIntoView({
+      const target = playgroundPanel.current?.querySelector<HTMLElement>(".model-lab-playground");
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
           ? "auto" : "smooth", block: "start",
       });
