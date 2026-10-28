@@ -6,6 +6,7 @@ import type { Dataset, DatasetColumns, Job, JobSummary } from "./types";
 
 const NUMERIC = /^(?:Int(?:32|64)|Float(?:32|64))$/;
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
+type FeatureRegistrationItem = JobSummary & { retired: boolean };
 
 function usePolledJob() {
   const [job, setJob] = useState<Job | null>(null);
@@ -44,7 +45,9 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const [ttlDays, setTtlDays] = useState(30);
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [registrations, setRegistrations] = useState<JobSummary[]>([]);
+  const [registrations, setRegistrations] = useState<FeatureRegistrationItem[]>([]);
+  const [retireTarget, setRetireTarget] = useState("");
+  const [retireBusy, setRetireBusy] = useState(false);
   const [registrationCursor, setRegistrationCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [registrationId, setRegistrationId] = useState("");
@@ -53,6 +56,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const [listError, setListError] = useState("");
   const registration = usePolledJob();
   const retrieval = usePolledJob();
+  const retirement = usePolledJob();
   const numeric = useMemo(() => columns.filter(c => NUMERIC.test(c.dtype)), [columns]);
   const sources = datasets.filter(d => d.kind === "file" && d.name.toLowerCase().endsWith(".parquet"));
 
@@ -68,34 +72,41 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
 
   useEffect(() => {
     let active = true;
-    void request<{items: JobSummary[]; next_cursor: string | null}>(
+    void request<{items: FeatureRegistrationItem[]; next_cursor: string | null}>(
       "/api/features/services/registrations?limit=100",
     ).then(page => {
         if (active) {
           setRegistrations(page.items.filter(item =>
-            item.status === "Succeeded" && typeof item.result?.feature_service === "string"));
+            item.status === "Succeeded" && !item.retired &&
+            typeof item.result?.feature_service === "string"));
           setRegistrationCursor(page.next_cursor);
         }
       })
       .catch(exc => { if (active) setListError(formatError(exc)); });
     return () => { active = false; };
-  }, [registration.job?.status]);
+  }, [registration.job?.status, retirement.job?.status]);
 
   useEffect(() => {
     if (registration.job?.status === "Succeeded") setRegistrationId(registration.job.id);
   }, [registration.job?.id, registration.job?.status]);
 
+  useEffect(() => {
+    if (retirement.job?.status === "Succeeded" && retireTarget === registrationId) {
+      setRegistrationId("");
+    }
+  }, [retirement.job?.status, retirement.job?.id, retireTarget, registrationId]);
+
   async function loadEarlierRegistrations() {
     if (!registrationCursor || loadingMore) return;
     setLoadingMore(true); setListError("");
     try {
-      const page = await request<{items: JobSummary[]; next_cursor: string | null}>(
+      const page = await request<{items: FeatureRegistrationItem[]; next_cursor: string | null}>(
         `/api/features/services/registrations?limit=100&cursor=${encodeURIComponent(registrationCursor)}`,
       );
       setRegistrations(current => {
         const known = new Set(current.map(item => item.id));
         return [...current, ...page.items.filter(item =>
-          !known.has(item.id) && item.status === "Succeeded" &&
+          !known.has(item.id) && item.status === "Succeeded" && !item.retired &&
           typeof item.result?.feature_service === "string")];
       });
       setRegistrationCursor(page.next_cursor);
@@ -104,6 +115,18 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
     } finally {
       setLoadingMore(false);
     }
+  }
+
+  async function retireRegistration() {
+    if (!canCreate || !retireTarget || retireBusy) return;
+    setRetireBusy(true); retirement.setError(""); retirement.setJob(null);
+    try {
+      const item = await submitJob<Job>(
+        `/api/features/services/${encodeURIComponent(retireTarget)}/retirement/jobs`, {},
+      );
+      retirement.setJob(item);
+    } catch (exc) { retirement.setError(formatError(exc)); }
+    finally { setRetireBusy(false); }
   }
 
   async function createRegistration() {
@@ -172,6 +195,35 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
         disabled={loadingMore} onClick={() => void loadEarlierRegistrations()}>
         {loadingMore ? "이전 등록을 조회하는 중…" : "이전 Feature Service 더 보기"}
       </button>}
+      <details>
+        <summary>Feature Service 폐기·등록 잔여물 정리</summary>
+        <p className="hint">완료·실패·취소된 등록을 폐기할 수 있습니다. 과거 조회나 다른
+          활성 등록이 사용 중인 정의는 Registry에 보존되며 신규 조회에는 사용할 수 없습니다.</p>
+        <label>정리할 등록
+          <select value={retireTarget} onChange={e => setRetireTarget(e.target.value)}
+            disabled={!canCreate} aria-label="Feast 폐기 대상 등록">
+            <option value="">등록 기록 선택</option>
+            {registrations.filter(r => !r.retired).map(r =>
+              <option key={r.id} value={r.id}>{r.id.slice(0,8)} · {jobStatusLabel(r.status)}</option>)}
+            {registration.job && !registrations.some(r => r.id === registration.job?.id) &&
+              TERMINAL.has(registration.job.status) &&
+              <option value={registration.job.id}>{registration.job.id.slice(0,8)} · 최근 등록</option>}
+          </select>
+        </label>
+        <button type="button" disabled={!canCreate || !retireTarget || retireBusy}
+          className="secondary" onClick={() => void retireRegistration()}>
+          {retireBusy ? "폐기 접수 중…" : "등록 폐기 Job 제출"}
+        </button>
+        {retirement.job && <div role="status">
+          <strong>폐기 · {jobStatusLabel(retirement.job.status)}</strong>
+          {retirement.job.status === "Failed" && <p role="alert">{retirement.job.error ?? "폐기 실패"}</p>}
+          {retirement.job.status === "Succeeded" &&
+            <p className="hint">{retirement.job.result?.registry_deleted
+              ? "Feast Registry에서도 참조 없는 정의를 정리했습니다."
+              : "등록은 폐기됐으며 사용 중인 과거 정의는 Registry에 보존했습니다."}</p>}
+        </div>}
+        {retirement.error && <p role="alert">{retirement.error}</p>}
+      </details>
       <details>
         <summary>새 Feature Service 정의·등록</summary>
         <div className="form-row">
