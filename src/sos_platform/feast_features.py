@@ -280,6 +280,106 @@ def register_feature_service(store, source_dataset: dict, raw_spec: dict) -> dic
     }
 
 
+
+def retire_feature_service(store, source_dataset: dict, registration_job: dict) -> dict:
+    """참조 중인 정의를 보존하고, 더는 참조하지 않는 Registry 객체만 폐기한다.
+
+    성공·취소·실패 등록 모두 원래 요청으로 동일 이름을 재구성한다. 다른 등록 Job과
+    조회 Job의 실제 참조를 확인한 뒤 삭제하며, 삭제 도중 재실행해도 수렴한다.
+    SOS의 Dataset·모델·과거 실행 근거 자체는 삭제하지 않는다.
+    """
+    from sqlalchemy import bindparam, text
+    from feast.errors import FeastObjectNotFoundException
+
+    spec = FeatureDefinitionRequest.model_validate(registration_job["spec"])
+    if source_dataset["id"] != spec.feature_dataset_id:
+        raise ValueError("Feature Source Dataset 식별자가 달라졌습니다.")
+    if source_dataset["version"] != registration_job["spec"]["feature_dataset_version"]:
+        raise ValueError("Feature Source 판본이 변경됐습니다.")
+    with pinned_scan_dataset(store, source_dataset) as source:
+        schema = _feature_schema(source, spec)
+    names, expected = _make_feature_objects(spec, source_dataset, schema)
+    old_result = registration_job.get("result") or {}
+    if old_result.get("definition_digest") and old_result["definition_digest"] != definition_digest(expected):
+        raise ValueError("등록된 Feature 정의 지문과 폐기 대상이 일치하지 않습니다.")
+
+    with store.connection() as db:
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:name))"),
+            {"name": "sos-feast:" + names[2]},
+        )
+        # 이름이 같은 등록의 사용 여부와 그 폐기 상태를 한 잠금 아래에서 조회한다.
+        registrations = db.execute(
+            text(
+                "SELECT id,status FROM jobs "
+                "WHERE kind='feature_register' AND dataset_id=:dataset "
+                "AND spec::jsonb->>'feature_service_name'=:service"
+            ),
+            {"dataset": source_dataset["id"], "service": names[2]},
+        ).mappings().all()
+        ids = [item["id"] for item in registrations]
+        retired_ids = set()
+        if ids:
+            retire_query = text(
+                "SELECT spec::jsonb->>'registration_job_id' FROM jobs "
+                "WHERE kind='feature_retire' AND status='Succeeded' "
+                "AND spec::jsonb->>'registration_job_id' IN :ids"
+            ).bindparams(bindparam("ids", expanding=True))
+            retired_ids = set(db.execute(retire_query, {"ids": ids}).scalars())
+        active = [
+            item["id"] for item in registrations
+            if item["id"] != registration_job["id"]
+            and item["status"] in ("Queued", "Running", "Succeeded")
+            and item["id"] not in retired_ids
+        ]
+        retrievals = []
+        if ids:
+            lookup_query = text(
+                "SELECT id FROM jobs WHERE kind='feature_retrieve' "
+                "AND status IN ('Queued','Running','Succeeded') "
+                "AND spec::jsonb->>'registration_job_id' IN :ids"
+            ).bindparams(bindparam("ids", expanding=True))
+            retrievals = list(db.execute(lookup_query, {"ids": ids}).scalars())
+        if active or retrievals:
+            return {
+                "registration_job_id": registration_job["id"],
+                "registry_deleted": False,
+                "retained_for": {
+                    "other_active_registrations": len(active),
+                    "historical_or_pending_retrievals": len(retrievals),
+                },
+            }
+
+        feast = _feature_store()
+        current = _registry_objects(feast, names)
+        for wanted, actual in zip(expected, current):
+            if actual is not None and _semantic_spec(actual) != _semantic_spec(wanted):
+                raise ValueError("Feast 정의가 등록 이후 변경되어 자동 폐기할 수 없습니다.")
+        if current[2] is not None:
+            feast.delete_feature_service(names[2])
+        if current[1] is not None:
+            feast.delete_feature_view(names[1])
+        if current[0] is not None:
+            feast._registry.delete_entity(names[0], project=feast.project)
+
+        # Feature View가 사용했던 개별 Source도 같은 식별자로 생성됐다.
+        source_name = f"{names[1]}_source"
+        try:
+            feast.get_data_source(source_name)
+        except FeastObjectNotFoundException:
+            pass
+        else:
+            feast._registry.delete_data_source(source_name, project=feast.project)
+
+        if any(item is not None for item in _registry_objects(_feature_store(), names)):
+            raise ValueError("Feast Registry 객체의 폐기가 완료되지 않았습니다.")
+    return {
+        "registration_job_id": registration_job["id"],
+        "registry_deleted": True,
+        "retained_for": {"other_active_registrations": 0, "historical_or_pending_retrievals": 0},
+    }
+
+
 def retrieve_features(
     store,
     feature_dataset: dict,
