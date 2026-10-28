@@ -21,6 +21,10 @@ Job/Attempt 계약을 적용한다.
 3. `POST /api/features/retrieval/jobs`: 등록 성공 Job ID·조회 시점 Dataset·UTC 시간
    컬럼을 제출한다. 동일 Feature Service를 조회마다 재사용하며 새 정의를 등록하지 않는다.
 4. 조회 성공 Job의 결과 `dataset_id`를 기존 SOS 모델 학습에 사용한다.
+5. `POST /api/features/services/{registration_job_id}/retirement/jobs`: 성공·실패·
+   취소된 등록을 명시적으로 폐기한다. `registry_deleted`는 실제 Registry 객체
+   제거 여부이며 `false`인 경우 다른 활성 등록·과거 조회의 참조가 유지된 것이다.
+   폐기된 등록은 새 조회에 사용할 수 없고 과거 Dataset·모델 근거는 유지한다.
 
 등록 요청:
 ```json
@@ -42,7 +46,10 @@ Job/Attempt 계약을 적용한다.
 }
 ```
 
-현재는 Entity 요청 100,000개까지 처리하고 초과 요청은 잘라내지 않고 실패한다.
+현재 DuckDB Runtime의 기본 Entity 조회 상한은 100,000개이며
+`SOS_FEAST_MAX_ENTITY_ROWS`로 조정한다. 초과 요청은 잘라내지 않고 실패한다.
+동일 정의를 재등록하면 Registry의 기존 내용을 대조하고 안전하게 재사용하며
+변경·부분 소실 상태는 무조건 덮어쓰지 않는다.
 Online Serving과 현재 Iceberg SQL Catalog의 직접 조회는 지원하지 않는다.
 
 ## 실행 준비

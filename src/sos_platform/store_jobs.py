@@ -491,6 +491,7 @@ class JobStoreMixin:
                         "registration_job_id": provenance["registration_job_id"],
                         "feature_service": provenance["feature_service"],
                         "feature_view": provenance["feature_view"],
+                        "definition_digest": provenance["definition_digest"],
                         "source_dataset_id": provenance["feature_dataset_id"],
                         "source_dataset_version": provenance["feature_dataset_version"],
                     }

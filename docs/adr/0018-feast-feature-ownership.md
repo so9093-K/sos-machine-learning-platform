@@ -39,7 +39,18 @@ ML Job을 관리하지만 독립적인 Feature Registry·Historical Retrieval의
 8. **Runtime 독립:** Feast SDK는 Feature 등록·조회 경계에서만 호출한다.
    독립 SOS API·Data Explorer·기존 ML 계산을 Feast Registry 가용성에 묶지
    않으며 일반 Worker의 시작도 Registry Health에 조건부로 종속시키지 않는다.
-9. **전환 원칙:** 도입 범위 안에서 대체된 API·실행 경로·자체 Registry·타입·설정·
+9. **Feast 외부 커밋·폐기:** 등록 정의의 이름을 요청과 Source 판본으로 결정하고,
+   Entity·View·Service의 의미적 지문을 Registry의 실제 상태와 비교한다.
+   같은 정의의 재시도는 기존 등록을 사용하고, 내용이 다른 충돌은 덮어쓰지 않는다.
+   Worker 중단 뒤 부분 등록은 확인·재조정한다. 실패·취소·성공 등록의 폐기는 별도
+   SOS Job으로 요청한다. 다른 활성 등록이나 과거/진행 중 Retrieval이 참조하는
+   정의는 Registry에 유지하되 해당 등록의 신규 조회는 막는다.
+   참조가 없는 경우에만 정의와 연결된 Registry 객체를 실제 삭제한다.
+   부분 폐기 후 재실행은 남은 객체만 확인하며 불일치하는 정의는 삭제하지 않는다.
+10. **조회 Runtime 경계:** 플랫폼의 등록·조회·불변 Dataset 계약은 Feast의
+    현행 DuckDB/Ibis Backend, DataFrame 물질화나 특정 파일 형식과 동일하지 않다.
+    현재 실행 정책 및 Offline Store별 조회 구현은 별도 Runtime 경계에서 관리한다.
+11. **전환 원칙:** 도입 범위 안에서 대체된 API·실행 경로·자체 Registry·타입·설정·
    문서·검증 참조를 같은 PR에서 제거한다. 미완료 기능을 완료로 설명하지 않는다.
    과거 Alembic migration은 변경하지 않으며 유효한 Dataset·Model·Scoring 이력은 유지한다.
 
@@ -55,8 +66,9 @@ ML Job을 관리하지만 독립적인 Feature Registry·Historical Retrieval의
   직접 Iceberg FeatureSource로 간주하지 않는다. Iceberg Snapshot을 명시적으로
   고정해 게시한 Parquet를 사용하거나 검증된 별도 지원 경로를 선택한다.
 - Online Serving/Online Materialization이 아직 구현되지 않았다는 사실을 유지한다.
-  Feature Source의 변경·삭제와 오래된 정의의 Registry 정리는 독립 수명주기이며,
-  임의로 과거 모델이 사용하는 정의를 삭제하지 않는다.
+  등록 폐기·Registry 객체 삭제·원본 Dataset/모델 결과의 보존은 서로 다른 수명주기다.
+  조회 결과·Model Revision은 Source·Feature 정의 지문과 실제 입력 근거를 보존한다.
+  자동 물리 삭제는 하지 않고 성공한 폐기 Job에서 참조를 확인한 경우에만 정리한다.
 - 등록 Feature는 SOS 내부 Actor 검증을 통과해야 하며, Feast의 내부 관리 UI를
   일반 사용자에게 직접 노출하지 않는다.
 

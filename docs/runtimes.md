@@ -28,9 +28,14 @@ MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·A
 등록 Feature의 Historical Retrieval을 지원하는 Worker 이미지에 Feast 0.67.0을 설치한다.
 Feast SQL Registry는 SOS 메타데이터 DB와 분리된 PostgreSQL 서비스에 보관한다.
 API는 Feast SDK를 설치하지 않고 Dataset·Actor 권한을 검증해 Job을 제출하며,
-Worker는 등록·조회 작업에서만 Feast SDK를 호출하고 결과를 SOS 불변 Dataset으로
-게시한다. Feast Registry가 불가용해도 일반 SOS Data·ML Job의 Worker 시작을
+Worker는 등록·조회·명시적 폐기 작업에서만 Feast SDK를 호출하고 결과를
+SOS 불변 Dataset으로 게시한다. 등록과 폐기는 같은 Registry 이름의 SOS DB
+advisory lock을 사용해 외부 변경을 직렬화한다. Feast Registry가 불가용해도 일반 SOS Data·ML Job의 Worker 시작을
 대기시키지 않는다.
+현재 Offline 실행 모듈은 `feast_offline.py`의 DuckDB/Ibis 물질화·S3 호환
+연결 방식이다. Entity 조회 상한은 `SOS_FEAST_MAX_ENTITY_ROWS` 실행 정책으로
+조정하며, 초과 입력은 잘라내지 않는다. 새 Offline Store 구현은 이 경계에서만
+교체하고 SOS의 Job·Dataset·모델 API를 재정의하지 않는다.
 현재는 게시 Parquet Feature Source, UTC Event Timestamp, Entity 시점 Dataset만
 지원한다. Online Serving과 Iceberg SQL Catalog 직접 Feature Source 조회는 지원하지
 않는다. Feast 전문 Worker는 API와 동일한 uv.lock의 별도 `feast` dependency group으로
