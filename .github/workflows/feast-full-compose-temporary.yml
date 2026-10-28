@@ -4,6 +4,9 @@ on:
     branches: [feat/feast-feature-ownership]
 permissions:
   contents: read
+concurrency:
+  group: feast-full-compose-review
+  cancel-in-progress: true
 jobs:
   full-compose:
     runs-on: ubuntu-latest
@@ -29,7 +32,7 @@ jobs:
           PY
       - name: Build and launch actual SOS API Worker S3 Registry and MLflow
         run: |
-          docker compose --profile app up --build -d --wait init api worker mlflow
+          docker compose --profile app up --build -d --wait init api worker mlflow feast-postgres
           docker compose --profile app ps --all
       - name: Test actual Feature registration retrieval publication and training
         env:
