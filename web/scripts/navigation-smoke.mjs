@@ -332,7 +332,16 @@ try {
   assert.equal(dataJobLabel({ kind: "feature_register", spec: {} }), "Feature Service 등록");
   assert.equal(dataJobLabel({ kind: "feature_retrieve", spec: {} }), "Feature 시점 조회");
   assert.equal(dataJobLabel({ kind: "feature_retire", spec: {} }), "Feature Service 폐기");
-  const { isFeastSource, entityKeyIssue, RegisteredFeatureSummary } = await vite.ssrLoadModule("/src/FeastFeaturePanel.tsx");
+  const { isFeastSource, entityKeyIssue, RegisteredFeatureSummary, featureRetrievalBlockReason } = await vite.ssrLoadModule("/src/FeastFeaturePanel.tsx");
+  const retirementFor = status => ({ status, spec: { registration_job_id: "registration-1" } });
+  for (const status of ["Queued", "Running", "Succeeded", "Failed"])
+    assert.ok(featureRetrievalBlockReason("registration-1", false, retirementFor(status)));
+  assert.match(featureRetrievalBlockReason("registration-1", false, retirementFor("Failed")), /폐기 상태를 확인하거나 폐기를 다시 요청/);
+  assert.match(featureRetrievalBlockReason("registration-1", true, null), /폐기돼 신규 조회/);
+  assert.equal(featureRetrievalBlockReason("registration-1", false, retirementFor("Cancelled")), null);
+  assert.equal(featureRetrievalBlockReason("different-registration", false, retirementFor("Failed")), null);
+  assert.equal(featureRetrievalBlockReason("registration-1", false, null), null);
+  assert.equal(featureRetrievalBlockReason("", false, retirementFor("Failed")), null);
   assert.equal(isFeastSource({ kind: "file", name: "활동 Feature", location: "s3://bucket/source.parquet" }), true);
   assert.equal(isFeastSource({ kind: "file", name: "source.parquet", location: "s3://bucket/source.csv" }), false);
   assert.equal(isFeastSource({ kind: "iceberg", name: "source.parquet", location: "table.parquet" }), false);
@@ -368,7 +377,16 @@ try {
     run: failedRun, operatorLinks: false, onInspectInput() {}, onRefresh() {},
   }));
   assert.match(failureView, /실패 지점 · 모델 학습/);
+  assert.match(failureView, /입력 Dataset 확인/);
   assert.doesNotMatch(failureView, /href=/);
+  for (const errorCode of ["SOS-MLFLOW-NOT-CONFIGURED", "SOS-JOB-FAILED"]) {
+    const infrastructureFailure = renderToStaticMarkup(React.createElement(PipelineFailureNotice, {
+      run: { ...failedRun, error_code: errorCode, stages: [] }, operatorLinks: false,
+      onInspectInput() {}, onRefresh() {},
+    }));
+    assert.doesNotMatch(infrastructureFailure, /입력 Dataset 확인/);
+    assert.match(infrastructureFailure, /실행 상태 다시 조회/);
+  }
   assert.equal(contextPath("jobs", { pipelineReturn: true, datasetId: "dataset-1" }),
     "/activity/jobs?from=pipeline&dataset=dataset-1");
   assert.deepEqual(nextNavigationContext(

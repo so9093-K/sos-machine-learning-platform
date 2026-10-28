@@ -9,6 +9,17 @@ const NUMERIC = /^(?:Int(?:32|64)|Float(?:32|64))$/;
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 type FeatureRegistrationItem = JobSummary & { retired: boolean };
 
+/** 폐기 실패는 외부 변경 미반영을 보장하지 않는다. 상태 확인 전에는 조회를 재허용하지 않는다. */
+export function featureRetrievalBlockReason(registrationId: string, retired: boolean,
+  retirement: Pick<Job, "spec" | "status"> | null): string | null {
+  if (!registrationId) return null;
+  if (retired) return "선택한 등록은 폐기돼 신규 조회에 사용할 수 없습니다. 다른 등록을 선택하세요.";
+  if (retirement?.spec.registration_job_id !== registrationId || retirement.status === "Cancelled") return null;
+  return retirement.status === "Failed"
+    ? "등록 폐기에 실패해 처리 상태 확인이 필요합니다. Registry 변경이 일부 반영됐을 수 있어 신규 조회를 중단했습니다. 폐기 상태를 확인하거나 폐기를 다시 요청하세요."
+    : "선택한 등록의 폐기가 접수돼 신규 조회에 사용할 수 없습니다. 다른 등록을 선택하세요.";
+}
+
 /** 표시 이름은 파일 형식의 근거가 아니다. Worker와 같은 불변 위치 조건을 사용한다. */
 export function isFeastSource(dataset: Dataset): boolean {
   return dataset.kind === "file" && dataset.location.endsWith(".parquet");
@@ -129,8 +140,9 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const [serviceSchema, setServiceSchema] = useState<{ id: string; columns: DatasetColumns["columns"]; error: string } | null>(null);
   const [serviceSchemaRetry, setServiceSchemaRetry] = useState(0);
   const currentServiceSchema = serviceSchema?.id === registeredSourceId ? serviceSchema : null;
-  const retirementBlocksSelection = Boolean(registrationId && retirement.job &&
-    retirement.job.spec.registration_job_id === registrationId && retirement.job.status !== "Failed" && retirement.job.status !== "Cancelled");
+  const retirementBlockReason = featureRetrievalBlockReason(registrationId,
+    Boolean(selectedRegistration && "retired" in selectedRegistration && selectedRegistration.retired), retirement.job);
+  const retirementBlocksSelection = Boolean(retirementBlockReason || (retireBusy && retireConfirmation === registrationId));
   const serviceSchemaLoading = Boolean(registeredSourceId && !currentServiceSchema);
   const keyIssue = typeof requiredKey === "string" && entityDataset && currentServiceSchema &&
     !currentServiceSchema.error && !entityColumnsLoading && !entityColumnsError
@@ -218,7 +230,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
 
   async function retireRegistration() {
     if (!canCreate || !retireConfirmation || retireConfirmation !== retireTarget || retiring) return;
-    setRetireBusy(true); retirement.setError(""); retirement.setJob(null);
+    setRetireBusy(true); retirement.setError("");
     try {
       const item = await submitJob<Job>(
         `/api/features/services/${encodeURIComponent(retireConfirmation)}/retirement/jobs`, {},
@@ -433,7 +445,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
       {entityDataset && !entityColumnsLoading && !entityColumnsError && entityTimes.length === 0 &&
         <p className="hint">조회 Dataset에 UTC 시간형 컬럼이 없습니다.</p>}
       {keyIssue && <p role="alert">{keyIssue}</p>}
-      {retirementBlocksSelection && <p role="status">선택한 등록의 폐기가 접수돼 신규 조회에 사용할 수 없습니다. 다른 등록을 선택하세요.</p>}
+      {retirementBlockReason && <p role="status">{retirementBlockReason}</p>}
       <p className="hint">조회 시점 Dataset에는 등록한 서비스의 동일 Entity 키와 UTC 시각이
         필요합니다. 원본 Feature 계산과 모델 학습은 자동 실행하지 않습니다.</p>
       <div className="actions">

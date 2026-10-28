@@ -59,7 +59,7 @@ export function PipelineFailureNotice({ run, operatorLinks, onInspectInput, onRe
       : "현재 실행 상태를 다시 확인하고 오류를 해결한 뒤 새 분석 여부를 판단하세요."}</p>
     <div className="actions">
       <button type="button" className={evidence.inputIssue ? "secondary" : undefined} onClick={onRefresh}>실행 상태 다시 조회</button>
-      <button type="button" className={evidence.inputIssue ? undefined : "secondary"} onClick={onInspectInput}>입력 Dataset 확인 →</button>
+      {evidence.inputIssue && <button type="button" onClick={onInspectInput}>입력 Dataset 확인 →</button>}
       {operatorLinks && <a href={dagsterRunsForAnalysis(run.id)} target="_blank" rel="noopener noreferrer">운영자용 단계 로그 확인 ↗</a>}
     </div>
     <details><summary>오류 코드·실행 근거</summary><p>{evidence.code ?? "오류 코드 미확인"}</p>
