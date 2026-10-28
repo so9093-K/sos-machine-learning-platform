@@ -1,0 +1,22 @@
+name: Temporary Feast SDK integration smoke
+on:
+  push:
+    branches: [feat/feast-feature-ownership]
+
+permissions:
+  contents: read
+
+jobs:
+  feast-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Prepare SOS Python
+        run: |
+          uv python install 3.12
+          uv sync --locked --group dev
+      - name: Install specialized Feast Runtime
+        run: uv pip install --python .venv/bin/python "feast[duckdb]==0.67.0"
+      - name: Run actual PIT Retrieval
+        run: .venv/bin/python -m pytest -q tests/test_feast_live.py
