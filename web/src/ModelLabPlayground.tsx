@@ -374,7 +374,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
       {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}
         {job.error_code && <small> ({job.error_code})</small>}</p>}
       <p className="hint">점수가 높을수록 모델에서 이례적인 입력이며, 사건 확률이나 확정 판정은 아닙니다.</p>
-      {matchesCompletedInput && reference && editedNames.length === 0 &&
+      {matchesCompletedInput && reference && editedNames.length === 0 && mode === "example" &&
         <div className="model-lab-try-change">
           <p>학습 중앙값을 바탕으로 한 기준 입력의 점수입니다. 숫자를 바꾼 뒤 다시 계산해 모델 반응을 살펴보세요.</p>
           <button type="button" className="secondary" onClick={() => setMode("edit")}>입력값 바꿔보기 →</button>
