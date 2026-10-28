@@ -900,6 +900,12 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-input-pane,.model-lab-results-pane { display:grid; gap:15px; min-width:0; }
 .model-lab-results-pane { border:1px solid var(--sos-border); border-radius:12px; padding:16px; }
 .model-lab-results-pane > h4 { margin:0; font-size:16px; }
+.model-lab-explanation-toggle { display:grid; gap:12px; border-top:1px solid var(--sos-border);
+  padding-top:14px; min-width:0; }
+.model-lab-explanation-toggle > summary { cursor:pointer; font-size:13px;
+  font-weight:650; color:var(--sos-accent); }
+.model-lab-explanation-toggle > summary:focus-visible { outline:2px solid var(--sos-accent);
+  outline-offset:3px; }
 .model-lab-run-comparison,.playground-explanations,.playground-explanation-method {
   display:grid; gap:12px; min-width:0; padding-top:14px; border-top:1px solid var(--sos-border); }
 .model-lab-run-comparison h5,.playground-explanations h4 { margin:0; }
