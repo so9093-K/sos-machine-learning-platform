@@ -21,9 +21,9 @@ function readable(value: unknown): string {
   return number === null ? "근거 없음" : number.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
 }
 
-/** 실제 결과의 검증된 전체 히스토그램만 표시한다. 추정 분포를 만들지 않는다. */
-function distributionOption(summary: Record<string, unknown>, rowCount: number,
-  selectedScore: number | null): EChartsCoreOption | null {
+/** 결과에 보존된 정확한 히스토그램만 인정한다. 검증되지 않은 분포는 추정하지 않는다. */
+function verifiedHistogram(summary: Record<string, unknown>, rowCount: number):
+  { edges: number[]; counts: number[] } | null {
   const histogram = summary.histogram;
   if (!histogram || typeof histogram !== "object") return null;
   const data = histogram as Record<string, unknown>;
@@ -37,6 +37,31 @@ function distributionOption(summary: Record<string, unknown>, rowCount: number,
         (index === 0 || value > edges[index - 1])) ||
       !counts.every((value: unknown) => typeof value === "number" && Number.isInteger(value) && value >= 0) ||
       counts.reduce((sum: number, value: number) => sum + value, 0) !== rowCount) return null;
+  return { edges: edges as number[], counts: counts as number[] };
+}
+
+/** 점수 범위 상위 1/4 구간에 실제로 있는 관측 수. 히스토그램 구간 경계를 그대로 쓰므로 정확한 집계다. */
+function upperScoreShare(summary: Record<string, unknown>, rowCount: number):
+  { lower: number; count: number; share: number } | null {
+  const histogram = verifiedHistogram(summary, rowCount);
+  if (!histogram || rowCount === 0) return null;
+  const start = Math.floor(histogram.counts.length * 0.75);
+  if (start <= 0 || start >= histogram.counts.length) return null;
+  const count = histogram.counts.slice(start).reduce((sum, value) => sum + value, 0);
+  return { lower: histogram.edges[start], count, share: count / rowCount };
+}
+
+function percent(share: number): string {
+  if (share > 0 && share < 0.0001) return "0.01% 미만";
+  return (share * 100).toLocaleString("ko-KR", { maximumFractionDigits: 2 }) + "%";
+}
+
+/** 실제 결과의 검증된 전체 히스토그램만 표시한다. 추정 분포를 만들지 않는다. */
+function distributionOption(summary: Record<string, unknown>, rowCount: number,
+  selectedScore: number | null): EChartsCoreOption | null {
+  const verified = verifiedHistogram(summary, rowCount);
+  if (!verified) return null;
+  const { edges, counts } = verified;
   return {
     aria: { enabled: true },
     tooltip: { trigger: "item" },
@@ -88,6 +113,13 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
     ? loaded.items.findIndex(item => item.row_index === selected.row_index) + 1 : undefined;
   const histogram = useMemo(() => distributionOption(summary, result.row_count, selectedScore),
     [summary, result.row_count, selectedScore]);
+  const upper = useMemo(() => upperScoreShare(summary, result.row_count), [summary, result.row_count]);
+  // 상세 분석에 넓은 공간이 필요할 때 사용자가 목록을 접는다. 자동으로 숨기지 않는다.
+  const [listCollapsed, setListCollapsed] = useState(false);
+  const loadedItems = loaded?.items ?? [];
+  const selectedIndex = selected ? loadedItems.findIndex(item => item.row_index === selected.row_index) : -1;
+  const previousItem = selectedIndex > 0 ? loadedItems[selectedIndex - 1] : null;
+  const nextItem = selectedIndex >= 0 ? loadedItems[selectedIndex + 1] ?? null : null;
 
   useEffect(() => {
     let active = true;
@@ -147,33 +179,18 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       </div>
       <p>실제 데이터의 전체 점수 분포와 관측값별 활동 특징을 함께 살펴봅니다.</p>
     </header>
-    <div className="scoring-result-provenance">
-      <EvidenceFacts compact facts={[
-        { label: "Dataset", value: shortIdentifier(result.dataset_id, 8),
-          title: result.dataset_id },
-        { label: "Dataset 판본", value: shortIdentifier(result.dataset_version),
-          title: result.dataset_version },
-        { label: "모델 판본", value: shortIdentifier(result.model_revision_id, 8),
-          title: result.model_revision_id },
-        { label: "결과 생성", value: new Date(result.created_at).toLocaleString("ko-KR") },
-      ]} />
-      <details className="scoring-provenance-identifiers">
-        <summary>분석 판본과 식별자</summary>
-        <dl>
-          <div><dt>Dataset ID</dt><dd>{result.dataset_id}</dd></div>
-          <div><dt>Dataset 판본</dt><dd>{result.dataset_version}</dd></div>
-          <div><dt>Model Revision</dt><dd>{result.model_revision_id}</dd></div>
-          <div><dt>Scoring Result</dt><dd>{result.id}</dd></div>
-        </dl>
-      </details>
-    </div>
     <div className="scoring-result-summary" aria-label="분석 결과 요약">
       <div><span>분석한 관측값</span><strong>{result.row_count.toLocaleString("ko-KR")}건</strong></div>
       <div><span>최고 이상 점수</span><strong>{readable(summary.score_max)}</strong></div>
       <div><span>평균 이상 점수</span><strong>{readable(summary.score_mean)}</strong></div>
     </div>
-    <p className="scoring-result-interpretation">전체 분포에서 점수가 높은 관측값을 선택해 실제 활동 특성을 살펴보세요.
-      판정 정책 미적용 · 점수순 위치는 이상 사건 판정이나 발생 확률을 뜻하지 않습니다.</p>
+    <p className="scoring-result-interpretation">{upper
+      ? <>점수 <strong>{readable(upper.lower)}</strong> 이상(점수 범위의 상위 1/4 구간)인 관측값은{" "}
+          <strong>{upper.count.toLocaleString("ko-KR")}건({percent(upper.share)})</strong>입니다.{" "}
+          {upper.share <= 0.05 ? "높은 점수 쪽 관측값은 소수이므로 아래 목록의 상위 관측값부터 살펴보세요."
+            : "아래 목록에서 점수가 높은 관측값의 실제 활동 특성을 살펴보세요."}</>
+      : "전체 분포에서 점수가 높은 관측값을 선택해 실제 활동 특성을 살펴보세요."}
+      <small>판정 정책 미적용 · 점수순 위치는 이상 사건 판정이나 발생 확률을 뜻하지 않습니다.</small></p>
     <section className="scoring-distribution" aria-label="전체 이상 점수 분포">
       <div className="scoring-distribution-heading">
         <h4>전체 관측값의 점수 분포</h4>
@@ -187,10 +204,25 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       <p className="hint">점수가 높을수록 이 모델에서 이례적인 입력입니다.
         {histogram && selectedScore !== null ? " 점선은 현재 표시 중인 관측값의 위치이며 판정 임계값이 아닙니다." : ""}</p>
     </section>
-    <div className="scoring-observation-workspace">
-      <section className="scoring-observation-list-panel" aria-label="점수가 높은 관측값 목록">
+    <div className={"scoring-observation-workspace" + (listCollapsed ? " list-collapsed" : "")}>
+      {listCollapsed && selected && <div className="scoring-observation-compact-nav" role="group"
+        aria-label="관측값 이동">
+        <span>{observationSelectionLabel(userSelected)} · 점수순 {scoreOrder?.toLocaleString("ko-KR")}번째
+          {" "}/ 조회 {loadedItems.length.toLocaleString("ko-KR")}건 · 점수 {readable(selected.anomaly_score)}</span>
+        <button type="button" className="secondary" disabled={!previousItem}
+          onClick={() => previousItem && chooseObservation(previousItem.row_index)}>← 이전 관측값</button>
+        <button type="button" className="secondary" disabled={!nextItem}
+          onClick={() => nextItem && chooseObservation(nextItem.row_index)}>다음 관측값 →</button>
+        <button type="button" className="ghost" onClick={() => setListCollapsed(false)}>목록 펼치기</button>
+      </div>}
+      <section className="scoring-observation-list-panel" aria-label="점수가 높은 관측값 목록"
+        hidden={listCollapsed}>
         <div className="scoring-observation-list-heading">
-          <h4>관측값 살펴보기</h4>
+          <div className="scoring-observation-list-title">
+            <h4>관측값 살펴보기</h4>
+            {selected && <button type="button" className="ghost" onClick={() => setListCollapsed(true)}>
+              목록 접고 상세 넓게 보기</button>}
+          </div>
           <p>점수가 높은 관측값 · 전체 {result.row_count.toLocaleString("ko-KR")}건 중
             {loaded ? ` 상위 ${loaded.items.length.toLocaleString("ko-KR")}건 조회` : " 조회 대기"}</p>
           {selected && <p className="scoring-observation-current" role="status">
@@ -247,5 +279,23 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
             : "선택한 관측값이 없습니다. 조회 가능한 관측값을 확인해 주세요."}</p>}
       </section>
     </div>
+    <details className="scoring-result-provenance">
+      <summary>분석 판본과 식별자</summary>
+      <EvidenceFacts compact facts={[
+        { label: "Dataset", value: shortIdentifier(result.dataset_id, 8),
+          title: result.dataset_id },
+        { label: "Dataset 판본", value: shortIdentifier(result.dataset_version),
+          title: result.dataset_version },
+        { label: "모델 판본", value: shortIdentifier(result.model_revision_id, 8),
+          title: result.model_revision_id },
+        { label: "결과 생성", value: new Date(result.created_at).toLocaleString("ko-KR") },
+      ]} />
+      <dl className="scoring-provenance-identifiers">
+          <div><dt>Dataset ID</dt><dd>{result.dataset_id}</dd></div>
+          <div><dt>Dataset 판본</dt><dd>{result.dataset_version}</dd></div>
+          <div><dt>Model Revision</dt><dd>{result.model_revision_id}</dd></div>
+          <div><dt>Scoring Result</dt><dd>{result.id}</dd></div>
+      </dl>
+    </details>
   </section>;
 }

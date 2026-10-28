@@ -40,16 +40,26 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
     .sort((a, b) => Math.abs(numeric(b.anomaly_score_delta)!) -
       Math.abs(numeric(a.anomaly_score_delta)!)).slice(0, 12);
   if (!ranked.length) return <p>시각화 가능한 점수 민감도 근거가 없습니다.</p>;
+  const shown = [...ranked].reverse();
   const option = {
     aria: { enabled: true },
-    tooltip: { trigger: "axis" },
+    // 비교에 필요한 정밀도만 보이고 원래 정밀도는 아래 표에서 확인한다.
+    tooltip: { trigger: "axis", formatter: (params: Array<{ dataIndex: number }>) => {
+      const item = shown[params[0]?.dataIndex ?? -1];
+      if (!item) return "";
+      const name = String(item.feature);
+      const label = activityFeatureLabel(name);
+      const delta = numeric(item.anomaly_score_delta);
+      return `${label}${label !== name ? ` (${name})` : ""}<br/>기준값 치환 시 점수 변화 ${
+        delta === null ? "미정의" : (delta > 0 ? "+" : "") + delta.toLocaleString("ko-KR", { maximumFractionDigits: 6 })}`;
+    } },
     grid: { left: "24%", right: "8%", top: 18, bottom: 32 },
     xAxis: { type: "value" as const, name: "점수 변화" },
     yAxis: { type: "category" as const,
-      data: ranked.map(x => activityFeatureLabel(String(x.feature))).reverse(),
+      data: shown.map(x => activityFeatureLabel(String(x.feature))),
       axisLabel: { width: 120, overflow: "truncate" as const } },
     series: [{ type: "bar" as const, name: "기준값 치환 시 점수 변화",
-      data: ranked.map(x => numeric(x.anomaly_score_delta)).reverse() }],
+      data: shown.map(x => numeric(x.anomaly_score_delta)) }],
   };
   return <>
     <DataChart option={option} ariaLabel="선택한 후보의 Feature별 참조 중앙값 치환에 따른 이상 점수 민감도" />
@@ -88,7 +98,7 @@ export function PipelineCandidateInvestigation({
     features: Record<string, number | null>, rowIndex: number, score: number,
   ) => string | null;
 }) {
-  const subject = observationMode ? "관측치" : "후보";
+  const subject = observationMode ? "관측값" : "후보";
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [modelError, setModelError] = useState("");
   const [experimentError, setExperimentError] = useState("");
@@ -238,13 +248,21 @@ export function PipelineCandidateInvestigation({
         : `선택한 후보 #${candidate.row_index.toLocaleString("ko-KR")}`}</h5>
     <p>이상 점수 <strong>{format(candidate.anomaly_score)}</strong>
       {typeof scoreOrder === "number" ? ` · 점수순 ${scoreOrder.toLocaleString("ko-KR")}번째` : ""}
-      {" · "}높을수록 모델이 더 특이하게 본 관측치입니다.</p>
+      {" · "}높을수록 모델이 더 특이하게 본 {subject}입니다.</p>
     {observationMode && !candidate.observed_at && !candidate.observation_id
       ? <p className="observation-source-missing">관측 시각·원본 관측치 ID 없음
           <strong>결과 내부 행 #{candidate.row_index.toLocaleString("ko-KR")}</strong>
           <small>이 번호는 해당 Scoring Result에서만 유효하며 원본 이벤트의 ID가 아닙니다.</small>
         </p>
-      : <dl className="pipeline-candidate-observation">
+      : observationMode
+        ? <p className="observation-meta">
+            {candidate.observed_at && <span title={candidate.observed_at}>
+              관측 시각 <strong>{formatObservedAt(candidate.observed_at)}</strong></span>}
+            {candidate.observation_id && <span>원본 관측치 ID <strong>{candidate.observation_id}</strong></span>}
+            <span>결과 행 #{candidate.row_index.toLocaleString("ko-KR")}</span>
+            {!candidate.observation_id && <span>원본 관측치 ID 없음</span>}
+          </p>
+        : <dl className="pipeline-candidate-observation">
           <div><dt>관측 시각</dt><dd title={candidate.observed_at ?? undefined}>{candidate.observed_at
             ? formatObservedAt(candidate.observed_at) : "시각 근거 없음"}</dd></div>
           <div><dt>관측치 ID (UUIDv4)</dt><dd>{candidate.observation_id ?? "별도 관측치 ID 없음"}</dd></div>
@@ -290,7 +308,7 @@ export function PipelineCandidateInvestigation({
       </div>}
       {model && !referenceMap && <p className="hint">이 모델에는 비교 가능한 학습 중앙값이 없습니다.</p>}
       <details className="observation-activity-all">
-      <summary>전체 {Object.keys(candidate.features).length}개 활동 Feature 살펴보기</summary>
+      <summary>전체 Feature {Object.keys(candidate.features).length}개 보기</summary>
       <div className="observation-activity-group-intro">
         <strong>활동별 지표</strong>
         <span>전체 {Object.keys(candidate.features).length}개 · 아래 그룹별 실제값과 학습 참조값</span>
@@ -361,39 +379,41 @@ export function PipelineCandidateInvestigation({
     {!observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
       onOpenResource={onOpenResource} />}
+    <section className="pipeline-sensitivity" aria-labelledby={`sensitivity-${candidate.row_index}`}>
+    <h6 id={`sensitivity-${candidate.row_index}`}>Feature 하나를 학습 중앙값으로 바꾸면 점수가 어떻게 달라지나요?
+      <small> 치환 민감도</small></h6>
     {previousLookup === "loading" && <p role="status">
-      이 후보의 기존 설명 작업을 확인하고 있습니다.
+      이 {subject}의 기존 민감도 계산을 확인하고 있습니다.
     </p>}
     {previousLookup === "error" && <div className="pipeline-readiness-blocked" role="alert">
-      <p>이전 설명 작업을 확인하지 못했습니다. 중복 실행을 방지하도록 작업 이력을 다시 확인하세요.</p>
+      <p>이전 민감도 계산을 확인하지 못했습니다. 중복 실행을 막기 위해 다시 조회해 주세요.</p>
       <button type="button" className="secondary" onClick={() =>
-        setLookupRetry(n => n + 1)}>이전 설명 작업 다시 조회</button>
+        setLookupRetry(n => n + 1)}>이전 계산 다시 조회</button>
     </div>}
     {(!job || job.status === "Failed" || job.status === "Cancelled") && canRun &&
       <button type="button" className="secondary pipeline-sensitivity-start" onClick={() => void start()}
         disabled={busy || previousLookup !== "ready"}>
-        {busy ? "설명 Job 제출 중…" : job ? "새 설명 Job으로 다시 계산 →" :
-          "이 " + subject + "의 점수 민감도 계산 →"}
+        {busy ? "민감도 계산 요청 중…" : job ? "민감도 다시 계산 →" : "치환 민감도 계산 →"}
       </button>}
     {!job && previousLookup === "ready" && olderJobsExist && <p className="hint">
-      최근 100건의 설명 작업에서는 같은 후보를 찾지 못했습니다.
-      더 오래된 설명 결과는 독립 설명 작업 이력에서 확인할 수 있습니다.
+      최근 100건의 민감도 계산에서 같은 {subject}를 찾지 못했습니다.
+      더 오래된 결과는 작업 이력의 설명 작업에서 확인할 수 있습니다.
     </p>}
     {job && previousLookup === "ready" && <p className="hint">
-      이 {subject}에 연결된 설명 Job을 조회했습니다. 다른 후보를 살펴본 뒤에도 다시 확인할 수 있습니다.
+      이 {subject}에 대해 이전에 계산한 민감도입니다. 다른 {subject}를 살펴본 뒤에도 다시 확인할 수 있습니다.
     </p>}
-    {!canRun && <p className="hint">현재 계정은 설명 Job을 제출할 권한이 없습니다.</p>}
-    {job && <p role="status">설명 Job: {jobStatusLabel(job.status)}
+    {!canRun && <p className="hint">현재 계정은 민감도 계산을 요청할 권한이 없습니다.</p>}
+    {job && <p role="status">민감도 계산: {jobStatusLabel(job.status)}
       {job.cancel_requested ? " · 취소 요청됨 (Worker 확인 중)" :
         job.status === "Running" || job.status === "Queued" ? " · 계산 중" : ""}
       {job.error_code ? " · 오류 " + job.error_code : ""}</p>}
     {job && !terminal.has(job.status) && canCancel && <button
       type="button" className="secondary" disabled={busy || job.cancel_requested}
       onClick={() => void cancelExplanation()}>
-      {job.cancel_requested ? "설명 Job 취소 요청 처리 중" : "설명 Job 취소 요청"}
+      {job.cancel_requested ? "민감도 계산 취소 요청 처리 중" : "민감도 계산 취소 요청"}
     </button>}
-    {job?.status === "Failed" && <p role="alert">설명 Job이 실패했습니다. 실행 이력에서 오류 근거를 확인하세요.</p>}
-    {job?.status === "Cancelled" && <p>설명 계산이 취소됐습니다.</p>}
+    {job?.status === "Failed" && <p role="alert">민감도 계산이 실패했습니다. 작업 이력에서 오류 근거를 확인하세요.</p>}
+    {job?.status === "Cancelled" && <p>민감도 계산이 취소됐습니다.</p>}
     {error && <div role="alert" className="pipeline-readiness-blocked">{error}
       {job && <button className="secondary" type="button" onClick={() => {
         setError(""); setRetry(n => n + 1);
@@ -403,5 +423,6 @@ export function PipelineCandidateInvestigation({
       <button type="button" className="secondary" onClick={() =>
         onOpenResource("explanation", result.id)}>설명 결과 판본 보기 →</button>
     </>}
+    </section>
   </section>;
 }

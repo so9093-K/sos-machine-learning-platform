@@ -396,7 +396,7 @@ try {
   assert.match(candidateWithContext, /2026-01-01T02:00:00Z/);
   assert.match(candidateWithContext, /Train 참조 중앙값/);
   assert.match(candidateWithContext, /전체 1개 Feature 관측값/);
-  assert.match(candidateWithContext, /모델 판단 근거 자세히 보기 \(SHAP\)/);
+  assert.match(candidateWithContext, /어떤 Feature가 이 점수에 기여했나요\?/);
   const groupedObservation = renderToStaticMarkup(
     React.createElement(PipelineCandidateInvestigation, {
       candidate: {
@@ -455,7 +455,7 @@ try {
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
   assert.match(groupedObservation, /학습 중앙값은 비교 기준이며 정상 범위나 사고 원인을 의미하지 않습니다/);
-  assert.ok(groupedObservation.indexOf("모델 판단 근거 자세히 보기") <
+  assert.ok(groupedObservation.indexOf("어떤 Feature가 이 점수에 기여했나요?") <
     groupedObservation.indexOf("활동별 지표"));
   assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
   assert.match(groupedObservation, /학습 모델 판본 참조가 없어/);
@@ -467,7 +467,7 @@ try {
     }));
   assert.doesNotMatch(pipelineViewOnly, /observation-activity-highlights/);
   assert.ok(pipelineViewOnly.indexOf("전체 1개 Feature 관측값") <
-    pipelineViewOnly.indexOf("모델 판단 근거 자세히 보기"));
+    pipelineViewOnly.indexOf("어떤 Feature가 이 점수에 기여했나요?"));
   const { ShapContributionChart } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
   const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
@@ -521,7 +521,7 @@ try {
   }));
   assert.match(zeroShap, /이 입력의 SHAP 기여도는 모두 0입니다/);
   assert.doesNotMatch(zeroShap, /role="img"/); // SSR 차트 컨테이너 자체가 없어야 한다.
-  assert.match(zeroShap, /전체 SHAP 값과 계산 근거/);
+  assert.match(zeroShap, /SHAP 상세 계산 근거/);
   assert.match(zeroShap, /모든 실제 입력 Feature가 학습 참조 중앙값과 일치합니다/);
   const zeroShapWithDifferentInput = renderToStaticMarkup(React.createElement(
     ShapContributionChart, { result: { id: "zero-but-different", output: {
@@ -547,7 +547,7 @@ try {
   }));
   assert.match(unverifiedShap, /검증에 실패했습니다/);
   assert.doesNotMatch(unverifiedShap, /실제 SOS 이상 점수 기준 Feature별/);
-  assert.match(shapPreview, /전체 SHAP 값과 계산 근거/);
+  assert.match(shapPreview, /SHAP 상세 계산 근거/);
   assert.match(shapPreview, /설명 방법과 기준/);
   assert.match(shapPreview, /설명 방법/);
   assert.match(shapPreview, /Permutation SHAP/);
@@ -1074,7 +1074,7 @@ try {
   assert.match(renderToStaticMarkup(React.createElement(PipelineCandidateInvestigation, {
     candidate: { row_index: 5, anomaly_score: 0.8, features: { "io_bytes_per_sec": 42 } },
     scoringResultId: "score-1", canRun: true, canCancel: true, onOpenResource: () => {},
-  })), /이 후보의 점수 민감도 계산/);
+  })), /치환 민감도 계산/);
   assert.match(renderToStaticMarkup(React.createElement(PipelineAnalysis, {
     run: { id: "run-1", stages: [], status: "Succeeded" }, onOpenResource: () => {},
   })), /분석 판본 참조가 불완전합니다/);

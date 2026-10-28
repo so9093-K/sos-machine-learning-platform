@@ -173,6 +173,29 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     setUsage("playground");
     return null;
   }
+  // 모델 그룹 전환은 보조 설정이다. 선택한 모델이 있으면 모델 카드 안에, 없으면 단독으로 둔다.
+  const groupOptions = <details className="model-lab-model-options">
+    <summary>모델 그룹 관리 · 목록 새로고침</summary>
+    {groupError && <p role="status" className="hint">
+      다른 모델 그룹을 불러오지 못했습니다. 현재 선택한 모델 그룹의 사용 가능 여부는 별도로 확인합니다.
+      <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}>
+        그룹 다시 조회
+      </button>
+    </p>}
+    <label>사용할 모델 그룹
+      <select value={registryKey} onChange={event => {
+        onSelectGroup(event.target.value);
+      }}>
+        <option value="default">기본 활동 이상 탐지</option>
+        {registryKey !== "default" && !groups.some(g => g.registry_key === registryKey) &&
+          <option value={registryKey}>현재 선택한 모델 그룹</option>}
+        {groups.filter(g => g.registry_key !== "default").map(g =>
+          <option key={g.registry_key} value={g.registry_key}>{g.title}</option>)}
+      </select>
+    </label>
+    <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}
+      disabled={loading || moreLoading}>모델 목록 새로고침</button>
+  </details>;
   return <section className={`model-lab-use${focusedResult ? " result-focused" : ""}${showResultSetup ? " show-setup" : ""}`}
     aria-label="활동 이상 탐지 모델 사용">
     {focusedResult && <div className="model-lab-result-toolbar">
@@ -187,33 +210,11 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     </button>
     <header className="model-lab-use-heading">
       <div>
-        <span className="eyebrow">활동 이상 탐지 · 모델 활용</span>
         <h2 id="model-lab-use-heading">준비된 모델 사용하기</h2>
         <p>데이터를 분석하고, 궁금한 관측값은 직접 바꿔 모델의 반응을 살펴봅니다.</p>
       </div>
     </header>
-    <details className="model-lab-model-options">
-      <summary>모델 그룹 관리 · 목록 새로고침</summary>
-      {groupError && <p role="status" className="hint">
-        다른 모델 그룹을 불러오지 못했습니다. 현재 선택한 모델 그룹의 사용 가능 여부는 별도로 확인합니다.
-        <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}>
-          그룹 다시 조회
-        </button>
-      </p>}
-      <label>사용할 모델 그룹
-        <select value={registryKey} onChange={event => {
-          onSelectGroup(event.target.value);
-        }}>
-          <option value="default">기본 활동 이상 탐지</option>
-          {registryKey !== "default" && !groups.some(g => g.registry_key === registryKey) &&
-            <option value={registryKey}>현재 선택한 모델 그룹</option>}
-          {groups.filter(g => g.registry_key !== "default").map(g =>
-            <option key={g.registry_key} value={g.registry_key}>{g.title}</option>)}
-        </select>
-      </label>
-      <button type="button" className="secondary" onClick={() => setRefresh(value => value + 1)}
-        disabled={loading || moreLoading}>모델 목록 새로고침</button>
-    </details>
+    {!selected && groupOptions}
     {loading && <p role="status">사용 가능한 모델을 확인하는 중입니다.</p>}
     {error && <div className="pipeline-readiness-blocked" role="alert">
       <p>{models.length > 0 || nextPage
@@ -252,6 +253,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         <h3>Isolation Forest · v{selected.version.version}</h3>
         <p>학습 시각 {new Date(selected.revision.created_at).toLocaleString("ko-KR")}
           · 입력 Feature {selected.revision.features.length}개</p></div>
+      <div className="model-lab-model-actions">
       <details className="model-lab-version-picker">
         <summary>다른 모델 버전 선택</summary>
         <div className="model-lab-model-list">
@@ -266,6 +268,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           </button>)}
         </div>
       </details>
+      {groupOptions}
+      </div>
     </div>}
     {!loading && nextPage && (!focusedResult || showResultSetup) && <button type="button" className="secondary model-lab-more-versions" disabled={moreLoading}
       onClick={() => void loadMore()}>{moreLoading ? "모델 확인 중…" : "다음 모델 버전 조회"}</button>}
@@ -285,14 +289,16 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       </div>}
     {selected && <>
       <div className="model-lab-start-choice">
-        <h3>어떤 데이터로 시작할까요?</h3>
-        <p className="hint">데이터를 선택하거나 직접 값을 입력하세요. 선택만으로 계산이 시작되지는 않습니다.</p>
-        <div className="model-lab-usage-tabs" role="group" aria-label="입력 데이터 선택">
+        <span className="model-lab-start-label" id="model-lab-start-label">분석할 데이터</span>
+        <div className="model-lab-usage-tabs" role="group" aria-labelledby="model-lab-start-label">
           <button type="button" className="secondary" aria-pressed={usage === "dataset"}
-            onClick={openDataset}>Dataset 선택·파일 등록</button>
+            onClick={openDataset}>Dataset 분석</button>
           <button type="button" className="secondary" aria-pressed={usage === "playground"}
             onClick={() => setUsage("playground")}>값 직접 입력</button>
         </div>
+        <p className="hint">{usage === "dataset"
+          ? "등록된 Dataset이나 새 파일 전체에 모델을 적용합니다."
+          : "관측값 한 건의 Feature를 입력해 모델 반응을 확인합니다."} 실행 버튼을 누를 때에만 계산합니다.</p>
       </div>
       <div hidden={usage !== "playground"} ref={playgroundPanel}>
         <ModelLabPlayground key={selected.revision.id} model={selected.revision}
