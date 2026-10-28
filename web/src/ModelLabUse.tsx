@@ -64,6 +64,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const [refresh, setRefresh] = useState(0);
   const [usage, setUsage] = useState<"playground" | "dataset">("dataset");
   const [observationInput, setObservationInput] = useState<ObservationExperiment | null>(null);
+  // 모델 판본이 바뀌면 앞서 선택한 다른 판본의 관측값 입력을 재사용하지 않는다.
   const observationRequest = useRef(0);
   const playgroundPanel = useRef<HTMLDivElement>(null);
   const datasetPanel = useRef<HTMLDivElement>(null);
@@ -72,6 +73,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const handleResultViewChange = useCallback((visible: boolean) => {
     setResultFocusedModelId(visible ? selectedModelId : null);
   }, [selectedModelId]);
+  useEffect(() => { setObservationInput(null); }, [selectedModelId]);
   const openDataset = () => setUsage("dataset");
   const backToObservation = () => {
     setUsage("dataset");
