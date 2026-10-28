@@ -35,7 +35,7 @@ export function ModelLabHome({ onUse, onLearn }: {
     <div className="model-lab-home-lead">
       <div className="model-lab-home-copy">
         <span className="eyebrow">비지도 학습 · 이상 탐지 · Isolation Forest</span>
-        <h2 id="model-lab-home-heading">활동이 평소와 달라지는 순간을 찾아봅니다</h2>
+        <h2 id="model-lab-home-heading">평소와 달라지는 활동 찾기</h2>
         <p>시간대별 사용자·호스트 활동의 특징을 모델이 점수로 평가합니다.
           점수가 높은 관측치를 찾아 상세 활동 특징을 확인할 수 있습니다.</p>
       </div>

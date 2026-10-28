@@ -306,7 +306,7 @@ export function PipelineShapExplanation({
   }
 
   return <div className="pipeline-shap-explanation">
-    <h6>어떤 Feature가 이 점수에 기여했나요? <small>SHAP</small></h6>
+    <h6>Feature별 점수 기여도 <small>SHAP</small></h6>
     <p className="hint">실제 모델 이상 점수를 Feature별 기여도로 나눠 봅니다.
       요청할 때만 계산하며, 아래 치환 민감도와는 다른 질문에 답하는 방법입니다.</p>
     {lookup === "loading" && <p role="status">이 후보의 기존 SHAP 결과를 찾고 있습니다.</p>}

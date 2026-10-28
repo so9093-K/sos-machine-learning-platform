@@ -380,7 +380,7 @@ export function PipelineCandidateInvestigation({
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
       onOpenResource={onOpenResource} />}
     <section className="pipeline-sensitivity" aria-labelledby={`sensitivity-${candidate.row_index}`}>
-    <h6 id={`sensitivity-${candidate.row_index}`}>Feature 하나를 학습 중앙값으로 바꾸면 점수가 어떻게 달라지나요?
+    <h6 id={`sensitivity-${candidate.row_index}`}>Feature 치환에 따른 점수 변화
       <small> 치환 민감도</small></h6>
     {previousLookup === "loading" && <p role="status">
       이 {subject}의 기존 민감도 계산을 확인하고 있습니다.

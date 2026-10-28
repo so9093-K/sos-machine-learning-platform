@@ -396,7 +396,7 @@ try {
   assert.match(candidateWithContext, /2026-01-01T02:00:00Z/);
   assert.match(candidateWithContext, /Train 참조 중앙값/);
   assert.match(candidateWithContext, /전체 1개 Feature 관측값/);
-  assert.match(candidateWithContext, /어떤 Feature가 이 점수에 기여했나요\?/);
+  assert.match(candidateWithContext, /Feature별 점수 기여도/);
   const groupedObservation = renderToStaticMarkup(
     React.createElement(PipelineCandidateInvestigation, {
       candidate: {
@@ -455,7 +455,7 @@ try {
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
   assert.match(groupedObservation, /학습 중앙값은 비교 기준이며 정상 범위나 사고 원인을 의미하지 않습니다/);
-  assert.ok(groupedObservation.indexOf("어떤 Feature가 이 점수에 기여했나요?") <
+  assert.ok(groupedObservation.indexOf("Feature별 점수 기여도") <
     groupedObservation.indexOf("활동별 지표"));
   assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
   assert.match(groupedObservation, /학습 모델 판본 참조가 없어/);
@@ -467,7 +467,7 @@ try {
     }));
   assert.doesNotMatch(pipelineViewOnly, /observation-activity-highlights/);
   assert.ok(pipelineViewOnly.indexOf("전체 1개 Feature 관측값") <
-    pipelineViewOnly.indexOf("어떤 Feature가 이 점수에 기여했나요?"));
+    pipelineViewOnly.indexOf("Feature별 점수 기여도"));
   const { ShapContributionChart } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
   const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
@@ -917,7 +917,7 @@ try {
   }));
   assert.match(home, /ACME AI Lab · EXPLORE/);
   assert.doesNotMatch(home, /SOS · EXPLORE/);
-  assert.match(home, /무엇을 시작할까요/);
+  assert.match(home, /작업 시작/);
   assert.match(home, /활동 이상 탐지/);
   assert.doesNotMatch(home, /최근 ML 실행/);
   const { PipelineHistoryPanel } = await vite.ssrLoadModule("/src/PipelineHistoryPanel.tsx");
@@ -1030,7 +1030,7 @@ try {
   assert.match(report, /Calibration 점수 구간별 전체 관측 수/);
   assert.match(report, /Test 점수 구간별 전체 관측 수/);
   const trainingReport = reportFor("training");
-  assert.match(trainingReport, /Training — 무엇을 학습했는가/);
+  assert.match(trainingReport, /Training — 학습 내용/);
   assert.match(trainingReport, /Training 점수 구간별 전체 관측 수/);
   const interactiveOverview = renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
     run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
@@ -1042,7 +1042,7 @@ try {
   assert.match(interactiveOverview, /후보 탐색/);
   assert.match(interactiveOverview, /그래프 막대나 아래 집계 표에서 점수 구간을 선택/);
   const calibrationReport = reportFor("calibration");
-  assert.match(calibrationReport, /Calibration — 기준은 어떻게 정했는가/);
+  assert.match(calibrationReport, /Calibration — 판정 기준 근거/);
   assert.match(calibrationReport, /0.5%/);
   assert.match(calibrationReport, /Calibration 점수 구간별 전체 관측 수/);
   const testReport = reportFor("test");
@@ -1051,7 +1051,7 @@ try {
     onInvestigateCandidates: () => {}, onOpenResource: () => {},
   }));
   assert.match(testWithCandidates, /검토할 이상 후보 살펴보기/);
-  assert.match(testReport, /Test — 적용 후 무엇이 달라졌는가/);
+  assert.match(testReport, /Test — 적용 결과/);
   assert.match(testReport, /15%/);
   assert.match(testReport, /Test 점수 구간별 전체 관측 수/);
   const sensitivity = renderToStaticMarkup(React.createElement(SensitivityChart, {

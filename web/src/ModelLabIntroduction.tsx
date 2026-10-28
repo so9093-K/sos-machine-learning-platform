@@ -26,7 +26,7 @@ export function ModelLabIntroduction({ definition, example, examplesLoading,
     aria-labelledby="pipeline-first-entry-heading">
     <div>
       <span className="eyebrow">모델 실험실 · 활동 이상 탐지</span>
-      <h2 id="pipeline-first-entry-heading">예제 데이터로 모델을 학습해 보세요</h2>
+      <h2 id="pipeline-first-entry-heading">예제 데이터로 모델 학습</h2>
       <p>준비된 활동 데이터로 Isolation Forest 모델을 학습하고,
         다른 시간 구간의 이상 후보까지 확인합니다.</p>
     </div>

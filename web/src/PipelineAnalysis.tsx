@@ -279,7 +279,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
     </section>}
     <div className="pipeline-analysis-phases">
       {section === "training" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-training-evidence">
-        <h5 id="pipeline-training-evidence">01 · Training — 무엇을 학습했는가?</h5>
+        <h5 id="pipeline-training-evidence">01 · Training — 학습 내용</h5>
         <dl>
           <div><dt>학습 구간</dt><dd>{format(trainRows)}행</dd></div>
           <div><dt>알고리즘</dt><dd>{model.algorithm}</dd></div>
@@ -300,7 +300,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
           onOpenResource("model", model.id)}>모델 판본 열기 →</button>
       </section>}
       {section === "calibration" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-calibration-evidence">
-        <h5 id="pipeline-calibration-evidence">02 · Calibration — 기준은 어떻게 정했는가?</h5>
+        <h5 id="pipeline-calibration-evidence">02 · Calibration — 판정 기준 근거</h5>
         <dl>
           <div><dt>Calibration 구간</dt><dd>{format(calibrationRows)}행</dd></div>
           <div><dt>방법</dt><dd>{policy.mode === "quantile" ? "점수 분위수" : policy.mode}</dd></div>
@@ -324,7 +324,7 @@ export function PipelineEvidenceView({ evidence, run, onOpenResource,
         </div>
       </section>}
       {section === "test" && <section className="pipeline-analysis-phase" aria-labelledby="pipeline-test-evidence">
-        <h5 id="pipeline-test-evidence">03 · Test — 적용 후 무엇이 달라졌는가?</h5>
+        <h5 id="pipeline-test-evidence">03 · Test — 적용 결과</h5>
         <dl>
           <div><dt>Test 구간</dt><dd>{format(testRows)}행</dd></div>
           <div><dt>Test 점수 범위</dt><dd>{format(metric(scored, "score_min"))} ~ {format(metric(scored, "score_max"))}</dd></div>
