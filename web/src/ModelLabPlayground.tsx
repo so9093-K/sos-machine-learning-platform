@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { groupActivityFeatures } from "./ActivityFeatureGroups";
-import { FeatureValueComparison } from "./FeatureValueComparison";
+import { formatFeatureValue } from "./FeatureValueComparison";
+import { FeatureResultDetails } from "./FeatureResultDetails";
 import { PlaygroundExplanations } from "./PlaygroundExplanations";
 import { jobStatusLabel } from "./display-format";
 import type { MLPlaygroundJob, MLPlaygroundJobPage, MLPlaygroundJobSummary, ModelRevision } from "./types";
@@ -127,7 +128,9 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   onBackToAnalysis?: () => void;
 }) {
   const reference = exampleValues(model);
-  const [mode, setMode] = useState<"example" | "edit">("edit");
+  const [inputSearch, setInputSearch] = useState("");
+  const [inputFilter, setInputFilter] = useState("all");
+  const [inputPage, setInputPage] = useState(0);
   const [importedSource, setImportedSource] = useState<ObservationExperiment | null>(null);
   const [importedAfterJobId, setImportedAfterJobId] = useState<string | null>(null);
   const appliedObservation = useRef<string | null>(null);
@@ -205,9 +208,9 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     setFields(Object.fromEntries(model.features.map(name => [
       name, saved[name] == null ? "" : String(saved[name]),
     ])));
-    setMode("edit");
     setImportedSource(null);
     setImportedAfterJobId(null);
+    setInputSearch(""); setInputFilter("all"); setInputPage(0);
   }
 
   useEffect(() => {
@@ -257,7 +260,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     // 실행 중 입력을 바꾸지 않으며, 새 관측값을 가져와도 Job은 자동 제출하지 않는다.
     appliedObservation.current = observationInput.id;
     setFields(observationInput.fields);
-    setMode("edit");
+    setInputSearch(""); setInputFilter("all"); setInputPage(0);
     setImportedSource(observationInput);
     // 과거 Job 결과를 새 관측값 실험의 결과로 표시하지 않는다.
     setImportedAfterJobId(job?.id ?? null);
@@ -271,13 +274,22 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const editedNames = reference ? playgroundChangedFeatures(fields, reference, model.features) : [];
   const observationEdits = importedSource
     ? playgroundChangedFeatures(fields, importedSource.fields, model.features) : [];
-  const highlightedChanges = importedSource ? observationEdits : editedNames;
-  const comparisonNames = reference
-    ? (highlightedChanges.length > 0 ? highlightedChanges : model.features).slice(0, 3) : [];
   const showCurrentJob = playgroundJobVisibleAfterImport(importedSource, importedAfterJobId, job?.id ?? null);
   const newJobAfterImport = Boolean(importedSource && showCurrentJob);
   const inputGroups = groupActivityFeatures(
     Object.fromEntries(model.features.map(name => [name, null])));
+  const searchedNames = model.features.filter(name => {
+    const term = inputSearch.trim().toLocaleLowerCase();
+    const matchesSearch = [name, activityFeatureLabel(name)].some(value => value.toLocaleLowerCase().includes(term));
+    const matchesFilter = inputFilter === "all" ||
+      (inputFilter === "changed" && (importedSource ? observationEdits : editedNames).includes(name)) ||
+      (inputFilter === "invalid" && invalid.some(item => item.name === name)) ||
+      inputGroups.find(group => group.id === inputFilter)?.entries.some(([entry]) => entry === name);
+    return matchesSearch && matchesFilter;
+  });
+  const inputPageCount = Math.max(1, Math.ceil(searchedNames.length / 4));
+  const currentInputPage = Math.min(inputPage, inputPageCount - 1);
+  const shownInputs = searchedNames.slice(currentInputPage * 4, (currentInputPage + 1) * 4);
   const explanationAvailable = referenceMedians.length === model.features.length &&
     referenceMedians.every(value => typeof value === "number" && Number.isFinite(value));
   const comparedFeatures = comparisonJob && job?.status === "Succeeded" &&
@@ -328,25 +340,25 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const inputPane = useRef<HTMLDivElement>(null);
   /** 재계산 결과에서 다음 행동으로 첫 Feature 입력에 바로 이동한다. */
   function focusFirstInput() {
-    setMode("edit");
-    const first = inputPane.current?.querySelector<HTMLInputElement>("input:not([disabled])");
+    const first = inputPane.current?.querySelector<HTMLInputElement>('input[type="number"]:not([disabled])');
     first?.scrollIntoView({ block: "center",
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     first?.focus({ preventScroll: true });
   }
   const featureField = (name: string) => <label className="model-lab-feature" key={name}>
-    <span>{activityFeatureLabel(name)} <small>{name} · {
-      featureDtypes[model.features.indexOf(name)] ?? "자료형 미확인"
-    }</small></span>
+    <span title={name + " · " + (featureDtypes[model.features.indexOf(name)] ?? "자료형 미확인")}>
+      {activityFeatureLabel(name)}</span>
     <input type="number" inputMode="decimal" step="any" value={fields[name] ?? ""}
-      disabled={mode === "example" || running}
+      disabled={running}
       onChange={event => setFields(current => ({ ...current, [name]: event.target.value }))}
       aria-label={activityFeatureLabel(name) + " 입력값"} />
+    {reference && <small title={reference[name]}>학습 기준 {formatFeatureValue(name, Number(reference[name]))}
+      {(name === "io_bytes_per_sec" || name === "net_bytes_per_sec") && " · 입력 단위 B/s"}</small>}
   </label>;
   return <section className="panel model-lab-playground" tabIndex={-1} aria-label="직접 모델 점수 계산">
     <div className="model-lab-playground-head">
       <div><h3>단일 입력 점수 계산</h3>
-        <p>입력값을 수정한 뒤 실제 점수를 계산하고, 이전 결과와 비교할 수 있습니다.</p></div>
+        <p>값을 바꾸고 모델의 점수 변화를 확인하세요.</p></div>
     </div>
     {observationInput && appliedObservation.current !== observationInput.id && running &&
       <p className="hint" role="status">진행 중인 점수 계산이 끝나면 선택한 관측값을 입력에 가져옵니다.</p>}
@@ -359,71 +371,37 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     </div>}
     <div className="model-lab-workspace">
       <div className="model-lab-input-pane" ref={inputPane}>
-    <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
-      <button type="button" aria-pressed={mode === "example"} className="secondary"
-        disabled={!reference || running}
-        onClick={() => { setMode("example"); setImportedSource(null); setImportedAfterJobId(null); if (reference) setFields(reference); }}>
-        학습 기준값 입력
-      </button>
-      <button type="button" aria-pressed={mode === "edit"} className="secondary"
-        disabled={running} onClick={() => setMode("edit")}>직접 입력</button>
+    <div className="playground-input-heading">
+      <h4>입력값</h4>
+      {reference && <button type="button" className="ghost" disabled={running}
+        onClick={() => { setFields(reference); setImportedSource(null); setImportedAfterJobId(null); }}>
+        학습 기준값으로 초기화</button>}
     </div>
-    {importedSource
-      ? <p className="hint">Dataset의 실제 관측 Feature를 가져왔습니다. 학습 참조값은 비교용이며,
-          새 실행은 원래 Dataset 결과를 변경하지 않습니다.</p>
-      : reference ? <p className="hint">입력값은 이 모델의 학습 Feature 중앙값을 바탕으로 구성했습니다.
-      정수 Feature는 정수로 조정했으며, 실제 관측치나 정상 활동의 판정값이 아닙니다.</p>
-      : <p className="hint" role="status">이 모델 판본에는 초기 입력 기준값이 없어 자동으로 채우지 않았습니다.
-        직접 수정 모드에서 모든 필수 Feature 값을 입력해 주세요.</p>}
-    {mode === "edit" && <p className="hint">Isolation Forest는 학습 데이터 범위를 벗어난 값을 범위 끝의
-      값과 비슷하게 다룹니다. 한 Feature에 아주 큰 값을 넣어도 점수가 크게 오르지 않을 수 있으며,
-      여러 Feature가 함께 평소와 다를 때 점수 변화가 더 뚜렷해질 수 있습니다.</p>}
-    <div className="model-lab-feature-groups">
-      {inputGroups.map(group => {
-        const names = group.entries.map(([name]) => name);
-        const shown = names.slice(0, 3);
-        const remaining = names.slice(3);
-        const needsReview = names.filter(name => invalid.some(item => item.name === name)).length;
-        return <section className="model-lab-feature-group" key={group.id}>
-          <div className="model-lab-feature-group-heading">
-            <strong>{group.title}</strong><span>{names.length}개 Feature
-              {needsReview > 0 && ` · 입력 확인 ${needsReview}개`}</span>
-          </div>
-          <p className="hint">{group.description} · 모델 중요도 순위가 아닙니다.</p>
-          <div className="model-lab-input-grid">{shown.map(featureField)}</div>
-          {remaining.length > 0 && <details className="model-lab-extra-features">
-            <summary>이 그룹의 나머지 필수 입력값 {remaining.length}개 확인</summary>
-            <div className="model-lab-input-grid">{remaining.map(featureField)}</div>
-          </details>}
-        </section>;
-      })}
+    <p className="hint">{importedSource ? "가져온 관측값에서 바꿀 항목을 고르세요."
+      : reference ? "학습 기준값을 채웠습니다. 바꿀 항목만 수정해 보세요."
+      : "초기 기준값이 없는 모델입니다. 모든 필수 항목을 입력해 주세요."}</p>
+    <div className="playground-input-tools">
+      <label>항목 찾기<input type="search" value={inputSearch} placeholder="예: 파일 쓰기"
+        onChange={event => { setInputSearch(event.target.value); setInputPage(0); }} /></label>
+      <label>표시 항목<select value={inputFilter}
+        onChange={event => { setInputFilter(event.target.value); setInputPage(0); }}>
+        <option value="all">전체 {model.features.length}개</option>
+        {reference && <option value="changed">수정한 항목 { (importedSource ? observationEdits : editedNames).length }개</option>}
+        {invalid.length > 0 && <option value="invalid">입력 확인 {invalid.length}개</option>}
+        {inputGroups.map(group => <option key={group.id} value={group.id}>{group.title}</option>)}
+      </select></label>
     </div>
-    {reference && <section className="model-lab-input-comparison"
-      aria-label="입력 Feature와 Train 참조값 비교">
-      <div className="model-lab-feature-group-heading">
-        <strong>{importedSource
-          ? observationEdits.length > 0 ? "관측값에서 수정한 입력과 학습 참조값" : "가져온 관측값과 학습 참조값"
-          : editedNames.length > 0 ? "변경한 입력값과 학습 참조값" : "현재 입력값과 학습 참조값"}</strong>
-        <span>{importedSource
-          ? observationEdits.length > 0 ? `수정 ${observationEdits.length}개` : "원본 입력 유지"
-          : editedNames.length > 0 ? `변경 ${editedNames.length}개` : "기준 입력"}</span>
-      </div>
-      <p className="hint">현재 입력값과 학습 중앙값을 비교합니다. 참조값이 양수일 때는 배율을,
-        그 외에는 차이를 표시합니다. 모델의 점수 변화는 실제 계산 후 확인할 수 있습니다.</p>
-      <div className="model-lab-reference-grid">
-        {comparisonNames.map(name => <div key={name} className="model-lab-reference-item">
-          <strong>{activityFeatureLabel(name)}</strong>
-          <FeatureValueComparison feature={name} actual={playgroundNumberValid(fields[name] ?? "",
-            featureDtypes[model.features.indexOf(name)] ?? "")
-            ? Number(fields[name]) : null}
-            reference={referenceMedians[model.features.indexOf(name)]}
-            actualLabel="현재 입력값" />
-        </div>)}
-      </div>
-      {highlightedChanges.length > comparisonNames.length && <small className="hint">
-        변경한 나머지 {highlightedChanges.length - comparisonNames.length}개 값은 위 Feature 입력에서 확인할 수 있습니다.
-      </small>}
-    </section>}
+    <div className="model-lab-input-grid">{shownInputs.map(featureField)}</div>
+    {shownInputs.length === 0 && <p className="hint">조건에 맞는 입력 항목이 없습니다.</p>}
+    <div className="feature-result-pages">
+      <span role="status">{searchedNames.length}개 중 {shownInputs.length ? currentInputPage * 4 + 1 : 0}–{currentInputPage * 4 + shownInputs.length}개</span>
+      {inputPageCount > 1 && <>
+        <button type="button" className="secondary" disabled={currentInputPage === 0}
+          onClick={() => setInputPage(currentInputPage - 1)}>이전 입력</button>
+        <button type="button" className="secondary" disabled={currentInputPage === inputPageCount - 1}
+          onClick={() => setInputPage(currentInputPage + 1)}>다음 입력</button>
+      </>}
+    </div>
     {invalid.length > 0 && <p role="alert" className="model-lab-input-error">
       필수 입력값이나 자료형·정수 범위가 맞지 않는 Feature {invalid.length}개가 있습니다.
       {invalid.length <= 3 && " 확인: " + invalid.map(item => activityFeatureLabel(item.name)).join(", ")}
@@ -434,15 +412,15 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     <p className="model-lab-input-state" role="status">{running
       ? "제출한 입력을 모델에서 계산하는 중입니다."
       : importedSource && !newJobAfterImport
-        ? "Dataset 관측값을 가져왔습니다. 이 입력에 대한 새로운 점수 계산은 아직 요청하지 않았습니다."
+        ? "가져온 입력을 계산할 준비가 됐습니다."
         : matchesCompletedInput
-          ? "현재 입력값은 최근 완료된 계산에 사용한 값과 일치합니다."
+          ? "현재 입력의 계산 결과입니다."
         : job?.status === "Succeeded" && lastScore !== null
-          ? "입력값이 마지막 계산 이후 변경됐습니다. 아래 점수는 이전 입력의 결과이며 현재 입력은 아직 계산하지 않았습니다."
+          ? "입력값을 수정했습니다. 아래는 이전 입력의 점수입니다."
           : job?.status === "Failed" || job?.status === "Cancelled"
             ? "마지막 실행에서는 점수를 얻지 못했습니다. 현재 입력값을 계산하려면 다시 실행해 주세요."
-            : "현재 입력값은 아직 계산하지 않았습니다. 점수를 확인하려면 실행을 요청하세요."}</p>
-    <p className="hint">모든 Feature {model.features.length}개가 실제 모델에 전달되며, 제출한 입력과 결과는 작업 이력에 보존됩니다.</p>
+            : "입력값을 준비한 뒤 점수를 계산하세요."}</p>
+
     {error && <p role="alert">{error}</p>}
     <div className="model-lab-playground-actions">
       <button type="button" onClick={() => void execute()}
@@ -452,10 +430,6 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       {importedSource && observationEdits.length > 0 && <button type="button" className="secondary"
         onClick={() => setFields({ ...importedSource.fields })} disabled={running}>
         원래 관측값으로 복원</button>}
-      {reference && <button type="button" className="ghost"
-        title={importedSource ? "가져온 관측값 대신 학습 중앙값 기준 입력으로 바꿉니다." : undefined}
-        onClick={() => { setFields(reference); setImportedSource(null); setImportedAfterJobId(null); }} disabled={running}>
-        학습 기준값으로 초기화</button>}
       {job && !TERMINAL.has(job.status) && canCancel &&
         <button type="button" className="secondary" onClick={() => void cancel()}>취소 요청</button>}
     </div>
@@ -490,36 +464,23 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}
         {job.error_code && <small> ({job.error_code})</small>}</p>}
       <p className="hint">점수가 높을수록 모델에서 이례적인 입력이며, 사건 확률이나 확정 판정은 아닙니다.</p>
-      {matchesCompletedInput && reference && editedNames.length === 0 && mode === "example" &&
+      {matchesCompletedInput && reference && editedNames.length === 0 && !importedSource &&
         <div className="model-lab-try-change">
           <p>학습 중앙값을 바탕으로 한 기준 입력의 점수입니다. 숫자를 바꾼 뒤 다시 계산해 모델 반응을 살펴보세요.</p>
-          <button type="button" className="secondary" onClick={() => setMode("edit")}>입력값 변경 →</button>
+          <button type="button" className="secondary" onClick={focusFirstInput}>입력값 변경 →</button>
         </div>}
     </div>}
     {showCurrentJob && job?.status === "Succeeded" && lastScore !== null && comparisonJob &&
-      comparedFeatures.length > 0 && <section className="model-lab-run-comparison"
-        aria-label="이전 실행과 이번 실행 비교">
-        <h5>두 완료 계산의 입력·점수 차이</h5>
-        <p className="hint">같은 모델 판본으로 완료한 두 Job의 실제 제출값입니다.
-          이 차이는 변경 Feature의 인과적 기여도를 뜻하지 않습니다.</p>
-        <div className="model-lab-score-row">
-          <div><span>이전 점수</span><strong>{typeof comparisonJob.result?.anomaly_score === "number"
-            ? formatScore(comparisonJob.result.anomaly_score) : "없음"}</strong></div>
-          <div><span>이번 점수</span><strong>{formatScore(lastScore)}</strong></div>
-        </div>
-        <p className="hint">바뀐 Feature {comparedFeatures.length}개</p>
-        <div className="table-scroll"><table>
-          <thead><tr><th>Feature</th><th>이전 실행</th><th>이번 실행</th></tr></thead>
-          <tbody>{comparedFeatures.map(name => <tr key={name}>
-            <td>{activityFeatureLabel(name)}</td>
-            <td>{String((comparisonJob.spec.features as Record<string, unknown>)[name] ?? "결측")}</td>
-            <td>{String((job.spec.features as Record<string, unknown>)[name] ?? "결측")}</td>
-          </tr>)}</tbody>
-        </table></div>
-      </section>}
+      comparedFeatures.length > 0 && <FeatureResultDetails key={job.id}
+        summary={`이전 실행에서 수정한 항목 ${comparedFeatures.length}개`}
+        columns={["이전 입력", "이번 입력"]}
+        rows={comparedFeatures.map(name => ({ feature: name, values: [
+          String((comparisonJob.spec.features as Record<string, unknown>)[name] ?? "결측"),
+          String((job.spec.features as Record<string, unknown>)[name] ?? "결측"),
+        ] }))} />}
     {showCurrentJob && job?.status === "Succeeded" && (explanationAvailable
       ? <details className="model-lab-explanation-toggle">
-          <summary>이 입력 설명하기 · SHAP / Feature 치환 민감도</summary>
+          <summary>{matchesCompletedInput ? "계산한 점수 설명" : "이전 입력의 점수 설명"}</summary>
           <PlaygroundExplanations key={job.id} source={job} canRun={canRun}
             canCancel={canCancel} shapSupported={model.features.length <= 64} />
         </details>
@@ -561,21 +522,17 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
                   {selectedHistory.error_code && <small> ({selectedHistory.error_code})</small>}</p>}
               {selectedHistory.status === "Cancelled" && <p>취소된 점수 계산입니다.</p>}
               {!TERMINAL.has(selectedHistory.status) && <p>이 실행은 아직 완료되지 않았습니다.</p>}
-              <details>
-                <summary>제출 당시 Feature 입력값 {model.features.length}개 확인</summary>
-                <dl className="model-lab-history-features">
-                  {model.features.map(name => <div key={name}>
-                    <dt>{activityFeatureLabel(name)}</dt>
-                    <dd>{String((selectedHistory.spec.features as Record<string, unknown>)[name] ?? "값 없음")}</dd>
-                  </div>)}
-                </dl>
-              </details>
+              <FeatureResultDetails key={selectedHistory.id}
+                summary={`제출한 입력 확인 · ${model.features.length}개 항목`}
+                columns={["제출한 값"]} rows={model.features.map(name => ({ feature: name,
+                  values: [String((selectedHistory.spec.features as Record<string, unknown>)[name] ?? "값 없음")],
+                }))} />
               <button type="button" className="secondary"
                 disabled={running}
                 onClick={() => useHistoryInput(selectedHistory)}>이 입력으로 다시 계산 준비</button>
               {selectedHistory.status === "Succeeded" && explanationAvailable &&
                 <details className="model-lab-explanation-toggle">
-                  <summary>이전 실행의 SHAP / Feature 민감도 확인</summary>
+                  <summary>이 점수 설명</summary>
                   <PlaygroundExplanations key={selectedHistory.id} source={selectedHistory}
                     canRun={canRun} canCancel={canCancel}
                     shapSupported={model.features.length <= 64} />
