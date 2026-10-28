@@ -141,7 +141,8 @@ def explain_playground_job(store, spec: dict) -> dict:
     original = np.asarray(
         ordered_playground_input(model, source["spec"]["features"]), dtype=np.float64
     )
-    score = source.get("result", {}).get("anomaly_score")
+    saved_result = source.get("result")
+    score = saved_result.get("anomaly_score") if isinstance(saved_result, dict) else None
     if not isinstance(score, (int, float)) or not math.isfinite(score):
         raise ValueError("Playground stored model score is unavailable")
     model_runtime = load_trusted_isolation_forest(model, store.home / "cache")
