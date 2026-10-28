@@ -19,6 +19,10 @@ jobs:
         run: |
           curl --fail --silent --show-error http://127.0.0.1:9608/health
           curl --fail --silent --show-error http://127.0.0.1:9608/projects-list.json | python -m json.tool
+          curl --fail --silent --show-error 'http://127.0.0.1:9608/api/v1/projects' |
+            python -c 'import sys,json; d=json.load(sys.stdin); assert any(p["name"] == "sos_features" for p in d["projects"])'
+          curl --fail --silent --show-error 'http://127.0.0.1:9608/api/v1/feature_services?project=sos_features' |
+            python -c 'import sys,json; d=json.load(sys.stdin); assert isinstance(d["featureServices"],list)'
           curl --fail --silent --show-error http://127.0.0.1:9608/ > /tmp/feast-ui-index.html
           grep -qi 'Feast' /tmp/feast-ui-index.html
       - name: Verify SQL viewer is query-only
