@@ -155,5 +155,5 @@ def test_registry_fingerprint_covers_source_mapping_and_execution_flags(tmp_path
     modified[1].batch_source.field_mapping = {"renamed_feature": "number"}
     assert feast_features.definition_digest(modified) != original
     modified = deepcopy(objects)
-    modified[1].offline = False
+    modified[1].offline = not bool(modified[1].offline)
     assert feast_features.definition_digest(modified) != original
