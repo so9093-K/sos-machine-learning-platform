@@ -423,6 +423,10 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
             <strong>{lastScore.toFixed(5)}</strong></div>
           {previousScore !== null && <div><span>이전 완료 계산과의 점수 차이</span>
             <strong>{(lastScore - previousScore) > 0 ? "+" : ""}{(lastScore - previousScore).toFixed(5)}</strong></div>}
+          {importedSource && matchesCompletedInput && <div>
+            <span>원래 Dataset 관측값 점수 대비 차이</span>
+            <strong>{lastScore - importedSource.originalScore > 0 ? "+" : ""}{(lastScore - importedSource.originalScore).toFixed(5)}</strong>
+          </div>}
         </div>}
       {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}
         {job.error_code && <small> ({job.error_code})</small>}</p>}
