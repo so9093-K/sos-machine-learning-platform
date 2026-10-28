@@ -159,8 +159,9 @@ def _perform(
                 or entity is None
             ):
                 raise ValueError("Registered Feature Service or Entity Dataset is unavailable")
-            if registered_job["id"] in store.retired_feature_registration_ids([registered_job["id"]]):
-                raise ValueError("폐기된 Feature Service를 조회할 수 없습니다.")
+            # 조회 Job은 등록 행 잠금 아래에서 폐기 접수 전에 승인된다.
+            # 폐기 이후 신규 제출은 Store에서 거부하지만, 그 이전에 Queued였던
+            # 조회는 보존된 Feast 정의로 완료해야 하므로 실행 시점에 재차 거부하지 않는다.
             verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
             verify_pinned_owner(entity, job["spec"], "entity_dataset_owner")
             result = retrieve_features(
