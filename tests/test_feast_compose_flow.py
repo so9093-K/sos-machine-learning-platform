@@ -129,7 +129,7 @@ def test_registered_feature_to_model_revision():
     assert no_late_retrieval.status_code == 409, no_late_retrieval.text
     no_double_retire = client.post(
         f"/api/features/services/{registration['id']}/retirement/jobs", json={},
-        headers={"Idempotency-Key": f"review-{uuid4().hex}",
+        headers={"Idempotency-Key": f"review-{uuid4().hex}"},
     )
     assert no_double_retire.status_code == 409, no_double_retire.text
     retirement = completed(retirement_request)
