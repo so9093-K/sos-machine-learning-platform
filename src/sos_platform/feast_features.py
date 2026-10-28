@@ -140,9 +140,13 @@ def _semantic_spec(obj) -> dict:
                 "name": source.get("name"),
                 "timestamp_field": source["timestamp_field"],
                 "created_timestamp_column": source.get("created_timestamp_column", ""),
-                "file_uri": source.get("file_options", {}).get("uri"),
+                "date_partition_column": source.get("date_partition_column", ""),
+                "timestamp_field_type": source.get("timestamp_field_type", ""),
+                "field_mapping": source.get("field_mapping", {}),
+                "file_options": source.get("file_options", {}),
             },
             "online": bool(getattr(obj, "online", False)),
+            "offline": bool(getattr(obj, "offline", True)),
         }
     if kind == "FeatureService":
         return {
