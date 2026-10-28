@@ -115,7 +115,7 @@ def retrieve_features(store, feature_dataset: dict, entity_dataset: dict, raw_sp
         registry={"registry_type": "sql", "path": registry_url, "cache_ttl_seconds": 0},
         provider="local",
         offline_store={"type": "duckdb"},
-        online_store="null",
+        online_store=None,
     )
     feast = FeatureStore(config=config)
     name, view_name, service_name = feature_identity(spec, feature_dataset)
