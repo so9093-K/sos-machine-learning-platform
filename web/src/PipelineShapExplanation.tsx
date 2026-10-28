@@ -100,18 +100,25 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
   // 학습 중앙값 기준 입력을 그대로 설명하면 유효한 SHAP 결과도 모두 0이다.
   // 설명의 근거를 숨기지 않되 값이 없는 차트를 일반 기여도 순위처럼 보여주지 않는다.
   const zeroContributions = isValid && values.every(item => item.shap_value === 0);
+  // 기여도가 모두 0이어도 실제 입력 Feature가 기준 입력과 같다고 추론할 수는 없다.
+  const sameAsMedianReference = zeroContributions && values.every(item =>
+    !item.missing_imputed && numeric(item.actual_value) &&
+    item.actual_value === item.reference_median);
   if (!isValid) {
     return <p role="alert">SHAP 설명 근거의 점수·기여도 검증에 실패했습니다.
       이 결과의 차트는 표시하지 않습니다. 설명 결과 판본을 확인하세요.</p>;
   }
   return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
-    <h6>{zeroContributions ? "SHAP 기준 입력과 동일한 결과" :
+    <h6>{zeroContributions ? "SHAP 기준 점수와 일치하는 결과" :
       `모델 점수에 기여한 주요 Feature ${shown.length}개 (SHAP)`}</h6>
     {zeroContributions
       ? <div className="pipeline-shap-zero" role="status">
           <strong>이 입력의 SHAP 기여도는 모두 0입니다.</strong>
-          <p>이 입력은 설명에 사용한 학습 중앙값 기준 입력과 같은 점수를 냅니다.
-            기준 점수와 실제 점수는 {key(score)}로 일치합니다.</p>
+          <p>기준 점수 <strong>{key(baseline)}</strong> · 실제 점수 <strong>{key(score)}</strong>:
+            계산 허용 오차 내에서 같습니다.</p>
+          {sameAsMedianReference
+            ? <p>모든 실제 입력 Feature가 학습 참조 중앙값과 일치합니다.</p>
+            : <p>기여도가 모두 0이어도 입력 Feature가 학습 중앙값과 같다는 뜻은 아닙니다.</p>}
           <p>다른 입력이나 관측값을 점수화하면 그 결과의 기여도를 살펴볼 수 있습니다.
             입력을 바꾼다고 반드시 점수가 달라지는 것은 아닙니다.</p>
         </div>
