@@ -259,14 +259,21 @@ explanation_results = Table(
     Column("id", String(36), primary_key=True),
     Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
     Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
-    Column("scoring_result_id", String(36), ForeignKey("scoring_results.id"), nullable=False),
+    Column("scoring_result_id", String(36), ForeignKey("scoring_results.id"), nullable=True),
+    Column("playground_job_id", String(36), ForeignKey("jobs.id"), nullable=True),
     Column("model_revision_id", String(36), ForeignKey("model_revisions.id"), nullable=False),
-    Column("row_index", Integer, nullable=False),
+    Column("row_index", Integer, nullable=True),
     Column("method", String(96), nullable=False),
     Column("output", Text, nullable=False),
     Column("owner_actor", Text),
     Column("created_at", Text, nullable=False),
     Index("ix_explanations_scoring_row", "scoring_result_id", "row_index"),
+    Index("ix_explanations_playground", "playground_job_id"),
+    CheckConstraint(
+        "(scoring_result_id IS NOT NULL AND row_index IS NOT NULL AND playground_job_id IS NULL) "
+        "OR (scoring_result_id IS NULL AND row_index IS NULL AND playground_job_id IS NOT NULL)",
+        name="ck_explanation_source_exactly_one",
+    ),
 )
 
 mlflow_exports = Table(
