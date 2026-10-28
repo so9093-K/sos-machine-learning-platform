@@ -42,9 +42,11 @@ export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
     설명 결과의 방법과 계산 근거가 일치하지 않습니다. 내용을 표시하지 않습니다.
   </p>;
   // 불변 Explanation 결과의 외부 식별자와 계산 근거 안의 식별자가 일치해야 한다.
-  if (result.output.scoring_result_id !== result.scoring_result_id ||
+  if (result.output.scoring_result_id !== (result.scoring_result_id ?? null) ||
+      result.output.playground_job_id !== (result.playground_job_id ?? undefined) &&
+        result.playground_job_id != null ||
       result.output.model_revision_id !== result.model_revision_id ||
-      result.output.row_index !== result.row_index) return <p role="alert">
+      result.output.row_index !== (result.row_index ?? null)) return <p role="alert">
     설명 결과의 Scoring·모델·관측 행 판본이 계산 근거와 일치하지 않습니다.
     다른 분석의 설명으로 표시하지 않습니다.
   </p>;
@@ -186,8 +188,9 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
       const r = data as EvaluationRevision;
       return <>
         <dl className="ml-resource-fields">
-          <Field label="Scoring Result"><button className="secondary"
-            onClick={() => onOpenResource("scoring", r.scoring_result_id)}>{r.scoring_result_id} ↗</button></Field>
+          {r.scoring_result_id ? <Field label="Scoring Result"><button className="secondary"
+            onClick={() => onOpenResource("scoring", r.scoring_result_id!)}>{r.scoring_result_id} ↗</button></Field>
+            : <Field label="단일 입력 Job">{r.playground_job_id ?? "출처 없음"}</Field>}
           <Field label="적용 정책">{r.policy_revision_id
             ? <button className="secondary" onClick={() => onOpenResource("policy", r.policy_revision_id!)}>
               {r.policy_revision_id} ↗</button> : "없음 (순위 평가만)"}</Field>
@@ -209,10 +212,11 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
           <Field label="모델 버전"><button className="secondary"
             onClick={() => onOpenResource("model", r.model_revision_id)}>{r.model_revision_id} ↗</button></Field>
           <Field label="방법">{r.method}</Field>
-          <Field label="결과 내부 행 번호">{r.row_index}</Field>
+          {r.row_index !== null && r.row_index !== undefined &&
+            <Field label="결과 내부 행 번호">{r.row_index}</Field>}
         </dl>
         <ExplanationEvidence result={r} />
-        <p className="hint">결과 행 번호는 Scoring Result 내부 순서이지 원본 관측치 ID가 아닙니다.</p>
+        {r.scoring_result_id && <p className="hint">결과 행 번호는 Scoring Result 내부 순서이지 원본 관측치 ID가 아닙니다.</p>}
       </>;
     })()}
   </section>;
