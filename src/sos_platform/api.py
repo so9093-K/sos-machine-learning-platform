@@ -1194,7 +1194,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         "/api/ml/explanations/jobs",
         tags=["Explanations"],
         summary="모델 설명 작업 제출",
-        description="선택한 Scoring 결과의 설명을 계산합니다. Feature 민감도와 SHAP은 실제 이상 사건의 인과 원인이 아닙니다.",
+        description="Scoring 결과 행 또는 성공한 단일 입력 Job을 설명합니다. Feature 민감도와 SHAP은 실제 이상 사건의 인과 원인이 아닙니다.",
         status_code=202,
         response_model=MLExplanationJobOut,
     )
@@ -1210,19 +1210,42 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
         ),
     ):
-        score = required_scoring_result(body.scoring_result_id, actor)
-        if body.row_index >= score["row_count"]:
-            raise HTTPException(status_code=422, detail="Explanation row_index out of bounds")
-        require_job_submission_key(idempotency_key)
-        return store.create_job(
-            kind="ml_explain",
-            dataset_id=score["dataset_id"],
-            spec={
+        if body.playground_job_id is not None:
+            source = existing_job(body.playground_job_id, actor)
+            if source["kind"] != "ml_playground" or source["status"] != "Succeeded":
+                raise HTTPException(
+                    status_code=409, detail="Explanation requires a successful Playground Job"
+                )
+            if not isinstance(source.get("result"), dict) or not isinstance(
+                source["result"].get("anomaly_score"), (int, float)
+            ):
+                raise HTTPException(status_code=409, detail="Playground score is unavailable")
+            model = store.get_model_revision(source["spec"]["model_revision_id"])
+            if model is None or model["lifecycle_state"] != "Active":
+                raise HTTPException(status_code=409, detail="Playground model is unavailable")
+            check_ownership(actor, model["owner_actor"], "model", model["id"])
+            dataset_id = None
+            source_spec = {
+                "playground_job_id": source["id"],
+                "source_owner_actor": source["owner_actor"],
+                "method": body.method,
+            }
+        else:
+            score = required_scoring_result(body.scoring_result_id, actor)
+            if body.row_index >= score["row_count"]:
+                raise HTTPException(status_code=422, detail="Explanation row_index out of bounds")
+            dataset_id = score["dataset_id"]
+            source_spec = {
                 "scoring_result_id": score["id"],
                 "source_owner_actor": score["owner_actor"],
                 "row_index": body.row_index,
                 "method": body.method,
-            },
+            }
+        require_job_submission_key(idempotency_key)
+        return store.create_job(
+            kind="ml_explain",
+            dataset_id=dataset_id,
+            spec=source_spec,
             request_id=request.state.request_id,
             owner_actor=actor.id,
             actor_type=actor.kind,
