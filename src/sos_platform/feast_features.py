@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from .config import Settings
 from .datasets import pinned_scan_dataset
+from .feast_offline import entity_execution_limit, retrieve_to_parquet
 
 
 class FeatureDefinitionRequest(BaseModel):
@@ -414,8 +415,8 @@ def retrieve_features(
             source_schema = feature_source.collect_schema()
         if schema[key] != source_schema[key]:
             raise ValueError("Entity key dtype differs from registered Feature Source")
-        # DuckDB .to_df() is materialized in memory: fail instead of sampling silently.
-        limit = 100_000
+        # 조회 정책은 현행 Offline Runtime에 속하며 SOS API 자체의 상한이 아니다.
+        limit = entity_execution_limit()
         selected_columns = [key, request.timestamp_column]
         if "sos_observation_id" in schema:
             selected_columns.append("sos_observation_id")
@@ -423,7 +424,7 @@ def retrieve_features(
         if rows.height == 0:
             raise ValueError("Entity Dataset is empty")
         if rows.height > limit:
-            raise ValueError("Historical Feature Retrieval exceeds 100,000 Entity rows")
+            raise ValueError(f"Historical Feature Retrieval exceeds the Runtime limit of {limit} Entity rows")
         entity_rows = rows.to_pandas().rename(
             columns={request.timestamp_column: "event_timestamp"}
         )
@@ -453,45 +454,13 @@ def retrieve_features(
     feast = _feature_store()
     validate_registry_definition(feast, names, expected)
     service = feast.get_feature_service(registered["feature_service"])
-    # Feast 0.67 DuckDB Offline Store는 Ibis의 기본 DuckDB Backend를 사용하며,
-    # FileSource.s3_endpoint_override만으로 그 Backend에 S3 URL/인증 설정이 전달되지 않는다.
-    # 각 격리된 Worker 자식의 Backend를 SOS S3 호환 엔드포인트로 명시 구성한다.
-    import ibis
-    from urllib.parse import urlsplit
-
-    settings = Settings.from_env()
-    endpoint = urlsplit(settings.s3_endpoint)
-    if (
-        endpoint.scheme not in {"http", "https"} or not endpoint.hostname
-        or endpoint.path not in {"", "/"} or endpoint.query or endpoint.fragment
-        or endpoint.username or endpoint.password
-    ):
-        raise ValueError("Feast S3 endpoint must be a plain HTTP(S) host")
-    prior_backend = ibis.options.default_backend
-    try:
-        ibis.options.default_backend = ibis.duckdb.connect(
-            s3_endpoint=endpoint.netloc,
-            s3_use_ssl=(endpoint.scheme == "https"),
-            s3_url_style="path",
-            s3_region=settings.s3_region,
-            s3_access_key_id=settings.s3_access_key,
-            s3_secret_access_key=settings.s3_secret_key,
-        )
-        output = feast.get_historical_features(
-            entity_df=entity_rows,
-            features=service,
-        ).to_df()
-    finally:
-        ibis.options.default_backend = prior_backend
     required = [key, "event_timestamp", *registered["feature_names"]]
     if "sos_observation_id" in entity_rows.columns:
         required.append("sos_observation_id")
-    if any(name not in output.columns for name in required):
-        raise ValueError("Feast returned a Feature schema different from registration")
-    if len(output) != len(entity_rows):
-        raise ValueError("Feast returned a different Entity row count")
-    output = output[required].rename(columns={"event_timestamp": request.timestamp_column})
-    output.to_parquet(pending, index=False)
+    rows_written = retrieve_to_parquet(
+        feast, service, entity_rows=entity_rows, expected_columns=required,
+        timestamp_column=request.timestamp_column, output=pending,
+    )
 
     return {
         "registration_job_id": request.registration_job_id,
@@ -506,7 +475,7 @@ def retrieve_features(
         "source_timestamp_column": registered["timestamp_column"],
         "feature_names": registered["feature_names"],
         "ttl_seconds": registered["ttl_seconds"],
-        "row_count": len(output),
+        "row_count": rows_written,
         "definition_digest": registered["definition_digest"],
         "engine": "feast",
     }
