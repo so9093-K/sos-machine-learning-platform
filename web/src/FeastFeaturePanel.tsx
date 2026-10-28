@@ -4,7 +4,7 @@ import { jobStatusLabel } from "./display-format";
 import { FeatureSelector } from "./FeatureSelector";
 import type { Dataset, DatasetColumns, Job } from "./types";
 
-const NUMERIC = /^(?:U?Int(?:8|16|32|64)|Float(?:32|64))$/;
+const NUMERIC = /^(?:Int(?:32|64)|Float(?:32|64))$/;
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 /** 등록 Feature 조회는 기존 학습과 독립된 SOS Job으로 실행·게시된다. */

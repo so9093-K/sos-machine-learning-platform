@@ -77,6 +77,7 @@ def retrieve_features(store, feature_dataset: dict, entity_dataset: dict, raw_sp
     """Feast Point-in-Time Retrieval을 수행하고 결과 파일은 부모 Worker가 게시한다."""
     from feast import Entity, FeatureService, FeatureStore, FeatureView, Field, FileSource, RepoConfig
     from feast.types import Float32, Float64, Int32, Int64
+    from feast.value_type import ValueType
     import pandas as pd
 
     spec = FeatureRetrievalRequest.model_validate(raw_spec)
@@ -131,7 +132,12 @@ def retrieve_features(store, feature_dataset: dict, entity_dataset: dict, raw_sp
         timestamp_field=spec.timestamp_column,
         s3_endpoint_override=settings.s3_endpoint,
     )
-    entity = Entity(name=name, join_keys=[spec.entity_column])
+    entity_type = {
+        pl.String: ValueType.STRING,
+        pl.Int32: ValueType.INT32,
+        pl.Int64: ValueType.INT64,
+    }[source_schema[spec.entity_column]]
+    entity = Entity(name=name, value_type=entity_type, join_keys=[spec.entity_column])
     view = FeatureView(
         name=view_name,
         entities=[entity],
