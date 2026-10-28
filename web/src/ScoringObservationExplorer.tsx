@@ -169,7 +169,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       <div><span>평균 이상 점수</span><strong>{readable(summary.score_mean)}</strong></div>
     </div>
     <p className="scoring-result-interpretation">전체 분포에서 점수가 높은 관측값을 선택해 실제 활동 특성을 살펴보세요.
-      판정 정책 미적용 · 점수순 위치는 사건 판정이나 발생 확률을 뜻하지 않습니다.</p>
+      판정 정책 미적용 · 점수순 위치는 이상 사건 판정이나 발생 확률을 뜻하지 않습니다.</p>
     <section className="scoring-distribution" aria-label="전체 이상 점수 분포">
       <div className="scoring-distribution-heading">
         <h4>전체 관측값의 점수 분포</h4>
