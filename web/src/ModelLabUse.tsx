@@ -33,7 +33,7 @@ async function compatiblePage(page: MLflowModelVersionPage, definition: Pipeline
 }
 
 export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, canRun, canCancel,
-  selectedModelId, selectedGroupKey, onSelectModel, onSelectGroup, onOpenResource, onBack, onLearn,
+  selectedModelId, selectedGroupKey, onSelectModel, onSelectGroup, onOpenResource, onBack, onResearch,
   canLearn, canUpload, onDatasetRegistered }: {
   datasets: Dataset[];
   hasMoreDatasets: boolean;
@@ -44,7 +44,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   onSelectModel: (id: string) => void;
   onSelectGroup: (group: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
-  onBack: () => void; onLearn: () => void;
+  onBack: () => void; onResearch: () => void;
   canLearn: boolean; canUpload: boolean;
   onDatasetRegistered: (dataset: Dataset) => void;
 }) {
@@ -196,7 +196,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           다른 모델 그룹 확인 →
         </button>}
       {!nextPage && !lookupFailures && canLearn &&
-        <button type="button" onClick={onLearn}>모델 학습 →</button>}
+        <button type="button" onClick={onResearch}>연구·실험 →</button>}
     </div>}
     {selected && <div className="model-lab-current-model">
       <div><span className="eyebrow">현재 선택한 모델</span>
@@ -242,7 +242,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
       canUpload={canUpload} onDatasetRegistered={onDatasetRegistered} onResultViewChange={handleResultViewChange} />}
     {canLearn && <div className="model-lab-use-footer">
-      <button type="button" className="ghost" onClick={onLearn}>새 모델 학습 →</button>
+      <button type="button" className="ghost" onClick={onResearch}>연구·실험 →</button>
     </div>}
   </section>;
 }

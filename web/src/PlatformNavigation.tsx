@@ -5,7 +5,7 @@ import type { PipelineDefinition } from "./types";
 
 export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
-  | "pipelines" | "ml" | "training" | "scoring" | "policies"
+  | "pipelines" | "ml" | "research" | "training" | "scoring" | "policies"
   | "evaluations" | "explanations"
   | "jobs" | "ml-jobs" | "pipeline-jobs" | "storage" | "audit";
 export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
@@ -79,7 +79,7 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
         ...(analysisSectionAt(params) ? { pipelineAnalysisSection: analysisSectionAt(params) } : {}),
       } : {}) };
   }
-  if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "",
+  if (tab === "training" || tab === "ml" || tab === "research") return { datasetId: params.get("dataset") ?? "",
     ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
   if (tab === "scoring") return { ...resourceContext(search), modelId: params.get("model") ?? "",
     ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
@@ -138,11 +138,11 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
     params.set("job", context.dataJobId);
     if (context.dataJobKind === "exploration") params.set("type", "exploration");
   }
-  if ((tab === "training" || tab === "ml") && context.datasetId) {
+  if ((tab === "training" || tab === "ml" || tab === "research") && context.datasetId) {
     params.set("dataset", context.datasetId);
   }
   if (tab === "scoring" && context.modelId) params.set("model", context.modelId);
-  if ((tab === "ml" || tab === "training" || tab === "scoring") &&
+  if ((tab === "ml" || tab === "research" || tab === "training" || tab === "scoring") &&
       context.modelGroupKey && context.modelGroupKey !== "default")
     params.set("group", context.modelGroupKey);
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
@@ -158,7 +158,7 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
 const paths: Record<WorkspaceTab, string> = {
   overview: "/", understanding: "/data", preview: "/data/query",
   profile: "/data/profile", preparation: "/data/prepare",
-  pipelines: "/pipelines", ml: "/models", training: "/training",
+  pipelines: "/pipelines", ml: "/models", research: "/research", training: "/training",
   scoring: "/scoring", policies: "/policies",
   evaluations: "/evaluations", explanations: "/explanations",
   jobs: "/activity/jobs", "ml-jobs": "/activity/ml", "pipeline-jobs": "/activity/pipelines", storage: "/operations/storage", audit: "/operations/audit",
@@ -214,9 +214,9 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
       }
     }
   }
-  // 미구현 설계 Preview의 과거 주소는 작동 중인 홈 기능으로 안내한다.
-  if (pathname === "/research" || pathname === "/model-experience") {
-    return { tab: "overview", resource: null, context: {} };
+  // 과거 모델 경험 주소도 실제 모델 활용 진입점으로 연결한다.
+  if (pathname === "/model-experience") {
+    return { tab: "ml", resource: null, context: contextAt("ml", search) };
   }
   const tab = (Object.keys(paths) as WorkspaceTab[]).find(key => paths[key] === pathname);
   return { tab: tab ?? "overview", resource: null,
@@ -254,8 +254,8 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
             modelGroupKey: previous.context.modelGroupKey } : {}),
     };
   }
-  if ((tab === "training" || tab === "ml" || tab === "scoring") &&
-      (previous.tab === "training" || previous.tab === "ml" || previous.tab === "scoring")) {
+  if ((tab === "training" || tab === "ml" || tab === "research" || tab === "scoring") &&
+      (previous.tab === "training" || previous.tab === "ml" || previous.tab === "research" || previous.tab === "scoring")) {
     return { ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}),
       ...(previous.context.modelGroupKey ? { modelGroupKey: previous.context.modelGroupKey } : {}) };
   }
@@ -268,9 +268,8 @@ export function useWorkspaceNavigation() {
     () => routeAt(window.location.pathname, window.location.search));
   const current = useRef(route);
   useEffect(() => {
-    if (window.location.pathname === "/research" ||
-        window.location.pathname === "/model-experience") {
-      window.history.replaceState(null, "", "/");
+    if (window.location.pathname === "/model-experience") {
+      window.history.replaceState(null, "", contextPath("ml", current.current.context));
     }
     const sync = () => {
       current.current = routeAt(window.location.pathname, window.location.search);
@@ -341,8 +340,10 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
   { title: "WORKSPACE", items: [
     { tab: "overview", label: "홈" },
     { tab: "understanding", label: "데이터 탐색" },
+    { tab: "ml", label: "모델 활용" },
+    { tab: "research", label: "연구·실험" },
   ] },
-  { title: "모델 실험실", items: [{ tab: "pipelines", label: "활동 이상 탐지" }] },
+  { title: "분석 주제", items: [{ tab: "pipelines", label: "활동 이상 탐지" }] },
   { title: "DATA TOOLS", items: [{ tab: "preparation", label: "데이터 준비" }] },
   { title: "ACTIVITY & OPERATIONS", items: [
     { tab: "jobs", label: "작업 이력" },
@@ -351,39 +352,44 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
   ] },
 ];
 
-const modelTabs: ReadonlyArray<{ tab: WorkspaceTab; label: string; group: string }> = [
-  { tab: "ml", label: "모델 버전", group: "리소스" },
-  { tab: "training", label: "학습", group: "실행" },
-  { tab: "scoring", label: "모델 적용", group: "실행" },
-  { tab: "evaluations", label: "평가", group: "결과와 판단" },
-  { tab: "policies", label: "판정 정책", group: "결과와 판단" },
-  { tab: "explanations", label: "점수 설명", group: "결과와 판단" },
+const modelTools: ReadonlyArray<NavItem> = [
+  { tab: "scoring", label: "모델 적용" },
+  { tab: "evaluations", label: "평가" },
+  { tab: "policies", label: "판정 정책" },
+  { tab: "explanations", label: "점수 설명" },
 ];
 export function isModelsArea(tab: WorkspaceTab): boolean {
-  return modelTabs.some(item => item.tab === tab);
+  return ["ml", "research", "training", ...modelTools.map(item => item.tab)].includes(tab);
 }
 
-/** 전역 내비게이션이 아니라 모델 리소스 문맥 안에서 독립 기능을 탐색한다. */
+/** 사용자 목적을 먼저 구분하고 독립 실행 도구는 활용 문맥 안에서 제공한다. */
 export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
   active: WorkspaceTab;
   context: MLNavigationContext;
   resource: ResourceRoute;
   onNavigate: (tab: WorkspaceTab) => void;
 }) {
-  return <nav className="model-area-nav" aria-label="모델 관련 화면">
-    {modelTabs.map(item => <a key={item.tab}
-      href={contextPath(item.tab, nextNavigationContext(
-        { tab: active, resource, context }, item.tab))}
-      aria-current={active === item.tab ? "page" : undefined}
-      className="model-area-link"
-      onClick={event => {
-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        event.preventDefault();
-        onNavigate(item.tab);
-      }}>
-      <small>{item.group}</small><span>{item.label}</span>
-    </a>)}
-  </nav>;
+  const inResearch = active === "research" || active === "training";
+  const link = (item: NavItem, current: boolean) => <a key={item.tab}
+    href={contextPath(item.tab, nextNavigationContext({ tab: active, resource, context }, item.tab))}
+    aria-current={current ? "page" : undefined} className="model-area-link"
+    onClick={event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault(); onNavigate(item.tab);
+    }}>{item.label}</a>;
+  return <div className="model-area-navigation">
+    <nav className="model-area-nav" aria-label="모델 작업 목적">
+      {link({ tab: "ml", label: "모델 활용" }, !inResearch)}
+      {link({ tab: "research", label: "연구·실험" }, inResearch)}
+    </nav>
+    {active === "training" && <p className="hint">연구·실험 / 새 학습</p>}
+    {!inResearch && <details className="model-tools" open={active !== "ml"}>
+      <summary>모델 적용·결과 도구</summary>
+      <nav aria-label="모델 적용과 결과 도구">
+        {modelTools.map(item => link(item, active === item.tab))}
+      </nav>
+    </details>}
+  </div>;
 }
 
 /** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
@@ -416,25 +422,26 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
 
   const isCurrent = (tab: WorkspaceTab) =>
     tab === "understanding" ? ["understanding", "preview", "profile"].includes(active)
-      : tab === "ml" ? isModelsArea(active)
+      : tab === "ml" ? isModelsArea(active) && active !== "research" && active !== "training"
+      : tab === "research" ? active === "research" || active === "training"
       : tab === "jobs" ? ["jobs", "ml-jobs", "pipeline-jobs"].includes(active) : active === tab;
   return <nav className="global-nav platform-nav" aria-label="플랫폼 메뉴">
     {groups.filter(group => canViewDataset || group.items.some(item =>
       (item.tab === "storage" && canInspectStorage) || (item.tab === "audit" && canViewAudit)))
       .map(group => <div className="platform-nav-group" key={group.title}>
-      <span className={group.title === "모델 실험실" ? "section-title model-lab-tree-title" : "section-title"}>
-        {group.title === "모델 실험실" && <svg viewBox="0 0 20 20" width="15" height="15"
+      <span className={group.title === "분석 주제" ? "section-title model-lab-tree-title" : "section-title"}>
+        {group.title === "분석 주제" && <svg viewBox="0 0 20 20" width="15" height="15"
           fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
           <path d="M7 2h6M9 2v6l-5 7a2 2 0 0 0 1.7 3h8.6a2 2 0 0 0 1.7-3l-5-7V2M7 13h6"/>
         </svg>}
         {group.title}
       </span>
-      {group.title === "모델 실험실" ? <div className="model-lab-tree" aria-label="등록된 분석 주제">
+      {group.title === "분석 주제" ? <div className="model-lab-tree" aria-label="등록된 분석 주제">
         {catalogLoading && <p className="model-lab-tree-feedback" role="status">주제 목록을 불러오는 중입니다.</p>}
         {!catalogLoading && !catalogError && topics.length === 0 &&
           <p className="model-lab-tree-feedback">현재 사용 가능한 주제가 없습니다.</p>}
         {catalogError && <div className="model-lab-tree-feedback" role="status">
-          <span>모델 실험실 목록을 불러오지 못했습니다.</span>
+          <span>분석 주제 목록을 불러오지 못했습니다.</span>
           <button type="button" className="ghost" onClick={() => setCatalogReload(n => n + 1)}>다시 조회</button>
         </div>}
         {(catalogLoading || catalogError) && <a

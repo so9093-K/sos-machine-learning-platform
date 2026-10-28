@@ -24,13 +24,10 @@ function useModelAvailability(): ModelAvailability {
 }
 
 /** 활동 이상 탐지 주제: 처리 단계가 아니라 모델의 목적과 실제 사용 행동을 보여준다. */
-export function ModelLabHome({ onUse, onLearn, canLearn = true }: {
-  onUse: () => void; onLearn: () => void; canLearn?: boolean;
+export function ModelLabHome({ onUse, onResearch, canLearn = true }: {
+  onUse: () => void; onResearch: () => void; canLearn?: boolean;
 }) {
   const availability = useModelAvailability();
-  // 사용할 모델이 없으면 새 학습을, 있으면 모델 사용을 주요 행동으로 둔다. 확인 전에는 어느 쪽도 강조하지 않는다.
-  const useClass = availability === "available" ? undefined : "secondary";
-  const learnClass = availability === "none" ? undefined : "secondary";
   return <section className="model-lab-home" aria-labelledby="model-lab-home-heading">
     <div className="model-lab-home-lead">
       <div className="model-lab-home-copy">
@@ -70,18 +67,13 @@ export function ModelLabHome({ onUse, onLearn, canLearn = true }: {
         <span className="model-lab-choice-icon" aria-hidden="true">↗</span>
         <h3>모델 적용</h3>
         <p>이미 학습한 모델을 데이터에 적용해 이상 점수와 검토할 관측치를 확인합니다.</p>
-        <button type="button" className={useClass} onClick={onUse}>모델 적용 →</button>
-      </article>
-      <article className="model-lab-choice">
-        <span className="model-lab-choice-icon" aria-hidden="true">✳</span>
-        <h3>모델 학습</h3>
-        <p>준비된 예제 또는 내 데이터로 모델을 학습하고, 생성된 모델과 Test 결과를 살펴봅니다.</p>
-        {canLearn ? <button type="button" className={learnClass} onClick={onLearn}>모델 학습 →</button>
-          : <p>현재 계정에는 모델 학습 권한이 없습니다. 등록된 모델과 이전 결과를 조회할 수 있습니다.</p>}
+        <button type="button" onClick={onUse}>모델 적용 →</button>
       </article>
     </div>
-    {canLearn && availability !== "available" && <p className="model-lab-home-note">{availability === "none"
-      ? "기본 모델 그룹에 사용할 수 있는 모델이 아직 없습니다. 먼저 예제로 모델을 학습해 보세요."
-      : "이미 학습한 모델이 없어도 괜찮습니다. 먼저 예제로 모델을 학습할 수 있습니다."}</p>}
+    {availability === "none" && <p className="model-lab-home-note">기본 모델 그룹에 사용할 수 있는 모델이 아직 없습니다. 연구·실험에서 학습·등록 상태를 확인할 수 있습니다.</p>}
+    <div className="model-lab-use-footer">
+      <p>{canLearn ? "이전 실험 확인과 새 학습" : "이전 실험과 학습 결과 확인"}</p>
+      <button type="button" className="secondary" onClick={onResearch}>연구·실험 →</button>
+    </div>
   </section>;
 }

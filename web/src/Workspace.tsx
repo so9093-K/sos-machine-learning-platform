@@ -28,6 +28,7 @@ import { ModelLabHome } from "./ModelLabHome";
 import { ModelLabUse } from "./ModelLabUse";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { MLWorkbench } from "./MLWorkbench";
+import { ModelCatalog } from "./ModelCatalog";
 import { MLflowResearch } from "./MLflowResearch";
 import { MLResourceDetail, ScoringWorkspace, DecisionWorkspace } from "./MLResourcePages";
 import type { DecisionView } from "./MLDecisionPanel";
@@ -584,7 +585,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "pipelines" && !context.pipelineRunId && !context.datasetId &&
         !context.pipelineView && <ModelLabHome canLearn={canRun}
           onUse={() => navigateWithContext("pipelines", { pipelineView: "use" })}
-          onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
+          onResearch={() => navigateWithContext("research", { modelGroupKey: context.modelGroupKey })} />}
       {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
         <ModelLabUse key="activity-anomaly" datasets={datasets}
           selectedModelId={context.modelId ?? ""}
@@ -599,7 +600,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
           }}
           onBack={() => navigateWithContext("pipelines", {})}
-          onLearn={() => navigateWithContext("pipelines", { pipelineView: "learn" })} />}
+          onResearch={() => navigateWithContext("research", { modelGroupKey: context.modelGroupKey })} />}
       {tab === "pipelines" && !context.pipelineRunId && (
         context.pipelineView === "learn" || Boolean(context.datasetId)) &&
         <button type="button" className="ghost model-lab-back"
@@ -650,11 +651,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {context.pipelineReturn &&
         (["understanding", "preview", "profile", "preparation", "jobs"] as Tab[]).includes(tab) &&
         <section className="pipeline-return" role="status">
-          <div><strong>{context.pipelineRunId ? "모델 실험실의 결과를 확인하고 있습니다" :
+          <div><strong>{context.pipelineRunId ? "활동 이상 탐지 결과 확인" :
             "모델 학습을 위한 데이터를 준비하고 있습니다"}</strong>
             <p>{context.pipelineRunId
               ? "분석한 데이터를 살펴본 뒤 같은 결과와 선택했던 후보로 돌아갈 수 있습니다."
-              : "데이터를 확인한 뒤 모델 실험실에서 학습을 시작할 수 있습니다."}</p>
+              : "데이터를 확인한 뒤 활동 이상 탐지 Workflow를 준비할 수 있습니다."}</p>
           </div>
           <button className="secondary" type="button"
             onClick={() => navigateWithContext("pipelines", context.pipelineRunId ? {
@@ -663,7 +664,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
               pipelineAnalysisSection: context.pipelineAnalysisSection,
             } : { datasetId: selected })}>
             {context.pipelineRunId ? "살펴보던 분석 결과로 돌아가기 →" :
-              selected ? "이 Dataset으로 모델 학습 →" : "모델 실험실로 돌아가기 →"}
+              selected ? "이 Dataset으로 모델 학습 →" : "활동 이상 탐지 복귀 →"}
           </button>
         </section>}
       {isDataArea && datasets.length > 0 && <div className="dataset-switcher">
@@ -709,8 +710,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             </button>
             {canRun && tab !== "preparation" &&
               <button className="secondary" type="button"
-                onClick={() => navigateWithContext("training", { datasetId: selected })}>
-                이 Dataset으로 학습 →
+                onClick={() => navigateWithContext("research", { datasetId: selected })}>
+                이 Dataset으로 연구·실험 →
               </button>}
             {canRun && tab === "preparation" && <>
               <label className="iceberg-append">적재할 Iceberg 테이블
@@ -878,12 +879,17 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         </>}
 
       </>}
-      {tab === "ml" && !resource && <MLflowResearch canManage={canManageModels} canTrain={canRun}
+      {tab === "ml" && !resource && <ModelCatalog canManage={canManageModels}
+        datasets={datasets} registryKey={context.modelGroupKey ?? "default"}
+        canInspectOperations={canInspectStorage || canViewAudit}
+        onSelectGroup={modelGroupKey => selectContext({ ...context, modelGroupKey })}
+        onOpenModel={id => openResource("model", id)} onScoreModel={startScoring}
+        onResearch={() => setTab("research")} />}
+      {tab === "research" && !resource && <MLflowResearch canManage={canManageModels} canTrain={canRun}
         datasets={datasets} registryKey={context.modelGroupKey ?? "default"}
         onOpenResource={openResource} canInspectOperations={canInspectStorage || canViewAudit}
         onSelectGroup={modelGroupKey => selectContext({ ...context, modelGroupKey })}
-        onOpenModel={id => openResource("model", id)}
-        onScoreModel={startScoring}
+        onWorkflow={() => navigateWithContext("pipelines", { pipelineView: "learn", datasetId: context.datasetId })}
         onTrain={modelGroupKey => navigateWithContext("training", { ...context, modelGroupKey })} />}
       {tab === "training" && !resource &&
         <MLWorkbench datasets={datasets}

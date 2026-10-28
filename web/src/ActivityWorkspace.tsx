@@ -20,7 +20,7 @@ export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource
   return <div className="platform-activity">
     <section className="platform-section-intro">
       <h2>실행 이력과 결과</h2>
-      <p>데이터·탐색, 독립 ML 실행, 모델 실험실의 분석 결과를 확인합니다.
+      <p>데이터·탐색, 독립 ML 실행, Workflow 분석 결과를 확인합니다.
         각 목록은 실제 조회된 범위만 표시합니다.</p>
     </section>
     <nav className="activity-scope-nav" aria-label="작업 이력 종류">
@@ -34,7 +34,7 @@ export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource
       </button>
       <button type="button" aria-current={active === "pipeline" ? "page" : undefined}
         className={active === "pipeline" ? "" : "secondary"} onClick={() => onChange("pipeline")}>
-        모델 실험실 분석
+        Workflow 분석
       </button>
     </nav>
     {active === "data" ? children : active === "ml" ?

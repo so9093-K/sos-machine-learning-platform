@@ -27,7 +27,8 @@ function body(method: string, value: unknown): RequestInit {
   };
 }
 
-export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage, onGroupResolved }: {
+export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage, onGroupResolved, purpose = "use" }: {
+  purpose?: "use" | "research";
   activeKey: string;
   onSelect: (key: string) => void;
   onChanged: () => void;
@@ -99,8 +100,10 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
 
   return <section className="panel model-group-panel" aria-label="모델 그룹 관리">
     <div className="panel-head">
-      <div><h2>모델 선택</h2>
-        <p>모델 그룹을 선택한 뒤 아래에서 학습된 버전을 비교하거나 데이터에 적용합니다.</p></div>
+      <div><h2>{purpose === "research" ? "학습 모델 그룹" : "모델 선택"}</h2>
+        <p>{purpose === "research"
+          ? "새 학습의 모델 버전을 등록할 그룹을 선택합니다. 실험 기록은 아래 연구 묶음에서 조회합니다."
+          : "목적에 맞는 모델 그룹을 선택한 뒤 학습된 판본과 입력 조건을 확인합니다."}</p></div>
     </div>
     {error && <p role="alert">{error}</p>}
     <label>모델 그룹 선택
