@@ -218,6 +218,18 @@ class JobStoreMixin:
             ]
             return item
 
+    def retired_feature_registration_ids(self, job_ids: list[str]) -> set[str]:
+        """SOS에서 명시적으로 확정된 Feast 등록 폐기 Job만 인정한다."""
+        if not job_ids:
+            return set()
+        query = text(
+            "SELECT spec::jsonb->>'registration_job_id' FROM jobs "
+            "WHERE kind='feature_retire' AND status='Succeeded' "
+            "AND spec::jsonb->>'registration_job_id' IN :ids"
+        ).bindparams(bindparam("ids", expanding=True))
+        with self.connection() as db:
+            return set(db.execute(query, {"ids": job_ids}).scalars())
+
     def jobs(
         self,
         *,

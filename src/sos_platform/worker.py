@@ -35,7 +35,7 @@ from .ml_explanation import explain_scored_row
 from .ml_scoring import cleanup_scoring_stage, run_dataset_scoring, scoring_stage_bytes
 from .ml_playground import run_playground_scoring
 from .ml_training import train_dataset
-from .feast_features import register_feature_service, retrieve_features, verify_pinned_owner
+from .feast_features import register_feature_service, retrieve_features, retire_feature_service, verify_pinned_owner
 from .ml_training_staging import (
     cleanup_training_stage,
     training_stage_bytes,
@@ -133,6 +133,19 @@ def _perform(
             stage = "processing"
             verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
             result = register_feature_service(store, dataset, job["spec"])
+        elif job["kind"] == "feature_retire":
+            stage = "processing"
+            registration = store.get_job(job["spec"]["registration_job_id"])
+            if (
+                registration is None
+                or registration["kind"] != "feature_register"
+                or registration["status"] not in ("Succeeded", "Failed", "Cancelled")
+                or registration["owner_actor"] != job["owner_actor"]
+                or registration["dataset_id"] != dataset["id"]
+            ):
+                raise ValueError("등록 폐기 대상의 상태·소유권이 바뀌었습니다.")
+            verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
+            result = retire_feature_service(store, dataset, registration)
         elif job["kind"] == "feature_retrieve":
             stage = "processing"
             registered_job = store.get_job(job["spec"]["registration_job_id"])
@@ -146,6 +159,8 @@ def _perform(
                 or entity is None
             ):
                 raise ValueError("Registered Feature Service or Entity Dataset is unavailable")
+            if registered_job["id"] in store.retired_feature_registration_ids([registered_job["id"]]):
+                raise ValueError("폐기된 Feature Service를 조회할 수 없습니다.")
             verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
             verify_pinned_owner(entity, job["spec"], "entity_dataset_owner")
             result = retrieve_features(
@@ -202,7 +217,7 @@ def _perform(
     except Exception as exc:
         code = (
             "SOS-ML-INPUT-INVALID"
-            if job["kind"] in ("feature_register", "feature_retrieve", "ml_pipeline_preflight", "ml_train", "ml_score", "ml_playground", "ml_policy", "ml_evaluate", "ml_explain")
+            if job["kind"] in ("feature_register", "feature_retrieve", "feature_retire", "ml_pipeline_preflight", "ml_train", "ml_score", "ml_playground", "ml_policy", "ml_evaluate", "ml_explain")
             and isinstance(exc, ValueError)
             else "SOS-ICEBERG-UNCERTAIN"
             if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
