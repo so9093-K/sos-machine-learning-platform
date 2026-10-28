@@ -436,7 +436,7 @@ try {
   assert.match(groupedObservation, /프로세스 활동/);
   assert.match(groupedObservation, /네트워크 활동/);
   assert.match(groupedObservation, /점수순 2번째/);
-  assert.match(groupedObservation, /중요도·정상 범위·원인 순위로 해석할 수 없습니다/);
+  assert.match(groupedObservation, /학습 중앙값은 비교 기준이며 정상 범위나 사고 원인을 의미하지 않습니다/);
   assert.ok(groupedObservation.indexOf("모델 판단 근거 자세히 보기") <
     groupedObservation.indexOf("활동별 지표"));
   assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
