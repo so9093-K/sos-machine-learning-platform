@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { MLTrackingStatus } from "./MLTrackingStatus";
 import { FeatureSelector } from "./FeatureSelector";
+import { FeastFeaturePanel } from "./FeastFeaturePanel";
 import { isLocalOperatorHost } from "./operator-tools";
 import type { Dataset, DatasetColumns, MLTrainingJob, ModelRevision } from "./types";
 import { jobStatusLabel } from "./display-format";
@@ -199,6 +200,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperation
       <strong>ML 작업을 처리하지 못했습니다.</strong> {error}
       <button className="ghost" onClick={() => setError("")}>닫기</button>
     </section>}
+    <FeastFeaturePanel datasets={datasets} canCreate={canTrain} onDatasetReady={changeDataset} />
     <section className="panel">
       <div className="panel-head"><div>
         <h2>Isolation Forest 실험</h2>
