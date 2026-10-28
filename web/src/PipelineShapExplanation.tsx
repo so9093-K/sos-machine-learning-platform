@@ -153,8 +153,6 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
         </>}
     <p className="hint">저장된 모델 점수와 SHAP 설명의 재구성 오차 {key(residual)}를 확인했습니다.
       기여도는 사고의 원인이나 확률을 의미하지 않습니다.</p>
-    <p className="hint">Train Feature 중앙값으로 구성한 합성 관측치 한 행을 기준으로 합니다.
-      실제 이상 사건의 원인이나 확률을 의미하지 않습니다.</p>
     <details className="pipeline-shap-technical">
       <summary>전체 SHAP 값과 계산 근거</summary>
       <div className="pipeline-shap-technical-content">
