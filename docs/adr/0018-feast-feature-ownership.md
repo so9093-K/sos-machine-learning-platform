@@ -1,0 +1,65 @@
+# 0018 — Feast Feature 관리·조회 정본 전환
+
+- 상태: **Accepted**
+- 관련: [Architecture](../architecture.md), [Contracts](../contracts.md), [ADR 0004](0004-duckdb-discovery.md), [ADR 0015](0015-mlflow-management-ownership.md), [ADR 0016](0016-dagster-orchestration.md)
+- 범위: 등록 Feature의 Entity·Feature View·Feature Service·Historical/Online Retrieval 소유권
+
+## 배경
+
+SOS는 Dataset의 불변 판본, Polars 기반 일반 변환, 모델별 입력 Feature 서명과
+ML Job을 관리하지만 독립적인 Feature Registry·Historical Retrieval의 정본은 없다.
+이를 SOS에 새로 구현하면 Feature 정의·시점 정합성·재사용·제공 방법까지
+별도의 Feature Store를 유지하게 된다. MLflow·Dagster의 기존 정본 분리와 일관되게
+전문 책임은 Feast에 위임한다.
+
+## 결정
+
+1. **Feature 관리 정본:** 등록된 Entity, Feature View, Feature Service와
+   등록 Feature의 Historical/Online Retrieval은 Feast가 소유한다.
+   SOS에 평행한 Feature Registry·PIT Join 구현·Fallback Retrieval을 만들지 않는다.
+2. **SOS 정본:** Actor 권한, 원본 Dataset과 Iceberg Snapshot, Job/Attempt,
+   불변 Retrieval Result Dataset, Model Revision, 감사·결과 게시·보존은 SOS가 소유한다.
+   Feast Registry의 현재 상태가 과거 Dataset/Model 근거를 소급 변경하지 못한다.
+3. **독립 기능:** 일반 Data Explorer, Polars Data Preparation, 직접 Feature 벡터를
+   이용한 학습·Scoring·Playground는 Feature Store가 아닌 독립 기능으로 유지한다.
+   등록 Feature를 요청하는 경우에만 Feast를 정본으로 사용한다.
+4. **계산과 조회 구분:** Lag·Rolling·집계 등 원본으로부터 Feature를 계산하는
+   Runtime과 Feature 정의·조회는 별개의 책임이다. Dagster는 Workflow,
+   MLflow는 모델·실험 정본을 계속 소유한다.
+5. **Entity·시간 계약:** Entity의 지속적 대상 식별자는 특정 Dataset Revision
+   안에서만 안정적인 `sos_observation_id`와 다르다. UTC Event Timestamp,
+   모델의 Prediction Timestamp, Data Availability Timestamp를 혼동하지 않는다.
+   Point-in-Time Join은 올바른 upstream 계산·데이터 도착 의미 없이 누수를 모두 막지 못한다.
+6. **명시적 판본:** Feature View·Service 정의, Feature 입력 Dataset 판본,
+   Entity 데이터 판본, TTL, Schema, 실제 Retrieval 출력과 실행 조건을 고정한다.
+   Feature Registry 정의 버전만으로 과거 데이터의 물리적 보존을 가정하지 않는다.
+7. **접근:** Feast의 관리 자격 증명·Registry·스토리지에 클라이언트를
+   직접 연결하지 않는다. SOS API가 Actor·Dataset 접근을 검사하며,
+   Worker는 신뢰된 Job 명세로만 Feast를 호출한다.
+8. **Runtime 독립:** Feast SDK는 필요한 전문 실행 환경에서만 사용한다.
+   독립 SOS API·Data Explorer·기존 ML 계산을 Feast의 설치·가용성에 묶지 않는다.
+9. **전환 원칙:** 도입 범위 안에서 대체된 API·실행 경로·자체 Registry·타입·설정·
+   문서·검증 참조를 같은 PR에서 제거한다. 미완료 기능을 완료로 설명하지 않는다.
+   과거 Alembic migration은 변경하지 않으며 유효한 Dataset·Model·Scoring 이력은 유지한다.
+
+## 구현 경계와 제한
+
+- 첫 등록된 Feature Retriever는 SOS가 이미 게시한 **Parquet Feature Dataset**을
+  Feast FileSource로 읽고 별도 Entity 시점 Dataset에 Point-in-Time Join한다.
+  조회 결과는 기존 SOS Worker의 Attempt별 불변 Parquet Dataset으로 게시한다.
+  일반 데이터 준비와 기존 독립 학습은 변경하지 않는다.
+- 기존 Iceberg SQL Catalog가 Feast Iceberg REST Catalog와 동일하지 않으므로
+  직접 Iceberg FeatureSource로 간주하지 않는다. Iceberg Snapshot을 명시적으로
+  고정해 게시한 Parquet를 사용하거나 검증된 별도 지원 경로를 선택한다.
+- Online Serving/Online Materialization이 아직 구현되지 않았다는 사실을 유지한다.
+  Feature Source의 변경·삭제와 오래된 정의의 Registry 정리는 독립 수명주기이며,
+  임의로 과거 모델이 사용하는 정의를 삭제하지 않는다.
+- 등록 Feature는 SOS 내부 Actor 검증을 통과해야 하며, Feast의 내부 관리 UI를
+  일반 사용자에게 직접 노출하지 않는다.
+
+## 검증과 영향
+
+하나의 실제 사용자 경로에서 Source/Entity Dataset 접근 → Feast 정의 등록 →
+역사적 시점 조회 → SOS 불변 Dataset 게시 → 기존 Model 학습/Scoring을 확인한다.
+미래 정보 사용, 다른 Actor의 원본 참조, 시간·자료형 불일치, 실패·취소와 결과
+게시 경계는 집중적으로 검증한다. 대형 전용 검증 체계를 새로 만들지 않는다.
