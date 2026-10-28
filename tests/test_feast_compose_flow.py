@@ -114,3 +114,31 @@ def test_registered_feature_to_model_revision():
     assert origin["registration_job_id"] == registration["id"]
     assert origin["retrieval_job_id"] == retrieval["id"]
     assert origin["feature_service"] == registration["result"]["feature_service"]
+
+
+    # 과거 모델·조회가 참조하는 정의는 폐기 후에도 Registry에 안전하게 보존한다.
+    retirement = completed(submit(
+        f"/api/features/services/{registration['id']}/retirement/jobs", {},
+    ))
+    assert retirement["result"]["registry_deleted"] is False
+    assert retirement["result"]["retained_for"]["historical_or_pending_retrievals"] >= 1
+    history = client.get("/api/features/services/registrations?limit=100")
+    assert history.status_code == 200
+    assert next(row for row in history.json()["items"] if row["id"] == registration["id"])["retired"]
+    denied = client.post("/api/features/retrieval/jobs", json={
+        "registration_job_id": registration["id"],
+        "entity_dataset_id": entity_source["id"], "timestamp_column": "prediction_time",
+    }, headers={"Idempotency-Key": f"review-{uuid4().hex}"})
+    assert denied.status_code == 409
+
+    # 한 번도 조회되지 않은 새 서비스는 명시적 폐기 시 실제 Registry 객체까지 삭제한다.
+    unused = completed(submit("/api/features/services/jobs", {
+        "feature_dataset_id": feature_source["id"],
+        "entity_column": "host_id", "timestamp_column": "event_timestamp",
+        "features": ["activity_rate"], "ttl_seconds": 86401,
+    }))
+    removed = completed(submit(
+        f"/api/features/services/{unused['id']}/retirement/jobs", {},
+    ))
+    assert removed["result"]["registry_deleted"] is True
+    assert client.get(f"/api/ml/models/{model_revision_id}").status_code == 200
