@@ -10,7 +10,7 @@ SOS Dataset 판본·Actor 권한·Job/Attempt·실제 게시한 조회 결과는
 Feature 정의 등록과 Retrieval은 별개의 Job이다. 성공한 등록 Job은 Feast의
 Service 이름 및 고정 Source 판본을 참조하고, 조회 Job은 등록 Job·Entity 시점 Dataset·
 UTC 시각 컬럼을 결합해 동일 Feature Service를 재사용한다. 조회 시 Registry에
-새 Feature 정의를 게시하지 않는다. 조회 결과 Dataset의 `parse_options.feature_retrieval_job_id`가 불변 조회 Job 출처를 기록하며,
+새 Feature 정의를 게시하지 않는다. 파싱 옵션과 분리된 Dataset `source_job_id`가 불변 조회 Job 출처를 기록하며,
 Entity 시점 Dataset에 `sos_observation_id`가 있으면 조회 결과에도 보존한다.
 조회 결과 Dataset으로 학습한 Model Revision은
 Feature 등록·조회 Job ID, Feature Service와 원본 Dataset 판본을 불변 Runtime 근거에 연결한다.

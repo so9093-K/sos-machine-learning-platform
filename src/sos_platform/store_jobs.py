@@ -436,15 +436,12 @@ class JobStoreMixin:
                     version=publish["version"],
                     created_at=now(),
                     owner_actor=row["owner_actor"],
-                    parse_options=(
-                        json.dumps({"feature_retrieval_job_id": job_id})
-                        if row["kind"] == "feature_retrieve" else None
-                    ),
+                    source_job_id=job_id,
                 )
                 db.execute(
                     text(
-                        "INSERT INTO datasets(id,name,kind,location,version,created_at,owner_actor,parse_options) "
-                        "VALUES(:id,:name,:kind,:location,:version,:created_at,:owner_actor,:parse_options)"
+                        "INSERT INTO datasets(id,name,kind,location,version,created_at,owner_actor,source_job_id) "
+                        "VALUES(:id,:name,:kind,:location,:version,:created_at,:owner_actor,:source_job_id)"
                     ),
                     item,
                 )
@@ -461,14 +458,10 @@ class JobStoreMixin:
                 runtime = dict(model_publish["runtime"])
                 # 조회 결과 Dataset의 원본 등록·조회 Job은 SOS가 이미 보존한다.
                 # MLflow/Feast Registry를 복제하지 않고 Model Revision에 불변 출처만 연결한다.
-                origin_options = db.execute(
-                    text("SELECT parse_options FROM datasets WHERE id=:id"),
+                origin_id = db.execute(
+                    text("SELECT source_job_id FROM datasets WHERE id=:id"),
                     {"id": row["dataset_id"]},
                 ).scalar_one_or_none()
-                origin_id = (
-                    json.loads(origin_options).get("feature_retrieval_job_id")
-                    if origin_options else None
-                )
                 feature_origin = (
                     db.execute(
                         text(

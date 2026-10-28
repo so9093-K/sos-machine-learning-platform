@@ -93,11 +93,10 @@ def test_registered_feature_to_model_revision():
     from sos_platform.config import Settings
     with create_engine(Settings.from_env().database_url).connect() as connection:
         options = connection.execute(
-            text("SELECT parse_options FROM datasets WHERE id=:id"),
+            text("SELECT source_job_id FROM datasets WHERE id=:id"),
             {"id": retrieved_dataset_id},
         ).scalar_one()
-    import json
-    assert json.loads(options)["feature_retrieval_job_id"] == retrieval["id"]
+    assert options == retrieval["id"]
 
     training = completed(submit("/api/ml/train/jobs", {
         "dataset_id": retrieved_dataset_id,
