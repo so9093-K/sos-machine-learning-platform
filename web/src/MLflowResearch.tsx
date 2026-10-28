@@ -132,27 +132,11 @@ export function MLflowResearch({ onTrain, onWorkflow, canManage, canTrain,
   }
 
   return <div className="ml-resource-workspace">
-    <section className="panel research-start" aria-label="새 연구 실행">
-      <div className="panel-head"><div><h2>새 연구 실행</h2>
-        <p>{groupTitle} · 데이터와 학습 조건을 선택해 새 모델 판본을 만듭니다.</p></div>
-        {canTrain && <div className="actions">
-          <button type="button" disabled={groupArchived} onClick={() => onTrain(registryKey)}>새 학습 →</button>
-          <button type="button" className="secondary" onClick={onWorkflow}>활동 이상 탐지 Workflow →</button>
-        </div>}
-      </div>
-      <details className="research-group-settings"><summary>학습 모델 그룹·등록 설정 · {groupTitle}</summary>
-        <ModelRegistryManager activeKey={registryKey} onSelect={onSelectGroup}
-          purpose="research" canManage={canManage} onGroupResolved={setCurrentGroup}
-          onChanged={() => setRevision(x => x + 1)} />
-      </details>
-      {groupArchived && <p className="hint">보관된 모델 그룹입니다. 새 버전 학습 전 그룹 복원이 필요합니다.</p>}
-      {!canTrain && <p className="hint">현재 계정은 실험 기록을 조회할 수 있습니다. 새 학습에는 Job 실행 권한이 필요합니다.</p>}
-      <p className="hint">활동 이상 탐지 Workflow는 기본 모델 그룹을 사용하며 시간 분할 학습·기준 설정·Test 평가를 함께 실행합니다.</p>
-    </section>
     <section className="panel research-history" aria-label="연구 실행 비교">
       <div className="panel-head"><div><h2>연구 실행 비교</h2>
         <p>MLflow에 기록된 조건과 지표를 확인하고 SOS 실행 결과로 이어갑니다.</p></div>
         <div className="actions">
+          {canTrain && <a href="#research-start">새 학습 준비 ↓</a>}
           {operatorLinks && <a href={mlflowUrl()} target="_blank" rel="noopener noreferrer">MLflow 실험 분석 ↗</a>}
           <button type="button" className="secondary" onClick={() => setRevision(x => x + 1)}>실험 재조회</button>
         </div>
@@ -204,6 +188,23 @@ export function MLflowResearch({ onTrain, onWorkflow, canManage, canTrain,
         onClick={() => void loadMore("runs")}>이전 실행 더 보기</button>}
       {compared.length > 0 && <RunComparison runs={compared} datasets={datasets} />}
       </div>
+    </section>
+    <section id="research-start" tabIndex={-1} className="panel research-start" aria-label="새 연구 실행">
+      <div className="panel-head"><div><h2>새 연구 실행</h2>
+        <p>{groupTitle} · 데이터와 학습 조건을 선택해 새 모델 판본을 만듭니다.</p></div>
+        {canTrain && <div className="actions">
+          <button type="button" disabled={groupArchived} onClick={() => onTrain(registryKey)}>새 학습 →</button>
+          <button type="button" className="secondary" onClick={onWorkflow}>활동 이상 탐지 Workflow →</button>
+        </div>}
+      </div>
+      <details className="research-group-settings"><summary>학습 모델 그룹·등록 설정 · {groupTitle}</summary>
+        <ModelRegistryManager activeKey={registryKey} onSelect={onSelectGroup}
+          purpose="research" canManage={canManage} onGroupResolved={setCurrentGroup}
+          onChanged={() => setRevision(x => x + 1)} />
+      </details>
+      {groupArchived && <p className="hint">보관된 모델 그룹입니다. 새 버전 학습 전 그룹 복원이 필요합니다.</p>}
+      {!canTrain && <p className="hint">현재 계정은 실험 기록을 조회할 수 있습니다. 새 학습에는 Job 실행 권한이 필요합니다.</p>}
+      <p className="hint">활동 이상 탐지 Workflow는 기본 모델 그룹을 사용하며 시간 분할 학습·기준 설정·Test 평가를 함께 실행합니다.</p>
     </section>
   </div>;
 }

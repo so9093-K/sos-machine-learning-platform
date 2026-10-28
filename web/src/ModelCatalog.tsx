@@ -76,7 +76,7 @@ export function ModelCatalog({ datasets, registryKey, onSelectGroup, onOpenModel
       canManage={false} onGroupResolved={setCurrentGroup} onChanged={() => setRevision(x => x + 1)} />
     <section className="panel model-version-panel">
       <div className="panel-head"><div><h2>{groupTitle} · 모델 버전</h2>
-        <p>학습 데이터와 시각을 확인하고 사용할 버전을 선택하세요.</p></div>
+        <p>등록 모델의 독립 실행입니다. 학습 데이터와 시각을 확인하고, 선택한 판본의 입력 조건에 맞춰 데이터를 적용합니다.</p></div>
         <div className="actions">
           <button type="button" className="secondary" onClick={onResearch}>연구·실험 →</button>
           <button type="button" className="secondary" onClick={() => setRevision(x => x + 1)}>새로고침</button>

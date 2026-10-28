@@ -71,7 +71,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
         </button>
       </div>
       <div id="sos-sidebar-menu" className={"sidebar-menu" + (menuOpen ? " open" : "")}>
-      <PlatformNavigation active={section} onNavigate={onNavigate}
+      <PlatformNavigation active={section} context={modelContext} resource={modelResource} onNavigate={onNavigate}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
         canViewDataset={actor.capabilities.includes("dataset.read")} />
       {dataSidebar}

@@ -269,6 +269,21 @@ try {
     "/training?dataset=data-v1&group=research-team");
   assert.equal(contextPath("research", nextNavigationContext(groupTraining, "research")),
     "/research?dataset=data-v1&group=research-team");
+  const modelUseRoute = routeAt("/pipelines", "?view=use&dataset=data-v1&group=research-team");
+  assert.equal(contextPath("research", nextNavigationContext(modelUseRoute, "research")),
+    "/research?dataset=data-v1&group=research-team");
+  for (const [source, destination, expected] of [
+    [researchRoute, "ml", "/models?dataset=data-v1&amp;group=research-team"],
+    [modelUseRoute, "research", "/research?dataset=data-v1&amp;group=research-team"],
+  ]) {
+    const menu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
+      active: source.tab, context: source.context, resource: source.resource,
+      canInspectStorage: false, canViewAudit: false, onNavigate: () => {},
+    }));
+    assert.ok(menu.includes('href="' + expected + '"'));
+    assert.equal(expected.replaceAll("&amp;", "&"),
+      contextPath(destination, nextNavigationContext(source, destination)));
+  }
   const researchNav = renderToStaticMarkup(React.createElement(ModelAreaNavigation, {
     active: "training", context: researchRoute.context, resource: null, onNavigate: () => {},
   }));

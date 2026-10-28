@@ -254,6 +254,9 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
             modelGroupKey: previous.context.modelGroupKey } : {}),
     };
   }
+  if (tab === "research" && previous.tab === "pipelines" && previous.context.pipelineView === "use") {
+    return { datasetId: previous.context.datasetId, modelGroupKey: previous.context.modelGroupKey };
+  }
   if ((tab === "training" || tab === "ml" || tab === "research" || tab === "scoring") &&
       (previous.tab === "training" || previous.tab === "ml" || previous.tab === "research" || previous.tab === "scoring")) {
     return { ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}),
@@ -393,12 +396,15 @@ export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
 }
 
 /** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
-export function PlatformNavigation({ active, onNavigate, canInspectStorage, canViewAudit, canViewDataset = true }: {
+export function PlatformNavigation({ active, onNavigate, canInspectStorage, canViewAudit, canViewDataset = true,
+  context = {}, resource = null }: {
   active: WorkspaceTab;
   onNavigate: (tab: WorkspaceTab) => void;
   canInspectStorage: boolean;
   canViewAudit: boolean;
   canViewDataset?: boolean;
+  context?: MLNavigationContext;
+  resource?: ResourceRoute;
 }) {
   const [catalog, setCatalog] = useState<PipelineDefinition[]>([]);
   const [catalogError, setCatalogError] = useState(false);
@@ -420,6 +426,8 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
   const isExpanded = (key: string) => !collapsed[key];
   const toggle = (key: string) => setCollapsed(previous => ({ ...previous, [key]: !previous[key] }));
 
+  const hrefFor = (tab: WorkspaceTab) => contextPath(tab,
+    nextNavigationContext({ tab: active, resource, context }, tab));
   const isCurrent = (tab: WorkspaceTab) =>
     tab === "understanding" ? ["understanding", "preview", "profile"].includes(active)
       : tab === "ml" ? isModelsArea(active) && active !== "research" && active !== "training"
@@ -445,7 +453,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
           <button type="button" className="ghost" onClick={() => setCatalogReload(n => n + 1)}>다시 조회</button>
         </div>}
         {(catalogLoading || catalogError) && <a
-          href={paths.pipelines} className="workspace-link model-lab-topic-link"
+          href={hrefFor("pipelines")} className="workspace-link model-lab-topic-link"
           aria-current={active === "pipelines" ? "page" : undefined}
           onClick={event => {
             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -481,7 +489,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
                   </button>
                   {isExpanded(taskKey) && <div className="model-lab-tree-children">
                     {task.topics.map(topic => <a key={topic.id}
-                      className="workspace-link model-lab-topic-link" href={paths.pipelines}
+                      className="workspace-link model-lab-topic-link" href={hrefFor("pipelines")}
                       aria-current={active === "pipelines" ? "page" : undefined}
                       onClick={event => {
                         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -504,7 +512,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
       </div> : group.items.filter(item =>
         (canViewDataset || item.tab === "storage" || item.tab === "audit") &&
         (item.tab !== "storage" || canInspectStorage) && (item.tab !== "audit" || canViewAudit)
-      ).map(item => <a key={item.tab} href={paths[item.tab]}
+      ).map(item => <a key={item.tab} href={hrefFor(item.tab)}
         className="workspace-link" aria-current={isCurrent(item.tab) ? "page" : undefined}
         onClick={event => {
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

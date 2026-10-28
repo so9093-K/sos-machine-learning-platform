@@ -159,7 +159,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     <header className="model-lab-use-heading">
       <div>
         <h2 id="model-lab-use-heading">모델 적용</h2>
-        <p>데이터를 분석하고, 궁금한 관측값은 직접 바꿔 모델의 반응을 살펴봅니다.</p>
+        <p>활동 이상 탐지 전용 분석입니다. 호환 모델로 이상 점수와 관측값을 조사하고, 입력값을 바꿔 모델의 반응을 살펴봅니다.</p>
       </div>
     </header>
     {!selected && groupOptions}

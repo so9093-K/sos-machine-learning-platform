@@ -585,22 +585,22 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "pipelines" && !context.pipelineRunId && !context.datasetId &&
         !context.pipelineView && <ModelLabHome canLearn={canRun}
           onUse={() => navigateWithContext("pipelines", { pipelineView: "use" })}
-          onResearch={() => navigateWithContext("research", { modelGroupKey: context.modelGroupKey })} />}
+          onResearch={() => setTab("research")} />}
       {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
         <ModelLabUse key="activity-anomaly" datasets={datasets}
           selectedModelId={context.modelId ?? ""}
           selectedGroupKey={context.modelGroupKey ?? "default"}
-          onSelectModel={modelId => selectContext({ pipelineView: "use", modelId,
+          onSelectModel={modelId => selectContext({ ...context, pipelineView: "use", modelId,
             modelGroupKey: context.modelGroupKey })}
-          onSelectGroup={modelGroupKey => selectContext({ pipelineView: "use",
-            modelGroupKey })}
+          onSelectGroup={modelGroupKey => selectContext({ ...context, pipelineView: "use",
+            modelId: "", modelGroupKey })}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
           canLearn={canRun} canUpload={canWrite} onDatasetRegistered={data => {
             setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
           }}
           onBack={() => navigateWithContext("pipelines", {})}
-          onResearch={() => navigateWithContext("research", { modelGroupKey: context.modelGroupKey })} />}
+          onResearch={() => setTab("research")} />}
       {tab === "pipelines" && !context.pipelineRunId && (
         context.pipelineView === "learn" || Boolean(context.datasetId)) &&
         <button type="button" className="ghost model-lab-back"
