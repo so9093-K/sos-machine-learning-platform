@@ -1,0 +1,43 @@
+name: Temporary Feast full API Worker debug
+on:
+  push:
+    branches: [feat/feast-feature-ownership]
+permissions:
+  contents: read
+jobs:
+  full-compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Python for diagnostic client
+        run: |
+          uv python install 3.12
+          uv sync --locked --group dev
+      - name: Configure temporary local administrator
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import hashlib, json
+          token = "review-feast-full-compose-token-value-012345678901234"
+          subject = {hashlib.sha256(token.encode()).hexdigest(): {
+            "actor_id": "feast-review-administrator",
+            "kind": "human",
+            "roles": ["administrator"]
+          }}
+          print("SOS_AUTH_TOKEN_HASHES=" + json.dumps(subject, separators=(",", ":")))
+          PY
+      - name: Build and launch actual SOS API Worker S3 Registry and MLflow
+        run: |
+          docker compose --profile app up --build -d --wait init api worker mlflow
+          docker compose --profile app ps --all
+      - name: Test actual Feature registration retrieval publication and training
+        env:
+          SOS_TEST_FEAST_COMPOSE: "1"
+        run: uv run --locked --group dev pytest -q tests/test_feast_compose_flow.py
+      - name: Diagnostic logs on failure
+        if: failure()
+        run: docker compose --profile app logs --tail 160 init api worker feast-postgres storage mlflow
+      - name: Stop temporary services
+        if: always()
+        run: docker compose --profile app down --volumes || true
