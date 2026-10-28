@@ -73,13 +73,18 @@ export function DataChart({ option, ariaLabel, onDataClick, selectedDataIndex }:
           ...line.lineStyle,
         } } };
       }) : series;
+    // 자동 영문 설명이 화면에서 정의한 차트의 한국어 의미를 덮어쓰지 않게 한다.
+    const withDescription = (value: unknown) => {
+      const aria = value as { enabled?: boolean; label?: Record<string, unknown> } | undefined;
+      return { ...aria, label: { ...aria?.label, description: ariaLabel } };
+    };
     if (option.baseOption && typeof option.baseOption === "object") {
       const base = option.baseOption as echarts.EChartsCoreOption;
       chart.setOption({
-        ...option, baseOption: { ...base, series: themedSeries(base.series) },
+        ...option, baseOption: { ...base, aria: withDescription(base.aria), series: themedSeries(base.series) },
       });
     } else {
-      chart.setOption({ ...option, series: themedSeries(option.series) });
+      chart.setOption({ ...option, aria: withDescription(option.aria), series: themedSeries(option.series) });
     }
     chart.on("click", params => {
       if (typeof params.dataIndex === "number" && Number.isInteger(params.dataIndex)) {
@@ -100,7 +105,7 @@ export function DataChart({ option, ariaLabel, onDataClick, selectedDataIndex }:
       chartInstance.current = null;
       chart.dispose();
     };
-  }, [option]);
+  }, [option, ariaLabel]);
   useEffect(() => {
     if (chartInstance.current && typeof selectedDataIndex === "number" &&
         Number.isInteger(selectedDataIndex) && selectedDataIndex >= 0) {

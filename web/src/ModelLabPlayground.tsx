@@ -5,21 +5,12 @@ import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { groupActivityFeatures } from "./ActivityFeatureGroups";
 import { formatFeatureValue } from "./FeatureValueComparison";
 import { FeatureResultDetails } from "./FeatureResultDetails";
+import { PlaygroundResult, formatPlaygroundScore as formatScore, type PlaygroundComparison } from "./PlaygroundResult";
 import { PlaygroundExplanations } from "./PlaygroundExplanations";
 import { jobStatusLabel } from "./display-format";
 import type { MLPlaygroundJob, MLPlaygroundJobPage, MLPlaygroundJobSummary, ModelRevision } from "./types";
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
-// 저장된 관측값 점수와 새 계산 점수를 같은 자릿수로 비교한다.
-const SCORE_DIGITS = 6;
-const formatScore = (value: number) => value.toFixed(SCORE_DIGITS);
-function formatScoreDelta(delta: number): string {
-  // 표시 자릿수에서 0이 되는 차이는 부호 없이 보여주고 의미를 따로 안내한다.
-  if (Math.abs(delta) < 0.5 * 10 ** -SCORE_DIGITS) return formatScore(0);
-  return (delta > 0 ? "+" : "") + formatScore(delta);
-}
-const sameAtDisplay = (delta: number) => Math.abs(delta) < 0.5 * 10 ** -SCORE_DIGITS;
-
 export function exampleValues(model: ModelRevision): Record<string, string> | null {
   const medians = model.runtime?.feature_reference_medians;
   const dtypes = model.runtime?.feature_dtypes;
@@ -100,15 +91,6 @@ export function playgroundInputMatchesResult(
     });
 }
 
-/** 실패·취소·실행 중 상태는 마지막 성공 점수를 덮어쓰지 않는다. */
-export function playgroundLatestSuccessfulScore(
-  previous: number | null, completed: Pick<MLPlaygroundJob, "status" | "result">,
-): number | null {
-  const score = completed.result?.anomaly_score;
-  return completed.status === "Succeeded" && typeof score === "number" && Number.isFinite(score)
-    ? score : previous;
-}
-
 /** 숫자 표기의 차이가 아니라 실제 모델에 전달될 값의 차이를 찾는다. */
 export function playgroundChangedFeatures(
   fields: Record<string, string>, reference: Record<string, string>, names: readonly string[],
@@ -138,10 +120,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
   const [job, setJob] = useState<MLPlaygroundJob | null>(null);
   const [lastScore, setLastScore] = useState<number | null>(null);
-  const [latestSuccessfulScore, setLatestSuccessfulScore] = useState<number | null>(null);
   const [latestSuccessfulJob, setLatestSuccessfulJob] = useState<MLPlaygroundJob | null>(null);
-  const [comparisonJob, setComparisonJob] = useState<MLPlaygroundJob | null>(null);
-  const [previousScore, setPreviousScore] = useState<number | null>(null);
+  const [comparison, setComparison] = useState<PlaygroundComparison | null>(null);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const submitting = useRef(false);
@@ -210,6 +190,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     ])));
     setImportedSource(null);
     setImportedAfterJobId(null);
+    if (restored.status === "Succeeded" && typeof restored.result?.anomaly_score === "number" &&
+        Number.isFinite(restored.result.anomaly_score)) setLatestSuccessfulJob(restored);
     setInputSearch(""); setInputFilter("all"); setInputPage(0);
   }
 
@@ -227,7 +209,6 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
           if (next.status === "Succeeded") {
             if (typeof value === "number" && Number.isFinite(value)) {
               setLastScore(value);
-              setLatestSuccessfulScore(current => playgroundLatestSuccessfulScore(current, next));
               setLatestSuccessfulJob(next);
             } else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
           }
@@ -292,29 +273,27 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const shownInputs = searchedNames.slice(currentInputPage * 4, (currentInputPage + 1) * 4);
   const explanationAvailable = referenceMedians.length === model.features.length &&
     referenceMedians.every(value => typeof value === "number" && Number.isFinite(value));
-  const comparedFeatures = comparisonJob && job?.status === "Succeeded" &&
-    lastScore !== null && comparisonJob.id !== job.id &&
-    comparisonJob.spec.model_revision_id === job.spec.model_revision_id
-    ? model.features.filter(name => {
-      const before = (comparisonJob.spec.features as Record<string, unknown>)[name];
-      const after = (job.spec.features as Record<string, unknown>)[name];
-      return before !== after;
-    }) : [];
-
   async function execute() {
     if (!canRun || running || invalid.length || submitting.current) return;
     submitting.current = true;
     setSending(true); setError("");
-    const comparisonScore = latestSuccessfulScore;
-    const previousCompletedJob = latestSuccessfulJob;
+    const anchor: PlaygroundComparison | null = importedSource ? {
+      modelId: model.id, label: "원래 관측값", score: importedSource.originalScore,
+      fields: Object.fromEntries(model.features.map(name => [name, Number(importedSource.fields[name])])),
+    } : latestSuccessfulJob ? {
+      modelId: model.id, label: "이전 성공 입력", score: Number(latestSuccessfulJob.result?.anomaly_score),
+      fields: latestSuccessfulJob.spec.features as Record<string, number>,
+    } : reference ? {
+      modelId: model.id, label: "학습 초기 입력", score: null,
+      fields: Object.fromEntries(model.features.map(name => [name, Number(reference[name])])),
+    } : null;
     try {
       const created = await submitJob<MLPlaygroundJob>("/api/ml/playground/jobs", {
         model_revision_id: model.id,
         features: Object.fromEntries(input.map(item => [item.name, item.value])),
       });
       // 제출이 실패한 경우에는 이전 결과와 비교 문맥을 잃지 않는다.
-      setPreviousScore(comparisonScore);
-      setComparisonJob(previousCompletedJob);
+      setComparison(anchor);
       setLastScore(null);
       setJob(created);
       // 동일 멱등 키 재제출 시 이미 성공한 Job이 응답할 수 있다.
@@ -323,7 +302,6 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
         const score = created.result?.anomaly_score;
         if (typeof score === "number" && Number.isFinite(score)) {
           setLastScore(score);
-          setLatestSuccessfulScore(current => playgroundLatestSuccessfulScore(current, created));
           setLatestSuccessfulJob(created);
         } else setError("점수화가 완료됐지만 결과 점수를 확인할 수 없습니다.");
       }
@@ -338,12 +316,13 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     } catch (cause) { setError(formatError(cause)); }
   }
   const inputPane = useRef<HTMLDivElement>(null);
-  /** 재계산 결과에서 다음 행동으로 첫 Feature 입력에 바로 이동한다. */
-  function focusFirstInput() {
-    const first = inputPane.current?.querySelector<HTMLInputElement>('input[type="number"]:not([disabled])');
-    first?.scrollIntoView({ block: "center",
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-    first?.focus({ preventScroll: true });
+  function editFeature(name?: string) {
+    setInputSearch(name ?? ""); setInputFilter("all"); setInputPage(0);
+    requestAnimationFrame(() => {
+      const target = inputPane.current?.querySelector<HTMLInputElement>(name ? 'input[type="number"]' : 'input[type="search"]');
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    });
   }
   const featureField = (name: string) => <label className="model-lab-feature" key={name}>
     <span title={name + " · " + (featureDtypes[model.features.indexOf(name)] ?? "자료형 미확인")}>
@@ -367,7 +346,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       <p>원래 결과 행 #{importedSource.rowIndex.toLocaleString("ko-KR")} · 저장된 이상 점수 {formatScore(importedSource.originalScore)}.
         값을 바꿔 다시 계산해도 원래 Dataset 결과는 바뀌지 않습니다.</p>
       {onBackToAnalysis && <button type="button" className="secondary"
-        onClick={onBackToAnalysis}>원래 Dataset 분석으로 돌아가기 →</button>}
+        onClick={onBackToAnalysis}>Dataset 분석 복귀 →</button>}
     </div>}
     <div className="model-lab-workspace">
       <div className="model-lab-input-pane" ref={inputPane}>
@@ -411,18 +390,16 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     </p>}
       </div>
       <aside className="model-lab-results-pane" aria-label="단일 입력 계산과 결과">
-    <h4>계산과 결과</h4>
-    <p className="model-lab-input-state" role="status">{running
-      ? "제출한 입력을 모델에서 계산하는 중입니다."
+    <h4>실험 결과</h4>
+    {(!showCurrentJob || job?.status !== "Succeeded" || lastScore === null) && <p className="model-lab-input-state" role="status">{running
+      ? job?.cancel_requested ? "취소 요청 처리 중입니다." : "제출한 입력을 모델에서 계산하는 중입니다."
       : importedSource && !newJobAfterImport
         ? "가져온 입력을 계산할 준비가 됐습니다."
-        : matchesCompletedInput
-          ? "현재 입력의 계산 결과입니다."
-        : job?.status === "Succeeded" && lastScore !== null
-          ? "입력값을 수정했습니다. 아래는 이전 입력의 점수입니다."
+        : job?.status === "Succeeded"
+          ? "계산이 완료됐지만 점수 확인이 필요합니다."
           : job?.status === "Failed" || job?.status === "Cancelled"
             ? "마지막 실행에서는 점수를 얻지 못했습니다. 현재 입력값을 계산하려면 다시 실행해 주세요."
-            : "입력값을 준비한 뒤 점수를 계산하세요."}</p>
+            : "입력값을 준비한 뒤 점수를 계산하세요."}</p>}
 
     {error && <p role="alert">{error}</p>}
     <div className="model-lab-playground-actions">
@@ -434,56 +411,19 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
         onClick={() => setFields({ ...importedSource.fields })} disabled={running}>
         원래 관측값으로 복원</button>}
       {job && !TERMINAL.has(job.status) && canCancel &&
-        <button type="button" className="secondary" onClick={() => void cancel()}>취소 요청</button>}
+        <button type="button" className="secondary" disabled={job.cancel_requested} onClick={() => void cancel()}>취소 요청</button>}
     </div>
-    {job && showCurrentJob && <div className="model-lab-playground-result" aria-live="polite">
-      <strong>점수 계산 · {jobStatusLabel(job.status)}</strong>
-      {job.status === "Succeeded" && lastScore !== null &&
-        <div className="model-lab-score-row">
-          <div><span>{matchesCompletedInput && (!importedSource || newJobAfterImport)
-            ? "현재 입력의 이상 점수" : "마지막 제출 입력의 이상 점수"}</span>
-            <strong>{formatScore(lastScore)}</strong></div>
-          {importedSource && newJobAfterImport && matchesCompletedInput ? <div>
-            <span>원래 관측값 점수({formatScore(importedSource.originalScore)}) 대비</span>
-            <strong>{formatScoreDelta(lastScore - importedSource.originalScore)}</strong>
-          </div> : previousScore !== null && <div><span>이전 완료 계산과의 점수 차이</span>
-            <strong>{formatScoreDelta(lastScore - previousScore)}</strong></div>}
-        </div>}
-      {job.status === "Succeeded" && lastScore !== null && importedSource && newJobAfterImport &&
-        matchesCompletedInput && <div className="model-lab-try-change" role="status">
-          {observationEdits.length === 0
-            ? <p><strong>원래 관측값을 그대로 다시 계산한 결과입니다.</strong>{" "}
-                {sameAtDisplay(lastScore - importedSource.originalScore)
-                  ? "같은 입력에서 저장된 점수와 같은 결과를 확인했습니다."
-                  : "저장된 점수와 차이가 있으니 모델 판본과 입력값을 확인해 주세요."}
-                {" "}이제 Feature 값을 바꿔 다시 계산하면 모델 반응을 비교할 수 있습니다.</p>
-            : <p>원래 관측값에서 Feature {observationEdits.length}개를 바꾼 결과입니다.
-                {sameAtDisplay(lastScore - importedSource.originalScore)
-                  ? " 표시 자릿수에서는 점수 변화가 없습니다. 다른 Feature나 여러 값을 함께 바꿔 보세요."
-                  : " 다른 Feature도 바꿔 보거나, 원래 관측값으로 복원해 다시 비교할 수 있습니다."}</p>}
-          {observationEdits.length === 0 && <button type="button" className="secondary"
-            onClick={focusFirstInput}>Feature 값 변경 →</button>}
-        </div>}
-      {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}
-        {job.error_code && <small> ({job.error_code})</small>}</p>}
-      <p className="hint">점수가 높을수록 모델에서 이례적인 입력이며, 사건 확률이나 확정 판정은 아닙니다.</p>
-      {matchesCompletedInput && reference && editedNames.length === 0 && !importedSource &&
-        <div className="model-lab-try-change">
-          <p>학습 중앙값을 바탕으로 한 기준 입력의 점수입니다. 숫자를 바꾼 뒤 다시 계산해 모델 반응을 살펴보세요.</p>
-          <button type="button" className="secondary" onClick={focusFirstInput}>입력값 변경 →</button>
-        </div>}
-    </div>}
-    {showCurrentJob && job?.status === "Succeeded" && lastScore !== null && comparisonJob &&
-      comparedFeatures.length > 0 && <FeatureResultDetails key={job.id}
-        summary={`이전 실행에서 수정한 항목 ${comparedFeatures.length}개`}
-        columns={["이전 입력", "이번 입력"]}
-        rows={comparedFeatures.map(name => ({ feature: name, values: [
-          String((comparisonJob.spec.features as Record<string, unknown>)[name] ?? "결측"),
-          String((job.spec.features as Record<string, unknown>)[name] ?? "결측"),
-        ] }))} />}
+    {job && showCurrentJob && job.status === "Failed" && <p role="alert">점수 계산에 실패했습니다 · {job.error ?? job.error_code ?? "실행 오류"}</p>}
+    {job && showCurrentJob && job.status === "Cancelled" && <p role="status">점수 계산이 취소됐습니다.</p>}
+    {job && showCurrentJob && job.status === "Succeeded" && lastScore !== null &&
+      <PlaygroundResult model={model} job={job} comparison={comparison} matchesInput={Boolean(matchesCompletedInput)}
+        onEdit={editFeature} onRestore={values => {
+          setFields(Object.fromEntries(model.features.map(name => [name, String(values[name])])));
+          setInputSearch(""); setInputFilter("all"); setInputPage(0);
+        }} />}
     {showCurrentJob && job?.status === "Succeeded" && (explanationAvailable
       ? <details className="model-lab-explanation-toggle">
-          <summary>{matchesCompletedInput ? "계산한 점수 설명" : "이전 입력의 점수 설명"}</summary>
+          <summary>점수 설명</summary>
           <PlaygroundExplanations key={job.id} source={job} canRun={canRun}
             canCancel={canCancel} shapSupported={model.features.length <= 64} />
         </details>

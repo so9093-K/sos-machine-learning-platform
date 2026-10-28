@@ -1,10 +1,7 @@
 /** 현재 Actor가 사용할 수 있는 Registry 모델 중 활동 이상 탐지 입력 계약에 맞는 모델만 사용한다. */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { formatError, request } from "./api";
-import { MLScoringPanel } from "./MLScoringPanel";
-import { ModelLabPlayground, observationInputForPlayground } from "./ModelLabPlayground";
-import type { ObservationExperiment } from "./ModelLabPlayground";
-import { activityFeatureLabel } from "./ActivityFeatureLabels";
+import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { Dataset, MLflowModelVersion, MLflowModelVersionPage, ModelRevision, PipelineDefinition } from "./types";
 
@@ -64,42 +61,11 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const [error, setError] = useState("");
   const [lookupFailures, setLookupFailures] = useState(0);
   const [refresh, setRefresh] = useState(0);
-  const [usage, setUsage] = useState<"playground" | "dataset">("dataset");
-  const [observationInput, setObservationInput] = useState<ObservationExperiment | null>(null);
-  // 모델 판본이 바뀌면 앞서 선택한 다른 판본의 관측값 입력을 재사용하지 않는다.
-  const observationRequest = useRef(0);
-  const playgroundPanel = useRef<HTMLDivElement>(null);
-  const datasetPanel = useRef<HTMLDivElement>(null);
   const [resultFocusedModelId, setResultFocusedModelId] = useState<string | null>(null);
   const [showResultSetup, setShowResultSetup] = useState(false);
   const handleResultViewChange = useCallback((visible: boolean) => {
     setResultFocusedModelId(visible ? selectedModelId : null);
   }, [selectedModelId]);
-  useEffect(() => { setObservationInput(null); }, [selectedModelId]);
-  const openDataset = () => setUsage("dataset");
-  const backToObservation = () => {
-    setUsage("dataset");
-    window.requestAnimationFrame(() => {
-      const detail = datasetPanel.current?.querySelector<HTMLElement>(".scoring-observation-detail");
-      detail?.focus({ preventScroll: true });
-      detail?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto" : "smooth", block: "start" });
-    });
-  };
-
-  useEffect(() => {
-    if (usage !== "playground" || !observationInput) return;
-    const id = window.requestAnimationFrame(() => {
-      const target = playgroundPanel.current?.querySelector<HTMLElement>(".model-lab-playground");
-      target?.focus({ preventScroll: true });
-      target?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "auto" : "smooth", block: "start",
-      });
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [usage, observationInput?.id]);
-
   useEffect(() => {
     let active = true;
     setLoading(true); setError(""); setGroupError(""); setGroups([]); setDefinition(null);
@@ -153,28 +119,8 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
 
   const selected = models.find(item => item.revision.id === selectedModelId) ?? null;
   // 모델 전환·Registry 재조회 중 과거 결과의 UI 상태가 새 모델 화면에 남지 않도록 한다.
-  const focusedResult = usage === "dataset" && selected !== null &&
+  const focusedResult = selected !== null &&
     resultFocusedModelId === selectedModelId;
-  function tryObservation(
-    features: Record<string, number | null>, rowIndex: number, score: number,
-    scoringResultId: string, modelRevisionId: string,
-  ): string | null {
-    // 모델·관측값 근거를 묵시적으로 교체하거나 누락 Feature를 중앙값으로 대체하지 않는다.
-    if (!selected || selected.revision.id !== modelRevisionId)
-      return "선택한 관측값과 모델 판본이 일치하지 않습니다. 모델을 다시 확인해 주세요.";
-    const prepared = observationInputForPlayground(selected.revision, features);
-    if (!prepared.fields) {
-      const examples = prepared.invalid.slice(0, 3).map(activityFeatureLabel).join(", ");
-      return `이 관측값은 직접 입력에 필요한 Feature ${prepared.invalid.length}개를 그대로 사용할 수 없습니다.` +
-        ` ${examples}${prepared.invalid.length > 3 ? " 외" : ""} 값을 확인해 주세요.`;
-    }
-    setObservationInput({
-      id: `${scoringResultId}:${rowIndex}:${++observationRequest.current}`,
-      modelRevisionId, scoringResultId, rowIndex, originalScore: score, fields: prepared.fields,
-    });
-    setUsage("playground");
-    return null;
-  }
   // 모델 그룹 전환은 보조 설정이다. 선택한 모델이 있으면 모델 카드 안에, 없으면 단독으로 둔다.
   const groupOptions = <details className="model-lab-model-options">
     <summary>모델 그룹 관리 · 목록 새로고침</summary>
@@ -291,36 +237,10 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
         <button type="button" className="secondary"
           onClick={() => onSelectModel(models[0].revision.id)}>이 모델 적용 →</button>
       </div>}
-    {selected && <>
-      <div className="model-lab-start-choice">
-        <span className="model-lab-start-label" id="model-lab-start-label">분석할 데이터</span>
-        <div className="model-lab-usage-tabs" role="group" aria-labelledby="model-lab-start-label">
-          <button type="button" className="secondary" aria-pressed={usage === "dataset"}
-            onClick={openDataset}>Dataset 분석</button>
-          <button type="button" className="secondary" aria-pressed={usage === "playground"}
-            onClick={() => setUsage("playground")}>값 직접 입력</button>
-        </div>
-        <p className="hint">{usage === "dataset"
-          ? "등록된 Dataset이나 새 파일 전체에 모델을 적용합니다."
-          : "관측값 한 건의 Feature를 입력해 모델 반응을 확인합니다."} 실행 버튼을 누를 때에만 계산합니다.</p>
-      </div>
-      <div hidden={usage !== "playground"} ref={playgroundPanel}>
-        <ModelLabPlayground key={selected.revision.id} model={selected.revision}
-          canRun={canRun} canCancel={canCancel}
-          observationInput={observationInput?.modelRevisionId === selected.revision.id
-            ? observationInput : null}
-          onBackToAnalysis={backToObservation} />
-      </div>
-      <div hidden={usage !== "dataset"} ref={datasetPanel}>
-        <MLScoringPanel key={selected.revision.id} model={selected.revision}
-          datasets={datasets} hasMoreDatasets={hasMoreDatasets}
-          onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
-          onOpenResult={id => onOpenResource("scoring", id)}
-          onOpenResource={onOpenResource}
-          canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
-          onResultViewChange={handleResultViewChange} onTryObservation={tryObservation} />
-      </div>
-    </>}
+    {selected && <ModelApplicationWorkspace key={selected.revision.id} model={selected.revision}
+      datasets={datasets} hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
+      canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
+      canUpload={canUpload} onDatasetRegistered={onDatasetRegistered} onResultViewChange={handleResultViewChange} />}
     {canLearn && <div className="model-lab-use-footer">
       <button type="button" className="ghost" onClick={onLearn}>새 모델 학습 →</button>
     </div>}

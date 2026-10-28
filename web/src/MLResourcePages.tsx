@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
-import { MLScoringPanel } from "./MLScoringPanel";
+import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { FeatureResultDetails } from "./FeatureResultDetails";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
 import { ShapContributionChart } from "./PipelineShapExplanation";
-import { SensitivityChart } from "./PipelineCandidateInvestigation";
+import { SensitivityChart } from "./FeatureSensitivity";
 import { MLDecisionPanel, type DecisionView } from "./MLDecisionPanel";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type {
@@ -190,6 +190,8 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
         <ScoringObservationExplorer key={r.id} result={r} canRun={canRun}
           canCancel={canCancel} onOpenResource={onOpenResource} />
         <div className="ml-resource-actions">
+          <button type="button" className="secondary" onClick={() => onScoring(r.model_revision_id)}>
+            이 모델로 다른 입력 분석 →</button>
           {(["policy", "evaluation", "explanation"] as const).map(k =>
             <button key={k} className="secondary"
               onClick={() => onDecision(k, r.id)}>
@@ -278,11 +280,14 @@ function JobRowSummary({ job, subject }: { job: JobRow; subject: string }) {
 
 /** 특정 학습 화면을 거치지 않고 Model Revision과 Dataset으로 Scoring한다. */
 export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel,
-  onOpenResource, onModelSelected, onNavigate, modelGroupKey = "default" }: {
+  onOpenResource, onModelSelected, onNavigate, modelGroupKey = "default",
+  hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered }: {
   modelGroupKey?: string;
   datasets: Dataset[]; preferredModelId: string; canRun: boolean; canCancel: boolean;
   onOpenResource: OpenResource; onModelSelected: (id: string) => void;
   onNavigate: (tab: "ml" | "scoring") => void;
+  hasMoreDatasets?: boolean; onLoadMoreDatasets?: () => Promise<void>;
+  canUpload?: boolean; onDatasetRegistered?: (dataset: Dataset) => void;
 }) {
   const [registeredModels, setRegisteredModels] = useState<MLflowModelVersionPage["items"]>([]);
   const modelPageRequest = useRef(0);
@@ -390,9 +395,10 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
     </section>
     {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
       modelId.trim() === loadedModelId &&
-      <MLScoringPanel key={model.id} model={model} datasets={datasets}
-      canRun={canRun} canCancel={canCancel} onOpenResult={id => onOpenResource("scoring", id)}
-      onOpenResource={onOpenResource} />}
+      <ModelApplicationWorkspace key={model.id} model={model} datasets={datasets}
+      hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
+      canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
+      canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
     <section className="panel">
       <div className="panel-head"><div><h2>전체 점수 계산 이력</h2>
         <p>이 화면에서 실행하지 않은 기존 점수 계산도 찾을 수 있습니다. 현재 조회된 목록 기준입니다.</p></div>

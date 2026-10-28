@@ -8,7 +8,7 @@ from sos_platform.feast_features import (
     FeatureRetrievalRequest,
     feature_identity,
 )
-from sos_platform.schemas import JobOut
+from sos_platform.schemas import JobOut, JobPageOut
 
 
 def sample(**overrides):
@@ -54,6 +54,10 @@ def test_feature_job_response_contract():
     }
     for kind in ("feature_register", "feature_retrieve", "feature_retire"):
         assert JobOut.model_validate({**payload, "kind": kind}).kind == kind
+        page = JobPageOut.model_validate({"items": [{
+            **payload, "kind": kind, "attempt_count": 0, "latest_attempt": None,
+        }], "next_cursor": None})
+        assert page.items[0].kind == kind
 
 
 def test_worker_checks_pinned_source_owner():

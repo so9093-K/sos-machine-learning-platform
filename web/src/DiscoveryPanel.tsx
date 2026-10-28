@@ -17,12 +17,13 @@ function analysisLabel(basis: string) {
 
 /** 사람과 외부 API가 동일하게 사용하는 Dataset Discovery 계약을 표시한다. */
 export function DiscoveryPanel({
-  datasetId, canCreate, onCreated, draft, onDraftChange,
+  datasetId, canCreate, onCreated, onOpenJob, draft, onDraftChange,
   overview, overviewStatus, overviewError, onRetryOverview,
 }: {
   datasetId: string;
   canCreate: boolean;
   onCreated: () => Promise<void>;
+  onOpenJob: (jobId: string) => void;
   draft: ExplorationDraft | null;
   onDraftChange: (request: ExplorationRequest) => void;
   overview: DatasetOverview | null;
@@ -102,7 +103,7 @@ export function DiscoveryPanel({
         await onCreated();
       } catch (e) {
         // Job 202 접수는 성공했으므로 목록 갱신 오류를 제출 실패로 표현하지 않는다.
-        setError(`작업은 정상 접수됐습니다. Jobs 목록을 다시 확인하세요. ${formatError(e)}`);
+        setError(`작업은 정상 접수됐습니다. 작업 이력을 다시 확인하세요. ${formatError(e)}`);
       }
     } catch (e) { setError(formatError(e)); }
     finally { setRunning(false); }
@@ -177,10 +178,11 @@ export function DiscoveryPanel({
           {running ? "분석 중…" : "부분 데이터 집계"}
         </button>
         {canCreate && <button className="secondary" disabled={running || !selectedMeasure || invalidDraft}
-          onClick={() => void runFullJob()}>전체 집계 Job 실행</button>}
+          onClick={() => void runFullJob()}>전체 데이터 집계</button>}
       </div>
       {fullJobId && <p role="status" className="muted">
-        전체 집계 Job을 제출했습니다. Jobs에서 상태와 결과를 확인하세요. 작업 ID: {fullJobId}
+        전체 집계가 접수됐습니다.
+        <button type="button" className="secondary" onClick={() => onOpenJob(fullJobId)}>집계 작업 상세 →</button>
       </p>}
       {result && <>
         <AnalysisEvidence

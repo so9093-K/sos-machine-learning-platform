@@ -16,6 +16,8 @@ export type MLNavigationContext = {
   pipelineView?: "learn" | "use";
   modelGroupKey?: string;
   modelLabReturn?: boolean;
+  dataJobId?: string;
+  dataJobKind?: "data" | "exploration";
   pipelineAnalysisSection?: "overview" | "training" | "calibration" | "test";
 };
 type WorkspaceRoute = {
@@ -66,7 +68,11 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   if (tab === "understanding" || tab === "preparation" || tab === "preview" ||
       tab === "profile" || tab === "jobs") {
     const pipelineReturn = params.get("from") === "pipeline";
-    return { pipelineReturn, datasetId: pipelineReturn ? params.get("dataset") ?? "" : "",
+    return { pipelineReturn, datasetId: params.get("dataset") ?? "",
+      ...(tab === "jobs" && params.get("job") ? {
+        dataJobId: params.get("job")!,
+        dataJobKind: params.get("type") === "exploration" ? "exploration" as const : "data" as const,
+      } : {}),
       ...(pipelineReturn && params.get("run") ? {
         pipelineRunId: params.get("run")!,
         ...(candidateRowAt(params) !== undefined ? { candidateRowIndex: candidateRowAt(params) } : {}),
@@ -75,7 +81,7 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   }
   if (tab === "training" || tab === "ml") return { datasetId: params.get("dataset") ?? "",
     ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
-  if (tab === "scoring") return { modelId: params.get("model") ?? "",
+  if (tab === "scoring") return { ...resourceContext(search), modelId: params.get("model") ?? "",
     ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
   if (isDecisionTab(tab)) return {
     scoringId: params.get("scoring") ?? "",
@@ -117,7 +123,7 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
       params.set("section", context.pipelineAnalysisSection);
   }
   if ((tab === "understanding" || tab === "preparation" || tab === "preview" ||
-        tab === "profile" || tab === "jobs") && context.pipelineReturn) {
+        tab === "profile" || tab === "jobs" || tab === "scoring") && context.pipelineReturn) {
     params.set("from", "pipeline");
     if (context.datasetId) params.set("dataset", context.datasetId);
     if (context.pipelineRunId) {
@@ -125,6 +131,12 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
       if (context.candidateRowIndex !== undefined) params.set("candidate", String(context.candidateRowIndex));
       if (context.pipelineAnalysisSection) params.set("section", context.pipelineAnalysisSection);
     }
+  }
+  if (["understanding", "preparation", "preview", "profile", "jobs"].includes(tab) && context.datasetId)
+    params.set("dataset", context.datasetId);
+  if (tab === "jobs" && context.dataJobId) {
+    params.set("job", context.dataJobId);
+    if (context.dataJobKind === "exploration") params.set("type", "exploration");
   }
   if ((tab === "training" || tab === "ml") && context.datasetId) {
     params.set("dataset", context.datasetId);
@@ -134,7 +146,7 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
       context.modelGroupKey && context.modelGroupKey !== "default")
     params.set("group", context.modelGroupKey);
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
-  if (isDecisionTab(tab) && context.modelLabReturn && context.modelId) {
+  if ((isDecisionTab(tab) || tab === "scoring") && context.modelLabReturn && context.modelId) {
     params.set("from", "model-lab");
     params.set("model", context.modelId);
     if (context.modelGroupKey && context.modelGroupKey !== "default")
@@ -224,7 +236,7 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
   if (["understanding", "preparation", "preview", "profile", "jobs"].includes(tab) &&
       ["understanding", "preparation", "preview", "profile", "jobs"].includes(previous.tab)) {
     return { pipelineReturn: previous.context.pipelineReturn,
-      ...(previous.context.pipelineReturn && previous.context.datasetId
+      ...(previous.context.datasetId
         ? { datasetId: previous.context.datasetId } : {}),
       ...(previous.context.pipelineReturn && previous.context.pipelineRunId ? {
         pipelineRunId: previous.context.pipelineRunId,
@@ -304,7 +316,7 @@ export function useWorkspaceNavigation() {
     if (!id) return;
     const previous = current.current;
     // Pipeline에서 열었던 결과 판본은 직접 링크·새로고침에서도 원래 Run에 돌아갈 수 있다.
-    const fromPipeline = (previous.tab === "pipelines" || previous.resource !== null)
+    const fromPipeline = (previous.tab === "pipelines" || previous.context.pipelineReturn === true || previous.resource !== null)
       && previous.context.pipelineReturn !== false;
     const fromLabUse = (previous.tab === "pipelines" && previous.context.pipelineView === "use") ||
       previous.context.modelLabReturn === true;
@@ -340,12 +352,12 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
 ];
 
 const modelTabs: ReadonlyArray<{ tab: WorkspaceTab; label: string; group: string }> = [
-  { tab: "ml", label: "모델 판본", group: "리소스" },
+  { tab: "ml", label: "모델 버전", group: "리소스" },
   { tab: "training", label: "학습", group: "실행" },
-  { tab: "scoring", label: "점수화", group: "실행" },
+  { tab: "scoring", label: "모델 적용", group: "실행" },
   { tab: "evaluations", label: "평가", group: "결과와 판단" },
   { tab: "policies", label: "판정 정책", group: "결과와 판단" },
-  { tab: "explanations", label: "설명", group: "결과와 판단" },
+  { tab: "explanations", label: "점수 설명", group: "결과와 판단" },
 ];
 export function isModelsArea(tab: WorkspaceTab): boolean {
   return modelTabs.some(item => item.tab === tab);
