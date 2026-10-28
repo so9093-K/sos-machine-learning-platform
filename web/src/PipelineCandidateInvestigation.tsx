@@ -1,12 +1,12 @@
 /** Pipeline 후보 한 건의 관측값과 명시적으로 계산한 설명 결과를 분석한다. */
 import { useEffect, useRef, useState } from "react";
 import { formatError, request, submitJob } from "./api";
-import { DataChart } from "./DataChart";
+import { CHART_COLORS, DataChart } from "./DataChart";
+import { FeatureResultDetails } from "./FeatureResultDetails";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { MLExplanationJob, MLExplanationJobSummary, ExplanationResult, PipelineCandidates, ModelRevision } from "./types";
-import { PipelineShapExplanation } from "./PipelineShapExplanation";
+import { escapeShapTooltipText, PipelineShapExplanation } from "./PipelineShapExplanation";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
-import { groupActivityFeatures } from "./ActivityFeatureGroups";
 import { FeatureValueComparison } from "./FeatureValueComparison";
 import { formatObservedAt, jobStatusLabel } from "./display-format";
 
@@ -32,60 +32,53 @@ function format(value: unknown): string {
     num.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
 }
 
+export const formatSensitivityValue = (value: number) =>
+  value !== 0 && Math.abs(value) < 1e-8 ? value.toExponential(3)
+    : value.toLocaleString("ko-KR", { maximumFractionDigits: 8 });
+
 export function SensitivityChart({ result }: { result: ExplanationResult }) {
   const raw = result.output.feature_sensitivities;
-  const entries = Array.isArray(raw) ? raw as Array<Record<string, unknown>> : [];
-  const ranked = entries.filter(entry => typeof entry.feature === "string" &&
-    numeric(entry.anomaly_score_delta) !== null)
-    .sort((a, b) => Math.abs(numeric(b.anomaly_score_delta)!) -
-      Math.abs(numeric(a.anomaly_score_delta)!)).slice(0, 12);
-  if (!ranked.length) return <p>시각화 가능한 점수 민감도 근거가 없습니다.</p>;
+  const entries = (Array.isArray(raw) ? raw as Array<Record<string, unknown>> : [])
+    .filter(entry => typeof entry.feature === "string" && numeric(entry.anomaly_score_delta) !== null)
+    .sort((a, b) => Math.abs(Number(b.anomaly_score_delta)) - Math.abs(Number(a.anomaly_score_delta)));
+  const ranked = entries.filter(entry => entry.anomaly_score_delta !== 0).slice(0, 5);
+  if (!entries.length) return <p>점수 민감도 근거가 없습니다.</p>;
   const shown = [...ranked].reverse();
   const option = { baseOption: {
     aria: { enabled: true },
-    // 비교에 필요한 정밀도만 보이고 원래 정밀도는 아래 표에서 확인한다.
     tooltip: { trigger: "axis", formatter: (params: Array<{ dataIndex: number }>) => {
       const item = shown[params[0]?.dataIndex ?? -1];
-      if (!item) return "";
-      const name = String(item.feature);
-      const label = activityFeatureLabel(name);
-      const delta = numeric(item.anomaly_score_delta);
-      return `${label}${label !== name ? ` (${name})` : ""}<br/>기준값 치환 시 점수 변화 ${
-        delta === null ? "미정의" : (delta > 0 ? "+" : "") + delta.toLocaleString("ko-KR", { maximumFractionDigits: 6 })}`;
+      return item ? `${escapeShapTooltipText(activityFeatureLabel(String(item.feature)))}<br/>점수 차이 ${formatSensitivityValue(Number(item.anomaly_score_delta))}` : "";
     } },
-    // SHAP 차트와 같은 라벨 폭을 써서 한국어 Feature 이름이 잘리지 않게 한다.
-    grid: { left: 240, right: 45, top: 18, bottom: 40 },
-    xAxis: { type: "value" as const, name: "점수 변화" },
-    yAxis: { type: "category" as const,
-      data: shown.map(x => activityFeatureLabel(String(x.feature))),
-      axisLabel: { width: 210, overflow: "truncate" as const, fontSize: 12 } },
-    series: [{ type: "bar" as const, name: "기준값 치환 시 점수 변화",
-      data: shown.map(x => numeric(x.anomaly_score_delta)) }],
+    grid: { left: 210, right: 35, top: 18, bottom: 40 },
+    xAxis: { type: "value" as const, name: "점수 차이", nameLocation: "middle" as const, nameGap: 28,
+      axisLabel: { formatter: (value: number) => value !== 0 && Math.abs(value) < 0.001
+        ? value.toExponential(1) : value.toFixed(3) } },
+    yAxis: { type: "category" as const, data: shown.map(x => activityFeatureLabel(String(x.feature))),
+      axisLabel: { width: 180, overflow: "truncate" as const, fontSize: 12 } },
+    series: [{ type: "bar" as const, name: "점수 차이",
+      data: shown.map(x => Number(x.anomaly_score_delta)),
+      itemStyle: { color: (params: { value: number }) =>
+        params.value >= 0 ? CHART_COLORS.positive : CHART_COLORS.negative },
+      markLine: { silent: true, symbol: "none", label: { show: false }, data: [{ xAxis: 0 }] } }],
   }, media: [{ query: { maxWidth: 620 }, option: {
-    grid: { left: 153, right: 20, top: 18, bottom: 48 },
-    yAxis: { axisLabel: { width: 127, overflow: "truncate" as const, fontSize: 11 } },
+    grid: { left: 135, right: 25, top: 18, bottom: 48 },
+    yAxis: { axisLabel: { width: 110, overflow: "truncate" as const, fontSize: 11 } },
   } }] };
-  return <>
-    <DataChart option={option} ariaLabel="선택한 후보의 Feature별 참조 중앙값 치환에 따른 이상 점수 민감도" />
-    <p className="hint">실제 모델에서 각 Feature를 Train 참조 중앙값으로 하나씩 치환했을 때의 점수 차이입니다.
-      SHAP·가법 기여도·원인 판정이 아닙니다. 양수는 기준값 치환 시 이상 점수가 낮아진 경우입니다.</p>
-    <details>
-      <summary>전체 Feature의 실제 값·참조값·점수 변화 표</summary>
-      <div className="table-scroll"><table>
-        <thead><tr><th>Feature</th><th>관측값</th><th>Train 참조 중앙값</th>
-          <th>치환 시 점수</th><th>원래 점수와의 차이</th></tr></thead>
-        <tbody>{entries.map((item, i) => <tr key={String(item.feature) + ":" + i}>
-          <th>{activityFeatureLabel(String(item.feature))}
-            {activityFeatureLabel(String(item.feature)) !== String(item.feature) &&
-              <small className="activity-feature-original">{String(item.feature)}</small>}</th>
-          <td>{item.missing_imputed ? "결측값 대체" : format(item.actual_value)}</td>
-          <td>{format(item.reference_median)}</td>
-          <td>{format(item.score_if_replaced)}</td>
-          <td>{format(item.anomaly_score_delta)}</td>
-        </tr>)}</tbody>
-      </table></div>
-    </details>
-  </>;
+  const number = (value: unknown) => numeric(value) === null ? "결측" : formatSensitivityValue(Number(value));
+  return <div className="sensitivity-result">
+    {ranked.length ? <>
+      <h6>점수 변화가 큰 항목 {ranked.length}개</h6>
+      <DataChart option={option} ariaLabel="점수 변화의 절댓값이 큰 상위 5개 항목의 치환 민감도" />
+      <p className="hint">각 항목을 학습 중앙값으로 바꿨을 때의 점수 차이입니다. 양수는 점수가 낮아진 경우이며 인과적 기여도는 아닙니다.</p>
+    </> : <p className="pipeline-shap-zero" role="status">각 항목을 학습 중앙값으로 바꿔도 점수가 달라지지 않습니다.</p>}
+    <FeatureResultDetails key={result.id} summary={`개별 값 확인 · ${entries.length}개 항목`}
+      columns={["관측값", "학습 중앙값", "치환 후 점수", "점수 차이"]}
+      rows={entries.map(item => ({ feature: String(item.feature), values: [
+        item.missing_imputed ? "결측값 대체" : number(item.actual_value), number(item.reference_median),
+        number(item.score_if_replaced), number(item.anomaly_score_delta),
+      ] }))} />
+  </div>;
 }
 
 export function PipelineCandidateInvestigation({
@@ -134,8 +127,6 @@ export function PipelineCandidateInvestigation({
     medians.length === model.features.length &&
     medians.every(v => typeof v === "number" && Number.isFinite(v))
     ? new Map(model.features.map((name, i) => [name, medians[i] as number])) : null;
-  // 집계 Feature의 표시 그룹이며, 모델 중요도나 원인 순위가 아니다.
-  const activityGroups = groupActivityFeatures(candidate.features);
   // 이 세 지표는 결과 화면의 고정 미리보기이며 중요도나 이상 원인 순위가 아니다.
   const previewNames = ["io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create"]
     .filter(name => Object.prototype.hasOwnProperty.call(candidate.features, name));
@@ -304,47 +295,12 @@ export function PipelineCandidateInvestigation({
         </button>
       </div>}
       {model && !referenceMap && <p className="hint">이 모델에는 비교 가능한 학습 중앙값이 없습니다.</p>}
-      <details className="observation-activity-all">
-      <summary>전체 Feature {Object.keys(candidate.features).length}개 보기</summary>
-      <div className="observation-activity-group-intro">
-        <strong>활동별 지표</strong>
-        <span>전체 {Object.keys(candidate.features).length}개 · 아래 그룹별 실제값과 학습 참조값</span>
-      </div>
-      <div className="observation-activity-groups">
-        {activityGroups.map(group => {
-          // 상단 고정 지표와 각 그룹의 미리보기에 같은 Feature를 반복 노출하지 않는다.
-          const remainingGroup = group.entries.filter(([name]) => !previewFeatures.includes(name));
-          const shown = remainingGroup.slice(0, 1);
-          const hidden = remainingGroup.slice(1);
-          return <section key={group.id} className="observation-activity-group">
-          <div className="observation-activity-group-heading">
-            <strong>{group.title}</strong><span>{group.entries.length}개 입력값</span>
-          </div>
-          <p>{group.description}</p>
-          {shown.length === 0 && <p className="hint">이 그룹에서 표시한 지표는 상단 활동 특징에 있습니다.</p>}
-          <div className="observation-activity-figures">
-            {shown.map(([name, value]) =>
-              <div key={name} className="observation-activity-figure">
-                <span title={name}>{activityFeatureLabel(name)}</span>
-                <FeatureValueComparison feature={name} actual={value} reference={referenceMap?.get(name)} />
-              </div>)}
-          </div>
-          {hidden.length > 0 && <details className="observation-activity-extra">
-            <summary>추가 지표 {hidden.length}개 확인</summary>
-            <div className="table-scroll"><table>
-              <thead><tr><th>Feature</th><th>관측값</th><th>학습 중앙값</th><th>중앙값 대비</th></tr></thead>
-              <tbody>{hidden.map(([name, value]) => <tr key={name}>
-                <th title={name}>{activityFeatureLabel(name)}</th><td>{format(value)}</td>
-                <td>{referenceLabel(name)}</td>
-                <td>{referenceDifference(name, value) ?? "비교 불가"}</td>
-              </tr>)}</tbody>
-            </table></div>
-          </details>}
-        </section>;
-        })}
-      </div>
-      <p className="hint">학습 중앙값과의 차이는 정상 범위·Feature 중요도·이상 원인을 의미하지 않습니다.</p>
-      </details>
+      <FeatureResultDetails key={scoringResultId + ":" + candidate.row_index}
+        summary={`입력값 확인 · ${Object.keys(candidate.features).length}개 항목`}
+        columns={["관측값", "학습 중앙값", "기준값 대비"]}
+        rows={Object.entries(candidate.features).map(([name, value]) => ({ feature: name,
+          values: [format(value), referenceLabel(name), referenceDifference(name, value) ?? "비교 불가"],
+        }))} />
     </section>}
     {observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
@@ -363,16 +319,12 @@ export function PipelineCandidateInvestigation({
       </button>
     </div>}
     {model && !referenceMap && <p className="hint">이전 모델에는 비교 가능한 학습 중앙값이 없습니다.</p>}
-    <div className="table-scroll pipeline-candidate-comparison"><table>
-      <thead><tr><th>Feature</th><th>관측값</th><th>Train 참조 중앙값</th></tr></thead>
-      <tbody>{Object.entries(candidate.features).map(([name, value]) =>
-        <tr key={name}><th>{activityFeatureLabel(name)}
-          {activityFeatureLabel(name) !== name &&
-            <small className="activity-feature-original">{name}</small>}</th><td>{format(value)}</td>
-          <td>{referenceMap?.has(name) ? format(referenceMap.get(name))
-            : modelError ? "조회 오류"
-            : !modelRevisionId ? "판본 없음" : !model ? "조회 중" : "근거 없음"}</td></tr>)}</tbody>
-    </table></div>
+    <FeatureResultDetails key={scoringResultId + ":" + candidate.row_index}
+      summary={`개별 입력값 확인 · ${Object.keys(candidate.features).length}개 항목`}
+      columns={["관측값", "학습 중앙값"]}
+      rows={Object.entries(candidate.features).map(([name, value]) => ({ feature: name,
+        values: [format(value), referenceLabel(name)],
+      }))} />
     </details>}
     {!observationMode && <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}

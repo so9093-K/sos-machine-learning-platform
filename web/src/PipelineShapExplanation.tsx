@@ -1,6 +1,7 @@
 /** 기존 독립 설명 Job을 SHAP 방법으로 요청하고 해당 결과를 탐구한다. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CHART_COLORS, DataChart } from "./DataChart";
+import { FeatureResultDetails } from "./FeatureResultDetails";
 import { EvidenceFacts } from "./EvidenceFacts";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { formatError, request, submitJob } from "./api";
@@ -54,8 +55,8 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
   const { contributions, shown, rest, restSum, bars } = useMemo(() => {
     const contributions = [...values].sort((a, b) =>
       Math.abs(b.shap_value) - Math.abs(a.shap_value));
-    const shown = contributions.slice(0, 8);
-    const rest = contributions.slice(8);
+    const shown = contributions.filter(item => item.shap_value !== 0).slice(0, 5);
+    const rest = contributions.slice(shown.length);
     const restSum = rest.reduce((sum, item) => sum + item.shap_value, 0);
     const bars = [...shown].reverse().map(item => ({
       label: activityFeatureLabel(item.feature), feature: item.feature, value: item.shap_value,
@@ -183,15 +184,11 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
           ]} />
         </section>
       </div>
-      <div className="table-scroll"><table>
-        <thead><tr><th>Feature</th><th>관측값</th><th>Train 중앙값</th><th>점수 기여</th></tr></thead>
-        <tbody>{contributions.map(item => <tr key={item.feature}>
-          <th>{activityFeatureLabel(item.feature)}
-            {activityFeatureLabel(item.feature) !== item.feature &&
-              <small className="activity-feature-original">{item.feature}</small>}</th><td>{item.missing_imputed ? "결측 대체" : key(item.actual_value)}</td>
-          <td>{key(item.reference_median)}</td><td>{key(item.shap_value)}</td>
-        </tr>)}</tbody>
-      </table></div>
+      <FeatureResultDetails key={result.id} summary={`개별 값 확인 · ${contributions.length}개 항목`}
+        columns={["관측값", "학습 중앙값", "점수 기여"]}
+        rows={contributions.map(item => ({ feature: item.feature, values: [
+          item.missing_imputed ? "결측 대체" : key(item.actual_value), key(item.reference_median), key(item.shap_value),
+        ] }))} />
     </details>
   </section>;
 }
