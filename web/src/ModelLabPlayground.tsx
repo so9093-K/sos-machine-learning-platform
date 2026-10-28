@@ -270,8 +270,8 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   </label>;
   return <section className="panel model-lab-playground" aria-label="직접 모델 점수 계산">
     <div className="model-lab-playground-head">
-      <div><h3>활동 한 건으로 모델 체험하기</h3>
-        <p>기준 입력값을 그대로 적용하거나 숫자를 바꾸어 모델의 실제 점수 변화를 확인합니다.</p></div>
+      <div><h3>한 건의 입력으로 모델 반응 시험하기</h3>
+        <p>기준 입력에서 시작해 숫자를 바꾸고, 이전 계산과 점수가 어떻게 달라지는지 살펴보세요.</p></div>
     </div>
     <div className="model-lab-workspace">
       <div className="model-lab-input-pane">
@@ -349,8 +349,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
           : job?.status === "Failed" || job?.status === "Cancelled"
             ? "마지막 실행에서는 점수를 얻지 못했습니다. 현재 입력값을 계산하려면 다시 실행해 주세요."
             : "현재 입력값은 아직 계산하지 않았습니다. 점수를 확인하려면 실행을 요청하세요."}</p>
-    <p className="hint">입력 Feature {model.features.length}개가 실제 모델에 전달됩니다.
-      실행을 요청하면 입력값과 결과가 권한이 적용되는 Job 이력에 보존됩니다.</p>
+    <p className="hint">모든 Feature {model.features.length}개가 실제 모델에 전달되며, 제출한 입력과 결과는 작업 이력에 보존됩니다.</p>
     {error && <p role="alert">{error}</p>}
     <div className="model-lab-playground-actions">
       <button type="button" onClick={() => void execute()}
@@ -374,7 +373,12 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
         </div>}
       {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}
         {job.error_code && <small> ({job.error_code})</small>}</p>}
-      <p className="hint">점수가 높을수록 모델에서 이례적인 입력입니다. 확률이나 사건 판정은 아닙니다.</p>
+      <p className="hint">점수가 높을수록 모델에서 이례적인 입력이며, 사건 확률이나 확정 판정은 아닙니다.</p>
+      {matchesCompletedInput && reference && editedNames.length === 0 &&
+        <div className="model-lab-try-change">
+          <p>학습 중앙값을 바탕으로 한 기준 입력의 점수입니다. 숫자를 바꾼 뒤 다시 계산해 모델 반응을 살펴보세요.</p>
+          <button type="button" className="secondary" onClick={() => setMode("edit")}>입력값 바꿔보기 →</button>
+        </div>}
     </div>}
     {job?.status === "Succeeded" && lastScore !== null && comparisonJob &&
       comparedFeatures.length > 0 && <section className="model-lab-run-comparison"
