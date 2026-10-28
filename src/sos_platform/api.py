@@ -1,6 +1,7 @@
 """데이터 탐색과 비동기 처리를 제공하는 공통 플랫폼 API."""
 
 import logging
+import math
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -1216,9 +1217,9 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
                 raise HTTPException(
                     status_code=409, detail="Explanation requires a successful Playground Job"
                 )
-            if not isinstance(source.get("result"), dict) or not isinstance(
-                source["result"].get("anomaly_score"), (int, float)
-            ):
+            saved = source.get("result")
+            score = saved.get("anomaly_score") if isinstance(saved, dict) else None
+            if type(score) not in (float, int) or not math.isfinite(score):
                 raise HTTPException(status_code=409, detail="Playground score is unavailable")
             model = store.get_model_revision(source["spec"]["model_revision_id"])
             if model is None or model["lifecycle_state"] != "Active":
