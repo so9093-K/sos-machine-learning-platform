@@ -10,7 +10,9 @@ SOS Dataset 판본·Actor 권한·Job/Attempt·실제 게시한 조회 결과는
 Feature 정의 등록과 Retrieval은 별개의 Job이다. 성공한 등록 Job은 Feast의
 Service 이름 및 고정 Source 판본을 참조하고, 조회 Job은 등록 Job·Entity 시점 Dataset·
 UTC 시각 컬럼을 결합해 동일 Feature Service를 재사용한다. 조회 시 Registry에
-새 Feature 정의를 게시하지 않는다. Registry의 최신 정의가 과거 데이터 보존을 대신하지 못한다.
+새 Feature 정의를 게시하지 않는다. 조회 결과 Dataset으로 학습한 Model Revision은
+Feature 등록·조회 Job ID, Feature Service와 원본 Dataset 판본을 불변 Runtime 근거에 연결한다.
+이 참조가 Feast Registry의 현재 상태나 과거 데이터의 물리적 보존을 대신하지는 못한다.
 [ADR 0018](adr/0018-feast-feature-ownership.md)을 따른다.
 
 ## 핵심 개념

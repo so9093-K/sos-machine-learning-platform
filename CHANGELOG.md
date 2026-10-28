@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Feast를 등록 Feature 정의·Feature Service·역사적 시점 조회의 정본으로 채택하고 전용 Worker·PostgreSQL Registry를 연결했습니다. 불변 Parquet Feature Source에 대한 등록 Job과 재사용 가능한 시점 조회 Job을 분리했습니다. 조회 결과는 SOS 불변 Dataset으로 게시해 기존 모델 학습·Scoring에 사용할 수 있고, 일반 Data Preparation·직접 학습 경로는 유지합니다.
+- Feast를 등록 Feature 정의·Feature Service·역사적 시점 조회의 정본으로 채택하고 전용 Worker·PostgreSQL Registry를 연결했습니다. 불변 Parquet Feature Source에 대한 등록 Job과 재사용 가능한 시점 조회 Job을 분리했습니다. 조회 결과는 SOS 불변 Dataset으로 게시해 기존 모델 학습·Scoring에 사용할 수 있고, 이를 사용하는 모델 판본에 Feature Service·등록·조회 Job 출처를 고정합니다. 일반 Data Preparation·직접 학습 경로는 유지합니다.
 
 - 관측 입력과 학습 중앙값을 단위·배율·차이로 비교하고 SHAP보다 먼저 표시합니다. 기본 미리보기와 점수 기여도 순위를 구분하며, SHAP의 합성 비교 기준을 계산 전후에 안내합니다. 임의의 점수 범위 상위 1/4 요약을 제거하고 관측값 조회 단위를 선택할 수 있게 했습니다.
 
