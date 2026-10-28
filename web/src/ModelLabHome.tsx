@@ -58,6 +58,7 @@ export function ModelLabHome({ onUse, onLearn }: {
           <text x="34" y="230" fontSize="12" fill="currentColor" opacity=".65">평소의 변화</text>
           <text x="486" y="230" fontSize="12" fill="currentColor" opacity=".65" textAnchor="end">시간 →</text>
         </svg>
+        <p className="model-lab-home-illustration-note">모델 원리를 설명하는 개념 그림 · 실제 분석 결과가 아닙니다.</p>
         <div className="model-lab-home-visual-foot">
           <span><i className="model-lab-chart-key normal" aria-hidden="true"/>일반적인 활동 변화</span>
           <span><i className="model-lab-chart-key unusual" aria-hidden="true"/>눈에 띄는 변화</span>
