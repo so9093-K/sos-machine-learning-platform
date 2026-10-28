@@ -27,6 +27,12 @@ python scripts/validate.py run all
 
 웹의 URL·결과 문맥 렌더링 검사는 `cd web && npm run test:navigation`으로 실행한다. 현재 검증에는 실제 브라우저·API·Worker·저장소·MLflow 통합 실행이 포함되지 않는다.
 
+Feast 전용 SDK가 필요한 변경을 확인할 때에는 필요에 따라
+`uv run --locked --group dev --group feast pytest -q tests/test_feast_live.py`를 실행한다.
+이는 상시 CI에 별도 Runtime 설치·Docker Compose 기동을 강제하지 않는 선택적 집중 검사다.
+이전에 완료한 S3·PostgreSQL·전체 Compose 통합 실행의 근거는 해당 PR 실행 이력에 남기고,
+검증을 위해 만들었던 일회성 서비스 기동 시나리오는 제품 테스트 코드로 계속 보관하지 않는다.
+
 `all`은 **현재 CLI에 등록된 Suite 전체**라는 뜻이지 SOS 제품 계약 전체를 뜻하지 않는다. pytest가 테스트를 수집하지 못해 비정상 종료하면 CLI도 실패한다. CI의 `validation` 상태도 이 범위에만 해당한다.
 
 ## 변경 방식

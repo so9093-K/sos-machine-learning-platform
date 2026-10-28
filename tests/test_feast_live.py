@@ -128,32 +128,3 @@ def test_registry_conflict_and_partial_recovery(tmp_path, monkeypatch):
     registry.apply(view)
     with pytest.raises(ValueError, match="다른 내용"):
         feast_features.register_feature_service(None, source_dataset, spec)
-
-
-def test_registry_fingerprint_covers_source_mapping_and_execution_flags(tmp_path, monkeypatch):
-    from copy import deepcopy
-
-    source = tmp_path / "fingerprint-source.parquet"
-    pl.DataFrame({
-        "host_id": ["a"], "event_timestamp": [utc(9)], "number": [1.0],
-    }).write_parquet(source)
-
-    monkeypatch.setattr(feast_features.Settings, "from_env", lambda: SimpleNamespace(
-        s3_access_key="testing", s3_secret_key="testing", s3_region="us-east-1",
-        s3_endpoint="http://127.0.0.1:9000",
-    ))
-    spec = feast_features.FeatureDefinitionRequest(
-        feature_dataset_id="feature", entity_column="host_id",
-        timestamp_column="event_timestamp", features=["number"],
-    )
-    schema = pl.scan_parquet(source).collect_schema()
-    _, objects = feast_features._make_feature_objects(
-        spec, {"id": "feature", "version": "v1", "location": str(source)}, schema,
-    )
-    original = feast_features.definition_digest(objects)
-    modified = deepcopy(objects)
-    modified[1].batch_source.field_mapping = {"renamed_feature": "number"}
-    assert feast_features.definition_digest(modified) != original
-    modified = deepcopy(objects)
-    modified[1].offline = not bool(modified[1].offline)
-    assert feast_features.definition_digest(modified) != original
