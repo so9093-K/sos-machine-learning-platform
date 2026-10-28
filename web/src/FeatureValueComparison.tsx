@@ -13,6 +13,9 @@ export function FeatureValueComparison({ actual, reference, actualLabel = "관�
   const max = actualReady && referenceReady && actual >= 0 && reference >= 0
     ? Math.max(actual, reference) : 0;
   const showBars = max > 0 && referenceReady && reference > 0;
+  // 비율이 극단적이면 짧은 막대가 보이지 않으므로 수치 비교를 우선 안내한다.
+  const tooDifferentForBars = showBars && actualReady &&
+    Math.min(actual, reference) / max < 0.01;
   const display = (value: number | null | undefined) => {
     if (!valid(value)) return "비교 기준 없음";
     // 표시 반올림으로 0과 혼동될 수 있는 작은 실제값은 지수 표기를 사용한다.
@@ -31,5 +34,8 @@ export function FeatureValueComparison({ actual, reference, actualLabel = "관�
       <span><i style={{ width: `${actual! / max * 100}%` }} /></span>
       <span><i style={{ width: `${reference! / max * 100}%` }} /></span>
     </div>}
+    {tooDifferentForBars && <small className="feature-reference-scale-note">
+      값 차이가 커 작은 값의 막대가 거의 보이지 않습니다. 위 숫자로 비교하세요.
+    </small>}
   </div>;
 }
