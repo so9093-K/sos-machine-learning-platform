@@ -1276,3 +1276,20 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 @media(max-width:900px) { .observation-activity-groups { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:560px) { .observation-activity { padding:10px; }
   .observation-activity-group { padding:10px; } }
+
+/* 모델 실험실 UX: 요약을 먼저, 근거와 전체 Feature는 선택적으로 제공한다. */
+.pipeline-shap-zero { display:grid; gap:8px; padding:14px 16px; border:1px solid var(--sos-border); background:var(--sos-raised); border-radius:10px; line-height:1.6; }
+.pipeline-shap-zero strong { font-size:14px; }
+.pipeline-shap-zero p { margin:0; color:var(--sos-muted); font-size:13px; }
+.pipeline-shap-summary { font-size:14px; line-height:1.6; }
+.model-lab-try-change { display:grid; justify-items:start; gap:10px; margin-top:10px; padding-top:12px; border-top:1px solid var(--sos-border); }
+.model-lab-try-change p { margin:0; color:var(--sos-muted); font-size:13px; line-height:1.6; }
+.scoring-action-hint { margin:0; color:var(--sos-muted); font-size:12px; }
+.scoring-input-guidance { color:var(--sos-muted); font-size:12px; }
+.scoring-input-guidance > summary { cursor:pointer; }
+.scoring-input-guidance .hint { margin:10px 0 0; line-height:1.65; }
+.observation-activity-all { border-top:1px solid var(--sos-border); padding-top:14px; }
+.observation-activity-all > summary { cursor:pointer; font-size:13px; font-weight:650; }
+.observation-activity-all[open] > summary { margin-bottom:14px; }
+.feature-reference-scale-note { color:var(--sos-muted); font-size:11px; line-height:1.5; }
+.model-lab-home-illustration-note { font-size:11px; color:var(--sos-muted); margin:5px 0 2px; }
