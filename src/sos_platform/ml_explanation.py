@@ -55,7 +55,7 @@ def explain_scored_row(store, spec: dict) -> dict:
         raise ValueError("Scoring Result and model output disagree")
     if method == "permutation_shap_median_v1":
         result = _permutation_shap_result(
-            scoring, model, selected, original, reference, saved_score, model_runtime
+            scoring["id"], model, selected, original, reference, saved_score, model_runtime
         )
     else:
         result = _median_reference_result(
@@ -142,8 +142,15 @@ def explain_playground_job(store, spec: dict) -> dict:
         ordered_playground_input(model, source["spec"]["features"]), dtype=np.float64
     )
     saved_result = source.get("result")
-    score = saved_result.get("anomaly_score") if isinstance(saved_result, dict) else None
-    if not isinstance(score, (int, float)) or not math.isfinite(score):
+    if not isinstance(saved_result, dict) or (
+        saved_result.get("model_revision_id") != model["id"]
+        or saved_result.get("score_direction") != "higher_is_more_anomalous"
+        or saved_result.get("score_scale") != "negative_sklearn_score_samples"
+        or saved_result.get("feature_count") != len(names)
+    ):
+        raise ValueError("Playground score provenance and model revision disagree")
+    score = saved_result.get("anomaly_score")
+    if type(score) not in (int, float) or not math.isfinite(score):
         raise ValueError("Playground stored model score is unavailable")
     model_runtime = load_trusted_isolation_forest(model, store.home / "cache")
     recalculated = float(model_runtime.score_anomalies(original.reshape(1, -1))[0])
@@ -153,7 +160,7 @@ def explain_playground_job(store, spec: dict) -> dict:
     method = spec.get("method", "median_reference_feature_replacement")
     if method == "permutation_shap_median_v1":
         result = _permutation_shap_result(
-            {"id": None}, model, None, original, reference, float(score), model_runtime
+            None, model, None, original, reference, float(score), model_runtime
         )
     elif method == "median_reference_feature_replacement":
         result = _median_reference_result(
@@ -165,7 +172,7 @@ def explain_playground_job(store, spec: dict) -> dict:
 
 
 def _permutation_shap_result(
-    scoring: dict, model: dict, row_index: int | None, original: np.ndarray,
+    scoring_result_id: str | None, model: dict, row_index: int | None, original: np.ndarray,
     reference: list[float], saved_score: float, model_runtime,
 ) -> dict:
     """고정 Train 중앙값 기준에서 실제 SOS 점수의 Permutation SHAP 값을 계산한다.
@@ -201,7 +208,7 @@ def _permutation_shap_result(
     if not math.isclose(saved_score, reconstructed_score, abs_tol=1e-7, rel_tol=1e-7):
         raise ValueError("Permutation SHAP does not reconstruct SOS anomaly score")
     return {
-        "scoring_result_id": scoring["id"],
+        "scoring_result_id": scoring_result_id,
         "model_revision_id": model["id"],
         "row_index": row_index,
         "method": "permutation_shap_median_v1",
