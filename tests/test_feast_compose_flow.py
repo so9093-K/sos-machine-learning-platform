@@ -117,9 +117,22 @@ def test_registered_feature_to_model_revision():
 
 
     # 과거 모델·조회가 참조하는 정의는 폐기 후에도 Registry에 안전하게 보존한다.
-    retirement = completed(submit(
+    retirement_request = submit(
         f"/api/features/services/{registration['id']}/retirement/jobs", {},
-    ))
+    )
+    # 폐기 실행이 아직 Queued/Running이라도 신규 조회를 접수하면 안 된다.
+    no_late_retrieval = client.post("/api/features/retrieval/jobs", json={
+        "registration_job_id": registration["id"],
+        "entity_dataset_id": entity_source["id"],
+        "timestamp_column": "prediction_time",
+    }, headers={"Idempotency-Key": f"review-{uuid4().hex}"})
+    assert no_late_retrieval.status_code == 409, no_late_retrieval.text
+    no_double_retire = client.post(
+        f"/api/features/services/{registration['id']}/retirement/jobs", json={},
+        headers={"Idempotency-Key": f"review-{uuid4().hex}",
+    )
+    assert no_double_retire.status_code == 409, no_double_retire.text
+    retirement = completed(retirement_request)
     assert retirement["result"]["registry_deleted"] is False
     assert retirement["result"]["retained_for"]["historical_or_pending_retrievals"] >= 1
     history = client.get("/api/features/services/registrations?limit=100")
