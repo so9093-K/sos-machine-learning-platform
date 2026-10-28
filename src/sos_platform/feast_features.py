@@ -346,6 +346,16 @@ def retire_feature_service(store, source_dataset: dict, registration_job: dict) 
             ).bindparams(bindparam("ids", expanding=True))
             retrievals = list(db.execute(lookup_query, {"ids": ids}).scalars())
         if active or retrievals:
+            # 이전 폐기 Attempt가 외부 삭제 일부만 커밋한 뒤 실패했을 수 있다.
+            # 참조가 남은 경우 보존하겠다는 응답 전에 Registry를 검증·복구한다.
+            feast = _feature_store()
+            current = _registry_objects(feast, names)
+            for wanted, actual in zip(expected, current):
+                if actual is not None and _semantic_spec(actual) != _semantic_spec(wanted):
+                    raise ValueError("참조 중인 Feast 정의가 변경되어 안전하게 복구할 수 없습니다.")
+            if not all(item is not None for item in current):
+                feast.apply(expected)
+            validate_registry_definition(_feature_store(), names, expected)
             return {
                 "registration_job_id": registration_job["id"],
                 "registry_deleted": False,
