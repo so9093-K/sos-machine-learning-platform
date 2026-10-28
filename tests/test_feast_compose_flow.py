@@ -89,7 +89,15 @@ def test_registered_feature_to_model_revision():
     assert retrieved_dataset_id
     ds_response = client.get(f"/api/datasets/{retrieved_dataset_id}")
     assert ds_response.status_code == 200, ds_response.text[:1000]
-    assert ds_response.json()["parse_options"]["feature_retrieval_job_id"] == retrieval["id"]
+    from sqlalchemy import create_engine, text
+    from sos_platform.config import Settings
+    with create_engine(Settings.from_env().database_url).connect() as connection:
+        options = connection.execute(
+            text("SELECT parse_options FROM datasets WHERE id=:id"),
+            {"id": retrieved_dataset_id},
+        ).scalar_one()
+    import json
+    assert json.loads(options)["feature_retrieval_job_id"] == retrieval["id"]
 
     training = completed(submit("/api/ml/train/jobs", {
         "dataset_id": retrieved_dataset_id,
