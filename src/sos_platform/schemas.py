@@ -316,20 +316,33 @@ class MLflowExportStatusOut(BaseModel):
 
 
 class MLExplanationRequest(BaseModel):
-    scoring_result_id: str
-    row_index: int = Field(strict=True, ge=0, le=2**63 - 1)
+    """Scoring 행 또는 완료된 Playground Job 하나만 설명 대상으로 지정한다."""
+
+    scoring_result_id: str | None = None
+    row_index: int | None = Field(default=None, strict=True, ge=0, le=2**63 - 1)
+    playground_job_id: str | None = None
     method: Literal[
         "median_reference_feature_replacement", "permutation_shap_median_v1"
     ] = "median_reference_feature_replacement"
+
+    @model_validator(mode="after")
+    def validate_source(self):
+        if self.playground_job_id is not None:
+            if self.scoring_result_id is not None or self.row_index is not None:
+                raise ValueError("Playground explanation cannot specify a Scoring row")
+        elif self.scoring_result_id is None or self.row_index is None:
+            raise ValueError("Explanation requires a Scoring row or Playground Job")
+        return self
 
 
 class ExplanationResultOut(BaseModel):
     id: str
     job_id: str
     attempt_id: str
-    scoring_result_id: str
+    scoring_result_id: str | None = None
+    playground_job_id: str | None = None
     model_revision_id: str
-    row_index: int
+    row_index: int | None = None
     method: str
     output: dict[str, object]
     created_at: str
