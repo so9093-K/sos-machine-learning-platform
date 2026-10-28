@@ -29,6 +29,18 @@ jobs:
 
 
 
+  feast-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Prepare Python
+        run: uv python install 3.12
+      - name: Install locked Feast runtime
+        run: uv sync --locked --group dev --group feast
+      - name: Verify Feast registration, recovery and source integrity
+        run: uv run --locked --group dev --group feast pytest -q tests/test_feast_features.py tests/test_feast_live.py
+
   web-build:
     runs-on: ubuntu-latest
     steps:
