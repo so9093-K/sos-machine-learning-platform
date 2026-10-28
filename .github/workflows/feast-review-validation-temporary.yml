@@ -1,0 +1,50 @@
+name: Temporary Feast review regression
+on:
+  push:
+    branches: [feat/feast-feature-ownership]
+permissions:
+  contents: read
+concurrency:
+  group: feast-review-regression
+  cancel-in-progress: true
+jobs:
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: |
+          uv python install 3.12
+          uv sync --locked --group dev --group feast
+      - name: Feast real SDK + HTTP schema regression
+        run: uv run --locked --group dev --group feast pytest -q tests/test_feast_live.py tests/test_feast_features.py tests/test_feast_s3_postgres.py
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: |
+          uv python install 3.12
+          uv sync --locked --group dev
+      - name: Configure isolated local administrator
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import hashlib,json
+          token="review-feast-full-compose-token-value-012345678901234"
+          credentials={hashlib.sha256(token.encode()).hexdigest(): {
+             "actor_id":"feast-review-administrator","kind":"human","roles":["administrator"]}}
+          print("SOS_AUTH_TOKEN_HASHES="+json.dumps(credentials,separators=(",",":")))
+          PY
+      - name: Build actual SOS and Feast services
+        run: docker compose --profile app up --build -d --wait init api worker mlflow feast-postgres
+      - name: Verify API registry admission, retirement, PIT and ML provenance
+        env:
+          SOS_TEST_FEAST_COMPOSE: "1"
+        run: uv run --locked --group dev pytest -q tests/test_feast_compose_flow.py
+      - name: Diagnostic logs
+        if: failure()
+        run: docker compose --profile app logs --tail 170 init api worker feast-postgres storage mlflow
+      - name: Stop services
+        if: always()
+        run: docker compose --profile app down --volumes || true
