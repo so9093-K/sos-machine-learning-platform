@@ -15,7 +15,8 @@ Job/Attempt 계약을 적용한다.
 1. `POST /api/features/services/jobs`: Feature Source Dataset, 지속적 Entity Key,
    원본 UTC Event Timestamp와 숫자형 Feature 목록을 제출한다. 성공한 Job 결과에
    Feast `feature_service` 이름과 고정 Source 판본을 남긴다.
-2. `GET /api/features/services/registrations`: 본인 등록 Job 이력만 읽는다.
+2. `GET /api/features/services/registrations?limit=100&cursor=...`: 본인 등록 Job
+   이력을 기존 키셋 커서 계약으로 페이지 조회한다.
    이 이력은 현재 Feast Registry의 실시간 가용성 판정을 대신하지 않는다.
 3. `POST /api/features/retrieval/jobs`: 등록 성공 Job ID·조회 시점 Dataset·UTC 시간
    컬럼을 제출한다. 동일 Feature Service를 조회마다 재사용하며 새 정의를 등록하지 않는다.

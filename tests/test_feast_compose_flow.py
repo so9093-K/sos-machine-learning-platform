@@ -82,7 +82,7 @@ def test_registered_feature_to_model_revision():
     assert registration["result"]["feature_service"]
     list_response = client.get("/api/features/services/registrations")
     assert list_response.status_code == 200, list_response.text[:1000]
-    assert any(item["id"] == registration["id"] for item in list_response.json())
+    assert any(item["id"] == registration["id"] for item in list_response.json()["items"])
 
     retrieval = completed(submit("/api/features/retrieval/jobs", {
         "registration_job_id": registration["id"],

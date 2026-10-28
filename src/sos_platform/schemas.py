@@ -824,6 +824,13 @@ class JobSummaryOut(BaseModel):
     latest_attempt: AttemptOut | None
 
 
+class FeatureRegistrationPageOut(BaseModel):
+    """Feast Feature Service 등록 Job의 재사용 가능한 키셋 목록."""
+
+    items: list[JobSummaryOut]
+    next_cursor: str | None = None
+
+
 class MLExplanationJobSummaryOut(JobSummaryOut):
     kind: Literal["ml_explain"]
 

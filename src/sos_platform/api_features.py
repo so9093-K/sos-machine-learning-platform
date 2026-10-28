@@ -2,10 +2,11 @@
 
 from collections.abc import Callable
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from .feast_features import FeatureDefinitionRequest, FeatureRetrievalRequest
-from .schemas import JobOut, JobSummaryOut
+from .pagination import decode_cursor, page_from_rows
+from .schemas import JobOut, FeatureRegistrationPageOut
 from .security import Actor, require
 from .store import Store
 
@@ -52,12 +53,22 @@ def feast_router(
     @router.get(
         "/api/features/services/registrations",
         tags=["Features"],
-        response_model=list[JobSummaryOut],
+        response_model=FeatureRegistrationPageOut,
         summary="내 Feature Service 등록 Job 이력 조회",
         description="SOS Job 이력을 반환합니다. Feast Registry의 현재 사용 가능 상태를 대체하지 않습니다.",
     )
-    def list_feature_registrations(actor: Actor = READ_JOB):
-        return store.jobs(limit=100, actor_id=actor.id, kind="feature_register")
+    def list_feature_registrations(
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: Actor = READ_JOB,
+    ):
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Feature Registration"),
+            actor_id=actor.id,
+            kind="feature_register",
+        )
+        return page_from_rows(rows, limit)
 
     @router.post(
         "/api/features/retrieval/jobs",

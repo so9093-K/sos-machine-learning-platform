@@ -45,6 +45,8 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [registrations, setRegistrations] = useState<JobSummary[]>([]);
+  const [registrationCursor, setRegistrationCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [registrationId, setRegistrationId] = useState("");
   const [registerBusy, setRegisterBusy] = useState(false);
   const [retrievalBusy, setRetrievalBusy] = useState(false);
@@ -66,10 +68,14 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
 
   useEffect(() => {
     let active = true;
-    void request<JobSummary[]>("/api/features/services/registrations")
-      .then(items => {
-        if (active) setRegistrations(items.filter(item =>
-          item.status === "Succeeded" && typeof item.result?.feature_service === "string"));
+    void request<{items: JobSummary[]; next_cursor: string | null}>(
+      "/api/features/services/registrations?limit=100",
+    ).then(page => {
+        if (active) {
+          setRegistrations(page.items.filter(item =>
+            item.status === "Succeeded" && typeof item.result?.feature_service === "string"));
+          setRegistrationCursor(page.next_cursor);
+        }
       })
       .catch(exc => { if (active) setListError(formatError(exc)); });
     return () => { active = false; };
@@ -78,6 +84,27 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   useEffect(() => {
     if (registration.job?.status === "Succeeded") setRegistrationId(registration.job.id);
   }, [registration.job?.id, registration.job?.status]);
+
+  async function loadEarlierRegistrations() {
+    if (!registrationCursor || loadingMore) return;
+    setLoadingMore(true); setListError("");
+    try {
+      const page = await request<{items: JobSummary[]; next_cursor: string | null}>(
+        `/api/features/services/registrations?limit=100&cursor=${encodeURIComponent(registrationCursor)}`,
+      );
+      setRegistrations(current => {
+        const known = new Set(current.map(item => item.id));
+        return [...current, ...page.items.filter(item =>
+          !known.has(item.id) && item.status === "Succeeded" &&
+          typeof item.result?.feature_service === "string")];
+      });
+      setRegistrationCursor(page.next_cursor);
+    } catch (exc) {
+      setListError(formatError(exc));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   async function createRegistration() {
     if (!canCreate || !featureDataset || !selected.length || registerBusy ||
@@ -141,6 +168,10 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
           </option>)}
         </select>
       </label>
+      {registrationCursor && <button type="button" className="secondary"
+        disabled={loadingMore} onClick={() => void loadEarlierRegistrations()}>
+        {loadingMore ? "이전 등록을 조회하는 중…" : "이전 Feature Service 더 보기"}
+      </button>}
       <details>
         <summary>새 Feature Service 정의·등록</summary>
         <div className="form-row">

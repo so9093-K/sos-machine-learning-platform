@@ -83,7 +83,9 @@ def test_feature_openapi_contract_uses_summary_for_registration_listing(tmp_path
     assert feature_paths["/api/features/services/jobs"]["post"]["responses"]["202"]["content"][
         "application/json"]["schema"]["$ref"] == "#/components/schemas/JobOut"
     assert feature_paths["/api/features/services/registrations"]["get"]["responses"]["200"][
-        "content"]["application/json"]["schema"]["items"]["$ref"] == "#/components/schemas/JobSummaryOut"
+        "content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/FeatureRegistrationPageOut"
+    page = schema["components"]["schemas"]["FeatureRegistrationPageOut"]
+    assert page["properties"]["items"]["items"]["$ref"] == "#/components/schemas/JobSummaryOut"
     assert feature_paths["/api/features/retrieval/jobs"]["post"]["responses"]["202"][
         "content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/JobOut"
 
