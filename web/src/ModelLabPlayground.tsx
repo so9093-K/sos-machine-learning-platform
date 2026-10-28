@@ -381,7 +381,8 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
         <p className="hint">같은 모델 판본으로 완료한 두 Job의 실제 제출값입니다.
           이 차이는 변경 Feature의 인과적 기여도를 뜻하지 않습니다.</p>
         <div className="model-lab-score-row">
-          <div><span>이전 점수</span><strong>{comparisonJob.result?.anomaly_score?.toFixed(5) ?? "없음"}</strong></div>
+          <div><span>이전 점수</span><strong>{typeof comparisonJob.result?.anomaly_score === "number"
+            ? comparisonJob.result.anomaly_score.toFixed(5) : "없음"}</strong></div>
           <div><span>이번 점수</span><strong>{lastScore.toFixed(5)}</strong></div>
         </div>
         <p className="hint">바뀐 Feature {comparedFeatures.length}개</p>
