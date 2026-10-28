@@ -9,7 +9,10 @@ type Method = "permutation_shap_median_v1" | "median_reference_feature_replaceme
 type PlaygroundResult = ExplanationResult & { playground_job_id?: string | null };
 type JobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
-const format = (value: number) => value.toLocaleString("ko-KR", { maximumFractionDigits: 8 });
+export const formatPlaygroundSensitivity = (value: number) =>
+  value !== 0 && Math.abs(value) < 1e-8
+    ? value.toExponential(3)
+    : value.toLocaleString("ko-KR", { maximumFractionDigits: 8 });
 type Sensitivity = {
   feature: string; actual_value: number | null; reference_median: number;
   score_if_replaced: number; anomaly_score_delta: number;
@@ -26,9 +29,10 @@ export function PlaygroundSensitivity({ result }: { result: PlaygroundResult }) 
     <p className="hint">현재 점수에서 특정 Feature 하나만 Train 중앙값으로 바꿔 다시 점수화한 실제 변화입니다.
       기여도 합이나 인과관계가 아니며, 다른 Feature는 그대로 유지합니다.</p>
     <div className="playground-sensitivity-bars">
-      {rows.slice(0, 8).map(item => <div key={item.feature}>
+      {rows.slice(0, 8).map(item => <div
+        key={item.feature} className={item.anomaly_score_delta < 0 ? "negative" : "positive"}>
         <span>{activityFeatureLabel(item.feature)}</span>
-        <strong>{item.anomaly_score_delta > 0 ? "+" : ""}{format(item.anomaly_score_delta)}</strong>
+        <strong>{item.anomaly_score_delta > 0 ? "+" : ""}{formatPlaygroundSensitivity(item.anomaly_score_delta)}</strong>
         <div className="playground-sensitivity-track" aria-hidden="true">
           <i style={{ width: max ? `${Math.abs(item.anomaly_score_delta) / max * 100}%` : "0%" }} />
         </div>
@@ -40,10 +44,10 @@ export function PlaygroundSensitivity({ result }: { result: PlaygroundResult }) 
           <th>치환 후 점수</th><th>원래 점수 − 치환 점수</th></tr></thead>
         <tbody>{rows.map(item => <tr key={item.feature}>
           <td>{activityFeatureLabel(item.feature)}</td>
-          <td>{item.actual_value === null ? "결측" : format(item.actual_value)}</td>
-          <td>{format(item.reference_median)}</td>
-          <td>{format(item.score_if_replaced)}</td>
-          <td>{format(item.anomaly_score_delta)}</td>
+          <td>{item.actual_value === null ? "결측" : formatPlaygroundSensitivity(item.actual_value)}</td>
+          <td>{formatPlaygroundSensitivity(item.reference_median)}</td>
+          <td>{formatPlaygroundSensitivity(item.score_if_replaced)}</td>
+          <td>{formatPlaygroundSensitivity(item.anomaly_score_delta)}</td>
         </tr>)}</tbody>
       </table></div>
     </details>
@@ -160,7 +164,8 @@ function MethodExplanation({ source, method, canRun, canCancel }: {
     {error && <p role="alert">{error}</p>}
     {result && <div>
       {method === "permutation_shap_median_v1"
-        ? <ShapContributionChart result={result} />
+        ? <ShapContributionChart result={result}
+            valueLabel="제출한 입력값" inputLabel="이 제출 입력" />
         : <PlaygroundSensitivity result={result} />}
       {canRun && <button type="button" className="secondary"
         disabled={busy} onClick={() => void run()}>{title} 다시 계산</button>}
