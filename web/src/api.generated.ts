@@ -3261,6 +3261,8 @@ export interface components {
         PipelineJobOut: {
             /** Cancel Requested */
             cancel_requested: boolean;
+            /** Error */
+            error?: string | null;
             /** Error Code */
             error_code?: string | null;
             /** Id */
@@ -3271,6 +3273,8 @@ export interface components {
             result: {
                 [key: string]: unknown;
             } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
             /**
              * Status
              * @enum {string}

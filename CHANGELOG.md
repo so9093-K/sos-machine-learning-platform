@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Feast Source 선택을 실제 저장 위치 조건에 맞추고, 선택한 Feature Service의 정의 요약과 조회 Dataset의 식별 컬럼 자료형 불일치를 표시합니다. 조회·TTL 용어를 정리하고 등록 폐기 전 대상·영향 확인을 추가했습니다.
+- Workflow 실패 화면에 확인된 실패 단계·공개 오류·복구 행동을 모으고 운영자용 단계 로그로 연결합니다. 단계 응답에 기존 Job의 공개 오류와 재시도 정책을 함께 제공합니다.
+- 연구 실행 비교의 발견 가능성과 검색 범위 안내를 개선했습니다. 달라진 설정·지표를 먼저 표시하며 각 연구 Run에서 SOS 작업·결과와 권한에 맞는 MLflow 운영 상세로 이동할 수 있습니다.
+
 - 공식 Feast 0.67.0 Feature Catalog UI를 로컬 Compose에서 상시 실행하고 기존 PostgreSQL Registry를 읽기 전용 계정으로 탐색하도록 연결했습니다. SOS의 로컬 운영 도구에서 Entity·Feature View·Service·Source·Lineage를 확인할 수 있으며, Feature 등록·조회·폐기는 기존 SOS Job 흐름을 유지합니다.
 
 - 데이터 선택을 URL에 보존해 새로고침·뒤로 가기와 직접 접근에서도 같은 Dataset을 엽니다. 작은 화면의 본문 데이터 선택과 메뉴 전환을 개선하고, 탐색의 전체 컬럼 통계는 펼쳐 검색·페이지로 확인하도록 정리했습니다.

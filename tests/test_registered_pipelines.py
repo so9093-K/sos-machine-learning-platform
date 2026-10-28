@@ -3,11 +3,10 @@
 from urllib.error import URLError
 
 import pytest
-
 from fastapi import HTTPException
 
 from sos_platform import dagster_workflows, pipeline_reference
-from sos_platform.api_pipelines import _candidate_rows
+from sos_platform.api_pipelines import PipelineRunOut, _candidate_rows
 from sos_platform.dagster_client import DagsterClient, DagsterUnavailable
 
 
@@ -98,6 +97,25 @@ def test_workflow_job_evidence_is_derived_not_replicated(monkeypatch):
     assert [s["name"] for s in result["stages"]] == ["preflight", "training"]
 
 
+def test_failed_stage_preserves_public_error_and_retry_policy(monkeypatch):
+    job = {
+        "id": "training-1", "status": "Failed", "kind": "ml_train",
+        "cancel_requested": False, "result": None,
+        "error_code": "SOS-ML-INPUT-INVALID",
+        "error": "숫자형 Feature·결측값·값의 범위·학습 파라미터를 확인한 뒤 다시 제출하세요.",
+        "retry_policy": "never",
+    }
+    monkeypatch.setattr(dagster_workflows, "_job_by_stage",
+                        lambda store, row, stage: job if stage == "training" else None)
+    response = PipelineRunOut.model_validate(dagster_workflows._run(
+        FakeStore(), _row(), client=FakeDagster("FAILURE")
+    )).model_dump()
+    failed = response["stages"][0]["job"]
+    assert failed["error"] == job["error"]
+    assert failed["retry_policy"] == "never"
+    assert response["current_stage"] is None
+
+
 def test_dagster_graphql_outage_is_reported(monkeypatch):
     from sos_platform import dagster_client
 
@@ -156,6 +174,7 @@ def test_dagster_submission_lookup_uses_supported_tag_filter(monkeypatch):
     """실제 발생한 RunsFilter.jobName HTTP 400 회귀를 직접 잡는다."""
     import io
     import json
+
     from sos_platform import dagster_client
 
     def query(req, timeout):
@@ -178,7 +197,6 @@ def test_dagster_submission_lookup_uses_supported_tag_filter(monkeypatch):
 
 
 def test_dagster_submission_lookup_rejects_wrong_job_and_duplicates(monkeypatch):
-    from sos_platform import dagster_client
 
     client = DagsterClient("http://example.test/graphql")
     monkeypatch.setattr(client, "_execute", lambda *args, **kwargs: {
@@ -202,6 +220,7 @@ def test_dagster_submission_lookup_rejects_wrong_job_and_duplicates(monkeypatch)
 
 def test_dagster_graphql_http_400_distinguished_from_connection_outage(monkeypatch):
     from urllib.error import HTTPError
+
     from sos_platform import dagster_client
 
     def rejected(*args, **kwargs):
@@ -217,6 +236,7 @@ def test_dagster_graphql_http_400_distinguished_from_connection_outage(monkeypat
 
 def test_dagster_graphql_errors_are_distinguished(monkeypatch):
     import io
+
     from sos_platform import dagster_client
 
     monkeypatch.setattr(dagster_client, "urlopen", lambda *args, **kwargs:

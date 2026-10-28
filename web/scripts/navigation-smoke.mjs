@@ -266,7 +266,7 @@ try {
   // 학습 폼도 URL Dataset을 최초 선택값으로 렌더한다.
   const { MLWorkbench } = await vite.ssrLoadModule("/src/MLWorkbench.tsx");
   const trainingForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
-    datasets: [{ id: "data-v1", name: "Example Dataset", kind: "file" }],
+    datasets: [{ id: "data-v1", name: "Example Dataset", kind: "file", location: "s3://example/source.parquet" }],
     initialDatasetId: "data-v1", onDatasetSelected: () => {},
     registryKey: "default", onRegistryGroupSelected: () => {},
     canTrain: false, canCancel: false, onOpenModel: () => {},
@@ -332,6 +332,43 @@ try {
   assert.equal(dataJobLabel({ kind: "feature_register", spec: {} }), "Feature Service 등록");
   assert.equal(dataJobLabel({ kind: "feature_retrieve", spec: {} }), "Feature 시점 조회");
   assert.equal(dataJobLabel({ kind: "feature_retire", spec: {} }), "Feature Service 폐기");
+  const { isFeastSource, entityKeyIssue, RegisteredFeatureSummary } = await vite.ssrLoadModule("/src/FeastFeaturePanel.tsx");
+  assert.equal(isFeastSource({ kind: "file", name: "활동 Feature", location: "s3://bucket/source.parquet" }), true);
+  assert.equal(isFeastSource({ kind: "file", name: "source.parquet", location: "s3://bucket/source.csv" }), false);
+  assert.equal(isFeastSource({ kind: "iceberg", name: "source.parquet", location: "table.parquet" }), false);
+  assert.match(entityKeyIssue("host_id", [{ name: "host_id", dtype: "Int32" }], [{ name: "host_id", dtype: "Int64" }]), /자료형 불일치/);
+  assert.match(entityKeyIssue("host_id", [{ name: "host_id", dtype: "String" }], []), /없습니다/);
+  assert.equal(entityKeyIssue("host_id", [{ name: "host_id", dtype: "String" }], [{ name: "host_id", dtype: "String" }]), "");
+  const featureSummary = renderToStaticMarkup(React.createElement(RegisteredFeatureSummary, {
+    registration: { id: "registration-1", spec: {}, result: { entity_column: "host_id", timestamp_column: "event_time", feature_names: ["activity"], ttl_seconds: 2592000 } },
+    sourceName: "활동 Feature",
+  }));
+  assert.match(featureSummary, /host_id/);
+  assert.match(featureSummary, /30일/);
+  assert.match(featureSummary, /조회 실행 시 검증/);
+  const { differingRunKeys, RunComparison } = await vite.ssrLoadModule("/src/RunComparison.tsx");
+  const comparisonRuns = [
+    { id: "first", params: { "sos.dataset_id": "one", "sos.n_estimators": "100" }, metrics: { "sos.score_mean": 0, same: 1 } },
+    { id: "second", params: { "sos.dataset_id": "one", "sos.n_estimators": "200" }, metrics: { same: 1 } },
+  ];
+  assert.deepEqual(differingRunKeys(comparisonRuns, "params"), ["sos.n_estimators"]);
+  assert.deepEqual(differingRunKeys(comparisonRuns, "metrics"), ["sos.score_mean"]);
+  const comparisonView = renderToStaticMarkup(React.createElement(RunComparison, { runs: comparisonRuns, datasets: [] }));
+  assert.match(comparisonView, /데이터 판본 기록 부족/);
+  assert.match(comparisonView, /트리 개수/);
+  assert.match(comparisonView, /평균 이상 점수/);
+  const { pipelineFailureEvidence, PipelineFailureNotice } = await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
+  const failedRun = { id: "failed-run", status: "Failed", error_code: "SOS-JOB-FAILED", stages: [{ name: "training", job: {
+    id: "training-1", status: "Failed", error_code: "SOS-ML-INPUT-INVALID", error: "입력값 확인", retry_policy: "never",
+  } }] };
+  assert.equal(pipelineFailureEvidence(failedRun).stage, "모델 학습");
+  assert.equal(pipelineFailureEvidence(failedRun).message, "입력값 확인");
+  assert.equal(pipelineFailureEvidence({ ...failedRun, stages: [] }).stage, null);
+  const failureView = renderToStaticMarkup(React.createElement(PipelineFailureNotice, {
+    run: failedRun, operatorLinks: false, onInspectInput() {}, onRefresh() {},
+  }));
+  assert.match(failureView, /실패 지점 · 모델 학습/);
+  assert.doesNotMatch(failureView, /href=/);
   assert.equal(contextPath("jobs", { pipelineReturn: true, datasetId: "dataset-1" }),
     "/activity/jobs?from=pipeline&dataset=dataset-1");
   assert.deepEqual(nextNavigationContext(

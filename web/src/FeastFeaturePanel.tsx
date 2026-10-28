@@ -9,6 +9,48 @@ const NUMERIC = /^(?:Int(?:32|64)|Float(?:32|64))$/;
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 type FeatureRegistrationItem = JobSummary & { retired: boolean };
 
+/** 표시 이름은 파일 형식의 근거가 아니다. Worker와 같은 불변 위치 조건을 사용한다. */
+export function isFeastSource(dataset: Dataset): boolean {
+  return dataset.kind === "file" && dataset.location.endsWith(".parquet");
+}
+
+export function entityKeyIssue(key: string, source: DatasetColumns["columns"], target: DatasetColumns["columns"]): string {
+  const expected = source.find(column => column.name === key);
+  const actual = target.find(column => column.name === key);
+  if (!expected) return `등록 원본에서 식별 컬럼 ${key}의 자료형을 확인할 수 없습니다.`;
+  if (!actual) return `조회 Dataset에 식별 컬럼 ${key}이 없습니다.`;
+  return expected.dtype === actual.dtype ? "" : `식별 컬럼 ${key}의 자료형 불일치 · 등록 원본 ${expected.dtype} / 조회 Dataset ${actual.dtype}`;
+}
+
+/** 성공한 등록의 기록을 보여주며 현재 Registry의 연결·무결성으로 확대 해석하지 않는다. */
+export function RegisteredFeatureSummary({ registration, sourceName }: {
+  registration: Pick<JobSummary, "id" | "spec" | "result">; sourceName: string;
+}) {
+  const definition = registration.result;
+  const features = definition?.feature_names ?? registration.spec.features;
+  const names = Array.isArray(features) ? features.filter((name): name is string => typeof name === "string") : [];
+  const ttl = definition?.ttl_seconds ?? registration.spec.ttl_seconds;
+  const ttlLabel = typeof ttl === "number" && Number.isFinite(ttl) && ttl > 0
+    ? ttl % 86400 === 0 ? `${ttl / 86400}일` : `${ttl.toLocaleString("ko-KR")}초` : "기록 없음";
+  const text = (value: unknown) => typeof value === "string" && value ? value : "기록 없음";
+  return <section className="registered-feature-summary" aria-label="선택한 Feature Service">
+    <h4>선택한 Feature Service</h4>
+    <dl className="evidence-facts evidence-facts-compact">
+      <div><dt>원본 Dataset</dt><dd>{sourceName}</dd></div>
+      <div><dt>식별 컬럼</dt><dd>{text(definition?.entity_column ?? registration.spec.entity_column)}</dd></div>
+      <div><dt>원본 UTC 시각</dt><dd>{text(definition?.timestamp_column ?? registration.spec.timestamp_column)}</dd></div>
+      <div><dt>Feature</dt><dd>{Array.isArray(features) ? `${names.length}개` : "기록 없음"}</dd></div>
+      <div><dt>과거 조회 기간</dt><dd>{ttlLabel}</dd></div>
+    </dl>
+    <p className="hint">등록 완료 기록입니다. 현재 Registry의 정의·연결 상태는 조회 실행 시 검증합니다.</p>
+    <details><summary>Feature 목록·등록 근거</summary>
+      <p>{names.join(" · ") || "기록 없음"}</p>
+      <dl className="evidence-facts"><div><dt>Feature Service</dt><dd>{text(definition?.feature_service)}</dd></div>
+        <div><dt>등록 Job</dt><dd>{registration.id}</dd></div></dl>
+    </details>
+  </section>;
+}
+
 function usePolledJob() {
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState("");
@@ -53,12 +95,14 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const [columnsError, setColumnsError] = useState("");
   const [columnsRetry, setColumnsRetry] = useState(0);
   const [entityColumns, setEntityColumns] = useState<DatasetColumns["columns"]>([]);
+  const [entitySchemaId, setEntitySchemaId] = useState("");
   const [entityColumnsError, setEntityColumnsError] = useState("");
   const [entityColumnsLoading, setEntityColumnsLoading] = useState(false);
   const [entityColumnsRetry, setEntityColumnsRetry] = useState(0);
   const [listRetry, setListRetry] = useState(0);
   const [registrations, setRegistrations] = useState<FeatureRegistrationItem[]>([]);
   const [retireTarget, setRetireTarget] = useState("");
+  const [retireConfirmation, setRetireConfirmation] = useState<string | null>(null);
   const [retireBusy, setRetireBusy] = useState(false);
   const [registrationCursor, setRegistrationCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -80,11 +124,28 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const entityTimes = entityColumns.filter(c => /Datetime.*UTC/.test(c.dtype));
   const selectedRegistration = registrations.find(item => item.id === registrationId) ??
     (registration.job?.id === registrationId ? registration.job : null);
-  const requiredKey = selectedRegistration?.spec.entity_column;
-  const missingEntityKey = typeof requiredKey === "string" && entityDataset !== "" &&
-    !entityColumnsLoading && !entityColumnsError && !entityColumns.some(column => column.name === requiredKey);
+  const requiredKey = selectedRegistration?.result?.entity_column ?? selectedRegistration?.spec.entity_column;
+  const registeredSourceId = selectedRegistration?.dataset_id ?? "";
+  const [serviceSchema, setServiceSchema] = useState<{ id: string; columns: DatasetColumns["columns"]; error: string } | null>(null);
+  const [serviceSchemaRetry, setServiceSchemaRetry] = useState(0);
+  const currentServiceSchema = serviceSchema?.id === registeredSourceId ? serviceSchema : null;
+  const retirementBlocksSelection = Boolean(registrationId && retirement.job &&
+    retirement.job.spec.registration_job_id === registrationId && retirement.job.status !== "Failed" && retirement.job.status !== "Cancelled");
+  const serviceSchemaLoading = Boolean(registeredSourceId && !currentServiceSchema);
+  const keyIssue = typeof requiredKey === "string" && entityDataset && currentServiceSchema &&
+    !currentServiceSchema.error && !entityColumnsLoading && !entityColumnsError
+    ? entityKeyIssue(requiredKey, currentServiceSchema.columns, entityColumns) : "";
   const datasetName = (id: unknown) => datasets.find(item => item.id === id)?.name ?? "현재 목록 밖의 Dataset";
-  const sources = datasets.filter(d => d.kind === "file" && d.name.toLowerCase().endsWith(".parquet"));
+  const sources = datasets.filter(isFeastSource);
+
+  useEffect(() => {
+    let active = true;
+    setServiceSchema(null);
+    if (registeredSourceId) void request<DatasetColumns>(`/api/datasets/${encodeURIComponent(registeredSourceId)}/columns`)
+      .then(value => { if (active) setServiceSchema({ id: registeredSourceId, columns: value.columns, error: "" }); })
+      .catch(error => { if (active) setServiceSchema({ id: registeredSourceId, columns: [], error: formatError(error) }); });
+    return () => { active = false; };
+  }, [registeredSourceId, serviceSchemaRetry]);
 
   useEffect(() => {
     let active = true;
@@ -100,10 +161,10 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
 
   useEffect(() => {
     let active = true;
-    setEntityColumns([]); setEntityTimestamp(""); setEntityColumnsError("");
+    setEntityColumns([]); setEntitySchemaId(""); setEntityTimestamp(""); setEntityColumnsError("");
     setEntityColumnsLoading(Boolean(entityDataset));
     if (entityDataset) void request<DatasetColumns>(`/api/datasets/${encodeURIComponent(entityDataset)}/columns`)
-      .then(value => { if (active) setEntityColumns(value.columns); })
+      .then(value => { if (active) { setEntityColumns(value.columns); setEntitySchemaId(entityDataset); } })
       .catch(exc => { if (active) setEntityColumnsError(formatError(exc)); })
       .finally(() => { if (active) setEntityColumnsLoading(false); });
     return () => { active = false; };
@@ -156,13 +217,14 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   }
 
   async function retireRegistration() {
-    if (!canCreate || !retireTarget || retiring) return;
+    if (!canCreate || !retireConfirmation || retireConfirmation !== retireTarget || retiring) return;
     setRetireBusy(true); retirement.setError(""); retirement.setJob(null);
     try {
       const item = await submitJob<Job>(
-        `/api/features/services/${encodeURIComponent(retireTarget)}/retirement/jobs`, {},
+        `/api/features/services/${encodeURIComponent(retireConfirmation)}/retirement/jobs`, {},
       );
       retirement.setJob(item);
+      setRetireConfirmation(null);
     } catch (exc) { retirement.setError(formatError(exc)); }
     finally { setRetireBusy(false); }
   }
@@ -187,7 +249,8 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
 
   async function createRetrieval() {
     if (!canCreate || !registrationId || !entityDataset || !entityTimestamp.trim() ||
-        retrieving || missingEntityKey || entityColumnsLoading || entityColumnsError) return;
+        !selectedRegistration || retirementBlocksSelection || entitySchemaId !== entityDataset || typeof requiredKey !== "string" || !currentServiceSchema || currentServiceSchema.error ||
+        retrieving || keyIssue || entityColumnsLoading || entityColumnsError) return;
     setRetrievalBusy(true);
     retrieval.setError(""); retrieval.setJob(null);
     try {
@@ -231,6 +294,11 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
           </option>)}
         </select>
       </label>
+      {selectedRegistration && <RegisteredFeatureSummary registration={selectedRegistration}
+        sourceName={datasetName(selectedRegistration.dataset_id)} />}
+      {serviceSchemaLoading && <p role="status">등록 원본의 식별 컬럼 확인 중…</p>}
+      {currentServiceSchema?.error && <div role="alert"><p>등록 원본의 자료형 조회 실패 · {currentServiceSchema.error}</p>
+        <button type="button" className="secondary" onClick={() => setServiceSchemaRetry(value => value + 1)}>등록 원본 다시 확인</button></div>}
       {registrationCursor && <button type="button" className="secondary"
         disabled={loadingMore} onClick={() => void loadEarlierRegistrations()}>
         {loadingMore ? "이전 등록을 조회하는 중…" : "이전 Feature Service 더 보기"}
@@ -240,20 +308,31 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
         <p className="hint">완료·실패·취소된 등록을 폐기할 수 있습니다. 과거 조회나 다른
           활성 등록이 사용 중인 정의는 Registry에 보존되며 신규 조회에는 사용할 수 없습니다.</p>
         <label>정리할 등록
-          <select value={retireTarget} onChange={e => setRetireTarget(e.target.value)}
+          <select value={retireTarget} onChange={e => { setRetireTarget(e.target.value); setRetireConfirmation(null); }}
             disabled={!canCreate || retiring} aria-label="Feast 폐기 대상 등록">
             <option value="">등록 기록 선택</option>
             {registrations.filter(r => !r.retired && TERMINAL.has(r.status)).map(r =>
               <option key={r.id} value={r.id}>{datasetName(r.dataset_id)} · {jobStatusLabel(r.status)} · {r.id.slice(0,8)}</option>)}
             {registration.job && !registrations.some(r => r.id === registration.job?.id) &&
+              !(retirement.job?.status === "Succeeded" && retirement.job.spec.registration_job_id === registration.job.id) &&
               TERMINAL.has(registration.job.status) &&
               <option value={registration.job.id}>{registration.job.id.slice(0,8)} · 최근 등록</option>}
           </select>
         </label>
-        <button type="button" disabled={!canCreate || !retireTarget || retiring}
-          className="secondary" onClick={() => void retireRegistration()}>
-          {retireBusy ? "폐기 접수 중…" : "등록 폐기 Job 제출"}
+        <button type="button" disabled={!canCreate || !retireTarget || retiring || Boolean(retireConfirmation)}
+          className="secondary" onClick={() => setRetireConfirmation(retireTarget)}>
+          등록 폐기 준비
         </button>
+        {retireConfirmation && <div className="feature-retirement-confirmation" role="group" aria-label="등록 폐기 확인">
+          <strong>선택 등록의 폐기 확인</strong>
+          <p>{datasetName(registrations.find(item => item.id === retireConfirmation)?.dataset_id ?? registration.job?.dataset_id)} · 등록 {retireConfirmation.slice(0, 8)}</p>
+          <p>이 등록으로 새 조회를 시작할 수 없게 됩니다. 과거 조회 Dataset과 모델 결과는 보존됩니다.
+            다른 등록이나 과거 조회가 참조하는 Registry 정의는 남을 수 있습니다.</p>
+          <div className="actions"><button type="button" className="secondary" disabled={retiring}
+            onClick={() => setRetireConfirmation(null)}>돌아가기</button>
+            <button type="button" disabled={!canCreate || retiring} onClick={() => void retireRegistration()}>
+              {retireBusy ? "폐기 접수 중…" : "선택 등록 폐기"}</button></div>
+        </div>}
         {retirement.job && <div role="status">
           <strong>폐기 · {jobStatusLabel(retirement.job.status)}</strong>
           {retirement.job.status === "Failed" && <p role="alert">{retirement.job.error ?? "폐기 실패"}</p>}
@@ -289,12 +368,13 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
               {sourceTimes.map(column => <option key={column.name} value={column.name}>{column.name}</option>)}
             </select>
           </label>
-          <label>Feature TTL (일)
+          <label>과거 Feature 조회 기간 (일)
             <input type="number" min={1} max={3650} step={1} value={ttlDays}
               onChange={e => setTtlDays(Number(e.target.value))}
               disabled={!canCreate || registering} aria-label="Feast Source TTL" />
           </label>
         </div>
+        <p className="hint">TTL은 조회 시점에서 거슬러 찾을 과거 Feature의 최대 기간입니다. 저장 데이터의 자동 삭제 기간과는 별개입니다.</p>
         {columnsLoading && <p role="status">원본 컬럼 조회 중…</p>}
         {columnsError && <div role="alert">{columnsError}<button type="button" className="secondary"
           onClick={() => setColumnsRetry(value => value + 1)}>원본 컬럼 다시 조회</button></div>}
@@ -352,15 +432,18 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
         onClick={() => setEntityColumnsRetry(value => value + 1)}>조회 컬럼 다시 확인</button></div>}
       {entityDataset && !entityColumnsLoading && !entityColumnsError && entityTimes.length === 0 &&
         <p className="hint">조회 Dataset에 UTC 시간형 컬럼이 없습니다.</p>}
-      {missingEntityKey && <p role="alert">등록 서비스의 식별 컬럼 {String(requiredKey)}이 조회 Dataset에 없습니다.</p>}
+      {keyIssue && <p role="alert">{keyIssue}</p>}
+      {retirementBlocksSelection && <p role="status">선택한 등록의 폐기가 접수돼 신규 조회에 사용할 수 없습니다. 다른 등록을 선택하세요.</p>}
       <p className="hint">조회 시점 Dataset에는 등록한 서비스의 동일 Entity 키와 UTC 시각이
         필요합니다. 원본 Feature 계산과 모델 학습은 자동 실행하지 않습니다.</p>
       <div className="actions">
         <button type="button" disabled={!canCreate || !registrationId || !entityDataset ||
-          !entityTimestamp.trim() || retrieving || missingEntityKey || entityColumnsLoading || Boolean(entityColumnsError)} onClick={() => void createRetrieval()}>
-          {retrievalBusy ? "접수 중…" : "Point-in-Time Feature 조회 Job 제출"}
+          !selectedRegistration || retirementBlocksSelection || entitySchemaId !== entityDataset || typeof requiredKey !== "string" || !currentServiceSchema || Boolean(currentServiceSchema.error) ||
+          !entityTimestamp.trim() || retrieving || Boolean(keyIssue) || entityColumnsLoading || Boolean(entityColumnsError)} onClick={() => void createRetrieval()}>
+          {retrievalBusy ? "접수 중…" : "조회 시점에 맞는 Feature Dataset 생성"}
         </button>
       </div>
+      <p className="hint">Point-in-Time Retrieval · 각 조회 시점 이후의 Feature는 사용하지 않습니다.</p>
       {retrieval.job && <div role="status">
         <strong>조회 · {jobStatusLabel(retrieval.job.status)}</strong>
         <p className="hint">조회 Dataset · {datasetName(retrieval.job.spec.entity_dataset_id)}</p>
