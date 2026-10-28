@@ -502,7 +502,7 @@ try {
     } },
   }));
   assert.match(zeroShap, /이 입력의 SHAP 기여도는 모두 0입니다/);
-  assert.doesNotMatch(zeroShap, /<canvas/);
+  assert.doesNotMatch(zeroShap, /role="img"/); // SSR 차트 컨테이너 자체가 없어야 한다.
   assert.match(zeroShap, /전체 SHAP 값과 계산 근거/);
   assert.match(zeroShap, /모든 실제 입력 Feature가 학습 참조 중앙값과 일치합니다/);
   const zeroShapWithDifferentInput = renderToStaticMarkup(React.createElement(
