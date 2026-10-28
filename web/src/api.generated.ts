@@ -2141,7 +2141,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import" | "ml_playground";
+            kind: "profile" | "transform" | "iceberg_import" | "ml_playground" | "feature_register" | "feature_retrieve";
             /** Request Id */
             request_id?: string | null;
             /** Result */
@@ -2197,7 +2197,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "profile" | "transform" | "iceberg_import" | "ml_playground";
+            kind: "profile" | "transform" | "iceberg_import" | "ml_playground" | "feature_register" | "feature_retrieve";
             latest_attempt: components["schemas"]["AttemptOut"] | null;
             /** Request Id */
             request_id?: string | null;
@@ -4437,7 +4437,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobOut"][];
+                    "application/json": components["schemas"]["JobSummaryOut"][];
                 };
             };
             /** @description Structured API error */
