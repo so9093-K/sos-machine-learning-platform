@@ -126,3 +126,73 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
         "id_column": "sos_observation_id",
         "observation_id": row["observation_id"],
     }
+
+
+def test_explanation_request_requires_exactly_one_input_source():
+    from pydantic import ValidationError
+    assert MLExplanationRequest(playground_job_id="job-1").row_index is None
+    assert MLExplanationRequest(scoring_result_id="scoring-1", row_index=0).playground_job_id is None
+    for invalid in (
+        {},
+        {"scoring_result_id": "s"},
+        {"playground_job_id": "p", "row_index": 0},
+        {"playground_job_id": "p", "scoring_result_id": "s", "row_index": 0},
+    ):
+        with pytest.raises(ValidationError):
+            MLExplanationRequest(**invalid)
+
+
+def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_path):
+    from sos_platform import ml_explanation
+    runtime = _LinearRuntime()
+    model = {
+        "id": "model", "owner_actor": "actor-1", "lifecycle_state": "Active",
+        "features": ["first", "second", "third"],
+        "runtime": {
+            "feature_dtypes": ["Float64", "Float64", "Float64"],
+            "feature_reference_medians": [0.0, 0.0, 0.0],
+            "artifact_schema": "if_model_with_preprocessing_v1",
+        },
+    }
+    features = {"third": 1.0, "first": 4.0, "second": 3.0}
+    expected = runtime.score_anomalies(np.asarray([[4.0, 3.0, 1.0]]))[0]
+    job = {
+        "id": "pg-job", "kind": "ml_playground", "status": "Succeeded",
+        "owner_actor": "actor-1",
+        "spec": {
+            "model_revision_id": "model", "model_owner_actor": "actor-1",
+            "features": features,
+        },
+        "result": {"anomaly_score": expected},
+    }
+    store = SimpleNamespace(
+        get_job=lambda _: job,
+        get_model_revision=lambda _: model,
+        home=tmp_path,
+    )
+    monkeypatch.setattr(ml_explanation, "load_trusted_isolation_forest", lambda *_: runtime)
+    spec = {"playground_job_id": "pg-job", "source_owner_actor": "actor-1"}
+    shap = ml_explanation.explain_scored_row(
+        store, {**spec, "method": "permutation_shap_median_v1"})
+    sensitivity = ml_explanation.explain_scored_row(
+        store, {**spec, "method": "median_reference_feature_replacement"})
+    assert shap["playground_job_id"] == sensitivity["playground_job_id"] == "pg-job"
+    assert shap["scoring_result_id"] is None and shap["row_index"] is None
+    assert shap["reconstructed_score"] == pytest.approx(expected, abs=1e-7)
+    assert shap["baseline_score"] + sum(
+        x["shap_value"] for x in shap["feature_contributions"]
+    ) == pytest.approx(expected)
+    assert len(sensitivity["feature_sensitivities"]) == 3
+    assert sensitivity["feature_sensitivities"][0]["anomaly_score_delta"] == pytest.approx(2.0)
+    assert sensitivity["additive_attribution"] is False
+
+    for invalid in (
+        {**job, "status": "Running"},
+        {**job, "kind": "ml_score"},
+        {**job, "owner_actor": "another"},
+        {**job, "result": {"anomaly_score": expected + 1}},
+    ):
+        store.get_job = lambda _, item=invalid: item
+        with pytest.raises(ValueError):
+            ml_explanation.explain_scored_row(
+                store, {**spec, "method": "permutation_shap_median_v1"})
