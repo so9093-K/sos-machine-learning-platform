@@ -20,6 +20,10 @@ type Props = {
   canUpload?: boolean;
   onDatasetRegistered?: (dataset: Dataset) => void;
   onResultViewChange?: (visible: boolean) => void;
+  onTryObservation?: (
+    features: Record<string, number | null>, rowIndex: number, score: number,
+    scoringResultId: string, modelRevisionId: string,
+  ) => string | null;
 };
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -27,7 +31,7 @@ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 /** 학습된 모델을 다른 Dataset에 적용하는 독립 Scoring 경험. */
 export function MLScoringPanel({
   model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult, onOpenResource,
-  canUpload = false, onDatasetRegistered, onResultViewChange,
+  canUpload = false, onDatasetRegistered, onResultViewChange, onTryObservation,
 }: Props) {
   const [datasetId, setDatasetId] = useState("");
   const [loadingMoreDatasets, setLoadingMoreDatasets] = useState(false);
@@ -285,7 +289,7 @@ export function MLScoringPanel({
           <p className="hint">학습에 사용한 동일 Dataset 판본의 결과입니다.
             독립된 Test 데이터에서 얻은 성능으로 해석하지 마세요.</p>}
         <ScoringObservationExplorer key={visibleResult.id} result={visibleResult} canRun={canRun}
-          canCancel={canCancel} onOpenResource={onOpenResource} />
+          canCancel={canCancel} onOpenResource={onOpenResource} onTryObservation={onTryObservation} />
         {(typeof visibleResult.ranking_metrics?.average_precision === "number" ||
           typeof visibleResult.ranking_metrics?.roc_auc === "number") && <details>
           <summary>정답 레이블 기반 순위 지표</summary>
