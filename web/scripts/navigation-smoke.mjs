@@ -747,6 +747,27 @@ try {
   assert.doesNotMatch(playgroundHtml, /네트워크 활동/); // 입력에 없는 그룹은 만들지 않는다.
   assert.match(playgroundHtml, /입력 Feature와 Train 참조값 비교/);
   assert.match(playgroundHtml, /현재 입력값은 아직 계산하지 않았습니다/);
+  assert.match(playgroundHtml, /model-lab-workspace/);
+  assert.match(playgroundHtml, /계산과 결과/);
+  const { PlaygroundExplanations, PlaygroundSensitivity } =
+    await vite.ssrLoadModule("/src/PlaygroundExplanations.tsx");
+  const explained = renderToStaticMarkup(React.createElement(PlaygroundExplanations, {
+    source: { id: "completed-job", status: "Succeeded", spec: { model_revision_id: "model-1" },
+      result: { anomaly_score: 0.45 } },
+    canRun: true, canCancel: true,
+  }));
+  assert.match(explained, /SHAP 기여도/);
+  assert.match(explained, /Feature 치환 민감도/);
+  const sensitivity = renderToStaticMarkup(React.createElement(PlaygroundSensitivity, {
+    result: { id: "explanation-1", output: {
+      feature_sensitivities: [
+        { feature: "file_create_count", actual_value: 6, reference_median: 2,
+          score_if_replaced: 0.3, anomaly_score_delta: 0.15 },
+      ],
+    } },
+  }));
+  assert.match(sensitivity, /치환 후 점수/);
+  assert.match(sensitivity, /0[.]15/);
   assert.match(playgroundHtml, /실제 이상 점수 계산하기/);
   assert.match(playgroundHtml, /입력값과 결과가 권한이 적용되는 Job 이력에 보존/);
   const { ModelLabUse, isActivityModelCompatible } =
