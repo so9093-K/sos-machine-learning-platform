@@ -21,7 +21,9 @@ type JobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
 type Contribution = { feature: string; shap_value: number; actual_value: number | null;
   reference_median: number; missing_imputed: boolean };
 
-export function ShapContributionChart({ result }: { result: ExplanationResult }) {
+export function ShapContributionChart({ result, valueLabel = "실제 관측값", inputLabel = "이 관측값" }: {
+  result: ExplanationResult; valueLabel?: string; inputLabel?: string;
+}) {
   // Explanation 판본별로 선택을 묶어 다른 관측값의 Feature 선택이 남지 않게 한다.
   const [featureSelection, setFeatureSelection] = useState<{
     resultId: string; feature: string;
@@ -128,12 +130,12 @@ export function ShapContributionChart({ result }: { result: ExplanationResult })
         현재 살펴보는 Feature: <strong>{activityFeatureLabel(selected.feature)}</strong>
       </p>
       <div className="pipeline-shap-feature-values" aria-live="polite">
-        <div><span>실제 관측값</span>
+        <div><span>{valueLabel}</span>
           <strong>{selected.missing_imputed ? "결측 대체" : key(selected.actual_value)}</strong></div>
         <div><span>Train 참조 중앙값</span><strong>{key(selected.reference_median)}</strong></div>
         <div><span>SHAP 점수 기여</span><strong>{key(selected.shap_value)}</strong></div>
       </div>
-      <p className="hint">막대를 누르거나 목록에서 Feature를 선택하면 이 관측값의 수치와
+      <p className="hint">막대를 누르거나 목록에서 Feature를 선택하면 {inputLabel}의 수치와
         실제 모델 점수에 대한 기여도가 함께 바뀝니다. 참조값과의 차이는 이상 원인을 뜻하지 않습니다.</p>
     </div>
     {rest.length > 0 && <div className="pipeline-shap-remainder">
