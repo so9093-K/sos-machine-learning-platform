@@ -3,18 +3,18 @@ import { formatError, request, submitJob } from "./api";
 import { jobStatusLabel } from "./display-format";
 import { mergeById } from "./collections";
 import { FeatureSelector } from "./FeatureSelector";
-import type { Dataset, DatasetColumns, Job, JobSummary } from "./types";
+import type { Dataset, DatasetColumns, FeatureRegistrationPage, FeatureRegistrationSummary, Job, JobSummary } from "./types";
 
 const NUMERIC = /^(?:Int(?:32|64)|Float(?:32|64))$/;
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
-type FeatureRegistrationItem = JobSummary & { retired: boolean };
 
 /** 폐기 실패는 외부 변경 미반영을 보장하지 않는다. 상태 확인 전에는 조회를 재허용하지 않는다. */
 export function featureRetrievalBlockReason(registrationId: string, retired: boolean,
-  retirement: Pick<Job, "spec" | "status"> | null): string | null {
+  retirement: Pick<Job, "spec" | "status"> | null, blocked = false): string | null {
   if (!registrationId) return null;
   if (retired) return "선택한 등록은 폐기돼 신규 조회에 사용할 수 없습니다. 다른 등록을 선택하세요.";
-  if (retirement?.spec.registration_job_id !== registrationId || retirement.status === "Cancelled") return null;
+  if (retirement?.spec.registration_job_id !== registrationId || retirement.status === "Cancelled")
+    return blocked ? "폐기 처리로 신규 조회가 차단된 등록입니다. 작업 이력에서 폐기 상태를 확인하고, 실패했다면 폐기를 다시 요청하세요." : null;
   return retirement.status === "Failed"
     ? "등록 폐기에 실패해 처리 상태 확인이 필요합니다. Registry 변경이 일부 반영됐을 수 있어 신규 조회를 중단했습니다. 폐기 상태를 확인하거나 폐기를 다시 요청하세요."
     : "선택한 등록의 폐기가 접수돼 신규 조회에 사용할 수 없습니다. 다른 등록을 선택하세요.";
@@ -111,7 +111,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const [entityColumnsLoading, setEntityColumnsLoading] = useState(false);
   const [entityColumnsRetry, setEntityColumnsRetry] = useState(0);
   const [listRetry, setListRetry] = useState(0);
-  const [registrations, setRegistrations] = useState<FeatureRegistrationItem[]>([]);
+  const [registrations, setRegistrations] = useState<FeatureRegistrationSummary[]>([]);
   const [retireTarget, setRetireTarget] = useState("");
   const [retireConfirmation, setRetireConfirmation] = useState<string | null>(null);
   const [retireBusy, setRetireBusy] = useState(false);
@@ -141,7 +141,8 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const [serviceSchemaRetry, setServiceSchemaRetry] = useState(0);
   const currentServiceSchema = serviceSchema?.id === registeredSourceId ? serviceSchema : null;
   const retirementBlockReason = featureRetrievalBlockReason(registrationId,
-    Boolean(selectedRegistration && "retired" in selectedRegistration && selectedRegistration.retired), retirement.job);
+    Boolean(selectedRegistration && "retired" in selectedRegistration && selectedRegistration.retired), retirement.job,
+    Boolean(selectedRegistration && "blocked" in selectedRegistration && selectedRegistration.blocked));
   const retirementBlocksSelection = Boolean(retirementBlockReason || (retireBusy && retireConfirmation === registrationId));
   const serviceSchemaLoading = Boolean(registeredSourceId && !currentServiceSchema);
   const keyIssue = typeof requiredKey === "string" && entityDataset && currentServiceSchema &&
@@ -185,12 +186,12 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   useEffect(() => {
     let active = true;
     setListError("");
-    void request<{items: FeatureRegistrationItem[]; next_cursor: string | null}>(
+    void request<FeatureRegistrationPage>(
       "/api/features/services/registrations?limit=100",
     ).then(page => {
         if (active) {
           setRegistrations(current => mergeById(page.items, current));
-          if (!retainedPages.current) setRegistrationCursor(page.next_cursor);
+          if (!retainedPages.current) setRegistrationCursor(page.next_cursor ?? null);
         }
       })
       .catch(exc => { if (active) setListError(formatError(exc)); });
@@ -204,7 +205,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   useEffect(() => {
     if (retirement.job?.status !== "Succeeded") return;
     const retiredId = retirement.job.spec.registration_job_id;
-    setRegistrations(current => current.map(item => item.id === retiredId ? { ...item, retired: true } : item));
+    setRegistrations(current => current.map(item => item.id === retiredId ? { ...item, retired: true, blocked: true } : item));
     if (retiredId === registrationId) setRegistrationId("");
   }, [retirement.job?.status, retirement.job?.id, registrationId]);
 
@@ -212,7 +213,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
     if (!registrationCursor || loadingMore) return;
     setLoadingMore(true); setListError("");
     try {
-      const page = await request<{items: FeatureRegistrationItem[]; next_cursor: string | null}>(
+      const page = await request<FeatureRegistrationPage>(
         `/api/features/services/registrations?limit=100&cursor=${encodeURIComponent(registrationCursor)}`,
       );
       retainedPages.current = true;
@@ -220,7 +221,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
         const known = new Set(current.map(item => item.id));
         return [...current, ...page.items.filter(item => !known.has(item.id))];
       });
-      setRegistrationCursor(page.next_cursor);
+      setRegistrationCursor(page.next_cursor ?? null);
     } catch (exc) {
       setListError(formatError(exc));
     } finally {
@@ -302,7 +303,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
             <option value={registration.job.id}>방금 등록한 Feature · {registration.job.id.slice(0,8)}</option>}
           {registrations.filter(j => j.status === "Succeeded" && !j.retired &&
             typeof j.result?.feature_service === "string").map(j => <option key={j.id} value={j.id}>
-            {datasetName(j.dataset_id)} · {Array.isArray(j.spec.features) ? j.spec.features.length + "개 Feature" : "등록 Feature"} · {new Date(j.created_at).toLocaleDateString("ko-KR")}
+            {datasetName(j.dataset_id)} · {Array.isArray(j.spec.features) ? j.spec.features.length + "개 Feature" : "등록 Feature"} · {new Date(j.created_at).toLocaleDateString("ko-KR")}{j.blocked ? " · 조회 차단" : ""}
           </option>)}
         </select>
       </label>

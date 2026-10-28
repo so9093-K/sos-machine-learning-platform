@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from .feast_features import FeatureDefinitionRequest, FeatureRetrievalRequest, feature_identity
 from .pagination import decode_cursor, page_from_rows
-from .schemas import JobOut, FeatureRegistrationPageOut
+from .schemas import FeatureRegistrationPageOut, JobOut
 from .security import Actor, require
 from .store import Store
 
@@ -70,9 +70,12 @@ def feast_router(
             kind="feature_register",
         )
         page = page_from_rows(rows, limit)
-        retired = store.retired_feature_registration_ids([item["id"] for item in page["items"]])
+        registration_ids = [item["id"] for item in page["items"]]
+        retired = store.retired_feature_registration_ids(registration_ids)
+        blocked = store.blocked_feature_registration_ids(registration_ids)
         for item in page["items"]:
             item["retired"] = item["id"] in retired
+            item["blocked"] = item["id"] in blocked
         return page
 
     @router.post(

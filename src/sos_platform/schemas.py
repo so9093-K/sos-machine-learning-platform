@@ -828,6 +828,7 @@ class FeatureRegistrationSummaryOut(JobSummaryOut):
     """등록 Job의 실행 상태와 현재 SOS 폐기 상태를 구별한다."""
 
     retired: bool = False
+    blocked: bool = Field(description="SOS 폐기 정책에 따라 신규 Feature 조회가 차단된 상태")
 
 
 class FeatureRegistrationPageOut(BaseModel):

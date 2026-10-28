@@ -341,6 +341,11 @@ try {
   assert.equal(featureRetrievalBlockReason("registration-1", false, retirementFor("Cancelled")), null);
   assert.equal(featureRetrievalBlockReason("different-registration", false, retirementFor("Failed")), null);
   assert.equal(featureRetrievalBlockReason("registration-1", false, null), null);
+  // 새 세션에는 로컬 폐기 Job이 없어도 서버의 차단 상태를 복원한다.
+  assert.match(featureRetrievalBlockReason("registration-1", false, null, true), /폐기 처리로 신규 조회가 차단/);
+  assert.match(featureRetrievalBlockReason("registration-1", false, retirementFor("Cancelled"), true), /신규 조회가 차단/);
+  assert.match(featureRetrievalBlockReason("different-registration", false, retirementFor("Failed"), true), /신규 조회가 차단/);
+  assert.equal(featureRetrievalBlockReason("registration-1", false, null, false), null);
   assert.equal(featureRetrievalBlockReason("", false, retirementFor("Failed")), null);
   assert.equal(isFeastSource({ kind: "file", name: "활동 Feature", location: "s3://bucket/source.parquet" }), true);
   assert.equal(isFeastSource({ kind: "file", name: "source.parquet", location: "s3://bucket/source.csv" }), false);

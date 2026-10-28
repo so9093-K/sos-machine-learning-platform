@@ -2034,6 +2034,11 @@ export interface components {
         FeatureRegistrationSummaryOut: {
             /** Attempt Count */
             attempt_count: number;
+            /**
+             * Blocked
+             * @description SOS 폐기 정책에 따라 신규 Feature 조회가 차단된 상태
+             */
+            blocked: boolean;
             /** Cancel Requested */
             cancel_requested: boolean;
             /** Created At */
