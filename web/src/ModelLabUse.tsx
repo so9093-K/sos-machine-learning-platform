@@ -1,8 +1,10 @@
 /** 현재 Actor가 사용할 수 있는 Registry 모델 중 활동 이상 탐지 입력 계약에 맞는 모델만 사용한다. */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatError, request } from "./api";
 import { MLScoringPanel } from "./MLScoringPanel";
-import { ModelLabPlayground } from "./ModelLabPlayground";
+import { ModelLabPlayground, observationInputForPlayground } from "./ModelLabPlayground";
+import type { ObservationExperiment } from "./ModelLabPlayground";
+import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { Dataset, MLflowModelVersion, MLflowModelVersionPage, ModelRevision, PipelineDefinition } from "./types";
 
@@ -61,12 +63,40 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   const [lookupFailures, setLookupFailures] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [usage, setUsage] = useState<"playground" | "dataset">("dataset");
+  const [observationInput, setObservationInput] = useState<ObservationExperiment | null>(null);
+  // 모델 판본이 바뀌면 앞서 선택한 다른 판본의 관측값 입력을 재사용하지 않는다.
+  const observationRequest = useRef(0);
+  const playgroundPanel = useRef<HTMLDivElement>(null);
+  const datasetPanel = useRef<HTMLDivElement>(null);
   const [resultFocusedModelId, setResultFocusedModelId] = useState<string | null>(null);
   const [showResultSetup, setShowResultSetup] = useState(false);
   const handleResultViewChange = useCallback((visible: boolean) => {
     setResultFocusedModelId(visible ? selectedModelId : null);
   }, [selectedModelId]);
+  useEffect(() => { setObservationInput(null); }, [selectedModelId]);
   const openDataset = () => setUsage("dataset");
+  const backToObservation = () => {
+    setUsage("dataset");
+    window.requestAnimationFrame(() => {
+      const detail = datasetPanel.current?.querySelector<HTMLElement>(".scoring-observation-detail");
+      detail?.focus({ preventScroll: true });
+      detail?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto" : "smooth", block: "start" });
+    });
+  };
+
+  useEffect(() => {
+    if (usage !== "playground" || !observationInput) return;
+    const id = window.requestAnimationFrame(() => {
+      const target = playgroundPanel.current?.querySelector<HTMLElement>(".model-lab-playground");
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto" : "smooth", block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [usage, observationInput?.id]);
 
   useEffect(() => {
     let active = true;
@@ -123,13 +153,33 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   // 모델 전환·Registry 재조회 중 과거 결과의 UI 상태가 새 모델 화면에 남지 않도록 한다.
   const focusedResult = usage === "dataset" && selected !== null &&
     resultFocusedModelId === selectedModelId;
+  function tryObservation(
+    features: Record<string, number | null>, rowIndex: number, score: number,
+    scoringResultId: string, modelRevisionId: string,
+  ): string | null {
+    // 모델·관측값 근거를 묵시적으로 교체하거나 누락 Feature를 중앙값으로 대체하지 않는다.
+    if (!selected || selected.revision.id !== modelRevisionId)
+      return "선택한 관측값과 모델 판본이 일치하지 않습니다. 모델을 다시 확인해 주세요.";
+    const prepared = observationInputForPlayground(selected.revision, features);
+    if (!prepared.fields) {
+      const examples = prepared.invalid.slice(0, 3).map(activityFeatureLabel).join(", ");
+      return `이 관측값은 직접 입력에 필요한 Feature ${prepared.invalid.length}개를 그대로 사용할 수 없습니다.` +
+        ` ${examples}${prepared.invalid.length > 3 ? " 외" : ""} 값을 확인해 주세요.`;
+    }
+    setObservationInput({
+      id: `${scoringResultId}:${rowIndex}:${++observationRequest.current}`,
+      modelRevisionId, scoringResultId, rowIndex, originalScore: score, fields: prepared.fields,
+    });
+    setUsage("playground");
+    return null;
+  }
   return <section className={`model-lab-use${focusedResult ? " result-focused" : ""}${showResultSetup ? " show-setup" : ""}`}
     aria-label="활동 이상 탐지 모델 사용">
     {focusedResult && <div className="model-lab-result-toolbar">
       <span>Isolation Forest · v{selected?.version.version ?? "?"} · Dataset 분석 결과</span>
       <button type="button" className="secondary" aria-expanded={showResultSetup}
         onClick={() => setShowResultSetup(value => !value)}>
-        {showResultSetup ? "모델·입력 방식 닫기" : "모델·입력 방식 변경"}
+        {showResultSetup ? "모델·데이터 선택 닫기" : "모델·데이터 선택 변경"}
       </button>
     </div>}
     <button type="button" className="ghost model-lab-back" onClick={onBack}>
@@ -139,7 +189,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       <div>
         <span className="eyebrow">활동 이상 탐지 · 모델 활용</span>
         <h2 id="model-lab-use-heading">준비된 모델 사용하기</h2>
-        <p>한 건의 입력을 시험하거나 Dataset 전체의 점수 분포와 관측값을 조사합니다.</p>
+        <p>데이터를 분석하고, 궁금한 관측값은 직접 바꿔 모델의 반응을 살펴봅니다.</p>
       </div>
     </header>
     <details className="model-lab-model-options">
@@ -234,25 +284,31 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           onClick={() => onSelectModel(models[0].revision.id)}>모델 사용하기 →</button>
       </div>}
     {selected && <>
-      <p className="hint model-lab-ready-hint">모델이 준비됐습니다. 아래에서 시험할 입력 방식만 선택하세요. 모델 선택만으로 계산을 시작하지 않습니다.</p>
-      <div className="model-lab-usage-tabs" role="group" aria-label="모델 적용 방식">
-        <button type="button" className="secondary" aria-pressed={usage === "playground"}
-          onClick={() => setUsage("playground")}>한 건 시험하기</button>
-        <button type="button" className="secondary" aria-pressed={usage === "dataset"}
-          onClick={openDataset}>전체 데이터 분석</button>
+      <div className="model-lab-start-choice">
+        <h3>어떤 데이터로 시작할까요?</h3>
+        <p className="hint">데이터를 선택하거나 직접 값을 입력하세요. 선택만으로 계산이 시작되지는 않습니다.</p>
+        <div className="model-lab-usage-tabs" role="group" aria-label="입력 데이터 선택">
+          <button type="button" className="secondary" aria-pressed={usage === "dataset"}
+            onClick={openDataset}>Dataset 선택·파일 등록</button>
+          <button type="button" className="secondary" aria-pressed={usage === "playground"}
+            onClick={() => setUsage("playground")}>값 직접 입력</button>
+        </div>
       </div>
-      <div hidden={usage !== "playground"}>
+      <div hidden={usage !== "playground"} ref={playgroundPanel}>
         <ModelLabPlayground key={selected.revision.id} model={selected.revision}
-          canRun={canRun} canCancel={canCancel} />
+          canRun={canRun} canCancel={canCancel}
+          observationInput={observationInput?.modelRevisionId === selected.revision.id
+            ? observationInput : null}
+          onBackToAnalysis={backToObservation} />
       </div>
-      <div hidden={usage !== "dataset"}>
+      <div hidden={usage !== "dataset"} ref={datasetPanel}>
         <MLScoringPanel key={selected.revision.id} model={selected.revision}
           datasets={datasets} hasMoreDatasets={hasMoreDatasets}
           onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
           onOpenResult={id => onOpenResource("scoring", id)}
           onOpenResource={onOpenResource}
           canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
-          onResultViewChange={handleResultViewChange} />
+          onResultViewChange={handleResultViewChange} onTryObservation={tryObservation} />
       </div>
     </>}
     <div className="model-lab-use-footer">

@@ -41,6 +41,40 @@ export function playgroundNumberValid(raw: string, dtype: string): boolean {
   return dtype === "Float64";
 }
 
+/** Dataset 관측값은 새로운 Job을 만들지 않고 편집 초깃값으로만 전달한다. */
+export type ObservationExperiment = {
+  id: string;
+  modelRevisionId: string;
+  scoringResultId: string;
+  rowIndex: number;
+  originalScore: number;
+  fields: Record<string, string>;
+};
+
+/** 관측값 전체가 선택 모델의 Playground 입력 계약에 맞을 때에만 전달한다. */
+export function observationInputForPlayground(
+  model: ModelRevision, values: Record<string, number | null>,
+): { fields: Record<string, string> | null; invalid: string[] } {
+  const dtypes = model.runtime?.feature_dtypes;
+  const invalid: string[] = [];
+  const fields: Record<string, string> = {};
+  model.features.forEach((name, index) => {
+    const value = values[name];
+    const dtype = Array.isArray(dtypes) ? String(dtypes[index] ?? "") : "";
+    const raw = typeof value === "number" && Number.isFinite(value) ? String(value) : "";
+    if (!playgroundNumberValid(raw, dtype)) invalid.push(name);
+    else fields[name] = raw;
+  });
+  return { fields: invalid.length ? null : fields, invalid };
+}
+
+/** 관측값을 가져오기 전의 Job을 새 실험 결과처럼 노출하지 않는다. */
+export function playgroundJobVisibleAfterImport(
+  source: ObservationExperiment | null, jobAtImport: string | null, currentJobId: string | null,
+): boolean {
+  return source === null || (currentJobId !== null && currentJobId !== jobAtImport);
+}
+
 /** 현재 편집값이 실제로 성공한 Job에서 제출한 값과 일치하는지 확인한다. */
 export function playgroundInputMatchesResult(
   fields: Record<string, string>, submitted: Record<string, unknown> | null | undefined,
@@ -78,11 +112,16 @@ export function playgroundChangedFeatures(
   });
 }
 
-export function ModelLabPlayground({ model, canRun, canCancel }: {
+export function ModelLabPlayground({ model, canRun, canCancel, observationInput, onBackToAnalysis }: {
   model: ModelRevision; canRun: boolean; canCancel: boolean;
+  observationInput?: ObservationExperiment | null;
+  onBackToAnalysis?: () => void;
 }) {
   const reference = exampleValues(model);
-  const [mode, setMode] = useState<"example" | "edit">(reference ? "example" : "edit");
+  const [mode, setMode] = useState<"example" | "edit">("edit");
+  const [importedSource, setImportedSource] = useState<ObservationExperiment | null>(null);
+  const [importedAfterJobId, setImportedAfterJobId] = useState<string | null>(null);
+  const appliedObservation = useRef<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>(() =>
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
   const [job, setJob] = useState<MLPlaygroundJob | null>(null);
@@ -158,6 +197,8 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
       name, saved[name] == null ? "" : String(saved[name]),
     ])));
     setMode("edit");
+    setImportedSource(null);
+    setImportedAfterJobId(null);
   }
 
   useEffect(() => {
@@ -201,6 +242,17 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   });
   const invalid = input.filter(item => !item.valid);
   const running = sending || Boolean(job && !TERMINAL.has(job.status));
+  useEffect(() => {
+    if (!observationInput || observationInput.modelRevisionId !== model.id ||
+        appliedObservation.current === observationInput.id || running) return;
+    // 실행 중 입력을 바꾸지 않으며, 새 관측값을 가져와도 Job은 자동 제출하지 않는다.
+    appliedObservation.current = observationInput.id;
+    setFields(observationInput.fields);
+    setMode("edit");
+    setImportedSource(observationInput);
+    // 과거 Job 결과를 새 관측값 실험의 결과로 표시하지 않는다.
+    setImportedAfterJobId(job?.id ?? null);
+  }, [observationInput, model.id, running, job?.id]);
   const submittedFeatures = job?.spec.features;
   const submittedInput = submittedFeatures && typeof submittedFeatures === "object" &&
     !Array.isArray(submittedFeatures)
@@ -208,8 +260,13 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
   const matchesCompletedInput = job?.status === "Succeeded" && lastScore !== null &&
     playgroundInputMatchesResult(fields, submittedInput, model.features);
   const editedNames = reference ? playgroundChangedFeatures(fields, reference, model.features) : [];
+  const observationEdits = importedSource
+    ? playgroundChangedFeatures(fields, importedSource.fields, model.features) : [];
+  const highlightedChanges = importedSource ? observationEdits : editedNames;
   const comparisonNames = reference
-    ? (editedNames.length > 0 ? editedNames : model.features).slice(0, 3) : [];
+    ? (highlightedChanges.length > 0 ? highlightedChanges : model.features).slice(0, 3) : [];
+  const showCurrentJob = playgroundJobVisibleAfterImport(importedSource, importedAfterJobId, job?.id ?? null);
+  const newJobAfterImport = Boolean(importedSource && showCurrentJob);
   const inputGroups = groupActivityFeatures(
     Object.fromEntries(model.features.map(name => [name, null])));
   const explanationAvailable = referenceMedians.length === model.features.length &&
@@ -268,23 +325,35 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
       onChange={event => setFields(current => ({ ...current, [name]: event.target.value }))}
       aria-label={activityFeatureLabel(name) + " 입력값"} />
   </label>;
-  return <section className="panel model-lab-playground" aria-label="직접 모델 점수 계산">
+  return <section className="panel model-lab-playground" tabIndex={-1} aria-label="직접 모델 점수 계산">
     <div className="model-lab-playground-head">
-      <div><h3>한 건의 입력으로 모델 반응 시험하기</h3>
-        <p>기준 입력에서 시작해 숫자를 바꾸고, 이전 계산과 점수가 어떻게 달라지는지 살펴보세요.</p></div>
+      <div><h3>값을 바꿔 모델 반응 살펴보기</h3>
+        <p>입력값을 수정한 뒤 실제 점수를 계산하고, 이전 결과와 비교할 수 있습니다.</p></div>
     </div>
+    {observationInput && appliedObservation.current !== observationInput.id && running &&
+      <p className="hint" role="status">진행 중인 점수 계산이 끝나면 선택한 관측값을 입력에 가져옵니다.</p>}
+    {importedSource && <div className="model-lab-observation-source" role="status">
+      <strong>Dataset 관측값에서 가져온 입력</strong>
+      <p>원래 결과 행 #{importedSource.rowIndex.toLocaleString("ko-KR")} · 저장된 이상 점수 {importedSource.originalScore.toFixed(6)}.
+        현재 입력은 별도로 수정할 수 있으며, 점수 계산은 직접 요청해야 합니다.</p>
+      {onBackToAnalysis && <button type="button" className="secondary"
+        onClick={onBackToAnalysis}>원래 Dataset 분석으로 돌아가기 →</button>}
+    </div>}
     <div className="model-lab-workspace">
       <div className="model-lab-input-pane">
     <div className="model-lab-mode-tabs" role="group" aria-label="입력 방식">
       <button type="button" aria-pressed={mode === "example"} className="secondary"
         disabled={!reference || running}
-        onClick={() => { setMode("example"); if (reference) setFields(reference); }}>
+        onClick={() => { setMode("example"); setImportedSource(null); setImportedAfterJobId(null); if (reference) setFields(reference); }}>
         기준값으로 체험
       </button>
       <button type="button" aria-pressed={mode === "edit"} className="secondary"
         disabled={running} onClick={() => setMode("edit")}>직접 수정해보기</button>
     </div>
-    {reference ? <p className="hint">입력값은 이 모델의 학습 Feature 중앙값을 바탕으로 구성했습니다.
+    {importedSource
+      ? <p className="hint">Dataset의 실제 관측 Feature를 가져왔습니다. 학습 참조값은 비교용이며,
+          새 실행은 원래 Dataset 결과를 변경하지 않습니다.</p>
+      : reference ? <p className="hint">입력값은 이 모델의 학습 Feature 중앙값을 바탕으로 구성했습니다.
       정수 Feature는 정수로 조정했으며, 실제 관측치나 정상 활동의 판정값이 아닙니다.</p>
       : <p className="hint" role="status">이 모델 판본에는 초기 입력 기준값이 없어 자동으로 채우지 않았습니다.
         직접 수정 모드에서 모든 필수 Feature 값을 입력해 주세요.</p>}
@@ -314,8 +383,12 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
     {reference && <section className="model-lab-input-comparison"
       aria-label="입력 Feature와 Train 참조값 비교">
       <div className="model-lab-feature-group-heading">
-        <strong>{editedNames.length > 0 ? "변경한 입력값과 학습 참조값" : "현재 입력값과 학습 참조값"}</strong>
-        <span>{editedNames.length > 0 ? `변경 ${editedNames.length}개` : "기준 입력"}</span>
+        <strong>{importedSource
+          ? observationEdits.length > 0 ? "관측값에서 수정한 입력과 학습 참조값" : "가져온 관측값과 학습 참조값"
+          : editedNames.length > 0 ? "변경한 입력값과 학습 참조값" : "현재 입력값과 학습 참조값"}</strong>
+        <span>{importedSource
+          ? observationEdits.length > 0 ? `수정 ${observationEdits.length}개` : "원본 입력 유지"
+          : editedNames.length > 0 ? `변경 ${editedNames.length}개` : "기준 입력"}</span>
       </div>
       <p className="hint">같은 Feature 안에서만 막대 길이를 비교합니다. 학습 중앙값은 정상 범위나
         모델 기여도가 아닙니다. 중앙값이 0이거나 음수인 경우 등 비례 표현이 부적절하면 숫자로 표시합니다.</p>
@@ -329,8 +402,8 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
             actualLabel="현재 입력값" />
         </div>)}
       </div>
-      {editedNames.length > comparisonNames.length && <small className="hint">
-        변경한 나머지 {editedNames.length - comparisonNames.length}개 값은 위 Feature 입력에서 확인할 수 있습니다.
+      {highlightedChanges.length > comparisonNames.length && <small className="hint">
+        변경한 나머지 {highlightedChanges.length - comparisonNames.length}개 값은 위 Feature 입력에서 확인할 수 있습니다.
       </small>}
     </section>}
     {invalid.length > 0 && <p role="alert" className="model-lab-input-error">
@@ -342,8 +415,10 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
     <h4>계산과 결과</h4>
     <p className="model-lab-input-state" role="status">{running
       ? "제출한 입력을 모델에서 계산하는 중입니다."
-      : matchesCompletedInput
-        ? "현재 입력값은 최근 완료된 계산에 사용한 값과 일치합니다."
+      : importedSource && !newJobAfterImport
+        ? "Dataset 관측값을 가져왔습니다. 이 입력에 대한 새로운 점수 계산은 아직 요청하지 않았습니다."
+        : matchesCompletedInput
+          ? "현재 입력값은 최근 완료된 계산에 사용한 값과 일치합니다."
         : job?.status === "Succeeded" && lastScore !== null
           ? "입력값이 마지막 계산 이후 변경됐습니다. 아래 점수는 이전 입력의 결과이며 현재 입력은 아직 계산하지 않았습니다."
           : job?.status === "Failed" || job?.status === "Cancelled"
@@ -357,19 +432,24 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
         {running ? "모델 실행 중…" : "실제 이상 점수 계산하기 →"}
       </button>
       {reference && <button type="button" className="secondary"
-        onClick={() => setFields(reference)} disabled={running}>기준값으로 초기화</button>}
+        onClick={() => { setFields(reference); setImportedSource(null); setImportedAfterJobId(null); }} disabled={running}>기준값으로 초기화</button>}
       {job && !TERMINAL.has(job.status) && canCancel &&
         <button type="button" className="secondary" onClick={() => void cancel()}>취소 요청</button>}
     </div>
-    {job && <div className="model-lab-playground-result" aria-live="polite">
+    {job && showCurrentJob && <div className="model-lab-playground-result" aria-live="polite">
       <strong>점수 계산 · {({ Queued: "대기 중", Running: "실행 중", Succeeded: "완료",
         Failed: "실패", Cancelled: "취소됨" } as Record<string, string>)[job.status] ?? job.status}</strong>
       {job.status === "Succeeded" && lastScore !== null &&
         <div className="model-lab-score-row">
-          <div><span>{matchesCompletedInput ? "현재 입력의 이상 점수" : "마지막 제출 입력의 이상 점수"}</span>
+          <div><span>{matchesCompletedInput && (!importedSource || newJobAfterImport)
+            ? "현재 입력의 이상 점수" : "마지막 제출 입력의 이상 점수"}</span>
             <strong>{lastScore.toFixed(5)}</strong></div>
           {previousScore !== null && <div><span>이전 완료 계산과의 점수 차이</span>
             <strong>{(lastScore - previousScore) > 0 ? "+" : ""}{(lastScore - previousScore).toFixed(5)}</strong></div>}
+          {importedSource && newJobAfterImport && matchesCompletedInput && <div>
+            <span>원래 Dataset 관측값 점수 대비 차이</span>
+            <strong>{lastScore - importedSource.originalScore > 0 ? "+" : ""}{(lastScore - importedSource.originalScore).toFixed(5)}</strong>
+          </div>}
         </div>}
       {job.status === "Failed" && <p role="alert">점수 계산 실패 · {job.error ?? "실행 오류"}
         {job.error_code && <small> ({job.error_code})</small>}</p>}
@@ -380,7 +460,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
           <button type="button" className="secondary" onClick={() => setMode("edit")}>입력값 바꿔보기 →</button>
         </div>}
     </div>}
-    {job?.status === "Succeeded" && lastScore !== null && comparisonJob &&
+    {showCurrentJob && job?.status === "Succeeded" && lastScore !== null && comparisonJob &&
       comparedFeatures.length > 0 && <section className="model-lab-run-comparison"
         aria-label="이전 실행과 이번 실행 비교">
         <h5>두 완료 계산의 입력·점수 차이</h5>
@@ -401,7 +481,7 @@ export function ModelLabPlayground({ model, canRun, canCancel }: {
           </tr>)}</tbody>
         </table></div>
       </section>}
-    {job?.status === "Succeeded" && (explanationAvailable
+    {showCurrentJob && job?.status === "Succeeded" && (explanationAvailable
       ? <details className="model-lab-explanation-toggle">
           <summary>이 입력 설명하기 · SHAP / Feature 치환 민감도</summary>
           <PlaygroundExplanations key={job.id} source={job} canRun={canRun}

@@ -1293,3 +1293,19 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .observation-activity-all[open] > summary { margin-bottom:14px; }
 .feature-reference-scale-note { color:var(--sos-muted); font-size:11px; line-height:1.5; }
 .model-lab-home-illustration-note { font-size:11px; color:var(--sos-muted); margin:5px 0 2px; }
+
+/* Model Lab: 데이터 선택은 하나의 시작 경험, 관측값 실험은 같은 분석의 다음 행동이다. */
+.model-lab-start-choice { display:grid; gap:10px; margin:18px 0 16px; }
+.model-lab-start-choice h3 { font-size:16px; margin:0; }
+.model-lab-start-choice .hint { margin:0; }
+.model-lab-observation-source { display:grid; justify-items:start; gap:9px; margin-bottom:16px;
+  padding:15px 18px; background:var(--sos-raised); border:1px solid var(--sos-accent);
+  border-radius:10px; }
+.model-lab-observation-source p { margin:0; font-size:13px; line-height:1.6; color:var(--sos-muted); }
+.observation-try-experiment { display:grid; justify-items:start; gap:10px; margin:14px 0;
+  padding:14px 16px; background:var(--sos-raised); border-radius:10px; }
+.observation-try-experiment p { margin:0; color:var(--sos-muted); font-size:13px; line-height:1.6; }
+.observation-try-experiment p[role="alert"] { color:var(--sos-danger); }
+
+/* 완료된 Dataset 결과에서는 입력 선택 대신 분석 결과를 먼저 보여준다. */
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-start-choice { display:none; }

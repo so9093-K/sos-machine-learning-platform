@@ -422,6 +422,24 @@ try {
   assert.match(defaultObservation, /2026-01-01 02:00:00 UTC/);
   assert.doesNotMatch(defaultObservation, /관측 시각·원본 관측치 ID 없음/);
   assert.match(groupedObservation, /활동 특징/);
+  const observationWithExperiment = renderToStaticMarkup(
+    React.createElement(PipelineCandidateInvestigation, {
+      candidate: {
+        row_index: 9, anomaly_score: 0.71,
+        features: { cnt_file_create: 3, cnt_proc_exec: 4 },
+      }, observationMode: true, scoringResultId: "score-1", modelRevisionId: "model-1",
+      canRun: true, canCancel: false, onOpenResource: () => {},
+      onTryObservation: () => null,
+    }));
+  assert.match(observationWithExperiment, /이 관측값으로 실험하기/);
+  assert.doesNotMatch(groupedObservation, /이 관측값으로 실험하기/);
+  const noPermissionExperiment = renderToStaticMarkup(
+    React.createElement(PipelineCandidateInvestigation, {
+      candidate: { row_index: 9, anomaly_score: 0.71, features: { cnt_file_create: 3 } },
+      observationMode: true, scoringResultId: "score-1", modelRevisionId: "model-1",
+      canRun: false, canCancel: false, onOpenResource: () => {}, onTryObservation: () => null,
+    }));
+  assert.doesNotMatch(noPermissionExperiment, /이 관측값으로 실험하기/);
   // 참조 모델이 없으면 비율을 추정하지 않고 비교 기준 없음으로 표시한다.
   assert.match(groupedObservation, /Train 중앙값/);
   assert.match(groupedObservation, /비교 기준 없음/);
@@ -732,7 +750,8 @@ try {
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
   const { ModelLabPlayground, exampleValues, playgroundInputMatchesResult,
-    playgroundLatestSuccessfulScore, playgroundChangedFeatures } =
+    playgroundLatestSuccessfulScore, playgroundChangedFeatures,
+    observationInputForPlayground, playgroundJobVisibleAfterImport } =
     await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
   // 성공 -> 실패/취소 -> 성공 경로에서도 이전 성공 점수를 잃지 않는다.
   assert.equal(playgroundLatestSuccessfulScore(0.41,
@@ -745,6 +764,12 @@ try {
     { status: "Succeeded", result: { anomaly_score: 0.52 } }), 0.52);
   assert.equal(playgroundLatestSuccessfulScore(0.41,
     { status: "Succeeded", result: { anomaly_score: Number.NaN } }), 0.41);
+  const imported = { id: "source-1", modelRevisionId: "model-1", scoringResultId: "sc-1",
+    rowIndex: 12, originalScore: 0.7, fields: { a: "2" } };
+  assert.equal(playgroundJobVisibleAfterImport(imported, "job-old", "job-old"), false);
+  assert.equal(playgroundJobVisibleAfterImport(imported, null, null), false);
+  assert.equal(playgroundJobVisibleAfterImport(imported, "job-old", "job-new"), true);
+  assert.equal(playgroundJobVisibleAfterImport(null, "job-old", "job-old"), true);
   assert.deepEqual(playgroundChangedFeatures(
     { a: "1e3", b: "0.25", c: "5" }, { a: "1000", b: "0.25", c: "4" },
     ["a", "b", "c"]), ["c"]);
@@ -781,6 +806,23 @@ try {
     runtime: { feature_reference_medians: [12, 2], feature_dtypes: ["Int64", "Int64"] },
   };
   assert.deepEqual(exampleValues(exampleModel), { cnt_proc_exec: "12", cnt_file_del: "2" });
+  assert.deepEqual(observationInputForPlayground(exampleModel,
+    { cnt_proc_exec: 7, cnt_file_del: 3 }),
+    { fields: { cnt_proc_exec: "7", cnt_file_del: "3" }, invalid: [] });
+  // 학습 참조값과 다르다고 사용자가 관측값을 수정한 것은 아니다.
+  assert.deepEqual(playgroundChangedFeatures({ cnt_proc_exec: "7", cnt_file_del: "3" },
+    { cnt_proc_exec: "7", cnt_file_del: "3" }, exampleModel.features), []);
+  assert.deepEqual(playgroundChangedFeatures({ cnt_proc_exec: "8", cnt_file_del: "3" },
+    { cnt_proc_exec: "7", cnt_file_del: "3" }, exampleModel.features), ["cnt_proc_exec"]);
+  assert.deepEqual(observationInputForPlayground(exampleModel,
+    { cnt_proc_exec: 7, cnt_file_del: null }),
+    { fields: null, invalid: ["cnt_file_del"] });
+  assert.deepEqual(observationInputForPlayground(exampleModel,
+    { cnt_proc_exec: 7.5, cnt_file_del: 3 }),
+    { fields: null, invalid: ["cnt_proc_exec"] });
+  assert.deepEqual(observationInputForPlayground(exampleModel,
+    { cnt_proc_exec: 7, cnt_file_del: Number.NaN }),
+    { fields: null, invalid: ["cnt_file_del"] });
   assert.equal(exampleValues({ ...exampleModel, runtime: {} }), null);
   const { playgroundNumberValid } = await vite.ssrLoadModule("/src/ModelLabPlayground.tsx");
   assert.ok(playgroundNumberValid("12", "Int64"));

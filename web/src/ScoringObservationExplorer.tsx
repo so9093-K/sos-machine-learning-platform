@@ -61,11 +61,15 @@ export function observationSelectionLabel(userSelected: boolean): string {
   return userSelected ? "현재 선택" : "기본 표시";
 }
 
-export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenResource }: {
+export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenResource, onTryObservation }: {
   result: ScoringResult;
   canRun: boolean;
   canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
+  onTryObservation?: (
+    features: Record<string, number | null>, rowIndex: number, score: number,
+    scoringResultId: string, modelRevisionId: string,
+  ) => string | null;
 }) {
   const [loaded, setLoaded] = useState<ScoringObservations | null>(null);
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
@@ -236,7 +240,9 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
               candidate={selected} scoreOrder={scoreOrder} scoringResultId={result.id}
               isDefaultObservation={!userSelected}
               modelRevisionId={result.model_revision_id}
-              observationMode canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />
+              observationMode canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
+              onTryObservation={onTryObservation ? (features, rowIndex, score) =>
+                onTryObservation(features, rowIndex, score, result.id, result.model_revision_id) : undefined} />
           : <p className="hint">{loading ? "관측값 상세를 준비하고 있습니다."
             : "선택한 관측값이 없습니다. 조회 가능한 관측값을 확인해 주세요."}</p>}
       </section>
