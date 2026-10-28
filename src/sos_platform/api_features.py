@@ -136,7 +136,9 @@ def feast_router(
             raise HTTPException(status_code=404, detail="Feature Service 등록을 찾을 수 없습니다.")
         if registration["status"] not in ("Succeeded", "Failed", "Cancelled"):
             raise HTTPException(status_code=409, detail="진행 중인 Feature 등록은 먼저 종료해야 합니다.")
-        if registration_job_id in store.blocked_feature_registration_ids([registration_job_id]):
+        if registration_job_id in store.blocked_feature_registration_ids(
+            [registration_job_id], include_failed=False
+        ):
             raise HTTPException(status_code=409, detail="이미 폐기된 Feature 등록입니다.")
         source = existing_dataset(registration["dataset_id"], actor)
         if source["version"] != registration["spec"]["feature_dataset_version"]:

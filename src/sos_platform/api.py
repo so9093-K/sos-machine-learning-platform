@@ -110,7 +110,7 @@ from .schemas import (
 )
 from .security import Actor, IdentitySettings, require, resource_allowed
 from .store import Store
-from .store_jobs import IcebergCancellationConflict
+from .store_jobs import IcebergCancellationConflict, FeatureRetirementCancellationConflict
 
 # Depends 객체는 요청마다 재생성하지 않고 안정적으로 재사용한다.
 READ_DATASET_DEP = Depends(require("dataset.read"))
@@ -1545,6 +1545,8 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         except IcebergCancellationConflict as exc:
             raise PlatformError("SOS-ICEBERG-CANCEL-409") from exc
+        except FeatureRetirementCancellationConflict as exc:
+            raise PlatformError("SOS-FEATURE-RETIRE-CANCEL-409") from exc
         if result is None:
             raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         return result

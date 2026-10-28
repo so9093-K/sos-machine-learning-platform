@@ -15,6 +15,10 @@ class IcebergCancellationConflict(Exception):
     """외부 Iceberg 커밋 완료 여부가 불명확할 때 취소를 거부한다."""
 
 
+class FeatureRetirementCancellationConflict(Exception):
+    """진행 중인 Feast Registry 객체 삭제는 부분 커밋을 남길 수 있어 취소할 수 없다."""
+
+
 class JobStoreMixin:
     """Store의 공통 트랜잭션 경계를 통해 작업 생명주기를 관리한다."""
 
@@ -155,11 +159,16 @@ class JobStoreMixin:
                     raise PlatformError("SOS-API-CONFLICT")
                 retirement_exists = db.execute(
                     text(
-                        "SELECT 1 FROM jobs WHERE kind='feature_retire' "
-                        "AND status IN ('Queued','Running','Succeeded') "
-                        "AND spec::jsonb->>'registration_job_id'=:registration_id LIMIT 1"
+                        "SELECT 1 FROM jobs AS r WHERE r.kind='feature_retire' "
+                        "AND (r.status IN ('Queued','Running','Succeeded') "
+                        "OR (:for_retrieval AND r.status='Failed' "
+                        "AND EXISTS (SELECT 1 FROM attempts a WHERE a.job_id=r.id))) "
+                        "AND r.spec::jsonb->>'registration_job_id'=:registration_id LIMIT 1"
                     ),
-                    {"registration_id": registration_id},
+                    {
+                        "registration_id": registration_id,
+                        "for_retrieval": kind == "feature_retrieve",
+                    },
                 ).first()
                 if retirement_exists:
                     raise PlatformError("SOS-API-CONFLICT")
@@ -252,17 +261,24 @@ class JobStoreMixin:
             ]
             return item
 
-    def blocked_feature_registration_ids(self, job_ids: list[str]) -> set[str]:
+    def blocked_feature_registration_ids(
+        self, job_ids: list[str], *, include_failed: bool = True
+    ) -> set[str]:
         """접수 중·실행 중·완료된 폐기는 신규 조회를 허용하지 않는다."""
         if not job_ids:
             return set()
         statement = text(
-            "SELECT spec::jsonb->>'registration_job_id' FROM jobs "
-            "WHERE kind='feature_retire' AND status IN ('Queued','Running','Succeeded') "
-            "AND spec::jsonb->>'registration_job_id' IN :ids"
+            "SELECT r.spec::jsonb->>'registration_job_id' FROM jobs r "
+            "WHERE r.kind='feature_retire' AND ("
+            "r.status IN ('Queued','Running','Succeeded') "
+            "OR (:include_failed AND r.status='Failed' AND EXISTS "
+            "(SELECT 1 FROM attempts a WHERE a.job_id=r.id))) "
+            "AND r.spec::jsonb->>'registration_job_id' IN :ids"
         ).bindparams(bindparam("ids", expanding=True))
         with self.connection() as db:
-            return set(db.execute(statement, {"ids": job_ids}).scalars())
+            return set(db.execute(
+                statement, {"ids": job_ids, "include_failed": include_failed}
+            ).scalars())
 
     def retired_feature_registration_ids(self, job_ids: list[str]) -> set[str]:
         """SOS에서 명시적으로 확정된 Feast 등록 폐기 Job만 인정한다."""
@@ -369,6 +385,10 @@ class JobStoreMixin:
                     {"at": now(), "id": job_id},
                 )
             elif row and row["status"] == "Running":
+                if row["kind"] == "feature_retire":
+                    raise FeatureRetirementCancellationConflict(
+                        "진행 중 Feast 정의 폐기는 외부 삭제 커밋이 불확실해 취소할 수 없습니다."
+                    )
                 if row["kind"] == "iceberg_import":
                     raise IcebergCancellationConflict(
                         "실행 중 Iceberg 적재는 커밋 여부를 보장할 수 없어 취소할 수 없습니다. "

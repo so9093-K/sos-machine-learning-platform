@@ -119,6 +119,12 @@ DEFINITIONS = (
         "commit_uncertain",
         "manual_verification_required",
     ),
+    spec(
+        "SOS-FEATURE-RETIRE-CANCEL-409",
+        "Feature 정의 폐기 취소 불가",
+        "Registry 객체 정리가 진행 중입니다. 완료·복구 상태를 확인하세요.",
+        "commit_uncertain",
+    ),
     spec("SOS-JOB-FAILED", "실행 실패", "작업 실행 중 오류가 발생했습니다.", "execution"),
     spec(
         "SOS-ML-INPUT-INVALID",
