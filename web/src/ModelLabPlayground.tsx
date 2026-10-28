@@ -111,7 +111,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   onBackToAnalysis?: () => void;
 }) {
   const reference = exampleValues(model);
-  const [mode, setMode] = useState<"example" | "edit">(reference ? "example" : "edit");
+  const [mode, setMode] = useState<"example" | "edit">("edit");
   const [importedSource, setImportedSource] = useState<ObservationExperiment | null>(null);
   const appliedObservation = useRef<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>(() =>
