@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { jobStatusLabel } from "./display-format";
 import { FeatureSelector } from "./FeatureSelector";
-import type { Dataset, DatasetColumns, Job } from "./types";
+import type { Dataset, DatasetColumns, Job, JobSummary } from "./types";
 
 const NUMERIC = /^(?:Int(?:32|64)|Float(?:32|64))$/;
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -44,7 +44,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   const [ttlDays, setTtlDays] = useState(30);
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [registrations, setRegistrations] = useState<Job[]>([]);
+  const [registrations, setRegistrations] = useState<JobSummary[]>([]);
   const [registrationId, setRegistrationId] = useState("");
   const [registerBusy, setRegisterBusy] = useState(false);
   const [retrievalBusy, setRetrievalBusy] = useState(false);
@@ -66,7 +66,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
 
   useEffect(() => {
     let active = true;
-    void request<Job[]>("/api/features/services/registrations")
+    void request<JobSummary[]>("/api/features/services/registrations")
       .then(items => {
         if (active) setRegistrations(items.filter(item =>
           item.status === "Succeeded" && typeof item.result?.feature_service === "string"));

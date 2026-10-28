@@ -5,7 +5,7 @@ from collections.abc import Callable
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from .feast_features import FeatureDefinitionRequest, FeatureRetrievalRequest
-from .schemas import JobOut
+from .schemas import JobOut, JobSummaryOut
 from .security import Actor, require
 from .store import Store
 
@@ -48,7 +48,7 @@ def feast_router(
     @router.get(
         "/api/features/services/registrations",
         tags=["Features"],
-        response_model=list[JobOut],
+        response_model=list[JobSummaryOut],
         summary="내 Feature Service 등록 Job 이력 조회",
         description="SOS Job 이력을 반환합니다. Feast Registry의 현재 사용 가능 상태를 대체하지 않습니다.",
     )
