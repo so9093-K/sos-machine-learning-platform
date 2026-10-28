@@ -25,10 +25,12 @@ MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·A
 
 ## Feast 전문 Runtime
 
-등록 Feature의 Historical Retrieval에는 Feast 0.67.0 전용 Worker 이미지를 사용한다.
+등록 Feature의 Historical Retrieval을 지원하는 Worker 이미지에 Feast 0.67.0을 설치한다.
 Feast SQL Registry는 SOS 메타데이터 DB와 분리된 PostgreSQL 서비스에 보관한다.
 API는 Feast SDK를 설치하지 않고 Dataset·Actor 권한을 검증해 Job을 제출하며,
-Worker는 Feature를 조회하고 결과를 기존 SOS 불변 Dataset으로 게시한다.
+Worker는 등록·조회 작업에서만 Feast SDK를 호출하고 결과를 SOS 불변 Dataset으로
+게시한다. Feast Registry가 불가용해도 일반 SOS Data·ML Job의 Worker 시작을
+대기시키지 않는다.
 현재는 게시 Parquet Feature Source, UTC Event Timestamp, Entity 시점 Dataset만
 지원한다. Online Serving과 Iceberg SQL Catalog 직접 Feature Source 조회는 지원하지
 않는다. Feast 전문 Worker는 API와 동일한 uv.lock의 별도 `feast` dependency group으로

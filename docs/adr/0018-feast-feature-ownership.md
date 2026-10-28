@@ -36,8 +36,9 @@ ML Job을 관리하지만 독립적인 Feature Registry·Historical Retrieval의
 7. **접근:** Feast의 관리 자격 증명·Registry·스토리지에 클라이언트를
    직접 연결하지 않는다. SOS API가 Actor·Dataset 접근을 검사하며,
    Worker는 신뢰된 Job 명세로만 Feast를 호출한다.
-8. **Runtime 독립:** Feast SDK는 필요한 전문 실행 환경에서만 사용한다.
-   독립 SOS API·Data Explorer·기존 ML 계산을 Feast의 설치·가용성에 묶지 않는다.
+8. **Runtime 독립:** Feast SDK는 Feature 등록·조회 경계에서만 호출한다.
+   독립 SOS API·Data Explorer·기존 ML 계산을 Feast Registry 가용성에 묶지
+   않으며 일반 Worker의 시작도 Registry Health에 조건부로 종속시키지 않는다.
 9. **전환 원칙:** 도입 범위 안에서 대체된 API·실행 경로·자체 Registry·타입·설정·
    문서·검증 참조를 같은 PR에서 제거한다. 미완료 기능을 완료로 설명하지 않는다.
    과거 Alembic migration은 변경하지 않으며 유효한 Dataset·Model·Scoring 이력은 유지한다.

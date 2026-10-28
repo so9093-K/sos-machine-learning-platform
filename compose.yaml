@@ -97,8 +97,7 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
-      feast-postgres:
-        condition: service_healthy
+    # Registry 장애가 일반 Data/ML Job Worker 시작을 차단하지 않게 한다.
     stop_grace_period: 35s
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
