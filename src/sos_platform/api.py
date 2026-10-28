@@ -16,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 from .api_control import control_router
+from .api_features import feast_router
 from .api_errors import problem_response, register_error_handlers
 from .api_ml_training import training_router
 from .api_pipelines import pipeline_router
@@ -797,6 +798,8 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
 
     app.include_router(model_management_router(store))
     app.include_router(model_deletion_router(store))
+
+    app.include_router(feast_router(store, existing_dataset=existing, require_submission_key=require_job_submission_key))
 
     app.include_router(
         training_router(
