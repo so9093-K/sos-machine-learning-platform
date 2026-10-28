@@ -252,7 +252,7 @@ export function PipelineCandidateInvestigation({
         </dl>}
     {!observationMode && <p className="hint">활동 Feature 관측치는 원시 이벤트 한 건이라는 뜻이 아니며,
       관측 시각은 고유 ID가 아닙니다. UUIDv4 형식만으로 개인정보 비식별성이 보장되지는 않습니다.</p>}
-    {observationMode && onTryObservation && <div className="observation-try-experiment">
+    {observationMode && onTryObservation && canRun && <div className="observation-try-experiment">
       <p>이 관측값의 Feature를 가져와 숫자를 바꿔보세요. 원래 분석 결과는 그대로 유지됩니다.</p>
       <button type="button" className="secondary" onClick={() => {
         setExperimentError(onTryObservation(candidate.features, candidate.row_index,
