@@ -17,6 +17,7 @@ from .datasets import pinned_scan_dataset
 from .errors import PlatformError
 from .execution_budget import ExecutionBudget
 from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold, score_histogram
+from .ml_if_config import IsolationForestConfig
 from .ml_if_preprocessing import FittedIFMedianImputer, _train_median, fit_if_median_imputer
 from .ml_input import (
     INTEGER_DTYPES,
@@ -24,7 +25,7 @@ from .ml_input import (
     TRAINING_SELECTION_CURRENT,
     TRAINING_SELECTION_LEGACY,
 )
-from .ml_isolation_forest import IsolationForestConfig, train_isolation_forest
+from .ml_isolation_forest import train_isolation_forest
 from .ml_sampling import canonical_sorted_batches
 from .ml_temporal_split import split_training_source
 from .schemas import MLTemporalSplitSpec, MLTrainingInputPolicy

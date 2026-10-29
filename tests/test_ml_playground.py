@@ -82,7 +82,8 @@ def test_playground_score_matches_trained_isolation_forest(monkeypatch, tmp_path
     """동일 모델을 통한 Playground 계산과 기존 모델 어댑터의 점수가 일치한다."""
     import numpy as np
     from sklearn.ensemble import IsolationForest
-    from sos_platform.ml_isolation_forest import IsolationForestConfig, TrainedIsolationForest
+    from sos_platform.ml_if_config import IsolationForestConfig
+    from sos_platform.ml_isolation_forest import TrainedIsolationForest
 
     train = np.array([[1.0, 2.0], [2.0, 5.0], [3.0, 8.0], [50.0, 100.0]])
     estimator = IsolationForest(n_estimators=12, random_state=42).fit(train)

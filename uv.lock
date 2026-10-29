@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.12.*"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -1668,8 +1668,6 @@ dependencies = [
     { name = "python-multipart" },
     { name = "pytz" },
     { name = "scalar-fastapi" },
-    { name = "scikit-learn" },
-    { name = "shap" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
 ]
@@ -1683,11 +1681,21 @@ dagster = [
 ]
 dev = [
     { name = "httpx" },
+    { name = "joblib" },
+    { name = "numpy" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "scikit-learn" },
+    { name = "shap" },
 ]
 feast = [
     { name = "feast", extra = ["duckdb", "grpcio"] },
+]
+ml = [
+    { name = "joblib" },
+    { name = "numpy" },
+    { name = "scikit-learn" },
+    { name = "shap" },
 ]
 
 [package.metadata]
@@ -1704,8 +1712,6 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.20,<1" },
     { name = "pytz", specifier = "==2026.2" },
     { name = "scalar-fastapi", specifier = ">=1.4,<2" },
-    { name = "scikit-learn", specifier = ">=1.7,<2" },
-    { name = "shap", specifier = ">=0.50,<0.51" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
     { name = "uvicorn", specifier = ">=0.32,<1" },
 ]
@@ -1719,10 +1725,20 @@ dagster = [
 ]
 dev = [
     { name = "httpx", specifier = ">=0.27,<1" },
+    { name = "joblib", specifier = ">=1.5,<2" },
+    { name = "numpy", specifier = ">=2,<3" },
     { name = "pytest", specifier = "==9.0.2" },
     { name = "ruff", specifier = "==0.14.0" },
+    { name = "scikit-learn", specifier = ">=1.7,<2" },
+    { name = "shap", specifier = ">=0.50,<0.51" },
 ]
 feast = [{ name = "feast", extras = ["duckdb", "grpcio"], specifier = "==0.67.0" }]
+ml = [
+    { name = "joblib", specifier = ">=1.5,<2" },
+    { name = "numpy", specifier = ">=2,<3" },
+    { name = "scikit-learn", specifier = ">=1.7,<2" },
+    { name = "shap", specifier = ">=0.50,<0.51" },
+]
 
 [[package]]
 name = "sqlalchemy"
