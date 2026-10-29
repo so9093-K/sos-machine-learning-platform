@@ -24,6 +24,7 @@ import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
 import { ModelLabUse } from "./ModelLabUse";
+import { PipelineWorkspace } from "./PipelineWorkspace";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { ModelCatalog } from "./ModelCatalog";
 import { MLResourceDetail, ScoringWorkspace, DecisionWorkspace } from "./MLResourcePages";
@@ -87,12 +88,12 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const [examplesReload, setExamplesReload] = useState(0);
   const [reloadRevision, setReloadRevision] = useState(0);
   function startScoring(modelId: string) {
-    navigateWithContext("scoring", { modelId, datasetId: context.datasetId });
+    navigateWithContext("scoring", { modelId, datasetId: context.datasetId, pipelineRunId: context.pipelineRunId });
   }
   function startDecision(view: DecisionView, scoringId: string) {
     navigateWithContext(
       view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
-      { scoringId, ...(context.modelLabReturn && context.modelId
+      { scoringId, pipelineRunId: context.pipelineRunId, ...(context.modelLabReturn && context.modelId
         ? { modelLabReturn: true, modelId: context.modelId, datasetId: context.datasetId } : {}) },
     );
   }
@@ -268,7 +269,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   }
   const requestedDatasetLoaded = datasets.some(item => item.id === context.datasetId);
   useEffect(() => {
-    if (!isDataArea) return;
+    if (!isDataArea && tab !== "pipelines") return;
     const requestedId = context.datasetId ?? "";
     setSelected(requestedId); setDatasetSelectionError("");
     if (!requestedId || requestedDatasetLoaded) { setDatasetSelectionLoading(false); return; }
@@ -280,7 +281,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       .catch(e => { if (active) setDatasetSelectionError(formatError(e)); })
       .finally(() => { if (active) setDatasetSelectionLoading(false); });
     return () => { active = false; };
-  }, [isDataArea, context.datasetId, requestedDatasetLoaded, reloadRevision]);
+  }, [isDataArea, tab, context.datasetId, requestedDatasetLoaded, reloadRevision]);
   useEffect(() => {
     if (canWrite) {
       request<UploadPolicy>("/api/datasets/upload-policy")
@@ -496,7 +497,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           {error.reference && <small className="alert-reference">{error.reference}</small>}
         </div>
         <button onClick={() => setError(null)} aria-label="오류 닫기">×</button></div>}
-      {datasetReadError && ["overview", "understanding", "preview", "profile", "preparation", "topic"].includes(tab) &&
+      {datasetReadError && ["overview", "understanding", "preview", "profile", "preparation", "topic", "pipelines"].includes(tab) &&
         <div role="alert" className="alert error">
           Dataset 목록을 확인하지 못했습니다. 현재 화면의 데이터 선택이 제한될 수 있습니다.
           <details><summary>문제 정보</summary>{datasetReadError}</details>
@@ -547,7 +548,30 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         canViewModels={actor.capabilities.includes("job.read")}
         onNavigate={setTab}
         onOpenDataset={id => chooseDataset(id, "understanding")} />}
-      {tab === "topic" && <ModelLabUse key="activity-anomaly" datasets={datasets}
+      {context.pipelineRunId && tab !== "pipelines" && <div className="pipeline-return">
+        <button className="secondary" onClick={() => navigateWithContext("pipelines", {
+          pipelineRunId: context.pipelineRunId,
+        })}>파이프라인 실행 결과로 복귀 →</button>
+        <span className="hint">원래 실행의 결과는 유지되며 추가 계산은 별도 결과로 남습니다.</span>
+      </div>}
+      {tab === "pipelines" && (actor.capabilities.includes("job.read")
+        ? <PipelineWorkspace runId={context.pipelineRunId ?? ""} datasetId={context.datasetId ?? ""} datasets={datasets}
+          canTrain={actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read")}
+          canRun={canRun} canCancel={canCancel} canOpenMLflow={canInspectStorage || canViewAudit}
+          hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
+          onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
+          onSelectRun={pipelineRunId => navigateWithContext("pipelines", { ...context, pipelineRunId })}
+          onOpenResource={openResource} onOpenDataset={id => navigateWithContext("understanding", {
+            datasetId: id, pipelineRunId: context.pipelineRunId,
+          })} />
+        : <section className="panel"><h2>파이프라인 조회 권한 없음</h2><p>실행 결과 조회에는 작업 조회 권한이 필요합니다.</p></section>)}
+      {tab === "topic" && <>
+        {actor.capabilities.includes("job.read") && <div className="pipeline-topic-link">
+          <button className="secondary" onClick={() => navigateWithContext("pipelines", { datasetId: context.datasetId })}>
+            등록 파이프라인·실행 결과 →</button>
+          <span className="hint">시간 분할 학습·보정·Test 평가의 주요 결과</span>
+        </div>}
+        <ModelLabUse key="activity-anomaly" datasets={datasets}
           selectedModelId={context.modelId ?? ""}
           onSelectModel={modelId => selectContext({ ...context, modelId })}
           selectedDatasetId={context.datasetId ?? ""}
@@ -557,7 +581,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           canUpload={canWrite} onDatasetRegistered={data => {
             setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
           }}
-          onHistory={() => setTab("ml-jobs")} />}
+          onHistory={() => setTab("ml-jobs")} /></>}
       {isDataArea && datasets.length > 0 && <div className="dataset-switcher">
         <label>Dataset 선택<select aria-label="현재 Dataset" value={selected}
           onChange={event => chooseDataset(event.target.value, tab as "understanding" | "preview" | "profile" | "preparation")}>
