@@ -406,12 +406,12 @@ def test_policy_only_loads_scores_not_full_feature_vectors(scoring_env, monkeypa
 def test_scoring_stage_is_attempt_scoped_counted_and_cleaned(tmp_path):
     from uuid import uuid4
 
-    from sos_platform.ml_scoring import (
+    from sos_platform.ml_scoring_staging import (
         cleanup_scoring_stage,
         scoring_stage_bytes,
         scoring_stage_prefix,
     )
-    from sos_platform.worker import attempt_result_paths, cleanup_recovered_results
+    from sos_platform.job_artifacts import attempt_result_paths, cleanup_recovered_results
 
     job_id, attempt_id, another_attempt = str(uuid4()), str(uuid4()), str(uuid4())
     root = tmp_path / "results"
@@ -444,7 +444,7 @@ def test_scoring_stage_is_attempt_scoped_counted_and_cleaned(tmp_path):
 
 
 def test_scoring_stage_never_follows_symlinks(tmp_path):
-    from sos_platform.ml_scoring import scoring_stage_bytes, scoring_stage_prefix
+    from sos_platform.ml_scoring_staging import scoring_stage_bytes, scoring_stage_prefix
 
     root = tmp_path / "results"
     root.mkdir()
@@ -485,7 +485,8 @@ def test_worker_stops_scoring_stage_overflow_with_distinct_failure_code(
     context.Process.return_value = process
     monkeypatch.setattr(worker.multiprocessing, "get_context", lambda _method: context)
     monkeypatch.setattr(worker, "process_rss_bytes", lambda _pid: None)
-    monkeypatch.setattr(worker, "scoring_stage_bytes", lambda _home, _output: 2 * 1024 * 1024)
+    from sos_platform import job_artifacts
+    monkeypatch.setattr(job_artifacts, "scoring_stage_bytes", lambda _home, _output: 2 * 1024 * 1024)
     monkeypatch.setattr(worker, "emit", lambda *_args, **_kwargs: None)
     cgroup = Mock()
     assert worker._run_once_reserved(

@@ -578,7 +578,7 @@ def test_worker_child_sets_attempt_scoped_sort_directory(monkeypatch, tmp_path):
         path.write_bytes(b"model")
         return {"training_rows": 2}
 
-    monkeypatch.setattr(worker, "train_dataset", fake_train)
+    monkeypatch.setattr(ml_training, "train_dataset", fake_train)
     completed = tmp_path / "finished.json"
     worker._perform(
         tmp_path, "postgresql://unused", job, completed, tmp_path / "pending.parquet",
@@ -615,7 +615,8 @@ def test_worker_parent_stops_stage_overflow_and_records_error(monkeypatch, tmp_p
     context.Process.return_value = process
     monkeypatch.setattr(worker.multiprocessing, "get_context", lambda _method: context)
     monkeypatch.setattr(worker, "process_rss_bytes", lambda _pid: None)
-    monkeypatch.setattr(worker, "training_stage_bytes", lambda _home, _attempt: 2 * 1024 * 1024)
+    from sos_platform import job_artifacts
+    monkeypatch.setattr(job_artifacts, "training_stage_bytes", lambda _home, _attempt: 2 * 1024 * 1024)
     monkeypatch.setattr(worker, "emit", lambda *_args, **_kwargs: None)
     cgroup = Mock()
     budget = ExecutionBudget(max_stage_mib=1)

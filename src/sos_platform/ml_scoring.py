@@ -5,7 +5,7 @@ Scoring Result의 row_index는 결과 파일의 행 번호이지 원본 Dataset�
 """
 
 import math
-import shutil
+from datetime import UTC
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -19,67 +19,11 @@ from .ml_anomaly import histogram_edges
 from .ml_input import INTEGER_DTYPES, model_input_issues
 from .ml_observation_identity import validate_observation_identity
 from .ml_runtime import load_trusted_isolation_forest
+from .ml_scoring_staging import scoring_stage_prefix
 from .ml_temporal_split import select_temporal_partition, utc_observation_time
 from .schemas import MLScoringTemporalScope
 
 SCORING_BATCH_ROWS = 10_000
-
-
-def scoring_stage_prefix(scoring_output: Path) -> str:
-    """Worker Attempt 결과 경로에 귀속된 임시 Scoring Stage 디렉터리 접두어."""
-    return f"ml-score-{scoring_output.name}-"
-
-
-def scoring_stage_directories(home: Path, scoring_output: Path) -> list[Path]:
-    """해당 Attempt가 소유하는 Stage만 탐색하고 심볼릭 링크는 거절한다."""
-    root = home / "results"
-    if not root.is_dir():
-        return []
-    prefix = scoring_stage_prefix(scoring_output)
-    matched = []
-    for item in root.iterdir():
-        if not item.name.startswith(prefix):
-            continue
-        if item.is_symlink():
-            raise ValueError("Scoring Stage must be an owned directory")
-        # 자식이 성공적으로 TemporaryDirectory를 정리한 직후일 수 있다.
-        if not item.exists():
-            continue
-        if not item.is_dir():
-            raise ValueError("Scoring Stage must be an owned directory")
-        matched.append(item)
-    return matched
-
-
-def scoring_stage_bytes(home: Path, scoring_output: Path) -> int:
-    """임시 입력 Stage와 현재 출력 Parquet의 실제 디스크 사용량."""
-    try:
-        size = scoring_output.stat().st_size if scoring_output.is_file() else 0
-    except FileNotFoundError:
-        size = 0
-    for root in scoring_stage_directories(home, scoring_output):
-        try:
-            for entry in root.rglob("*"):
-                if entry.is_symlink():
-                    raise ValueError("Scoring Stage cannot contain symbolic links")
-                try:
-                    if entry.is_file():
-                        size += entry.stat().st_size
-                except FileNotFoundError:
-                    # 임시 파일이 폴링 사이에 정상 삭제될 수 있다.
-                    continue
-        except FileNotFoundError:
-            continue
-    return size
-
-
-def cleanup_scoring_stage(home: Path, scoring_output: Path) -> None:
-    """중단·재시도 Attempt에 한해 남은 임시 Stage 디렉터리를 제거한다."""
-    for directory in scoring_stage_directories(home, scoring_output):
-        try:
-            shutil.rmtree(directory)
-        except FileNotFoundError:
-            continue
 
 
 def _scoring_scope(source: pl.LazyFrame, dataset: dict, model: dict, raw_scope: dict):
@@ -101,12 +45,11 @@ def _scoring_scope(source: pl.LazyFrame, dataset: dict, model: dict, raw_scope: 
         scope.calibration_end.isoformat(),
     )
     # 같은 시간대를 가진 다른 UTC offset도 동일한 순간이면 호환된다.
-    from datetime import timezone
 
     requested = (
         requested[0],
-        scope.train_end.astimezone(timezone.utc).isoformat(),
-        scope.calibration_end.astimezone(timezone.utc).isoformat(),
+        scope.train_end.astimezone(UTC).isoformat(),
+        scope.calibration_end.astimezone(UTC).isoformat(),
     )
     if requested != expected:
         raise ValueError("Temporal Scoring must use Model Revision training boundaries")
