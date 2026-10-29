@@ -432,7 +432,8 @@ def retrieve_features(
         # 조회 정책은 현행 Offline Runtime에 속하며 SOS API 자체의 상한이 아니다.
         limit = entity_execution_limit()
         selected_columns = [key, request.timestamp_column]
-        if "sos_observation_id" in schema:
+        # 관측 식별자가 Entity 키 자체일 때 같은 컬럼을 두 번 선택하지 않는다.
+        if "sos_observation_id" in schema and key != "sos_observation_id":
             selected_columns.append("sos_observation_id")
         rows = source.select(selected_columns).head(limit + 1).collect()
         if rows.height == 0:
@@ -469,7 +470,7 @@ def retrieve_features(
     validate_registry_definition(feast, names, expected)
     service = feast.get_feature_service(registered["feature_service"])
     required = [key, "event_timestamp", *registered["feature_names"]]
-    if "sos_observation_id" in entity_rows.columns:
+    if "sos_observation_id" in entity_rows.columns and key != "sos_observation_id":
         required.append("sos_observation_id")
     rows_written = retrieve_to_parquet(
         feast, service, entity_rows=entity_rows, expected_columns=required,

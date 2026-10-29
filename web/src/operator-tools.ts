@@ -28,16 +28,3 @@ export function mlflowUrl(): string {
 export function feastUrl(): string {
   return origin(ports().feast);
 }
-
-/** SOS 분석 ID는 Dagster Run의 sos/submission_id 태그와 같다. */
-export function dagsterRunsForAnalysis(analysisId: string): string {
-  return `${dagsterUrl()}/runs?q%5B%5D=${encodeURIComponent("tag:sos/submission_id=" + analysisId)}`;
-}
-
-export function mlflowRunUrl(runId: string): string {
-  return `${mlflowUrl()}/#/runs/${encodeURIComponent(runId)}`;
-}
-
-export function mlflowRegistryUrl(): string {
-  return `${mlflowUrl()}/#/models`;
-}

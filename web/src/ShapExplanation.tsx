@@ -109,13 +109,13 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
     return <p role="alert">SHAP 설명 근거의 점수·기여도 검증에 실패했습니다.
       이 결과의 차트는 표시하지 않습니다. 설명 결과 판본을 확인하세요.</p>;
   }
-  return <section aria-label="SHAP 모델 점수 기여도" className="pipeline-shap-result">
+  return <section aria-label="SHAP 모델 점수 기여도" className="shap-result">
     <p className="explanation-baseline">비교 기준: 학습 Feature별 중앙값을 모은 합성 입력 1개.
       학습 데이터의 실제 분포나 정상 범위를 나타내지 않습니다.</p>
     <h6>{zeroContributions ? "SHAP 기준 점수와 일치하는 결과" :
       `모델 점수에 기여한 주요 Feature ${shown.length}개 (SHAP)`}</h6>
     {zeroContributions
-      ? <div className="pipeline-shap-zero" role="status">
+      ? <div className="shap-zero" role="status">
           <strong>이 입력의 SHAP 기여도는 모두 0입니다.</strong>
           <p>기준 점수 <strong>{key(baseline)}</strong> · 실제 점수 <strong>{key(score)}</strong>:
             계산 허용 오차 내에서 같습니다.</p>
@@ -126,19 +126,19 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
             입력을 바꾼다고 반드시 점수가 달라지는 것은 아닙니다.</p>
         </div>
       : <>
-          <p className="pipeline-shap-summary">기준 점수 <strong>{key(baseline)}</strong> +
+          <p className="shap-summary">기준 점수 <strong>{key(baseline)}</strong> +
             Feature 기여도 합 <strong>{key(shapSum)}</strong> =
             실제 이상 점수 <strong>{key(score)}</strong></p>
-          <p className="pipeline-shap-legend"><span className="pipeline-shap-positive">양수: 점수를 높이는 방향</span>
-            <span className="pipeline-shap-negative">음수: 점수를 낮추는 방향</span></p>
+          <p className="shap-legend"><span className="shap-positive">양수: 점수를 높이는 방향</span>
+            <span className="shap-negative">음수: 점수를 낮추는 방향</span></p>
           <DataChart option={option} selectedDataIndex={selectedBarIndex}
             ariaLabel={`실제 모델 이상 점수 기준 주요 ${shown.length}개 Feature의 개별 양수·음수 Permutation SHAP 기여도. 현재 살펴보는 Feature: ${activityFeatureLabel(selected.feature)}`}
             onDataClick={index => {
               const entry = bars[index];
               if (entry) setFeatureSelection({ resultId: result.id, feature: entry.feature });
             }} />
-          <div className="pipeline-shap-feature-focus" aria-label="선택한 SHAP Feature 근거">
-            <label className="pipeline-shap-feature-picker">
+          <div className="shap-feature-focus" aria-label="선택한 SHAP Feature 근거">
+            <label className="shap-feature-picker">
               <span>Feature 선택</span>
               <select value={selected.feature} onChange={event =>
                 setFeatureSelection({ resultId: result.id, feature: event.target.value })}>
@@ -147,7 +147,7 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
                 </option>)}
               </select>
             </label>
-            <div className="pipeline-shap-feature-values" aria-live="polite">
+            <div className="shap-feature-values" aria-live="polite">
               <div><span>{valueLabel}</span>
                 <strong>{selected.missing_imputed ? "결측 대체" : key(selected.actual_value)}</strong></div>
               <div><span>학습 참조 중앙값</span><strong>{key(selected.reference_median)}</strong></div>
@@ -155,16 +155,16 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
             </div>
             <p className="hint">차트 막대 또는 목록에서 Feature를 선택하면 {inputLabel}의 값과 점수 기여를 비교할 수 있습니다.</p>
           </div>
-          {rest.length > 0 && <div className="pipeline-shap-remainder">
+          {rest.length > 0 && <div className="shap-remainder">
             <span>나머지 {rest.length}개 Feature 기여도 합계</span>
             <strong>{key(restSum)}</strong>
             <small>전체 기여도 합에 포함되며 단일 Feature의 기여도가 아닙니다.</small>
           </div>}
         </>}
     <p className="hint">기여도는 이 입력의 모델 점수에 대한 근사 설명입니다. 사고 원인이나 발생 확률을 뜻하지 않습니다.</p>
-    <details className="pipeline-shap-technical">
+    <details className="shap-technical">
       <summary>SHAP 상세 계산 근거</summary>
-      <div className="pipeline-shap-technical-content">
+      <div className="shap-technical-content">
         <section aria-label="SHAP 설명 방법과 기준">
           <h6>설명 방법과 기준</h6>
           <EvidenceFacts facts={[
@@ -193,7 +193,7 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
   </section>;
 }
 
-export function PipelineShapExplanation({
+export function ShapExplanation({
   candidate, scoringResultId, modelRevisionId, canRun, canCancel, onOpenResource,
 }: {
   candidate: { row_index: number; anomaly_score: number };
@@ -302,7 +302,7 @@ export function PipelineShapExplanation({
     finally { setBusy(false); }
   }
 
-  return <div className="pipeline-shap-explanation">
+  return <div className="shap-explanation">
     <h6>점수 기여도 <small>SHAP</small></h6>
     <p className="hint">기준 입력에서 이 관측값으로 바뀌면서 모델 점수가 얼마나 달라졌는지 Feature별로 설명합니다.</p>
     {!result && <p className="explanation-baseline">비교 기준: 학습 Feature별 중앙값을 모은 합성 입력 1개.
@@ -322,7 +322,7 @@ export function PipelineShapExplanation({
       최근 100건에 기존 SHAP 작업이 없습니다. 오래된 결과는 독립 설명 작업 이력에서 확인하세요.
     </p>}
     {!canRun && <p className="hint">현재 계정은 설명 Job을 제출할 권한이 없습니다.</p>}
-    {job && <p role="status" className="pipeline-shap-job-status">
+    {job && <p role="status" className="shap-job-status">
       {job.status === "Succeeded" ? "SHAP 분석 완료" :
         job.status === "Running" ? "SHAP 분석 중" :
         job.status === "Queued" ? "SHAP 분석 대기 중" :
@@ -347,7 +347,7 @@ export function PipelineShapExplanation({
     {result && <><ShapContributionChart result={result} />
       <button type="button" className="secondary"
         onClick={() => onOpenResource("explanation", result.id)}>SHAP 결과 판본 보기 →</button>
-      {canRun && <button type="button" className="secondary pipeline-shap-recalculate"
+      {canRun && <button type="button" className="secondary shap-recalculate"
         disabled={busy || lookup !== "ready"} onClick={() => void submit()}>
         {busy ? "SHAP 분석 요청 중…" : "SHAP 다시 계산"}
       </button>}

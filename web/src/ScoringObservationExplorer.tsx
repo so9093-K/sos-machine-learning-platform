@@ -6,7 +6,7 @@ import { DataChart } from "./DataChart";
 import { verifiedScoreHistogram } from "./ModelScoreContext";
 import { EvidenceFacts } from "./EvidenceFacts";
 import { formatObservedAt } from "./display-format";
-import { PipelineCandidateInvestigation } from "./PipelineCandidateInvestigation";
+import { ObservationInvestigation } from "./ObservationInvestigation";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { ScoringObservations, ScoringResult } from "./types";
 
@@ -208,7 +208,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           </p>}
         </div>
         {loading && <p role="status">점수가 높은 관측값을 불러오는 중입니다.</p>}
-        {error && <div role="alert" className="pipeline-readiness-blocked">
+        {error && <div role="alert" className="notice-blocked">
           <strong>관측값 조회를 완료하지 못했습니다.</strong>
           <details><summary>오류 진단 정보</summary><p>{error}</p></details>
           {!loaded && <button type="button" className="secondary"
@@ -244,7 +244,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       <section className="scoring-observation-detail" ref={detailRef} tabIndex={-1}
         aria-label="현재 표시 중인 관측값 상세">
         {selected
-          ? <PipelineCandidateInvestigation
+          ? <ObservationInvestigation
               key={result.id + ":" + selected.row_index}
               candidate={selected} scoreOrder={scoreOrder} scoringResultId={result.id}
               isDefaultObservation={!userSelected}

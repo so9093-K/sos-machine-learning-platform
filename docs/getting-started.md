@@ -1,26 +1,24 @@
 # 시작하기
 
-SOS의 로컬 개발 환경을 실행하고 데이터 탐색과 준비된 모델의 이해·활용을 시작하는 안내다. 학습·제작은 별도 권한이 필요한 관리 작업이다. 각 목적은 독립적으로 시작할 수 있으며 모든 단계를 순서대로 거칠 필요는 없다.
+SOS의 로컬 개발 환경을 실행하고 데이터 탐색과 준비된 모델의 이해·활용을 시작하는 안내다. 모델과 Feature는 개발 환경에서 만들고 배포 과정이 SOS에 공급하며, SOS 웹은 그 기능을 이해하고 활용하는 곳이다. 각 목적은 독립적으로 시작할 수 있으며 모든 단계를 순서대로 거칠 필요는 없다.
 
 ## 제품명과 인스턴스 표시명
 
 관리자는 Web 사이드바에서 **제품명 설정**과 **인스턴스 표시명 설정**을 각각 변경할 수 있습니다. 제품명은 로그인 전 화면에도 표시되며, 별도로 설정하지 않은 인스턴스의 기본 제품명은 **SOS**입니다. 표시명 변경은 내부 API·Worker·데이터 식별자를 바꾸지 않습니다.
 
-## Feast 등록 Feature 조회
+## Feast 등록 Feature (개발·자동화)
 
-Feature Service 등록과 조회는 별개의 사용자 행동이다. **제작 도구 → 학습·실험 관리 → 새 학습**의
-**등록 Feature로 학습 Dataset 구성 · Feast**를 펼쳐 기존 Service를 선택하거나 새로 등록할 수 있다. 두 API 모두 Actor·Dataset 권한과
-Job/Attempt 계약을 적용한다.
+Feature Service 등록·조회·폐기는 개발·배포 자동화가 `automation` 역할의 서비스 계정으로 SOS API를 호출해 수행한다. SOS 웹은 이 작업 화면을 제공하지 않는다. 모든 API는 Actor·Dataset 권한과 Job/Attempt 계약을 적용한다.
 
 1. `POST /api/features/services/jobs`: Feature Source Dataset, 지속적 Entity Key,
    원본 UTC Event Timestamp와 숫자형 Feature 목록을 제출한다. 성공한 Job 결과에
    Feast `feature_service` 이름과 고정 Source 판본을 남긴다.
-2. `GET /api/features/services/registrations?limit=100&cursor=...`: 본인 등록 Job
+2. `GET /api/features/services/registrations?limit=100&cursor=...`: 같은 Actor의 등록 Job
    이력을 기존 키셋 커서 계약으로 페이지 조회한다.
    이 이력은 현재 Feast Registry의 실시간 가용성 판정을 대신하지 않는다.
 3. `POST /api/features/retrieval/jobs`: 등록 성공 Job ID·조회 시점 Dataset·UTC 시간
    컬럼을 제출한다. 동일 Feature Service를 조회마다 재사용하며 새 정의를 등록하지 않는다.
-4. 조회 성공 Job의 결과 `dataset_id`를 기존 SOS 모델 학습에 사용한다.
+4. 조회 성공 Job의 결과 `dataset_id`를 모델 학습 입력으로 사용한다.
 5. `POST /api/features/services/{registration_job_id}/retirement/jobs`: 성공·실패·
    취소된 등록을 명시적으로 폐기한다. `registry_deleted`는 실제 Registry 객체
    제거 여부이며 `false`인 경우 다른 활성 등록·과거 조회의 참조가 유지된 것이다.
@@ -28,32 +26,6 @@ Job/Attempt 계약을 적용한다.
    과거 Dataset·모델 근거는 유지한다. 실행 중인 폐기 Job은 외부 삭제 커밋
    정합성을 위해 취소할 수 없다. 부분 실패한 폐기는 새 폐기 Job으로
    재시도하여 실제 Registry 상태를 확인해야 한다.
-
-등록 요청:
-```json
-{
-  "feature_dataset_id": "<published-parquet-source-id>",
-  "entity_column": "host_id",
-  "timestamp_column": "event_timestamp",
-  "features": ["file_changes_1h", "network_connections_1h"],
-  "ttl_seconds": 2592000
-}
-```
-
-조회 요청:
-```json
-{
-  "registration_job_id": "<successful-feature-register-job-id>",
-  "entity_dataset_id": "<entity-events-dataset-id>",
-  "timestamp_column": "prediction_time"
-}
-```
-
-현재 DuckDB Runtime의 기본 Entity 조회 상한은 100,000개이며
-`SOS_FEAST_MAX_ENTITY_ROWS`로 조정한다. 초과 요청은 잘라내지 않고 실패한다.
-동일 정의를 재등록하면 Registry의 기존 내용을 대조하고 안전하게 재사용하며
-변경·부분 소실 상태는 무조건 덮어쓰지 않는다.
-Online Serving과 현재 Iceberg SQL Catalog의 직접 조회는 지원하지 않는다.
 
 ## 실행 준비
 
@@ -127,37 +99,30 @@ Web UI의 인증 화면에 앞에서 보관한 Bearer Token을 입력한다. 토
 
 미리보기와 부분 데이터 분석은 전체 Dataset의 분포를 보장하지 않는다. 파일 등록 성공은 모든 행의 품질 검증 완료를 뜻하지 않으며, 이후 조회·분석·Job에서 오류가 발견될 수 있다. 입력 형식·계산 범위와 결과의 의미는 [Contracts](contracts.md)와 화면·API의 현재 안내를 따른다.
 
-## 기존 모델 활용
+## 준비된 모델 활용
 
-1. 홈의 **모델 선택** 또는 왼쪽 **모델 활용**을 열어 모델 그룹과 판본을 선택한다. **모델 상세**에서 학습 데이터와 입력 조건을 확인하고 **데이터에 적용**으로 이동한다. 새 학습은 필요하지 않다.
+1. 홈의 **모델 선택** 또는 왼쪽 **모델 활용**을 열면 제공 중인 모델과 목적·적용 대상·한계 설명을 볼 수 있다. **모델 상세**에서 입력 조건과 판본에 고정된 생성 근거를 확인하고 **데이터에 적용**으로 이동한다. 새 학습은 필요하지 않다.
 2. **Dataset 분석**에서 사용할 Dataset과 입력 조건을 확인한 뒤 **이 Dataset 분석 시작**을 선택한다. 지원 모델에서는 **값 직접 입력**으로 별도 소량 점수 계산을 할 수도 있다. 화면 이동이나 파일 등록만으로 점수 계산을 실행하지 않는다.
-3. 모델 상세의 **모델 생성 과정**, **적용 범위·한계**, **기록된 학습 범위·설정**에서 보존된 근거를 확인할 수 있다. 점수 계산 후에는 실제 분포·점수순 관측값·선택적 설명을 살펴본다. 이전 실행과 조건·지표 비교는 **작업 이력 → ML 실행 작업**에서 찾는다.
+3. 점수 계산 후에는 실제 분포·점수순 관측값·선택적 설명을 살펴보고, 필요하면 판정 정책·평가를 이어서 실행한다. 이전 실행은 **작업 이력 → 모델 적용 작업**에서 찾는다.
 
-## 제작 권한과 새 학습
+제공 중인 모델이 없으면 모델 활용 화면은 아직 준비된 모델이 없다고 표시한다. 데이터 탐색은 그대로 사용할 수 있다.
 
+## 활동 이상 탐지
 
-기존 `researcher` 토큰은 데이터·모델 활용의 일반 Job 실행을 계속할 수 있지만 학습·모델 관리·Feature 정의 변경을 할 수 없다. 학습 제출·Fork·학습 포함 Workflow에는 `model.train`, Feature 등록·폐기에는 `feature.manage`, 모델 그룹·판본 변경에는 `model.manage` 권한이 필요하다. 이 권한은 명시적으로 부여한 `model_builder` 역할과 관리자에게 제공한다. 기존 제작 자동화가 `researcher`를 사용했다면 해당 Actor의 토큰 설정을 검토해 필요한 제작 역할을 명시적으로 부여해야 한다. `operator`는 기존 진단·보존 역할을 유지한다.
+왼쪽 **분석 주제 → 활동 이상 탐지**는 활동 이상 탐지 입력 계약(44개 숫자형 활동 Feature)에 맞는 제공 모델을 사용자의 Dataset 또는 직접 입력에 적용하는 화면이다. 점수순 관측값의 실제 입력·Train 참조 중앙값을 비교하고, SHAP 기여도·기준값 치환 민감도를 선택적으로 계산한다. 내부 행 번호는 원본 활동 ID가 아니며 이상 점수는 사고 확정·정확도·확률이 아니다. 원시 로그에서 Feature를 자동 생성하지 않는다.
 
-일반 계정의 홈은 데이터 탐색과 모델 활용을 제공하고, 제작 화면의 직접 URL도 실행 권한을 확인한다. 모델이 없으면 담당자에게 등록·접근 상태를 확인한다. 현재 다른 Actor의 모델을 공유·게시하는 기능은 제공하지 않으며 기존 소유권을 유지한다.
+## 모델 공급 (개발·배포)
 
-1. 학습 실행 권한이 있는 계정에서 왼쪽 **제작 도구 → 학습·실험 관리**를 연다. **연구 묶음**에서 Experiment를 선택하고 같은 종류의 Run을 최대 두 개 비교한다. 기존 연구를 이어가려면 해당 묶음을 선택한 뒤 **새 학습 준비 → 새 학습**으로 이동한다. 선택한 연구 이름이 학습 화면의 **연구 Experiment** 초기값에 들어가며 수정할 수도 있다. 선택 없이 시작하면 **기본 실험**을 사용한다.
-2. 학습 화면에서 등록된 Dataset, 학습할 숫자형 Feature, 등록할 모델 그룹을 선택한다. 기존 `/training` 주소로 직접 시작할 수도 있고, Data Explorer의 분석 Job을 먼저 실행할 필요는 없다. Experiment ID만 있고 연구 이름이 빠진 학습 주소에서는 **연구 묶음 확인**을 통해 해당 연구를 확인한 뒤 학습을 준비한다.
-3. 학습 입력을 전체 Dataset(`all`, 기본값) 또는 행 수와 Seed를 지정한 부분집합(`sample`)으로 선택하고 Isolation Forest 설정을 확인한다. 입력 부분집합의 행 수와 모델의 트리별 표본 수는 서로 다른 설정이다.
-4. **학습 Job 제출** 후 **학습 Job 상태**에서 실제 상태와 오류를 확인한다. 이전 실행은 **작업 이력 → ML 실행 작업**에서 확인한다. 성공하면 **불변 모델 근거 보기**에서 Dataset 판본·입력 범위·학습 점수 요약을 확인하고, Registry에 등록된 모델을 활용할 수 있다. 학습 성공과 Registry 등록 완료는 구별한다.
+모델 개발·학습 설정·실험은 프로젝트 코드와 MLflow 등 개발 환경에서 수행하고, 준비된 모델은 배포 과정에서 SOS에 공급한다. 공급에는 `automation` 역할의 서비스 계정 토큰을 사용한다. `automation`은 `kind`가 `service`인 Actor에만 부여할 수 있으며, 학습(`model.train`)·모델 관리와 제공(`model.manage`)·Feature 정의 변경(`feature.manage`) 권한을 가진다. 사람 사용자 역할(`viewer`·`researcher`)에는 이 권한이 없다. 이전의 `model_builder` 역할은 제거됐으므로 해당 토큰 설정은 `automation` 서비스 계정으로 바꿔야 한다.
 
-학습 입력은 고정된 50,000행·32 Feature 한도로 제한하지 않지만, 요청한 데이터와 실행 환경의 자원 예산이 맞지 않으면 **입력을 조용히 줄이지 않고 실패**한다. 정확한 입력 조건과 설정 범위는 학습 화면 및 [API Reference](http://localhost:9602/docs)가 정본이다.
+```bash
+SOS_SUPPLY_TOKEN=<automation 토큰> .venv/bin/python scripts/supply_model.py \
+  --dataset-file <학습 데이터.parquet> --description-file <제공 설명.txt> [--sample-rows 200000]
+```
 
-학습 점수는 독립 검증 성능이 아니다. 필요하면 Scoring·판정 정책·평가·설명을 별도로 실행한다. 지원되는 Permutation SHAP은 기준 점수에 대한 Feature 기여도를, 기준값 치환은 입력 하나를 바꾼 점수 반응을 나타낸다. 둘 다 사건 원인이나 인과효과를 뜻하지 않는다. 온라인 Serving·프로덕션 배포는 아직 제공하지 않는다.
+스크립트는 학습 데이터를 등록하고 활동 이상 탐지 분석 정의의 필수 Feature로 SOS Worker 학습을 실행한 뒤, Registry 등록을 확인하고 설명과 함께 판본을 제공한다. 제공 설명에는 모델의 목적·적용할 데이터·결과 해석 시 주의할 한계를 적는다. 제공 중단은 `DELETE /api/ml/models/{id}/offering`으로 하며 새 적용만 막고 사용자가 이미 만든 결과는 유지한다.
 
-## 활동 이상 탐지와 Workflow
-
-1. 왼쪽 **분석 주제 → 활동 이상 탐지**를 열면 모델 적용 방법을 살펴볼 수 있다. **모델 적용**은 호환되는 기존 모델을 사용하는 활동 이상 탐지 전용 경로다.
-2. 새 시간 분할 학습·기준 설정·Test 평가를 함께 실행하려면 **제작 도구 → 학습·실험 관리 → 활동 이상 탐지 Workflow**를 연다. **예제로 모델 학습 시작**은 합성 Dataset 등록·입력 검사 후 Workflow를 명시적으로 제출한다. **내 Dataset으로 시작**에서는 자신의 입력을 선택해 조건을 확인한 뒤 실행한다. 예제 목록을 보는 것만으로 데이터를 등록하거나 작업을 실행하지 않는다.
-3. 대기·학습·판정 기준 설정·Test 적용 및 등록 대기·오류·취소 상태를 구별해 확인한다. 학습 성공이 곧 전체 Workflow 완료를 의미하지는 않는다.
-4. 완료 후 학습 범위·Calibration 기준·Test 검토 건수와 분포를 확인하고 이상 후보의 실제 입력과 선택적 설명을 조사한다. 내부 행 번호는 원본 활동 ID가 아니며 이상 점수는 사고 확정·정확도·확률이 아니다.
-5. 이전 결과는 **작업 이력 → Workflow 분석**이나 홈의 **이어서 이용할 분석**에서 연다. 이력 목록의 최근 최대 30건은 전체 이력 수가 아니다. 결과 상세 URL로도 직접 접근할 수 있고, 결과에서 데이터 탐색으로 이동하면 원래 분석·후보·분석 구간으로 복귀할 수 있다.
-
-현재 Workflow는 44개 숫자형 활동 Feature와 UTC 시간 컬럼이 필요하며 원시 로그에서 Feature를 자동 생성하지 않는다. Workflow는 기본 모델 그룹·기본 실험을 사용한다. 연구 화면에서 고른 Experiment를 이어 학습하려면 독립 **새 학습**을 사용한다. 기존 모델을 다른 Dataset에 적용하는 Scoring은 새 학습과 별개다.
+학습 입력을 조용히 줄이지 않으며, 요청한 데이터와 실행 환경의 자원 예산이 맞지 않으면 실패한다. 큰 데이터는 `--sample-rows`로 행 수와 Seed를 명시한 부분집합을 사용한다. 학습 점수는 독립 검증 성능이 아니다. 지원되는 Permutation SHAP은 기준 점수에 대한 Feature 기여도를, 기준값 치환은 입력 하나를 바꾼 점수 반응을 나타낸다. 둘 다 사건 원인이나 인과효과를 뜻하지 않는다. 온라인 Serving·프로덕션 배포는 아직 제공하지 않는다.
 
 ## 종료와 문제 해결
 
@@ -176,9 +141,9 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 ## MLflow 실험·모델 관리
 
-로컬 Compose는 MLflow 관리 서버를 실행합니다. SOS 웹의 **작업 이력 → ML 실행 작업 → 기록된 실행 조건·지표 비교**에서 Experiment·Run을 읽기 전용으로 조회·비교하고, **모델 활용**에서 등록된 모델 그룹과 판본을 선택합니다. 그룹 이름·설명과 생성·보관 설정은 제작 권한 전용 **학습·실험 관리**의 **학습 모델 그룹·등록 설정**, 판본 보관·삭제는 모델 목록의 **버전 관리·식별자**에서 확인합니다. Experiment·Run·Registered Model/Version은 MLflow가 관리하고, SOS는 Dataset·Job/Attempt·Scoring·Evaluation 및 불변 모델 실행 근거를 소유합니다.
+로컬 Compose는 MLflow 관리 서버를 실행합니다. Experiment·Run 비교와 모델 그룹·판본 관리는 개발 환경과 공식 MLflow UI에서 수행하며, SOS 웹은 제공된 모델 판본과 고정된 실행 근거만 보여줍니다. Experiment·Run·Registered Model/Version은 MLflow가 관리하고, SOS는 Dataset·Job/Attempt·Scoring·Evaluation 및 불변 모델 실행 근거와 모델 제공 기록을 소유합니다.
 
-학습 성공과 MLflow Registry 등록 성공은 구별합니다. 관리 연결이 실패하면 학습 성공은 유지되지만 새 모델의 Scoring 및 Pipeline 후속 단계는 Registry 등록을 기다립니다. 기존 `SOS_MLFLOW_EXPERIMENT_ID`는 사용하지 않습니다. 독립 학습에서 입력한 연구 Experiment 이름으로 MLflow 내 Actor별 연구 묶음을 만들며, Pipeline처럼 연구 이름을 지정하지 않은 실행은 기본 실험에 기록합니다.
+학습 성공과 MLflow Registry 등록 성공은 구별합니다. 관리 연결이 실패하면 학습 성공은 유지되지만 새 모델의 Scoring 및 Workflow 후속 단계는 Registry 등록을 기다립니다. 기존 `SOS_MLFLOW_EXPERIMENT_ID`는 사용하지 않습니다. 학습 요청의 연구 Experiment 이름으로 MLflow 내 Actor별 연구 묶음을 만들며, 연구 이름을 지정하지 않은 실행은 기본 실험에 기록합니다.
 
 외부 MLflow 서버를 사용하는 경우 `SOS_MLFLOW_TRACKING_URI`를 변경하고 필요한 인증은 `SOS_MLFLOW_TOKEN`에 설정할 수 있습니다. 기본 MLflow UI는 로컬 운영자 도구이며 사용자별 격리를 제공하지 않으므로 **외부 네트워크에 공개하지 마세요**. SOS API는 Actor별로 실행과 모델의 실제 소유권을 재검증합니다.
 
@@ -186,8 +151,8 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 ## Dagster OSS Workflow 운영
 
-등록형 활동 이상 탐지 Workflow의 실행·단계 의존성과 Asset Graph는 Dagster OSS에서 관리한다. 일반 사용자의 분석 제출·조회·취소는 반드시 SOS API를 경유해야 한다. Dagster UI와 GraphQL을 외부 네트워크에 공개하거나 사용자 권한을 위임해선 안 된다. 기존 독립 ML API 및 Worker의 Job/Attempt·무결성 계약은 유지된다.
+등록형 활동 이상 탐지 Workflow의 실행·단계 의존성과 Asset Graph는 Dagster OSS에서 관리한다. Workflow 제출·조회·취소는 자동화 계정이 SOS API를 경유해 수행하며 SOS 웹은 Workflow 실행 화면을 제공하지 않는다. Dagster UI와 GraphQL을 외부 네트워크에 공개하거나 사용자 권한을 위임해선 안 된다. 기존 독립 ML API 및 Worker의 Job/Attempt·무결성 계약은 유지된다.
 
 Migration 0024는 기존 자체 Pipeline 실행 그룹 테이블을 제거하기 전에 연결된 Job ID와 실행 단계의 관계를 감사 이력에 기록한다. 이전 Pipeline 그룹별 사용자 화면은 종료되지만 실제 Job·Model·Scoring·Evaluation 데이터는 보존된다. 개발 환경이라고 확인되지 않은 볼륨을 무조건 삭제해서는 안 된다.
 
-모델 삭제는 SOS 모델 상세와 Registry 관리 화면에서 영향 정보를 확인한 뒤 실행합니다. 삭제한 모델의 MLflow Version과 실제 S3 모델 파일은 제거되며 과거 Job·Scoring·평가 근거는 보존됩니다. 버전 관리·객체 잠금·외부 백업이 있는 저장소는 관리 정책과 실제 삭제 결과를 별도로 확인해야 합니다.
+모델 삭제는 모델을 소유한 자동화 계정이 `GET /api/ml/models/{id}/deletion-impact`로 영향 정보를 확인한 뒤 `DELETE /api/ml/models/{id}`로 실행합니다. 삭제한 모델의 MLflow Version과 실제 S3 모델 파일은 제거되며 과거 Job·Scoring·평가 근거는 보존됩니다. 버전 관리·객체 잠금·외부 백업이 있는 저장소는 관리 정책과 실제 삭제 결과를 별도로 확인해야 합니다.

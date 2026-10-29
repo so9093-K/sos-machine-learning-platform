@@ -1,7 +1,7 @@
 import { CHART_COLORS, DataChart } from "./DataChart";
 import { FeatureResultDetails } from "./FeatureResultDetails";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
-import { escapeShapTooltipText } from "./PipelineShapExplanation";
+import { escapeShapTooltipText } from "./ShapExplanation";
 import type { ExplanationResult } from "./types";
 const numeric = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? value : null;
 
@@ -44,7 +44,7 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
       <h6>점수 변화가 큰 항목 {ranked.length}개</h6>
       <DataChart option={option} ariaLabel="점수 변화의 절댓값이 큰 상위 5개 항목의 치환 민감도" />
       <p className="hint">각 항목을 학습 중앙값으로 바꿨을 때의 점수 차이입니다. 양수는 점수가 낮아진 경우이며 인과적 기여도는 아닙니다.</p>
-    </> : <div className="pipeline-shap-zero" role="status">{entries.every(item => numeric(item.actual_value) !== null && item.actual_value === item.reference_median)
+    </> : <div className="shap-zero" role="status">{entries.every(item => numeric(item.actual_value) !== null && item.actual_value === item.reference_median)
       ? <p>입력값이 이미 학습 중앙값과 같습니다. 이번 치환에서는 실제 입력값이 달라지지 않았습니다.</p>
       : entries.some(item => numeric(item.actual_value) !== null && numeric(item.reference_median) !== null && item.actual_value !== item.reference_median)
         ? <p>기준값과 다른 입력을 각각 바꿔도 이번 비교에서 점수가 달라지지 않았습니다. 이 결과만으로 항목의 전반적인 중요도를 판단할 수는 없습니다.</p>

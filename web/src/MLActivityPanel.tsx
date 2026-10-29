@@ -3,12 +3,12 @@ import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 import type {
-  Dataset, MLTrainingJobSummary, MLScoringJobSummary, MLPolicyJobSummary,
+  Dataset, MLScoringJobSummary, MLPolicyJobSummary,
   MLEvaluationJobSummary, MLExplanationJobSummary,
 } from "./types";
 import { formatRecordedAt, jobStatusLabel } from "./display-format";
 
-type Kind = "training" | "scoring" | "policy" | "evaluation" | "explanation";
+type Kind = "scoring" | "policy" | "evaluation" | "explanation";
 type JobLike = {
   id: string;
   status: string;
@@ -22,7 +22,6 @@ type JobLike = {
 const operations: Record<Kind, {
   label: string; tab: WorkspaceTab; resource: MLResourceKind; field: string; endpoint: string;
 }> = {
-  training: { label: "모델 학습", tab: "training", resource: "model", field: "model_revision_id", endpoint: "/api/ml/train/jobs" },
   scoring: { label: "점수 계산", tab: "scoring", resource: "scoring", field: "scoring_result_id", endpoint: "/api/ml/scoring/jobs" },
   policy: { label: "판정 정책", tab: "policies", resource: "policy", field: "policy_revision_id", endpoint: "/api/ml/policies/jobs" },
   evaluation: { label: "평가", tab: "evaluations", resource: "evaluation", field: "evaluation_revision_id", endpoint: "/api/ml/evaluations/jobs" },
@@ -115,17 +114,15 @@ function ActivityJobDetails({ job, canCancel, onChanged }: {
 }
 
 /** 조회된 Job 페이지에 있는 활동만 보여준다. 전체 Job 수나 완료 진행률을 추정하지 않는다. */
-export function MLActivityPanel({ canTrain = false, compact = false, canCancel = false, datasets = [], onNavigate,
+export function MLActivityPanel({ compact = false, canCancel = false, datasets = [], onNavigate,
   onOpenResource, onViewAll }: {
   compact?: boolean;
-  canTrain?: boolean;
   canCancel?: boolean;
   datasets?: Dataset[];
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onViewAll?: () => void;
 }) {
-  const training = usePagedJobs<MLTrainingJobSummary>("/api/ml/train/jobs");
   const scoring = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const policy = usePagedJobs<MLPolicyJobSummary>("/api/ml/policies/jobs");
   const evaluation = usePagedJobs<MLEvaluationJobSummary>("/api/ml/evaluations/jobs");
@@ -133,7 +130,7 @@ export function MLActivityPanel({ canTrain = false, compact = false, canCancel =
   const [filter, setFilter] = useState<Kind | "all">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const sources = { training, scoring, policy, evaluation, explanation };
+  const sources = { scoring, policy, evaluation, explanation };
   async function refresh() {
     setLoading(true);
     try {
@@ -153,7 +150,7 @@ export function MLActivityPanel({ canTrain = false, compact = false, canCancel =
       <h3 id={compact ? "recent-ml-heading" : "ml-activity-heading"}>
         {compact ? "최근 ML 실행" : "ML 실행 이력"}
       </h3>
-      <p>학습·점수 계산·정책·평가·설명 Job의 조회된 페이지 범위입니다.</p>
+      <p>점수 계산·정책·평가·설명 Job의 조회된 페이지 범위입니다.</p>
     </div>
       {compact
         ? <button className="secondary" onClick={onViewAll ?? (() => onNavigate("ml-jobs"))}>작업 이력 →</button>
@@ -188,9 +185,9 @@ export function MLActivityPanel({ canTrain = false, compact = false, canCancel =
             onClick={() => onOpenResource(operations[job.kind].resource, job.resultId!)}>
             결과 판본 보기 →
           </button>}
-          {(job.kind !== "training" || canTrain) && <button className="secondary" onClick={() => onNavigate(operations[job.kind].tab)}>
+          <button className="secondary" onClick={() => onNavigate(operations[job.kind].tab)}>
             {job.resultId ? "관련 작업" : "실행 화면"} →
-          </button>}
+          </button>
         </div>
         {!compact && <ActivityJobDetails job={job} canCancel={canCancel}
           onChanged={() => void refresh()}/>}

@@ -15,7 +15,7 @@ const vite = await createServer({
 
 try {
   const { routeAt, contextPath, nextNavigationContext, resourcePath,
-    pipelineRunSelectionContext, ModelAreaNavigation, PlatformNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
+    ModelAreaNavigation, PlatformNavigation } = await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
   const { activityFeatureLabel } = await vite.ssrLoadModule("/src/ActivityFeatureLabels.ts");
   assert.equal(activityFeatureLabel("cnt_proc_exec"), "프로세스 실행 횟수");
@@ -98,19 +98,16 @@ try {
     learning_type: "semi_supervised", task_type: "anomaly_detection", topic: "new_topic",
   }), ["semi_supervised", "이상 탐지", "new_topic"]);
   const catalogPendingMenu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
-    active: "pipelines", canInspectStorage: false, canViewAudit: false,
+    active: "topic", canInspectStorage: false, canViewAudit: false,
     onNavigate: () => {},
   }));
   assert.match(catalogPendingMenu, /활동 이상 탐지 화면 열기/);
-  assert.match(catalogPendingMenu, /href="\/pipelines"/);
-  const ordinaryMenu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
-    active: "ml", canInspectStorage: false, canViewAudit: false, onNavigate: () => {},
-  }));
-  assert.doesNotMatch(ordinaryMenu, /href="\/research|학습·실험 관리|제작 도구/);
-  const builderMenu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
-    active: "ml", canTrain: true, canInspectStorage: false, canViewAudit: false, onNavigate: () => {},
-  }));
-  assert.match(builderMenu, /학습·실험 관리/);
+  assert.match(catalogPendingMenu, /href="\/topics\/activity-anomaly"/);
+  // 학습·실험 제작 화면은 웹 메뉴와 경로에 없다.
+  assert.doesNotMatch(catalogPendingMenu, /href="\/research|href="\/training|학습·실험 관리|제작 도구/);
+  assert.equal(routeAt("/training", "").tab, "overview");
+  assert.equal(routeAt("/research", "").tab, "overview");
+  assert.equal(routeAt("/pipelines", "").tab, "overview");
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
   assert.equal(first.tab, "evaluations");
@@ -119,103 +116,24 @@ try {
     "/policies?scoring=score-v1");
   assert.equal(contextPath("explanations", nextNavigationContext(first, "explanations")),
     "/explanations?scoring=score-v1");
-  assert.deepEqual(nextNavigationContext(first, "training"), {});
+  assert.deepEqual(nextNavigationContext(first, "ml"), {});
 
-  const training = routeAt("/training", "?dataset=data-v1");
-  assert.equal(contextPath("ml", nextNavigationContext(training, "ml")),
-    "/models?dataset=data-v1");
-  assert.equal(contextPath("training", nextNavigationContext(routeAt(
-    "/models", "?dataset=data-v1"), "training")), "/training?dataset=data-v1");
-
-  const groupTraining = routeAt("/training", "?dataset=data-v1&group=research-team");
-  assert.equal(contextPath("ml", nextNavigationContext(groupTraining, "ml")),
-    "/models?dataset=data-v1&group=research-team");
-  assert.equal(contextPath("scoring", nextNavigationContext(
-    routeAt("/models", "?group=research-team"), "scoring")), "/scoring?group=research-team");
-  const groupModel = resourcePath("model", "model-v1", { modelGroupKey: "research-team" });
-  assert.equal(groupModel, "/models/model-v1?group=research-team");
-  assert.equal(contextPath("scoring", nextNavigationContext(
-    routeAt("/models/model-v1", "?group=research-team"), "scoring")),
-    "/scoring?model=model-v1&group=research-team");
-  assert.equal(routeAt("/training", "?group=invalid!").context.modelGroupKey, undefined);
   assert.equal(routeAt("/scoring", "?model=model-v1").context.modelId, "model-v1");
-  assert.equal(contextPath("pipelines", { pipelineView: "learn" }), "/pipelines?view=learn");
-  assert.equal(contextPath("pipelines", { pipelineView: "use" }), "/pipelines?view=use");
-  assert.equal(routeAt("/pipelines", "?view=learn").context.pipelineView, "learn");
-  assert.equal(routeAt("/pipelines", "?view=use").context.pipelineView, "use");
-  assert.equal(contextPath("pipelines", { pipelineView: "use", modelId: "model one" }),
-    "/pipelines?view=use&model=model+one");
-  assert.equal(routeAt("/pipelines", "?view=use&model=model-one").context.modelId, "model-one");
-  // 사용자 정의 모델 그룹의 직접 URL과 결과에서 복귀할 때 모델 선택이 유지된다.
-  const groupedUse = contextPath("pipelines", {
-    pipelineView: "use", modelId: "model-a", modelGroupKey: "anomaly-team",
-  });
-  assert.equal(groupedUse, "/pipelines?view=use&model=model-a&group=anomaly-team");
-  assert.equal(routeAt("/pipelines", "?view=use&model=model-a&group=anomaly-team")
-    .context.modelGroupKey, "anomaly-team");
-  assert.equal(routeAt("/pipelines", "?view=use&model=model-a&group=invalid!")
-    .context.modelGroupKey, undefined);
-  const groupedResource = resourcePath("scoring", "result-a", {
-    modelLabReturn: true, modelId: "model-a", modelGroupKey: "anomaly-team",
-  });
-  assert.equal(groupedResource,
-    "/scoring/results/result-a?from=model-lab&model=model-a&group=anomaly-team");
-  assert.equal(routeAt("/scoring/results/result-a",
-    "?from=model-lab&model=model-a&group=anomaly-team").context.modelGroupKey, "anomaly-team");
-  const groupedDecision = contextPath("policies", {
-    scoringId: "score-a", modelLabReturn: true, modelId: "model-a",
-    modelGroupKey: "anomaly-team",
-  });
-  assert.equal(groupedDecision,
-    "/policies?scoring=score-a&from=model-lab&model=model-a&group=anomaly-team");
-  assert.equal(routeAt("/policies", "?scoring=score-a&from=model-lab&model=model-a&group=anomaly-team")
-    .context.modelGroupKey, "anomaly-team");
-
-  assert.equal(routeAt("/pipelines", "?view=learn&model=model-one").context.modelId, undefined);
-  assert.equal(routeAt("/pipelines", "?view=unexpected").context.pipelineView, undefined);
-  assert.equal(routeAt("/pipelines", "?run=run-1&view=use").context.pipelineView, undefined);
+  assert.equal(contextPath("topic", { modelId: "model one" }), "/topics/activity-anomaly?model=model+one");
+  assert.equal(routeAt("/topics/activity-anomaly", "?model=model-one").context.modelId, "model-one");
+  assert.deepEqual(routeAt("/topics/activity-anomaly", "").context, {});
   assert.equal(contextPath("scoring", { modelId: "name + / ?" }),
     "/scoring?model=name+%2B+%2F+%3F");
   assert.equal(routeAt("/policies", "").context.scoringId, "");
   assert.equal(routeAt("/data", "?scoring=unrelated").context.scoringId, undefined);
+  assert.equal(contextPath("preview", nextNavigationContext(routeAt("/data", "?dataset=data-v1"), "preview")),
+    "/data/query?dataset=data-v1");
 
   const immutablePath = resourcePath("scoring", "score/with space");
   assert.deepEqual(routeAt("/scoring/results/score%2Fwith%20space", "?scoring=other").resource,
     { kind: "scoring", id: "score/with space" });
   assert.equal(immutablePath, "/scoring/results/score%2Fwith%20space");
-  const pipelineResource = resourcePath("model", "model/first", {
-    pipelineReturn: true, pipelineRunId: "run/1", datasetId: "data v1",
-    candidateRowIndex: 42,
-  });
-  assert.equal(pipelineResource,
-    "/models/model%2Ffirst?from=pipeline&run=run%2F1&dataset=data+v1&candidate=42");
-  assert.deepEqual(routeAt("/models/model%2Ffirst",
-    "?from=pipeline&run=run%2F1&dataset=data+v1&candidate=42").context,
-    { pipelineReturn: true, pipelineRunId: "run/1", datasetId: "data v1",
-      candidateRowIndex: 42 });
   assert.deepEqual(routeAt("/models/model-v1", "").context, {});
-  assert.deepEqual(routeAt("/models/model-v1", "?from=pipeline").context, {});
-  assert.equal(contextPath("pipelines", { pipelineRunId: "run-1", candidateRowIndex: 7 }),
-    "/pipelines?run=run-1&candidate=7");
-  assert.equal(routeAt("/pipelines", "?run=run-1&candidate=7").context.candidateRowIndex, 7);
-  assert.equal(routeAt("/pipelines", "?run=run-1&candidate=abc").context.candidateRowIndex, undefined);
-  assert.equal(routeAt("/pipelines", "?candidate=7").context.candidateRowIndex, undefined);
-  const focusedRoute = routeAt("/pipelines", "?run=run-1&candidate=8&section=calibration");
-  assert.equal(focusedRoute.context.pipelineAnalysisSection, "calibration");
-  assert.equal(focusedRoute.context.candidateRowIndex, 8);
-  assert.equal(contextPath("pipelines", focusedRoute.context),
-    "/pipelines?run=run-1&candidate=8&section=calibration");
-  assert.equal(routeAt("/pipelines", "?run=run-1&section=incorrect").context.pipelineAnalysisSection,
-    undefined);
-  const preselectedRun = routeAt("/pipelines", "?run=run-1&candidate=8&section=test").context;
-  assert.equal(contextPath("pipelines",
-    pipelineRunSelectionContext(preselectedRun, "run-1", "actual-dataset")),
-    "/pipelines?dataset=actual-dataset&run=run-1&candidate=8&section=test");
-  assert.equal(contextPath("pipelines",
-    pipelineRunSelectionContext(preselectedRun, "other-run", "other-dataset")),
-    "/pipelines?dataset=other-dataset&run=other-run");
-  assert.equal(contextPath("pipelines", pipelineRunSelectionContext(preselectedRun, "", "")),
-    "/pipelines?view=learn");
   const fromModelLab = resourcePath("scoring", "score/one", {
     modelLabReturn: true, modelId: "model/a",
   });
@@ -240,10 +158,6 @@ try {
     "?from=model-lab&model=model%2Fa").context,
     { modelLabReturn: true, modelId: "model/a" });
   assert.deepEqual(routeAt("/scoring/results/score-one", "?from=model-lab").context, {});
-  assert.equal(resourcePath("policy", "policy-1", {
-    pipelineReturn: true, pipelineRunId: "run-1",
-    pipelineAnalysisSection: "calibration", candidateRowIndex: 8,
-  }), "/policies/policy-1?from=pipeline&run=run-1&candidate=8&section=calibration");
   // 직접 연 Scoring/Model 상세에서 영역 탭으로 이동해도 동일 자산을 이어받는다.
   assert.equal(nextNavigationContext(
     routeAt("/scoring/results/score-v1", ""), "policies").scoringId, "score-v1");
@@ -254,8 +168,6 @@ try {
     routeAt("/models/model-v1", ""), "scoring")), "/scoring?model=model-v1");
   assert.deepEqual(nextNavigationContext(
     routeAt("/models/model-v1", ""), "evaluations"), {});
-  assert.deepEqual(nextNavigationContext(
-    routeAt("/scoring/results/score-v1", ""), "training"), {});
 
   // 실제 모델 영역 링크도 Ctrl/새 탭 열기에서 같은 문맥을 유지한다.
   const resultNav = renderToStaticMarkup(React.createElement(ModelAreaNavigation, {
@@ -270,125 +182,15 @@ try {
     resource: { kind: "model", id: "model-v1" }, onNavigate: () => {},
   }));
   assert.match(modelNav, /href="\/scoring\?model=model-v1"/);
-
-  // 새 목적 구분에서도 Dataset·모델 그룹은 직접 URL과 왕복 이동에 유지한다.
-  const researchRoute = routeAt("/research", "?dataset=data-v1&group=research-team");
-  assert.equal(contextPath("training", nextNavigationContext(researchRoute, "training")),
-    "/training?dataset=data-v1&group=research-team");
-  assert.equal(contextPath("research", nextNavigationContext(groupTraining, "research")),
-    "/research?dataset=data-v1&group=research-team");
-  const modelUseRoute = routeAt("/pipelines", "?view=use&dataset=data-v1&group=research-team");
-  assert.equal(contextPath("research", nextNavigationContext(modelUseRoute, "research")),
-    "/research?dataset=data-v1&group=research-team");
-  for (const [source, destination, expected] of [
-    [researchRoute, "ml", "/models?dataset=data-v1&amp;group=research-team"],
-    [modelUseRoute, "research", "/research?dataset=data-v1&amp;group=research-team"],
-  ]) {
-    const menu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
-      active: source.tab, context: source.context, resource: source.resource,
-      canInspectStorage: false, canViewAudit: false, canTrain: true, onNavigate: () => {},
-    }));
-    assert.ok(menu.includes('href="' + expected + '"'));
-    assert.equal(expected.replaceAll("&amp;", "&"),
-      contextPath(destination, nextNavigationContext(source, destination)));
-  }
-  const selectedResearch = { ...researchRoute.context, experimentId: "17", experimentTitle: "활동 비교 A & B / 2026" };
-  const experimentPath = contextPath("research", selectedResearch);
-  const experimentRoute = routeAt("/research", experimentPath.split("?")[1]);
-  const experimentTraining = contextPath("training", nextNavigationContext(experimentRoute, "training"));
-  const restoredTraining = routeAt("/training", experimentTraining.split("?")[1]);
-  assert.equal(restoredTraining.context.experimentTitle, selectedResearch.experimentTitle);
-  assert.equal(contextPath("research", nextNavigationContext(restoredTraining, "research")), experimentPath);
-  const researchNav = renderToStaticMarkup(React.createElement(ModelAreaNavigation, {
-    active: "training", canTrain: true, context: researchRoute.context, resource: null, onNavigate: () => {},
-  }));
-  assert.match(researchNav, /href="\/research\?dataset=data-v1&amp;group=research-team" aria-current="page"/);
-  assert.doesNotMatch(researchNav, /href="\/training/);
-  assert.doesNotMatch(researchNav, /모델 적용·결과 도구/);
   assert.match(modelNav, /<details class="model-tools">/);
   const { ModelCatalog } = await vite.ssrLoadModule("/src/ModelCatalog.tsx");
   const catalog = renderToStaticMarkup(React.createElement(ModelCatalog, {
-    datasets: [], registryKey: "default", canManage: true, onSelectGroup: () => {},
     onOpenModel: () => {}, onScoreModel: () => {},
   }));
-  assert.doesNotMatch(catalog, /실행 기록 비교|새 학습 →|새 모델 그룹 생성/);
-  const { MLflowResearch } = await vite.ssrLoadModule("/src/MLflowResearch.tsx");
-  const researchProps = { datasets: [], registryKey: "research-team", canManage: false,
-    onSelectGroup: () => {}, onOpenResource: () => {}, onTrain: () => {}, onWorkflow: () => {},
-    onSelectExperiment: () => {} };
-  const researchPage = renderToStaticMarkup(React.createElement(MLflowResearch, { ...researchProps, canTrain: true }));
-  assert.match(researchPage, /새 학습 →/);
-  assert.match(researchPage, /실행 기록 비교/);
-  assert.doesNotMatch(researchPage, /연구 묶음·비교 대상 선택|모델 버전 검색/);
-  const unresolvedResearch = renderToStaticMarkup(React.createElement(MLflowResearch, {
-    ...researchProps, canTrain: true, experimentId: "17",
-  }));
-  assert.match(unresolvedResearch, /<button[^>]*disabled=""[^>]*>새 학습 →/);
-  const readResearch = renderToStaticMarkup(React.createElement(MLflowResearch, { ...researchProps, canTrain: false }));
-  assert.doesNotMatch(readResearch, /새 학습 →|활동 이상 탐지 Workflow →|MLflow 실험 분석/);
-  assert.match(readResearch, /실행 기록 비교/);
-  assert.doesNotMatch(readResearch, /새 연구 실행|학습 모델 그룹/);
+  assert.match(catalog, /사용할 수 있는 모델/);
+  assert.doesNotMatch(catalog, /새 학습|모델 그룹|학습·실험/);
 
-  // 학습 폼도 URL Dataset을 최초 선택값으로 렌더한다.
-  const { MLWorkbench } = await vite.ssrLoadModule("/src/MLWorkbench.tsx");
-  const trainingForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
-    datasets: [{ id: "data-v1", name: "Example Dataset", kind: "file", location: "s3://example/source.parquet" }],
-    initialDatasetId: "data-v1", onDatasetSelected: () => {},
-    registryKey: "default", onRegistryGroupSelected: () => {},
-    canTrain: false, canCancel: false, onOpenModel: () => {},
-  }));
-  assert.match(trainingForm, /<option value="data-v1" selected=""/);
-  assert.match(trainingForm, /학습 결측값 처리 정책/);
-  assert.match(trainingForm, /결측 허용 안 함 \(기본값\)/);
-  assert.match(trainingForm, /Train 중앙값으로 대체/);
-  assert.doesNotMatch(trainingForm, /새 Feature Service 정의·등록|Feature Service 폐기·등록 잔여물 정리/);
-  assert.match(trainingForm, /Feature와 입력 정책을 직접 선택하는 독립 실험/);
-  const experimentForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
-    datasets: [], initialDatasetId: "", initialExperimentTitle: "활동 비교 A & B / 2026",
-    registryKey: "default", onRegistryGroupSelected: () => {}, onDatasetSelected: () => {},
-    canTrain: false, canCancel: false, onOpenModel: () => {},
-  }));
-  assert.match(experimentForm, /aria-label="연구 Experiment 이름"[^>]*value="활동 비교 A &amp; B \/ 2026"/);
-  assert.match(trainingForm, /aria-label="연구 Experiment 이름"[^>]*value="기본 실험"/);
-  // 필수 Feature 선택은 초기 숨김 없이 접근할 수 있고, 한 번에 전체 선택을 강요하지 않는다.
-  const { FeatureSelector } = await vite.ssrLoadModule("/src/FeatureSelector.tsx");
-  const emptyFeatureSelection = renderToStaticMarkup(React.createElement(FeatureSelector, {
-    columns: [{ name: "metric_a", dtype: "Float64" }, { name: "metric_b", dtype: "Int64" }],
-    selected: [], disabled: false, onChange: () => {},
-  }));
-  assert.match(emptyFeatureSelection, /학습 Feature 검색/);
-  assert.match(emptyFeatureSelection, /0(?:<!-- -->)?개 선택/);
-  assert.match(emptyFeatureSelection, /2(?:<!-- -->)?개 표시/);
-  assert.match(emptyFeatureSelection, /표시된 항목 선택/);
-  assert.match(emptyFeatureSelection, /metric_a/);
-  assert.match(emptyFeatureSelection, /metric_b/);
-
-  const pagedDatasetForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
-    datasets: [], initialDatasetId: "data-not-on-first-page",
-    registryKey: "default", onRegistryGroupSelected: () => {},
-    onDatasetSelected: () => {}, canTrain: false, canCancel: false,
-    onOpenModel: () => {},
-  }));
-  assert.match(pagedDatasetForm, /현재 목록 외 Dataset/);
-  assert.match(pagedDatasetForm, /<option value="data-not-on-first-page" selected=""/);
-
-
-  // 등록형 Pipeline의 선택 Dataset·Run 및 준비 화면 복귀 문맥.
-  const pipelineRoute = routeAt("/pipelines", "?dataset=dataset-1&run=run-1");
-  assert.equal(pipelineRoute.context.datasetId, "dataset-1");
-  assert.equal(pipelineRoute.context.pipelineRunId, "run-1");
-  assert.equal(contextPath("pipelines", { datasetId: "data 1", pipelineRunId: "run/1" }),
-    "/pipelines?dataset=data+1&run=run%2F1");
-  assert.deepEqual(nextNavigationContext(
-    routeAt("/data", "?from=pipeline"), "preparation"), { pipelineReturn: true });
-  assert.equal(contextPath("understanding", { pipelineReturn: true }), "/data?from=pipeline");
-  assert.equal(routeAt("/data/prepare", "?from=pipeline").context.pipelineReturn, true);
-  assert.equal(contextPath("preparation", { pipelineReturn: true, datasetId: "dataset-1" }),
-    "/data/prepare?from=pipeline&dataset=dataset-1");
-  assert.deepEqual(nextNavigationContext(
-    routeAt("/data", "?from=pipeline&dataset=dataset-1"), "preparation"),
-    { pipelineReturn: true, datasetId: "dataset-1" });
-  assert.equal(routeAt("/data", "?from=pipeline&dataset=dataset-1").context.datasetId, "dataset-1");
+  // 데이터 화면 사이 이동에서 선택한 Dataset과 작업 문맥을 유지한다.
   assert.equal(routeAt("/data", "?dataset=chosen").context.datasetId, "chosen");
   for (const [tab, path] of [["understanding", "/data"], ["preview", "/data/query"],
       ["profile", "/data/profile"], ["preparation", "/data/prepare"]]) {
@@ -396,152 +198,20 @@ try {
     assert.equal(routeAt(path, target.slice(target.indexOf("?"))).context.datasetId, "data / one");
   }
   assert.deepEqual(nextNavigationContext(routeAt("/data", "?dataset=one"), "preview"),
-    { pipelineReturn: false, datasetId: "one" });
+    { datasetId: "one" });
   const jobContext = { datasetId: "one", dataJobId: "job / one", dataJobKind: "exploration" };
   const jobPath = contextPath("jobs", jobContext);
-  assert.deepEqual(routeAt("/activity/jobs", jobPath.slice(jobPath.indexOf("?"))).context,
-    { pipelineReturn: false, ...jobContext });
+  assert.deepEqual(routeAt("/activity/jobs", jobPath.slice(jobPath.indexOf("?"))).context, jobContext);
   assert.equal(nextNavigationContext(routeAt("/activity/jobs", jobPath.slice(jobPath.indexOf("?"))), "preview").dataJobId, undefined);
   const { dataJobLabel } = await vite.ssrLoadModule("/src/JobsPanel.tsx");
   assert.equal(dataJobLabel({ kind: "feature_register", spec: {} }), "Feature Service 등록");
   assert.equal(dataJobLabel({ kind: "feature_retrieve", spec: {} }), "Feature 시점 조회");
   assert.equal(dataJobLabel({ kind: "feature_retire", spec: {} }), "Feature Service 폐기");
-  const { isFeastSource, entityKeyIssue, RegisteredFeatureSummary, featureRetrievalBlockReason } = await vite.ssrLoadModule("/src/FeastFeaturePanel.tsx");
-  const retirementFor = status => ({ status, spec: { registration_job_id: "registration-1" } });
-  for (const status of ["Queued", "Running", "Succeeded", "Failed"])
-    assert.ok(featureRetrievalBlockReason("registration-1", false, retirementFor(status)));
-  assert.match(featureRetrievalBlockReason("registration-1", false, retirementFor("Failed")), /폐기 상태를 확인하거나 폐기를 다시 요청/);
-  assert.match(featureRetrievalBlockReason("registration-1", true, null), /폐기돼 신규 조회/);
-  assert.equal(featureRetrievalBlockReason("registration-1", false, retirementFor("Cancelled")), null);
-  assert.equal(featureRetrievalBlockReason("different-registration", false, retirementFor("Failed")), null);
-  assert.equal(featureRetrievalBlockReason("registration-1", false, null), null);
-  // 새 세션에는 로컬 폐기 Job이 없어도 서버의 차단 상태를 복원한다.
-  assert.match(featureRetrievalBlockReason("registration-1", false, null, true), /폐기 처리로 신규 조회가 차단/);
-  assert.match(featureRetrievalBlockReason("registration-1", false, retirementFor("Cancelled"), true), /신규 조회가 차단/);
-  assert.match(featureRetrievalBlockReason("different-registration", false, retirementFor("Failed"), true), /신규 조회가 차단/);
-  assert.equal(featureRetrievalBlockReason("registration-1", false, null, false), null);
-  assert.equal(featureRetrievalBlockReason("", false, retirementFor("Failed")), null);
-  assert.equal(isFeastSource({ kind: "file", name: "활동 Feature", location: "s3://bucket/source.parquet" }), true);
-  assert.equal(isFeastSource({ kind: "file", name: "source.parquet", location: "s3://bucket/source.csv" }), false);
-  assert.equal(isFeastSource({ kind: "iceberg", name: "source.parquet", location: "table.parquet" }), false);
-  assert.match(entityKeyIssue("host_id", [{ name: "host_id", dtype: "Int32" }], [{ name: "host_id", dtype: "Int64" }]), /자료형 불일치/);
-  assert.match(entityKeyIssue("host_id", [{ name: "host_id", dtype: "String" }], []), /없습니다/);
-  assert.equal(entityKeyIssue("host_id", [{ name: "host_id", dtype: "String" }], [{ name: "host_id", dtype: "String" }]), "");
-  const featureSummary = renderToStaticMarkup(React.createElement(RegisteredFeatureSummary, {
-    registration: { id: "registration-1", spec: {}, result: { entity_column: "host_id", timestamp_column: "event_time", feature_names: ["activity"], ttl_seconds: 2592000 } },
-    sourceName: "활동 Feature",
-  }));
-  assert.match(featureSummary, /host_id/);
-  assert.match(featureSummary, /30일/);
-  assert.match(featureSummary, /조회 실행 시 검증/);
-  const { differingRunKeys, RunComparison } = await vite.ssrLoadModule("/src/RunComparison.tsx");
-  const comparisonRuns = [
-    { id: "first", params: { "sos.dataset_id": "one", "sos.n_estimators": "100" }, metrics: { "sos.score_mean": 0, same: 1 } },
-    { id: "second", params: { "sos.dataset_id": "one", "sos.n_estimators": "200" }, metrics: { same: 1 } },
-  ];
-  assert.deepEqual(differingRunKeys(comparisonRuns, "params"), ["sos.n_estimators"]);
-  assert.deepEqual(differingRunKeys(comparisonRuns, "metrics"), ["sos.score_mean"]);
-  const comparisonView = renderToStaticMarkup(React.createElement(RunComparison, { runs: comparisonRuns, datasets: [] }));
-  assert.match(comparisonView, /데이터 판본 기록 부족/);
-  assert.match(comparisonView, /트리 개수/);
-  assert.match(comparisonView, /평균 이상 점수/);
-  const { pipelineFailureEvidence, PipelineFailureNotice } = await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
-  const failedRun = { id: "failed-run", status: "Failed", error_code: "SOS-JOB-FAILED", stages: [{ name: "training", job: {
-    id: "training-1", status: "Failed", error_code: "SOS-ML-INPUT-INVALID", error: "입력값 확인", retry_policy: "never",
-  } }] };
-  assert.equal(pipelineFailureEvidence(failedRun).stage, "모델 학습");
-  assert.equal(pipelineFailureEvidence(failedRun).message, "입력값 확인");
-  assert.equal(pipelineFailureEvidence({ ...failedRun, stages: [] }).stage, null);
-  const failureView = renderToStaticMarkup(React.createElement(PipelineFailureNotice, {
-    run: failedRun, operatorLinks: false, onInspectInput() {}, onRefresh() {},
-  }));
-  assert.match(failureView, /실패 지점 · 모델 학습/);
-  assert.match(failureView, /입력 Dataset 확인/);
-  assert.doesNotMatch(failureView, /href=/);
-  for (const errorCode of ["SOS-MLFLOW-NOT-CONFIGURED", "SOS-JOB-FAILED"]) {
-    const infrastructureFailure = renderToStaticMarkup(React.createElement(PipelineFailureNotice, {
-      run: { ...failedRun, error_code: errorCode, stages: [] }, operatorLinks: false,
-      onInspectInput() {}, onRefresh() {},
-    }));
-    assert.doesNotMatch(infrastructureFailure, /입력 Dataset 확인/);
-    assert.match(infrastructureFailure, /실행 상태 다시 조회/);
-  }
-  assert.equal(contextPath("jobs", { pipelineReturn: true, datasetId: "dataset-1" }),
-    "/activity/jobs?from=pipeline&dataset=dataset-1");
-  assert.deepEqual(nextNavigationContext(
-    routeAt("/data/prepare", "?from=pipeline&dataset=dataset-1"), "jobs"),
-    { pipelineReturn: true, datasetId: "dataset-1" });
-  assert.deepEqual(nextNavigationContext(
-    routeAt("/activity/jobs", "?from=pipeline&dataset=dataset-1"), "preview"),
-    { pipelineReturn: true, datasetId: "dataset-1" });
-  assert.deepEqual(nextNavigationContext(routeAt("/activity/jobs", ""), "understanding"),
-    { pipelineReturn: false });
-  assert.deepEqual(nextNavigationContext(
-    routeAt("/data", "?from=pipeline"), "ml"), {});
-  assert.equal(contextPath("pipelines", { datasetId: "dataset-from-data" }),
-    "/pipelines?dataset=dataset-from-data");
-  assert.equal(routeAt("/activity/pipelines", "").tab, "pipeline-jobs");
-  const exploredFromRun = {
-    pipelineReturn: true, datasetId: "dataset-from-run",
-    pipelineRunId: "run-1", candidateRowIndex: 8, pipelineAnalysisSection: "test",
-  };
-  assert.equal(contextPath("understanding", exploredFromRun),
-    "/data?from=pipeline&dataset=dataset-from-run&run=run-1&candidate=8&section=test");
-  const exploredPath = contextPath("understanding", exploredFromRun);
-  const preparedContext = nextNavigationContext(
-    routeAt("/data", exploredPath.slice(exploredPath.indexOf("?"))), "preparation");
-  assert.deepEqual(preparedContext, exploredFromRun);
-  assert.equal(contextPath("pipelines", preparedContext),
-    "/pipelines?dataset=dataset-from-run&run=run-1&candidate=8&section=test");
-
-  // 서버 계산 없이 첫 Pipeline 소비 화면의 입구·준비 안내를 렌더링한다.
-  const { PipelineWorkspace, isRegistrationPending, filterCandidatesByScoreRange } =
-    await vite.ssrLoadModule("/src/PipelineWorkspace.tsx");
-  // Training Job 성공만으로 Run 전체가 성공한 것처럼 표시하지 않는다.
-  const pendingRun = {
-    status: "Running", current_stage: "training",
-    stages: [{ name: "training", job: { status: "Succeeded" } }],
-  };
-  assert.equal(isRegistrationPending(pendingRun), true);
-  assert.equal(isRegistrationPending({
-    ...pendingRun, stages: [{ name: "training", job: { status: "Running" } }],
-  }), false);
-  assert.equal(isRegistrationPending({ ...pendingRun, current_stage: "calibration" }), false);
-  assert.equal(isRegistrationPending({ ...pendingRun, status: "Succeeded" }), false);
-  assert.equal(isRegistrationPending(null), false);
-
-  const { MLTrackingDetails } = await vite.ssrLoadModule("/src/MLTrackingStatus.tsx");
-  // Retry는 학습 실패가 아니며, 등록 오류 코드를 소비자가 확인할 수 있어야 한다.
-  const retryTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
-    status: { state: "Retry", attempts: 2, last_error_code: "SOS-MLFLOW-HTTP-503" },
-    error: "",
-  }));
-  assert.match(retryTracking, /MLflow 기록·모델 등록 실패 · 자동 재시도 대기 \(시도 2회\)/);
-  assert.match(retryTracking, /SOS-MLFLOW-HTTP-503/);
-  assert.match(retryTracking, /기존 Job 결과는 보존됩니다/);
-  const missingModelTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
-    status: { state: "Retry", attempts: 6,
-      retry_after: "2026-10-26T12:30:00+00:00",
-      run_id: "tracked-run-1",
-      last_error_code: "SOS-MLFLOW-HTTP-404-registered-models_get" },
-    error: "",
-  }));
-  assert.match(missingModelTracking, /신규 모델 생성 순서 또는 Registry 상태/);
-  assert.match(missingModelTracking, /다음 자동 재시도 기준 시각/);
-  assert.match(missingModelTracking, /tracked-run-1/);
-  assert.match(missingModelTracking, /동일 학습을 다시 제출해 해결하려 하지 마세요/);
-  const recoveredTracking = renderToStaticMarkup(React.createElement(MLTrackingDetails, {
-    status: { state: "Succeeded", run_id: "mlflow-run-1" }, error: "",
-  }));
-  assert.match(recoveredTracking, /MLflow 기록 완료 · Run ID mlflow-run-1/);
-  assert.doesNotMatch(recoveredTracking, /role="alert"|SOS-MLFLOW-HTTP-503/);
-
-  const { PipelineAnalysis, PipelineEvidenceView, validatePipelineEvidence } = await vite.ssrLoadModule("/src/PipelineAnalysis.tsx");
-  const { PipelineCandidateInvestigation } = await vite.ssrLoadModule("/src/PipelineCandidateInvestigation.tsx");
+  const { ObservationInvestigation } = await vite.ssrLoadModule("/src/ObservationInvestigation.tsx");
   const { SensitivityChart, formatSensitivityValue } = await vite.ssrLoadModule("/src/FeatureSensitivity.tsx");
   const { matchingExplanationJob } = await vite.ssrLoadModule("/src/ObservationSensitivity.tsx");
   const candidateWithContext = renderToStaticMarkup(
-    React.createElement(PipelineCandidateInvestigation, {
+    React.createElement(ObservationInvestigation, {
       candidate: {
         row_index: 8, anomaly_score: 0.85, features: { ratio_outbound_traffic: 0.9 },
         observed_at: "2026-01-01T02:00:00Z",
@@ -556,7 +226,7 @@ try {
   assert.match(candidateWithContext, /입력값 확인 · 1개 항목/);
   assert.match(candidateWithContext, /점수 기여도/);
   const groupedObservation = renderToStaticMarkup(
-    React.createElement(PipelineCandidateInvestigation, {
+    React.createElement(ObservationInvestigation, {
       candidate: {
         row_index: 9, anomaly_score: 0.71,
         features: { cnt_file_create: 3, cnt_proc_exec: 4, ratio_outbound_traffic: 0.6 },
@@ -566,7 +236,7 @@ try {
     }));
   assert.match(groupedObservation, /선택한 관측값/);
   const defaultObservation = renderToStaticMarkup(
-    React.createElement(PipelineCandidateInvestigation, {
+    React.createElement(ObservationInvestigation, {
       candidate: {
         row_index: 0, anomaly_score: 0.91, features: { cnt_file_create: 2 },
         observed_at: "2026-01-01T02:00:00+00:00",
@@ -581,7 +251,7 @@ try {
   assert.doesNotMatch(defaultObservation, /관측 시각·원본 관측치 ID 없음/);
   assert.match(groupedObservation, /활동 선택/);
   const observationWithExperiment = renderToStaticMarkup(
-    React.createElement(PipelineCandidateInvestigation, {
+    React.createElement(ObservationInvestigation, {
       candidate: {
         row_index: 9, anomaly_score: 0.71,
         features: { cnt_file_create: 3, cnt_proc_exec: 4 },
@@ -592,7 +262,7 @@ try {
   assert.match(observationWithExperiment, /이 관측값으로 실험/);
   assert.doesNotMatch(groupedObservation, /이 관측값으로 실험/);
   const noPermissionExperiment = renderToStaticMarkup(
-    React.createElement(PipelineCandidateInvestigation, {
+    React.createElement(ObservationInvestigation, {
       candidate: { row_index: 9, anomaly_score: 0.71, features: { cnt_file_create: 3 } },
       observationMode: true, scoringResultId: "score-1", modelRevisionId: "model-1",
       canRun: false, canCancel: false, onOpenResource: () => {}, onTryObservation: () => null,
@@ -611,10 +281,9 @@ try {
   assert.doesNotMatch(groupedObservation, /기본 미리보기|observation-selected-feature/);
   assert.ok(groupedObservation.indexOf("활동 선택") <
     groupedObservation.indexOf("점수 기여도"));
-  assert.doesNotMatch(groupedObservation, /pipeline-feature-details/);
   assert.match(groupedObservation, /학습 모델 판본 참조가 없어/);
   const pipelineViewOnly = renderToStaticMarkup(
-    React.createElement(PipelineCandidateInvestigation, {
+    React.createElement(ObservationInvestigation, {
       candidate: { row_index: 2, anomaly_score: 0.2, features: { cnt_proc_exec: 2 } },
       scoringResultId: "score-1", modelRevisionId: null,
       canRun: false, canCancel: false, onOpenResource: () => {},
@@ -622,7 +291,7 @@ try {
   assert.match(pipelineViewOnly, /observation-activity-picker/);
   assert.ok(pipelineViewOnly.indexOf("입력값 확인 · 1개 항목") <
     pipelineViewOnly.indexOf("점수 기여도"));
-  const { ShapContributionChart } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
+  const { ShapContributionChart } = await vite.ssrLoadModule("/src/ShapExplanation.tsx");
   const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
       method: "permutation_shap_median_v1", baseline_score: 0.3, score: 0.5,
@@ -811,7 +480,7 @@ try {
     result: { ...shapResult, output: null },
   }));
   assert.match(missingOutput, /방법과 계산 근거가 일치하지 않습니다/);
-  const { escapeShapTooltipText } = await vite.ssrLoadModule("/src/PipelineShapExplanation.tsx");
+  const { escapeShapTooltipText } = await vite.ssrLoadModule("/src/ShapExplanation.tsx");
   assert.equal(escapeShapTooltipText('<img src=x onerror="test()">&'),
     '&lt;img src=x onerror=&quot;test()&quot;&gt;&amp;');
   const groupShap = renderToStaticMarkup(React.createElement(ShapContributionChart, {
@@ -828,65 +497,6 @@ try {
   assert.doesNotMatch(groupShap, /실제 모델 이상 점수 기준 주요 8개 Feature와 나머지 합/);
   assert.match(candidateWithContext, /원본 관측치 ID/);
   assert.match(candidateWithContext, /18c4be49-18c4-4f32-9894-8c3bfabbd008/);
-  // 인접 점수 구간의 경계값은 한 구간에만 속해야 한다.
-  const scoreItems = [
-    { row_index: 1, anomaly_score: 0.1, features: {} },
-    { row_index: 2, anomaly_score: 0.2, features: {} },
-    { row_index: 3, anomaly_score: 0.3, features: {} },
-  ];
-  assert.deepEqual(filterCandidatesByScoreRange(scoreItems,
-    { lower: 0.1, upper: 0.2, includeUpper: false }).map(x => x.row_index), [1]);
-  assert.deepEqual(filterCandidatesByScoreRange(scoreItems,
-    { lower: 0.2, upper: 0.3, includeUpper: true }).map(x => x.row_index), [2, 3]);
-  assert.deepEqual(filterCandidatesByScoreRange(scoreItems, null).map(x => x.row_index), [1, 2, 3]);
-  const props = {
-    datasets: [], initialDatasetId: "", initialRunId: "",
-    hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
-    onSelectDataset: () => {}, onSelectRun: () => {},
-    canRun: true, canTrain: true, canCancel: true, onNavigate: () => {}, onOpenResource: () => {},
-  };
-  // 비어 있는 첫 진입에서도 제공 기능과 실행 가능한 예제를 발견할 수 있어야 한다.
-  const emptyJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
-    ...props, hasPipelineExample: true, canCreateDataset: true,
-    example: { id: "activity-anomaly-if", row_count: 240, columns: ["ts", "io_bytes_per_sec"],
-      description: "44개 활동 Feature가 있는 합성 데이터", title: "활동 이상 탐지 예제",
-      guide: "입력과 점수를 확인합니다", version: "v1" },
-    onUseExample: async () => ({ id: "example", name: "example", version: "v1", kind: "file" }),
-  }));
-  assert.match(emptyJourney, /예제로 모델 학습 시작/);
-  assert.match(emptyJourney, /id="pipeline-example-start"/);
-  assert.match(emptyJourney, /내 Dataset으로 시작/);
-  assert.doesNotMatch(emptyJourney, /어떤 과정을 경험하나요|이해를 돕는 개념도|예제 구성 살펴보기/);
-  assert.doesNotMatch(emptyJourney, /id="model-lab-example-preview"/);
-  assert.doesNotMatch(emptyJourney, /학습 결과.*이상 후보.*다른 데이터에 적용/);
-  assert.doesNotMatch(emptyJourney, /이 데이터로 분석 실행/);
-  const withoutPermission = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
-    ...props, hasPipelineExample: true, canCreateDataset: false, canRun: false,
-  }));
-  assert.match(withoutPermission, /id="pipeline-example-start"[^>]*disabled=""/);
-  const withoutExample = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
-    ...props, hasPipelineExample: false, examplesLoading: false, canCreateDataset: true,
-  }));
-  assert.match(withoutExample, /id="pipeline-example-start"[^>]*disabled=""/);
-  const { ModelLabIntroduction } = await vite.ssrLoadModule("/src/ModelLabIntroduction.tsx");
-  const unavailableExample = renderToStaticMarkup(React.createElement(ModelLabIntroduction, {
-    definition: null, examplesLoading: false, exampleBusy: false, examplePhase: null,
-    canCreateDataset: true, canRun: true, catalogError: "",
-    examplesError: "temporary failure", onRetryExamples: () => {},
-    onRetryCatalog: () => {}, onStartExample: () => {}, onOwnData: () => {},
-  }));
-  assert.match(unavailableExample, /예제 목록을 불러오지 못했습니다/);
-  assert.match(unavailableExample, /예제 다시 조회/);
-  assert.match(unavailableExample, /id="pipeline-example-start"[^>]*disabled=""/);
-  const readyExample = renderToStaticMarkup(React.createElement(ModelLabIntroduction, {
-    definition: { required_features: ["f1"], required_time_column: "ts" },
-    example: { title: "예제", row_count: 240 },
-    examplesLoading: false, exampleBusy: false, examplePhase: null,
-    canCreateDataset: true, canRun: true, catalogError: "",
-    onRetryCatalog: () => {}, onStartExample: () => {}, onOwnData: () => {},
-  }));
-  assert.match(readyExample, /id="pipeline-example-start"[^>]*>예제로 모델 학습 시작/);
-  assert.doesNotMatch(readyExample, /id="pipeline-example-start"[^>]*disabled=""/);
   const { ExampleGallery } = await vite.ssrLoadModule("/src/ExampleGallery.tsx");
   const failedGallery = renderToStaticMarkup(React.createElement(ExampleGallery, {
     examples: [], busy: false, loading: false, canUse: true,
@@ -894,15 +504,6 @@ try {
   }));
   assert.match(failedGallery, /예제 다시 조회/);
   assert.doesNotMatch(failedGallery, /현재 제공되는 예제가 없습니다/);
-  const selectedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
-    ...props, datasets: [{ id: "dataset-1", name: "활동 데이터", version: "revision-1", kind: "file" }],
-    initialDatasetId: "dataset-1",
-  }));
-  assert.match(selectedJourney, /<option value="dataset-1" selected=""/);
-  assert.match(selectedJourney, /입력 조건 확인/);
-  // 연구·실험의 직접 진입과 과거 모델 경험 주소는 실제 기능으로 연결한다.
-  assert.equal(routeAt("/research", "").tab, "research");
-  assert.equal(routeAt("/model-experience", "").tab, "ml");
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
   const { ModelLabPlayground, exampleValues, playgroundInputMatchesResult,
@@ -1035,8 +636,7 @@ try {
   }));
   assert.match(missingScoreContext, /보존돼 있지 않습니다/);
   assert.doesNotMatch(missingScoreContext, /role="img"|점수 범위 안/);
-  const applicationContext = { modelId: "model-a", pipelineReturn: true, pipelineRunId: "run-a",
-    datasetId: "dataset-a", candidateRowIndex: 8, pipelineAnalysisSection: "calibration" };
+  const applicationContext = { modelId: "model-a", modelLabReturn: true };
   assert.deepEqual(routeAt("/scoring", contextPath("scoring", applicationContext).split("?")[1]).context,
     applicationContext);
   const { PlaygroundExplanations, PlaygroundSensitivity } =
@@ -1095,24 +695,14 @@ try {
   const pendingUse = renderToStaticMarkup(React.createElement(ModelLabUse, {
     datasets: [], hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
     canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
-    onOpenResource: () => {}, onBack: () => {}, onHistory: () => {},
+    onOpenResource: () => {}, onHistory: () => {},
   }));
   assert.match(pendingUse, /모델 적용/);
-  assert.match(pendingUse, /사용 가능한 모델을 확인하는 중/);
-  const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
-  const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {
-    onUse: () => {}, onHistory: () => {},
-  }));
-  assert.match(labHome, /<h3>모델 적용<\/h3>/);
-  assert.match(labHome, /실행 기록 →/);
-  assert.doesNotMatch(labHome, /<h3>모델 학습<\/h3>/);
-  assert.match(labHome, /시간대별 활동 패턴/);
-  assert.doesNotMatch(labHome, /이해를 돕는 개념도|실제 결과가 아닙니다/);
+  assert.match(pendingUse, /사용할 수 있는 모델을 확인하는 중/);
   const { PlatformOverview } = await vite.ssrLoadModule("/src/PlatformOverview.tsx");
   const home = renderToStaticMarkup(React.createElement(PlatformOverview, {
     brandName: "ACME AI Lab",
     datasets: [], onNavigate: () => {}, onOpenDataset: () => {},
-    onOpenPipelineRun: () => {},
   }));
   assert.match(home, /ACME AI Lab · EXPLORE/);
   assert.doesNotMatch(home, /SOS · EXPLORE/);
@@ -1121,18 +711,13 @@ try {
   assert.doesNotMatch(home, /<h4>연구·실험<\/h4>|새 학습|새로운 실험/);
   assert.match(home, /활동 이상 탐지/);
   assert.doesNotMatch(home, /최근 ML 실행/);
-  const { PipelineHistoryPanel } = await vite.ssrLoadModule("/src/PipelineHistoryPanel.tsx");
-  const historyPanel = renderToStaticMarkup(React.createElement(PipelineHistoryPanel, {
-    datasets: [], onOpenRun: () => {}, onStart: () => {},
-  }));
-  assert.match(historyPanel, /활동 이상 탐지 분석 이력/);
   const { ActivityWorkspace } = await vite.ssrLoadModule("/src/ActivityWorkspace.tsx");
   const activity = renderToStaticMarkup(React.createElement(ActivityWorkspace, {
-    active: "pipeline", onChange: () => {}, onNavigate: () => {},
-    onOpenResource: () => {}, onOpenPipelineRun: () => {}, datasets: [], canCancel: false,
+    active: "data", onChange: () => {}, onNavigate: () => {},
+    onOpenResource: () => {}, datasets: [], canCancel: false,
   }));
-  assert.match(activity, /Workflow 분석/);
-  assert.match(activity, /활동 이상 탐지 분석 이력/);
+  assert.match(activity, /모델 적용 작업/);
+  assert.doesNotMatch(activity, /Workflow 분석|학습/);
   const { ModelApplicationWorkspace } = await vite.ssrLoadModule("/src/ModelApplicationWorkspace.tsx");
   const useModel = renderToStaticMarkup(React.createElement(ModelApplicationWorkspace, {
     model: { ...exampleModel, training_score_summary: {} }, datasets: [], canRun: true,
@@ -1140,115 +725,6 @@ try {
   }));
   assert.match(useModel, /Dataset 분석/);
   assert.match(useModel, /값 직접 입력/);
-  const deepLinkedJourney = renderToStaticMarkup(React.createElement(PipelineWorkspace, {
-    ...props, initialRunId: "previous-run",
-  }));
-  assert.match(deepLinkedJourney, /선택한 실행을 불러오는 중입니다/);
-  assert.match(deepLinkedJourney, /aria-labelledby="pipeline-run-heading"/);
-  assert.doesNotMatch(deepLinkedJourney, /pipeline-run-context-header/);
-  assert.doesNotMatch(deepLinkedJourney, /비지도 학습/);
-  assert.doesNotMatch(deepLinkedJourney, /예제로 모델 학습 시작/);
-  assert.doesNotMatch(deepLinkedJourney, /내 데이터로 학습하거나 분석 방법 자세히 보기/);
-  assert.match(deepLinkedJourney, /새 모델 학습 →/);
-  assert.match(deepLinkedJourney, /선택한 실행/);
-  assert.doesNotMatch(deepLinkedJourney, /aria-label="분석 이용 단계"/);
-  assert.doesNotMatch(deepLinkedJourney, /아직 선택된 실행이 없습니다/);
-  const completedRun = {
-    id: "run-demo", definition_id: "activity-anomaly-if", status: "Succeeded",
-    dataset_id: "dataset-1", dataset_version: "v1",
-    stages: [
-      { name: "training", job: { result: { model_revision_id: "model-a" } } },
-      { name: "calibration", job: { result: { scoring_result_id: "cal-a" } } },
-      { name: "policy", job: { result: { policy_revision_id: "policy-a" } } },
-      { name: "test", job: { result: { scoring_result_id: "test-a" } } },
-      { name: "evaluation", job: { result: { evaluation_revision_id: "eval-a" } } },
-    ],
-    input_plan: {
-      timestamp_column: "ts", train_end: "2026-01-02T00:00:00+00:00",
-      calibration_end: "2026-01-03T00:00:00+00:00",
-      partition_sizes: { train: 60, calibration: 20, test: 20 },
-    },
-  };
-  const temporalScope = partition => ({
-    partition, timestamp_column: "ts", train_end: "2026-01-02T00:00:00+00:00",
-    calibration_end: "2026-01-03T00:00:00+00:00",
-    model_revision_id: "model-a", dataset_id: "dataset-1", dataset_version: "v1",
-    train_rows: 60, calibration_rows: 20, test_rows: 20,
-  });
-  const resultEvidence = {
-    model: { id: "model-a", algorithm: "isolation_forest", params: { n_estimators: 100 },
-      dataset_id: "dataset-1", dataset_version: "v1", features: ["f1"],
-      runtime: { preprocessing_mode: "train_median_v1" },
-      training_score_summary: {
-        score_min: 0.1, score_mean: 0.2, score_max: 0.4, score_count: 60,
-        histogram: { method: "equal_width_exact_v1", bin_edges: [0.1, 0.25, 0.4],
-          bin_counts: [30, 30], score_count: 60, constant_scores: false },
-      } },
-    calibration: { id: "cal-a", dataset_id: "dataset-1", dataset_version: "v1",
-      model_revision_id: "model-a", row_count: 20, score_direction: "higher_is_more_anomalous",
-      feature_names: ["f1"], score_summary: {
-      temporal_scope: temporalScope("calibration"),
-      score_min: 0.15, score_mean: 0.25, score_max: 0.5, score_count: 20,
-      histogram: { method: "equal_width_exact_v1", bin_edges: [0.15, 0.325, 0.5],
-        bin_counts: [10, 10], score_count: 20, constant_scores: false },
-    } },
-    test: { id: "test-a", dataset_id: "dataset-1", dataset_version: "v1",
-      model_revision_id: "model-a", row_count: 20, score_direction: "higher_is_more_anomalous",
-      feature_names: ["f1"], score_summary: {
-      temporal_scope: temporalScope("test"),
-      score_min: 0.2, score_mean: 0.3, score_max: 0.6, score_count: 20,
-      histogram: { method: "equal_width_exact_v1", bin_edges: [0.2, 0.4, 0.6],
-        bin_counts: [15, 5], score_count: 20, constant_scores: false },
-    } },
-    policy: { id: "policy-a", mode: "quantile", alert_fraction: 0.005,
-      threshold: 0.47, scoring_result_id: "cal-a",
-      decision_summary: { score_count: 20, predicted_anomalies: 2 } },
-    evaluation: { id: "eval-a", scoring_result_id: "test-a",
-      policy_revision_id: "policy-a", label_coverage: "none",
-      decision_metrics: { score_count: 20, predicted_anomalies: 3, alert_rate: 0.15 } },
-  };
-  assert.equal(validatePipelineEvidence(completedRun, resultEvidence), null);
-  assert.match(validatePipelineEvidence(completedRun, {
-    ...resultEvidence,
-    calibration: { ...resultEvidence.calibration, score_summary: {
-      ...resultEvidence.calibration.score_summary, temporal_scope: temporalScope("test"),
-    } },
-  }), /시간 분할/);
-  assert.match(validatePipelineEvidence(completedRun, {
-    ...resultEvidence, test: { ...resultEvidence.test, feature_names: ["other_feature"] },
-  }), /Feature 서명/);
-  assert.match(validatePipelineEvidence(completedRun, {
-    ...resultEvidence, evaluation: { ...resultEvidence.evaluation, decision_metrics: {
-      ...resultEvidence.evaluation.decision_metrics, predicted_anomalies: 4,
-    } },
-  }), /평가 근거/);
-  const reportFor = initialSection => renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
-    run: completedRun, evidence: resultEvidence, initialSection, onOpenResource: () => {},
-  }));
-  const report = reportFor("overview");
-  assert.match(report, /학습 및 검토 결과/);
-  assert.match(report, /Test 구간의 검토 대상/);
-  assert.match(report, /3건/);
-  assert.match(report, /15%/);
-  assert.match(report, /같은 경계/);
-  assert.match(report, /정답 레이블이 없어/);
-  assert.match(report, /Test 점수 구간별 전체 관측 수/);
-  assert.doesNotMatch(report, /pipeline-analysis-nav|Training 점수 구간별 전체 관측 수|Calibration 점수 구간별 전체 관측 수/);
-  const trainingReport = reportFor("training");
-  assert.match(trainingReport, /학습 데이터·설정/);
-  assert.match(trainingReport, /Training 점수 구간별 전체 관측 수/);
-  const interactiveOverview = renderToStaticMarkup(React.createElement(PipelineEvidenceView, {
-    run: completedRun, evidence: resultEvidence, onOpenResource: () => {},
-    onSelectTestScoreRange: () => {}, onInvestigateCandidates: () => {},
-  }));
-  assert.match(interactiveOverview, /검토 대상 탐색 →/);
-  assert.match(interactiveOverview, /aria-label="Test 점수 구간"/);
-  assert.match(interactiveOverview, /value="" disabled="" selected="">구간 선택/);
-  const calibrationReport = reportFor("calibration");
-  assert.match(calibrationReport, /검토 기준 산정/);
-  assert.match(calibrationReport, /0.5%/);
-  assert.match(calibrationReport, /Calibration 점수 구간별 전체 관측 수/);
-  assert.match(reportFor("test"), /실제 최소·평균·최대 이상 점수/);
   const sensitivity = renderToStaticMarkup(React.createElement(SensitivityChart, {
     result: { output: { feature_sensitivities: [
       { feature: "f1", anomaly_score_delta: 0.12 },
@@ -1266,15 +742,11 @@ try {
   assert.equal(matchingExplanationJob([
     explanationJobSummary("other", "score-2", 5, "2026-10-23T12:00:00Z"),
   ], "score-1", 5), undefined);
-  assert.match(renderToStaticMarkup(React.createElement(PipelineCandidateInvestigation, {
+  assert.match(renderToStaticMarkup(React.createElement(ObservationInvestigation, {
     candidate: { row_index: 5, anomaly_score: 0.8, features: { "io_bytes_per_sec": 42 } },
     scoringResultId: "score-1", canRun: true, canCancel: true, onOpenResource: () => {},
   })), /추가 실험 · 기준값 치환/);
-  assert.match(renderToStaticMarkup(React.createElement(PipelineAnalysis, {
-    run: { id: "run-1", stages: [], status: "Succeeded" }, onOpenResource: () => {},
-  })), /분석 판본 참조가 불완전합니다/);
-
-  console.log("ML / Pipeline navigation and Consumer entry: assertions passed");
+  console.log("Navigation and model use: assertions passed");
 } finally {
   await vite.close();
 }

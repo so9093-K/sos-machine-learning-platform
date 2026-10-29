@@ -1,9 +1,5 @@
 /** 홈은 백엔드 Job 분류 대신 지금 이용 가능한 제품 기능을 제공한다. */
-import { useEffect, useState } from "react";
-import { formatError, request } from "./api";
-import { jobStatusLabel } from "./display-format";
 import type { WorkspaceTab } from "./PlatformNavigation";
-import type { PipelineRun } from "./types";
 
 type DatasetLink = { id: string; name: string; kind: string };
 type Props = {
@@ -11,29 +7,9 @@ type Props = {
   datasets: DatasetLink[];
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenDataset: (id: string) => void;
-  onOpenPipelineRun: (runId: string, datasetId: string) => void;
 };
 
-export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDataset, onOpenPipelineRun }: Props) {
-  const [runs, setRuns] = useState<PipelineRun[]>([]);
-  const [runError, setRunError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setRunError("");
-    void request<PipelineRun[]>("/api/pipeline-runs")
-      .then(data => { if (active) setRuns(data); })
-      .catch(error => { if (active) setRunError(formatError(error)); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [retry]);
-  // 조회 실패·재시도 중에는 이전 목록을 현재 결과처럼 보이지 않는다.
-  const recent = loading || runError ? [] : [...runs].sort((a, b) =>
-    b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)).slice(0, 4);
-  const datasetName = (id: string) => datasets.find(item => item.id === id)?.name ??
-    "현재 Dataset 목록 밖의 데이터";
+export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDataset }: Props) {
   return <div className="platform-home">
     <section className="platform-intro">
       <span className="eyebrow">{brandName} · EXPLORE · EXPERIMENT · UNDERSTAND · EVOLVE</span>
@@ -58,30 +34,6 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
         </article>
       </div>
     </section>
-    <section className="panel" aria-labelledby="resume-pipeline-heading">
-      <div className="panel-head"><div>
-        <h3 id="resume-pipeline-heading">이어서 이용할 분석</h3>
-        <p>실제로 실행했던 Pipeline을 데이터와 결과 문맥으로 다시 엽니다.</p>
-      </div>
-        <button className="secondary" type="button" disabled={loading}
-          onClick={() => setRetry(n => n + 1)}>다시 조회</button>
-      </div>
-      {loading && <p role="status">이전 분석을 확인하는 중입니다.</p>}
-      {runError && <p role="alert">이전 분석을 조회하지 못했습니다: {runError}</p>}
-      {!loading && !runError && recent.length === 0 &&
-        <p className="muted">아직 실행한 분석이 없습니다.</p>}
-      {recent.length > 0 && <div className="platform-compact-list">
-        {recent.map(run => <button type="button" key={run.id}
-          className="platform-list-link ghost"
-          onClick={() => onOpenPipelineRun(run.id, run.dataset_id)}>
-          <span className="platform-resource-name">
-            활동 이상 탐지 · {datasetName(run.dataset_id)}
-          </span>
-          <small>{new Date(run.created_at).toLocaleString("ko-KR")}</small>
-          <span className={`status ${run.status.toLowerCase()}`}>{jobStatusLabel(run.status)}</span>
-        </button>)}
-      </div>}
-    </section>
     <section className="panel" aria-labelledby="continue-data-heading">
       <div className="panel-head"><div>
         <h3 id="continue-data-heading">다시 살펴볼 데이터</h3>
@@ -100,9 +52,9 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
     </section>
     <section className="platform-outlook">
       <h3>분석 주제·작업 이력</h3>
-      <p>활동 이상 탐지의 사용 방법을 살펴보거나 실행한 작업을 확인합니다.</p>
+      <p>활동 이상 탐지 모델을 데이터에 적용하거나 실행한 작업을 확인합니다.</p>
       <div className="platform-outlook-actions">
-        <button className="secondary" type="button" onClick={() => onNavigate("pipelines")}>활동 이상 탐지 →</button>
+        <button className="secondary" type="button" onClick={() => onNavigate("topic")}>활동 이상 탐지 →</button>
         <button className="secondary" type="button" onClick={() => onNavigate("jobs")}>작업 이력 →</button>
       </div>
     </section>

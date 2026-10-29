@@ -165,6 +165,8 @@ def test_http_scoring_identity_option_respects_dataset_and_model_ownership(
     fake_store = Mock()
     fake_store.get_dataset.return_value = dataset
     fake_store.get_model_revision.return_value = model
+    # 다른 Actor에게 제공되지 않은 모델 판본이다.
+    fake_store.get_model_offering.return_value = None
 
     def created(**kwargs):
         return {

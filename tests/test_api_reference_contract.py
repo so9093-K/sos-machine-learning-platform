@@ -148,7 +148,7 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
     """일반 실행 토큰이 직접 API로 학습·정의 변경을 우회하지 못한다."""
     actors = {
         "analysis-token-with-enough-entropy": Actor("owner", "human", frozenset({"researcher"})),
-        "builder-token-with-enough-entropy": Actor("owner", "human", frozenset({"model_builder"})),
+        "automation-token-with-enough-entropy": Actor("owner", "service", frozenset({"automation"})),
     }
     identity = IdentitySettings("token", {
         hashlib.sha256(token.encode()).hexdigest(): actor for token, actor in actors.items()
@@ -169,7 +169,7 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
 
     monkeypatch.setattr(Store, "create_job", create_job)
     client = TestClient(create_app(tmp_path, identity=identity))
-    analyst, builder = [{"Authorization": "Bearer " + token, "Idempotency-Key": "authoring-test-01"}
+    analyst, automation = [{"Authorization": "Bearer " + token, "Idempotency-Key": "authoring-test-01"}
                         for token in actors]
     train = {"dataset_id": "source", "features": ["f1"]}
     definition = {"feature_dataset_id": "source", "entity_column": "host",
@@ -189,9 +189,9 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
     assert client.post("/api/ml/scoring/jobs", json={
         "dataset_id": "source", "model_revision_id": "missing",
     }, headers=analyst).status_code == 404
-    assert client.post("/api/ml/train/jobs", json=train, headers=builder).status_code == 202
+    assert client.post("/api/ml/train/jobs", json=train, headers=automation).status_code == 202
     assert submitted[-1]["kind"] == "ml_train"
-    assert client.post("/api/features/services/jobs", json=definition, headers=builder).status_code == 202
+    assert client.post("/api/features/services/jobs", json=definition, headers=automation).status_code == 202
     assert submitted[-1]["kind"] == "feature_register"
     capabilities = client.get("/api/v2/auth/me", headers=analyst).json()["capabilities"]
     assert "job.create" in capabilities

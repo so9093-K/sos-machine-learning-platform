@@ -241,14 +241,14 @@ export function MLScoringPanel({
     ? n.toLocaleString("ko-KR", { maximumFractionDigits: 5 }) : "미정의";
 
   return <section className={`panel ml-scoring-panel${visibleResult ? " scoring-has-result" : ""}`} aria-label="독립 이상 점수 계산">
-    {previousJobNotice && <div role="status" className="pipeline-readiness-blocked">
+    {previousJobNotice && <div role="status" className="notice-blocked">
       이전 Dataset에서 시작한 점수 계산 Job은 자동 취소되지 않습니다.
       완료 여부는 작업 이력에서 확인할 수 있습니다.
       <button type="button" className="secondary" onClick={() => setPreviousJobNotice(false)}>
         안내 닫기
       </button>
     </div>}
-    {error && <div role="alert" className="pipeline-readiness-blocked">
+    {error && <div role="alert" className="notice-blocked">
       <strong>모델 점수 계산 또는 상태 확인에 문제가 생겼습니다.</strong>
       <details><summary>요청 오류와 복구 정보</summary><p>{error}</p></details>
     </div>}
@@ -270,7 +270,7 @@ export function MLScoringPanel({
         !hasResultReference &&
         <p role="alert">점수 계산은 완료됐지만 결과 참조가 없습니다. 작업 이력에서 실행 근거를 확인해 주세요.</p>}
       {selectedJob.status === "Succeeded" && hasResultReference &&
-        resultError && <div role="alert" className="pipeline-readiness-blocked">
+        resultError && <div role="alert" className="notice-blocked">
           <p>점수 계산은 완료됐지만 결과를 불러오지 못했습니다: {resultError}</p>
           <button type="button" className="secondary"
             onClick={() => setResultRetry(current => current + 1)}>결과만 다시 조회</button>
@@ -332,7 +332,7 @@ export function MLScoringPanel({
     </div>
     {datasets.length === 0 && canUpload && onDatasetRegistered && <details className="scoring-file-input"
       open={datasets.length === 0 || uploading || Boolean(uploadError) || undefined}>
-      <summary>새 파일 등록해서 분석하기 (CSV·Parquet)</summary>
+      <summary>새 파일 등록·분석 (CSV·Parquet)</summary>
       <label>등록할 파일
         <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
           onChange={event => {
@@ -350,7 +350,7 @@ export function MLScoringPanel({
         {uploadProgress?.phase === "transferring" && uploadProgress.total > 0 &&
           <progress max={uploadProgress.total} value={uploadProgress.loaded} aria-label="파일 전송 진행률" />}
       </div>}
-      {uploadError && <div role="alert" className="pipeline-readiness-blocked">
+      {uploadError && <div role="alert" className="notice-blocked">
         <strong>파일을 등록하지 못했습니다.</strong>
         <p>파일 형식과 크기, 연결 상태를 확인해 주세요. 등록 여부가 불확실하면 Dataset 목록에서 먼저 확인해 주세요.</p>
         <details><summary>오류 진단 정보</summary><p>{uploadError}</p></details>
@@ -367,7 +367,7 @@ export function MLScoringPanel({
     {columnStatus === "loading" && <p role="status">Dataset의 입력 컬럼을 확인하는 중입니다.</p>}
     {columnStatus === "error" && <p role="alert">입력 컬럼을 조회하지 못했습니다: {columnError}</p>}
     {checkedColumns && missingFeatures.length > 0 &&
-      <div role="alert" className="pipeline-readiness-blocked">
+      <div role="alert" className="notice-blocked">
         <strong>필수 Feature {missingFeatures.length}개가 없습니다.</strong>
         <p>{missingFeatures.slice(0, 6).join(", ")}
           {missingFeatures.length > 6 ? " 외 " + (missingFeatures.length - 6) + "개" : ""}</p>
@@ -387,7 +387,7 @@ export function MLScoringPanel({
     </button>
     {datasets.length > 0 && canUpload && onDatasetRegistered && <details className="scoring-file-input"
       open={datasets.length === 0 || uploading || Boolean(uploadError) || undefined}>
-      <summary>새 파일 등록해서 분석하기 (CSV·Parquet)</summary>
+      <summary>새 파일 등록·분석 (CSV·Parquet)</summary>
       <label>등록할 파일
         <input type="file" accept=".csv,.parquet" disabled={uploading || submitted}
           onChange={event => {
@@ -405,7 +405,7 @@ export function MLScoringPanel({
         {uploadProgress?.phase === "transferring" && uploadProgress.total > 0 &&
           <progress max={uploadProgress.total} value={uploadProgress.loaded} aria-label="파일 전송 진행률" />}
       </div>}
-      {uploadError && <div role="alert" className="pipeline-readiness-blocked">
+      {uploadError && <div role="alert" className="notice-blocked">
         <strong>파일을 등록하지 못했습니다.</strong>
         <p>파일 형식과 크기, 연결 상태를 확인해 주세요. 등록 여부가 불확실하면 Dataset 목록에서 먼저 확인해 주세요.</p>
         <details><summary>오류 진단 정보</summary><p>{uploadError}</p></details>
@@ -419,7 +419,7 @@ export function MLScoringPanel({
         관측 시각의 보존만으로 시간 분할이나 독립 Test 평가를 의미하지 않습니다.
         이상 점수는 사건 확률이 아닙니다.</p>
     </details>
-    <details className="pipeline-scoring-history" onToggle={event => {
+    <details className="scoring-history" onToggle={event => {
       setHistoryOpen(event.currentTarget.open);
       if (event.currentTarget.open) {
         setHistoryError("");

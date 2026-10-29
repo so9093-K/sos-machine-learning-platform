@@ -810,6 +810,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/models/{revision_id}/offering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 모델 판본의 제공 상태 조회 */
+        get: operations["get_model_offering_api_ml_models__revision_id__offering_get"];
+        /**
+         * 모델 판본 제공·설명 갱신
+         * @description 모델을 소유한 자동화 계정이 판본을 사용자의 적용 대상으로 제공합니다. 설명에는 목적·적용 대상 데이터·한계를 적습니다.
+         */
+        put: operations["offer_model_api_ml_models__revision_id__offering_put"];
+        post?: never;
+        /**
+         * 모델 판본 제공 중단
+         * @description 새 적용만 중단합니다. 사용자가 이미 만든 결과와 제공 기록은 유지합니다.
+         */
+        delete: operations["withdraw_model_offering_api_ml_models__revision_id__offering_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/offered-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 제공 중인 모델 판본 조회
+         * @description 제공 중인 활성 모델 판본을 최근 제공 순으로 반환합니다. 학습 Dataset과 학습 기록의 열람 권한은 포함하지 않습니다.
+         */
+        get: operations["list_offered_models_api_ml_offered_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/playground/jobs": {
         parameters: {
             query?: never;
@@ -3132,6 +3177,49 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** ModelOfferingOut */
+        ModelOfferingOut: {
+            /** Description */
+            description: string;
+            model: components["schemas"]["ModelRevisionOut"];
+            /** Offered At */
+            offered_at: string;
+            /** Offered By */
+            offered_by: string;
+        };
+        /** ModelOfferingPageOut */
+        ModelOfferingPageOut: {
+            /** Items */
+            items: components["schemas"]["ModelOfferingOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * ModelOfferingRequest
+         * @description 다른 Actor가 모델을 고를 때 읽는 목적·적용 대상·한계 설명.
+         */
+        ModelOfferingRequest: {
+            /** Description */
+            description: string;
+        };
+        /**
+         * ModelOfferingStateOut
+         * @description 현재 Actor가 본 모델 판본의 제공 상태. 학습 데이터 접근 권한은 포함하지 않는다.
+         */
+        ModelOfferingStateOut: {
+            /** Description */
+            description?: string | null;
+            /** Offered */
+            offered: boolean;
+            /** Offered At */
+            offered_at?: string | null;
+            /** Offered By */
+            offered_by?: string | null;
+            /** Owned */
+            owned: boolean;
+            /** Withdrawn At */
+            withdrawn_at?: string | null;
+        };
         /** ModelRevisionOut */
         ModelRevisionOut: {
             /** Algorithm */
@@ -5355,6 +5443,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_model_offering_api_ml_models__revision_id__offering_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOfferingStateOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    offer_model_api_ml_models__revision_id__offering_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelOfferingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOfferingStateOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    withdraw_model_offering_api_ml_models__revision_id__offering_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOfferingStateOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_offered_models_api_ml_offered_models_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOfferingPageOut"];
                 };
             };
             /** @description Structured API error */

@@ -12,8 +12,6 @@ export type Profile = components["schemas"]["ProfileOut"];
 export type Job = components["schemas"]["JobOut"];
 export type JobSummary = components["schemas"]["JobSummaryOut"];
 export type JobPage = components["schemas"]["JobPageOut"];
-export type FeatureRegistrationSummary = components["schemas"]["FeatureRegistrationSummaryOut"];
-export type FeatureRegistrationPage = components["schemas"]["FeatureRegistrationPageOut"];
 export type Example = components["schemas"]["ExampleOut"];
 export type StorageInspection = components["schemas"]["StorageInspectionOut"];
 export type StoragePolicy = components["schemas"]["StoragePolicyOut"];
@@ -28,10 +26,10 @@ export type ExplorationJob = components["schemas"]["ExplorationJobOut"];
 export type ExplorationJobSummary = components["schemas"]["ExplorationJobSummaryOut"];
 export type ExplorationJobPage = components["schemas"]["ExplorationJobPageOut"];
 
-export type MLTrainingJob = components["schemas"]["MLTrainingJobOut"];
-export type MLTrainingJobSummary = components["schemas"]["MLTrainingJobSummaryOut"];
-export type MLTrainingJobPage = components["schemas"]["MLTrainingJobPageOut"];
 export type ModelRevision = components["schemas"]["ModelRevisionOut"];
+export type ModelOffering = components["schemas"]["ModelOfferingOut"];
+export type ModelOfferingPage = components["schemas"]["ModelOfferingPageOut"];
+export type ModelOfferingState = components["schemas"]["ModelOfferingStateOut"];
 
 export type MLPlaygroundJob = components["schemas"]["MLPlaygroundJobOut"];
 export type MLPlaygroundJobSummary = components["schemas"]["MLPlaygroundJobSummaryOut"];
@@ -49,21 +47,11 @@ export type DecisionPolicyRevision = components["schemas"]["DecisionPolicyRevisi
 export type EvaluationRevision = components["schemas"]["EvaluationRevisionOut"];
 export type ExplanationResult = components["schemas"]["ExplanationResultOut"];
 
-export type MLflowExportStatus = components["schemas"]["MLflowExportStatusOut"];
-export type MLflowExperiment = components["schemas"]["MLflowExperimentOut"];
-export type MLflowExperimentPage = components["schemas"]["MLflowExperimentPageOut"];
-export type MLflowRun = components["schemas"]["MLflowRunOut"];
-export type MLflowRunPage = components["schemas"]["MLflowRunPageOut"];
-export type MLflowModelVersion = components["schemas"]["MLflowModelVersionOut"];
-export type MLflowModelVersionPage = components["schemas"]["MLflowModelVersionPageOut"];
 
 export type MLPolicyJobSummary = components["schemas"]["MLPolicyJobSummaryOut"];
 export type MLEvaluationJobSummary = components["schemas"]["MLEvaluationJobSummaryOut"];
 export type MLExplanationJobSummary = components["schemas"]["MLExplanationJobSummaryOut"];
 
-// Pipeline API 응답은 FastAPI OpenAPI에서 생성한 타입을 사용한다.
+// 분석 주제 정의는 FastAPI OpenAPI에서 생성한 타입을 사용한다.
 export type PipelineDefinition = components["schemas"]["PipelineDefinitionOut"];
-export type PipelineCheck = components["schemas"]["PipelineCheckOut"];
-export type PipelineRun = components["schemas"]["PipelineRunOut"];
-export type PipelineJob = components["schemas"]["PipelineJobOut"];
 export type PipelineCandidates = components["schemas"]["PipelineCandidatesOut"];
