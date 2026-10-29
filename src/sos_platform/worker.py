@@ -1,10 +1,9 @@
-"""EDA 및 변환 작업을 별도 프로세스로 격리한다.
+"""Job 자식 프로세스의 격리·예산·중단·소유권을 감독한다.
 
 취소 요청 시 계산 종료를 기다리지 않고 자식 프로세스를 중단한다.
 종료가 확인된 뒤에만 취소를 확정한다.
 """
 
-import argparse
 import ctypes
 import json
 import logging
@@ -18,46 +17,21 @@ from pathlib import Path
 from sqlalchemy import bindparam, text
 
 from .cgroup import CgroupIsolation
-from .datasets import (
-    cleanup_iceberg_staging,
-    iceberg_staging_bytes,
-    import_to_iceberg,
-    pinned_scan_dataset,
-)
 from .diagnostics import classify_failure
 from .discovery import DiscoveryPolicy
-from .discovery import explore as discovery_explore
-from .discovery import profile as discovery_profile
-from .errors import ERRORS, PlatformError, RuntimeConfigurationError
+from .errors import ERRORS, PlatformError
 from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
-from .feast_features import (
-    register_feature_service,
-    retire_feature_service,
-    retrieve_features,
-    verify_pinned_owner,
+from .job_artifacts import (
+    ResultPublication,
+    attempt_result_paths,
+    cleanup_attempt_files,
+    enforce_stage_limit,
 )
 from .job_completion import complete_job
-from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
-from .ml_explanation import explain_scored_row
-from .ml_playground import run_playground_scoring
-from .ml_scoring import cleanup_scoring_stage, run_dataset_scoring, scoring_stage_bytes
-from .ml_training import train_dataset
-from .ml_training_staging import (
-    cleanup_training_stage,
-    training_stage_bytes,
-    training_stage_path,
-)
-from .mlflow_config import MLflowSettings
-from .mlflow_tracking import MLflowClient, run_tracking_once
-from .object_store import ObjectStore
+from .job_execution import execute_job, execution_failure_code, publication_failure_code
 from .observability import emit
-from .observation_preparation import materialize_observation_ids
-from .pipeline_reference import inspect_dataset as inspect_pipeline_dataset
-from .processing import transform
 from .resource_admission import ExecutionCapacity, reserve_execution_memory
-from .schemas import ExplorationSpec, Transform
 from .store import Store, WorkerOwnershipLost
-from .understanding import build_understanding
 
 
 def _guard_child_parent(parent_pid: int) -> None:
@@ -83,9 +57,9 @@ def _perform(
     _guard_child_parent(parent_pid)
     stage = "read_input"
 
-    def mark_commit_started() -> None:
+    def set_stage(value: str) -> None:
         nonlocal stage
-        stage = "iceberg_commit"
+        stage = value
 
     try:
         # 자식 스스로 cgroup에 들어가기 전에는 Dataset 읽기·외부 Commit을 시작하지 않는다.
@@ -95,146 +69,10 @@ def _perform(
         store = Store(home, database_url=database_url)
         # 부모 Worker의 논리적 메모리 예약 안에서 실행되는 자식이다.
         store._execution_memory_reserved = True
-        dataset = store.get_dataset(job["dataset_id"]) if job["dataset_id"] else None
-        if dataset is None and not (
-            job["kind"] == "ml_playground"
-            or (job["kind"] == "ml_explain" and job["spec"].get("playground_job_id"))
-        ):
-            raise ValueError("Input dataset is missing")
-        if job["kind"] == "ml_playground":
-            stage = "processing"
-            result = run_playground_scoring(store, job["spec"])
-        elif job["kind"] == "profile":
-            stage = "processing"
-            if job["spec"].get("mode") == "understanding":
-                result = build_understanding(
-                    store, dataset, scope=job["spec"].get("scope", "sample")
-                )
-            else:
-                result = discovery_profile(store, dataset, sample=None)
-        elif job["kind"] == "exploration":
-            stage = "processing"
-            spec = ExplorationSpec.model_validate(job["spec"]["exploration"])
-            result = discovery_explore(
-                store, dataset, spec.column, spec.metric, spec.group_by, scope="full"
-            )
-        elif job["kind"] == "transform":
-            stage = "processing"
-            spec = Transform.model_validate(job["spec"]["transform"])
-            with pinned_scan_dataset(store, dataset) as source:
-                if spec.observation_id_column is not None:
-                    evidence = materialize_observation_ids(
-                        source, pending, column=spec.observation_id_column
-                    )
-                else:
-                    lf = transform(source, spec)
-                    lf.sink_parquet(pending)
-                    evidence = {}
-            result = {
-                "input_dataset_id": dataset["id"],
-                "input_dataset_version": dataset["version"],
-                **evidence,
-            }
-        elif job["kind"] == "feature_register":
-            stage = "processing"
-            verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
-            result = register_feature_service(store, dataset, job["spec"])
-        elif job["kind"] == "feature_retire":
-            stage = "processing"
-            registration = store.get_job(job["spec"]["registration_job_id"])
-            if (
-                registration is None
-                or registration["kind"] != "feature_register"
-                or registration["status"] not in ("Succeeded", "Failed", "Cancelled")
-                or registration["owner_actor"] != job["owner_actor"]
-                or registration["dataset_id"] != dataset["id"]
-            ):
-                raise ValueError("등록 폐기 대상의 상태·소유권이 바뀌었습니다.")
-            verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
-            result = retire_feature_service(store, dataset, registration)
-        elif job["kind"] == "feature_retrieve":
-            stage = "processing"
-            registered_job = store.get_job(job["spec"]["registration_job_id"])
-            entity = store.get_dataset(job["spec"]["entity_dataset_id"])
-            if (
-                registered_job is None
-                or registered_job["kind"] != "feature_register"
-                or registered_job["status"] != "Succeeded"
-                or registered_job["dataset_id"] != dataset["id"]
-                or registered_job["owner_actor"] != job["owner_actor"]
-                or entity is None
-            ):
-                raise ValueError("Registered Feature Service or Entity Dataset is unavailable")
-            # 조회 Job은 등록 행 잠금 아래에서 폐기 접수 전에 승인된다.
-            # 폐기 이후 신규 제출은 Store에서 거부하지만, 그 이전에 Queued였던
-            # 조회는 보존된 Feast 정의로 완료해야 하므로 실행 시점에 재차 거부하지 않는다.
-            verify_pinned_owner(dataset, job["spec"], "feature_source_owner")
-            verify_pinned_owner(entity, job["spec"], "entity_dataset_owner")
-            result = retrieve_features(
-                store, dataset, entity, registered_job["result"], job["spec"], pending
-            )
-        elif job["kind"] == "ml_pipeline_preflight":
-            stage = "processing"
-            if job["spec"]["dataset_version"] != dataset["version"]:
-                raise ValueError("Pipeline Dataset 판본이 변경됐습니다.")
-            inspection = inspect_pipeline_dataset(store, dataset, full=True)
-            if not inspection["ready"] or not inspection["plan"]:
-                raise ValueError("Pipeline 입력 데이터의 시간/Feature 적합성 검사에 실패했습니다.")
-            result = {"plan": inspection["plan"], "feature_count": inspection["feature_count"]}
-        elif job["kind"] == "ml_train":
-            stage = "processing"
-            # 정렬 Spill 파일은 이 Attempt만 소유한다. 종료 후 부모가 정리하고
-            # 자식 강제 종료 시에도 다음 Worker의 복구 경로에서 회수한다.
-            scratch = training_stage_path(store.home, job["attempts"][-1]["id"])
-            if scratch.parent.is_symlink():
-                raise OSError("Training stage root must not be a symlink")
-            scratch.parent.mkdir(parents=True, exist_ok=True)
-            scratch.mkdir(mode=0o700)
-            os.environ["POLARS_TEMP_DIR"] = str(scratch)
-            result = train_dataset(store, dataset, job["spec"], pending.with_suffix(".joblib"))
-        elif job["kind"] == "ml_score":
-            stage = "processing"
-            result = run_dataset_scoring(
-                store, dataset, job["spec"], pending.with_suffix(".scores.parquet")
-            )
-        elif job["kind"] == "ml_policy":
-            stage = "processing"
-            result = apply_scoring_policy(store, job["spec"])
-        elif job["kind"] == "ml_evaluate":
-            stage = "processing"
-            result = evaluate_scoring_policy(store, job["spec"])
-        elif job["kind"] == "ml_explain":
-            stage = "processing"
-            result = explain_scored_row(store, job["spec"])
-        elif job["kind"] == "iceberg_import":
-            stage = "iceberg_prepare"
-            result = {
-                "iceberg_publish": import_to_iceberg(
-                    store,
-                    dataset,
-                    job["spec"]["table_name"],
-                    job["attempts"][-1]["id"],
-                    owner_actor=job["owner_actor"],
-                    on_commit_start=mark_commit_started,
-                )
-            }
-        else:
-            raise ValueError("Unknown job type")
+        result = execute_job(store, job, pending, set_stage)
         outcome = {"result": result}
     except Exception as exc:
-        code = (
-            "SOS-FEATURE-INPUT-INVALID"
-            if job["kind"] in ("feature_register", "feature_retrieve", "feature_retire")
-            and isinstance(exc, ValueError)
-            else "SOS-ML-INPUT-INVALID"
-            if job["kind"] in ("ml_pipeline_preflight", "ml_train", "ml_score", "ml_playground", "ml_policy", "ml_evaluate", "ml_explain")
-            and isinstance(exc, ValueError)
-            else "SOS-ICEBERG-UNCERTAIN"
-            if job["kind"] == "iceberg_import" and stage == "iceberg_commit"
-            else exc.code
-            if isinstance(exc, PlatformError)
-            else "SOS-JOB-FAILED"
-        )
+        code = execution_failure_code(job, exc, stage)
         category, exception_type = classify_failure(exc)
         outcome = {
             "error_code": code,
@@ -252,33 +90,6 @@ def _stop(process: multiprocessing.Process) -> None:
         if process.is_alive():
             process.kill()
             process.join()
-
-
-def attempt_result_paths(store: Store, job_id: str, attempt_id: str) -> tuple[Path, Path, Path]:
-    """Attempt마다 고유한 로컬 계산 결과 경로를 반환한다."""
-    # Job/Attempt ID는 PostgreSQL에서 발급한 UUID다.
-    root = store.home / "results"
-    stem = f"{job_id}.{attempt_id}"
-    return (
-        root / f"{stem}.parquet",
-        root / f"{stem}.pending.parquet",
-        root / f"{stem}.completed.json",
-    )
-
-
-def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) -> None:
-    """복구가 확정된 Attempt의 로컬 파일만 회수하고 S3·공유 객체는 건드리지 않는다."""
-    for job_id, attempt_id in interrupted:
-        output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
-        for path in (
-            output,
-            pending,
-            completed,
-            pending.with_suffix(".joblib"),
-            pending.with_suffix(".scores.parquet"),
-        ):
-            path.unlink(missing_ok=True)
-        cleanup_scoring_stage(store.home, pending.with_suffix(".scores.parquet"))
 
 
 def cleanup_orphaned_cgroups_before_recovery(store: Store, isolation: CgroupIsolation) -> None:
@@ -332,7 +143,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
         return False
     job_id = job["id"]
     attempt_id = job["attempts"][-1]["id"]
-    write_id: str | None = None
+    publication = ResultPublication()
     emit(
         "worker.attempt.started",
         service="sos-worker",
@@ -354,28 +165,11 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
         started = time.monotonic()
         while process.is_alive():
             process.join(timeout=0.1)
-            stage_bytes = (
-                iceberg_staging_bytes(store, attempt_id)
-                if job["kind"] == "iceberg_import"
-                else None
-            )
             budget.enforce(
                 elapsed_seconds=time.monotonic() - started,
-                stage_bytes=stage_bytes,
                 rss_bytes=process_rss_bytes(process.pid),
             )
-            if (
-                job["kind"] == "ml_train"
-                and training_stage_bytes(store.home, attempt_id)
-                > budget.max_stage_mib * 1024 * 1024
-            ):
-                raise ExecutionLimitExceeded("SOS-ML-TRAIN-STAGE-LIMIT", "storage")
-            if (
-                job["kind"] == "ml_score"
-                and scoring_stage_bytes(store.home, pending.with_suffix(".scores.parquet"))
-                > budget.max_stage_mib * 1024 * 1024
-            ):
-                raise ExecutionLimitExceeded("SOS-ML-SCORE-STAGE-LIMIT", "storage")
+            enforce_stage_limit(store, job, pending, budget.max_stage_mib)
             if time.monotonic() >= next_heartbeat:
                 store.heartbeat()
                 next_heartbeat = time.monotonic() + 2
@@ -422,68 +216,19 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             )
             return True
 
-        publish = outcome["result"].get("iceberg_publish")
-        model_pending = pending.with_suffix(".joblib")
-        if job["kind"] == "ml_train":
-            if not model_pending.exists():
-                raise RuntimeError("Training completed without a model artifact")
-            model_key = f"results/{job_id}/{attempt_id}.model.joblib"
-            storage = ObjectStore()
-            write_id = store.begin_object_write(
-                location=storage.location(model_key),
-                owner_kind="attempt",
-                owner_id=attempt_id,
-            )
-            digest = storage.put(model_key, model_pending)
-            publish = {
-                **outcome["result"],
-                "location": storage.location(model_key),
-                "sha256": digest,
-            }
-        score_pending = pending.with_suffix(".scores.parquet")
-        if job["kind"] == "ml_score":
-            if not score_pending.exists():
-                raise RuntimeError("Scoring completed without a score artifact")
-            score_key = f"results/{job_id}/{attempt_id}.scores.parquet"
-            storage = ObjectStore()
-            write_id = store.begin_object_write(
-                location=storage.location(score_key),
-                owner_kind="attempt",
-                owner_id=attempt_id,
-            )
-            digest = storage.put(score_key, score_pending)
-            publish = {
-                **outcome["result"],
-                "location": storage.location(score_key),
-                "sha256": digest,
-            }
-        if pending.exists():
-            pending.replace(output)
-            key = f"results/{job_id}/{attempt_id}.parquet"
-            storage = ObjectStore()
-            write_id = store.begin_object_write(
-                location=storage.location(key), owner_kind="attempt", owner_id=attempt_id
-            )
-            version = storage.put(key, output)
-            publish = {
-                "name": f"features-{job_id[:8]}.parquet",
-                "kind": "file",
-                "location": storage.location(key),
-                "version": version,
-            }
-        result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}
+        publication.prepare(store, job, outcome["result"], pending, output)
         store._assert_worker_ownership()
         final_status = complete_job(
             store,
             job_id,
             "Succeeded",
             attempt_id=attempt_id,
-            result=result,
-            publication=publish,
-            write_id=write_id,
+            result=publication.result,
+            publication=publication.payload,
+            write_id=publication.write_id,
         )
-        if final_status != "Succeeded" and write_id:
-            store.fail_object_write(write_id, "Job cancelled during publication")
+        if final_status != "Succeeded" and publication.write_id:
+            store.fail_object_write(publication.write_id, "Job cancelled during publication")
         emit(
             "worker.attempt.finished",
             service="sos-worker",
@@ -512,9 +257,9 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
         # 잠금이 사라진 Worker는 실패 확정이나 게시 의도 변경도 수행하지 않는다.
         # DB가 살아 있으면 새 소유자가 Running Attempt의 복구를 맡는다.
         store._assert_worker_ownership()
-        if write_id:
+        if publication.write_id:
             try:
-                store.fail_object_write(write_id, ERRORS["SOS-JOB-FAILED"].message)
+                store.fail_object_write(publication.write_id, ERRORS["SOS-JOB-FAILED"].message)
             except Exception:
                 emit(
                     "worker.write_intent.record_failed",
@@ -523,13 +268,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                     job_id=job_id,
                     attempt_id=attempt_id,
                 )
-        if job["kind"] == "iceberg_import":
-            # 부모는 자식의 Catalog 커밋 진입 시점을 확정할 수 없다.
-            code = "SOS-ICEBERG-UNCERTAIN"
-        elif isinstance(exc, ExecutionLimitExceeded):
-            code = exc.code
-        else:
-            code = "SOS-JOB-FAILED"
+        code = publication_failure_code(job, exc)
         if isinstance(exc, ExecutionLimitExceeded):
             category, exception_type = exc.category, type(exc).__name__
         else:
@@ -558,12 +297,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
         )
     finally:
         _stop(process)
-        # 게시 도중 실패해도 로컬 실행 중간 파일은 남기지 않는다.
-        output.unlink(missing_ok=True)
-        pending.unlink(missing_ok=True)
-        pending.with_suffix(".joblib").unlink(missing_ok=True)
-        pending.with_suffix(".scores.parquet").unlink(missing_ok=True)
-        completed.unlink(missing_ok=True)
+        cleanup_attempt_files(store, job)
         try:
             cgroup.cleanup(attempt_id)
         except (OSError, ValueError) as exc:
@@ -576,104 +310,4 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                 attempt_id=attempt_id,
                 exception_type=type(exc).__name__,
             )
-        if job["kind"] == "ml_score":
-            try:
-                cleanup_scoring_stage(store.home, pending.with_suffix(".scores.parquet"))
-            except (OSError, ValueError):
-                emit(
-                    "worker.staging.cleanup_failed",
-                    service="sos-worker",
-                    level=logging.ERROR,
-                    job_id=job_id,
-                    attempt_id=attempt_id,
-                )
-        if job["kind"] == "ml_train":
-            try:
-                cleanup_training_stage(store.home, attempt_id)
-            except OSError:
-                emit(
-                    "worker.staging.cleanup_failed",
-                    service="sos-worker",
-                    level=logging.ERROR,
-                    job_id=job_id,
-                    attempt_id=attempt_id,
-                )
-        if job["kind"] == "iceberg_import":
-            # 자식이 SIGKILL되어도 Attempt에 속한 미완성 입력은 부모가 회수한다.
-            try:
-                cleanup_iceberg_staging(store, attempt_id)
-            except OSError:
-                # 정리 실패로 이미 확정한 Job/Attempt 결과를 덮어쓰지 않는다.
-                emit(
-                    "worker.staging.cleanup_failed",
-                    service="sos-worker",
-                    level=logging.ERROR,
-                    job_id=job_id,
-                    attempt_id=attempt_id,
-                )
     return True
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--home", type=Path, default=Path(os.getenv("SOS_HOME", ".sos")))
-    parser.add_argument("--once", action="store_true")
-    parser.add_argument("--poll", type=float, default=0.5)
-    args = parser.parse_args()
-    store = Store(args.home)
-    store.initialize()
-    try:
-        mlflow_settings = MLflowSettings.from_env()
-    except RuntimeConfigurationError:
-        # 잘못된 선택적 Tracking 설정이 SOS의 핵심 학습 Worker를 막지 않는다.
-        # 전송 대기 기록은 설정 수정·재시작 후에도 PostgreSQL에 남는다.
-        emit(
-            "worker.mlflow.config_invalid",
-            service="sos-worker",
-            level=logging.WARNING,
-        )
-        mlflow_settings = None
-    mlflow_client = MLflowClient(mlflow_settings) if mlflow_settings else None
-    if not store.acquire_worker():
-        raise SystemExit("Another worker already owns the execution lock")
-
-    def stop_on_sigterm(_signum, _frame):
-        # 부모 종료 시 run_once의 finally가 실행 중인 자식도 종료한다.
-        raise KeyboardInterrupt
-
-    previous = signal.signal(signal.SIGTERM, stop_on_sigterm)
-    try:
-        isolation = CgroupIsolation.from_env(ExecutionBudget.from_env().max_rss_mib)
-        isolation.validate_before_claim()
-        cleanup_orphaned_cgroups_before_recovery(store, isolation)
-        interrupted = store.recover()
-        if mlflow_client:
-            store.recover_tracking_exports()
-        # 단일 Worker 잠금 아래에서는 이전 실행의 자식이 남아 있지 않다.
-        cleanup_recovered_results(store, interrupted)
-        cleanup_iceberg_staging(store)
-        cleanup_training_stage(store.home)
-        store.heartbeat()
-        if args.once:
-            run_once(store)
-            if mlflow_client:
-                run_tracking_once(store, mlflow_client)
-            return
-        while True:
-            store.heartbeat()
-            executed = run_once(store)
-            exported = run_tracking_once(store, mlflow_client) if mlflow_client else False
-            if not executed and not exported:
-                time.sleep(args.poll)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        signal.signal(signal.SIGTERM, previous)
-        try:
-            store.release_worker()
-        finally:
-            store.engine.dispose()
-
-
-if __name__ == "__main__":
-    main()
