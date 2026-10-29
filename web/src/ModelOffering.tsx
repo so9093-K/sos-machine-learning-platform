@@ -31,6 +31,12 @@ export function useModelOffering(modelId: string | null, refreshKey = 0) {
   };
 }
 
+/** 서버의 신규 적용 규칙과 같다. 활성·Registry 등록 판본이어야 하고, 소유자·관리자가 아니면 제공 중이어야 한다. */
+export function canApplyModel(model: ModelRevision, offering: ModelOfferingState, isAdministrator: boolean) {
+  return model.lifecycle_state === "Active" && Boolean(model.registry_version) &&
+    (offering.offered || offering.owned || isAdministrator);
+}
+
 function OfferingEditor({ model, offering, disabled, onSaved }: {
   model: ModelRevision; offering: ModelOfferingState; disabled: boolean;
   onSaved: (value: ModelOfferingState) => void;

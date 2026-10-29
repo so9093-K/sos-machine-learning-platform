@@ -46,9 +46,11 @@ export function ActivityTopic({ canRun, datasetId, datasetName, onClearDataset, 
       <p>사용자·호스트 단위로 집계한 활동 Feature에서 평소 패턴과 다른 관측값을 찾습니다.
         제공된 모델을 내 Dataset에 적용하면 관측값마다 이상 점수를 계산하고, 점수가 높은 관측값의 입력과 모델 반응을 조사할 수 있습니다.</p>
       <dl className="evidence-facts">
-        <div><dt>입력 조건</dt><dd>{definition
-          ? `숫자형 활동 Feature ${definition.required_features.length}개 · UTC 시각 컬럼 ${definition.required_time_column}`
+        <div><dt>모델 적용 입력</dt><dd>{definition
+          ? `모델이 요구하는 숫자형 활동 Feature ${definition.required_features.length}개와 기록된 자료형 · 관측 시각 컬럼은 선택`
           : "입력 조건 확인 중"}</dd></div>
+        {onOpenPipelines && definition && <div><dt>새 모델 학습 입력</dt>
+          <dd>{`위 Feature와 시간 분할용 UTC 시각 컬럼 ${definition.required_time_column} · 등록 파이프라인 실행 조건`}</dd></div>}
         <div><dt>결과</dt><dd>관측값별 이상 점수 · 점수 분포 · 관측값 입력과 기여도</dd></div>
       </dl>
       {definition && <details className="activity-topic-features">

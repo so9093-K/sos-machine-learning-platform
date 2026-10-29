@@ -19,7 +19,7 @@ import {
   scoreDirectionLabel,
 } from "./display-format";
 import { ModelCreationEvidence } from "./ModelCreationEvidence";
-import { ModelOfferingPanel, useModelOffering } from "./ModelOffering";
+import { canApplyModel, ModelOfferingPanel, useModelOffering } from "./ModelOffering";
 import { EvaluationSummary } from "./EvaluationSummary";
 
 type OpenResource = (kind: MLResourceKind, id: string) => void;
@@ -171,9 +171,8 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
               : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>
           {m.algorithm === "isolation_forest" && <p>학습한 입력 패턴과 다른 관측값을 점수로 살펴보는 이상 탐지 모델입니다.</p>}
           <div className="ml-resource-actions">
-            <button disabled={!canRun || m.lifecycle_state !== "Active" || modelOffering.offering === null ||
-              modelOffering.loading || Boolean(modelOffering.error) ||
-              (!modelOwned && !modelOffering.offering.offered)}
+            <button disabled={!canRun || modelOffering.offering === null || modelOffering.loading ||
+              Boolean(modelOffering.error) || !canApplyModel(m, modelOffering.offering, isAdministrator)}
               onClick={() => onScoring(m.id)}>이 모델로 점수 계산 →</button>
           </div>
         </div>
@@ -307,10 +306,10 @@ function JobRowSummary({ job, subject }: { job: JobRow; subject: string }) {
 
 /** 특정 학습 화면을 거치지 않고 Model Revision과 Dataset으로 Scoring한다. */
 export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets, preferredModelId, canRun, canCancel,
-  onOpenResource, onModelSelected, onNavigate,
+  onOpenResource, onModelSelected, onNavigate, isAdministrator = false,
   hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered }: {
   selectedDatasetId?: string; onSelectDataset?: (id: string) => void;
-  datasets: Dataset[]; preferredModelId: string; canRun: boolean; canCancel: boolean;
+  datasets: Dataset[]; preferredModelId: string; canRun: boolean; canCancel: boolean; isAdministrator?: boolean;
   onOpenResource: OpenResource; onModelSelected: (id: string) => void;
   onNavigate: (tab: "ml" | "scoring") => void;
   hasMoreDatasets?: boolean; onLoadMoreDatasets?: () => Promise<void>;
@@ -355,9 +354,7 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
   }
   const current = model && model.id === preferredModelId ? model : null;
   const state = offering.offering;
-  // 소유자·관리자 외에는 제공 중인 판본에만 새 계산을 제출할 수 있다.
-  const usable = current !== null && state !== null && current.lifecycle_state === "Active" &&
-    Boolean(current.registry_version) && (state.offered || state.owned);
+  const usable = current !== null && state !== null && canApplyModel(current, state, isAdministrator);
   const description = state?.description ?? offered.find(item => item.model.id === preferredModelId)?.description;
   const listed = offered.some(item => item.model.id === preferredModelId);
   const collapsed = resultFocused && !showSetup;
@@ -377,7 +374,8 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
           onChange={event => onModelSelected(event.target.value)}>
           <option value="">모델 선택</option>
           {preferredModelId && !listed && <option value={preferredModelId}>{current
-            ? `${algorithmLabel(current.algorithm)} · v${current.registry_version ?? "?"} · 목록 밖 판본` : "선택한 모델"}</option>}
+            ? `${algorithmLabel(current.algorithm)} · v${current.registry_version ?? "?"} · ${state && !state.offered
+              ? "제공되지 않은 판본" : "목록 밖 판본"}` : "선택한 모델"}</option>}
           {offered.map(item => <option key={item.model.id} value={item.model.id}>
             {algorithmLabel(item.model.algorithm)} · v{item.model.registry_version ?? "?"} · 제공 {formatRecordedAt(item.offered_at)}
           </option>)}
@@ -390,6 +388,9 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
           · 입력 Feature {current.features.length}개
           {" "}<button type="button" className="ghost" onClick={() => onOpenResource("model", current.id)}>모델 상세 →</button></p>
         {description && <p className="model-offering-description">{description}</p>}
+        {usable && state && !state.offered && <p className="hint">{state.owned
+          ? "사용자에게 제공되지 않은 판본입니다. 소유자 권한으로 적용합니다."
+          : "사용자에게 제공되지 않은 판본입니다. 관리자 권한으로 적용합니다."}</p>}
       </div>}
       {preferredModelId && offering.loading && !state && <p role="status">모델 제공 상태 확인 중…</p>}
       {offering.error && <p role="alert">모델 제공 상태 확인 실패 · {offering.error}

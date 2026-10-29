@@ -65,8 +65,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const canInspectStorage = actor.capabilities.includes("storage.inspect");
   const canViewAudit = actor.capabilities.includes("audit.read");
   const canConfigure = actor.capabilities.includes("instance.configure");
-  // 등록 파이프라인은 학습 권한 계정이 모델을 공급하는 운영 도구다.
+  // 등록 파이프라인은 학습 권한 계정이 모델을 공급하는 운영 도구다. 메뉴·새 실행은 학습 권한,
+  // 기존 실행 결과의 직접 링크 열람은 API와 같이 작업 조회 권한을 따른다.
   const canOperatePipelines = actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read");
+  const canViewPipelineRuns = actor.capabilities.includes("job.read");
   const { tab, resource, context, navigate: setTab, navigateWithContext,
     selectContext, openResource } = useWorkspaceNavigation();
   const isDataArea = (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab);
@@ -557,18 +559,17 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         })}>파이프라인 실행 결과로 복귀 →</button>
         <span className="hint">원래 실행의 결과는 유지되며 추가 계산은 별도 결과로 남습니다.</span>
       </div>}
-      {tab === "pipelines" && (canOperatePipelines
+      {tab === "pipelines" && (canViewPipelineRuns
         ? <PipelineWorkspace runId={context.pipelineRunId ?? ""} datasetId={context.datasetId ?? ""} datasets={datasets}
-          canRun={canRun} canCancel={canCancel} canOpenMLflow={canInspectStorage || canViewAudit}
+          canTrain={canOperatePipelines} canRun={canRun} canCancel={canCancel} canOpenMLflow={canInspectStorage || canViewAudit}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
           onSelectRun={(pipelineRunId, datasetId) => navigateWithContext("pipelines", { pipelineRunId, datasetId })}
           onOpenResource={openResource} onOpenDataset={id => navigateWithContext("understanding", {
             datasetId: id, pipelineRunId: context.pipelineRunId,
           })} />
-        : <section className="panel"><h2>모델 공급 운영 도구</h2>
-          <p>등록 파이프라인은 새 모델을 학습해 공급하는 운영 도구이며 모델 학습 권한이 있는 계정에서 사용합니다.
-            준비된 모델은 모델 활용에서 선택해 데이터에 적용할 수 있습니다.</p>
+        : <section className="panel"><h2>파이프라인 조회 권한 없음</h2>
+          <p>실행 결과 조회에는 작업 조회 권한이 필요합니다. 준비된 모델은 모델 활용에서 선택해 데이터에 적용할 수 있습니다.</p>
           <button type="button" onClick={() => setTab("ml")}>모델 활용 →</button></section>)}
       {tab === "topic" && <ActivityTopic canRun={canRun} datasetId={context.datasetId}
         datasetName={datasets.find(item => item.id === context.datasetId)?.name}
@@ -807,7 +808,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
         }}
         onModelSelected={modelId => selectContext({ ...context, modelId })} onNavigate={setTab}
-        canRun={canRun} canCancel={canCancel} onOpenResource={openResource} />}
+        isAdministrator={actor.roles.includes("administrator")} canRun={canRun} canCancel={canCancel} onOpenResource={openResource} />}
       {(["policies","evaluations","explanations"] as Tab[]).includes(tab) && !resource &&
         <DecisionWorkspace
           key={tab} view={tab === "policies" ? "policy" : tab === "evaluations" ? "evaluation" : "explanation"}
