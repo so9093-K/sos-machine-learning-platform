@@ -92,11 +92,11 @@ def _activity_anomaly_if() -> bytes:
 _EXAMPLES = {
     "activity-anomaly-if": {
         "name": "example-activity-anomaly-if.csv",
-        "title": "활동 이상 탐지 학습 예제",
+        "title": "활동 Feature 구조 예제",
         "description": "44개 활동 Feature·UTC 시각·재현 가능한 비식별 관측치 ID를 포함한 합성 예제입니다.",
         "columns": ["ts", "sos_observation_id", "io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create", "cnt_proc_exec"],
         "content": _activity_anomaly_if(),
-        "guide": "모델 실험실에서 모델을 학습하고 점수와 이상 후보를 살펴보세요. 실제 침해 사건이나 탐지 정확도를 검증하는 데이터가 아닙니다.",
+        "guide": "데이터 탐색에서 활동 Feature의 구조·분포를 확인하세요. 제공 모델과 입력 조건이 맞으면 점수 계산에 사용할 수 있습니다. 실제 침해 사건이나 탐지 정확도를 검증하는 데이터가 아닙니다.",
     },
     "machine-sensors": {
         "name": "example-machine-sensors.csv",
@@ -104,7 +104,7 @@ _EXAMPLES = {
         "description": "2개 설비의 시계열, 결측값, 일부 이상값을 탐색합니다.",
         "columns": ["machine_id", "time", "temperature", "vibration", "pressure"],
         "content": _machine_sensors(),
-        "guide": "EDA에서 분포를 확인하고 Features에서 시간 컬럼과 설비별 그룹을 선택하세요.",
+        "guide": "데이터 탐색에서 센서값의 분포·결측을 확인하세요. 시간·설비별 가공은 데이터 준비에서 선택할 수 있습니다.",
     },
     "data-quality": {
         "name": "example-data-quality.csv",

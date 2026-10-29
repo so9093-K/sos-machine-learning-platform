@@ -87,13 +87,13 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const [examplesReload, setExamplesReload] = useState(0);
   const [reloadRevision, setReloadRevision] = useState(0);
   function startScoring(modelId: string) {
-    navigateWithContext("scoring", { modelId });
+    navigateWithContext("scoring", { modelId, datasetId: context.datasetId });
   }
   function startDecision(view: DecisionView, scoringId: string) {
     navigateWithContext(
       view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
       { scoringId, ...(context.modelLabReturn && context.modelId
-        ? { modelLabReturn: true, modelId: context.modelId } : {}) },
+        ? { modelLabReturn: true, modelId: context.modelId, datasetId: context.datasetId } : {}) },
     );
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
@@ -544,11 +544,14 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       </div>}
       {tab === "overview" && <PlatformOverview brandName={brandName}
         datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
+        canViewModels={actor.capabilities.includes("job.read")}
         onNavigate={setTab}
         onOpenDataset={id => chooseDataset(id, "understanding")} />}
       {tab === "topic" && <ModelLabUse key="activity-anomaly" datasets={datasets}
           selectedModelId={context.modelId ?? ""}
-          onSelectModel={modelId => selectContext({ modelId })}
+          onSelectModel={modelId => selectContext({ ...context, modelId })}
+          selectedDatasetId={context.datasetId ?? ""}
+          onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
           canUpload={canWrite} onDatasetRegistered={data => {
@@ -763,7 +766,9 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         </>}
 
       </>}
-      {tab === "ml" && !resource && <ModelCatalog
+      {tab === "ml" && !resource && <ModelCatalog canRun={canRun}
+        datasetId={context.datasetId} datasetName={datasets.find(item => item.id === context.datasetId)?.name}
+        onClearDataset={() => selectContext({ ...context, datasetId: undefined })}
         onOpenModel={id => openResource("model", id)} onScoreModel={startScoring} />}
       {(resource || (["scoring", "policies", "evaluations", "explanations"] as Tab[]).includes(tab)) &&
         context.modelLabReturn && context.modelId &&
@@ -772,7 +777,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             <p>선택한 모델과 데이터에 적용한 결과를 살펴본 뒤 모델 적용 화면으로 돌아갈 수 있습니다.</p>
           </div>
           <button type="button" className="secondary"
-            onClick={() => navigateWithContext("topic", { modelId: context.modelId })}>
+            onClick={() => navigateWithContext("topic", { modelId: context.modelId, datasetId: context.datasetId })}>
             모델 적용 화면으로 돌아가기 →</button>
         </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
@@ -781,6 +786,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         onScoring={startScoring} onDecision={startDecision} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
         datasets={datasets} preferredModelId={context.modelId ?? ""}
+        selectedDatasetId={context.datasetId ?? ""}
+        onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
         hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
         canUpload={canWrite} onDatasetRegistered={data => {
           setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);

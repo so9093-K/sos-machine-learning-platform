@@ -165,11 +165,12 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
               : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>
           {m.algorithm === "isolation_forest" && <p>학습한 입력 패턴과 다른 관측값을 점수로 살펴보는 이상 탐지 모델입니다.</p>}
           <div className="ml-resource-actions">
-            <button disabled={m.lifecycle_state !== "Active" || modelOffering.offering === null ||
+            <button disabled={!canRun || m.lifecycle_state !== "Active" || modelOffering.offering === null ||
               (!modelOwned && !modelOffering.offering.offered)}
               onClick={() => onScoring(m.id)}>이 모델로 점수 계산 →</button>
           </div>
         </div>
+        {!canRun && <p className="hint">조회 전용 · 점수 계산에는 작업 실행 권한이 필요합니다.</p>}
         <ModelOfferingPanel offering={modelOffering.offering} error={modelOffering.error}
           onRetry={modelOffering.reload} />
         <dl className="ml-resource-fields">
@@ -179,13 +180,13 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
         <ModelCreationEvidence key={m.id} model={m}
           datasetName={modelOwned ? datasetName : "제공 모델의 학습 Dataset"} />
         <details className="ml-resource-evidence">
-          <summary>모델 입력·학습 Job·Runtime 근거</summary>
+          <summary>{modelOwned ? "모델 입력·학습 Job·Runtime 근거" : "모델 입력·Runtime 근거"}</summary>
           <dl className="ml-resource-fields">
             <Field label="모델 판본 ID">{m.id}</Field>
-            <Field label="Dataset ID · 판본">{m.dataset_id} · {m.dataset_version}</Field>
-            <Field label="학습 Job">{m.job_id}</Field>
-            <Field label="학습 매개변수">{Object.entries(m.params)
-              .map(([name, value]) => `${name}=${JSON.stringify(value)}`).join(", ") || "기록 없음"}</Field>
+            {modelOwned && <Field label="Dataset ID · 판본">{m.dataset_id} · {m.dataset_version}</Field>}
+            {modelOwned && <Field label="학습 Job">{m.job_id}</Field>}
+            {modelOwned && <Field label="학습 매개변수">{Object.entries(m.params)
+              .map(([name, value]) => `${name}=${JSON.stringify(value)}`).join(", ") || "기록 없음"}</Field>}
             <Field label="Runtime">{String(m.runtime.scikit_learn ?? "상세 근거 미확인")}</Field>
           </dl>
           <FeatureResultDetails key={m.id} summary={`입력 항목 확인 · ${m.features.length}개`}
@@ -292,9 +293,10 @@ function JobRowSummary({ job, subject }: { job: JobRow; subject: string }) {
 }
 
 /** 특정 학습 화면을 거치지 않고 Model Revision과 Dataset으로 Scoring한다. */
-export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel,
+export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets, preferredModelId, canRun, canCancel,
   onOpenResource, onModelSelected, onNavigate,
   hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered }: {
+  selectedDatasetId?: string; onSelectDataset?: (id: string) => void;
   datasets: Dataset[]; preferredModelId: string; canRun: boolean; canCancel: boolean;
   onOpenResource: OpenResource; onModelSelected: (id: string) => void;
   onNavigate: (tab: "ml" | "scoring") => void;
@@ -362,7 +364,7 @@ export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel
       </div>}
     </section>
     {model && model.id === preferredModelId &&
-      <ModelApplicationWorkspace key={model.id} model={model} datasets={datasets}
+      <ModelApplicationWorkspace selectedDatasetId={selectedDatasetId} onSelectDataset={onSelectDataset} key={model.id} model={model} datasets={datasets}
       hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
       canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
       canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}

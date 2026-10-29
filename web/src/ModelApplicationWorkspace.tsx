@@ -6,8 +6,10 @@ import type { MLResourceKind } from "./PlatformNavigation";
 import type { Dataset, ModelRevision } from "./types";
 
 /** 진입 위치와 관계없이 같은 모델 적용·관측값 실험·결과 복귀 경험을 사용한다. */
-export function ModelApplicationWorkspace({ model, datasets, canRun, canCancel, onOpenResource,
+export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, model, datasets, canRun, canCancel, onOpenResource,
   hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered, onResultViewChange }: {
+  selectedDatasetId?: string;
+  onSelectDataset?: (id: string) => void;
   model: ModelRevision; datasets: Dataset[]; canRun: boolean; canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   hasMoreDatasets?: boolean; onLoadMoreDatasets?: () => Promise<void>;
@@ -66,7 +68,7 @@ export function ModelApplicationWorkspace({ model, datasets, canRun, canCancel, 
         observationInput={observationInput} onBackToAnalysis={backToObservation} />
     </div>
     <div hidden={usage !== "dataset"} ref={datasetPanel}>
-      <MLScoringPanel model={model} datasets={datasets} hasMoreDatasets={hasMoreDatasets}
+      <MLScoringPanel selectedDatasetId={selectedDatasetId} onSelectDataset={onSelectDataset} model={model} datasets={datasets} hasMoreDatasets={hasMoreDatasets}
         onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
         onOpenResult={id => onOpenResource("scoring", id)} onOpenResource={onOpenResource}
         canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}

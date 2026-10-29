@@ -187,7 +187,8 @@ try {
   const catalog = renderToStaticMarkup(React.createElement(ModelCatalog, {
     onOpenModel: () => {}, onScoreModel: () => {},
   }));
-  assert.match(catalog, /사용할 수 있는 모델/);
+  assert.match(catalog, /제공 모델/);
+  assert.match(catalog, /조회 전용/);
   assert.doesNotMatch(catalog, /새 학습|모델 그룹|학습·실험/);
 
   // 데이터 화면 사이 이동에서 선택한 Dataset과 작업 문맥을 유지한다.
@@ -199,6 +200,40 @@ try {
   }
   assert.deepEqual(nextNavigationContext(routeAt("/data", "?dataset=one"), "preview"),
     { datasetId: "one" });
+  // 데이터 탐색 → 목록 → 모델 상세 → 적용과 직접 URL에서 선택 Dataset을 이어 간다.
+  const sourceData = routeAt("/data", "?dataset=data+one");
+  const modelsPath = contextPath("ml", nextNavigationContext(sourceData, "ml"));
+  assert.equal(modelsPath, "/models?dataset=data+one");
+  const modelDetailPath = resourcePath("model", "model-a", sourceData.context);
+  assert.equal(modelDetailPath, "/models/model-a?dataset=data+one");
+  const modelDetail = routeAt("/models/model-a", "?dataset=data+one");
+  const applyContext = nextNavigationContext(modelDetail, "scoring");
+  assert.deepEqual(routeAt("/scoring", contextPath("scoring", applyContext).split("?")[1]).context,
+    { modelId: "model-a", datasetId: "data one" });
+  const withDatasetNav = renderToStaticMarkup(React.createElement(PlatformNavigation, {
+    active: "understanding", context: sourceData.context, resource: null,
+    canInspectStorage: false, canViewAudit: false, onNavigate: () => {},
+  }));
+  assert.match(withDatasetNav, /href="\/models\?dataset=data\+one"/);
+  assert.equal(contextPath("topic", nextNavigationContext(sourceData, "topic")),
+    "/topics/activity-anomaly?dataset=data+one");
+  const { checkModelDatasetInput, ModelDatasetCompatibility } = await vite.ssrLoadModule("/src/ModelDatasetCompatibility.tsx");
+  const contract = { features: ["count", "ratio"], runtime: { feature_dtypes: ["Int64", "Float64"] } };
+  assert.equal(checkModelDatasetInput(contract, [
+    { name: "ratio", dtype: "Float64" }, { name: "count", dtype: "Int64" },
+  ]).ready, true); // Dataset의 물리적 컬럼 순서와 무관하게 모델 순서로 자료형을 비교한다.
+  assert.deepEqual(checkModelDatasetInput(contract, [{ name: "count", dtype: "Int64" }]).missing, ["ratio"]);
+  assert.equal(checkModelDatasetInput(contract, [
+    { name: "count", dtype: "Float64" }, { name: "ratio", dtype: "Float64" },
+  ]).ready, false);
+  assert.equal(checkModelDatasetInput(contract, [
+    { name: "count", dtype: "String" }, { name: "ratio", dtype: "Float64" },
+  ]).ready, false);
+  assert.equal(checkModelDatasetInput({ ...contract, runtime: {} }, []).ready, false);
+  const mismatchNotice = renderToStaticMarkup(React.createElement(ModelDatasetCompatibility, {
+    model: contract, columns: [{ name: "count", dtype: "Int64" }], compact: true,
+  }));
+  assert.match(mismatchNotice, /선택한 Dataset에 적용할 수 없음/);
   const jobContext = { datasetId: "one", dataJobId: "job / one", dataJobKind: "exploration" };
   const jobPath = contextPath("jobs", jobContext);
   assert.deepEqual(routeAt("/activity/jobs", jobPath.slice(jobPath.indexOf("?"))).context, jobContext);
@@ -706,7 +741,10 @@ try {
   }));
   assert.match(home, /ACME AI Lab · EXPLORE/);
   assert.doesNotMatch(home, /SOS · EXPLORE/);
-  assert.match(home, /작업 시작/);
+  assert.match(home, /플랫폼 개요/);
+  assert.match(home, /주요 기능/);
+  assert.match(home, /모델 제공 상태 확인 중/);
+  assert.match(home, /<button type="button">모델 목록 →<\/button>/);
   assert.match(home, /<h4>모델 활용<\/h4>/);
   assert.doesNotMatch(home, /<h4>연구·실험<\/h4>|새 학습|새로운 실험/);
   assert.match(home, /활동 이상 탐지/);
@@ -725,6 +763,13 @@ try {
   }));
   assert.match(useModel, /Dataset 분석/);
   assert.match(useModel, /값 직접 입력/);
+  const { MLScoringPanel } = await vite.ssrLoadModule("/src/MLScoringPanel.tsx");
+  const restoredInput = renderToStaticMarkup(React.createElement(MLScoringPanel, {
+    model: exampleModel, datasets: [], selectedDatasetId: "outside-first-page",
+    canRun: true, canCancel: true, onOpenResult: () => {}, onOpenResource: () => {},
+  }));
+  assert.match(restoredInput, /<option value="outside-first-page" selected=""/);
+  assert.match(restoredInput, /선택한 Dataset · 목록 외/);
   const sensitivity = renderToStaticMarkup(React.createElement(SensitivityChart, {
     result: { output: { feature_sensitivities: [
       { feature: "f1", anomaly_score_delta: 0.12 },
