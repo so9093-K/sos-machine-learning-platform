@@ -3,6 +3,7 @@ import { ApiError, formatError, request } from "./api";
 import { DataChart } from "./DataChart";
 import { verifiedScoreHistogram } from "./ModelScoreContext";
 import { EvaluationSummary } from "./EvaluationSummary";
+import { useModelOffering } from "./ModelOffering";
 import { ObservationInvestigation } from "./ObservationInvestigation";
 import { formatRecordedAt, jobStatusLabel } from "./display-format";
 import { isLocalOperatorHost, mlflowRunUrl } from "./operator-tools";
@@ -133,6 +134,7 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
   const evaluationId = pipelineResultId(run, "evaluation", "evaluation_revision_id");
   const path = (base: string, id: string | null) => id ? `/api/ml/${base}/${encodeURIComponent(id)}` : null;
   const model = useAsset<ModelRevision>(path("models", modelId), revision);
+  const offering = useModelOffering(modelId, revision);
   const calibration = useAsset<ScoringResult>(path("scoring/results", calibrationId), revision);
   const policy = useAsset<DecisionPolicyRevision>(path("policies", policyId), revision);
   const test = useAsset<ScoringResult>(path("scoring/results", testId), revision);
@@ -179,8 +181,13 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
         <p>Isolation Forest · 학습 점수 {amount(model.data.training_score_summary.score_count)}건
           · Feature {model.data.features.length}개</p>
         <p>{model.data.registry_version ? `Registry v${model.data.registry_version} · 등록 확인` : "학습 완료 · Registry 등록 미확인"}</p>
-        <p className="hint">학습 점수는 Train 내부 진단이며 독립 평가 성능이 아닙니다. 모델 제공은 별도 절차입니다.</p>
-        {open("model", modelId, "모델 판본")}
+        <p className="hint">학습 점수는 Train 내부 진단이며 독립 평가 성능이 아닙니다.</p>
+        {offering.error ? <div role="alert"><p>모델 제공 상태 조회 실패 · {offering.error}</p>
+          <button className="secondary" onClick={offering.reload}>제공 상태 다시 조회</button></div>
+          : <p>{offering.loading ? "모델 제공 상태 확인 중…" : offering.offering?.offered
+            ? "사용자 제공 중 · 모델 목록에서 활용 가능"
+            : "사용자 미제공 · 권한이 있는 계정은 모델 상세에서 제공 등록"}</p>}
+        {open("model", modelId, "모델 상세·제공 상태")}
         <details><summary>학습 설정</summary><pre>{JSON.stringify(model.data.params, null, 2)}</pre></details>
       </>}</AssetState>
       {tracking("training")}

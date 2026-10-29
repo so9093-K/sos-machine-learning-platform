@@ -807,6 +807,9 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         canRun={canRun} canCancel={canCancel}
+        canManageModel={actor.capabilities.includes("model.manage")} isAdministrator={actor.roles.includes("administrator")}
+        onOpenModelCatalog={() => navigateWithContext("ml", { datasetId: context.datasetId })}
+        onOpenActivity={modelId => navigateWithContext("topic", { modelId, datasetId: context.datasetId })}
         onScoring={startScoring} onDecision={startDecision} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
         datasets={datasets} preferredModelId={context.modelId ?? ""}

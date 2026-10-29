@@ -2,15 +2,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
+import { isActivityModelCompatible } from "./ModelLabTaxonomy";
 import type { MLResourceKind } from "./PlatformNavigation";
-import type { Dataset, ModelOffering, ModelOfferingPage, ModelRevision, PipelineDefinition } from "./types";
-
-export function isActivityModelCompatible(model: Pick<ModelRevision, "algorithm" | "features">,
-  definition: Pick<PipelineDefinition, "algorithm" | "required_features">): boolean {
-  return model.algorithm === definition.algorithm &&
-    model.features.length === definition.required_features.length &&
-    model.features.every((feature, index) => feature === definition.required_features[index]);
-}
+import type { Dataset, ModelOffering, ModelOfferingPage, PipelineDefinition } from "./types";
 
 async function offeredPage(cursor: string | null) {
   return request<ModelOfferingPage>("/api/ml/offered-models?limit=50" +
