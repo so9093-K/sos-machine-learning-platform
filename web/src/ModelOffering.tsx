@@ -1,8 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { formatError, request } from "./api";
 import { formatRecordedAt } from "./display-format";
-import { isActivityModelCompatible } from "./ModelLabTaxonomy";
-import type { ModelOfferingState, ModelRevision, PipelineDefinition } from "./types";
+import type { ModelOfferingState, ModelRevision } from "./types";
 
 /** 모델 판본의 제공 상태를 조회한다. 제공한 적이 없으면 offered=false로 응답한다. */
 export function useModelOffering(modelId: string | null, refreshKey = 0) {
@@ -30,30 +29,6 @@ export function useModelOffering(modelId: string | null, refreshKey = 0) {
     },
     reload: () => setRevision(value => value + 1),
   };
-}
-
-function OfferingDestinations({ model, onOpenCatalog, onOpenActivity }: {
-  model: ModelRevision; onOpenCatalog: () => void; onOpenActivity?: () => void;
-}) {
-  const [definition, setDefinition] = useState<PipelineDefinition | null>(null);
-  const [error, setError] = useState("");
-  const [revision, setRevision] = useState(0);
-  useEffect(() => {
-    if (!onOpenActivity) return;
-    let active = true;
-    setDefinition(null); setError("");
-    void request<PipelineDefinition[]>("/api/pipelines").then(items => {
-      if (active) setDefinition(items.find(item => item.id === "activity-anomaly-if") ?? null);
-    }).catch(cause => { if (active) setError(formatError(cause)); });
-    return () => { active = false; };
-  }, [model.id, revision, Boolean(onOpenActivity)]);
-  return <div className="model-offering-destinations">
-    <button type="button" className="secondary" onClick={onOpenCatalog}>제공 모델 목록 →</button>
-    {onOpenActivity && definition && isActivityModelCompatible(model, definition) &&
-      <button type="button" className="secondary" onClick={onOpenActivity}>이 모델로 활동 이상 탐지 →</button>}
-    {error && <div role="alert"><p>분석 주제 호환성 조회 실패 · {error}</p>
-      <button type="button" className="secondary" onClick={() => setRevision(value => value + 1)}>호환성 다시 조회</button></div>}
-  </div>;
 }
 
 function OfferingEditor({ model, offering, disabled, onSaved }: {
@@ -135,8 +110,8 @@ function OfferingEditor({ model, offering, disabled, onSaved }: {
   </div>;
 }
 
-/** 모델 상세에서 제공 상태·명시적 관리·지원되는 활용 화면을 연결한다. */
-export function ModelOfferingPanel({ model, offering, error, loading, canManage, onRetry, onSaved, onOpenCatalog, onOpenActivity }: {
+/** 모델 상세에서 제공 상태와 명시적 제공 관리를 보인다. */
+export function ModelOfferingPanel({ model, offering, error, loading, canManage, onRetry, onSaved, onOpenCatalog }: {
   model: ModelRevision;
   offering: ModelOfferingState | null;
   error: string;
@@ -145,7 +120,6 @@ export function ModelOfferingPanel({ model, offering, error, loading, canManage,
   onRetry: () => void;
   onSaved: (value: ModelOfferingState) => void;
   onOpenCatalog: () => void;
-  onOpenActivity?: () => void;
 }) {
   if (!offering && error) return <section className="model-offering" role="alert">
     <p>모델 제공 상태를 확인하지 못했습니다. {error}</p>
@@ -164,10 +138,12 @@ export function ModelOfferingPanel({ model, offering, error, loading, canManage,
     {loading && <p role="status">제공 상태 확인 중…</p>}
     {error && <p role="alert">제공 상태 조회 실패 · {error} · 표시는 마지막 확인 기록입니다.</p>}
     <p className="hint">모델 제공은 SOS에서 해당 판본을 사용할 수 있게 하는 작업입니다. 성능 승인이나 프로덕션 Serving 배포를 뜻하지 않습니다.</p>
-    <button type="button" className="secondary" disabled={loading} onClick={onRetry}>제공 상태 다시 조회</button>
+    {(canManage || error) && <button type="button" className="secondary" disabled={loading} onClick={onRetry}>
+      제공 상태 다시 조회</button>}
     {canManage && <OfferingEditor key={model.id} model={model} offering={offering}
       disabled={loading || Boolean(error)} onSaved={onSaved} />}
-    {offering.offered && !loading && !error && <OfferingDestinations model={model}
-      onOpenCatalog={onOpenCatalog} onOpenActivity={onOpenActivity} />}
+    {offering.offered && !loading && !error && <div className="model-offering-destinations">
+      <button type="button" className="secondary" onClick={onOpenCatalog}>제공 모델 목록 →</button>
+    </div>}
   </section>;
 }

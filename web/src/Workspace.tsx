@@ -9,6 +9,7 @@ import { useFeatureEditor } from "./useFeatureEditor";
 import { FeaturePanel } from "./FeaturePanel";
 import { useIcebergConnector } from "./useIcebergConnector";
 import { request, jsonPost, submitJob, formatError, uploadFile, describeError, type ErrorNotice } from "./api";
+import { ErrorNotice as ErrorNoticeView } from "./ErrorNotice";
 import { ExampleGallery } from "./ExampleGallery";
 import { DelimitedImport } from "./DelimitedImport";
 import { JobsPanel } from "./JobsPanel";
@@ -23,7 +24,7 @@ import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation"
 import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
-import { ModelLabUse } from "./ModelLabUse";
+import { ActivityTopic } from "./ActivityTopic";
 import { PipelineWorkspace } from "./PipelineWorkspace";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { ModelCatalog } from "./ModelCatalog";
@@ -64,11 +65,13 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const canInspectStorage = actor.capabilities.includes("storage.inspect");
   const canViewAudit = actor.capabilities.includes("audit.read");
   const canConfigure = actor.capabilities.includes("instance.configure");
+  // 등록 파이프라인은 학습 권한 계정이 모델을 공급하는 운영 도구다.
+  const canOperatePipelines = actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read");
   const { tab, resource, context, navigate: setTab, navigateWithContext,
     selectContext, openResource } = useWorkspaceNavigation();
   const isDataArea = (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [datasetSelectionError, setDatasetSelectionError] = useState("");
+  const [datasetSelectionError, setDatasetSelectionError] = useState<ErrorNotice | null>(null);
   const [datasetSelectionLoading, setDatasetSelectionLoading] = useState(false);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const [jobsLoading, setJobsLoading] = useState(true);
@@ -93,8 +96,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   function startDecision(view: DecisionView, scoringId: string) {
     navigateWithContext(
       view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
-      { scoringId, pipelineRunId: context.pipelineRunId, ...(context.modelLabReturn && context.modelId
-        ? { modelLabReturn: true, modelId: context.modelId, datasetId: context.datasetId } : {}) },
+      { scoringId, pipelineRunId: context.pipelineRunId },
     );
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
@@ -271,14 +273,14 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   useEffect(() => {
     if (!isDataArea && tab !== "pipelines") return;
     const requestedId = context.datasetId ?? "";
-    setSelected(requestedId); setDatasetSelectionError("");
+    setSelected(requestedId); setDatasetSelectionError(null);
     if (!requestedId || requestedDatasetLoaded) { setDatasetSelectionLoading(false); return; }
     let active = true;
     setDatasetSelectionLoading(true);
     void request<Dataset>(`/api/datasets/${encodeURIComponent(requestedId)}`)
       .then(item => { if (active) setDatasets(previous =>
         [item, ...previous.filter(entry => entry.id !== item.id)]); })
-      .catch(e => { if (active) setDatasetSelectionError(formatError(e)); })
+      .catch(e => { if (active) setDatasetSelectionError(describeError(e)); })
       .finally(() => { if (active) setDatasetSelectionLoading(false); });
     return () => { active = false; };
   }, [isDataArea, tab, context.datasetId, requestedDatasetLoaded, reloadRevision]);
@@ -546,6 +548,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "overview" && <PlatformOverview brandName={brandName}
         datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
         canViewModels={actor.capabilities.includes("job.read")}
+        canWrite={canWrite} canPrepare={canRun}
         onNavigate={setTab}
         onOpenDataset={id => chooseDataset(id, "understanding")} />}
       {context.pipelineRunId && tab !== "pipelines" && <div className="pipeline-return">
@@ -554,9 +557,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         })}>파이프라인 실행 결과로 복귀 →</button>
         <span className="hint">원래 실행의 결과는 유지되며 추가 계산은 별도 결과로 남습니다.</span>
       </div>}
-      {tab === "pipelines" && (actor.capabilities.includes("job.read")
+      {tab === "pipelines" && (canOperatePipelines
         ? <PipelineWorkspace runId={context.pipelineRunId ?? ""} datasetId={context.datasetId ?? ""} datasets={datasets}
-          canTrain={actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read")}
           canRun={canRun} canCancel={canCancel} canOpenMLflow={canInspectStorage || canViewAudit}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
@@ -564,24 +566,15 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onOpenResource={openResource} onOpenDataset={id => navigateWithContext("understanding", {
             datasetId: id, pipelineRunId: context.pipelineRunId,
           })} />
-        : <section className="panel"><h2>파이프라인 조회 권한 없음</h2><p>실행 결과 조회에는 작업 조회 권한이 필요합니다.</p></section>)}
-      {tab === "topic" && <>
-        {actor.capabilities.includes("job.read") && <div className="pipeline-topic-link">
-          <button className="secondary" onClick={() => navigateWithContext("pipelines", { datasetId: context.datasetId })}>
-            등록 파이프라인·실행 결과 →</button>
-          <span className="hint">시간 분할 학습·보정·Test 평가의 주요 결과</span>
-        </div>}
-        <ModelLabUse key="activity-anomaly" datasets={datasets}
-          selectedModelId={context.modelId ?? ""}
-          onSelectModel={modelId => selectContext({ ...context, modelId })}
-          selectedDatasetId={context.datasetId ?? ""}
-          onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
-          hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
-          canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
-          canUpload={canWrite} onDatasetRegistered={data => {
-            setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
-          }}
-          onHistory={() => setTab("ml-jobs")} /></>}
+        : <section className="panel"><h2>모델 공급 운영 도구</h2>
+          <p>등록 파이프라인은 새 모델을 학습해 공급하는 운영 도구이며 모델 학습 권한이 있는 계정에서 사용합니다.
+            준비된 모델은 모델 활용에서 선택해 데이터에 적용할 수 있습니다.</p>
+          <button type="button" onClick={() => setTab("ml")}>모델 활용 →</button></section>)}
+      {tab === "topic" && <ActivityTopic canRun={canRun} datasetId={context.datasetId}
+        datasetName={datasets.find(item => item.id === context.datasetId)?.name}
+        onClearDataset={() => selectContext({ ...context, datasetId: undefined })}
+        onOpenModel={id => openResource("model", id)} onScoreModel={startScoring}
+        onOpenPipelines={canOperatePipelines ? () => setTab("pipelines") : undefined} />}
       {isDataArea && datasets.length > 0 && <div className="dataset-switcher">
         <label>Dataset 선택<select aria-label="현재 Dataset" value={selected}
           onChange={event => chooseDataset(event.target.value, tab as "understanding" | "preview" | "profile" | "preparation")}>
@@ -593,23 +586,28 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onClick={() => void loadMoreDatasets()}>Dataset 더 보기</button>}
       </div>}
       {isDataArea && selected && !dataset && <section className="panel" aria-label="선택한 Dataset 조회">
-        {datasetSelectionError ? <><p role="alert">선택한 Dataset을 열지 못했습니다. {datasetSelectionError}</p>
-          <button type="button" className="secondary" onClick={() => setReloadRevision(value => value + 1)}>선택 데이터 다시 조회</button></>
+        {datasetSelectionError ? <ErrorNoticeView title="선택한 Dataset을 열지 못했습니다" notice={datasetSelectionError}>
+          <p className="hint">다른 계정의 Dataset이거나 삭제된 Dataset은 열 수 없습니다.</p>
+          <button type="button" className="secondary" onClick={() => setReloadRevision(value => value + 1)}>선택 데이터 다시 조회</button>
+        </ErrorNoticeView>
           : <p role="status">{datasetSelectionLoading ? "선택한 Dataset을 불러오는 중입니다." : "선택한 Dataset의 접근 권한을 확인하고 있습니다."}</p>}
       </section>}
       {!selected && isDataArea && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터 탐색"}</h2>
-        <p>{tab === "preparation"
-          ? "Data Preparation은 Explorer 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
+        <p>{!canWrite
+          ? "조회 전용 계정입니다. 이 계정 소유의 Dataset이 있으면 왼쪽 목록에서 선택해 살펴볼 수 있습니다."
+          : tab === "preparation"
+          ? "데이터 준비는 탐색 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
           : "CSV·Parquet·탭 구분 TSV/TXT, Iceberg 테이블 또는 합성 예제로 시작하세요."}</p>
         {canWrite && <button className="secondary" onClick={() => uploadRef.current?.click()}>
           파일 선택 (CSV·Parquet·TSV·TXT)
         </button>}
-        <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
+        {/* 예제는 Dataset으로 등록되므로 등록 권한이 있는 계정에만 보인다. */}
+        {canWrite && <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
           error={examplesError} onRetry={() => setExamplesReload(v => v + 1)}
-          canUse={canWrite} startLabel={tab === "preparation"
+          startLabel={tab === "preparation"
             ? "이 예제로 데이터 준비 시작 →" : undefined}
-          onUse={id => void selectExample(id)} />
+          onUse={id => void selectExample(id)} />}
       </div>}
       {dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <>
         <div className="dataset-hero">
@@ -686,7 +684,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
                 {showAllPreviewColumns ? "첫 12개 컬럼만 보기" : "전체 컬럼 보기"}
               </button>}
             </div>}
-            <div className="table-scroll"><table><thead><tr>
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="데이터 조회 결과 표"><table><thead><tr>
             {displayedColumns.map(c => <th key={c}>{c}<small>{displayedPreview.schema[c]}</small></th>)}
           </tr></thead><tbody>{displayedPreview.rows.map((r, i) => <tr key={i}>
             {displayedColumns.map(c => <td key={c}>{r[c] == null
@@ -744,7 +742,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
                 onChange={event => { setProfileSearch(event.target.value); setProfilePage(0); }} /></label>
               <span role="status">{profileColumns.length}개 중 {profileColumns.length ? currentProfilePage * 10 + 1 : 0}–{Math.min(profileColumns.length, (currentProfilePage + 1) * 10)}개</span>
             </div>
-            <div className="table-scroll"><table><thead><tr>
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="컬럼 통계 표"><table><thead><tr>
               <th>컬럼</th><th>dtype</th><th>NULL</th><th>NaN</th><th>고유 값</th><th>평균</th>
             </tr></thead><tbody>{profileColumns.slice(currentProfilePage * 10, (currentProfilePage + 1) * 10).map(c => <tr key={c.name}>
               <td>{c.name}</td><td title={c.dtype}>{formatDtype(c.dtype)}</td><td>{c.nulls}</td>
@@ -794,22 +792,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         datasetId={context.datasetId} datasetName={datasets.find(item => item.id === context.datasetId)?.name}
         onClearDataset={() => selectContext({ ...context, datasetId: undefined })}
         onOpenModel={id => openResource("model", id)} onScoreModel={startScoring} />}
-      {(resource || (["scoring", "policies", "evaluations", "explanations"] as Tab[]).includes(tab)) &&
-        context.modelLabReturn && context.modelId &&
-        <section className="context-return" role="status">
-          <div><strong>활동 이상 탐지에서 열린 결과입니다.</strong>
-            <p>선택한 모델과 데이터에 적용한 결과를 살펴본 뒤 모델 적용 화면으로 돌아갈 수 있습니다.</p>
-          </div>
-          <button type="button" className="secondary"
-            onClick={() => navigateWithContext("topic", { modelId: context.modelId, datasetId: context.datasetId })}>
-            모델 적용 화면으로 돌아가기 →</button>
-        </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         canRun={canRun} canCancel={canCancel}
         canManageModel={actor.capabilities.includes("model.manage")} isAdministrator={actor.roles.includes("administrator")}
         onOpenModelCatalog={() => navigateWithContext("ml", { datasetId: context.datasetId })}
-        onOpenActivity={modelId => navigateWithContext("topic", { modelId, datasetId: context.datasetId })}
         onScoring={startScoring} onDecision={startDecision} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
         datasets={datasets} preferredModelId={context.modelId ?? ""}

@@ -22,9 +22,13 @@ type JobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
 type Contribution = { feature: string; shap_value: number; actual_value: number | null;
   reference_median: number; missing_imputed: boolean };
 
-export function ShapContributionChart({ result, valueLabel = "실제 관측값", inputLabel = "이 관측값" }: {
+export function ShapContributionChart({ result, valueLabel = "실제 관측값", inputLabel = "이 관측값",
+  headingLevel = 6 }: {
   result: ExplanationResult; valueLabel?: string; inputLabel?: string;
+  /** 놓이는 화면의 제목 단계에 맞춘다. 결과 상세처럼 상위 제목이 h2이면 3을 쓴다. */
+  headingLevel?: 3 | 4 | 5 | 6;
 }) {
+  const Heading = `h${headingLevel}` as "h3" | "h4" | "h5" | "h6";
   // Explanation 판본별로 선택을 묶어 다른 관측값의 Feature 선택이 남지 않게 한다.
   const [featureSelection, setFeatureSelection] = useState<{
     resultId: string; feature: string;
@@ -112,8 +116,8 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
   return <section aria-label="SHAP 모델 점수 기여도" className="shap-result">
     <p className="explanation-baseline">비교 기준: 학습 Feature별 중앙값을 모은 합성 입력 1개.
       학습 데이터의 실제 분포나 정상 범위를 나타내지 않습니다.</p>
-    <h6>{zeroContributions ? "SHAP 기준 점수와 일치하는 결과" :
-      `모델 점수에 기여한 주요 Feature ${shown.length}개 (SHAP)`}</h6>
+    <Heading>{zeroContributions ? "SHAP 기준 점수와 일치하는 결과" :
+      `모델 점수에 기여한 주요 Feature ${shown.length}개 (SHAP)`}</Heading>
     {zeroContributions
       ? <div className="shap-zero" role="status">
           <strong>이 입력의 SHAP 기여도는 모두 0입니다.</strong>
@@ -166,7 +170,7 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
       <summary>SHAP 상세 계산 근거</summary>
       <div className="shap-technical-content">
         <section aria-label="SHAP 설명 방법과 기준">
-          <h6>설명 방법과 기준</h6>
+          <Heading>설명 방법과 기준</Heading>
           <EvidenceFacts facts={[
             { label: "설명 방법", value: "Permutation SHAP" },
             { label: "모델 점수 출력", value: "-score_samples" },
@@ -175,7 +179,7 @@ export function ShapContributionChart({ result, valueLabel = "실제 관측값",
           <p className="hint">점수 재구성 오차: {key(residual)}. 합산 관계를 확인하는 값이며, 개별 기여도 추정의 정확도를 측정한 값이 아닙니다.</p>
         </section>
         <section aria-label="SHAP 재현 설정">
-          <h6>재현 설정</h6>
+          <Heading>재현 설정</Heading>
           <EvidenceFacts compact facts={[
             { label: "순열 반복", value: typeof output.permutation_rounds === "number"
               ? `${key(output.permutation_rounds)}회` : "미정의" },

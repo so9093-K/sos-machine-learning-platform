@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
-import type { DatasetColumns, ModelOffering, ModelOfferingPage } from "./types";
+import type { DatasetColumns, ModelOffering, ModelOfferingPage, ModelRevision } from "./types";
 import { checkModelDatasetInput, ModelDatasetCompatibility } from "./ModelDatasetCompatibility";
 import { algorithmLabel, formatRecordedAt } from "./display-format";
 
-/** 모델 활용의 진입점. 개발·배포 과정이 제공한 모델 판본의 목적과 입력 조건을 먼저 보인다. */
-export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datasetId = "", datasetName, onClearDataset }: {
+/** 모델 활용의 진입점. 개발·배포 과정이 제공한 모델 판본의 목적과 입력 조건을 먼저 보인다.
+ *
+ * 분석 주제 화면은 `accepts`로 해당 주제의 입력 계약에 맞는 판본만 보인다.
+ */
+export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datasetId = "", datasetName, onClearDataset,
+  title = "제공 모델", accepts, emptyMessage }: {
+  title?: string;
+  accepts?: (model: ModelRevision) => boolean;
+  emptyMessage?: string;
   canRun?: boolean;
   datasetId?: string;
   datasetName?: string;
@@ -30,6 +37,7 @@ export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datase
     return () => { active = false; };
   }, [datasetId, revision]);
   const currentSchema = schema?.id === datasetId ? schema : null;
+  const shown = accepts ? items.filter(item => accepts(item.model)) : items;
   useEffect(() => {
     let active = true;
     setLoading(true); setError("");
@@ -52,7 +60,7 @@ export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datase
     finally { setLoadingMore(false); }
   }
   return <section className="panel model-version-panel" aria-labelledby="offered-models-heading">
-    <div className="panel-head"><div><h2 id="offered-models-heading">제공 모델</h2>
+    <div className="panel-head"><div><h2 id="offered-models-heading">{title}</h2>
       <p>준비된 모델의 목적과 입력 조건을 확인한 뒤 자신의 Dataset에 적용합니다.</p></div>
       <div className="actions">
         <button type="button" className="secondary" onClick={() => setRevision(x => x + 1)}>새로고침</button>
@@ -71,10 +79,11 @@ export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datase
     </div>}
     {loading && <p role="status">사용할 수 있는 모델을 조회하고 있습니다.</p>}
     {error && <p role="alert">{error}</p>}
-    {!loading && !error && items.length === 0 &&
-      <p className="muted">아직 준비된 모델이 없습니다. 모델이 제공되면 이곳에서 선택해 데이터에 적용할 수 있습니다.</p>}
+    {!loading && !error && shown.length === 0 &&
+      <p className="muted">{cursor ? "현재 불러온 목록에 해당 모델이 없습니다. 모델을 더 불러와 확인하세요."
+        : emptyMessage ?? "아직 준비된 모델이 없습니다. 모델이 제공되면 이곳에서 선택해 데이터에 적용할 수 있습니다."}</p>}
     <div className="model-version-list">
-      {items.map(item => <article className="model-version-row" key={item.model.id}>
+      {shown.map(item => <article className="model-version-row" key={item.model.id}>
         <div className="model-version-identity">
           <h3>{algorithmLabel(item.model.algorithm)} · v{item.model.registry_version ?? "?"}</h3>
           <p className="model-offering-description">{item.description}</p>

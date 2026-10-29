@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ApiError, formatError, request } from "./api";
+import { ApiError, describeError, formatError, request, type ErrorNotice as Notice } from "./api";
+import { ErrorNotice } from "./ErrorNotice";
 import { DataChart } from "./DataChart";
 import { verifiedScoreHistogram } from "./ModelScoreContext";
 import { EvaluationSummary } from "./EvaluationSummary";
@@ -29,14 +30,14 @@ function amount(value: unknown): string {
 
 /** 결과별 조회 실패를 격리하고, 실행을 바꾸면 과거 판본을 즉시 감춘다. */
 function useAsset<T>(path: string | null, revision: number) {
-  const [state, setState] = useState<{ path: string; data?: T; error?: string } | null>(null);
+  const [state, setState] = useState<{ path: string; data?: T; error?: Notice } | null>(null);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     if (!path) return;
     let active = true;
     setState(null);
     void request<T>(path).then(data => { if (active) setState({ path, data }); })
-      .catch(error => { if (active) setState({ path, error: formatError(error) }); });
+      .catch(error => { if (active) setState({ path, error: describeError(error) }); });
     return () => { active = false; };
   }, [path, revision, retry]);
   return { data: state?.path === path ? state.data : undefined,
@@ -45,10 +46,10 @@ function useAsset<T>(path: string | null, revision: number) {
 }
 
 function AssetState({ error, onRetry, children }: {
-  error?: string; onRetry: () => void; children?: ReactNode;
+  error?: Notice; onRetry: () => void; children?: ReactNode;
 }) {
-  return error ? <div role="alert"><p>결과 조회 실패 · {error}</p>
-    <button className="secondary" onClick={onRetry}>결과 다시 조회</button></div>
+  return error ? <ErrorNotice title="결과 조회 실패" notice={error}>
+    <button className="secondary" onClick={onRetry}>결과 다시 조회</button></ErrorNotice>
     : children ?? <p role="status">결과 조회 중…</p>;
 }
 
@@ -232,7 +233,7 @@ export function PipelineRunDetails({ runId, canRun, canCancel, canOpenMLflow, on
   onOpenDataset: (id: string) => void;
 }) {
   const [run, setRun] = useState<PipelineRun | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -248,7 +249,7 @@ export function PipelineRunDetails({ runId, canRun, canCancel, canOpenMLflow, on
       try {
         const item = await request<PipelineRun>(`/api/pipeline-runs/${encodeURIComponent(runId)}`);
         if (!active) return;
-        setRun(item); setError("");
+        setRun(item); setError(null);
         polling = ["Queued", "Running"].includes(item.status);
         delay = 3000;
         if (!polling) { setNotice(""); setCancelError(""); }
@@ -260,7 +261,8 @@ export function PipelineRunDetails({ runId, canRun, canCancel, canOpenMLflow, on
           (cause.status >= 500 || [408, 429].includes(cause.status)));
         polling = polling && temporary;
         delay = Math.min(delay * 2, 30000);
-        setError(formatError(cause) + (polling ? " · 자동 재조회 대기" : ""));
+        const notice = describeError(cause);
+        setError(polling ? { ...notice, guidance: "자동으로 다시 조회합니다." } : notice);
       } finally {
         if (active) {
           setLoading(false);
@@ -290,7 +292,8 @@ export function PipelineRunDetails({ runId, canRun, canCancel, canOpenMLflow, on
         <button className="secondary" disabled={loading} onClick={() => setRevision(value => value + 1)}>상태·결과 다시 조회</button>
       </div>
       {loading && <p role="status">실행 상태 조회 중…</p>}
-      {error && <p role="alert">실행 상태 조회 실패 · {error}{run ? " · 아래 내용은 마지막 확인 기록입니다." : ""}</p>}
+      {error && <ErrorNotice title="실행 상태 조회 실패" notice={error}>
+        {run && <p className="hint">아래 내용은 마지막으로 확인한 기록입니다.</p>}</ErrorNotice>}
       {notice && <p role="status">{notice}</p>}
       {cancelError && <p role="alert">취소 요청 확인 실패 · {cancelError} · 실행 상태 재조회 필요</p>}
       {run && <>

@@ -12,7 +12,7 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
   preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "원본 선택 · 변환 편집 · 결과 Dataset" },
   topic: { eyebrow: "분석 주제", title: "활동 이상 탐지", description: "활동 패턴 이해 · 모델 적용 · 결과 분석" },
-  pipelines: { eyebrow: "PIPELINES", title: "파이프라인", description: "등록된 분석 · 단계별 결과 · 실행 근거" },
+  pipelines: { eyebrow: "MODEL OPERATIONS", title: "등록 파이프라인", description: "모델 공급 운영 · 단계별 결과 · 실행 근거" },
   ml: { eyebrow: "MODELS", title: "모델 활용", description: "모델 선택 · 입력 확인 · 적용 · 결과 이해" },
   scoring: { eyebrow: "SCORING", title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
   policies: { eyebrow: "DECISION POLICY", title: "판정 정책", description: "점수 결과 · 정책 판본 · 재사용" },
@@ -71,7 +71,9 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
       <div id="sos-sidebar-menu" className={"sidebar-menu" + (menuOpen ? " open" : "")}>
       <PlatformNavigation active={section} context={modelContext} resource={modelResource} onNavigate={onNavigate}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
-        canViewDataset={actor.capabilities.includes("dataset.read")} canViewRuns={actor.capabilities.includes("job.read")} />
+        canViewDataset={actor.capabilities.includes("dataset.read")}
+        canPrepareData={actor.capabilities.includes("job.create")}
+        canOperatePipelines={actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read")} />
       {dataSidebar}
       {localOperatorHost && (canInspectStorage || canViewAudit) && <div className="operator-tools">
         <span className="eyebrow">로컬 운영 도구</span>

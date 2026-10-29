@@ -215,7 +215,8 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
     model = {"id": "model", "owner_actor": "supplier", "job_id": "training",
         "attempt_id": "attempt", "dataset_id": "training-data", "dataset_version": "v1",
         "algorithm": "isolation_forest", "location": "s3://test/model", "sha256": "abc",
-        "features": ["a"], "params": {}, "training_score_summary": {}, "runtime": {},
+        "features": ["a"], "params": {}, "training_score_summary": {},
+        "runtime": {"feature_dtypes": ["Float64"]},
         "created_at": "2026-10-29T00:00:00Z", "lifecycle_state": "Active", "registry_version": "1"}
     offering = {}
     submitted = []
@@ -229,6 +230,8 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
     monkeypatch.setattr(api.MLflowSettings, "from_env", lambda: object())
     monkeypatch.setattr(api, "MLflowClient", lambda settings: object())
     monkeypatch.setattr(api, "verify_registered_version", lambda *args: None)
+    monkeypatch.setattr(api, "discovery_columns", lambda store, dataset: {
+        "columns": [{"name": "a", "dtype": "Float64"}]})
 
     def offer(self, mid, **values):
         offering.update(description=values["description"], offered_by=values["actor_id"],

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatError, request } from "./api";
+import { describeError, formatError, request, type ErrorNotice as Notice } from "./api";
+import { ErrorNotice } from "./ErrorNotice";
 import { usePagedJobs } from "./usePagedJobs";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { FeatureResultDetails } from "./FeatureResultDetails";
@@ -104,18 +105,18 @@ export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
     </p>;
   }
   return result.method === "permutation_shap_median_v1"
-    ? <ShapContributionChart result={result} /> : <SensitivityChart result={result} />;
+    ? <ShapContributionChart result={result} headingLevel={3} /> : <SensitivityChart result={result} headingLevel={3} />;
 }
 
 /** 불변 ID로 직접 조회하므로 목록 첫 페이지나 이전 학습 화면을 요구하지 않는다. */
 export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecision, canRun, canCancel,
-  canManageModel = false, isAdministrator = false, onOpenModelCatalog, onOpenActivity }: {
+  canManageModel = false, isAdministrator = false, onOpenModelCatalog }: {
   kind: MLResourceKind; id: string; onOpenResource: OpenResource;
   onScoring: (modelId: string) => void;
   onDecision: (kind: ResultKind, scoringId: string) => void;
   canRun: boolean; canCancel: boolean;
   canManageModel?: boolean; isAdministrator?: boolean;
-  onOpenModelCatalog: () => void; onOpenActivity?: (modelId: string) => void;
+  onOpenModelCatalog: () => void;
 }) {
   const endpoints: Record<MLResourceKind, string> = {
     model: "/api/ml/models", scoring: "/api/ml/scoring/results",
@@ -126,15 +127,15 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
   const [retry, setRetry] = useState(0);
   const [state, setState] = useState<{
     key: string; data: ModelRevision | ScoringResult | DecisionPolicyRevision |
-      EvaluationRevision | ExplanationResult | null; error: string;
+      EvaluationRevision | ExplanationResult | null; error: Notice | null;
   } | null>(null);
   useEffect(() => {
     let active = true;
-    setState({ key, data: null, error: "" });
+    setState({ key, data: null, error: null });
     void request<ModelRevision | ScoringResult | DecisionPolicyRevision |
       EvaluationRevision | ExplanationResult>(`${endpoints[kind]}/${encodeURIComponent(id)}`)
-      .then(data => { if (active) setState({ key, data, error: "" }); })
-      .catch(error => { if (active) setState({ key, data: null, error: formatError(error) }); });
+      .then(data => { if (active) setState({ key, data, error: null }); })
+      .catch(error => { if (active) setState({ key, data: null, error: describeError(error) }); });
     return () => { active = false; };
   }, [key, retry]);
   const current = state?.key === key ? state : null;
@@ -144,10 +145,12 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
   // 제공받은 모델의 학습 Dataset은 소유자 전용이므로 조회하지 않는다.
   const datasetName = useDatasetName(kind === "scoring" || (kind === "model" && modelOwned)
     ? loaded?.dataset_id : null);
-  if (current?.error) return <section className="panel" role="alert">
-    <h2>결과 열기 실패</h2><p>{current.error}</p>
-    <p className="hint">판본 ID, 접근 권한 또는 서비스 상태를 확인하세요.</p>
-    <button className="secondary" onClick={() => setRetry(value => value + 1)}>다시 조회</button>
+  if (current?.error) return <section className="panel">
+    <h2>결과 열기 실패</h2>
+    <ErrorNotice title="요청한 결과를 열 수 없습니다" notice={current.error}>
+      <p className="hint">다른 계정의 결과이거나 삭제된 결과는 열 수 없습니다. 주소와 접근 권한을 확인하세요.</p>
+      <button className="secondary" onClick={() => setRetry(value => value + 1)}>다시 조회</button>
+    </ErrorNotice>
   </section>;
   if (!current?.data) return <section className="panel" role="status">불변 결과를 조회하는 중입니다.</section>;
   const data = current.data;
@@ -155,14 +158,14 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
 <div className="panel-head"><div><h2>{{
       model: "모델 판본", scoring: "모델 적용 분석 결과", policy: "판정 정책",
       evaluation: "평가 결과", explanation: "설명 결과",
-    }[kind]}</h2><p>생성 {formatRecordedAt(data.created_at)}</p></div></div>
+    }[kind]}</h2>{kind !== "model" && <p>생성 {formatRecordedAt(data.created_at)}</p>}</div></div>
     {kind === "model" && (() => {
       const m = data as ModelRevision;
       return <>
         <div className="ml-resource-summary">
           <h3>{algorithmLabel(m.algorithm)}{m.registry_version ? ` · v${m.registry_version}` : ""} · 학습 {formatRecordedAt(m.created_at)}</h3>
           <p>{m.lifecycle_state === "Active"
-            ? "학습에서 생성한 불변 결과입니다. 새 학습 없이 기존 모델을 활용할 수 있습니다."
+            ? "Dataset이나 직접 입력한 값에 적용해 관측값별 이상 점수를 계산할 수 있는 고정 판본입니다."
             : m.lifecycle_state === "Deleting"
               ? "모델 파일을 삭제 중입니다. 현재 새 점수화에 사용할 수 없습니다."
               : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>
@@ -178,15 +181,24 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
         <ModelOfferingPanel model={m} offering={modelOffering.offering} error={modelOffering.error}
           loading={modelOffering.loading} canManage={canManageModel && (modelOwned || isAdministrator)}
           onRetry={modelOffering.reload} onSaved={state => { modelOffering.accept(state); modelOffering.reload(); }}
-          onOpenCatalog={onOpenModelCatalog} onOpenActivity={onOpenActivity ? () => onOpenActivity(m.id) : undefined} />
-        <dl className="ml-resource-fields">
-          <Field label="학습 Dataset">{modelOwned ? datasetName : "제공 모델의 학습 Dataset · 사용자 열람 대상 아님"}</Field>
-          <Field label="입력 Feature 수">{m.features.length.toLocaleString("ko-KR")}개</Field>
-        </dl>
+          onOpenCatalog={onOpenModelCatalog} />
+        <section className="model-input-contract" aria-labelledby={`model-input-${m.id}`}>
+          <h3 id={`model-input-${m.id}`}>입력 조건</h3>
+          <p>숫자형 Feature {m.features.length.toLocaleString("ko-KR")}개를 아래 이름·자료형 그대로 요구합니다.
+            Dataset 컬럼 순서는 달라도 되며, 값은 자동으로 변환하지 않습니다.</p>
+          <FeatureResultDetails key={m.id} open summary={`필수 Feature · ${m.features.length}개`}
+            columns={["입력 순서", "자료형"]} rows={m.features.map((feature, index) => ({
+              feature, values: [index + 1, Array.isArray(m.runtime.feature_dtypes)
+                ? String(m.runtime.feature_dtypes[index] ?? "미확인") : "미확인"],
+            }))} />
+        </section>
+        {modelOwned && <dl className="ml-resource-fields">
+          <Field label="학습 Dataset">{datasetName}</Field>
+        </dl>}
         <ModelCreationEvidence key={m.id} model={m}
           datasetName={modelOwned ? datasetName : "제공 모델의 학습 Dataset"} />
         <details className="ml-resource-evidence">
-          <summary>{modelOwned ? "모델 입력·학습 Job·Runtime 근거" : "모델 입력·Runtime 근거"}</summary>
+          <summary>{modelOwned ? "판본·학습 Job·Runtime 근거" : "판본·Runtime 근거"}</summary>
           <dl className="ml-resource-fields">
             <Field label="모델 판본 ID">{m.id}</Field>
             {modelOwned && <Field label="Dataset ID · 판본">{m.dataset_id} · {m.dataset_version}</Field>}
@@ -195,11 +207,6 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
               .map(([name, value]) => `${name}=${JSON.stringify(value)}`).join(", ") || "기록 없음"}</Field>}
             <Field label="Runtime">{String(m.runtime.scikit_learn ?? "상세 근거 미확인")}</Field>
           </dl>
-          <FeatureResultDetails key={m.id} summary={`입력 항목 확인 · ${m.features.length}개`}
-            columns={["입력 순서", "자료형"]} rows={m.features.map((feature, index) => ({
-              feature, values: [index + 1, Array.isArray(m.runtime.feature_dtypes)
-                ? String(m.runtime.feature_dtypes[index] ?? "미확인") : "미확인"],
-            }))} />
         </details>
       </>;
     })()}
@@ -314,6 +321,9 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [error, setError] = useState("");
+  const [resultFocused, setResultFocused] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
+  const offering = useModelOffering(preferredModelId || null);
   useEffect(() => {
     let active = true;
     void request<ModelOfferingPage>("/api/ml/offered-models?limit=50")
@@ -324,9 +334,9 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
   }, []);
   useEffect(() => {
     let active = true;
-    setModel(null);
+    setModel(null); setResultFocused(false); setShowSetup(false);
     if (preferredModelId) {
-      // 제공 목록 밖의 판본도 조회 권한 안에서는 열 수 있다. 새 적용 가능 여부는 서버가 검사한다.
+      // 첫 목록 페이지 밖의 판본도 직접 연다. 적용 가능 여부는 제공 상태와 서버 검사를 따른다.
       void request<ModelRevision>(`/api/ml/models/${encodeURIComponent(preferredModelId)}`)
         .then(value => { if (active) { setModel(value); setError(""); } })
         .catch(e => { if (active) setError(formatError(e)); });
@@ -343,15 +353,31 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
       setOfferedCursor(page.next_cursor ?? null);
     } catch (e) { setError(formatError(e)); }
   }
+  const current = model && model.id === preferredModelId ? model : null;
+  const state = offering.offering;
+  // 소유자·관리자 외에는 제공 중인 판본에만 새 계산을 제출할 수 있다.
+  const usable = current !== null && state !== null && current.lifecycle_state === "Active" &&
+    Boolean(current.registry_version) && (state.offered || state.owned);
+  const description = state?.description ?? offered.find(item => item.model.id === preferredModelId)?.description;
+  const listed = offered.some(item => item.model.id === preferredModelId);
+  const collapsed = resultFocused && !showSetup;
   return <div className="ml-resource-workspace">
-    <section className="panel">
+    {resultFocused && current && <div className="model-lab-result-toolbar">
+      <span>{algorithmLabel(current.algorithm)} · v{current.registry_version ?? "?"} · Dataset 분석 결과</span>
+      <button type="button" className="secondary" aria-expanded={showSetup}
+        onClick={() => setShowSetup(value => !value)}>
+        {showSetup ? "모델 선택 닫기" : "모델 선택 변경"}</button>
+    </div>}
+    {!collapsed && <section className="panel">
       <h2>적용할 모델</h2>
-      <p className="hint">준비된 모델을 선택해 자신의 Dataset에 적용합니다. 새 학습은 필요하지 않습니다.</p>
+      <p className="hint">준비된 모델을 선택해 자신의 Dataset이나 직접 입력한 값에 적용합니다. 새 학습은 필요하지 않습니다.</p>
       {error && <p role="alert">{error}</p>}
-      <label>제공 모델
-        <select value={offered.some(item => item.model.id === preferredModelId) ? preferredModelId : ""}
-          aria-label="적용할 제공 모델 선택" onChange={event => onModelSelected(event.target.value)}>
+      <label className="model-choice">제공 모델
+        <select value={preferredModelId} aria-label="적용할 제공 모델 선택"
+          onChange={event => onModelSelected(event.target.value)}>
           <option value="">모델 선택</option>
+          {preferredModelId && !listed && <option value={preferredModelId}>{current
+            ? `${algorithmLabel(current.algorithm)} · v${current.registry_version ?? "?"} · 목록 밖 판본` : "선택한 모델"}</option>}
           {offered.map(item => <option key={item.model.id} value={item.model.id}>
             {algorithmLabel(item.model.algorithm)} · v{item.model.registry_version ?? "?"} · 제공 {formatRecordedAt(item.offered_at)}
           </option>)}
@@ -359,22 +385,35 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
       </label>
       {offeredCursor && <button type="button" className="secondary" onClick={() => void loadMoreOffered()}>
         모델 더 보기</button>}
-      {model && model.id === preferredModelId &&
-        <p className="hint">선택 모델: {model.registry_version ? `v${model.registry_version} · ` : ""}{algorithmLabel(model.algorithm)} · 학습 {formatRecordedAt(model.created_at)}
-          · 입력 Feature {model.features.length}개</p>}
+      {current && <div className="model-choice-summary">
+        <p>{algorithmLabel(current.algorithm)} · v{current.registry_version ?? "?"} · 학습 {formatRecordedAt(current.created_at)}
+          · 입력 Feature {current.features.length}개
+          {" "}<button type="button" className="ghost" onClick={() => onOpenResource("model", current.id)}>모델 상세 →</button></p>
+        {description && <p className="model-offering-description">{description}</p>}
+      </div>}
+      {preferredModelId && offering.loading && !state && <p role="status">모델 제공 상태 확인 중…</p>}
+      {offering.error && <p role="alert">모델 제공 상태 확인 실패 · {offering.error}
+        <button type="button" className="secondary" onClick={offering.reload}>다시 조회</button></p>}
+      {current && state && !usable && <div className="notice-blocked" role="status">
+        <p>{current.lifecycle_state !== "Active" || !current.registry_version
+          ? "이 판본은 현재 새 계산에 사용할 수 없습니다."
+          : "제공이 중단된 모델입니다. 이미 만든 결과는 확인할 수 있지만 새 적용은 할 수 없습니다."}</p>
+        <button type="button" className="secondary" onClick={() => onNavigate("ml")}>제공 모델 목록 →</button>
+      </div>}
       {!preferredModelId && <div className="steps">
         <p className="hint">{offered.length
           ? "점수를 계산하려면 제공 모델을 선택하세요. 모델 목적과 입력 조건은 모델 활용에서 확인할 수 있습니다."
           : "아직 준비된 모델이 없습니다. 모델이 제공되면 이곳에서 선택할 수 있습니다."}</p>
         <button className="secondary" type="button" onClick={() => onNavigate("ml")}>모델 활용 →</button>
       </div>}
-    </section>
-    {model && model.id === preferredModelId &&
-      <ModelApplicationWorkspace selectedDatasetId={selectedDatasetId} onSelectDataset={onSelectDataset} key={model.id} model={model} datasets={datasets}
+    </section>}
+    {current && usable &&
+      <ModelApplicationWorkspace selectedDatasetId={selectedDatasetId} onSelectDataset={onSelectDataset} key={current.id} model={current} datasets={datasets}
       hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
       canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
-      canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
-    <section className="panel">
+      canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
+      onResultViewChange={setResultFocused} />}
+    {!collapsed && <section className="panel">
       <div className="panel-head"><div><h2>전체 점수 계산 이력</h2>
         <p>이 화면에서 실행하지 않은 기존 점수 계산도 찾을 수 있습니다. 현재 조회된 목록 기준입니다.</p></div>
         <button className="secondary" onClick={() => void scores.refresh().catch(e => setError(formatError(e)))}>새로고침</button>
@@ -393,7 +432,7 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
       </div>
       {scores.nextCursor && <button className="secondary"
         onClick={() => void scores.loadMore().catch(e => setError(formatError(e)))}>이전 작업 더 보기</button>}
-    </section>
+    </section>}
   </div>;
 }
 
