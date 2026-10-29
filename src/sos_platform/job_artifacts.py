@@ -85,47 +85,86 @@ def enforce_stage_limit(store: Store, job: dict, pending: Path, max_stage_mib: i
 
 
 def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) -> None:
-    """복구가 확정된 Attempt 파일만 회수하며 공유 객체를 삭제하지 않는다."""
+    """복구가 확정된 모든 Attempt의 회수를 시도하고 실패를 항목별로 보고한다."""
     for job_id, attempt_id in interrupted:
         output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
-        _remove_result_files(output, pending, completed)
-        cleanup_scoring_stage(store.home, pending.with_suffix(".scores.parquet"))
-
-
-def _remove_result_files(output: Path, pending: Path, completed: Path) -> None:
-    for path in (
-        output,
-        pending,
-        completed,
-        pending.with_suffix(".joblib"),
-        pending.with_suffix(".scores.parquet"),
-    ):
-        path.unlink(missing_ok=True)
-
-
-def cleanup_attempt_files(store: Store, job: dict) -> None:
-    """종료 후 파일 회수 실패가 확정된 Job 상태를 덮어쓰지 않게 한다."""
-    job_id, attempt_id = job["id"], job["attempts"][-1]["id"]
-    output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
-    try:
-        _remove_result_files(output, pending, completed)
-        if job["kind"] == "ml_score":
+        failures = _remove_result_files(output, pending, completed)
+        try:
             cleanup_scoring_stage(store.home, pending.with_suffix(".scores.parquet"))
-        elif job["kind"] == "ml_train":
-            cleanup_training_stage(store.home, attempt_id)
-        elif job["kind"] == "iceberg_import":
-            cleanup_iceberg_staging(store, attempt_id)
-    except (OSError, ValueError):
+        except (OSError, ValueError) as exc:
+            failures.append(("scoring_stage", exc))
+        _report_cleanup_failures(failures, job_id=job_id, attempt_id=attempt_id)
+
+
+def _remove_result_files(
+    output: Path,
+    pending: Path,
+    completed: Path,
+) -> list[tuple[str, Exception]]:
+    failures = []
+    for operation, path in (
+        ("result.output", output),
+        ("result.pending", pending),
+        ("result.completed", completed),
+        ("result.model", pending.with_suffix(".joblib")),
+        ("result.scores", pending.with_suffix(".scores.parquet")),
+    ):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            failures.append((operation, exc))
+    return failures
+
+
+def _report_cleanup_failures(
+    failures: list[tuple[str, Exception]],
+    *,
+    job_id: str | None = None,
+    attempt_id: str | None = None,
+) -> None:
+    # 파일 경로·예외 원문 대신 Attempt와 고정 항목명으로 실패 대상을 식별한다.
+    for operation, exc in failures:
         emit(
             "worker.staging.cleanup_failed",
             service="sos-worker",
             level=logging.ERROR,
             job_id=job_id,
             attempt_id=attempt_id,
+            operation=operation,
+            exception_type=type(exc).__name__,
         )
 
 
+def cleanup_attempt_files(store: Store, job: dict) -> None:
+    """파일별 실패와 관계없이 스테이징 회수까지 시도한 뒤 실패 항목을 보고한다."""
+    job_id, attempt_id = job["id"], job["attempts"][-1]["id"]
+    output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
+    failures = _remove_result_files(output, pending, completed)
+    operation = "staging"
+    try:
+        if job["kind"] == "ml_score":
+            operation = "scoring_stage"
+            cleanup_scoring_stage(store.home, pending.with_suffix(".scores.parquet"))
+        elif job["kind"] == "ml_train":
+            operation = "training_stage"
+            cleanup_training_stage(store.home, attempt_id)
+        elif job["kind"] == "iceberg_import":
+            operation = "iceberg_stage"
+            cleanup_iceberg_staging(store, attempt_id)
+    except (OSError, ValueError) as exc:
+        failures.append((operation, exc))
+    _report_cleanup_failures(failures, job_id=job_id, attempt_id=attempt_id)
+
+
 def cleanup_recovered_staging(store: Store) -> None:
-    """이전 자식이 없는 단일 Worker 잠금 아래에서만 공용 스테이징을 회수한다."""
-    cleanup_iceberg_staging(store)
-    cleanup_training_stage(store.home)
+    """단일 Worker 잠금 아래 두 스테이징의 회수를 각각 시도하고 실패를 보고한다."""
+    failures = []
+    for operation, cleanup in (
+        ("iceberg_stage", lambda: cleanup_iceberg_staging(store)),
+        ("training_stage", lambda: cleanup_training_stage(store.home)),
+    ):
+        try:
+            cleanup()
+        except (OSError, ValueError) as exc:
+            failures.append((operation, exc))
+    _report_cleanup_failures(failures)

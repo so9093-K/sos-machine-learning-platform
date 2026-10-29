@@ -29,6 +29,8 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 - `observability.emit()`은 허용된 이벤트 속성만 구조화 로그로 내보낸다. 토큰·S3 Key·SQL·환경 변수·예외 원문·데이터 Payload·Stack Trace를 기록하지 않는다.
 - API/Worker 실행에 로그 수집기나 외부 APM 서비스는 필수가 아니다. 로그 저장소를 상태·감사·커밋 판정의 원본으로 만들지 않는다.
 
+Worker의 `worker.staging.cleanup_failed`는 정리를 모두 시도한 뒤 실패한 파일·스테이징마다 기록한다. `job_id`·`attempt_id`와 고정 `operation` 항목명, `exception_type`으로 대상을 구분하며 정리 실패가 확정된 Job 상태를 변경하지 않는다.
+
 ## Runbooks — 반복 가능한 수동 진단
 
 ### 입력·권한 오류
