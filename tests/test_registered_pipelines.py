@@ -276,3 +276,47 @@ def test_dagster_connection_reset_is_dependency_failure(monkeypatch):
         DagsterClient("http://example.test/graphql").find_by_submission("test-id")
     assert failed.value.operation == "run_lookup"
     assert failed.value.failure_type == "connection"
+
+
+def test_job_workflow_source_requires_recorded_internal_link():
+    """같은 Actor의 위장 키와 미확인 기존 키도 실제 Workflow 출처로 인정하지 않는다."""
+    from sqlalchemy import create_engine, text
+    from sos_platform.store import Store
+
+    store = object.__new__(Store)
+    store.engine = create_engine("sqlite://")
+    try:
+        with store.connection() as db:
+            db.execute(text(
+                "CREATE TABLE jobs (id TEXT, owner_actor TEXT, dataset_id TEXT, "
+                "workflow_submission_id TEXT, workflow_stage TEXT)"
+            ))
+            db.execute(text(
+                "CREATE TABLE job_submissions (job_id TEXT, actor_id TEXT, submission_key TEXT)"
+            ))
+            db.execute(text(
+                "CREATE TABLE workflow_submissions "
+                "(id TEXT, owner_actor TEXT, dataset_id TEXT, definition_id TEXT)"
+            ))
+            db.execute(text(
+                "INSERT INTO workflow_submissions VALUES ('run','owner','data','custom-pipeline')"
+            ))
+            db.execute(text(
+                "INSERT INTO jobs VALUES "
+                "('job','owner','data','run','custom_stage'), "
+                "('forged','owner','data',NULL,NULL), "
+                "('foreign','other','data','run','training'), "
+                "('wrong-input','owner','other-data','run','training')"
+            ))
+            db.execute(text(
+                "INSERT INTO job_submissions VALUES ('forged','owner','workflow:run:training')"
+            ))
+        assert store.job_workflow_source({"id": "job", "owner_actor": "owner"}) == {
+            "submission_id": "run", "stage": "custom_stage", "definition_id": "custom-pipeline",
+        }
+        assert store.job_workflow_source({"id": "forged", "owner_actor": "owner"}) is None
+        assert store.job_workflow_source({"id": "foreign", "owner_actor": "other"}) is None
+        assert store.job_workflow_source({"id": "wrong-input", "owner_actor": "owner"}) is None
+        assert store.job_workflow_source({"id": "job", "owner_actor": "other"}) is None
+    finally:
+        store.engine.dispose()
