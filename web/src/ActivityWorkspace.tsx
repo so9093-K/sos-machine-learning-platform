@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { MLflowResearch } from "./MLflowResearch";
 import { MLActivityPanel } from "./MLActivityPanel";
 import { PipelineHistoryPanel } from "./PipelineHistoryPanel";
 import type { Dataset } from "./types";
@@ -7,7 +8,7 @@ import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 export type ActivityView = "data" | "ml" | "pipeline";
 
 /** Job API는 종류별로 분리되어 있다. 화면도 조회 범위를 숨기지 않고 작업 유형을 전환한다. */
-export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource, onOpenPipelineRun, datasets, canCancel, children }: {
+export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource, onOpenPipelineRun, datasets, canCancel, children, canTrain = false }: {
   active: ActivityView;
   onChange: (view: ActivityView) => void;
   onNavigate: (tab: WorkspaceTab) => void;
@@ -15,8 +16,11 @@ export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource
   onOpenPipelineRun: (runId: string, datasetId: string) => void;
   datasets: Dataset[];
   canCancel: boolean;
+  canTrain?: boolean;
   children: ReactNode;
 }) {
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [experimentId, setExperimentId] = useState("");
   return <div className="platform-activity">
     <section className="platform-section-intro">
       <h2>실행 이력과 결과</h2>
@@ -37,8 +41,15 @@ export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource
         Workflow 분석
       </button>
     </nav>
+    {active === "ml" && <details onToggle={event => setComparisonOpen(event.currentTarget.open)}>
+      <summary>기록된 실행 조건·지표 비교</summary>
+      {comparisonOpen && <MLflowResearch datasets={datasets} registryKey="default"
+        canManage={false} canTrain={false} onSelectGroup={() => {}}
+        experimentId={experimentId} onSelectExperiment={experiment => setExperimentId(experiment?.id ?? "")}
+        onOpenResource={onOpenResource} onTrain={() => {}} onWorkflow={() => {}} />}
+    </details>}
     {active === "data" ? children : active === "ml" ?
-      <MLActivityPanel onNavigate={onNavigate} onOpenResource={onOpenResource} canCancel={canCancel}
+      <MLActivityPanel canTrain={canTrain} onNavigate={onNavigate} onOpenResource={onOpenResource} canCancel={canCancel}
         datasets={datasets} /> :
       <PipelineHistoryPanel datasets={datasets} onOpenRun={onOpenPipelineRun}
         onStart={() => onNavigate("pipelines")} />}

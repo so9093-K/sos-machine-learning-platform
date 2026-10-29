@@ -11,6 +11,7 @@ from .security import Actor, require
 from .store import Store
 
 CREATE_JOB = Depends(require("job.create"))
+MANAGE_FEATURE = Depends(require("feature.manage"))
 READ_JOB = Depends(require("job.read"))
 
 
@@ -32,7 +33,7 @@ def feast_router(
     def create_feature_service(
         body: FeatureDefinitionRequest,
         request: Request,
-        actor: Actor = CREATE_JOB,
+        actor: Actor = MANAGE_FEATURE,
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key",
             min_length=8, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$"),
     ):
@@ -127,7 +128,7 @@ def feast_router(
     def retire_feature_registration(
         registration_job_id: str,
         request: Request,
-        actor: Actor = CREATE_JOB,
+        actor: Actor = MANAGE_FEATURE,
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key",
             min_length=8, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$"),
     ):

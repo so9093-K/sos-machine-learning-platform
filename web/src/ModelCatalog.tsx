@@ -7,12 +7,11 @@ import { isLocalOperatorHost, mlflowRunUrl } from "./operator-tools";
 
 /** 모델 활용은 등록 판본의 선택과 실제 입력·결과로 이어지는 진입점이다. */
 export function ModelCatalog({ datasets, registryKey, onSelectGroup, onOpenModel,
-  onScoreModel, onResearch, canManage, canInspectOperations = false }: {
+  onScoreModel, canManage, canInspectOperations = false }: {
   datasets: Dataset[]; registryKey: string;
   onSelectGroup: (key: string) => void;
   onOpenModel: (id: string) => void;
   onScoreModel: (id: string, group: string) => void;
-  onResearch: () => void;
   canManage: boolean; canInspectOperations?: boolean;
 }) {
   const [localOperatorHost, setLocalOperatorHost] = useState(false);
@@ -78,7 +77,6 @@ export function ModelCatalog({ datasets, registryKey, onSelectGroup, onOpenModel
       <div className="panel-head"><div><h2>{groupTitle} · 모델 버전</h2>
         <p>등록 모델의 독립 실행입니다. 학습 데이터와 시각을 확인하고, 선택한 판본의 입력 조건에 맞춰 데이터를 적용합니다.</p></div>
         <div className="actions">
-          <button type="button" className="secondary" onClick={onResearch}>연구·실험 →</button>
           <button type="button" className="secondary" onClick={() => setRevision(x => x + 1)}>새로고침</button>
         </div>
       </div>
@@ -90,7 +88,7 @@ export function ModelCatalog({ datasets, registryKey, onSelectGroup, onOpenModel
       {loading && <p role="status">모델 버전을 조회하고 있습니다.</p>}
       {error && <p role="alert">{error}</p>}
       {!loading && !error && filteredModels.length === 0 && <p className="muted">
-        {term.trim() ? "현재 불러온 버전에서 검색 조건과 일치하는 결과가 없습니다." : modelCursor ? "현재 페이지에 표시할 버전이 없습니다. 이전 버전을 더 조회할 수 있습니다." : "이 그룹에 등록된 모델 버전이 없습니다. 연구·실험에서 학습과 등록 상태를 확인할 수 있습니다."}</p>}
+        {term.trim() ? "현재 불러온 버전에서 검색 조건과 일치하는 결과가 없습니다." : modelCursor ? "현재 페이지에 표시할 버전이 없습니다. 이전 버전을 더 조회할 수 있습니다." : "현재 계정에서 사용할 수 있는 모델 판본이 없습니다. 모델 제공 담당자에게 등록·접근 상태를 확인하세요."}</p>}
       <div className="model-version-list">
         {filteredModels.map(item => <article className="model-version-row" key={item.name + "@" + item.version}>
           <div className="model-version-identity"><h3>{groupTitle} · v{item.version}</h3>

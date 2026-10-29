@@ -17,6 +17,7 @@ import {
   algorithmLabel, explanationMethodLabel, formatRecordedAt, jobStatusLabel, policyModeLabel,
   scoreDirectionLabel,
 } from "./display-format";
+import { ModelCreationEvidence } from "./ModelCreationEvidence";
 import { EvaluationSummary } from "./EvaluationSummary";
 
 type OpenResource = (kind: MLResourceKind, id: string) => void;
@@ -157,6 +158,7 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
             : m.lifecycle_state === "Deleting"
               ? "모델 파일을 삭제 중입니다. 현재 새 점수화에 사용할 수 없습니다."
               : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>
+          {m.algorithm === "isolation_forest" && <p>학습한 입력 패턴과 다른 관측값을 점수로 살펴보는 이상 탐지 모델입니다.</p>}
           <div className="ml-resource-actions">
             <button disabled={m.lifecycle_state !== "Active"}
               onClick={() => onScoring(m.id)}>이 모델로 점수 계산 →</button>
@@ -166,7 +168,7 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
           <Field label="학습 Dataset">{datasetName}</Field>
           <Field label="입력 Feature 수">{m.features.length.toLocaleString("ko-KR")}개</Field>
         </dl>
-        <p className="hint">학습 데이터의 점수 요약은 독립 검증 성능을 의미하지 않습니다.</p>
+        <ModelCreationEvidence key={m.id} model={m} datasetName={datasetName} />
         <details className="ml-resource-evidence">
           <summary>모델 입력·학습 Job·Runtime 근거</summary>
           <dl className="ml-resource-fields">

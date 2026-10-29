@@ -13,6 +13,8 @@ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 type Props = {
   datasets: Dataset[];
   canTrain: boolean;
+  canRun?: boolean;
+  canManageFeatures?: boolean;
   canCancel: boolean;
   canInspectOperations?: boolean;
   onOpenModel: (id: string) => void;
@@ -28,8 +30,8 @@ function statistic(value: unknown): string {
     ? value.toLocaleString("ko-KR") : "—";
 }
 
-/** 독립 Training은 SOS 실행 계약, 모델 자산 탐색은 MLflowResearch가 책임진다. */
-export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperations = false,
+/** 독립 Training은 SOS 실행 계약, 모델 자산 탐색은 ModelCatalog가 책임진다. */
+export function MLWorkbench({ datasets, canTrain, canRun = false, canManageFeatures = false, canCancel, canInspectOperations = false,
   onOpenModel, initialDatasetId, onDatasetSelected, registryKey = "default", onRegistryGroupSelected,
   initialExperimentTitle = "기본 실험" }: Props) {
   const selectedId = initialDatasetId;
@@ -203,7 +205,7 @@ export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperation
       <strong>ML 작업을 처리하지 못했습니다.</strong> {error}
       <button className="ghost" onClick={() => setError("")}>닫기</button>
     </section>}
-    <FeastFeaturePanel datasets={datasets} canCreate={canTrain} onDatasetReady={changeDataset} />
+    <FeastFeaturePanel datasets={datasets} canCreate={canRun} canManage={canManageFeatures} onDatasetReady={changeDataset} />
     <section className="panel">
       <div className="panel-head"><div>
         <h2>Isolation Forest 실험</h2>

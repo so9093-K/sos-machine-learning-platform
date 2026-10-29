@@ -333,7 +333,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .platform-intro h2 { font-size:clamp(22px,2.5vw,29px); margin:10px 0; letter-spacing:-.025em; }
 .platform-intro p { color:var(--sos-muted); font-size:13px; line-height:1.7; max-width:750px; }
 .platform-section-title { font-size:17px; margin-bottom:14px; }
-.platform-destinations { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.platform-destinations { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 /* 사용자 진입 기능은 단순 링크가 아니라 목적·제약·실행 동작을 갖춘 카드다. */
 .platform-destinations>.platform-destination.panel {
   display:flex; flex-direction:column; align-items:flex-start; gap:12px;
@@ -1468,3 +1468,9 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 
 .research-group-settings { margin:12px 0; }
 .research-group-settings > .panel { margin-top:12px; }
+
+.model-creation-evidence { margin:20px 0; padding:18px 0; border-block:1px solid var(--sos-border); }
+.model-creation-evidence h3, .model-creation-evidence h4 { margin-bottom:10px; }
+.model-creation-evidence ol { padding-left:22px; line-height:1.9; }
+.model-creation-evidence p { font-size:13px; line-height:1.7; }
+.model-creation-evidence details { margin-top:14px; }

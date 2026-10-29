@@ -127,7 +127,7 @@ export function filterCandidatesByScoreRange(
 }
 
 /** 등록된 분석 방법을 이해·검사·실행하고 자신의 결과로 이동하는 경험. */
-export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, onApplyModel, canRun, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, examplesError, onRetryExamples, onUseExample, canInspectOperations }: {
+export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, initialCandidateRowIndex, initialAnalysisSection, hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onSelectCandidate, onSelectAnalysisSection, onApplyModel, canRun, canTrain = false, canCancel, onNavigate, onOpenResource, canCreateDataset, hasPipelineExample, example, examplesLoading, examplesError, onRetryExamples, onUseExample, canInspectOperations }: {
   datasets: Dataset[]; initialDatasetId: string; initialRunId: string;
   initialCandidateRowIndex?: number;
   initialAnalysisSection?: PipelineAnalysisSection;
@@ -138,7 +138,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   onSelectCandidate: (rowIndex: number) => void;
   onSelectAnalysisSection: (section: PipelineAnalysisSection) => void;
   onApplyModel: (modelId: string) => void;
-  canRun: boolean; canCancel: boolean;
+  canRun: boolean; canTrain?: boolean; canCancel: boolean;
   canInspectOperations?: boolean;
   canCreateDataset?: boolean;
   hasPipelineExample?: boolean;
@@ -378,7 +378,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   /** 예제 등록·입력 검사·학습 제출을 한 번의 명시적 사용자 행동에 연결한다. */
   async function startExample() {
     if (!catalog.some(item => item.id === PIPELINE) ||
-        !onUseExample || !hasPipelineExample || !canCreateDataset || !canRun ||
+        !onUseExample || !hasPipelineExample || !canCreateDataset || !canTrain ||
         exampleSubmitting.current || ownSubmitting.current || busy) return;
     exampleSubmitting.current = true;
     const previousRevision = datasetSelectionRevision.current;
@@ -442,7 +442,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
   }
   async function start() {
     if (!datasetId || checked?.dataset_id !== datasetId || !checked.ready ||
-        busy || exampleSubmitting.current || ownSubmitting.current || !canRun) return;
+        busy || exampleSubmitting.current || ownSubmitting.current || !canTrain) return;
     ownSubmitting.current = true;
     const previousRunId = selectedRunId.current;
     const submittedDatasetId = datasetId;
@@ -534,7 +534,7 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
       examplesError={examplesError ?? ""} onRetryExamples={onRetryExamples}
       catalogError={catalogError} onRetryCatalog={() => setListReload(n => n + 1)}
       exampleBusy={exampleBusy || busy} examplePhase={examplePhase}
-      canCreateDataset={Boolean(canCreateDataset)} canRun={canRun}
+      canCreateDataset={Boolean(canCreateDataset)} canRun={canTrain}
       onStartExample={() => void startExample()}
       onOwnData={() => {
         if (ownDataDetails.current) {
@@ -645,10 +645,10 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <strong>입력 구조 확인 완료</strong>
         <p>필수 Feature와 시간 컬럼의 구조가 일치합니다. 전체 시간 값과
           Train·Calibration·Test의 실제 분할 가능성은 실행 Worker가 검사합니다.</p>
-        <button type="button" disabled={!canRun || busy || exampleBusy} onClick={() => void start()}>
+        <button type="button" disabled={!canTrain || busy || exampleBusy} onClick={() => void start()}>
           {busy ? "제출 중…" : "이 데이터로 분석 실행 →"}
         </button>
-        {!canRun && <p>현재 계정은 Job 제출 권한이 없습니다.</p>}
+        {!canTrain && <p>현재 계정에는 모델 학습 실행 권한이 없습니다.</p>}
       </div>}
     </section>
     </details>}
@@ -661,8 +661,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
             run ? "모델 학습 · " + statusLabel[run.status] : "학습 기록을 불러오는 중"
           }</h3>
         </div>
-        <button type="button" className="secondary" disabled={exampleBusy}
-          onClick={() => selectRun("")}>새 모델 학습 →</button>
+        {canTrain && <button type="button" className="secondary" disabled={exampleBusy}
+          onClick={() => selectRun("")}>새 모델 학습 →</button>}
       </div>
         {run.status === "Failed" && <PipelineFailureNotice run={run}
           operatorLinks={Boolean(canInspectOperations && localOperatorHost)}
@@ -700,8 +700,8 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
         <div className="pipeline-results-actions">
           {modelRevisionId && <button type="button" className="secondary"
             onClick={() => onApplyModel(modelRevisionId)}>이 모델로 다른 데이터 분석 →</button>}
-          <button type="button" className="secondary" disabled={exampleBusy}
-            onClick={() => selectRun("")}>새 모델 학습</button>
+          {canTrain && <button type="button" className="secondary" disabled={exampleBusy}
+            onClick={() => selectRun("")}>새 모델 학습</button>}
         </div>
       </div>
       {runLoadError && <div className="pipeline-readiness-blocked" role="alert">
@@ -735,12 +735,12 @@ export function PipelineWorkspace({ datasets, initialDatasetId, initialRunId, in
           <div className="pipeline-actions">
             <button type="button" className="secondary" onClick={() =>
               setRunReload(n => n + 1)}>이 분석 다시 조회</button>
-            <button type="button" className="secondary" disabled={exampleBusy} onClick={() => selectRun("")}>
+            {canTrain && <button type="button" className="secondary" disabled={exampleBusy} onClick={() => selectRun("")}>
               새 분석 준비 →
-            </button>
+            </button>}
           </div>
         </>}
-        {runId && !runLoadError && <button type="button" className="secondary"
+        {canTrain && runId && !runLoadError && <button type="button" className="secondary"
           disabled={exampleBusy} onClick={() => selectRun("")}>
           새 모델 학습 →
         </button>}

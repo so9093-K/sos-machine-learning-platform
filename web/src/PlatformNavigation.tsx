@@ -357,9 +357,9 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
     { tab: "overview", label: "홈" },
     { tab: "understanding", label: "데이터 탐색" },
     { tab: "ml", label: "모델 활용" },
-    { tab: "research", label: "연구·실험" },
   ] },
   { title: "분석 주제", items: [{ tab: "pipelines", label: "활동 이상 탐지" }] },
+  { title: "제작 도구", items: [{ tab: "research", label: "학습·실험 관리" }] },
   { title: "DATA TOOLS", items: [{ tab: "preparation", label: "데이터 준비" }] },
   { title: "ACTIVITY & OPERATIONS", items: [
     { tab: "jobs", label: "작업 이력" },
@@ -379,8 +379,9 @@ export function isModelsArea(tab: WorkspaceTab): boolean {
 }
 
 /** 사용자 목적을 먼저 구분하고 독립 실행 도구는 활용 문맥 안에서 제공한다. */
-export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
+export function ModelAreaNavigation({ active, context, resource, onNavigate, canTrain = false }: {
   active: WorkspaceTab;
+  canTrain?: boolean;
   context: MLNavigationContext;
   resource: ResourceRoute;
   onNavigate: (tab: WorkspaceTab) => void;
@@ -393,12 +394,13 @@ export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate(item.tab);
     }}>{item.label}</a>;
+  if (inResearch && !canTrain) return null;
   return <div className="model-area-navigation">
-    <nav className="model-area-nav" aria-label="모델 작업 목적">
+    {inResearch && <nav className="model-area-nav" aria-label="제작 도구 이동">
       {link({ tab: "ml", label: "모델 활용" }, !inResearch)}
-      {link({ tab: "research", label: "연구·실험" }, inResearch)}
-    </nav>
-    {active === "training" && <p className="hint">연구·실험 / 새 학습</p>}
+      {link({ tab: "research", label: "학습·실험 관리" }, inResearch)}
+    </nav>}
+    {active === "training" && <p className="hint">학습·실험 관리 / 새 학습</p>}
     {!inResearch && <details className="model-tools" open={active !== "ml"}>
       <summary>모델 적용·결과 도구</summary>
       <nav aria-label="모델 적용과 결과 도구">
@@ -409,13 +411,14 @@ export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
 }
 
 /** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
-export function PlatformNavigation({ active, onNavigate, canInspectStorage, canViewAudit, canViewDataset = true,
+export function PlatformNavigation({ active, onNavigate, canInspectStorage, canViewAudit, canViewDataset = true, canTrain = false,
   context = {}, resource = null }: {
   active: WorkspaceTab;
   onNavigate: (tab: WorkspaceTab) => void;
   canInspectStorage: boolean;
   canViewAudit: boolean;
   canViewDataset?: boolean;
+  canTrain?: boolean;
   context?: MLNavigationContext;
   resource?: ResourceRoute;
 }) {
@@ -447,8 +450,8 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
       : tab === "research" ? active === "research" || active === "training"
       : tab === "jobs" ? ["jobs", "ml-jobs", "pipeline-jobs"].includes(active) : active === tab;
   return <nav className="global-nav platform-nav" aria-label="플랫폼 메뉴">
-    {groups.filter(group => canViewDataset || group.items.some(item =>
-      (item.tab === "storage" && canInspectStorage) || (item.tab === "audit" && canViewAudit)))
+    {groups.filter(group => (group.title !== "제작 도구" || canTrain) && (canViewDataset || group.items.some(item =>
+      (item.tab === "storage" && canInspectStorage) || (item.tab === "audit" && canViewAudit))))
       .map(group => <div className="platform-nav-group" key={group.title}>
       <span className={group.title === "분석 주제" ? "section-title model-lab-tree-title" : "section-title"}>
         {group.title === "분석 주제" && <svg viewBox="0 0 20 20" width="15" height="15"

@@ -45,7 +45,7 @@ export function PipelineHistoryPanel({ datasets, onOpenRun, onStart }: {
     </div>}
     {!loading && !error && runs.length === 0 && <div className="pipeline-next-step">
       <p>조회된 분석 결과가 없습니다.</p>
-      <button type="button" onClick={onStart}>활동 이상 탐지 학습 시작 →</button>
+      <button type="button" onClick={onStart}>활동 이상 탐지 →</button>
     </div>}
     {!loading && !error && runs.length > 0 && <div className="ml-resource-list">
       {runs.map(run => <a key={run.id}

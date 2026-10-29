@@ -16,7 +16,7 @@ from .schemas import (
 from .security import Actor, require
 from .store import Store
 
-CREATE_JOB_DEP = Depends(require("job.create"))
+TRAIN_MODEL_DEP = Depends(require("model.train"))
 READ_JOB_DEP = Depends(require("job.read"))
 CANCEL_JOB_DEP = Depends(require("job.cancel"))
 
@@ -42,7 +42,7 @@ def training_router(
     def create_training_job(
         body: MLTrainRequest,
         request: Request,
-        actor: Actor = CREATE_JOB_DEP,
+        actor: Actor = TRAIN_MODEL_DEP,
         idempotency_key: str | None = Header(
             default=None,
             alias="Idempotency-Key",
@@ -100,7 +100,7 @@ def training_router(
         source_job_id: str,
         body: MLForkRequest,
         request: Request,
-        actor: Actor = CREATE_JOB_DEP,
+        actor: Actor = TRAIN_MODEL_DEP,
         idempotency_key: str | None = Header(
             default=None,
             alias="Idempotency-Key",

@@ -6,15 +6,15 @@ import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
   type WorkspaceTab, type MLNavigationContext, type ResourceRoute } from "./PlatformNavigation";
 
 const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; description: string }> = {
-  overview: { eyebrow: "WORKSPACE", title: "Workspace", description: "데이터 탐색 · 모델 활용 · 연구·실험" },
+  overview: { eyebrow: "WORKSPACE", title: "Workspace", description: "데이터 탐색 · 모델 활용 · 실행 근거" },
   understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
   preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
   preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "원본 선택 · 변환 편집 · 결과 Dataset" },
   pipelines: { eyebrow: "분석 주제", title: "활동 이상 탐지", description: "활동 패턴 이해 · 모델 적용 · 결과 분석" },
   ml: { eyebrow: "MODELS", title: "모델 활용", description: "모델 선택 · 입력 확인 · 적용 · 결과 이해" },
-  research: { eyebrow: "RESEARCH & EXPERIMENTS", title: "연구·실험", description: "이전 실험 · 실행 비교 · 새 학습" },
-  training: { eyebrow: "RESEARCH & EXPERIMENTS", title: "새 학습", description: "입력 데이터 · 학습 설정 · 실행 결과" },
+  research: { eyebrow: "AUTHORING", title: "학습·실험 관리", description: "제작 권한 전용 · 학습 실행 · 모델·Feature 관리" },
+  training: { eyebrow: "AUTHORING", title: "새 학습", description: "입력 데이터 · 학습 설정 · 실행 결과" },
   scoring: { eyebrow: "SCORING", title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
   policies: { eyebrow: "DECISION POLICY", title: "판정 정책", description: "점수 결과 · 정책 판본 · 재사용" },
   evaluations: { eyebrow: "EVALUATION", title: "평가 결과", description: "평가 근거 · 레이블 · 지표" },
@@ -73,7 +73,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
       <div id="sos-sidebar-menu" className={"sidebar-menu" + (menuOpen ? " open" : "")}>
       <PlatformNavigation active={section} context={modelContext} resource={modelResource} onNavigate={onNavigate}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
-        canViewDataset={actor.capabilities.includes("dataset.read")} />
+        canViewDataset={actor.capabilities.includes("dataset.read")} canTrain={actor.capabilities.includes("model.train")} />
       {dataSidebar}
       {localOperatorHost && (canInspectStorage || canViewAudit) && <div className="operator-tools">
         <span className="eyebrow">로컬 운영 도구</span>
@@ -103,14 +103,15 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
         <div className="header-meta">
           <span className="environment">{actor.mode === "development" ? "로컬 인증" : "토큰 인증"}</span>
           <div className="auth-status">
-            <span>{actor.actor_id} · {actor.roles.map(role => ({ administrator: "관리자", researcher: "연구자", viewer: "조회 사용자", operator: "운영자" }[role] ?? role)).join(" · ")}</span>
+            <span>{actor.actor_id} · {actor.roles.map(role => ({ administrator: "관리자", researcher: "분석 사용자", model_builder: "모델 제작자", viewer: "조회 사용자", operator: "운영자" }[role] ?? role)).join(" · ")}</span>
             {actor.mode !== "development" &&
               <button type="button" className="ghost" onClick={onSignOut}>인증 해제</button>}
           </div>
         </div>
       </header>
       {isModelsArea(section) && <ModelAreaNavigation active={section}
-        context={modelContext} resource={modelResource} onNavigate={onNavigate} />}
+        context={modelContext} resource={modelResource} onNavigate={onNavigate}
+        canTrain={actor.capabilities.includes("model.train")} />}
       {children}
       <footer>{brandName} · {label.eyebrow}<span>데이터 · 모델 · 분석 결과</span></footer>
     </main>

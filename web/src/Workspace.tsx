@@ -7,6 +7,7 @@ import { formatDtype } from "./display-format";
 import { histogram, needsTimeOrder } from "./feature-utils";
 import { useFeatureEditor } from "./useFeatureEditor";
 import { FeaturePanel } from "./FeaturePanel";
+import { FeastFeaturePanel } from "./FeastFeaturePanel";
 import { useIcebergConnector } from "./useIcebergConnector";
 import { request, jsonPost, submitJob, formatError, uploadFile, describeError, type ErrorNotice } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
@@ -63,6 +64,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   // 역할→권한 매핑의 정본은 Python security.GRANTS다.
   const canWrite = actor.capabilities.includes("dataset.create");
   const canRun = actor.capabilities.includes("job.create");
+  const canTrain = actor.capabilities.includes("model.train");
+  const canManageFeatures = actor.capabilities.includes("feature.manage");
   const canCancel = actor.capabilities.includes("job.cancel");
   const canManageModels = actor.capabilities.includes("model.manage");
   const canInspectStorage = actor.capabilities.includes("storage.inspect");
@@ -583,9 +586,9 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         }}
         onOpenDataset={id => chooseDataset(id, "understanding")} />}
       {tab === "pipelines" && !context.pipelineRunId && !context.datasetId &&
-        !context.pipelineView && <ModelLabHome canLearn={canRun}
+        !context.pipelineView && <ModelLabHome
           onUse={() => navigateWithContext("pipelines", { pipelineView: "use" })}
-          onResearch={() => setTab("research")} />}
+          onHistory={() => setTab("ml-jobs")} />}
       {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
         <ModelLabUse key="activity-anomaly" datasets={datasets}
           selectedModelId={context.modelId ?? ""}
@@ -596,19 +599,19 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             modelId: "", modelGroupKey })}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
-          canLearn={canRun} canUpload={canWrite} onDatasetRegistered={data => {
+          canUpload={canWrite} onDatasetRegistered={data => {
             setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
           }}
           onBack={() => navigateWithContext("pipelines", {})}
-          onResearch={() => setTab("research")} />}
-      {tab === "pipelines" && !context.pipelineRunId && (
+          onHistory={() => setTab("ml-jobs")} />}
+      {canTrain && tab === "pipelines" && !context.pipelineRunId && (
         context.pipelineView === "learn" || Boolean(context.datasetId)) &&
         <button type="button" className="ghost model-lab-back"
           onClick={() => navigateWithContext("pipelines", {})}>← 활동 이상 탐지 소개로</button>}
-      {tab === "pipelines" && (Boolean(context.pipelineRunId) ||
+      {tab === "pipelines" && (Boolean(context.pipelineRunId) || (canTrain && (
         context.pipelineView === "learn" ||
-        (Boolean(context.datasetId) && context.pipelineView !== "use")) &&
-        <PipelineWorkspace datasets={datasets}
+        (Boolean(context.datasetId) && context.pipelineView !== "use")))) &&
+        <PipelineWorkspace datasets={datasets} canTrain={canTrain}
         canInspectOperations={canInspectStorage || canViewAudit}
         canCreateDataset={canWrite}
         hasPipelineExample={examples.some(item => item.id === "activity-anomaly-if")}
@@ -648,7 +651,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           pipelineAnalysisSection: context.pipelineAnalysisSection,
         })}
         onOpenResource={openResource} />}
-      {context.pipelineReturn &&
+      {context.pipelineReturn && (context.pipelineRunId || canTrain) &&
         (["understanding", "preview", "profile", "preparation", "jobs"] as Tab[]).includes(tab) &&
         <section className="pipeline-return" role="status">
           <div><strong>{context.pipelineRunId ? "활동 이상 탐지 결과 확인" :
@@ -705,13 +708,13 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
               데이터 다시 불러오기
             </button>
             <button className="secondary" type="button"
-              onClick={() => navigateWithContext("pipelines", { datasetId: selected })}>
-              활동 이상 탐지 입력 확인 →
+              onClick={() => setTab("ml")}>
+              모델 활용 →
             </button>
-            {canRun && tab !== "preparation" &&
+            {canTrain && tab !== "preparation" &&
               <button className="secondary" type="button"
                 onClick={() => navigateWithContext("research", { datasetId: selected })}>
-                이 Dataset으로 연구·실험 →
+                이 Dataset으로 학습 준비 →
               </button>}
             {canRun && tab === "preparation" && <>
               <label className="iceberg-append">적재할 Iceberg 테이블
@@ -876,16 +879,31 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           {preview && <FeaturePanel editor={editor}
             columnNames={columnNames} busy={busy} canRun={canRun}
             onSubmit={() => void submit("transform")} />}
+          {/* 등록 Feature 재사용은 학습 권한과 별개로 데이터 준비에서 제공한다. */}
+          {(canRun || canManageFeatures) && <FeastFeaturePanel datasets={datasets}
+            canCreate={canRun} canManage={canManageFeatures} purpose="preparation"
+            onDatasetReady={id => chooseDataset(id, "preparation")} />}
         </>}
 
       </>}
+      {!canTrain && !resource && (tab === "training" || tab === "research" ||
+        (tab === "pipelines" && !context.pipelineRunId && (context.pipelineView === "learn" ||
+          (context.datasetId && context.pipelineView !== "use")))) &&
+        <section className="panel" aria-label="제작 도구 접근 안내">
+          <h2>학습·제작 전용 도구</h2>
+          <p>이 도구는 학습 실행 권한이 있는 제작 주체가 사용합니다. 모델 활용과 기존 실행 근거는 아래에서 확인할 수 있습니다.</p>
+          <div className="actions">
+            <button type="button" onClick={() => setTab("ml")}>모델 활용 →</button>
+            <button type="button" className="secondary" onClick={() => setTab("ml-jobs")}>실행 기록 →</button>
+          </div>
+        </section>}
       {tab === "ml" && !resource && <ModelCatalog canManage={canManageModels}
         datasets={datasets} registryKey={context.modelGroupKey ?? "default"}
         canInspectOperations={canInspectStorage || canViewAudit}
         onSelectGroup={modelGroupKey => selectContext({ ...context, modelGroupKey })}
         onOpenModel={id => openResource("model", id)} onScoreModel={startScoring}
-        onResearch={() => setTab("research")} />}
-      {tab === "research" && !resource && <MLflowResearch canManage={canManageModels} canTrain={canRun}
+        />}
+      {tab === "research" && canTrain && !resource && <MLflowResearch canManage={canManageModels} canTrain={canTrain}
         datasets={datasets} registryKey={context.modelGroupKey ?? "default"}
         experimentId={context.experimentId}
         onSelectExperiment={experiment => selectContext({ ...context,
@@ -896,10 +914,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         onTrain={(modelGroupKey, experimentTitle) => navigateWithContext("training", {
           ...context, modelGroupKey, experimentTitle,
         })} />}
-      {tab === "training" && !resource && (context.experimentId && !context.experimentTitle?.trim()
+      {tab === "training" && canTrain && !resource && (context.experimentId && !context.experimentTitle?.trim()
         ? <section className="panel" aria-label="학습 연구 확인">
           <h2>연구 이름 확인</h2>
-          <p>이 주소에는 Experiment ID만 있고 연구 이름이 없습니다. 연구·실험에서 해당 묶음을 확인한 뒤 학습을 준비하세요.</p>
+          <p>이 주소에는 Experiment ID만 있고 연구 이름이 없습니다. 학습·실험 관리에서 해당 묶음을 확인한 뒤 학습을 준비하세요.</p>
           <button type="button" onClick={() => setTab("research")}>연구 묶음 확인 →</button>
         </section>
         : <MLWorkbench datasets={datasets}
@@ -909,7 +927,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onRegistryGroupSelected={modelGroupKey => selectContext({ ...context, modelGroupKey })}
           onDatasetSelected={datasetId => selectContext({ ...context, datasetId })}
           onOpenModel={id => openResource("model", id)}
-          canTrain={canRun} canCancel={canCancel}
+          canTrain={canTrain} canRun={canRun} canManageFeatures={canManageFeatures} canCancel={canCancel}
           canInspectOperations={canInspectStorage || canViewAudit} />)}
       {(resource || tab === "scoring") && context.pipelineReturn && context.pipelineRunId &&
         <section className="pipeline-return" role="status">
@@ -965,7 +983,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           setSelected(datasetId);
           navigateWithContext("pipelines", { datasetId, pipelineRunId: runId });
         }}
-        canCancel={canCancel}>
+        canCancel={canCancel} canTrain={canTrain}>
         {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
           b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))}
           datasets={datasets} busy={busy} canCancel={canCancel}

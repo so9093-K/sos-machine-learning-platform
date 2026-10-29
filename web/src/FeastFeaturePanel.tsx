@@ -88,10 +88,19 @@ function usePolledJob() {
   return { job, setJob, error, setError };
 }
 
-/** Feast는 Feature 정의 정본, SOS는 등록·조회 Job과 불변 Dataset의 정본이다. */
-export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
+const purposeText = {
+  training: { summary: "등록 Feature로 학습 Dataset 구성 · Feast", ready: "게시된 Feature Dataset으로 학습 준비" },
+  preparation: { summary: "등록 Feature 조회 · Feast", ready: "게시된 Feature Dataset 열기" },
+} as const;
+
+/** Feast는 Feature 정의 정본, SOS는 등록·조회 Job과 불변 Dataset의 정본이다.
+ *  조회는 Job 실행 권한, 등록·폐기는 Feature 관리 권한으로 구분한다. */
+export function FeastFeaturePanel({ datasets, canCreate, canManage = false, purpose = "training",
+  onDatasetReady }: {
   datasets: Dataset[];
   canCreate: boolean;
+  canManage?: boolean;
+  purpose?: keyof typeof purposeText;
   onDatasetReady: (datasetId: string) => void;
 }) {
   const [featureDataset, setFeatureDataset] = useState("");
@@ -230,7 +239,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   }
 
   async function retireRegistration() {
-    if (!canCreate || !retireConfirmation || retireConfirmation !== retireTarget || retiring) return;
+    if (!canManage || !retireConfirmation || retireConfirmation !== retireTarget || retiring) return;
     setRetireBusy(true); retirement.setError("");
     try {
       const item = await submitJob<Job>(
@@ -243,7 +252,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
   }
 
   async function createRegistration() {
-    if (!canCreate || !featureDataset || !selected.length || selected.length > 128 || registering || columnsLoading || columnsError ||
+    if (!canManage || !featureDataset || !selected.length || selected.length > 128 || registering || columnsLoading || columnsError ||
         !entityColumn.trim() || !sourceTimestamp.trim() ||
         !Number.isSafeInteger(ttlDays) || ttlDays < 1 || ttlDays > 3650) return;
     setRegisterBusy(true);
@@ -287,8 +296,8 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
     typeof retrieval.job.result.dataset_id === "string" ? retrieval.job.result.dataset_id : null;
 
   return <details className="panel feast-feature-panel">
-    <summary>등록 Feature로 학습 Dataset 구성 · Feast</summary>
-    <p className="hint">재사용할 Feature Service를 먼저 등록한 뒤 조회 시점 Dataset에 연결합니다.
+    <summary>{purposeText[purpose].summary}</summary>
+    <p className="hint">등록된 Feature Service를 선택해 조회 시점 Dataset에 연결합니다.
       원본·조회 Dataset에는 UTC 시간형 컬럼이 필요합니다.</p>
     {!canCreate && <p className="hint">조회 전용 계정입니다. Feature 작업 실행 권한이 없습니다.</p>}
     <div className="steps">
@@ -296,7 +305,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
       <label>등록된 Feature Service
         <select aria-label="Feast 등록 Feature Service" value={registrationId}
           onChange={e => setRegistrationId(e.target.value)} disabled={retrieving}>
-          <option value="">새로 등록하거나 기존 등록을 선택하세요</option>
+          <option value="">등록된 Feature Service 선택</option>
           {registration.job?.status === "Succeeded" &&
             !(retirement.job?.status === "Succeeded" && retirement.job.spec.registration_job_id === registration.job.id) &&
             !registrations.some(r => r.id === registration.job?.id) &&
@@ -316,13 +325,13 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
         disabled={loadingMore} onClick={() => void loadEarlierRegistrations()}>
         {loadingMore ? "이전 등록을 조회하는 중…" : "이전 Feature Service 더 보기"}
       </button>}
-      <details>
+      {canManage && <details>
         <summary>Feature Service 폐기·등록 잔여물 정리</summary>
         <p className="hint">완료·실패·취소된 등록을 폐기할 수 있습니다. 과거 조회나 다른
           활성 등록이 사용 중인 정의는 Registry에 보존되며 신규 조회에는 사용할 수 없습니다.</p>
         <label>정리할 등록
           <select value={retireTarget} onChange={e => { setRetireTarget(e.target.value); setRetireConfirmation(null); }}
-            disabled={!canCreate || retiring} aria-label="Feast 폐기 대상 등록">
+            disabled={!canManage || retiring} aria-label="Feast 폐기 대상 등록">
             <option value="">등록 기록 선택</option>
             {registrations.filter(r => !r.retired && TERMINAL.has(r.status)).map(r =>
               <option key={r.id} value={r.id}>{datasetName(r.dataset_id)} · {jobStatusLabel(r.status)} · {r.id.slice(0,8)}</option>)}
@@ -332,7 +341,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
               <option value={registration.job.id}>{registration.job.id.slice(0,8)} · 최근 등록</option>}
           </select>
         </label>
-        <button type="button" disabled={!canCreate || !retireTarget || retiring || Boolean(retireConfirmation)}
+        <button type="button" disabled={!canManage || !retireTarget || retiring || Boolean(retireConfirmation)}
           className="secondary" onClick={() => setRetireConfirmation(retireTarget)}>
           등록 폐기 준비
         </button>
@@ -343,7 +352,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
             다른 등록이나 과거 조회가 참조하는 Registry 정의는 남을 수 있습니다.</p>
           <div className="actions"><button type="button" className="secondary" disabled={retiring}
             onClick={() => setRetireConfirmation(null)}>돌아가기</button>
-            <button type="button" disabled={!canCreate || retiring} onClick={() => void retireRegistration()}>
+            <button type="button" disabled={!canManage || retiring} onClick={() => void retireRegistration()}>
               {retireBusy ? "폐기 접수 중…" : "선택 등록 폐기"}</button></div>
         </div>}
         {retirement.job && <div role="status">
@@ -355,13 +364,13 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
               : "등록은 폐기됐으며 사용 중인 과거 정의는 Registry에 보존했습니다."}</p>}
         </div>}
         {retirement.error && <p role="alert">{retirement.error}</p>}
-      </details>
-      <details>
+      </details>}
+      {canManage && <details>
         <summary>새 Feature Service 정의·등록</summary>
         <div className="form-row">
           <label>Feature Source Dataset
             <select aria-label="Feast Feature Source Dataset" value={featureDataset}
-              onChange={e => setFeatureDataset(e.target.value)} disabled={!canCreate || registering}>
+              onChange={e => setFeatureDataset(e.target.value)} disabled={!canManage || registering}>
               <option value="">Parquet Dataset 선택</option>
               {sources.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
@@ -369,14 +378,14 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
           <label>연결 대상 식별 컬럼
             <select value={entityColumn} onChange={event => {
               setEntityColumn(event.target.value); setSelected(current => current.filter(name => name !== event.target.value));
-            }} disabled={!canCreate || registering || columnsLoading} aria-label="Feast Source Entity 키">
+            }} disabled={!canManage || registering || columnsLoading} aria-label="Feast Source Entity 키">
               <option value="">식별 컬럼 선택</option>
               {keys.map(column => <option key={column.name} value={column.name}>{column.name} · {column.dtype}</option>)}
             </select>
           </label>
           <label>원본 UTC 시각 컬럼
             <select value={sourceTimestamp} onChange={event => setSourceTimestamp(event.target.value)}
-              disabled={!canCreate || registering || columnsLoading} aria-label="Feast Source UTC 시각">
+              disabled={!canManage || registering || columnsLoading} aria-label="Feast Source UTC 시각">
               <option value="">UTC 시간형 컬럼 선택</option>
               {sourceTimes.map(column => <option key={column.name} value={column.name}>{column.name}</option>)}
             </select>
@@ -384,7 +393,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
           <label>과거 Feature 조회 기간 (일)
             <input type="number" min={1} max={3650} step={1} value={ttlDays}
               onChange={e => setTtlDays(Number(e.target.value))}
-              disabled={!canCreate || registering} aria-label="Feast Source TTL" />
+              disabled={!canManage || registering} aria-label="Feast Source TTL" />
           </label>
         </div>
         <p className="hint">TTL은 조회 시점에서 거슬러 찾을 과거 Feature의 최대 기간입니다. 저장 데이터의 자동 삭제 기간과는 별개입니다.</p>
@@ -396,12 +405,12 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
         {selected.length > 128 && <p role="alert">한 번에 등록할 Feature는 최대 128개입니다. 현재 {selected.length}개를 선택했습니다.</p>}
         {featureDataset && !columnsLoading && !columnsError && <div className="steps">
           <strong>숫자형 Feature · {selected.length}개</strong>
-          <FeatureSelector columns={numeric} selected={selected} disabled={!canCreate || registering}
+          <FeatureSelector columns={numeric} selected={selected} disabled={!canManage || registering}
             onChange={setSelected} />
           {numeric.length === 0 && <p className="hint">등록 가능한 숫자형 Feature가 없습니다.</p>}
         </div>}
         <div className="actions">
-          <button type="button" disabled={!canCreate || !featureDataset || !selected.length ||
+          <button type="button" disabled={!canManage || !featureDataset || !selected.length ||
             !entityColumn.trim() || !sourceTimestamp.trim() || registering || columnsLoading || Boolean(columnsError) || selected.length > 128 ||
             !Number.isInteger(ttlDays) || ttlDays < 1 || ttlDays > 3650}
             onClick={() => void createRegistration()}>
@@ -412,7 +421,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
           <strong>등록 · {jobStatusLabel(registration.job.status)}</strong>
           <p className="hint">원본 Dataset · {datasetName(registration.job.dataset_id)}</p>
           {registration.job.status === "Failed" && <p role="alert">{registration.job.error ?? "등록 실패"}</p>}
-          {canCreate && ["Queued","Running"].includes(registration.job.status) &&
+          {canManage && ["Queued","Running"].includes(registration.job.status) &&
             !registration.job.cancel_requested &&
             <button type="button" className="secondary"
               onClick={() => void cancel(registration.job!, registration.setJob, registration.setError)}>
@@ -420,7 +429,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
             </button>}
         </div>}
         {registration.error && <p role="alert">{registration.error}</p>}
-      </details>
+      </details>}
     </div>
     <div className="steps">
       <strong>2. 등록 Feature 조회</strong>
@@ -469,7 +478,7 @@ export function FeastFeaturePanel({ datasets, canCreate, onDatasetReady }: {
             취소 요청
           </button>}
         {published && <button type="button" onClick={() => onDatasetReady(published)}>
-          게시된 Feature Dataset으로 학습 준비
+          {purposeText[purpose].ready}
         </button>}
       </div>}
       {retrieval.error && <p role="alert">{retrieval.error}</p>}
