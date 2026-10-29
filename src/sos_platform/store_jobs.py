@@ -22,6 +22,26 @@ class FeatureRetirementCancellationConflict(Exception):
 class JobStoreMixin:
     """Store의 공통 트랜잭션 경계를 통해 작업 생명주기를 관리한다."""
 
+    def job_workflow_source(self, job: dict) -> dict | None:
+        """SOS 제출·소유권 기록에서 출처를 읽는다. 오케스트레이터에 연결하지 않는다.
+
+        단계명은 실행 권한이 아닌 출처 메타데이터이며 특정 Pipeline의 단계 목록에
+        종속되지 않는다. 제출 키만 흉내 낸 다른 Actor의 Job은 연결하지 않는다.
+        """
+        with self.connection() as db:
+            key = db.execute(text(
+                "SELECT submission_key FROM job_submissions WHERE job_id=:job AND actor_id=:owner"
+            ), {"job": job["id"], "owner": job.get("owner_actor")}).scalar_one_or_none()
+            parts = key.split(":") if isinstance(key, str) else []
+            if len(parts) != 3 or parts[0] != "workflow" or not parts[1] or not parts[2]:
+                return None
+            row = db.execute(text(
+                "SELECT id,definition_id FROM workflow_submissions WHERE id=:id AND owner_actor=:owner"
+            ), {"id": parts[1], "owner": job.get("owner_actor")}).mappings().first()
+        return None if row is None else {
+            "submission_id": row["id"], "stage": parts[2], "definition_id": row["definition_id"],
+        }
+
     def create_job(
         self,
         *,

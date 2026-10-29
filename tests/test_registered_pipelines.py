@@ -276,3 +276,26 @@ def test_dagster_connection_reset_is_dependency_failure(monkeypatch):
         DagsterClient("http://example.test/graphql").find_by_submission("test-id")
     assert failed.value.operation == "run_lookup"
     assert failed.value.failure_type == "connection"
+
+
+def test_job_workflow_source_is_owned_by_sos_without_orchestrator():
+    """실제 SQL로 출처·소유자를 확인하며 특정 Pipeline의 단계명에 종속되지 않는다."""
+    from sqlalchemy import create_engine, text
+    from sos_platform.store import Store
+
+    store = object.__new__(Store)
+    store.engine = create_engine('sqlite://')
+    try:
+        with store.connection() as db:
+            db.execute(text('CREATE TABLE job_submissions (job_id TEXT, actor_id TEXT, submission_key TEXT)'))
+            db.execute(text('CREATE TABLE workflow_submissions (id TEXT, owner_actor TEXT, definition_id TEXT)'))
+            db.execute(text("INSERT INTO workflow_submissions VALUES ('run','owner','custom-pipeline')"))
+            db.execute(text("INSERT INTO job_submissions VALUES ('job','owner','workflow:run:custom_stage'), ('ordinary','owner','request-1'), ('forged','other','workflow:run:training')"))
+        assert store.job_workflow_source({'id':'job','owner_actor':'owner'}) == {
+            'submission_id':'run','stage':'custom_stage','definition_id':'custom-pipeline',
+        }
+        assert store.job_workflow_source({'id':'ordinary','owner_actor':'owner'}) is None
+        assert store.job_workflow_source({'id':'forged','owner_actor':'other'}) is None
+        assert store.job_workflow_source({'id':'job','owner_actor':'other'}) is None
+    finally:
+        store.engine.dispose()

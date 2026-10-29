@@ -31,6 +31,8 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**의 
 
 구체적인 판본과 호환성은 [Contracts](contracts.md), 사용자 행동은 [Experience](experience.md), 실행 상태는 [Workflows](workflows.md), 환경 격리는 [Runtimes](runtimes.md)가 정본이다.
 
+Job의 Workflow 출처는 SOS의 제출·Actor 소유권 기록에서 조회한다. Tracking 어댑터는 이 조회 결과를 기록하며 오케스트레이터 구현이나 등록 Pipeline의 단계 목록을 참조하지 않는다.
+
 ## 현재 구현과 논리적 책임
 
 현재 PostgreSQL은 Dataset·Job·Attempt 등 제어 메타데이터를, S3 호환 저장소는 데이터·결과 객체를, Iceberg Catalog는 테이블·Snapshot 상태를 담당한다. 이 저장소들은 하나의 원자적 트랜잭션을 공유하지 않는다. 객체 게시와 Snapshot 보존은 참조·의도·실제 외부 상태를 구별한다. 소유권 불명의 Iceberg 테이블은 읽기와 쓰기 권한을 혼동하지 않는다. 세부 보존·쓰기 규칙은 [Contracts](contracts.md)와 [ADR 0002](adr/0002-object-lifecycle.md)·[ADR 0008](adr/0008-iceberg-table-write-ownership.md)을 따른다.

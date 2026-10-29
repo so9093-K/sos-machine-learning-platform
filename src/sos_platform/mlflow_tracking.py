@@ -15,7 +15,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from .dagster_workflows import workflow_stage_of_job
 from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
 from .mlflow_errors import MLflowDeliveryError
@@ -344,7 +343,7 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
             known_run_id=export["run_id"],
             remember_run=lambda value: store.save_tracking_run_id(job_id, value),
             experiment_title=_job_experiment_title(store, job),
-            workflow=workflow_stage_of_job(store, job),
+            workflow=store.job_workflow_source(job),
         )
         if job["kind"] == "ml_train" and job["status"] == "Succeeded":
             model_id = (job.get("result") or {}).get("model_revision_id")
