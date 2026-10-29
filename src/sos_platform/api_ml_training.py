@@ -53,7 +53,7 @@ def training_router(
     ):
         dataset = existing_dataset(body.dataset_id, actor)
         require_submission_key(idempotency_key)
-        from .ml_isolation_forest import IsolationForestConfig
+        from .ml_if_config import IsolationForestConfig
 
         try:
             IsolationForestConfig(**body.params.model_dump())
@@ -117,7 +117,7 @@ def training_router(
             raise HTTPException(status_code=409, detail="학습 Dataset 판본을 사용할 수 없습니다.")
         require_submission_key(idempotency_key)
         params = body.params.model_dump() if body.params is not None else source["spec"]["params"]
-        from .ml_isolation_forest import IsolationForestConfig
+        from .ml_if_config import IsolationForestConfig
 
         try:
             IsolationForestConfig(**params)

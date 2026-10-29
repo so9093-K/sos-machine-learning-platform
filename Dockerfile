@@ -5,7 +5,7 @@ COPY tools/scalar-docs/ ./tools/scalar-docs/
 COPY scripts/build_scalar_assets.sh ./scripts/
 RUN bash scripts/build_scalar_assets.sh
 
-# API, Worker, 초기화 명령은 같은 잠금 파일 기반 Python 이미지를 사용한다.
+# API·초기화와 Worker는 같은 잠금 파일에서 필요한 의존성 그룹만 선택한다.
 FROM ghcr.io/astral-sh/uv:0.9.2 AS uv
 # Model Revision은 학습 Runtime을 기록하므로 다시 빌드해도 Python이 바뀌지 않도록 digest로 고정한다.
 FROM python:3.12.16-slim-bookworm@sha256:dbecf082dea1850bcd45039ab8658daf263620e5f662944a15dd508dc851f7a3
@@ -24,10 +24,10 @@ COPY src/ ./src/
 COPY --from=scalar-assets /build/src/sos_platform/static/scalar.js ./src/sos_platform/static/scalar.js
 COPY migrations/ ./migrations/
 COPY alembic.ini ./
-# API와 Feast Worker는 공통 lock에서 선택하는 의존성 그룹만 다르다.
+# API는 기본 의존성, 기존 통합 Worker 이미지는 ML·Feast 실행 그룹을 사용한다.
 ARG SOS_WITH_FEAST=0
 RUN if [ "$SOS_WITH_FEAST" = "1" ]; then \
-      uv sync --locked --no-dev --no-editable --group feast --python /usr/local/bin/python; \
+      uv sync --locked --no-dev --no-editable --group ml --group feast --python /usr/local/bin/python; \
     else \
       uv sync --locked --no-dev --no-editable --python /usr/local/bin/python; \
     fi

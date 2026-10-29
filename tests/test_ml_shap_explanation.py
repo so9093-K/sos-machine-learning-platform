@@ -45,9 +45,8 @@ def test_permutation_shap_reconstructs_actual_sos_score():
 
 def test_permutation_shap_reconstructs_real_isolation_forest_score():
     """설명 모델이 선형 함수가 아니라 실제 SOS IF 점수인 경우도 검증한다."""
-    from sos_platform.ml_isolation_forest import (
-        IsolationForestConfig, train_isolation_forest,
-    )
+    from sos_platform.ml_if_config import IsolationForestConfig
+    from sos_platform.ml_isolation_forest import train_isolation_forest
 
     rng = np.random.default_rng(24)
     training = rng.normal(size=(70, 44))

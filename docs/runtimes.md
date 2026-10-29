@@ -21,6 +21,8 @@ Worker는 자식 실행의 시간·메모리·스테이징 사용량을 감시�
 
 Dataset 캐시는 재사용 가능한 로컬 복사본이며 원본 S3 객체·모델·Iceberg Snapshot의 보존 정책과 다르다. 사용 중인 캐시를 임의 축출하지 않으며 데이터 손상 시 원본으로부터 무결성을 확인한다.
 
+API·초기화·Dagster는 기본 의존성을 사용하고 ML 계산용 numpy·joblib·scikit-learn·SHAP은 `ml` dependency group으로 설치한다. 학습 제출·Fork의 매개변수 검증은 SDK를 로딩하지 않는다. 개발 검사는 실제 ML 계산을 포함하므로 `dev` 그룹에 `ml`을 포함한다. 호스트 Worker 실행에는 `uv sync --locked --group ml`을 사용하고, 등록 Feature 실행에는 `--group feast`를 함께 선택한다.
+
 MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·Alias의 정본은 MLflow이지만 SOS는 신뢰된 Worker가 발급한 모델 위치·SHA-256·Feature·Runtime·권한을 검증한 뒤 실행한다. 외부 Registry 등록만으로 임의 직렬화 파일을 신뢰하지 않는다. 인증정보는 서버 측에만 제공한다. 연결 상태의 의미는 [Workflows](workflows.md)를 따른다.
 
 ## Feast 전문 Runtime

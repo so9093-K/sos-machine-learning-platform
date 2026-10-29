@@ -14,11 +14,12 @@ import sklearn
 from sklearn.ensemble import IsolationForest
 
 from .errors import PlatformError
+from .ml_if_config import IsolationForestConfig
 from .ml_if_preprocessing import FittedIFMedianImputer
-from .ml_isolation_forest import IsolationForestConfig, TrainedIsolationForest
+from .ml_isolation_forest import TrainedIsolationForest
+from .object_store import ObjectStore
 
 IF_BUNDLE_SCHEMA = "if_model_with_preprocessing_v1"
-from .object_store import ObjectStore
 
 
 def _python_minor(version: object) -> tuple[str, str] | None:
