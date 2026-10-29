@@ -8,28 +8,37 @@ import type { Preview, Profile } from "./types";
 
 const PAGE = 10;
 
-/** 제한 조회 프로파일의 컬럼 통계와 미리보기 분포·행 비교 차트.
- *
- *  검색·페이지·축 선택은 이 화면 안에서만 쓰며 Dataset이 바뀌면 처음 상태로 돌아간다.
- */
+type ProfileSelection = { visualColumn: string; timeColumn: string; search: string; page: number };
+const EMPTY_SELECTION: ProfileSelection = { visualColumn: "", timeColumn: "", search: "", page: 0 };
+
+/** 프로파일의 컬럼 검색·페이지·차트 축 선택. 탭을 오가거나 다시 불러와도 유지하고 Dataset이 바뀌면 버린다. */
+export function useProfileSelection(datasetId: string) {
+  const [state, setState] = useState<{ datasetId: string; selection: ProfileSelection } | null>(null);
+  useEffect(() => { setState(null); }, [datasetId]);
+  return {
+    ...(state?.datasetId === datasetId ? state.selection : EMPTY_SELECTION),
+    change: (next: Partial<ProfileSelection>) => setState(current => ({
+      datasetId,
+      selection: { ...(current?.datasetId === datasetId ? current.selection : EMPTY_SELECTION), ...next },
+    })),
+  };
+}
+
+export type ProfileSelectionState = ReturnType<typeof useProfileSelection>;
+
+/** 제한 조회 프로파일의 컬럼 통계와 미리보기 분포·행 비교 차트. */
 export function ProfileStatistics({ profile, profileStatus, profileError, preview, columnNames,
-  canRun, busy, onRunFullProfile, onRetry }: {
+  selection, canRun, busy, onRunFullProfile, onRetry }: {
   profile: Profile | null; profileStatus: string; profileError: string;
-  preview: Preview | null; columnNames: string[];
+  preview: Preview | null; columnNames: string[]; selection: ProfileSelectionState;
   canRun: boolean; busy: boolean; onRunFullProfile: () => void; onRetry: () => void;
 }) {
-  const [visualColumn, setVisualColumn] = useState("");
-  const [timeColumn, setTimeColumn] = useState("");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  useEffect(() => {
-    if (!preview) return;
-    const columns = Object.keys(preview.schema);
-    // 원본의 첫 컬럼이 의미 있는 지표나 시간축이라는 근거는 없다.
-    setVisualColumn(current =>
-      columns.includes(current) && /Int|Float|Decimal/.test(preview.schema[current]) ? current : "");
-    setTimeColumn(current => columns.includes(current) ? current : "");
-  }, [preview]);
+  const { search, page, change } = selection;
+  // 원본의 첫 컬럼이 의미 있는 지표나 시간축이라는 근거는 없어 사용자가 고른 컬럼만 쓴다.
+  // 다시 불러온 미리보기에 없거나 숫자형이 아닌 선택은 적용하지 않는다.
+  const visualColumn = preview && columnNames.includes(selection.visualColumn) &&
+    /Int|Float|Decimal/.test(preview.schema[selection.visualColumn]) ? selection.visualColumn : "";
+  const timeColumn = columnNames.includes(selection.timeColumn) ? selection.timeColumn : "";
   const complete = Boolean(profile?.sampled && coversAllRows(profile.row_count, profile.sample_limit));
   const numeric = profile?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
   const matched = profile?.columns.filter(column =>
@@ -105,7 +114,7 @@ export function ProfileStatistics({ profile, profileStatus, profileError, previe
       <div className="profile-column-tools">
         <h4>컬럼 통계</h4>
         <label>컬럼 검색<input type="search" aria-label="프로파일 컬럼 검색" value={search}
-          onChange={event => { setSearch(event.target.value); setPage(0); }} /></label>
+          onChange={event => change({ search: event.target.value, page: 0 })} /></label>
         <span role="status">{matched.length}개 중 {matched.length ? currentPage * PAGE + 1 : 0}–{Math.min(matched.length, (currentPage + 1) * PAGE)}개</span>
       </div>
       <div className="table-scroll" tabIndex={0} role="region" aria-label="컬럼 통계 표"><table><thead><tr>
@@ -116,15 +125,15 @@ export function ProfileStatistics({ profile, profileStatus, profileError, previe
         <td>{typeof c.mean === "number" ? c.mean.toFixed(3) : "—"}</td>
       </tr>)}</tbody></table></div>
       {matched.length > PAGE && <div className="feature-result-pages">
-        <button type="button" className="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>이전 컬럼</button>
-        <button type="button" className="secondary" disabled={(currentPage + 1) * PAGE >= matched.length} onClick={() => setPage(currentPage + 1)}>다음 컬럼</button>
+        <button type="button" className="secondary" disabled={currentPage === 0} onClick={() => change({ page: currentPage - 1 })}>이전 컬럼</button>
+        <button type="button" className="secondary" disabled={(currentPage + 1) * PAGE >= matched.length} onClick={() => change({ page: currentPage + 1 })}>다음 컬럼</button>
       </div>}
       <div className="chart-controls"><h4>분포·행 비교</h4>
-        <label>값 <select aria-label="값 컬럼" value={visualColumn} onChange={e => setVisualColumn(e.target.value)}>
+        <label>값 <select aria-label="값 컬럼" value={visualColumn} onChange={e => change({ visualColumn: e.target.value })}>
           <option value="">값 컬럼 선택</option>
           {numeric.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select></label>
-        <label>가로축 <select aria-label="가로축 컬럼" value={timeColumn} onChange={e => setTimeColumn(e.target.value)}>
+        <label>가로축 <select aria-label="가로축 컬럼" value={timeColumn} onChange={e => change({ timeColumn: e.target.value })}>
           <option value="">가로축 선택</option>
           {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
         </select></label></div>

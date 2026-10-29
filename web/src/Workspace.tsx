@@ -31,7 +31,7 @@ import { useDatasetCatalog, useRequestedDataset } from "./useDatasetCatalog";
 import { useDataJobs } from "./useDataJobs";
 import { UploadProgressStatus, useDatasetUpload } from "./DatasetUpload";
 import { DatasetPreviewPanel, useDatasetQuery } from "./DatasetPreviewTab";
-import { ProfileStatistics } from "./ProfileStatistics";
+import { ProfileStatistics, useProfileSelection } from "./ProfileStatistics";
 
 type Tab = WorkspaceTab;
 const DATA_TABS: Tab[] = ["understanding", "preview", "profile", "preparation"];
@@ -151,6 +151,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     onConnected: showRegisteredDataset, onImported: showSubmittedJob,
   });
   const query = useDatasetQuery(selected, reloadRevision);
+  const profileSelection = useProfileSelection(selected);
   const uploads = useDatasetUpload({
     canWrite, withFeedback,
     onRejected: message => { setNotice(""); setError(message); },
@@ -438,7 +439,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             overview={overview} overviewStatus={overviewStatus}
             overviewError={overviewError} onRetryOverview={retryOverview} />
         </section>}
-        {tab === "preview" && <DatasetPreviewPanel key={selected} datasetId={selected} revision={reloadRevision}
+        {tab === "preview" && <DatasetPreviewPanel datasetId={selected} revision={reloadRevision}
           preview={preview} previewStatus={previewStatus} previewError={previewError} overview={overview}
           columnNames={columnNames} busy={busy} query={query} onRetry={() => setReloadRevision(v => v + 1)} />}
         {tab === "profile" && <section className="panel" role="tabpanel"
@@ -448,8 +449,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             overview={overview} overviewStatus={overviewStatus}
             overviewError={overviewError} onRetryOverview={retryOverview}
             onCreated={dataJobs.refreshExplorations} onOpenJob={id => openDataJob(id, "exploration")} />
-          <ProfileStatistics key={selected} profile={profile} profileStatus={profileStatus}
-            profileError={profileError} preview={preview} columnNames={columnNames} canRun={canRun} busy={busy}
+          <ProfileStatistics profile={profile} profileStatus={profileStatus} profileError={profileError}
+            preview={preview} columnNames={columnNames} selection={profileSelection} canRun={canRun} busy={busy}
             onRunFullProfile={() => void submit("profile")} onRetry={() => setReloadRevision(v => v + 1)} />
         </section>}
         {tab === "preparation" && <>

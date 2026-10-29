@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQueryPanel";
 import type { DatasetOverview, Preview } from "./types";
 
-/** 데이터 조회 조건과 마지막 적용 결과. 탭을 오가도 유지하고 Dataset이 바뀌면 버린다.
+/** 데이터 조회 조건·표의 컬럼 표시 범위와 마지막 적용 결과. 탭을 오가도 유지하고 Dataset이 바뀌면 버린다.
  *
  *  다시 불러오기(revision 증가)는 이전 적용 결과를 폐기하지만 편집 중인 조건은 보존하므로,
  *  새 기본 미리보기가 나타나도 그 조건이 적용됐다고 표시하지 않는다.
@@ -13,14 +13,18 @@ export function useDatasetQuery(datasetId: string, revision: number) {
   } | null>(null);
   const [draftState, setDraftState] = useState<{ datasetId: string; draft: QueryDraft } | null>(null);
   const [pending, setPending] = useState<{ datasetId: string; revision: number } | null>(null);
-  useEffect(() => { setResult(null); setDraftState(null); setPending(null); }, [datasetId]);
+  const [allColumnsFor, setAllColumnsFor] = useState<string | null>(null);
+  useEffect(() => {
+    setResult(null); setDraftState(null); setPending(null); setAllColumnsFor(null);
+  }, [datasetId]);
   const current = result?.datasetId === datasetId && result.revision === revision ? result : null;
   const draft = draftState?.datasetId === datasetId ? draftState.draft : emptyQueryDraft();
   const edited = draft.chosen.length > 0 || !!draft.filterColumn || !!draft.filterValue ||
     !!draft.sortColumn || draft.descending || draft.limit !== 30;
   const unapplied = (pending?.datasetId === datasetId && pending.revision === revision) || (!current && edited);
   return {
-    current, draft, unapplied,
+    current, draft, unapplied, showAllColumns: allColumnsFor === datasetId,
+    toggleAllColumns: () => setAllColumnsFor(value => value === datasetId ? null : datasetId),
     changeDraft: (next: QueryDraft) => setDraftState({ datasetId, draft: next }),
     applyResult: (data: Preview, explicitProjection: boolean) => {
       setResult({ datasetId, revision, data, explicitProjection });
@@ -40,8 +44,7 @@ export function DatasetPreviewPanel({ datasetId, revision, preview, previewStatu
   overview: DatasetOverview | null; columnNames: string[]; busy: boolean;
   query: DatasetQueryState; onRetry: () => void;
 }) {
-  const [showAllColumns, setShowAllColumns] = useState(false);
-  const { current } = query;
+  const { current, showAllColumns } = query;
   const displayed = current?.data ?? preview;
   const available = displayed ? Object.keys(displayed.schema) : [];
   // 사용자가 명시적으로 선택한 투영 컬럼은 임의로 감추지 않는다.
@@ -71,7 +74,7 @@ export function DatasetPreviewPanel({ datasetId, revision, preview, previewStatu
           current?.explicitProjection ? "선택한 컬럼 전부 표시" : "조회한 값의 화면 표시 범위만 변경합니다."
         }</span>
         {!current?.explicitProjection && <button className="secondary"
-          onClick={() => setShowAllColumns(value => !value)}>
+          onClick={query.toggleAllColumns}>
           {showAllColumns ? "첫 12개 컬럼만 보기" : "전체 컬럼 보기"}
         </button>}
       </div>}
