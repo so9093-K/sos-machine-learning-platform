@@ -1,6 +1,6 @@
 # 0009 — 검증 실행의 CI 독립성과 테스트 자산 수명주기
 
-상태: **Accepted**
+상태: **Superseded** · [0013](0013-validation-reset.md)이 대체
 
 ## 배경
 

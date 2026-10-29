@@ -1,6 +1,6 @@
 # 0008 — Iceberg 테이블 쓰기 소유권과 Catalog 정체성
 
-- 상태: Accepted
+- 상태: Accepted · 관리자 채택·중단 재개 조항은 [0014](0014-remove-iceberg-adoption.md)가 대체
 - 관련 결정: [0003 Snapshot 인증·권한](0003-snapshot-identity-audit.md), [0002 객체 보존](0002-object-lifecycle.md)
 - 적용 범위: 현재 로컬 Iceberg SQL Catalog의 `default` 네임스페이스
 
