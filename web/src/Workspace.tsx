@@ -887,13 +887,19 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         onResearch={() => setTab("research")} />}
       {tab === "research" && !resource && <MLflowResearch canManage={canManageModels} canTrain={canRun}
         datasets={datasets} registryKey={context.modelGroupKey ?? "default"}
+        experimentId={context.experimentId}
+        onSelectExperiment={experiment => selectContext({ ...context,
+          experimentId: experiment?.id, experimentTitle: experiment?.name })}
         onOpenResource={openResource} canInspectOperations={canInspectStorage || canViewAudit}
         onSelectGroup={modelGroupKey => selectContext({ ...context, modelGroupKey })}
         onWorkflow={() => navigateWithContext("pipelines", { pipelineView: "learn", datasetId: context.datasetId })}
-        onTrain={modelGroupKey => navigateWithContext("training", { ...context, modelGroupKey })} />}
+        onTrain={(modelGroupKey, experimentTitle) => navigateWithContext("training", {
+          ...context, modelGroupKey, experimentTitle,
+        })} />}
       {tab === "training" && !resource &&
         <MLWorkbench datasets={datasets}
           initialDatasetId={context.datasetId ?? ""}
+          initialExperimentTitle={context.experimentTitle}
           registryKey={context.modelGroupKey ?? "default"}
           onRegistryGroupSelected={modelGroupKey => selectContext({ ...context, modelGroupKey })}
           onDatasetSelected={datasetId => selectContext({ ...context, datasetId })}

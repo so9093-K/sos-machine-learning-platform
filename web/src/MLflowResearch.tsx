@@ -24,10 +24,13 @@ function url(path: string, params: Record<string, string | null>) {
 
 /** 연구 묶음·Run·모델 버전의 정본은 MLflow다. 실행 권한은 SOS API에서 판단한다. */
 export function MLflowResearch({ onTrain, onWorkflow, canManage, canTrain,
-  datasets, registryKey, onSelectGroup, onOpenResource, canInspectOperations = false }: {
+  datasets, registryKey, onSelectGroup, onOpenResource, canInspectOperations = false,
+  experimentId = "", onSelectExperiment }: {
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   canInspectOperations?: boolean;
-  onTrain: (group: string) => void; onWorkflow: () => void;
+  onTrain: (group: string, experimentTitle: string) => void; onWorkflow: () => void;
+  experimentId?: string;
+  onSelectExperiment: (experiment: MLflowExperiment | null) => void;
   canManage: boolean; canTrain: boolean;
   datasets: Dataset[]; registryKey: string; onSelectGroup: (key: string) => void;
 }) {
@@ -38,7 +41,10 @@ export function MLflowResearch({ onTrain, onWorkflow, canManage, canTrain,
   const [runs, setRuns] = useState<MLflowRun[]>([]);
   const [experimentCursor, setExperimentCursor] = useState<string | null>(null);
   const [runCursor, setRunCursor] = useState<string | null>(null);
-  const [experimentId, setExperimentId] = useState("");
+  const [experimentsLoading, setExperimentsLoading] = useState(true);
+  const chosenExperiment = experiments.find(item => item.id === experimentId);
+  // 선택한 ID를 확인하지 못한 상태에서 다른 연구 묶음으로 학습을 제출하지 않는다.
+  const trainingExperimentTitle = experimentId ? chosenExperiment?.name : "기본 실험";
   const [selected, setSelected] = useState<string[]>([]);
   const [revision, setRevision] = useState(0);
   const [currentGroup, setCurrentGroup] = useState<ModelGroup | null>(null);
@@ -57,11 +63,12 @@ export function MLflowResearch({ onTrain, onWorkflow, canManage, canTrain,
 
   useEffect(() => {
     let active = true;
-    setExperimentError("");
+    setExperimentError(""); setExperimentsLoading(true);
     void request<MLflowExperimentPage>("/api/ml/experiments").then(page => {
       if (!active) return;
       setExperiments(page.items); setExperimentCursor(page.next_page_token ?? null);
-    }).catch(exc => { if (active) setExperimentError(formatError(exc)); });
+    }).catch(exc => { if (active) setExperimentError(formatError(exc)); })
+      .finally(() => { if (active) setExperimentsLoading(false); });
     return () => { active = false; };
   }, [revision]);
 
@@ -147,9 +154,12 @@ export function MLflowResearch({ onTrain, onWorkflow, canManage, canTrain,
       {runError && <p role="alert">실행 이력 조회 실패: {runError}</p>}
       <div className="form-row">
         <label>연구 묶음
-          <select value={experimentId} onChange={event => setExperimentId(event.target.value)} aria-label="연구 Experiment 선택">
+          <select value={experimentId} onChange={event => onSelectExperiment(
+            experiments.find(item => item.id === event.target.value) ?? null)} aria-label="연구 Experiment 선택">
             <option value="">기본 실험</option>
-            {experiments.filter(item => item.name !== "기본 실험").map(item =>
+            {experimentId && !chosenExperiment &&
+              <option value={experimentId}>선택한 연구 · 목록 확인 필요</option>}
+            {experiments.filter(item => item.name !== "기본 실험" || item.id === experimentId).map(item =>
               <option value={item.id} key={item.id}>{item.name}</option>)}
           </select>
         </label>
@@ -193,10 +203,14 @@ export function MLflowResearch({ onTrain, onWorkflow, canManage, canTrain,
       <div className="panel-head"><div><h2>새 연구 실행</h2>
         <p>{groupTitle} · 데이터와 학습 조건을 선택해 새 모델 판본을 만듭니다.</p></div>
         {canTrain && <div className="actions">
-          <button type="button" disabled={groupArchived} onClick={() => onTrain(registryKey)}>새 학습 →</button>
+          <button type="button" disabled={groupArchived || trainingExperimentTitle === undefined}
+            onClick={() => { if (trainingExperimentTitle !== undefined) onTrain(registryKey, trainingExperimentTitle); }}>새 학습 →</button>
           <button type="button" className="secondary" onClick={onWorkflow}>활동 이상 탐지 Workflow →</button>
         </div>}
       </div>
+      {trainingExperimentTitle !== undefined ? <p className="hint">학습 연구 묶음 · {trainingExperimentTitle}</p>
+        : <p className="hint" role="status">{experimentsLoading ? "선택한 연구 묶음 확인 중…"
+          : "선택한 연구를 현재 목록에서 확인하지 못했습니다. 실험 더 보기·재조회를 이용하거나 다른 연구 묶음을 선택하세요."}</p>}
       <details className="research-group-settings"><summary>학습 모델 그룹·등록 설정 · {groupTitle}</summary>
         <ModelRegistryManager activeKey={registryKey} onSelect={onSelectGroup}
           purpose="research" canManage={canManage} onGroupResolved={setCurrentGroup}

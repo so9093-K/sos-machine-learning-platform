@@ -17,6 +17,7 @@ type Props = {
   canInspectOperations?: boolean;
   onOpenModel: (id: string) => void;
   initialDatasetId: string;
+  initialExperimentTitle?: string;
   registryKey: string;
   onRegistryGroupSelected: (key: string) => void;
   onDatasetSelected: (id: string) => void;
@@ -29,7 +30,8 @@ function statistic(value: unknown): string {
 
 /** 독립 Training은 SOS 실행 계약, 모델 자산 탐색은 MLflowResearch가 책임진다. */
 export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperations = false,
-  onOpenModel, initialDatasetId, onDatasetSelected, registryKey = "default", onRegistryGroupSelected }: Props) {
+  onOpenModel, initialDatasetId, onDatasetSelected, registryKey = "default", onRegistryGroupSelected,
+  initialExperimentTitle = "기본 실험" }: Props) {
   const selectedId = initialDatasetId;
   const [localOperatorHost, setLocalOperatorHost] = useState(false);
   useEffect(() => { setLocalOperatorHost(isLocalOperatorHost()); }, []);
@@ -37,7 +39,8 @@ export function MLWorkbench({ datasets, canTrain, canCancel, canInspectOperation
   const [features, setFeatures] = useState<string[]>([]);
   const [featureEditorOpen, setFeatureEditorOpen] = useState(true);
   const [nEstimators, setNEstimators] = useState(100);
-  const [experimentTitle, setExperimentTitle] = useState("기본 실험");
+  const [experimentTitle, setExperimentTitle] = useState(initialExperimentTitle);
+  useEffect(() => { setExperimentTitle(initialExperimentTitle); }, [initialExperimentTitle]);
   const [modelGroups, setModelGroups] = useState<Array<{
     registry_key: string; title: string; archived: boolean;
   }>>([]);
