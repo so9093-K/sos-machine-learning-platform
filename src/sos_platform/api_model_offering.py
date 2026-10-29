@@ -4,10 +4,9 @@
 조회·새 계산만 허용하며 학습 Dataset·학습 Job·실험 기록의 소유권 검사는 유지한다.
 """
 
-from collections.abc import Callable
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from .api_access import ResourceAccess
 from .pagination import decode_cursor, page_from_rows
 from .schemas import ModelOfferingPageOut, ModelOfferingRequest, ModelOfferingStateOut
 from .security import Actor, require
@@ -17,15 +16,8 @@ from .store_models import ModelOfferingUnavailable
 READ_JOB = Depends(require("job.read"))
 MANAGE_MODEL = Depends(require("model.manage"))
 
-ModelLookup = Callable[[str, Actor], dict]
 
-
-def model_offering_router(
-    store: Store,
-    *,
-    readable_model: ModelLookup,
-    owned_model: ModelLookup,
-) -> APIRouter:
+def model_offering_router(store: Store, access: ResourceAccess) -> APIRouter:
     router = APIRouter()
 
     def offering_state(model: dict, actor: Actor) -> dict:
@@ -68,7 +60,7 @@ def model_offering_router(
         response_model=ModelOfferingStateOut,
     )
     def get_model_offering(revision_id: str, actor: Actor = READ_JOB):
-        return offering_state(readable_model(revision_id, actor), actor)
+        return offering_state(access.readable_model(revision_id, actor), actor)
 
     @router.put(
         "/api/ml/models/{revision_id}/offering",
@@ -79,7 +71,7 @@ def model_offering_router(
         response_model=ModelOfferingStateOut,
     )
     def offer_model(revision_id: str, body: ModelOfferingRequest, actor: Actor = MANAGE_MODEL):
-        owned_model(revision_id, actor)
+        access.owned_model(revision_id, actor)
         try:
             store.offer_model(
                 revision_id,
@@ -92,7 +84,7 @@ def model_offering_router(
             raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.") from exc
         except ModelOfferingUnavailable as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        return offering_state(owned_model(revision_id, actor), actor)
+        return offering_state(access.owned_model(revision_id, actor), actor)
 
     @router.delete(
         "/api/ml/models/{revision_id}/offering",
@@ -102,7 +94,7 @@ def model_offering_router(
         response_model=ModelOfferingStateOut,
     )
     def withdraw_model_offering(revision_id: str, actor: Actor = MANAGE_MODEL):
-        owned_model(revision_id, actor)
+        access.owned_model(revision_id, actor)
         try:
             store.withdraw_model_offering(
                 revision_id,
@@ -112,6 +104,6 @@ def model_offering_router(
             )
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.") from exc
-        return offering_state(owned_model(revision_id, actor), actor)
+        return offering_state(access.owned_model(revision_id, actor), actor)
 
     return router

@@ -1,6 +1,7 @@
 """Training 입력 정책·실행 수용 경계와 연구 근거를 확인한다."""
 
 from contextlib import contextmanager
+from types import SimpleNamespace
 
 import numpy as np
 import polars as pl
@@ -290,12 +291,11 @@ def test_http_training_submission_and_fork_preserve_input_policy():
 
     store.create_job.side_effect = created_job
     app = FastAPI()
-    app.include_router(training_router(
-        store,
-        existing_dataset=lambda dataset_id, _actor: {"id": dataset_id, "version": "v1"},
-        existing_job=lambda _job_id, _actor: source_job,
+    app.include_router(training_router(store, SimpleNamespace(
+        dataset=lambda dataset_id, _actor: {"id": dataset_id, "version": "v1"},
+        job=lambda _job_id, _actor: source_job,
         require_submission_key=lambda key: None,
-    ))
+    )))
     app.dependency_overrides[TRAIN_MODEL_DEP.dependency] = lambda: actor
 
     @app.middleware("http")

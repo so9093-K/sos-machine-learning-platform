@@ -1,5 +1,4 @@
 """불변 Scoring Result의 점수순 관측치를 Pipeline과 독립적으로 조회한다."""
-from collections.abc import Callable
 import base64
 import binascii
 import heapq
@@ -10,6 +9,7 @@ import pyarrow.parquet as pq
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from .api_access import ResourceAccess
 from .cache import cached_dataset_file
 from .security import Actor, require
 from .store import Store
@@ -123,10 +123,10 @@ def ranked_scoring_rows(
     }
 
 
-def scoring_observations_router(
-    store: Store,
-    check_ownership: Callable[[Actor, str | None, str, str], None],
-) -> APIRouter:
+READ_JOB = Depends(require("job.read"))
+
+
+def scoring_observations_router(store: Store, access: ResourceAccess) -> APIRouter:
     router = APIRouter()
 
     @router.get(
@@ -141,12 +141,12 @@ def scoring_observations_router(
         limit: int = Query(default=25, ge=1, le=100),
         cursor: str | None = Query(default=None, max_length=160),
         row_index: int | None = Query(default=None, ge=0),
-        actor: Actor = Depends(require("job.read")),
+        actor: Actor = READ_JOB,
     ):
         scoring = store.get_scoring_result(result_id)
         if scoring is None:
             raise HTTPException(status_code=404, detail="점수 결과를 찾을 수 없습니다.")
-        check_ownership(actor, scoring["owner_actor"], "scoring_result", result_id)
+        access.check_ownership(actor, scoring["owner_actor"], "scoring_result", result_id)
         return ranked_scoring_rows(store, scoring, limit, cursor, row_index=row_index)
 
     return router

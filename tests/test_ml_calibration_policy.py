@@ -182,7 +182,7 @@ def test_http_evaluation_validates_policy_reference_access_and_model(
 
     from fastapi.testclient import TestClient
 
-    from sos_platform import api
+    from sos_platform import api, api_ml_results
     from sos_platform.security import Actor, IdentitySettings
 
     _, calibration, test, scoring, policies = scoring_context
@@ -206,7 +206,7 @@ def test_http_evaluation_validates_policy_reference_access_and_model(
     monkeypatch.setattr(api, "Store", lambda home: fake_store)
     app = api.create_app(tmp_path, identity=IdentitySettings("development", {}))
     actor = Actor("owner-a", "human", frozenset({"researcher"}))
-    app.dependency_overrides[api.CREATE_JOB_DEP.dependency] = lambda: actor
+    app.dependency_overrides[api_ml_results.CREATE_JOB_DEP.dependency] = lambda: actor
     with TestClient(app) as client:
         # 정책 생성 API는 평가 Job의 추가 근거를 요구하지 않아야 한다.
         policy_job = client.post("/api/ml/policies/jobs", json={
