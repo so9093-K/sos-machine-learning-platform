@@ -13,55 +13,11 @@ from datetime import timedelta
 from pathlib import Path
 
 import polars as pl
-from pydantic import BaseModel, Field, model_validator
 
 from .config import Settings
+from .feature_contracts import FeatureDefinitionRequest, FeatureRetrievalRequest, feature_identity
 from .datasets import pinned_scan_dataset
 from .feast_offline import entity_execution_limit, retrieve_to_parquet
-
-
-class FeatureDefinitionRequest(BaseModel):
-    """안정적인 Source 판본에 고정되는 Feast Feature Service 정의."""
-
-    feature_dataset_id: str = Field(min_length=1)
-    entity_column: str = Field(min_length=1, max_length=256)
-    timestamp_column: str = Field(min_length=1, max_length=256)
-    features: list[str] = Field(min_length=1, max_length=128)
-    ttl_seconds: int = Field(default=2_592_000, ge=1, le=315_360_000)
-
-    @model_validator(mode="after")
-    def validate_definition(self):
-        if self.entity_column == self.timestamp_column:
-            raise ValueError("Entity and event time columns must be different")
-        if len(self.features) != len(set(self.features)):
-            raise ValueError("Feature columns must be unique")
-        if set(self.features) & {self.entity_column, self.timestamp_column, "sos_observation_id"}:
-            raise ValueError("Entity, time, and observation identity cannot be features")
-        return self
-
-
-class FeatureRetrievalRequest(BaseModel):
-    """기존 등록 Feature Service를 재사용하는 Entity 시점 조회 요청."""
-
-    registration_job_id: str = Field(min_length=1)
-    entity_dataset_id: str = Field(min_length=1)
-    timestamp_column: str = Field(min_length=1, max_length=256)
-
-
-def feature_identity(spec: FeatureDefinitionRequest, dataset: dict) -> tuple[str, str, str]:
-    """등록된 Source Dataset 판본·스키마·TTL 변경 시 새 정의를 발급한다."""
-    payload = {
-        "dataset_id": dataset["id"],
-        "version": dataset["version"],
-        "entity_column": spec.entity_column,
-        "timestamp_column": spec.timestamp_column,
-        "features": spec.features,
-        "ttl_seconds": spec.ttl_seconds,
-    }
-    digest = hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
-    return f"sos_entity_{digest[:24]}", f"sos_fv_{digest[:24]}", f"sos_fs_{digest[:24]}"
 
 
 def _feature_schema(source: pl.LazyFrame, spec: FeatureDefinitionRequest):
@@ -370,24 +326,25 @@ def retire_feature_service(store, source_dataset: dict, registration_job: dict) 
         for wanted, actual in zip(expected, current):
             if actual is not None and _semantic_spec(actual) != _semantic_spec(wanted):
                 raise ValueError("Feast 정의가 등록 이후 변경되어 자동 폐기할 수 없습니다.")
-        if current[2] is not None:
-            feast.delete_feature_service(names[2])
-        if current[1] is not None:
-            feast.delete_feature_view(names[1])
-        if current[0] is not None:
-            feast._registry.delete_entity(names[0], project=feast.project)
-
-        # Feature View가 사용했던 개별 Source도 같은 식별자로 생성됐다.
+        # 부분 커밋 이후에도 실제 남은 객체만 공개 삭제 API에 명시한다.
+        # 공유·과거 참조 보존 판단은 위의 같은 SOS 잠금 안에서 끝난 상태다.
+        objects_to_delete = [item for item in current if item is not None]
         source_name = f"{names[1]}_source"
         try:
-            feast.get_data_source(source_name)
+            objects_to_delete.append(feast.get_data_source(source_name))
         except FeastObjectNotFoundException:
             pass
-        else:
-            feast._registry.delete_data_source(source_name, project=feast.project)
+        if objects_to_delete:
+            feast.apply([], objects_to_delete=objects_to_delete, partial=False)
 
         if any(item is not None for item in _registry_objects(_feature_store(), names)):
             raise ValueError("Feast Registry 객체의 폐기가 완료되지 않았습니다.")
+        try:
+            _feature_store().get_data_source(source_name)
+        except FeastObjectNotFoundException:
+            pass
+        else:
+            raise ValueError("Feast Source 객체의 폐기가 완료되지 않았습니다.")
     return {
         "registration_job_id": registration_job["id"],
         "registry_deleted": True,

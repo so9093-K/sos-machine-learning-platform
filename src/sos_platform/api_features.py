@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
-from .feast_features import FeatureDefinitionRequest, FeatureRetrievalRequest, feature_identity
+from .feature_contracts import FeatureDefinitionRequest, FeatureRetrievalRequest, feature_identity
 from .pagination import decode_cursor, page_from_rows
 from .schemas import FeatureRegistrationPageOut, JobOut
 from .security import Actor, require

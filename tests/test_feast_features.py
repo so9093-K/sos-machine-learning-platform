@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from sos_platform.api_features import READ_JOB, feast_router
-from sos_platform.feast_features import (
+from sos_platform.feature_contracts import (
     FeatureDefinitionRequest,
     FeatureRetrievalRequest,
     feature_identity,
