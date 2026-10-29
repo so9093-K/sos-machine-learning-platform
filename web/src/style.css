@@ -318,7 +318,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .data-sidebar .section-title { padding-top:8px; }
 .data-sidebar .dataset-nav { overflow-y:auto; }
 
-/* 홈: 지금 이용할 수 있는 기능을 먼저 제공한다. */
+/* 홈: 제품 영역과 모델 제공 상태를 함께 표시한다. */
 .platform-home { display:grid; gap:25px; min-width:0; }
 .platform-intro { padding:28px 30px; border-radius:12px; background:var(--sos-panel);
   border:1px solid var(--sos-border); }
@@ -987,3 +987,7 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .model-offering p { margin:0; font-size:13px; line-height:1.6; }
 .model-offering-meta { color:var(--sos-muted); }
 .model-offering-description { white-space:pre-line; overflow-wrap:anywhere; }
+
+.model-dataset-context { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; margin:12px 0; overflow-wrap:anywhere; }
+.model-dataset-context p { flex-basis:100%; margin:0; }
+.scoring-input-ready p { color:var(--sos-muted); line-height:1.6; }

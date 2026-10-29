@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { formatError, request, submitJob, uploadFile } from "./api";
+import { checkModelDatasetInput, ModelDatasetCompatibility } from "./ModelDatasetCompatibility";
 import { usePagedJobs } from "./usePagedJobs";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
 import type { MLResourceKind } from "./PlatformNavigation";
@@ -9,6 +10,8 @@ import type {
 import { formatDtype, jobStatusLabel } from "./display-format";
 
 type Props = {
+  selectedDatasetId?: string;
+  onSelectDataset?: (id: string) => void;
   model: ModelRevision;
   datasets: Dataset[];
   hasMoreDatasets?: boolean;
@@ -30,10 +33,15 @@ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
 /** 학습된 모델을 다른 Dataset에 적용하는 독립 Scoring 경험. */
 export function MLScoringPanel({
-  model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult, onOpenResource,
+  selectedDatasetId, onSelectDataset, model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult, onOpenResource,
   canUpload = false, onDatasetRegistered, onResultViewChange, onTryObservation,
 }: Props) {
-  const [datasetId, setDatasetId] = useState("");
+  const [localDatasetId, setLocalDatasetId] = useState("");
+  const datasetId = selectedDatasetId ?? localDatasetId;
+  function setDatasetId(id: string) {
+    setLocalDatasetId(id);
+    onSelectDataset?.(id);
+  }
   const [loadingMoreDatasets, setLoadingMoreDatasets] = useState(false);
   const [columns, setColumns] = useState<DatasetColumns["columns"]>([]);
   const [labelColumn, setLabelColumn] = useState("");
@@ -42,6 +50,7 @@ export function MLScoringPanel({
   const [columnStatus, setColumnStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [columnsDatasetId, setColumnsDatasetId] = useState("");
   const [columnError, setColumnError] = useState("");
+  const [columnsRetry, setColumnsRetry] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -65,6 +74,7 @@ export function MLScoringPanel({
     setColumns([]);
     setColumnsDatasetId("");
     setLabelColumn("");
+    setTimeColumnChoice(null);
     setColumnError("");
     setColumnStatus(datasetId ? "loading" : "idle");
     if (datasetId) {
@@ -79,7 +89,7 @@ export function MLScoringPanel({
         });
     }
     return () => { alive = false; };
-  }, [datasetId]);
+  }, [datasetId, columnsRetry]);
 
   useEffect(() => {
     if (!selectedJob || TERMINAL.has(selectedJob.status)) return;
@@ -125,15 +135,14 @@ export function MLScoringPanel({
   }, [selectedJob?.id]);
 
   const checkedColumns = columnStatus === "ready" && columnsDatasetId === datasetId;
-  const missingFeatures = checkedColumns
-    ? model.features.filter(feature => !columns.some(col => col.name === feature)) : [];
+  const inputCheck = checkedColumns ? checkModelDatasetInput(model, columns) : null;
   const timeColumns = checkedColumns
     ? columns.filter(col => !model.features.includes(col.name) &&
         col.name !== labelColumn && /^(String|Utf8|Datetime)/i.test(col.dtype)) : [];
   const timeColumn = timeColumnChoice === null
     ? timeColumns.find(col => col.name === "ts")?.name ?? ""
     : timeColumns.some(col => col.name === timeColumnChoice) ? timeColumnChoice : "";
-  const inputReady = datasetId !== "" && checkedColumns && missingFeatures.length === 0;
+  const inputReady = datasetId !== "" && inputCheck?.ready === true;
   function chooseDataset(id: string) {
     historySelectionRequest.current += 1;
     setLoadingHistoryId(null);
@@ -307,6 +316,7 @@ export function MLScoringPanel({
           disabled={submitted || uploading}
           onChange={e => chooseDataset(e.target.value)}>
           <option value="">분석할 Dataset 선택</option>
+          {datasetId && !datasets.some(item => item.id === datasetId) && <option value={datasetId}>선택한 Dataset · 목록 외</option>}
           {datasets.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
         </select>
       </label>
@@ -342,7 +352,7 @@ export function MLScoringPanel({
           }} />
       </label>
       <p className="hint">CSV·Parquet 파일을 Dataset으로 등록한 뒤 입력 조건을 확인합니다.
-        등록이 끝나도 점수 계산은 자동 제출하지 않습니다. 원시 로그의 활동 Feature 자동 변환은 아직 지원하지 않습니다.</p>
+        등록이 끝나도 점수 계산은 자동 제출하지 않습니다. 선택 모델에 기록된 Feature 이름·자료형의 데이터가 필요합니다.</p>
       {uploading && <div role="status" className="scoring-upload-status">
         <p>{uploadProgress?.phase === "registering"
           ? "파일 전송 완료 · 서버에서 검증하고 Dataset을 등록하고 있습니다."
@@ -365,17 +375,9 @@ export function MLScoringPanel({
       {loadingMoreDatasets ? "Dataset 불러오는 중…" : "Dataset 더 보기"}
     </button>}
     {columnStatus === "loading" && <p role="status">Dataset의 입력 컬럼을 확인하는 중입니다.</p>}
-    {columnStatus === "error" && <p role="alert">입력 컬럼을 조회하지 못했습니다: {columnError}</p>}
-    {checkedColumns && missingFeatures.length > 0 &&
-      <div role="alert" className="notice-blocked">
-        <strong>필수 Feature {missingFeatures.length}개가 없습니다.</strong>
-        <p>{missingFeatures.slice(0, 6).join(", ")}
-          {missingFeatures.length > 6 ? " 외 " + (missingFeatures.length - 6) + "개" : ""}</p>
-        <p>학습 모델과 호환되는 Dataset을 선택하세요.</p>
-      </div>}
-    {checkedColumns && missingFeatures.length === 0 && <p role="status" className="scoring-input-ready">
-      ✓ 모델 입력 Feature {model.features.length}개 이름이 일치합니다. 자료형·결측 조건은 실행할 때 검증합니다.
-    </p>}
+    {columnStatus === "error" && <div role="alert"><p>입력 컬럼을 조회하지 못했습니다: {columnError}</p>
+      <button type="button" className="secondary" onClick={() => setColumnsRetry(value => value + 1)}>입력 구조 재조회</button></div>}
+    {checkedColumns && <ModelDatasetCompatibility model={model} columns={columns} />}
     {datasetId === model.dataset_id && <p className="hint">
       모델 학습에 사용한 Dataset과 같은 ID입니다. 판본이 같다면 해당 점수는 독립 Test 성능이 아닙니다.
     </p>}
@@ -397,7 +399,7 @@ export function MLScoringPanel({
           }} />
       </label>
       <p className="hint">CSV·Parquet 파일을 Dataset으로 등록한 뒤 입력 조건을 확인합니다.
-        등록이 끝나도 점수 계산은 자동 제출하지 않습니다. 원시 로그의 활동 Feature 자동 변환은 아직 지원하지 않습니다.</p>
+        등록이 끝나도 점수 계산은 자동 제출하지 않습니다. 선택 모델에 기록된 Feature 이름·자료형의 데이터가 필요합니다.</p>
       {uploading && <div role="status" className="scoring-upload-status">
         <p>{uploadProgress?.phase === "registering"
           ? "파일 전송 완료 · 서버에서 검증하고 Dataset을 등록하고 있습니다."

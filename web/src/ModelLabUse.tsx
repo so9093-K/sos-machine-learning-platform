@@ -17,8 +17,10 @@ async function offeredPage(cursor: string | null) {
     (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
 }
 
-export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, canRun, canCancel,
+export function ModelLabUse({ selectedDatasetId, onSelectDataset, datasets, hasMoreDatasets, onLoadMoreDatasets, canRun, canCancel,
   selectedModelId, onSelectModel, onOpenResource, onHistory, canUpload, onDatasetRegistered }: {
+  selectedDatasetId?: string;
+  onSelectDataset?: (id: string) => void;
   datasets: Dataset[];
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
@@ -140,7 +142,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           onClick={() => onSelectModel(models[0]?.model.id ?? "")}>
           {models.length > 0 ? "제공 중인 모델 선택" : "선택 해제"}</button>
       </div>}
-    {selected && <ModelApplicationWorkspace key={selected.model.id} model={selected.model}
+    {selected && <ModelApplicationWorkspace selectedDatasetId={selectedDatasetId} onSelectDataset={onSelectDataset} key={selected.model.id} model={selected.model}
       datasets={datasets} hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
       canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
       canUpload={canUpload} onDatasetRegistered={onDatasetRegistered} onResultViewChange={handleResultViewChange} />}

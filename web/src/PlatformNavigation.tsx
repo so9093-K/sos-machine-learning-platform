@@ -20,20 +20,27 @@ type WorkspaceRoute = {
   tab: WorkspaceTab; resource: ResourceRoute; context: MLNavigationContext;
 };
 
+const MODEL_INPUT_TABS: ReadonlyArray<WorkspaceTab> = ["ml", "topic", "scoring"];
+
 const DATA_TABS: ReadonlyArray<WorkspaceTab> = ["understanding", "preparation", "preview", "profile", "jobs"];
 
 function isDecisionTab(tab: WorkspaceTab): boolean {
   return tab === "policies" || tab === "evaluations" || tab === "explanations";
 }
 
+function inputDatasetContext(params: URLSearchParams): MLNavigationContext {
+  return params.get("dataset") ? { datasetId: params.get("dataset")! } : {};
+}
+
 function modelLabContext(params: URLSearchParams): MLNavigationContext {
   return params.get("from") === "model-lab" && params.get("model")
-    ? { modelLabReturn: true, modelId: params.get("model")! } : {};
+    ? { modelLabReturn: true, modelId: params.get("model")!, ...inputDatasetContext(params) } : {};
 }
 
 function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
-  if (tab === "topic") return params.get("model") ? { modelId: params.get("model")! } : {};
+  if (tab === "ml") return inputDatasetContext(params);
+  if (tab === "topic") return { ...inputDatasetContext(params), ...(params.get("model") ? { modelId: params.get("model")! } : {}) };
   if (DATA_TABS.includes(tab)) {
     return { datasetId: params.get("dataset") ?? "",
       ...(tab === "jobs" && params.get("job") ? {
@@ -41,7 +48,7 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
         dataJobKind: params.get("type") === "exploration" ? "exploration" as const : "data" as const,
       } : {}) };
   }
-  if (tab === "scoring") return { modelId: params.get("model") ?? "", ...modelLabContext(params) };
+  if (tab === "scoring") return { modelId: params.get("model") ?? "", ...inputDatasetContext(params), ...modelLabContext(params) };
   if (isDecisionTab(tab)) return { scoringId: params.get("scoring") ?? "", ...modelLabContext(params) };
   return {};
 }
@@ -60,6 +67,7 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
     params.set("from", "model-lab");
     params.set("model", context.modelId);
   }
+  if (context.datasetId && (MODEL_INPUT_TABS.includes(tab) || context.modelLabReturn)) params.set("dataset", context.datasetId);
   return paths[tab] + (params.size ? "?" + params.toString() : "");
 }
 
@@ -80,8 +88,12 @@ const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }>
 };
 export function resourcePath(kind: MLResourceKind, id: string, context: MLNavigationContext = {}): string {
   const path = `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
-  return context.modelLabReturn && context.modelId
-    ? path + "?" + new URLSearchParams({ from: "model-lab", model: context.modelId }) : path;
+  const params = new URLSearchParams();
+  if (context.modelLabReturn && context.modelId) {
+    params.set("from", "model-lab"); params.set("model", context.modelId);
+  }
+  if (context.datasetId && (kind === "model" || context.modelLabReturn)) params.set("dataset", context.datasetId);
+  return path + (params.size ? "?" + params.toString() : "");
 }
 
 export function routeAt(pathname: string, search: string): WorkspaceRoute {
@@ -91,7 +103,8 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
       const id = pathname.slice(config.base.length + 1);
       if (id && !id.includes("/")) {
         try { return { tab: config.tab, resource: { kind, id: decodeURIComponent(id) },
-          context: modelLabContext(new URLSearchParams(search)) }; }
+          context: { ...(kind === "model" ? inputDatasetContext(new URLSearchParams(search)) : {}),
+            ...modelLabContext(new URLSearchParams(search)) } }; }
         catch { break; }
       }
     }
@@ -105,19 +118,25 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
 export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTab): MLNavigationContext {
   // 결과 상세에서 모델 영역 탭을 직접 선택해도 이미 확인한 리소스를 전달한다.
   if (previous.resource?.kind === "scoring" && isDecisionTab(tab)) {
-    return { scoringId: previous.resource.id };
+    return { scoringId: previous.resource.id, ...(previous.context.modelLabReturn ? previous.context : {}) };
   }
   if (previous.resource?.kind === "model" && tab === "scoring") {
-    return { modelId: previous.resource.id };
+    return { modelId: previous.resource.id, ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}) };
   }
   if (DATA_TABS.includes(tab) && DATA_TABS.includes(previous.tab)) {
     return previous.context.datasetId ? { datasetId: previous.context.datasetId } : {};
+  }
+  if (previous.context.datasetId &&
+      ((MODEL_INPUT_TABS.includes(tab) && (DATA_TABS.includes(previous.tab) || MODEL_INPUT_TABS.includes(previous.tab))) ||
+       (DATA_TABS.includes(tab) && MODEL_INPUT_TABS.includes(previous.tab)))) {
+    return { datasetId: previous.context.datasetId };
   }
   if (isDecisionTab(tab) && isDecisionTab(previous.tab)) {
     return {
       scoringId: previous.context.scoringId,
       ...(previous.context.modelLabReturn && previous.context.modelId
-        ? { modelLabReturn: true, modelId: previous.context.modelId } : {}),
+        ? { modelLabReturn: true, modelId: previous.context.modelId,
+            ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}) } : {}),
     };
   }
   return {};
@@ -174,7 +193,9 @@ export function useWorkspaceNavigation() {
     const previous = current.current;
     const fromLabUse = previous.tab === "topic" || previous.context.modelLabReturn === true;
     const context: MLNavigationContext = fromLabUse && previous.context.modelId
-      ? { modelLabReturn: true, modelId: previous.context.modelId } : {};
+      ? { modelLabReturn: true, modelId: previous.context.modelId,
+          ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}) }
+      : kind === "model" && previous.context.datasetId ? { datasetId: previous.context.datasetId } : {};
     update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context },
       resourcePath(kind, id, context));
   }, [update]);
