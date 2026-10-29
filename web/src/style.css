@@ -856,7 +856,7 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   padding:20px 0; border-bottom:1px solid var(--sos-border); align-items:start; }
 .model-version-row:last-child { border-bottom:0; }
 .model-version-identity { min-width:0; display:grid; gap:7px; }
-.model-version-identity h3 { font-size:17px; overflow-wrap:anywhere; }
+.model-version-identity h3 { font-size:13px; font-weight:400; color:var(--sos-muted); margin:0; line-height:1.6; overflow-wrap:anywhere; }
 .model-version-identity p,.model-version-identity small { font-size:13px; color:var(--sos-muted); overflow-wrap:anywhere; }
 .model-version-identity .model-offering-purpose,.ml-resource-summary .model-offering-purpose {
   font-size:17px; font-weight:600; line-height:1.65; color:var(--sos-text); }
