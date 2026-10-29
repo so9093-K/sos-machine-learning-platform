@@ -10,7 +10,7 @@ from importlib.metadata import version
 import numpy as np
 
 from .ml_decision import _verified_scoring_row
-from .ml_playground import ordered_playground_input
+from .ml_input import ordered_playground_input
 from .ml_runtime import load_trusted_isolation_forest
 
 

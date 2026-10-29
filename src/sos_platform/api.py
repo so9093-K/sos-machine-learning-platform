@@ -31,7 +31,8 @@ from .datasets import (
     save_upload_file,
 )
 from .discovery import columns as discovery_columns
-from .ml_input import model_input_issues
+from .ml_input import model_input_issues, ordered_playground_input
+from .ml_policy_contract import validate_policy_for_scoring
 from .discovery import explore as discovery_explore
 from .discovery import overview as discovery_overview
 from .discovery import preview as discovery_preview
@@ -862,7 +863,6 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
         ),
     ):
-        from .ml_playground import ordered_playground_input
         model = model_allowed(actor, model_lookup(body.model_revision_id), for_new_work=True)
         if not model.get("registry_version"):
             raise HTTPException(status_code=409, detail="모델 Registry 등록이 진행 중입니다. 잠시 후 다시 조회하세요.")
@@ -1105,8 +1105,6 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
                 raise HTTPException(status_code=404, detail="판정 정책을 찾을 수 없습니다.")
             check_ownership(actor, policy["owner_actor"], "decision_policy", policy["id"])
             reference = required_scoring_result(policy["scoring_result_id"], actor)
-            from .ml_decision import validate_policy_for_scoring
-
             try:
                 validate_policy_for_scoring(store, policy, score)
             except ValueError as exc:
