@@ -31,7 +31,7 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**의 
 
 구체적인 판본과 호환성은 [Contracts](contracts.md), 사용자 행동은 [Experience](experience.md), 실행 상태는 [Workflows](workflows.md), 환경 격리는 [Runtimes](runtimes.md)가 정본이다.
 
-Job의 Workflow 출처는 SOS의 제출·Actor 소유권 기록에서 조회한다. Tracking 어댑터는 이 조회 결과를 기록하며 오케스트레이터 구현이나 등록 Pipeline의 단계 목록을 참조하지 않는다.
+Job의 Workflow 출처는 신뢰된 실행이 Job 생성 트랜잭션에 기록한 연결에서 조회한다. 내부 생성 시 제출의 Actor·Dataset 판본·Dagster root Run을 대조하며 일반 멱등성 키로 출처를 추정하지 않는다. Tracking 어댑터는 이 조회 결과를 기록하며 오케스트레이터 구현이나 등록 Pipeline의 단계 목록을 참조하지 않는다.
 
 ## 현재 구현과 논리적 책임
 

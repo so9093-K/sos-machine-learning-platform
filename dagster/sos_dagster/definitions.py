@@ -56,6 +56,7 @@ def _job(context: OpExecutionContext, row: dict, stage: str, spec: dict, kind: s
         owner_actor=row["owner_actor"],
         actor_type=row["owner_actor_type"],
         idempotency_key=key,
+        workflow_source=(row["id"], stage, context.dagster_run.root_run_id or context.run_id),
     )
     context.log.info("%s SOS Job: %s", stage, job["id"])
     try:

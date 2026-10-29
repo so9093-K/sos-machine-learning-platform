@@ -68,6 +68,13 @@ jobs = Table(
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
     Column("owner_actor", Text),
+    Column("workflow_submission_id", String(36), ForeignKey("workflow_submissions.id")),
+    Column("workflow_stage", String(128)),
+    CheckConstraint(
+        "(workflow_submission_id IS NULL AND workflow_stage IS NULL) OR "
+        "(workflow_submission_id IS NOT NULL AND workflow_stage IS NOT NULL)",
+        name="ck_jobs_workflow_source",
+    ),
     Index("ix_jobs_created_at_id", "created_at", "id"),
     Index("ix_jobs_dataset_created_id", "dataset_id", "created_at", "id"),
     Index("ix_jobs_request_id", "request_id"),

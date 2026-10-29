@@ -23,23 +23,21 @@ class JobStoreMixin:
     """Store의 공통 트랜잭션 경계를 통해 작업 생명주기를 관리한다."""
 
     def job_workflow_source(self, job: dict) -> dict | None:
-        """SOS 제출·소유권 기록에서 출처를 읽는다. 오케스트레이터에 연결하지 않는다.
+        """신뢰된 실행 경로가 Job 생성과 함께 기록한 Workflow 연결만 읽는다.
 
-        단계명은 실행 권한이 아닌 출처 메타데이터이며 특정 Pipeline의 단계 목록에
-        종속되지 않는다. 제출 키만 흉내 낸 다른 Actor의 Job은 연결하지 않는다.
+        일반 요청의 멱등성 키는 출처 증거가 아니다. 연결 기록이 없는 기존 Job도
+        문자열로 추정하지 않으며 Tracking은 오케스트레이터에 연결하지 않는다.
         """
         with self.connection() as db:
-            key = db.execute(text(
-                "SELECT submission_key FROM job_submissions WHERE job_id=:job AND actor_id=:owner"
-            ), {"job": job["id"], "owner": job.get("owner_actor")}).scalar_one_or_none()
-            parts = key.split(":") if isinstance(key, str) else []
-            if len(parts) != 3 or parts[0] != "workflow" or not parts[1] or not parts[2]:
-                return None
             row = db.execute(text(
-                "SELECT id,definition_id FROM workflow_submissions WHERE id=:id AND owner_actor=:owner"
-            ), {"id": parts[1], "owner": job.get("owner_actor")}).mappings().first()
+                "SELECT w.id,w.definition_id,j.workflow_stage FROM jobs j "
+                "JOIN workflow_submissions w ON w.id=j.workflow_submission_id "
+                "AND w.owner_actor=j.owner_actor AND w.dataset_id=j.dataset_id "
+                "WHERE j.id=:job AND j.owner_actor=:owner"
+            ), {"job": job["id"], "owner": job.get("owner_actor")}).mappings().first()
         return None if row is None else {
-            "submission_id": row["id"], "stage": parts[2], "definition_id": row["definition_id"],
+            "submission_id": row["id"], "stage": row["workflow_stage"],
+            "definition_id": row["definition_id"],
         }
 
     def create_job(
@@ -54,8 +52,13 @@ class JobStoreMixin:
         idempotency_key: str | None = None,
         reserve_iceberg_table: str | None = None,
         require_model_offering: bool = False,
+        workflow_source: tuple[str, str, str] | None = None,
     ) -> dict:
-        """중복 제출을 PostgreSQL 유일성 제약과 같은 트랜잭션으로 처리한다."""
+        """중복 제출과 내부 Workflow 연결을 같은 트랜잭션으로 확정한다.
+
+        workflow_source는 신뢰된 Dagster 경로 전용 (제출 ID, 단계, root Run ID)다.
+        HTTP 요청에서는 받지 않으며 실제 제출의 소유자·입력·실행 ID와 대조한다.
+        """
         if dataset_id is None and not (
             kind == "ml_playground"
             or (kind == "ml_explain" and spec.get("playground_job_id"))
@@ -65,9 +68,18 @@ class JobStoreMixin:
             raise ValueError("Idempotent Job requires an actor")
         if reserve_iceberg_table is not None and (kind != "iceberg_import" or not owner_actor):
             raise ValueError("Iceberg table reservation requires an import actor")
+        submission_id, stage, run_id = workflow_source or (None, None, None)
+        payload = {"kind": kind, "dataset_id": dataset_id, "spec": spec}
+        if workflow_source is not None:
+            if (not submission_id or not stage or not run_id or len(stage) > 128
+                    or ":" in stage or not owner_actor
+                    or idempotency_key != f"workflow:{submission_id}:{stage}"):
+                raise ValueError("Invalid internal Workflow source")
+            # 같은 키·입력을 위장해 먼저 제출한 일반 Job을 신뢰된 Job으로 승격하지 않는다.
+            payload["workflow_source"] = {"submission_id": submission_id, "stage": stage}
         fingerprint = hashlib.sha256(
             json.dumps(
-                {"kind": kind, "dataset_id": dataset_id, "spec": spec},
+                payload,
                 sort_keys=True,
                 separators=(",", ":"),
                 ensure_ascii=False,
@@ -84,8 +96,28 @@ class JobStoreMixin:
             status="Queued",
             created_at=now(),
             updated_at=now(),
+            workflow_submission_id=submission_id,
+            workflow_stage=stage,
         )
         with self.connection() as db:
+            if workflow_source is not None:
+                source = db.execute(text(
+                    "SELECT w.owner_actor,w.owner_actor_type,w.dataset_id,w.dagster_run_id,"
+                    "w.dataset_version,d.version FROM workflow_submissions w "
+                    "JOIN datasets d ON d.id=w.dataset_id WHERE w.id=:id FOR UPDATE OF w FOR SHARE OF d"
+                ), {"id": submission_id}).mappings().first()
+                if (source is None or source["owner_actor"] != owner_actor
+                        or source["owner_actor_type"] != actor_type
+                        or source["dataset_id"] != dataset_id
+                        or source["dagster_run_id"] not in (None, run_id)
+                        or source["dataset_version"] != source["version"]):
+                    raise PlatformError("SOS-API-CONFLICT")
+                if source["dagster_run_id"] is None:
+                    # Dagster op가 launch 응답의 SOS 저장보다 먼저 시작할 수 있다.
+                    # 신뢰된 root Run의 첫 Job 생성이 같은 잠금 아래 연결을 확정한다.
+                    db.execute(text(
+                        "UPDATE workflow_submissions SET dagster_run_id=:run WHERE id=:id"
+                    ), {"id": submission_id, "run": run_id})
             if kind in ("ml_score", "ml_playground"):
                 model_id = spec.get("model_revision_id")
                 state = db.execute(text(
@@ -121,6 +153,7 @@ class JobStoreMixin:
                 kind == "profile"
                 and spec.get("mode") == "understanding"
                 and owner_actor is not None
+                and workflow_source is None
             )
             if is_understanding:
                 # 같은 Actor의 여러 탭이 동시에 새 프로파일을 만들지 않게 직렬화한다.
@@ -226,9 +259,9 @@ class JobStoreMixin:
             db.execute(
                 text(
                     "INSERT INTO jobs(id,kind,dataset_id,spec,status,created_at,updated_at,"
-                    "owner_actor,request_id) "
+                    "owner_actor,request_id,workflow_submission_id,workflow_stage) "
                     "VALUES(:id,:kind,:dataset_id,:spec,:status,:created_at,:updated_at,"
-                    ":owner_actor,:request_id)"
+                    ":owner_actor,:request_id,:workflow_submission_id,:workflow_stage)"
                 ),
                 item,
             )

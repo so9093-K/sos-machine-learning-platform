@@ -171,7 +171,11 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
     client = TestClient(create_app(tmp_path, identity=identity))
     analyst, automation = [{"Authorization": "Bearer " + token, "Idempotency-Key": "authoring-test-01"}
                         for token in actors]
-    train = {"dataset_id": "source", "features": ["f1"]}
+    train = {
+        "dataset_id": "source", "features": ["f1"],
+        "workflow_source": ["submission", "training", "run"],
+        "workflow_submission_id": "submission", "workflow_stage": "training",
+    }
     definition = {"feature_dataset_id": "source", "entity_column": "host",
                   "timestamp_column": "event_time", "features": ["f1"]}
     for path, body in [
@@ -191,6 +195,12 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
     }, headers=analyst).status_code == 404
     assert client.post("/api/ml/train/jobs", json=train, headers=automation).status_code == 202
     assert submitted[-1]["kind"] == "ml_train"
+    assert "workflow_source" not in submitted[-1]
+    assert "workflow_submission_id" not in submitted[-1]
+    assert "workflow_stage" not in submitted[-1]
+    assert not {"workflow_source", "workflow_submission_id", "workflow_stage"}.intersection(
+        submitted[-1]["spec"]
+    )
     assert client.post("/api/features/services/jobs", json=definition, headers=automation).status_code == 202
     assert submitted[-1]["kind"] == "feature_register"
     capabilities = client.get("/api/v2/auth/me", headers=analyst).json()["capabilities"]
