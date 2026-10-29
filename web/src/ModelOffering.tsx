@@ -64,18 +64,22 @@ function OfferingEditor({ model, offering, disabled, onSaved }: {
   const [operation, setOperation] = useState<"save" | "withdraw" | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [confirmWithdrawal, setConfirmWithdrawal] = useState(false);
   const mounted = useRef(true);
   const busy = useRef(false);
+  const withdrawalTrigger = useRef<HTMLButtonElement>(null);
   const fieldId = useId();
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
   useEffect(() => { setDescription(offering.description ?? ""); }, [offering.description]);
+  useEffect(() => { if (!offering.offered) setConfirmWithdrawal(false); }, [offering.offered]);
   const length = Array.from(description.trim()).length;
   const eligible = model.lifecycle_state === "Active" && Boolean(model.registry_version);
   async function change(action: "save" | "withdraw") {
-    if (disabled || busy.current || (action === "save" && (!eligible || length < 1 || length > 1000))) return;
+    if (disabled || busy.current || (action === "save" && (!eligible || length < 1 || length > 1000)) ||
+      (action === "withdraw" && (!offering.offered || !confirmWithdrawal))) return;
     busy.current = true; setOperation(action); setError(""); setNotice("");
     try {
       const next = await request<ModelOfferingState>(`/api/ml/models/${encodeURIComponent(model.id)}/offering`, {
@@ -84,6 +88,7 @@ function OfferingEditor({ model, offering, disabled, onSaved }: {
           body: JSON.stringify({ description: description.trim() }) } : {}),
       });
       if (!mounted.current) return;
+      setConfirmWithdrawal(false);
       onSaved(next);
       setNotice(next.offered ? "모델 제공 상태를 저장했습니다. 제공 모델 목록에서 확인할 수 있습니다."
         : "모델 제공이 중단됐습니다. 기존 결과는 유지됩니다.");
@@ -111,9 +116,19 @@ function OfferingEditor({ model, offering, disabled, onSaved }: {
       </form>
     </details>
     {offering.offered && <div className="model-offering-withdraw">
-      <button type="button" className="secondary" disabled={disabled || Boolean(operation)} onClick={() => void change("withdraw")}>
-        {operation === "withdraw" ? "제공 중단 중…" : "모델 제공 중단"}</button>
-      <p className="hint">제공 중단은 새 적용만 차단하며 이미 만든 결과는 유지합니다.</p>
+      <button ref={withdrawalTrigger} type="button" className="secondary" disabled={disabled || Boolean(operation)}
+        aria-expanded={confirmWithdrawal} aria-controls={`${fieldId}-confirmation`}
+        onClick={() => setConfirmWithdrawal(value => !value)}>모델 제공 중단</button>
+      {confirmWithdrawal ? <div id={`${fieldId}-confirmation`} className="notice-blocked" role="group" aria-labelledby={`${fieldId}-withdraw`}>
+        <h4 id={`${fieldId}-withdraw`}>모델 제공 중단 확인</h4>
+        <p>대상 판본 · Registry v{model.registry_version} · {model.id}</p>
+        <p>다른 사용자의 신규 모델 적용(Scoring)이 차단됩니다. 기존 결과는 유지되며, 모델은 다시 제공할 수 있습니다.</p>
+        <button type="button" disabled={disabled || Boolean(operation)} onClick={() => void change("withdraw")}>
+          {operation === "withdraw" ? "제공 중단 중…" : "제공 중단 확인"}</button>
+        <button type="button" className="secondary" disabled={Boolean(operation)} onClick={() => {
+          setConfirmWithdrawal(false); withdrawalTrigger.current?.focus();
+        }}>취소</button>
+      </div> : <p className="hint">제공 중단은 새 적용만 차단하며 이미 만든 결과는 유지합니다.</p>}
     </div>}
     {error && <p role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
