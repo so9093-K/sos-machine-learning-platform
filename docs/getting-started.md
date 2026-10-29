@@ -65,12 +65,12 @@ make doctor   # 설정·준비 상태 진단
 - 학습 완료 후 등록 대기 중에는 SOS의 MLflow Run ID·재시도 상태를 확인하고, 로컬 운영자라면 Dagster Runs와 MLflow Registry를 대조한다. Dagster Code Location `Loaded` 또는 MLflow Run `Finished`만으로 전체 Pipeline의 완료를 판단하지 않는다.
 - Dagster OSS 운영자 UI: `http://localhost:9607` (localhost 전용, 사용자 인증 기능 없음)
 - Dagster에서 등록형 활동 이상 탐지 실행을 찾을 때는 Code Location `sos`, Job `activity_anomaly_workflow`를 확인하세요.
-  운영 권한이 있으면 SOS 분석 화면의 기술 근거에서 해당 분석의 Dagster Run(태그 `sos/submission_id` = SOS 분석 ID)으로 바로 이동할 수 있습니다.
-  Dagster의 Re-execute는 같은 SOS 단계 Job을 재사용하므로 재시도가 아닙니다. 다시 실행하려면 SOS에서 새 분석을 시작합니다.
+  자동화가 반환받은 SOS 제출 ID로 Dagster Run의 `sos/submission_id` 태그를 검색합니다.
+  Dagster의 Re-execute는 같은 SOS 단계 Job을 재사용하므로 새 분석이 아닙니다. 새 실행은 자동화 계정이 `POST /api/pipelines/activity-anomaly-if/runs`에 새 멱등성 키로 제출합니다.
 - MLflow에서 한 분석의 Run은 이름 `sos-workflow-<분석 ID 앞 8자>-<Dagster 단계명>`과 태그 `sos.workflow_submission_id`로 묶입니다.
   모델 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 MLflow UI에서 수정하거나 삭제하지 않습니다.
 - Dagster는 SOS 사용자용 학습 화면이 아니라 **로컬 운영자의 Workflow Run·단계·이벤트 확인 도구**입니다.
-  실행과 결과는 SOS 웹에서 확인하며, Dagster 접속은 같은 PC의 브라우저에서만 가능합니다.
+  Workflow 상태와 단계별 Job·결과는 SOS API에서 확인하며, Dagster 접속은 같은 PC의 브라우저에서만 가능합니다. SOS 웹에는 Workflow 실행·결과 화면이 없습니다.
   API 컨테이너의 내부 GraphQL 주소는 `http://dagster-webserver:3000/graphql`입니다.
 - Feast UI는 SOS의 `sos_features` SQL Registry를 **읽기 전용 DB 계정**으로 탐색합니다.
   `make up` 때 기존 Registry를 준비하고 읽기 권한을 설정합니다. 처음 기동할 때 등록된 Feature가 없으면 빈 Catalog가 정상입니다.
@@ -117,10 +117,15 @@ Web UI의 인증 화면에 앞에서 보관한 Bearer Token을 입력한다. 토
 
 ```bash
 SOS_SUPPLY_TOKEN=<automation 토큰> .venv/bin/python scripts/supply_model.py \
+  --state-file .sos/supply/activity.json \
   --dataset-file <학습 데이터.parquet> --description-file <제공 설명.txt> [--sample-rows 200000]
 ```
 
-스크립트는 학습 데이터를 등록하고 활동 이상 탐지 분석 정의의 필수 Feature로 SOS Worker 학습을 실행한 뒤, Registry 등록을 확인하고 설명과 함께 판본을 제공한다. 제공 설명에는 모델의 목적·적용할 데이터·결과 해석 시 주의할 한계를 적는다. 제공 중단은 `DELETE /api/ml/models/{id}/offering`으로 하며 새 적용만 막고 사용자가 이미 만든 결과는 유지한다.
+`--state-file`은 필수이며 하나의 공급 실행을 식별한다. Dataset ID·고정 학습 요청·멱등성 키·Job·Model ID를 기록하고, 같은 파일로 재실행하면 기존 등록·학습에서 이어 간다. 재개할 때는 입력 옵션을 생략할 수 있다. 이미 등록된 입력 파일이 바뀌어도 같은 상태 파일은 저장된 Dataset을 사용한다. 새로운 입력·학습에는 새 상태 파일을 명시한다. 토큰은 상태 파일에 기록하지 않으며 같은 파일을 사용하는 공급의 동시 실행은 차단한다.
+
+파일 등록 응답이 유실되면 자동 재업로드하지 않는다. `GET /api/datasets`에서 해당 Actor의 등록 상태를 확인하고 같은 `--state-file`과 확인한 `--dataset-id`로 재개한다. 등록 여부를 확인하기 전에 새 상태 파일로 다시 실행하면 중복 Dataset이 생길 수 있다.
+
+스크립트는 학습 데이터를 등록하고 활동 이상 탐지 분석 정의의 필수 Feature로 SOS Worker 학습을 실행한 뒤, Registry 등록을 확인하고 설명과 함께 판본을 제공한다. 제공 설명에는 모델의 목적·적용할 데이터·결과 해석 시 주의할 한계를 적는다. 제공 중단은 `DELETE /api/ml/models/{id}/offering`으로 하며 새 적용만 막고 사용자가 이미 만든 결과는 유지한다. 중단한 판본은 공급 스크립트 재실행으로 자동 재제공하지 않는다. 재제공은 `PUT /api/ml/models/{id}/offering`으로 명시적으로 요청한다.
 
 학습 입력을 조용히 줄이지 않으며, 요청한 데이터와 실행 환경의 자원 예산이 맞지 않으면 실패한다. 큰 데이터는 `--sample-rows`로 행 수와 Seed를 명시한 부분집합을 사용한다. 학습 점수는 독립 검증 성능이 아니다. 지원되는 Permutation SHAP은 기준 점수에 대한 Feature 기여도를, 기준값 치환은 입력 하나를 바꾼 점수 반응을 나타낸다. 둘 다 사건 원인이나 인과효과를 뜻하지 않는다. 온라인 Serving·프로덕션 배포는 아직 제공하지 않는다.
 
@@ -155,4 +160,4 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 Migration 0024는 기존 자체 Pipeline 실행 그룹 테이블을 제거하기 전에 연결된 Job ID와 실행 단계의 관계를 감사 이력에 기록한다. 이전 Pipeline 그룹별 사용자 화면은 종료되지만 실제 Job·Model·Scoring·Evaluation 데이터는 보존된다. 개발 환경이라고 확인되지 않은 볼륨을 무조건 삭제해서는 안 된다.
 
-모델 삭제는 모델을 소유한 자동화 계정이 `GET /api/ml/models/{id}/deletion-impact`로 영향 정보를 확인한 뒤 `DELETE /api/ml/models/{id}`로 실행합니다. 삭제한 모델의 MLflow Version과 실제 S3 모델 파일은 제거되며 과거 Job·Scoring·평가 근거는 보존됩니다. 버전 관리·객체 잠금·외부 백업이 있는 저장소는 관리 정책과 실제 삭제 결과를 별도로 확인해야 합니다.
+제공 중인 모델은 먼저 제공을 중단해야 삭제할 수 있습니다. 모델 삭제는 모델을 소유한 자동화 계정이 `GET /api/ml/models/{id}/deletion-impact`로 영향 정보를 확인한 뒤 `DELETE /api/ml/models/{id}`로 실행합니다. 삭제한 모델의 MLflow Version과 실제 S3 모델 파일은 제거되며 과거 Job·Scoring·평가 근거는 보존됩니다. 버전 관리·객체 잠금·외부 백업이 있는 저장소는 관리 정책과 실제 삭제 결과를 별도로 확인해야 합니다.

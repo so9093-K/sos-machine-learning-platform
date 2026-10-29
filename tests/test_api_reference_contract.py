@@ -196,3 +196,93 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
     capabilities = client.get("/api/v2/auth/me", headers=analyst).json()["capabilities"]
     assert "job.create" in capabilities
     assert not {"model.train", "feature.manage", "model.manage"}.intersection(capabilities)
+
+
+def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path, monkeypatch):
+    """제공은 모델 사용만 허용하며 중단 후 신규 실행과 과거 결과를 구별한다."""
+    from sos_platform import api
+
+    actors = {
+        "supplier-token-with-enough-entropy": Actor("supplier", "service", frozenset({"automation"})),
+        "consumer-token-with-enough-entropy": Actor("consumer", "human", frozenset({"researcher"})),
+        "other-supplier-with-enough-entropy": Actor("other", "service", frozenset({"automation"})),
+    }
+    identity = IdentitySettings("token", {
+        hashlib.sha256(token.encode()).hexdigest(): actor for token, actor in actors.items()
+    })
+    supplier, consumer, other = [{"Authorization": f"Bearer {token}",
+                                "Idempotency-Key": "offering-contract-01"} for token in actors]
+    model = {"id": "model", "owner_actor": "supplier", "job_id": "training",
+        "attempt_id": "attempt", "dataset_id": "training-data", "dataset_version": "v1",
+        "algorithm": "isolation_forest", "location": "s3://test/model", "sha256": "abc",
+        "features": ["a"], "params": {}, "training_score_summary": {}, "runtime": {},
+        "created_at": "2026-10-29T00:00:00Z", "lifecycle_state": "Active", "registry_version": "1"}
+    offering = {}
+    submitted = []
+    monkeypatch.setattr(Store, "record_audit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(Store, "get_model_revision", lambda self, mid: model if mid == "model" else None)
+    monkeypatch.setattr(Store, "get_model_offering", lambda self, mid: dict(offering) or None)
+    monkeypatch.setattr(Store, "get_dataset", lambda self, did: {
+        "id": did, "owner_actor": "consumer" if did == "user-data" else "supplier", "version": "v1"})
+    monkeypatch.setattr(Store, "get_job", lambda self, jid: {
+        "id": jid, "kind": "ml_train", "owner_actor": "supplier"})
+    monkeypatch.setattr(api.MLflowSettings, "from_env", lambda: object())
+    monkeypatch.setattr(api, "MLflowClient", lambda settings: object())
+    monkeypatch.setattr(api, "verify_registered_version", lambda *args: None)
+
+    def offer(self, mid, **values):
+        offering.update(description=values["description"], offered_by=values["actor_id"],
+                        offered_at="2026-10-29T00:00:00Z", withdrawn_at=None)
+        return dict(offering)
+
+    def withdraw(self, mid, **values):
+        offering["withdrawn_at"] = "2026-10-29T01:00:00Z"
+        return dict(offering)
+
+    def listing(self, **kwargs):
+        return [{"id": "model", "created_at": offering["offered_at"], "model": model,
+                 "description": offering["description"], "offered_by": "supplier",
+                 "offered_at": offering["offered_at"]}] if offering and not offering["withdrawn_at"] else []
+
+    def create(self, **values):
+        assert values["require_model_offering"] is True
+        assert values["spec"]["model_owner_actor"] == "supplier"
+        submitted.append(values)
+        return {**values, "id": "score-job", "status": "Queued", "result": None,
+            "cancel_requested": False, "error": None, "attempts": [],
+            "created_at": model["created_at"], "updated_at": model["created_at"]}
+
+    monkeypatch.setattr(Store, "offer_model", offer)
+    monkeypatch.setattr(Store, "withdraw_model_offering", withdraw)
+    monkeypatch.setattr(Store, "list_model_offerings", listing)
+    monkeypatch.setattr(Store, "create_job", create)
+    scoring = {"id": "scored", "owner_actor": "consumer", "job_id": "score-job",
+        "attempt_id": "score-attempt", "model_revision_id": "model", "dataset_id": "user-data",
+        "dataset_version": "v1", "location": "s3://test/scores", "sha256": "abc", "row_count": 2,
+        "score_direction": "higher_is_more_anomalous", "feature_names": ["a"],
+        "score_summary": {}, "ranking_metrics": None, "label_column": None,
+        "created_at": model["created_at"]}
+    monkeypatch.setattr(Store, "get_scoring_result", lambda self, sid: scoring)
+    client = TestClient(create_app(tmp_path, identity=identity))
+    path = "/api/ml/models/model/offering"
+    body = {"dataset_id": "user-data", "model_revision_id": "model"}
+    assert client.get("/api/ml/models/model", headers=consumer).status_code == 404
+    assert client.put(path, json={"description": "설명"}, headers=consumer).status_code == 403
+    assert client.put(path, json={"description": "설명"}, headers=other).status_code == 404
+    assert client.put(path, json={"description": "목적·입력·한계"}, headers=supplier).json()["offered"] is True
+    assert client.get("/api/ml/offered-models", headers=consumer).json()["items"][0]["model"]["id"] == "model"
+    assert client.get("/api/ml/models/model", headers=consumer).status_code == 200
+    assert client.get("/api/datasets/training-data", headers=consumer).status_code == 404
+    assert client.get("/api/ml/train/jobs/training", headers=consumer).status_code == 404
+    assert client.post("/api/ml/scoring/jobs", json=body, headers=consumer).status_code == 202
+    assert client.delete(path, headers=consumer).status_code == 403
+    assert client.delete(path, headers=supplier).json()["offered"] is False
+    assert client.get("/api/ml/offered-models", headers=consumer).json()["items"] == []
+    assert client.post("/api/ml/scoring/jobs", json=body, headers=consumer).status_code == 404
+    assert len(submitted) == 1
+    assert client.get("/api/ml/scoring/results/scored", headers=consumer).status_code == 200
+    assert client.get("/api/ml/scoring/results/scored", headers=other).status_code == 404
+    # 기존의 모순된 기록에서도 삭제 중인 모델을 제공 중으로 표시하지 않는다.
+    model["lifecycle_state"] = "Deleting"
+    offering["withdrawn_at"] = None
+    assert client.get(path, headers=supplier).json()["offered"] is False

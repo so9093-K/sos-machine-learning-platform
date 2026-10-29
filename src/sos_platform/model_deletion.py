@@ -52,6 +52,14 @@ def begin_delete(store: Store, model_id: str, actor: Actor) -> dict:
             raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다.")
         if row["lifecycle_state"] == "Deleted":
             return dict(row)
+        # 제공·중단도 같은 모델 행을 잠근다. 제공 확인과 삭제 전환 사이에
+        # 새 제공이 끼어들지 못하며, 외부 삭제 재시도 전에도 중단을 요구한다.
+        offered = db.execute(text(
+            "SELECT 1 FROM model_offerings WHERE model_revision_id=:id "
+            "AND withdrawn_at IS NULL"
+        ), {"id": model_id}).scalar_one_or_none()
+        if offered:
+            raise HTTPException(status_code=409, detail="제공 중인 모델입니다. 먼저 모델 제공을 중단하세요.")
         if row["lifecycle_state"] == "Active":
             tracking = db.execute(text(
                 "SELECT state FROM mlflow_exports WHERE job_id=:id"
