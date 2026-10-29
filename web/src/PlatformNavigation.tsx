@@ -15,6 +15,8 @@ export type MLNavigationContext = {
   pipelineRunId?: string; pipelineReturn?: boolean; candidateRowIndex?: number;
   pipelineView?: "learn" | "use";
   modelGroupKey?: string;
+  experimentId?: string;
+  experimentTitle?: string;
   modelLabReturn?: boolean;
   dataJobId?: string;
   dataJobKind?: "data" | "exploration";
@@ -80,7 +82,10 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
       } : {}) };
   }
   if (tab === "training" || tab === "ml" || tab === "research") return { datasetId: params.get("dataset") ?? "",
-    ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
+    ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}),
+    ...(tab !== "ml" && params.get("experiment") ? { experimentId: params.get("experiment")! } : {}),
+    ...(tab !== "ml" && params.has("experiment_title")
+      ? { experimentTitle: params.get("experiment_title")! } : {}) };
   if (tab === "scoring") return { ...resourceContext(search), modelId: params.get("model") ?? "",
     ...(modelGroupAt(params) ? { modelGroupKey: modelGroupAt(params) } : {}) };
   if (isDecisionTab(tab)) return {
@@ -140,6 +145,10 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
   }
   if ((tab === "training" || tab === "ml" || tab === "research") && context.datasetId) {
     params.set("dataset", context.datasetId);
+  }
+  if (tab === "research" || tab === "training") {
+    if (context.experimentId) params.set("experiment", context.experimentId);
+    if (context.experimentTitle !== undefined) params.set("experiment_title", context.experimentTitle);
   }
   if (tab === "scoring" && context.modelId) params.set("model", context.modelId);
   if ((tab === "ml" || tab === "research" || tab === "training" || tab === "scoring") &&
@@ -260,7 +269,11 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
   if ((tab === "training" || tab === "ml" || tab === "research" || tab === "scoring") &&
       (previous.tab === "training" || previous.tab === "ml" || previous.tab === "research" || previous.tab === "scoring")) {
     return { ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}),
-      ...(previous.context.modelGroupKey ? { modelGroupKey: previous.context.modelGroupKey } : {}) };
+      ...(previous.context.modelGroupKey ? { modelGroupKey: previous.context.modelGroupKey } : {}),
+      ...((tab === "research" || tab === "training") &&
+          (previous.tab === "research" || previous.tab === "training") ? {
+        experimentId: previous.context.experimentId, experimentTitle: previous.context.experimentTitle,
+      } : {}) };
   }
   return {};
 }

@@ -284,6 +284,13 @@ try {
     assert.equal(expected.replaceAll("&amp;", "&"),
       contextPath(destination, nextNavigationContext(source, destination)));
   }
+  const selectedResearch = { ...researchRoute.context, experimentId: "17", experimentTitle: "활동 비교 A & B / 2026" };
+  const experimentPath = contextPath("research", selectedResearch);
+  const experimentRoute = routeAt("/research", experimentPath.split("?")[1]);
+  const experimentTraining = contextPath("training", nextNavigationContext(experimentRoute, "training"));
+  const restoredTraining = routeAt("/training", experimentTraining.split("?")[1]);
+  assert.equal(restoredTraining.context.experimentTitle, selectedResearch.experimentTitle);
+  assert.equal(contextPath("research", nextNavigationContext(restoredTraining, "research")), experimentPath);
   const researchNav = renderToStaticMarkup(React.createElement(ModelAreaNavigation, {
     active: "training", context: researchRoute.context, resource: null, onNavigate: () => {},
   }));
@@ -299,11 +306,16 @@ try {
   assert.doesNotMatch(catalog, /연구 실행 비교|새 학습 →|새 모델 그룹 생성/);
   const { MLflowResearch } = await vite.ssrLoadModule("/src/MLflowResearch.tsx");
   const researchProps = { datasets: [], registryKey: "research-team", canManage: false,
-    onSelectGroup: () => {}, onOpenResource: () => {}, onTrain: () => {}, onWorkflow: () => {} };
+    onSelectGroup: () => {}, onOpenResource: () => {}, onTrain: () => {}, onWorkflow: () => {},
+    onSelectExperiment: () => {} };
   const researchPage = renderToStaticMarkup(React.createElement(MLflowResearch, { ...researchProps, canTrain: true }));
   assert.match(researchPage, /새 학습 →/);
   assert.match(researchPage, /연구 실행 비교/);
   assert.doesNotMatch(researchPage, /연구 묶음·비교 대상 선택|모델 버전 검색/);
+  const unresolvedResearch = renderToStaticMarkup(React.createElement(MLflowResearch, {
+    ...researchProps, canTrain: true, experimentId: "17",
+  }));
+  assert.match(unresolvedResearch, /<button[^>]*disabled=""[^>]*>새 학습 →/);
   const readResearch = renderToStaticMarkup(React.createElement(MLflowResearch, { ...researchProps, canTrain: false }));
   assert.doesNotMatch(readResearch, /새 학습 →|활동 이상 탐지 Workflow →|MLflow 실험 분석/);
   assert.match(readResearch, /실험 기록을 조회/);
@@ -321,6 +333,13 @@ try {
   assert.match(trainingForm, /결측 허용 안 함 \(기본값\)/);
   assert.match(trainingForm, /Train 중앙값으로 대체/);
   assert.match(trainingForm, /Feature와 입력 정책을 직접 선택하는 독립 실험/);
+  const experimentForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
+    datasets: [], initialDatasetId: "", initialExperimentTitle: "활동 비교 A & B / 2026",
+    registryKey: "default", onRegistryGroupSelected: () => {}, onDatasetSelected: () => {},
+    canTrain: false, canCancel: false, onOpenModel: () => {},
+  }));
+  assert.match(experimentForm, /aria-label="연구 Experiment 이름"[^>]*value="활동 비교 A &amp; B \/ 2026"/);
+  assert.match(trainingForm, /aria-label="연구 Experiment 이름"[^>]*value="기본 실험"/);
   // 필수 Feature 선택은 초기 숨김 없이 접근할 수 있고, 한 번에 전체 선택을 강요하지 않는다.
   const { FeatureSelector } = await vite.ssrLoadModule("/src/FeatureSelector.tsx");
   const emptyFeatureSelection = renderToStaticMarkup(React.createElement(FeatureSelector, {
