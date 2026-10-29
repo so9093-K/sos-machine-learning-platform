@@ -1,4 +1,14 @@
 /** Pipeline Catalog의 독립 분류 차원을 사용자에게 읽을 수 있게 표시한다. */
+import type { ModelRevision, PipelineDefinition } from "./types";
+
+/** 활동 이상 탐지 화면과 제공 후 이동에 같은 등록 분석 계약을 적용한다. */
+export function isActivityModelCompatible(model: Pick<ModelRevision, "algorithm" | "features">,
+  definition: Pick<PipelineDefinition, "algorithm" | "required_features">): boolean {
+  return model.algorithm === definition.algorithm &&
+    model.features.length === definition.required_features.length &&
+    model.features.every((feature, index) => feature === definition.required_features[index]);
+}
+
 const learningTypes: Record<string, string> = { unsupervised: "비지도 학습" };
 const taskTypes: Record<string, string> = { anomaly_detection: "이상 탐지" };
 const topics: Record<string, string> = { activity_anomaly: "활동 이상 탐지" };

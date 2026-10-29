@@ -108,11 +108,14 @@ export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
 }
 
 /** 불변 ID로 직접 조회하므로 목록 첫 페이지나 이전 학습 화면을 요구하지 않는다. */
-export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecision, canRun, canCancel }: {
+export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecision, canRun, canCancel,
+  canManageModel = false, isAdministrator = false, onOpenModelCatalog, onOpenActivity }: {
   kind: MLResourceKind; id: string; onOpenResource: OpenResource;
   onScoring: (modelId: string) => void;
   onDecision: (kind: ResultKind, scoringId: string) => void;
   canRun: boolean; canCancel: boolean;
+  canManageModel?: boolean; isAdministrator?: boolean;
+  onOpenModelCatalog: () => void; onOpenActivity?: (modelId: string) => void;
 }) {
   const endpoints: Record<MLResourceKind, string> = {
     model: "/api/ml/models", scoring: "/api/ml/scoring/results",
@@ -166,13 +169,16 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
           {m.algorithm === "isolation_forest" && <p>학습한 입력 패턴과 다른 관측값을 점수로 살펴보는 이상 탐지 모델입니다.</p>}
           <div className="ml-resource-actions">
             <button disabled={!canRun || m.lifecycle_state !== "Active" || modelOffering.offering === null ||
+              modelOffering.loading || Boolean(modelOffering.error) ||
               (!modelOwned && !modelOffering.offering.offered)}
               onClick={() => onScoring(m.id)}>이 모델로 점수 계산 →</button>
           </div>
         </div>
         {!canRun && <p className="hint">조회 전용 · 점수 계산에는 작업 실행 권한이 필요합니다.</p>}
-        <ModelOfferingPanel offering={modelOffering.offering} error={modelOffering.error}
-          onRetry={modelOffering.reload} />
+        <ModelOfferingPanel model={m} offering={modelOffering.offering} error={modelOffering.error}
+          loading={modelOffering.loading} canManage={canManageModel && (modelOwned || isAdministrator)}
+          onRetry={modelOffering.reload} onSaved={state => { modelOffering.accept(state); modelOffering.reload(); }}
+          onOpenCatalog={onOpenModelCatalog} onOpenActivity={onOpenActivity ? () => onOpenActivity(m.id) : undefined} />
         <dl className="ml-resource-fields">
           <Field label="학습 Dataset">{modelOwned ? datasetName : "제공 모델의 학습 Dataset · 사용자 열람 대상 아님"}</Field>
           <Field label="입력 Feature 수">{m.features.length.toLocaleString("ko-KR")}개</Field>

@@ -747,8 +747,9 @@ try {
   assert.match(playgroundHtml, /이상 점수 계산 →/);
   assert.match(playgroundHtml, /항목 찾기/);
   assert.match(playgroundHtml, /표시 항목/);
-  const { ModelLabUse, isActivityModelCompatible } =
+  const { ModelLabUse } =
     await vite.ssrLoadModule("/src/ModelLabUse.tsx");
+  const { isActivityModelCompatible } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
   assert.equal(isActivityModelCompatible(
     { algorithm: "isolation_forest", features: ["a", "b"] },
     { algorithm: "isolation_forest", required_features: ["a", "b"] }), true);
@@ -758,6 +759,33 @@ try {
   assert.equal(isActivityModelCompatible(
     { algorithm: "other", features: ["a", "b"] },
     { algorithm: "isolation_forest", required_features: ["a", "b"] }), false);
+  const { ModelOfferingPanel } = await vite.ssrLoadModule("/src/ModelOffering.tsx");
+  const offeringProps = {
+    model: { id: "model-offering", lifecycle_state: "Active", registry_version: "1" },
+    offering: { offered: false, owned: true, description: null }, error: "", loading: false,
+    onRetry: () => {}, onSaved: () => {}, onOpenCatalog: () => {},
+  };
+  const offeringReadOnly = renderToStaticMarkup(React.createElement(ModelOfferingPanel, {
+    ...offeringProps, canManage: false,
+  }));
+  assert.match(offeringReadOnly, /제공되지 않은 판본/);
+  assert.doesNotMatch(offeringReadOnly, /<textarea|type="submit"|모델 제공 중단/);
+  const offeringEditable = renderToStaticMarkup(React.createElement(ModelOfferingPanel, {
+    ...offeringProps, canManage: true,
+  }));
+  assert.match(offeringEditable, /목적·적용 대상·결과 해석과 한계/);
+  assert.match(offeringEditable, /<button type="submit" disabled/);
+  const unregisteredOffering = renderToStaticMarkup(React.createElement(ModelOfferingPanel, {
+    ...offeringProps, model: { ...offeringProps.model, registry_version: null },
+    offering: { ...offeringProps.offering, description: "목적·적용 범위·한계" }, canManage: true,
+  }));
+  assert.match(unregisteredOffering, /Registry 등록이 확인된 활성 모델만/);
+  assert.match(unregisteredOffering, /<button type="submit" disabled/);
+  const offeringReadFailure = renderToStaticMarkup(React.createElement(ModelOfferingPanel, {
+    ...offeringProps, offering: null, error: "조회 연결 실패", canManage: true,
+  }));
+  assert.match(offeringReadFailure, /조회 연결 실패/);
+  assert.doesNotMatch(offeringReadFailure, /<textarea|제공되지 않은 판본/);
   const pendingUse = renderToStaticMarkup(React.createElement(ModelLabUse, {
     datasets: [], hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
     canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},

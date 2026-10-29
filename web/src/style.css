@@ -987,6 +987,18 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .model-offering p { margin:0; font-size:13px; line-height:1.6; }
 .model-offering-meta { color:var(--sos-muted); }
 .model-offering-description { white-space:pre-line; overflow-wrap:anywhere; }
+.model-offering > button { justify-self:start; }
+.model-offering-management { border-top:1px solid var(--sos-border); padding-top:14px; }
+.model-offering-management summary { cursor:pointer; font-weight:650; }
+.model-offering-management details[open] > summary { margin-bottom:14px; }
+.model-offering-management form { display:grid; gap:10px; max-width:760px; margin-top:14px; }
+.model-offering-management textarea { width:100%; min-height:140px; resize:vertical; line-height:1.6; }
+.model-offering-management button { justify-self:start; }
+.model-offering-destinations,.model-offering-withdraw { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:12px; }
+.model-offering-withdraw > .notice-blocked { flex-basis:100%; margin-top:0; overflow-wrap:anywhere; }
+.model-offering-withdraw .notice-blocked p { margin:8px 0; }
+.model-offering-withdraw .notice-blocked button + button { margin-left:10px; }
+.model-offering-management > [role] { margin-top:12px; }
 
 .model-dataset-context { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; margin:12px 0; overflow-wrap:anywhere; }
 .model-dataset-context p { flex-basis:100%; margin:0; }
