@@ -30,12 +30,18 @@ from .discovery import explore as discovery_explore
 from .discovery import profile as discovery_profile
 from .errors import ERRORS, PlatformError, RuntimeConfigurationError
 from .execution_budget import ExecutionBudget, ExecutionLimitExceeded, process_rss_bytes
+from .feast_features import (
+    register_feature_service,
+    retire_feature_service,
+    retrieve_features,
+    verify_pinned_owner,
+)
+from .job_completion import complete_job
 from .ml_decision import apply_scoring_policy, evaluate_scoring_policy
 from .ml_explanation import explain_scored_row
-from .ml_scoring import cleanup_scoring_stage, run_dataset_scoring, scoring_stage_bytes
 from .ml_playground import run_playground_scoring
+from .ml_scoring import cleanup_scoring_stage, run_dataset_scoring, scoring_stage_bytes
 from .ml_training import train_dataset
-from .feast_features import register_feature_service, retrieve_features, retire_feature_service, verify_pinned_owner
 from .ml_training_staging import (
     cleanup_training_stage,
     training_stage_bytes,
@@ -46,11 +52,11 @@ from .mlflow_tracking import MLflowClient, run_tracking_once
 from .object_store import ObjectStore
 from .observability import emit
 from .observation_preparation import materialize_observation_ids
+from .pipeline_reference import inspect_dataset as inspect_pipeline_dataset
 from .processing import transform
 from .resource_admission import ExecutionCapacity, reserve_execution_memory
 from .schemas import ExplorationSpec, Transform
 from .store import Store, WorkerOwnershipLost
-from .pipeline_reference import inspect_dataset as inspect_pipeline_dataset
 from .understanding import build_understanding
 
 
@@ -376,14 +382,14 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             if store.cancellation_requested(job_id):
                 store._assert_worker_ownership()
                 _stop(process)
-                store.finish(job_id, "Cancelled", attempt_id=attempt_id)
+                complete_job(store, job_id, "Cancelled", attempt_id=attempt_id)
                 return True
 
         # Worker 종료 직후 소유권을 확인한다. 유실 시 이전 Worker는
         # 취소나 성공을 확정하지 않고 새 Worker의 복구에 판단을 맡긴다.
         store._assert_worker_ownership()
         if store.cancellation_requested(job_id):
-            store.finish(job_id, "Cancelled", attempt_id=attempt_id)
+            complete_job(store, job_id, "Cancelled", attempt_id=attempt_id)
             return True
         if not completed.exists():
             if cgroup.oom_killed(attempt_id):
@@ -403,7 +409,8 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                 exception_type=outcome.get("exception_type"),
                 failure_category=outcome.get("failure_category"),
             )
-            store.finish(
+            complete_job(
+                store,
                 job_id,
                 "Failed",
                 attempt_id=attempt_id,
@@ -416,7 +423,6 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             return True
 
         publish = outcome["result"].get("iceberg_publish")
-        model_publish = None
         model_pending = pending.with_suffix(".joblib")
         if job["kind"] == "ml_train":
             if not model_pending.exists():
@@ -429,12 +435,11 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                 owner_id=attempt_id,
             )
             digest = storage.put(model_key, model_pending)
-            model_publish = {
+            publish = {
                 **outcome["result"],
                 "location": storage.location(model_key),
                 "sha256": digest,
             }
-        scoring_publish = None
         score_pending = pending.with_suffix(".scores.parquet")
         if job["kind"] == "ml_score":
             if not score_pending.exists():
@@ -447,7 +452,7 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
                 owner_id=attempt_id,
             )
             digest = storage.put(score_key, score_pending)
-            scoring_publish = {
+            publish = {
                 **outcome["result"],
                 "location": storage.location(score_key),
                 "sha256": digest,
@@ -468,18 +473,14 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             }
         result = {k: v for k, v in outcome["result"].items() if k != "iceberg_publish"}
         store._assert_worker_ownership()
-        final_status = store.finish(
+        final_status = complete_job(
+            store,
             job_id,
             "Succeeded",
             attempt_id=attempt_id,
             result=result,
-            publish=publish,
+            publication=publish,
             write_id=write_id,
-            model_publish=model_publish,
-            scoring_publish=scoring_publish,
-            policy_publish=outcome["result"] if job["kind"] == "ml_policy" else None,
-            evaluation_publish=outcome["result"] if job["kind"] == "ml_evaluate" else None,
-            explanation_publish=outcome["result"] if job["kind"] == "ml_explain" else None,
         )
         if final_status != "Succeeded" and write_id:
             store.fail_object_write(write_id, "Job cancelled during publication")
@@ -544,7 +545,8 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             exception_type=exception_type,
             failure_category=category,
         )
-        store.finish(
+        complete_job(
+            store,
             job_id,
             "Failed",
             attempt_id=attempt_id,
