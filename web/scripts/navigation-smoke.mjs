@@ -217,7 +217,7 @@ try {
   assert.match(withDatasetNav, /href="\/models\?dataset=data\+one"/);
   assert.equal(contextPath("topic", nextNavigationContext(sourceData, "topic")),
     "/topics/activity-anomaly?dataset=data+one");
-  const { checkModelDatasetInput } = await vite.ssrLoadModule("/src/ModelDatasetCompatibility.tsx");
+  const { checkModelDatasetInput, ModelDatasetCompatibility } = await vite.ssrLoadModule("/src/ModelDatasetCompatibility.tsx");
   const contract = { features: ["count", "ratio"], runtime: { feature_dtypes: ["Int64", "Float64"] } };
   assert.equal(checkModelDatasetInput(contract, [
     { name: "ratio", dtype: "Float64" }, { name: "count", dtype: "Int64" },
@@ -230,6 +230,10 @@ try {
     { name: "count", dtype: "String" }, { name: "ratio", dtype: "Float64" },
   ]).ready, false);
   assert.equal(checkModelDatasetInput({ ...contract, runtime: {} }, []).ready, false);
+  const mismatchNotice = renderToStaticMarkup(React.createElement(ModelDatasetCompatibility, {
+    model: contract, columns: [{ name: "count", dtype: "Int64" }], compact: true,
+  }));
+  assert.match(mismatchNotice, /선택한 Dataset에 적용할 수 없음/);
   const jobContext = { datasetId: "one", dataJobId: "job / one", dataJobKind: "exploration" };
   const jobPath = contextPath("jobs", jobContext);
   assert.deepEqual(routeAt("/activity/jobs", jobPath.slice(jobPath.indexOf("?"))).context, jobContext);
@@ -740,6 +744,7 @@ try {
   assert.match(home, /플랫폼 개요/);
   assert.match(home, /주요 기능/);
   assert.match(home, /모델 제공 상태 확인 중/);
+  assert.match(home, /<button type="button">모델 목록 →<\/button>/);
   assert.match(home, /<h4>모델 활용<\/h4>/);
   assert.doesNotMatch(home, /<h4>연구·실험<\/h4>|새 학습|새로운 실험/);
   assert.match(home, /활동 이상 탐지/);

@@ -114,7 +114,9 @@ export function ModelLabUse({ selectedDatasetId, onSelectDataset, datasets, hasM
         <h3>{modelTitle(selected)}</h3>
         <p>학습 시각 {new Date(selected.model.created_at).toLocaleString("ko-KR")}
           · 입력 Feature {selected.model.features.length}개</p>
-        <p className="model-offering-description">{selected.description}</p></div>
+        <p className="model-offering-description">{selected.description}</p>
+        {selectedDatasetId && <p className="hint">기본 모델 선택은 활동 이상 탐지의 Feature 계약을 기준으로 합니다.
+          선택 Dataset의 적용 조건은 Dataset 분석의 입력 검사 결과에서 확인하세요.</p>}</div>
       {models.length > 1 && <div className="model-lab-model-actions">
         <details className="model-lab-version-picker">
           <summary>다른 모델 선택</summary>

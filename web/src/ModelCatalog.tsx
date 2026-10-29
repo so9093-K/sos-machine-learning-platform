@@ -62,7 +62,10 @@ export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datase
     {datasetId && <div className="model-dataset-context">
       <strong>선택 Dataset · {datasetName || "선택한 Dataset"}</strong>
       <p className="hint">모델별 Feature 이름·자료형을 비교합니다. 입력 구조 일치는 성능·업무 적합성 검증이 아닙니다.</p>
-      {onClearDataset && <button type="button" className="ghost" onClick={onClearDataset}>Dataset 선택 해제</button>}
+      {onClearDataset && <>
+        <button type="button" className="secondary" onClick={onClearDataset}>Dataset 선택 해제</button>
+        <p className="hint">선택 해제 후 모델 적용 화면에서 다른 Dataset을 고르거나 값 직접 입력을 확인할 수 있습니다.</p>
+      </>}
       {!currentSchema?.columns && !currentSchema?.error && <p role="status">Dataset 입력 구조 확인 중…</p>}
       {currentSchema?.error && <p role="alert">Dataset 입력 구조 조회 실패 · {currentSchema.error}</p>}
     </div>}
@@ -81,7 +84,7 @@ export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datase
         <div className="model-index-actions">
           <button type="button" disabled={!canRun || Boolean(datasetId &&
             (!currentSchema?.columns || !checkModelDatasetInput(item.model, currentSchema.columns).ready))}
-            onClick={() => onScoreModel(item.model.id)}>데이터에 적용 →</button>
+            onClick={() => onScoreModel(item.model.id)}>{datasetId ? "선택 Dataset에 적용 →" : "데이터에 적용 →"}</button>
           <button type="button" className="secondary" onClick={() => onOpenModel(item.model.id)}>모델 상세</button>
         </div>
       </article>)}

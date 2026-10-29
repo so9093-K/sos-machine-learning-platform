@@ -25,7 +25,9 @@ export function ModelDatasetCompatibility({ model, columns, compact = false }: {
 }) {
   const input = checkModelDatasetInput(model, columns);
   return <div className={input.ready ? "scoring-input-ready" : "notice-blocked"} role="status">
-    <strong>{input.ready ? "입력 구조 일치" : "입력 구조 불일치·확인 필요"}</strong>
+    <strong>{input.ready ? "선택한 Dataset 입력 구조 일치"
+      : input.missing.length > 0 || input.mismatches.length > 0
+        ? "선택한 Dataset에 적용할 수 없음" : "선택한 Dataset 적용 조건 확인 필요"}</strong>
     {input.missing.length > 0 && <p>필수 Feature {input.missing.length}개 없음 · {input.missing.slice(0, 3).join(", ")}{input.missing.length > 3 ? " 외" : ""}</p>}
     {input.mismatches.length > 0 && <p>자료형 불일치 {input.mismatches.length}개 · {input.mismatches.slice(0, 3).map(item =>
       `${item.name}: 실제 ${item.actual} / 요구 ${item.expected ?? "수치형"}`).join(", ")}{input.mismatches.length > 3 ? " 외" : ""}</p>}

@@ -54,8 +54,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
             {modelState === "error" && <p role="alert">{modelError}</p>}
             {(modelState === "empty" || modelState === "error") &&
               <button type="button" className="secondary" onClick={() => setReload(value => value + 1)}>제공 상태 재조회</button>}
-            <button type="button" disabled={modelState !== "ready"}
-              onClick={() => onNavigate("ml")}>모델 목록 →</button>
+            <button type="button" onClick={() => onNavigate("ml")}>모델 목록 →</button>
           </>}
         </article>
       </div>
