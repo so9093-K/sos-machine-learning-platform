@@ -7,6 +7,7 @@ import { formatDtype } from "./display-format";
 import { histogram, needsTimeOrder } from "./feature-utils";
 import { useFeatureEditor } from "./useFeatureEditor";
 import { FeaturePanel } from "./FeaturePanel";
+import { FeastFeaturePanel } from "./FeastFeaturePanel";
 import { useIcebergConnector } from "./useIcebergConnector";
 import { request, jsonPost, submitJob, formatError, uploadFile, describeError, type ErrorNotice } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
@@ -64,6 +65,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const canWrite = actor.capabilities.includes("dataset.create");
   const canRun = actor.capabilities.includes("job.create");
   const canTrain = actor.capabilities.includes("model.train");
+  const canManageFeatures = actor.capabilities.includes("feature.manage");
   const canCancel = actor.capabilities.includes("job.cancel");
   const canManageModels = actor.capabilities.includes("model.manage");
   const canInspectStorage = actor.capabilities.includes("storage.inspect");
@@ -877,6 +879,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           {preview && <FeaturePanel editor={editor}
             columnNames={columnNames} busy={busy} canRun={canRun}
             onSubmit={() => void submit("transform")} />}
+          {/* 등록 Feature 재사용은 학습 권한과 별개로 데이터 준비에서 제공한다. */}
+          {(canRun || canManageFeatures) && <FeastFeaturePanel datasets={datasets}
+            canCreate={canRun} canManage={canManageFeatures} purpose="preparation"
+            onDatasetReady={id => chooseDataset(id, "preparation")} />}
         </>}
 
       </>}
@@ -921,7 +927,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onRegistryGroupSelected={modelGroupKey => selectContext({ ...context, modelGroupKey })}
           onDatasetSelected={datasetId => selectContext({ ...context, datasetId })}
           onOpenModel={id => openResource("model", id)}
-          canTrain={canTrain} canRun={canRun} canManageFeatures={actor.capabilities.includes("feature.manage")} canCancel={canCancel}
+          canTrain={canTrain} canRun={canRun} canManageFeatures={canManageFeatures} canCancel={canCancel}
           canInspectOperations={canInspectStorage || canViewAudit} />)}
       {(resource || tab === "scoring") && context.pipelineReturn && context.pipelineRunId &&
         <section className="pipeline-return" role="status">

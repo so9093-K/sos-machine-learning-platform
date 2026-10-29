@@ -88,11 +88,19 @@ function usePolledJob() {
   return { job, setJob, error, setError };
 }
 
-/** Feast는 Feature 정의 정본, SOS는 등록·조회 Job과 불변 Dataset의 정본이다. */
-export function FeastFeaturePanel({ datasets, canCreate, canManage = false, onDatasetReady }: {
+const purposeText = {
+  training: { summary: "등록 Feature로 학습 Dataset 구성 · Feast", ready: "게시된 Feature Dataset으로 학습 준비" },
+  preparation: { summary: "등록 Feature 조회 · Feast", ready: "게시된 Feature Dataset 열기" },
+} as const;
+
+/** Feast는 Feature 정의 정본, SOS는 등록·조회 Job과 불변 Dataset의 정본이다.
+ *  조회는 Job 실행 권한, 등록·폐기는 Feature 관리 권한으로 구분한다. */
+export function FeastFeaturePanel({ datasets, canCreate, canManage = false, purpose = "training",
+  onDatasetReady }: {
   datasets: Dataset[];
   canCreate: boolean;
   canManage?: boolean;
+  purpose?: keyof typeof purposeText;
   onDatasetReady: (datasetId: string) => void;
 }) {
   const [featureDataset, setFeatureDataset] = useState("");
@@ -288,7 +296,7 @@ export function FeastFeaturePanel({ datasets, canCreate, canManage = false, onDa
     typeof retrieval.job.result.dataset_id === "string" ? retrieval.job.result.dataset_id : null;
 
   return <details className="panel feast-feature-panel">
-    <summary>등록 Feature로 학습 Dataset 구성 · Feast</summary>
+    <summary>{purposeText[purpose].summary}</summary>
     <p className="hint">등록된 Feature Service를 선택해 조회 시점 Dataset에 연결합니다.
       원본·조회 Dataset에는 UTC 시간형 컬럼이 필요합니다.</p>
     {!canCreate && <p className="hint">조회 전용 계정입니다. Feature 작업 실행 권한이 없습니다.</p>}
@@ -470,7 +478,7 @@ export function FeastFeaturePanel({ datasets, canCreate, canManage = false, onDa
             취소 요청
           </button>}
         {published && <button type="button" onClick={() => onDatasetReady(published)}>
-          게시된 Feature Dataset으로 학습 준비
+          {purposeText[purpose].ready}
         </button>}
       </div>}
       {retrieval.error && <p role="alert">{retrieval.error}</p>}

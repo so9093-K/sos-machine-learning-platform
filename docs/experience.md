@@ -68,9 +68,11 @@ Feast가 담당하며 SOS는 Feature 사용·조회 Job·Dataset·모델 근거�
 정의 등록·폐기는 SOS Job 계약을 따른다.
 
 
-사용자는 기존 Dataset에서 안정적인 Entity·시간 기준과 숫자형 Feature를 선택해
-Feature Service를 등록할 수 있다. 등록 결과는 SOS Job 이력에서 확인하며
-기존 등록 Feature Service를 다른 조회 시점 Dataset에도 재사용한다.
+Feature 관리 권한이 있는 사용자는 기존 Dataset에서 안정적인 Entity·시간 기준과
+숫자형 Feature를 선택해 Feature Service를 등록·폐기할 수 있다. 등록 결과는 SOS Job
+이력에서 확인하며 기존 등록 Feature Service를 다른 조회 시점 Dataset에도 재사용한다.
+등록 Feature Service의 시점 조회는 일반 Job 실행 권한으로 데이터 준비에서 제공하며
+학습 권한이나 제작 도구 진입을 요구하지 않는다.
 Feature 정의 등록과 조회는 별개 Job이고, 조회는 Registry의 정의를 수정하지 않는다.
 성공한 조회 결과는 불변 Dataset으로 확정해 사용자가 명시적으로 모델 학습에 사용할 수 있다.
 Feature 계산·조회·학습·온라인 Serving을 한 단계의 자동 작업으로 오인시키지 않는다.
