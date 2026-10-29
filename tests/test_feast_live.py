@@ -128,3 +128,91 @@ def test_registry_conflict_and_partial_recovery(tmp_path, monkeypatch):
     registry.apply(view)
     with pytest.raises(ValueError, match="다른 내용"):
         feast_features.register_feature_service(None, source_dataset, spec)
+
+
+def test_public_retirement_preserves_references_and_recovers_partial_delete(tmp_path, monkeypatch):
+    """실제 SDK 삭제·부분 커밋 재시도·공유 참조 보존을 확인한다."""
+    from unittest.mock import Mock
+    from feast import FeatureStore
+    from feast.errors import FeastObjectNotFoundException
+
+    source = tmp_path / "source.parquet"
+    pl.DataFrame({
+        "host_id": ["a"], "event_timestamp": [utc(9)], "number": [3.0],
+    }).write_parquet(source)
+    dataset = {"id": "source", "kind": "file", "location": str(source), "version": "v1"}
+
+    @contextmanager
+    def pinned(_store, _dataset):
+        yield pl.scan_parquet(source)
+
+    monkeypatch.setattr(feast_features, "pinned_scan_dataset", pinned)
+    monkeypatch.setattr(feast_features.Settings, "from_env", lambda: SimpleNamespace(
+        s3_access_key="testing", s3_secret_key="testing", s3_region="us-east-1",
+        s3_endpoint="http://127.0.0.1:9000",
+    ))
+    monkeypatch.setenv("SOS_FEAST_REGISTRY_URL", f"sqlite:///{tmp_path / 'registry.db'}")
+    spec = {
+        "feature_dataset_id": "source", "feature_dataset_version": "v1",
+        "entity_column": "host_id", "timestamp_column": "event_timestamp",
+        "features": ["number"], "ttl_seconds": 86400,
+    }
+    result = feast_features.register_feature_service(None, dataset, spec)
+    unrelated = feast_features.register_feature_service(None, dataset, {**spec, "ttl_seconds": 3600})
+    job = {
+        "id": "registration",
+        "spec": {**spec, "feature_service_name": result["feature_service"]}, "result": result,
+    }
+    referenced = True
+    db = Mock()
+
+    def execute(statement, params=None):
+        rows = Mock()
+        if "SELECT id,status FROM jobs" in str(statement):
+            registrations = [{"id": "registration", "status": "Succeeded"}]
+            if referenced:
+                registrations.append({"id": "other", "status": "Succeeded"})
+            rows.mappings.return_value.all.return_value = registrations
+        rows.scalars.return_value = []
+        return rows
+
+    db.execute.side_effect = execute
+
+    @contextmanager
+    def connection():
+        yield db
+
+    store = SimpleNamespace(connection=connection)
+    registry = feast_features._feature_store()
+    registry.delete_feature_service(result["feature_service"])
+    retained = feast_features.retire_feature_service(store, dataset, job)
+    assert not retained["registry_deleted"]
+    assert retained["retained_for"]["other_active_registrations"] == 1
+    assert feast_features._feature_store().get_feature_service(result["feature_service"])
+
+    referenced = False
+    real_apply = FeatureStore.apply
+    failed = False
+
+    def interrupted_apply(self, objects, *args, **kwargs):
+        nonlocal failed
+        if kwargs.get("objects_to_delete") and not failed:
+            failed = True
+            real_apply(self, objects, objects_to_delete=kwargs["objects_to_delete"][:1], partial=False)
+            raise RuntimeError("injected partial commit")
+        return real_apply(self, objects, *args, **kwargs)
+
+    monkeypatch.setattr(FeatureStore, "apply", interrupted_apply)
+    with pytest.raises(RuntimeError, match="partial commit"):
+        feast_features.retire_feature_service(store, dataset, job)
+    assert feast_features.retire_feature_service(store, dataset, job)["registry_deleted"]
+    assert feast_features.retire_feature_service(store, dataset, job)["registry_deleted"]
+    registry = feast_features._feature_store()
+    for method, name in [
+        (registry.get_feature_service, result["feature_service"]),
+        (registry.get_feature_view, result["feature_view"]),
+        (registry.get_data_source, result["feature_view"] + "_source"),
+    ]:
+        with pytest.raises(FeastObjectNotFoundException):
+            method(name)
+    assert registry.get_feature_service(unrelated["feature_service"])
