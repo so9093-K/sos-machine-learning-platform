@@ -2,10 +2,10 @@
 
 import hashlib
 import json
-import os
+from collections.abc import Callable, Mapping
 from uuid import uuid4
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import Connection, bindparam, text
 
 from .errors import ERRORS, InvalidRequestError, PlatformError, WorkerOwnershipLost
 from .store_administration import now
@@ -521,18 +521,13 @@ class JobStoreMixin:
         attempt_id: str,
         result: dict | None = None,
         error: str | None = None,
-        publish: dict | None = None,
-        write_id: str | None = None,
-        model_publish: dict | None = None,
-        scoring_publish: dict | None = None,
-        policy_publish: dict | None = None,
-        evaluation_publish: dict | None = None,
-        explanation_publish: dict | None = None,
+        on_finish: Callable[[Connection, Mapping, str, dict | None], dict | None] | None = None,
         error_code: str | None = None,
         failure_stage: str | None = None,
         failure_category: str | None = None,
         exception_type: str | None = None,
     ) -> str:
+        """현재 Attempt를 종료하며 선택적 결과 게시를 같은 DB 연결에서 실행한다."""
         # Job/Attempt 최종 상태를 검증하지 않으면 잘못된 내부 호출이 DB에
         # Queued·Running 같은 미완료 상태를 확정하고 복구 불가능하게 만들 수 있다.
         if status not in ("Succeeded", "Failed", "Cancelled"):
@@ -563,250 +558,11 @@ class JobStoreMixin:
             if active_attempt != attempt_id:
                 raise WorkerOwnershipLost("Job execution attempt has changed")
             if row["cancel_requested"]:
-                status, result, publish = "Cancelled", None, None
+                status, result = "Cancelled", None
                 error, error_code, failure_stage = None, None, None
                 failure_category, exception_type = None, None
-            if status == "Succeeded" and publish:
-                item = dict(
-                    id=publish.get("retention_id") or str(uuid4()),
-                    name=publish["name"],
-                    kind=publish.get("kind", "file"),
-                    location=publish["location"],
-                    version=publish["version"],
-                    created_at=now(),
-                    owner_actor=row["owner_actor"],
-                    source_job_id=job_id,
-                )
-                db.execute(
-                    text(
-                        "INSERT INTO datasets(id,name,kind,location,version,created_at,owner_actor,source_job_id) "
-                        "VALUES(:id,:name,:kind,:location,:version,:created_at,:owner_actor,:source_job_id)"
-                    ),
-                    item,
-                )
-                if write_id:
-                    self._publish_object(db, write_id, publish["location"], publish["version"])
-                if publish.get("retention_id"):
-                    self._confirm_snapshot_retention(
-                        db, publish["retention_id"], publish["location"], publish["version"]
-                    )
-                result = {**(result or {}), "dataset_id": item["id"]}
-            if status == "Succeeded" and model_publish is not None:
-                if row["kind"] != "ml_train" or not write_id or publish is not None:
-                    raise ValueError("Invalid model publication request")
-                runtime = dict(model_publish["runtime"])
-                # 조회 결과 Dataset의 원본 등록·조회 Job은 SOS가 이미 보존한다.
-                # MLflow/Feast Registry를 복제하지 않고 Model Revision에 불변 출처만 연결한다.
-                origin_id = db.execute(
-                    text("SELECT source_job_id FROM datasets WHERE id=:id"),
-                    {"id": row["dataset_id"]},
-                ).scalar_one_or_none()
-                feature_origin = (
-                    db.execute(
-                        text(
-                            "SELECT id,result FROM jobs "
-                            "WHERE id=:id AND kind='feature_retrieve' AND status='Succeeded'"
-                        ),
-                        {"id": origin_id},
-                    ).mappings().first()
-                    if origin_id else None
-                )
-                if feature_origin:
-                    provenance = json.loads(feature_origin["result"])
-                    runtime["feature_retrieval"] = {
-                        "retrieval_job_id": feature_origin["id"],
-                        "registration_job_id": provenance["registration_job_id"],
-                        "feature_service": provenance["feature_service"],
-                        "feature_view": provenance["feature_view"],
-                        "definition_digest": provenance["definition_digest"],
-                        "source_dataset_id": provenance["feature_dataset_id"],
-                        "source_dataset_version": provenance["feature_dataset_version"],
-                    }
-                item = {
-                    "id": str(uuid4()),
-                    "job_id": job_id,
-                    "attempt_id": attempt_id,
-                    "dataset_id": row["dataset_id"],
-                    "dataset_version": model_publish["dataset_version"],
-                    "algorithm": model_publish["algorithm"],
-                    "registry_key": (json.loads(row["spec"]) or {}).get("registry_key", "default"),
-                    "location": model_publish["location"],
-                    "sha256": model_publish["sha256"],
-                    "features": json.dumps(model_publish["features"], allow_nan=False),
-                    "params": json.dumps(model_publish["params"], allow_nan=False),
-                    "training_score_summary": json.dumps(
-                        model_publish["training_score_summary"], allow_nan=False
-                    ),
-                    "runtime": json.dumps(runtime, allow_nan=False),
-                    "owner_actor": row["owner_actor"],
-                    "created_at": now(),
-                }
-                db.execute(
-                    text(
-                        "INSERT INTO model_revisions "
-                        "(id,job_id,attempt_id,dataset_id,dataset_version,algorithm,"
-                        "location,sha256,features,params,training_score_summary,runtime,"
-                        "registry_key,owner_actor,created_at) "
-                        "VALUES (:id,:job_id,:attempt_id,:dataset_id,:dataset_version,"
-                        ":algorithm,:location,:sha256,:features,:params,"
-                        ":training_score_summary,:runtime,:registry_key,:owner_actor,:created_at)"
-                    ),
-                    item,
-                )
-                self._publish_object(
-                    db, write_id, model_publish["location"], model_publish["sha256"]
-                )
-                result = {**(result or {}), "model_revision_id": item["id"]}
-            if status == "Succeeded" and scoring_publish is not None:
-                if row["kind"] != "ml_score" or not write_id or publish is not None:
-                    raise ValueError("Invalid scoring publication request")
-                item = {
-                    "id": str(uuid4()),
-                    "job_id": job_id,
-                    "attempt_id": attempt_id,
-                    "model_revision_id": scoring_publish["model_revision_id"],
-                    "dataset_id": row["dataset_id"],
-                    "dataset_version": scoring_publish["dataset_version"],
-                    "location": scoring_publish["location"],
-                    "sha256": scoring_publish["sha256"],
-                    "row_count": scoring_publish["row_count"],
-                    "score_direction": scoring_publish["score_direction"],
-                    "feature_names": json.dumps(scoring_publish["feature_names"]),
-                    "score_summary": json.dumps(scoring_publish["score_summary"], allow_nan=False),
-                    "ranking_metrics": json.dumps(
-                        scoring_publish["ranking_metrics"], allow_nan=False
-                    )
-                    if scoring_publish["ranking_metrics"] is not None
-                    else None,
-                    "label_column": scoring_publish["label_column"],
-                    "owner_actor": row["owner_actor"],
-                    "created_at": now(),
-                }
-                db.execute(
-                    text(
-                        "INSERT INTO scoring_results "
-                        "(id,job_id,attempt_id,model_revision_id,dataset_id,dataset_version,"
-                        "location,sha256,row_count,score_direction,feature_names,score_summary,"
-                        "ranking_metrics,label_column,owner_actor,created_at) "
-                        "VALUES (:id,:job_id,:attempt_id,:model_revision_id,:dataset_id,"
-                        ":dataset_version,:location,:sha256,:row_count,:score_direction,"
-                        ":feature_names,:score_summary,:ranking_metrics,:label_column,"
-                        ":owner_actor,:created_at)"
-                    ),
-                    item,
-                )
-                self._publish_object(
-                    db, write_id, scoring_publish["location"], scoring_publish["sha256"]
-                )
-                result = {**(result or {}), "scoring_result_id": item["id"]}
-            if status == "Succeeded" and policy_publish is not None:
-                if row["kind"] != "ml_policy":
-                    raise ValueError("Invalid policy publication request")
-                item = {
-                    "id": str(uuid4()),
-                    "job_id": job_id,
-                    "attempt_id": attempt_id,
-                    "scoring_result_id": policy_publish["scoring_result_id"],
-                    "mode": policy_publish["mode"],
-                    "threshold": policy_publish["threshold"],
-                    "alert_fraction": policy_publish["alert_fraction"],
-                    "decision_summary": json.dumps(
-                        policy_publish["decision_summary"], allow_nan=False
-                    ),
-                    "owner_actor": row["owner_actor"],
-                    "created_at": now(),
-                }
-                db.execute(
-                    text(
-                        "INSERT INTO decision_policy_revisions "
-                        "(id,job_id,attempt_id,scoring_result_id,mode,threshold,alert_fraction,"
-                        "decision_summary,owner_actor,created_at) VALUES "
-                        "(:id,:job_id,:attempt_id,:scoring_result_id,:mode,:threshold,"
-                        ":alert_fraction,:decision_summary,:owner_actor,:created_at)"
-                    ),
-                    item,
-                )
-                result = {**(result or {}), "policy_revision_id": item["id"]}
-            if status == "Succeeded" and evaluation_publish is not None:
-                if row["kind"] != "ml_evaluate":
-                    raise ValueError("Invalid evaluation publication request")
-                item = {
-                    "id": str(uuid4()),
-                    "job_id": job_id,
-                    "attempt_id": attempt_id,
-                    "scoring_result_id": evaluation_publish["scoring_result_id"],
-                    "policy_revision_id": evaluation_publish["policy_revision_id"],
-                    "label_coverage": evaluation_publish["label_coverage"],
-                    "decision_metrics": json.dumps(
-                        evaluation_publish["decision_metrics"], allow_nan=False
-                    ),
-                    "ranking_metrics": json.dumps(
-                        evaluation_publish["ranking_metrics"], allow_nan=False
-                    )
-                    if evaluation_publish["ranking_metrics"] is not None
-                    else None,
-                    "owner_actor": row["owner_actor"],
-                    "created_at": now(),
-                }
-                db.execute(
-                    text(
-                        "INSERT INTO evaluation_revisions "
-                        "(id,job_id,attempt_id,scoring_result_id,policy_revision_id,"
-                        "label_coverage,decision_metrics,ranking_metrics,owner_actor,created_at) "
-                        "VALUES (:id,:job_id,:attempt_id,:scoring_result_id,:policy_revision_id,"
-                        ":label_coverage,:decision_metrics,:ranking_metrics,:owner_actor,:created_at)"
-                    ),
-                    item,
-                )
-                result = {**(result or {}), "evaluation_revision_id": item["id"]}
-            if status == "Succeeded" and explanation_publish is not None:
-                if row["kind"] != "ml_explain":
-                    raise ValueError("Invalid explanation publication request")
-                item = {
-                    "id": str(uuid4()),
-                    "job_id": job_id,
-                    "attempt_id": attempt_id,
-                    "scoring_result_id": explanation_publish.get("scoring_result_id"),
-                    "playground_job_id": explanation_publish.get("playground_job_id"),
-                    "model_revision_id": explanation_publish["model_revision_id"],
-                    "row_index": explanation_publish.get("row_index"),
-                    "method": explanation_publish["method"],
-                    "output": json.dumps(explanation_publish, allow_nan=False),
-                    "owner_actor": row["owner_actor"],
-                    "created_at": now(),
-                }
-                db.execute(
-                    text(
-                        "INSERT INTO explanation_results "
-                        "(id,job_id,attempt_id,scoring_result_id,playground_job_id,"
-                        "model_revision_id,row_index,method,output,owner_actor,created_at) "
-                        "VALUES (:id,:job_id,:attempt_id,:scoring_result_id,:playground_job_id,"
-                        ":model_revision_id,:row_index,:method,:output,:owner_actor,:created_at)"
-                    ),
-                    item,
-                )
-                result = {**(result or {}), "explanation_result_id": item["id"]}
-            if (
-                status in ("Succeeded", "Failed", "Cancelled")
-                and row["kind"] == "profile"
-                and json.loads(row["spec"]).get("mode") == "understanding"
-                and result is not None
-            ):
-                db.execute(
-                    text(
-                        "INSERT INTO dataset_profiles"
-                        "(job_id,dataset_id,dataset_version,scope,result,created_at) "
-                        "VALUES(:job,:dataset,:version,:scope,:result,:at)"
-                    ),
-                    {
-                        "job": job_id,
-                        "dataset": row["dataset_id"],
-                        "version": result["version"],
-                        "scope": result["scope"],
-                        "result": json.dumps(result, ensure_ascii=False, allow_nan=False),
-                        "at": now(),
-                    },
-                )
+            if on_finish is not None:
+                result = on_finish(db, row, status, result)
             db.execute(
                 text(
                     "UPDATE jobs SET status=:status,result=:result,error=:error,"
@@ -846,90 +602,6 @@ class JobStoreMixin:
                 ),
             ).scalar_one()
             reason = f"attempt={completed_attempt}"
-            if status == "Succeeded" and publish:
-                self._audit(
-                    db,
-                    actor_id="sos-worker",
-                    actor_type="service",
-                    action="dataset.publish",
-                    resource_type="dataset",
-                    resource_id=item["id"],
-                    reason=f"job={job_id};{reason}",
-                    request_id=row["request_id"],
-                )
-            if status == "Succeeded" and policy_publish is not None:
-                self._audit(
-                    db,
-                    actor_id="sos-worker",
-                    actor_type="service",
-                    action="policy.publish",
-                    resource_type="decision_policy",
-                    resource_id=result["policy_revision_id"],
-                    reason=f"job={job_id};{reason}",
-                    request_id=row["request_id"],
-                )
-            if status == "Succeeded" and explanation_publish is not None:
-                self._audit(
-                    db,
-                    actor_id="sos-worker",
-                    actor_type="service",
-                    action="explanation.publish",
-                    resource_type="explanation",
-                    resource_id=result["explanation_result_id"],
-                    reason=f"job={job_id};{reason}",
-                    request_id=row["request_id"],
-                )
-            if status == "Succeeded" and evaluation_publish is not None:
-                self._audit(
-                    db,
-                    actor_id="sos-worker",
-                    actor_type="service",
-                    action="evaluation.publish",
-                    resource_type="evaluation",
-                    resource_id=result["evaluation_revision_id"],
-                    reason=f"job={job_id};{reason}",
-                    request_id=row["request_id"],
-                )
-            if status == "Succeeded" and scoring_publish is not None:
-                self._audit(
-                    db,
-                    actor_id="sos-worker",
-                    actor_type="service",
-                    action="scoring.publish",
-                    resource_type="scoring_result",
-                    resource_id=result["scoring_result_id"],
-                    reason=f"job={job_id};{reason}",
-                    request_id=row["request_id"],
-                )
-            if status == "Succeeded" and model_publish is not None:
-                self._audit(
-                    db,
-                    actor_id="sos-worker",
-                    actor_type="service",
-                    action="model.publish",
-                    resource_type="model",
-                    resource_id=result["model_revision_id"],
-                    reason=f"job={job_id};{reason}",
-                    request_id=row["request_id"],
-                )
-            # 외부 기록은 Job 트랜잭션과 함께 '전송 대기'만 남긴다.
-            # MLflow 네트워크 호출을 여기서 실행하면 데이터 정본을 오염시킨다.
-            if (
-                status == "Succeeded"
-                and row["kind"]
-                in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain")
-                and os.getenv("SOS_MLFLOW_TRACKING_URI")
-            ):
-                db.execute(
-                    text(
-                        "INSERT INTO mlflow_exports"
-                        "(job_id,state,run_id,attempts,last_error_code,retry_after,"
-                        "created_at,updated_at) "
-                        "VALUES (:job,'Pending',NULL,0,NULL,:at,:at,:at) "
-                        "ON CONFLICT (job_id) DO NOTHING"
-                    ),
-                    {"job": job_id, "at": now()},
-                )
             self._audit(
                 db,
                 actor_id="sos-worker",

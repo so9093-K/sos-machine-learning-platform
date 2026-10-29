@@ -92,7 +92,7 @@ services:
       SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
       SOS_FEAST_REGISTRY_URL: postgresql+psycopg2://feast:${SOS_FEAST_DB_PASSWORD:-feast-dev-only}@feast-postgres:5432/sos_feast
       SOS_FEAST_MAX_ENTITY_ROWS: ${SOS_FEAST_MAX_ENTITY_ROWS:-100000}
-    command: ["python", "-m", "sos_platform.worker"]
+    command: ["python", "-m", "sos_platform.worker_service"]
     volumes:
       - worker_state:/var/lib/sos
     depends_on:

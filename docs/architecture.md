@@ -35,6 +35,8 @@ Job의 Workflow 출처는 신뢰된 실행이 Job 생성 트랜잭션에 기록�
 
 ## 현재 구현과 논리적 책임
 
+Job 저장소는 실행 소유권·Attempt·취소 판정과 종료 트랜잭션을 담당한다. 실행 결과 조합 계층이 결과 유형별 게시와 Tracking 전송 의도를 연결하고, 각 게시 함수는 자산 참조·감사를 같은 DB 연결에 기록한다. 게시 함수는 별도 트랜잭션이나 외부 SDK 호출을 시작하지 않는다. Worker는 자식 프로세스의 격리·예산·취소·소유권을 감독하고, 연산 실행과 Attempt 파일·게시 입력 준비는 실행 계층에 위임한다. Job 저장소에 모델·평가별 게시 인자를 전달하지 않는다.
+
 현재 PostgreSQL은 Dataset·Job·Attempt 등 제어 메타데이터를, S3 호환 저장소는 데이터·결과 객체를, Iceberg Catalog는 테이블·Snapshot 상태를 담당한다. 이 저장소들은 하나의 원자적 트랜잭션을 공유하지 않는다. 객체 게시와 Snapshot 보존은 참조·의도·실제 외부 상태를 구별한다. 소유권 불명의 Iceberg 테이블은 읽기와 쓰기 권한을 혼동하지 않는다. 세부 보존·쓰기 규칙은 [Contracts](contracts.md)와 [ADR 0002](adr/0002-object-lifecycle.md)·[ADR 0008](adr/0008-iceberg-table-write-ownership.md)을 따른다.
 
 현재 DuckDB는 Dataset 탐색·프로파일, Polars는 Feature·변환 연산을 수행한다. 데이터 이해 결과는 원본 판본과 연결하지만 Dataset 등록 자체를 바꾸지 않는다. 이들은 현행 어댑터의 선택이며, 다른 연산기나 실행기를 도입하더라도 Dataset·Job의 의미가 달라져서는 안 된다.

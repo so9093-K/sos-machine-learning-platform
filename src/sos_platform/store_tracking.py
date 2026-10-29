@@ -1,13 +1,30 @@
 """MLflow 외부 전송의 영속적 Outbox. Job 상태는 절대 변경하지 않는다."""
 
+import os
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import Connection, text
 
 from .store_administration import now
 
 
 class TrackingStoreMixin:
+    def enqueue_tracking_export(self, db: Connection, job_id: str, kind: str) -> None:
+        """성공 결과의 DB 게시와 함께 외부 전송 의도만 남긴다."""
+        if kind not in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain"):
+            return
+        if not os.getenv("SOS_MLFLOW_TRACKING_URI"):
+            return
+        db.execute(
+            text(
+                "INSERT INTO mlflow_exports"
+                "(job_id,state,run_id,attempts,last_error_code,retry_after,created_at,updated_at) "
+                "VALUES (:job,'Pending',NULL,0,NULL,:at,:at,:at) "
+                "ON CONFLICT (job_id) DO NOTHING"
+            ),
+            {"job": job_id, "at": now()},
+        )
+
     def save_registry_version(self, model_id: str, name: str, version: str) -> None:
         """Registry 식별자는 한 번만 확정한다. 다른 버전으로 조용히 바꾸지 않는다."""
         with self.worker_ownership_connection() as db:
