@@ -85,10 +85,12 @@ function OfferingEditor({ model, offering, disabled, onSaved }: {
       <summary>{offering.offered ? "제공 설명 수정" : "모델 제공 등록"}</summary>
       <p className="hint">이 모델 판본을 SOS 사용자의 신규 적용 대상으로 제공합니다. 학습 Dataset과 학습 Job은 공유되지 않습니다.</p>
       <form onSubmit={event => { event.preventDefault(); void change("save"); }}>
-        <label htmlFor={fieldId}>목적·적용 대상·결과 해석과 한계</label>
+        <label htmlFor={fieldId}>사용 목적·적용 대상·알려진 한계</label>
+        <p className="hint">모델을 사용할 업무와 적합한 대상, 알려진 제외 조건을 작성하세요.
+          Feature·자료형·모델 판본과 평가 지표·임계값은 기존 기록으로 표시하므로 다시 입력할 필요가 없습니다.</p>
         <textarea id={fieldId} value={description} rows={5} required aria-describedby={`${fieldId}-length`}
           disabled={disabled || Boolean(operation)} onChange={event => setDescription(event.target.value)}
-          placeholder={"목적: 모델이 해결하는 작업\n적용 대상: 지원하는 데이터와 입력 조건\n해석·한계: 결과의 의미와 주의할 범위"} />
+          placeholder={"사용 목적: 어떤 업무에 도움이 되는 모델인지\n적용 대상: 적합한 데이터와 수집·집계 환경\n알려진 한계: 확인된 제약과 사용을 피해야 하는 조건"} />
         <span id={`${fieldId}-length`} className="hint">{length.toLocaleString("ko-KR")} / 1,000자 · 1~1,000자 필수</span>
         {!eligible && <p className="hint">Registry 등록이 확인된 활성 모델만 제공할 수 있습니다.</p>}
         <button type="submit" disabled={disabled || Boolean(operation) || !eligible || length < 1 || length > 1000}>
@@ -134,7 +136,6 @@ export function ModelOfferingPanel({ model, offering, error, loading, canManage,
   if (!offering) return <p className="hint" role="status">모델 제공 상태를 확인하는 중입니다.</p>;
   return <section className="model-offering" aria-label="모델 제공 정보">
     <h3>{offering.offered ? "제공 중인 모델" : offering.withdrawn_at ? "제공이 중단된 모델" : "제공되지 않은 판본"}</h3>
-    {offering.description && <p className="model-offering-description">{offering.description}</p>}
     <p className="model-offering-meta">
       {offering.offered
         ? `제공 ${formatRecordedAt(offering.offered_at ?? "")}`

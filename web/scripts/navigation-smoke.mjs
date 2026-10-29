@@ -751,7 +751,7 @@ try {
   const offeringEditable = renderToStaticMarkup(React.createElement(ModelOfferingPanel, {
     ...offeringProps, canManage: true,
   }));
-  assert.match(offeringEditable, /목적·적용 대상·결과 해석과 한계/);
+  assert.match(offeringEditable, /사용 목적·적용 대상·알려진 한계/);
   assert.match(offeringEditable, /<button type="submit" disabled/);
   const unregisteredOffering = renderToStaticMarkup(React.createElement(ModelOfferingPanel, {
     ...offeringProps, model: { ...offeringProps.model, registry_version: null },

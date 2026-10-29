@@ -83,10 +83,11 @@ export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datase
       <p className="muted">{cursor ? "현재 불러온 목록에 해당 모델이 없습니다. 모델을 더 불러와 확인하세요."
         : emptyMessage ?? "아직 준비된 모델이 없습니다. 모델이 제공되면 이곳에서 선택해 데이터에 적용할 수 있습니다."}</p>}
     <div className="model-version-list">
-      {shown.map(item => <article className="model-version-row" key={item.model.id}>
+      {shown.map(item => <article className="model-version-row" key={item.model.id} aria-label={`모델 판본 ${item.model.id}`}>
         <div className="model-version-identity">
-          <h3>{algorithmLabel(item.model.algorithm)} · v{item.model.registry_version ?? "?"}</h3>
-          <p className="model-offering-description">{item.description}</p>
+          <p className="model-offering-description model-offering-purpose">{item.description}</p>
+          <p className="model-card-meta">{algorithmLabel(item.model.algorithm)} · Registry v{item.model.registry_version ?? "?"}
+            · 판본 {item.model.id.slice(0, 8)}</p>
           <small>제공 {formatRecordedAt(item.offered_at)} · 입력 Feature {item.model.features.length}개</small>
           {datasetId && currentSchema?.columns && <ModelDatasetCompatibility compact model={item.model} columns={currentSchema.columns} />}
         </div>

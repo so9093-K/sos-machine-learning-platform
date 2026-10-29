@@ -159,6 +159,35 @@ class ModelStoreMixin:
         item["decision_summary"] = json.loads(item["decision_summary"])
         return item
 
+    def list_model_evaluations(
+        self, revision_id: str, *, owner_actor: str | None, limit: int,
+        before: dict | None = None,
+    ) -> list[dict]:
+        """평가의 실제 Scoring 참조로 모델을 대조하고 열람 가능한 판본만 반환한다."""
+        filters = ["s.model_revision_id=:model"]
+        params = {"model": revision_id, "limit": limit}
+        if owner_actor is not None:
+            filters.append("e.owner_actor=:owner")
+            params["owner"] = owner_actor
+        if before:
+            filters.append("(e.created_at,e.id) < (:created_at,:id)")
+            params.update(before)
+        with self.connection() as db:
+            rows = db.execute(text(
+                "SELECT e.* FROM evaluation_revisions e "
+                "JOIN scoring_results s ON s.id=e.scoring_result_id "
+                "WHERE " + " AND ".join(filters) + " "
+                "ORDER BY e.created_at DESC,e.id DESC LIMIT :limit"
+            ), params).mappings().all()
+        items = []
+        for row in rows:
+            item = dict(row)
+            for field in ("decision_metrics", "ranking_metrics"):
+                if item[field] is not None:
+                    item[field] = json.loads(item[field])
+            items.append(item)
+        return items
+
     def get_evaluation_revision(self, revision_id: str) -> dict | None:
         """평가 조건·레이블 커버리지·지표의 불변 근거."""
         with self.connection() as db:

@@ -379,6 +379,11 @@ class EvaluationRevisionOut(BaseModel):
     created_at: str
 
 
+class ModelEvaluationPageOut(BaseModel):
+    items: list[EvaluationRevisionOut]
+    next_cursor: str | None = None
+
+
 class MLTemporalSplitSpec(BaseModel):
     """시간순 Train/Calibration/Test 경계. Train 이외 구간은 학습에 사용하지 않는다."""
 

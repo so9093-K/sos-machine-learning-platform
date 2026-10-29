@@ -810,6 +810,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/models/{revision_id}/evaluations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 모델 판본의 평가 근거 조회
+         * @description 열람 가능한 모델의 평가를 계정 소유권 범위에서 조회합니다. 관리자는 전체 평가를 조회하며 모델 제공은 공급자 평가를 공개하지 않습니다.
+         */
+        get: operations["model_evaluations_api_ml_models__revision_id__evaluations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/models/{revision_id}/offering": {
         parameters: {
             query?: never;
@@ -3168,6 +3188,13 @@ export interface components {
             /** Next Page Token */
             next_page_token?: string | null;
         };
+        /** ModelEvaluationPageOut */
+        ModelEvaluationPageOut: {
+            /** Items */
+            items: components["schemas"]["EvaluationRevisionOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** ModelGroupUpdate */
         ModelGroupUpdate: {
             /** Archived */
@@ -5443,6 +5470,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    model_evaluations_api_ml_models__revision_id__evaluations_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelEvaluationPageOut"];
                 };
             };
             /** @description Structured API error */
