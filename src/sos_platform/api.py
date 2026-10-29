@@ -883,6 +883,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             request_id=request.state.request_id,
             owner_actor=actor.id, actor_type=actor.kind,
             idempotency_key=idempotency_key,
+            require_model_offering=not actor.privileged and model["owner_actor"] != actor.id,
         )
 
     @app.get(
@@ -976,6 +977,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             owner_actor=actor.id,
             actor_type=actor.kind,
             idempotency_key=idempotency_key,
+            require_model_offering=not actor.privileged and model["owner_actor"] != actor.id,
         )
 
     def existing_scoring_job(job_id: str, actor: Actor) -> dict:

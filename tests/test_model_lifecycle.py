@@ -189,3 +189,61 @@ def test_invalid_model_object_key_never_deletes_registry_version(monkeypatch):
     with pytest.raises(HTTPException) as err:
         endpoint("model-id", confirm=True, actor=actor)
     assert err.value.status_code == 503
+
+
+@pytest.mark.parametrize("state", ["Active", "Deleting"])
+def test_offered_model_requires_withdrawal_before_deletion(state):
+    from contextlib import nullcontext
+
+    actor = Actor("supplier", "service", frozenset({"automation"}))
+    db = Mock()
+    row = {"id": "model", "owner_actor": actor.id, "lifecycle_state": state}
+    db.execute.side_effect = [
+        Mock(**{"mappings.return_value.one_or_none.return_value": row}),
+        Mock(**{"scalar_one_or_none.return_value": 1}),
+    ]
+    store = SimpleNamespace(connection=lambda: nullcontext(db))
+    with pytest.raises(HTTPException) as error:
+        model_deletion.begin_delete(store, "model", actor)
+    assert error.value.status_code == 409
+    assert "먼저 모델 제공을 중단" in error.value.detail
+    assert db.execute.call_count == 2  # 외부 삭제나 상태 전환 전에 거부한다.
+
+
+@pytest.mark.parametrize("state", ["Deleting", "Deleted"])
+def test_deleting_or_deleted_model_cannot_be_offered(state):
+    from contextlib import nullcontext
+    from sos_platform.store import Store
+    from sos_platform.store_models import ModelOfferingUnavailable
+
+    db = Mock()
+    db.execute.return_value.mappings.return_value.first.return_value = {
+        "owner_actor": "supplier", "lifecycle_state": state, "registry_version": "1",
+    }
+    store = object.__new__(Store)
+    store.connection = lambda: nullcontext(db)
+    with pytest.raises(ModelOfferingUnavailable):
+        store.offer_model("model", description="설명", actor_id="supplier",
+                          actor_type="service", owner_actor="supplier")
+    assert db.execute.call_count == 1
+
+
+@pytest.mark.parametrize("kind", ["ml_score", "ml_playground"])
+def test_withdrawal_is_rechecked_when_the_job_is_committed(kind):
+    from contextlib import nullcontext
+    from sos_platform.errors import PlatformError
+    from sos_platform.store import Store
+
+    db = Mock()
+    db.execute.side_effect = [
+        Mock(**{"scalar_one_or_none.return_value": "Active"}),
+        Mock(**{"scalar_one_or_none.return_value": None}),
+    ]
+    store = object.__new__(Store)
+    store.connection = lambda: nullcontext(db)
+    with pytest.raises(PlatformError) as error:
+        store.create_job(kind=kind, dataset_id="user-data",
+            spec={"model_revision_id": "model"}, owner_actor="consumer",
+            require_model_offering=True)
+    assert error.value.code == "SOS-API-CONFLICT"
+    assert db.execute.call_count == 2

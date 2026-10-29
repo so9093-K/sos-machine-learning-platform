@@ -32,7 +32,10 @@ def model_offering_router(
         offering = store.get_model_offering(model["id"]) or {}
         owned = model.get("owner_actor") == actor.id
         return {
-            "offered": bool(offering) and offering.get("withdrawn_at") is None,
+            "offered": (
+                bool(offering) and offering.get("withdrawn_at") is None
+                and model["lifecycle_state"] == "Active" and bool(model.get("registry_version"))
+            ),
             "description": offering.get("description"),
             "offered_by": offering.get("offered_by"),
             "offered_at": offering.get("offered_at"),

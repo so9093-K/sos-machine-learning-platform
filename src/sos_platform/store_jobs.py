@@ -33,6 +33,7 @@ class JobStoreMixin:
         request_id: str | None = None,
         idempotency_key: str | None = None,
         reserve_iceberg_table: str | None = None,
+        require_model_offering: bool = False,
     ) -> dict:
         """중복 제출을 PostgreSQL 유일성 제약과 같은 트랜잭션으로 처리한다."""
         if dataset_id is None and not (
@@ -72,6 +73,13 @@ class JobStoreMixin:
                 ), {"id": model_id}).scalar_one_or_none()
                 if state != "Active":
                     raise PlatformError("SOS-ML-MODEL-INVALID")
+                # API에서 제공 상태를 읽은 뒤 중단이 확정될 수 있다. 중단·삭제와
+                # 같은 모델 행 잠금 아래에서 교차 Actor의 신규 사용을 재확인한다.
+                if require_model_offering and db.execute(text(
+                    "SELECT 1 FROM model_offerings WHERE model_revision_id=:id "
+                    "AND withdrawn_at IS NULL"
+                ), {"id": model_id}).scalar_one_or_none() is None:
+                    raise PlatformError("SOS-API-CONFLICT")
             if kind == "ml_explain":
                 # 설명 대상의 모델 파일이 삭제되는 상황과 계산 접수를 직렬화한다.
                 if spec.get("playground_job_id"):
