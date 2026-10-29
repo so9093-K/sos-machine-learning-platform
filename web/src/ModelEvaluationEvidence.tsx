@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { ApiError, formatError, request } from "./api";
-import { EvaluationSummary } from "./EvaluationSummary";
+import { EvaluationSummary, evaluationTypeLabel } from "./EvaluationSummary";
 import { formatRecordedAt, policyModeLabel, scoreDirectionLabel } from "./display-format";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { DecisionPolicyRevision, EvaluationRevision, ModelEvaluationPage, ScoringResult } from "./types";
@@ -113,12 +113,15 @@ export function ModelEvaluationEvidence({ modelId, onOpenResource, supplierEvide
     {current?.error && <EvidenceFailure error={current.error} onRetry={() => setRevision(value => value + 1)} />}
     {page && <>
       <p className="hint">열람 가능한 평가를 최신순으로 5건씩 조회합니다. 평가별 데이터와 정책 조건을 확인하세요.</p>
+      {page.items.length > 0 && <p className="hint">기본 표시는 조회한 목록의 최근 평가입니다.
+        모델의 대표 평가나 승인된 성능을 뜻하지 않습니다.</p>}
       {page.items.length === 0 && <p>{cursor ? "이 페이지에서 확인된 평가 근거가 없습니다."
         : supplierEvidenceVisible === false ? "이 계정이 생성한 평가가 없습니다. 공급자의 평가 부재를 뜻하지 않습니다."
           : "이 계정에서 확인된 평가 근거가 없습니다. 학습·Registry 등록만으로 성능을 판단할 수 없습니다."}</p>}
       {page.items.length > 1 && <div className="model-evaluation-picker"><label htmlFor={selectId}>평가 선택</label>
         <select id={selectId} value={selected?.id ?? ""} onChange={event => setSelectedId(event.target.value)}>
-        {page.items.map(item => <option key={item.id} value={item.id}>{formatRecordedAt(item.created_at)} · {item.id.slice(0, 8)}</option>)}
+        {page.items.map(item => <option key={item.id} value={item.id}>{evaluationTypeLabel(item)}
+          {` · ${formatRecordedAt(item.created_at)} · ${item.id.slice(0, 8)}`}</option>)}
       </select></div>}
       {selected && <EvaluationEvidenceDetails key={selected.id} modelId={modelId} evaluation={selected} onOpenResource={onOpenResource} />}
       {(cursor || page.next_cursor) && <div className="ml-resource-actions">

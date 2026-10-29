@@ -31,6 +31,17 @@ export function labelCoverageLabel(coverage: string): string {
   return coverage === "full" ? "전체 행 레이블" : coverage === "none" ? "레이블 없음" : coverage;
 }
 
+/** 목록에서도 실제 평가 종류를 식별하며 Test 여부나 대표 성능을 추정하지 않는다. */
+export function evaluationTypeLabel(evaluation: EvaluationRevision): string {
+  switch (evaluation.decision_metrics.evaluation_kind) {
+    case "labeled": return "레이블 기반 판정 평가";
+    case "ranking_only": return "레이블 기반 순위 평가";
+    case "unlabeled": return evaluation.decision_metrics.threshold == null
+      ? "레이블 없는 점수 요약" : "레이블 없는 판정 평가";
+    default: return "평가 유형 미확인";
+  }
+}
+
 /** 평가 판본의 판정 요약을 먼저 보이고, 레이블로만 정의되는 지표는 레이블이 있을 때만 보인다. */
 export function EvaluationSummary({ evaluation }: { evaluation: EvaluationRevision }) {
   const metrics = evaluation.decision_metrics;
