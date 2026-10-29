@@ -8,7 +8,7 @@
 - **권한·중요 변경 결정:** PostgreSQL `audit_events`가 트랜잭션과 연결되는 정본이다. 이 기록은 외부 변경 불가능한 감사 저장소를 대체하지 않는다.
 - **기술적 원인·시각:** 구조화된 JSON 로그는 진단 증거다. 로그나 Trace가 없더라도 Job/Attempt 상태는 유지되어야 한다.
 
-- **Workflow 실행·단계 이력:** Dagster OSS Run과 이벤트가 정본이다. SOS는 Actor·Idempotency-Key·Dagster Run ID 연결만 유지하며 SOS Job/Attempt의 실제 계산 완료와 구분한다.
+- **Workflow 실행·단계 이력:** Dagster OSS Run과 이벤트가 정본이다. SOS는 Actor·Idempotency-Key·Dagster Run ID와 신뢰된 실행이 생성한 Job 연결을 유지하며 SOS Job/Attempt의 실제 계산 완료와 구분한다. 일반 제출 키만으로 Job의 Workflow 출처를 확정하지 않는다.
 
 ## 오류 응답과 호환성
 
