@@ -98,6 +98,7 @@ from .schemas import (
     MLPlaygroundJobOut,
     MLPlaygroundJobPageOut,
     ModelRevisionOut,
+    ModelEvaluationPageOut,
     PreviewOut,
     ProblemOut,
     ProfileOut,
@@ -1335,6 +1336,24 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             raise HTTPException(status_code=404, detail="설명 결과를 찾을 수 없습니다.")
         check_ownership(actor, item["owner_actor"], "explanation", revision_id)
         return item
+
+    @app.get(
+        "/api/ml/models/{revision_id}/evaluations",
+        tags=["Evaluations"],
+        summary="모델 판본의 평가 근거 조회",
+        description="열람 가능한 모델의 평가를 계정 소유권 범위에서 조회합니다. 관리자는 전체 평가를 조회하며 모델 제공은 공급자 평가를 공개하지 않습니다.",
+        response_model=ModelEvaluationPageOut,
+    )
+    def model_evaluations(
+        revision_id: str, limit: int = Query(default=5, ge=1, le=50),
+        cursor: str | None = Query(default=None, max_length=512), actor: Actor = READ_JOB_DEP,
+    ):
+        readable_model(revision_id, actor)
+        rows = store.list_model_evaluations(
+            revision_id, owner_actor=None if actor.privileged else actor.id,
+            limit=limit + 1, before=decode_cursor(cursor, "모델 평가"),
+        )
+        return page_from_rows(rows, limit)
 
     @app.get(
         "/api/ml/evaluations/{revision_id}",

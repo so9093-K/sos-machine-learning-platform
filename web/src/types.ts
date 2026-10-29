@@ -45,6 +45,7 @@ export type MLEvaluationJob = components["schemas"]["MLEvaluationJobOut"];
 export type MLExplanationJob = components["schemas"]["MLExplanationJobOut"];
 export type DecisionPolicyRevision = components["schemas"]["DecisionPolicyRevisionOut"];
 export type EvaluationRevision = components["schemas"]["EvaluationRevisionOut"];
+export type ModelEvaluationPage = components["schemas"]["ModelEvaluationPageOut"];
 export type ExplanationResult = components["schemas"]["ExplanationResultOut"];
 
 

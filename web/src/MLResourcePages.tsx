@@ -19,6 +19,7 @@ import {
   scoreDirectionLabel,
 } from "./display-format";
 import { ModelCreationEvidence } from "./ModelCreationEvidence";
+import { ModelEvaluationEvidence } from "./ModelEvaluationEvidence";
 import { canApplyModel, ModelOfferingPanel, useModelOffering } from "./ModelOffering";
 import { EvaluationSummary } from "./EvaluationSummary";
 
@@ -156,14 +157,18 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
   const data = current.data;
   return <section className="panel ml-resource-detail">
 <div className="panel-head"><div><h2>{{
-      model: "모델 판본", scoring: "모델 적용 분석 결과", policy: "판정 정책",
+      model: "모델 상세", scoring: "모델 적용 분석 결과", policy: "판정 정책",
       evaluation: "평가 결과", explanation: "설명 결과",
     }[kind]}</h2>{kind !== "model" && <p>생성 {formatRecordedAt(data.created_at)}</p>}</div></div>
     {kind === "model" && (() => {
       const m = data as ModelRevision;
       return <>
         <div className="ml-resource-summary">
-          <h3>{algorithmLabel(m.algorithm)}{m.registry_version ? ` · v${m.registry_version}` : ""} · 학습 {formatRecordedAt(m.created_at)}</h3>
+          <h3>사용 목적·적용 범위</h3>
+          {modelOffering.offering?.description && <p className="model-offering-description model-offering-purpose">
+            {modelOffering.offering.description}</p>}
+          <p className="model-card-meta">{algorithmLabel(m.algorithm)}{m.registry_version ? ` · Registry v${m.registry_version}` : ""}
+            · 학습 {formatRecordedAt(m.created_at)}</p>
           <p>{m.lifecycle_state === "Active"
             ? "Dataset이나 직접 입력한 값에 적용해 관측값별 이상 점수를 계산할 수 있는 고정 판본입니다."
             : m.lifecycle_state === "Deleting"
@@ -177,25 +182,27 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
           </div>
         </div>
         {!canRun && <p className="hint">조회 전용 · 점수 계산에는 작업 실행 권한이 필요합니다.</p>}
-        <ModelOfferingPanel model={m} offering={modelOffering.offering} error={modelOffering.error}
-          loading={modelOffering.loading} canManage={canManageModel && (modelOwned || isAdministrator)}
-          onRetry={modelOffering.reload} onSaved={state => { modelOffering.accept(state); modelOffering.reload(); }}
-          onOpenCatalog={onOpenModelCatalog} />
         <section className="model-input-contract" aria-labelledby={`model-input-${m.id}`}>
           <h3 id={`model-input-${m.id}`}>입력 조건</h3>
           <p>숫자형 Feature {m.features.length.toLocaleString("ko-KR")}개를 아래 이름·자료형 그대로 요구합니다.
             Dataset 컬럼 순서는 달라도 되며, 값은 자동으로 변환하지 않습니다.</p>
-          <FeatureResultDetails key={m.id} open summary={`필수 Feature · ${m.features.length}개`}
+          <FeatureResultDetails key={m.id} summary={`필수 Feature · ${m.features.length}개`}
             columns={["입력 순서", "자료형"]} rows={m.features.map((feature, index) => ({
               feature, values: [index + 1, Array.isArray(m.runtime.feature_dtypes)
                 ? String(m.runtime.feature_dtypes[index] ?? "미확인") : "미확인"],
             }))} />
         </section>
+        <ModelEvaluationEvidence key={`evaluation:${m.id}`} modelId={m.id} onOpenResource={onOpenResource}
+          supplierEvidenceVisible={isAdministrator ? true : modelOffering.offering ? modelOwned : null} />
         {modelOwned && <dl className="ml-resource-fields">
           <Field label="학습 Dataset">{datasetName}</Field>
         </dl>}
         <ModelCreationEvidence key={m.id} model={m}
           datasetName={modelOwned ? datasetName : "제공 모델의 학습 Dataset"} />
+        <ModelOfferingPanel model={m} offering={modelOffering.offering} error={modelOffering.error}
+          loading={modelOffering.loading} canManage={canManageModel && (modelOwned || isAdministrator)}
+          onRetry={modelOffering.reload} onSaved={state => { modelOffering.accept(state); modelOffering.reload(); }}
+          onOpenCatalog={onOpenModelCatalog} />
         <details className="ml-resource-evidence">
           <summary>{modelOwned ? "판본·학습 Job·Runtime 근거" : "판본·Runtime 근거"}</summary>
           <dl className="ml-resource-fields">
