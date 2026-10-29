@@ -1,24 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { mergeById } from "./collections";
-import type * as echarts from "echarts";
-import { DataChart, CHART_COLORS } from "./DataChart";
-import { AnalysisEvidence, coversAllRows, dataSelectionLabel } from "./AnalysisEvidence";
-import { formatDtype } from "./display-format";
-import { histogram, needsTimeOrder } from "./feature-utils";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { needsTimeOrder } from "./feature-utils";
 import { useFeatureEditor } from "./useFeatureEditor";
 import { FeaturePanel } from "./FeaturePanel";
 import { useIcebergConnector } from "./useIcebergConnector";
-import { request, jsonPost, submitJob, formatError, uploadFile, describeError, type ErrorNotice } from "./api";
+import { request, jsonPost, submitJob, describeError, type ErrorNotice } from "./api";
 import { ErrorNotice as ErrorNoticeView } from "./ErrorNotice";
-import { ExampleGallery } from "./ExampleGallery";
+import { AvailableExamples } from "./ExampleGallery";
 import { DelimitedImport } from "./DelimitedImport";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
-import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQueryPanel";
-import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
+import type { Dataset, Job, Identity, ExplorationRequest } from "./types";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformShell } from "./PlatformShell";
@@ -33,20 +27,24 @@ import type { DecisionView } from "./MLDecisionPanel";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
 import { useDatasetOverview } from "./useDatasetOverview";
 import { useDatasetInspection } from "./useDatasetInspection";
-import { usePagedJobs } from "./usePagedJobs";
-import type { ExplorationRequest } from "./types";
-
+import { useDatasetCatalog, useRequestedDataset } from "./useDatasetCatalog";
+import { useDataJobs } from "./useDataJobs";
+import { UploadProgressStatus, useDatasetUpload } from "./DatasetUpload";
+import { DatasetPreviewPanel, useDatasetQuery } from "./DatasetPreviewTab";
+import { ProfileStatistics } from "./ProfileStatistics";
 
 type Tab = WorkspaceTab;
-type UploadProgress = {
-  name: string; loaded: number; total: number;
-  phase: "transferring" | "registering";
-};
-const mebibytes = (size: number) => (size / (1024 * 1024)).toFixed(2);
+const DATA_TABS: Tab[] = ["understanding", "preview", "profile", "preparation"];
 
 function readableVersion(d: Dataset) {
   return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
 }
+
+/** 화면 이동(URL)·공유 Dataset 목록·전역 안내를 소유하고 업무 화면을 조합한다.
+ *
+ *  화면 안에서만 쓰는 편집·조회 상태는 각 화면 컴포넌트가 가진다. 데이터 영역의 조회 조건과
+ *  탐색 초안은 탭을 오가도 유지해야 하므로 여기서 Dataset 단위로 보관한다.
+ */
 export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadError,
   onBrandChange, onBrandRetry }: {
   actor: Identity;
@@ -71,27 +69,20 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const canViewPipelineRuns = actor.capabilities.includes("job.read");
   const { tab, resource, context, navigate: setTab, navigateWithContext,
     selectContext, openResource } = useWorkspaceNavigation();
-  const isDataArea = (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab);
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [datasetSelectionError, setDatasetSelectionError] = useState<ErrorNotice | null>(null);
-  const [datasetSelectionLoading, setDatasetSelectionLoading] = useState(false);
-  const [datasetsLoading, setDatasetsLoading] = useState(true);
-  const [jobsLoading, setJobsLoading] = useState(true);
-  const [nextDatasetCursor, setNextDatasetCursor] = useState<string | null>(null);
+  const isDataArea = DATA_TABS.includes(tab);
+  const catalog = useDatasetCatalog();
+  const { datasets } = catalog;
   const [rememberedDataset, setSelected] = useState<string>(context.datasetId ?? "");
   const selected = isDataArea ? context.datasetId ?? "" : context.datasetId || rememberedDataset;
-  const {
-    items: jobs, nextCursor: nextJobsCursor, refresh: refreshJobs, loadMore: loadOlderJobs,
-  } = usePagedJobs<JobSummary>("/api/jobs");
-  const {
-    items: discoveryJobs, nextCursor: nextDiscoveryCursor,
-    refresh: refreshDiscoveryJobs, loadMore: loadOlderDiscoveryJobs,
-  } = usePagedJobs<ExplorationJobSummary>("/api/explorations/jobs");
-  const [examples, setExamples] = useState<Example[]>([]);
-  const [examplesLoading, setExamplesLoading] = useState(true);
-  const [examplesError, setExamplesError] = useState("");
-  const [examplesReload, setExamplesReload] = useState(0);
+  const dataJobs = useDataJobs(tab === "jobs");
   const [reloadRevision, setReloadRevision] = useState(0);
+  const selectionActive = isDataArea || tab === "pipelines";
+  const requested = useRequestedDataset(context.datasetId ?? "",
+    datasets.some(item => item.id === context.datasetId), selectionActive,
+    `${tab}:${reloadRevision}`, catalog.upsert);
+  useEffect(() => {
+    if (selectionActive) setSelected(context.datasetId ?? "");
+  }, [selectionActive, tab, context.datasetId]);
   function startScoring(modelId: string) {
     navigateWithContext("scoring", { modelId, datasetId: context.datasetId, pipelineRunId: context.pipelineRunId });
   }
@@ -103,26 +94,12 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
   const [busy, setBusy] = useState(false);
-  const [uploadPolicy, setUploadPolicy] = useState<UploadPolicy | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const [pendingDelimited, setPendingDelimited] = useState<File | null>(null);
   const [error, setErrorNotice] = useState<ErrorNotice | null>(null);
   // 빈 값은 안내를 닫고, 그 외에는 API 오류의 메시지·안내·참조 정보를 나눠 보관한다.
   const setError = useCallback((cause: unknown) =>
     setErrorNotice(cause === "" || cause == null ? null : describeError(cause)), []);
   const [notice, setNotice] = useState("");
-  // 화면과 무관한 백그라운드 GET 실패를 전역 작업 실패로 표시하지 않는다.
-  const [datasetReadError, setDatasetReadError] = useState("");
-  const [jobsReadError, setJobsReadError] = useState("");
-  const [discoveryReadError, setDiscoveryReadError] = useState("");
-  const [uploadPolicyReadError, setUploadPolicyReadError] = useState("");
-  const [queryPreview, setQueryPreview] = useState<{
-    datasetId: string; revision: number; data: Preview; explicitProjection: boolean
-  } | null>(null);
-  const [queryDraftState, setQueryDraftState] = useState<{ datasetId: string; draft: QueryDraft } | null>(null);
-  const [pendingQuery, setPendingQuery] = useState<{ datasetId: string; revision: number } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
-  const datasetRequestVersion = useRef(0);
   const feedbackRequests = useRef(0);
   // 늦은 목록 GET 오류가 다음 사용자 작업의 알림을 덮지 않도록 작업 세대를 고정한다.
   const feedbackRevision = useRef(0);
@@ -160,8 +137,6 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     useDatasetOverview(isDataArea ? selected : "", reloadRevision);
   const { preview, profile, previewStatus, profileStatus, previewError, profileError } =
     useDatasetInspection(selected, reloadRevision, tab);
-  const profileComplete = Boolean(profile?.sampled &&
-    coversAllRows(profile.row_count, profile.sample_limit));
   const columnNames = preview ? Object.keys(preview.schema) : [];
   const editor = useFeatureEditor({
     datasetId: selected, revision: reloadRevision, preview, onError: setError, withFeedback,
@@ -175,48 +150,15 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     selected, onError: setError, withFeedback,
     onConnected: showRegisteredDataset, onImported: showSubmittedJob,
   });
-  const [showAllPreviewColumns, setShowAllPreviewColumns] = useState(false);
-  const currentQuery = queryPreview?.datasetId === selected &&
-    queryPreview.revision === reloadRevision ? queryPreview : null;
-  const queryDraft = queryDraftState?.datasetId === selected ? queryDraftState.draft : emptyQueryDraft();
-  const editedQueryDraft = queryDraft.chosen.length > 0 || !!queryDraft.filterColumn ||
-    !!queryDraft.filterValue || !!queryDraft.sortColumn || queryDraft.descending || queryDraft.limit !== 30;
-  // Dataset 재조회는 이전 적용 결과를 폐기하지만 편집 중인 조건은 보존한다.
-  // 따라서 새 기본 미리보기가 나타나도 해당 조건이 적용되었다고 표시하지 않는다.
-  const queryPending = (pendingQuery?.datasetId === selected &&
-    pendingQuery.revision === reloadRevision) || (!currentQuery && editedQueryDraft);
-  const displayedPreview = currentQuery?.data ?? preview;
-  const availableColumns = displayedPreview ? Object.keys(displayedPreview.schema) : [];
-  // 사용자가 명시적으로 선택한 투영 컬럼은 임의로 감추지 않는다.
-  const displayedColumns = showAllPreviewColumns || currentQuery?.explicitProjection
-    ? availableColumns : availableColumns.slice(0, 12);
-  const numeric = profile?.columns.filter(c => /Int|Float|Decimal/.test(c.dtype)) ?? [];
-  const [visualColumn, setVisualColumn] = useState("");
-  const [timeColumn, setTimeColumn] = useState("");
-  const [profileSearch, setProfileSearch] = useState("");
-  const [profilePage, setProfilePage] = useState(0);
-  const profileColumns = profile?.columns.filter(column =>
-    column.name.toLocaleLowerCase().includes(profileSearch.trim().toLocaleLowerCase())) ?? [];
-  const currentProfilePage = Math.min(profilePage, Math.max(0, Math.ceil(profileColumns.length / 10) - 1));
+  const query = useDatasetQuery(selected, reloadRevision);
+  const uploads = useDatasetUpload({
+    canWrite, withFeedback,
+    onRejected: message => { setNotice(""); setError(message); },
+    onRegistered: data => showRegisteredDataset(data,
+      "파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.",
+      "파일은 정상 등록됐습니다. 데이터셋 목록 갱신 결과를 확인하지 못했지만 다시 등록할 필요는 없습니다."),
+  });
 
-  async function refreshDatasets(): Promise<"updated" | "superseded"> {
-    const version = ++datasetRequestVersion.current;
-    setDatasetsLoading(true);
-    let page: DatasetPage;
-    try {
-      page = await request<DatasetPage>("/api/datasets?limit=20");
-    } catch (error) {
-      // 새 등록·더 최신 조회에서 대체된 실패는 현재 화면의 오류가 아니다.
-      if (version !== datasetRequestVersion.current) return "superseded";
-      throw error;
-    } finally { if (version === datasetRequestVersion.current) setDatasetsLoading(false); }
-    // 오래된 GET 응답이 최근 등록·조회 후 확정된 Dataset 선택을 덮지 못하게 한다.
-    if (version !== datasetRequestVersion.current) return "superseded";
-    // 이미 조회한 옛 Dataset과 결과 화면의 현재 선택은 최신 20개 밖이어도 보존한다.
-    setDatasets(previous => mergeById(page.items, previous));
-    setNextDatasetCursor(page.next_cursor ?? null);
-    return "updated";
-  }
   function chooseDataset(id: string, target: "understanding" | "preview" | "profile" | "preparation") {
     setSelected(id);
     navigateWithContext(target, { datasetId: id });
@@ -226,7 +168,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   }
   /** 서버 등록 성공을 목록 새로고침 실패 때문에 취소된 작업처럼 표시하지 않는다. */
   async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
-    setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
+    catalog.upsert(data);
     // 데이터 준비에서 명시적으로 데이터를 등록했다면 Explorer로 강제 이동하지 않는다.
     setSelected(data.id);
     const target = tab === "preparation" ? "preparation" : "understanding";
@@ -236,7 +178,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     setNotice(success);
     try {
       // 새 목록 GET이 이 요청을 대체해도 201 등록 성공 자체를 취소하지 않는다.
-      await refreshDatasets();
+      await catalog.refresh();
     } catch {
       if (revision !== feedbackRevision.current) return;
       // 사용자가 닫았거나 다른 작업이 갱신한 알림은 오래된 GET 실패로 다시 표시하지 않는다.
@@ -247,7 +189,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   async function showSubmittedJob(job: Job, message: string) {
     openDataJob(job.id);
     try {
-      await refreshJobs();
+      await dataJobs.refreshJobs();
       setNotice(message);
     } catch {
       setError("");
@@ -255,106 +197,35 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     }
   }
   async function loadMoreDatasets() {
-    if (!nextDatasetCursor) return;
-    await withFeedback(async () => {
-      const version = datasetRequestVersion.current;
-      const page = await request<DatasetPage>(
-        `/api/datasets?limit=20&cursor=${encodeURIComponent(nextDatasetCursor)}`);
-      if (version !== datasetRequestVersion.current) return;
-      setDatasets(previous => mergeById(previous, page.items));
-      setNextDatasetCursor(page.next_cursor ?? null);
-    });
+    await withFeedback(catalog.loadMore);
   }
   async function loadMoreDiscoveryJobs() {
-    await withFeedback(loadOlderDiscoveryJobs);
+    await withFeedback(dataJobs.loadOlderExplorations);
   }
   async function loadMoreJobs() {
-    await withFeedback(loadOlderJobs);
+    await withFeedback(dataJobs.loadOlderJobs);
   }
-  const requestedDatasetLoaded = datasets.some(item => item.id === context.datasetId);
-  useEffect(() => {
-    if (!isDataArea && tab !== "pipelines") return;
-    const requestedId = context.datasetId ?? "";
-    setSelected(requestedId); setDatasetSelectionError(null);
-    if (!requestedId || requestedDatasetLoaded) { setDatasetSelectionLoading(false); return; }
-    let active = true;
-    setDatasetSelectionLoading(true);
-    void request<Dataset>(`/api/datasets/${encodeURIComponent(requestedId)}`)
-      .then(item => { if (active) setDatasets(previous =>
-        [item, ...previous.filter(entry => entry.id !== item.id)]); })
-      .catch(e => { if (active) setDatasetSelectionError(describeError(e)); })
-      .finally(() => { if (active) setDatasetSelectionLoading(false); });
-    return () => { active = false; };
-  }, [isDataArea, tab, context.datasetId, requestedDatasetLoaded, reloadRevision]);
-  useEffect(() => {
-    if (canWrite) {
-      request<UploadPolicy>("/api/datasets/upload-policy")
-        .then(policy => { setUploadPolicy(policy); setUploadPolicyReadError(""); })
-        .catch(e => setUploadPolicyReadError(formatError(e)));
-    }
-    refreshDatasets().then(() => setDatasetReadError(""))
-      .catch(e => setDatasetReadError(formatError(e)));
-  }, []);
-  async function refreshDataJobs() {
-    setJobsLoading(true);
-    const results = await Promise.allSettled([refreshJobs(), refreshDiscoveryJobs()]);
-    setJobsReadError(results[0].status === "rejected" ? formatError(results[0].reason) : "");
-    setDiscoveryReadError(results[1].status === "rejected" ? formatError(results[1].reason) : "");
-    setJobsLoading(false);
-  }
-  useEffect(() => { if (tab === "jobs") void refreshDataJobs(); }, [tab]);
-  useEffect(() => {
-    let active = true;
-    setExamplesLoading(true);
-    setExamplesError("");
-    void request<Example[]>("/api/examples")
-      .then(items => { if (active) setExamples(items); })
-      .catch(e => { if (active) { setExamples([]); setExamplesError(formatError(e)); } })
-      .finally(() => { if (active) setExamplesLoading(false); });
-    return () => { active = false; };
-  }, [examplesReload]);
-  useEffect(() => {
-    // Dataset 전환과 네트워크 재시도를 구분해 작성 중인 변환을 보존한다.
-    setVisualColumn(""); setTimeColumn(""); setShowAllPreviewColumns(false); setProfileSearch(""); setProfilePage(0);
-    setQueryPreview(null); setQueryDraftState(null); setPendingQuery(null); setExplorationDraft(null);
-  }, [selected]);
+  // 탐색 초안은 Dataset 판본에 귀속한다. 다른 Dataset의 조건을 이어받지 않는다.
+  useEffect(() => { setExplorationDraft(null); }, [selected]);
   useEffect(() => {
     if (!preview) return;
     const columns = Object.keys(preview.schema);
     setColumn(current => columns.includes(current) ? current : (columns[0] ?? ""));
-    // 원본의 첫 컬럼이 의미 있는 지표나 시간축이라는 근거는 없다.
-    setVisualColumn(current =>
-      columns.includes(current) && /Int|Float|Decimal/.test(preview.schema[current])
-        ? current : "");
-    setTimeColumn(current => columns.includes(current) ? current : "");
   }, [preview]);
   useEffect(() => {
     // 첫 페이지에 없는 과거 성공 Job 때문에 무한히 GET을 반복하지 않는다.
-    const unseen = jobs.filter(j => j.status === "Succeeded" && j.result?.dataset_id &&
+    const unseen = dataJobs.jobs.filter(j => j.status === "Succeeded" && j.result?.dataset_id &&
       !refreshedCompletedJobs.current.has(j.id));
     unseen.forEach(j => refreshedCompletedJobs.current.add(j.id));
     if (unseen.some(j => !datasets.some(d => d.id === j.result?.dataset_id))) {
       // 백그라운드에서 누락된 Job 결과를 목록에 보강하는 best-effort 조회다.
       // 실패를 업로드·Job 제출 실패로 표현하지 않으며 다음 기회에 재조회한다.
-      refreshDatasets().catch(() => {
+      catalog.refresh().catch(() => {
         unseen.forEach(j => refreshedCompletedJobs.current.delete(j.id));
         setNotice(current => current || "일부 Job 결과 Dataset 목록을 갱신하지 못했습니다. 목록을 다시 조회하세요.");
       });
     }
-  }, [jobs, datasets]);
-  useEffect(() => {
-    const handle = window.setInterval(() => {
-      if (jobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
-        refreshJobs().then(() => setJobsReadError(""))
-          .catch(e => setJobsReadError(formatError(e)));
-      }
-      if (discoveryJobs.some(j => !["Succeeded", "Failed", "Cancelled"].includes(j.status))) {
-        refreshDiscoveryJobs().then(() => setDiscoveryReadError(""))
-          .catch(e => setDiscoveryReadError(formatError(e)));
-      }
-    }, 2000);
-    return () => window.clearInterval(handle);
-  }, [jobs, discoveryJobs]);
+  }, [dataJobs.jobs, datasets]);
 
   // 수동 작업 오류는 다음 화면까지 따라다니지 않는다.
   useEffect(() => { setError(""); }, [tab]);
@@ -392,79 +263,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     await withFeedback(async () => {
       // 완료 Job의 출력은 최신 Dataset 첫 페이지 밖에 있을 수 있다.
       const item = await request<Dataset>(`/api/datasets/${encodeURIComponent(datasetId)}`);
-      setDatasets(previous => [item, ...previous.filter(d => d.id !== item.id)]);
+      catalog.upsert(item);
       setSelected(item.id);
       chooseDataset(item.id, "preview");
     });
   }
-  async function upload(file: File) {
-    if (uploadPolicy && !uploadPolicy.supported_extensions.some(ext =>
-      file.name.toLowerCase().endsWith(ext.toLowerCase()))) {
-      setNotice("");
-      setError("지원하지 않는 파일 형식입니다. CSV·Parquet 또는 탭으로 구분된 TSV·TXT를 선택하세요.");
-      return;
-    }
-    if (uploadPolicy && file.size > uploadPolicy.max_size_bytes) {
-      setNotice("");
-      setError(`파일 크기 ${mebibytes(file.size)} MiB가 최대 ${mebibytes(uploadPolicy.max_size_bytes)} MiB를 초과했습니다.`);
-      return;
-    }
-    setUploadProgress({ name: file.name, loaded: 0,
-      total: file.size, phase: "transferring" });
-    await withFeedback(async () => {
-      const data = await uploadFile<Dataset>(
-        "/api/datasets/files", file,
-        (loaded, total) => setUploadProgress(previous => previous
-          ? { ...previous, loaded, total } : null),
-        () => setUploadProgress(previous => previous
-          ? { ...previous, phase: "registering" } : null),
-      );
-      // HTTP 201이 등록 성공의 정본이다.
-      await showRegisteredDataset(data,
-        "파일 등록이 완료됐습니다. 데이터 미리보기와 분석을 시작할 수 있습니다.",
-        "파일은 정상 등록됐습니다. 데이터셋 목록 갱신 결과를 확인하지 못했지만 다시 등록할 필요는 없습니다.");
-      // 등록을 확정한 뒤에만 입력 확인 화면을 닫는다. 4xx·네트워크 오류는 수정·재시도 가능해야 한다.
-      setPendingDelimited(null);
-    });
-    setUploadProgress(null);
-  }
-  const distribution = useMemo(() => histogram(preview?.rows ?? [], visualColumn),
-    [preview, visualColumn]);
-  const distributionOption = useMemo<echarts.EChartsCoreOption | null>(() => {
-    if (!distribution) return null;
-    return {
-      backgroundColor: "transparent", textStyle: { color: CHART_COLORS.text },
-      tooltip: { trigger: "axis" },
-      grid: { left: 50, right: 15, top: 20, bottom: 48 },
-      xAxis: { type: "category", data: distribution.labels,
-        axisLabel: { color: CHART_COLORS.label, rotate: 20, hideOverlap: true } },
-      yAxis: { type: "value", axisLabel: { color: CHART_COLORS.label },
-        splitLine: { lineStyle: { color: CHART_COLORS.grid } } },
-      series: [{ type: "bar", data: distribution.counts,
-        itemStyle: { color: CHART_COLORS.bar } }],
-    };
-  }, [distribution]);
-  const chartOption = useMemo<echarts.EChartsCoreOption | null>(() => {
-    if (!preview?.rows.length || !visualColumn || !timeColumn) return null;
-    const values = preview.rows.map(r => r[visualColumn])
-      .filter((n): n is number => typeof n === "number" && Number.isFinite(n));
-    // 일정한 값이나 가로축 하나만으로 변화가 존재하는 것처럼 표시하지 않는다.
-    if (new Set(values).size < 2 ||
-        new Set(preview.rows.map(row => String(row[timeColumn] ?? ""))).size < 2) return null;
-    return {
-      backgroundColor: "transparent",
-      textStyle: { color: CHART_COLORS.text },
-      tooltip: { trigger: "axis" },
-      grid: { left: 48, right: 20, top: 25, bottom: 42 },
-      xAxis: { type: "category", data: preview.rows.map(r => String(r[timeColumn] ?? "")),
-        axisLabel: { color: CHART_COLORS.label, hideOverlap: true } },
-      yAxis: { type: "value", axisLabel: { color: CHART_COLORS.label }, splitLine: {
-        lineStyle: { color: CHART_COLORS.grid } } },
-      series: [{ type: "line", showSymbol: false, name: visualColumn, data: preview.rows.map(
-        r => typeof r[visualColumn] === "number" ? r[visualColumn] : null
-      ), lineStyle: { color: CHART_COLORS.line }, itemStyle: { color: CHART_COLORS.line } }],
-    };
-  }, [preview, visualColumn, timeColumn]);
 
   return <PlatformShell actor={actor} section={tab} modelContext={context}
     modelResource={resource} onNavigate={setTab}
@@ -472,13 +275,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     brandName={brandName} brandReady={brandReady} brandLoadError={brandLoadError}
     onBrandChange={onBrandChange} onBrandRetry={onBrandRetry}
     canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
-    dataSidebar={(["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) &&
-        <DataSourceSidebar datasets={datasets} loading={datasetsLoading} readError={Boolean(datasetReadError)} selected={selected} canWrite={canWrite} busy={busy}
-          uploadRef={uploadRef} uploadPolicy={uploadPolicy}
+    dataSidebar={isDataArea &&
+        <DataSourceSidebar datasets={datasets} loading={catalog.loading} readError={Boolean(catalog.readError)} selected={selected} canWrite={canWrite} busy={busy}
+          uploadRef={uploadRef} uploadPolicy={uploads.policy}
           onFile={file => {
-            if (/\.(tsv|txt)$/i.test(file.name)) {
-              setPendingDelimited(file); setError(""); setNotice("");
-            } else { void upload(file); }
+            if (uploads.choose(file) === "confirm") { setError(""); setNotice(""); }
           }}
           onExample={() => {
             setSelected("");
@@ -493,7 +294,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           snapshotsLoading={snapshotsLoading}
           onLoadSnapshots={() => void loadSnapshots()}
           onConnectExisting={() => void connectExisting()}
-          hasMore={Boolean(nextDatasetCursor)} onLoadMore={() => void loadMoreDatasets()} />}>
+          hasMore={Boolean(catalog.nextCursor)} onLoadMore={() => void loadMoreDatasets()} />}>
       {error && <div role="alert" className="alert error">
         <div className="alert-body">
           <strong>{error.message}</strong>
@@ -501,52 +302,41 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           {error.reference && <small className="alert-reference">{error.reference}</small>}
         </div>
         <button onClick={() => setError(null)} aria-label="오류 닫기">×</button></div>}
-      {datasetReadError && ["overview", "understanding", "preview", "profile", "preparation", "topic", "pipelines"].includes(tab) &&
+      {catalog.readError && ["overview", "understanding", "preview", "profile", "preparation", "topic", "pipelines"].includes(tab) &&
         <div role="alert" className="alert error">
           Dataset 목록을 확인하지 못했습니다. 현재 화면의 데이터 선택이 제한될 수 있습니다.
-          <details><summary>문제 정보</summary>{datasetReadError}</details>
-          <button type="button" className="secondary" onClick={() => void refreshDatasets()
-            .then(() => setDatasetReadError("")).catch(e => setDatasetReadError(formatError(e)))}>
+          <details><summary>문제 정보</summary>{catalog.readError}</details>
+          <button type="button" className="secondary" onClick={() => void catalog.retry()}>
             Dataset 다시 조회
           </button>
         </div>}
-      {jobsReadError && tab === "jobs" &&
+      {dataJobs.jobsError && tab === "jobs" &&
         <div role="alert" className="alert error">
           작업 이력을 새로 확인하지 못했습니다. 실행이 실패했다는 의미는 아닙니다.
-          <details><summary>문제 정보</summary>{jobsReadError}</details>
-          <button type="button" className="secondary" onClick={() => void refreshJobs()
-            .then(() => setJobsReadError("")).catch(e => setJobsReadError(formatError(e)))}>
+          <details><summary>문제 정보</summary>{dataJobs.jobsError}</details>
+          <button type="button" className="secondary" onClick={() => void dataJobs.retryJobs()}>
             작업 이력 다시 조회
           </button>
         </div>}
-      {discoveryReadError && tab === "jobs" &&
+      {dataJobs.explorationsError && tab === "jobs" &&
         <div role="alert" className="alert error">
           데이터 탐색 작업 이력을 새로 확인하지 못했습니다.
-          <details><summary>문제 정보</summary>{discoveryReadError}</details>
-          <button type="button" className="secondary" onClick={() => void refreshDiscoveryJobs()
-            .then(() => setDiscoveryReadError("")).catch(e => setDiscoveryReadError(formatError(e)))}>
+          <details><summary>문제 정보</summary>{dataJobs.explorationsError}</details>
+          <button type="button" className="secondary" onClick={() => void dataJobs.retryExplorations()}>
             탐색 이력 다시 조회
           </button>
         </div>}
-      {uploadPolicyReadError && tab === "preparation" &&
+      {uploads.policyError && tab === "preparation" &&
         <div role="status" className="alert error">
           업로드 정책을 조회할 수 없어 새 파일 등록이 제한될 수 있습니다.
-          <details><summary>문제 정보</summary>{uploadPolicyReadError}</details>
+          <details><summary>문제 정보</summary>{uploads.policyError}</details>
         </div>}
       {notice && <div role="status" className="alert success">{notice}
         <button onClick={() => setNotice("")} aria-label="알림 닫기">×</button></div>}
-      {pendingDelimited && <DelimitedImport file={pendingDelimited} disabled={busy}
-        onCancel={() => setPendingDelimited(null)}
-        onConfirm={file => { void upload(file); }} />}
-      {uploadProgress && <div className="upload-status" role="status" aria-live="polite">
-        <strong>{uploadProgress.name}</strong>
-        <span>{uploadProgress.phase === "transferring"
-          ? `전송 중 · ${mebibytes(uploadProgress.loaded)} / ${mebibytes(uploadProgress.total)} MiB`
-          : "전송 완료 · 서버에서 검증하고 Dataset을 등록하고 있습니다."}</span>
-        {uploadProgress.phase === "transferring" && uploadProgress.total > 0 &&
-          <progress max={uploadProgress.total} value={uploadProgress.loaded}
-            aria-label="파일 전송 진행률" />}
-      </div>}
+      {uploads.pendingDelimited && <DelimitedImport file={uploads.pendingDelimited} disabled={busy}
+        onCancel={uploads.cancelDelimited}
+        onConfirm={file => { void uploads.upload(file); }} />}
+      {uploads.progress && <UploadProgressStatus progress={uploads.progress} />}
       {tab === "overview" && <PlatformOverview brandName={brandName}
         datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
         canViewModels={actor.capabilities.includes("job.read")}
@@ -562,7 +352,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "pipelines" && (canViewPipelineRuns
         ? <PipelineWorkspace runId={context.pipelineRunId ?? ""} datasetId={context.datasetId ?? ""} datasets={datasets}
           canTrain={canOperatePipelines} canRun={canRun} canCancel={canCancel} canOpenMLflow={canInspectStorage || canViewAudit}
-          hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
+          hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
           onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
           onSelectRun={(pipelineRunId, datasetId) => navigateWithContext("pipelines", { pipelineRunId, datasetId })}
           onOpenResource={openResource} onOpenDataset={id => navigateWithContext("understanding", {
@@ -580,18 +370,18 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         <label>Dataset 선택<select aria-label="현재 Dataset" value={selected}
           onChange={event => chooseDataset(event.target.value, tab as "understanding" | "preview" | "profile" | "preparation")}>
           <option value="">Dataset 선택</option>
-          {selected && !dataset && <option value={selected}>{datasetSelectionError ? "선택한 Dataset · 조회 실패" : "선택한 Dataset · 조회 중"}</option>}
+          {selected && !dataset && <option value={selected}>{requested.error ? "선택한 Dataset · 조회 실패" : "선택한 Dataset · 조회 중"}</option>}
           {datasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select></label>
-        {nextDatasetCursor && <button type="button" className="secondary" disabled={busy}
+        {catalog.nextCursor && <button type="button" className="secondary" disabled={busy}
           onClick={() => void loadMoreDatasets()}>Dataset 더 보기</button>}
       </div>}
       {isDataArea && selected && !dataset && <section className="panel" aria-label="선택한 Dataset 조회">
-        {datasetSelectionError ? <ErrorNoticeView title="선택한 Dataset을 열지 못했습니다" notice={datasetSelectionError}>
+        {requested.error ? <ErrorNoticeView title="선택한 Dataset을 열지 못했습니다" notice={requested.error}>
           <p className="hint">다른 계정의 Dataset이거나 삭제된 Dataset은 열 수 없습니다.</p>
           <button type="button" className="secondary" onClick={() => setReloadRevision(value => value + 1)}>선택 데이터 다시 조회</button>
         </ErrorNoticeView>
-          : <p role="status">{datasetSelectionLoading ? "선택한 Dataset을 불러오는 중입니다." : "선택한 Dataset의 접근 권한을 확인하고 있습니다."}</p>}
+          : <p role="status">{requested.loading ? "선택한 Dataset을 불러오는 중입니다." : "선택한 Dataset의 접근 권한을 확인하고 있습니다."}</p>}
       </section>}
       {!selected && isDataArea && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터 탐색"}</h2>
@@ -604,13 +394,12 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           파일 선택 (CSV·Parquet·TSV·TXT)
         </button>}
         {/* 예제는 Dataset으로 등록되므로 등록 권한이 있는 계정에만 보인다. */}
-        {canWrite && <ExampleGallery examples={examples} loading={examplesLoading} busy={busy}
-          error={examplesError} onRetry={() => setExamplesReload(v => v + 1)}
+        {canWrite && <AvailableExamples busy={busy}
           startLabel={tab === "preparation"
             ? "이 예제로 데이터 준비 시작 →" : undefined}
           onUse={id => void selectExample(id)} />}
       </div>}
-      {dataset && (["understanding", "preview", "profile", "preparation"] as Tab[]).includes(tab) && <>
+      {dataset && isDataArea && <>
         <div className="dataset-hero">
           <div><span className="eyebrow">DATASET</span><h2>{dataset.name}</h2>
             <p>{dataset.kind.toUpperCase()} · {readableVersion(dataset)}</p></div>
@@ -641,7 +430,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             canCreate={canRun} onChooseCandidate={selectExplorationCandidate}
             onJobCreated={() => {
               // Job 등록은 이미 성공했다. 목록 갱신 실패를 제출 실패로 표현하지 않는다.
-              void refreshJobs().catch(() => setNotice(current => current ||
+              void dataJobs.refreshJobs().catch(() => setNotice(current => current ||
                 "분석 Job은 접수됐습니다. 전체 Jobs에서 목록을 다시 조회할 수 있습니다."
               ));
             }}
@@ -649,129 +438,19 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
             overview={overview} overviewStatus={overviewStatus}
             overviewError={overviewError} onRetryOverview={retryOverview} />
         </section>}
-        {tab === "preview" && <section className="panel" role="tabpanel"
-          id="sos-panel-preview" aria-labelledby="sos-tab-preview" tabIndex={0}>
-          <div className="panel-head"><div><h3>데이터 조회</h3><p>최대 100행 · 전체 데이터가 아닌 일부입니다.</p></div>
-            <span className="chip">반환 {displayedPreview?.returned_rows ?? "…"}행 · {currentQuery
-              ? "조건 일치 전체 건수 미계산"
-              : overview?.dataset_id === selected && overview.row_count != null
-                ? `전체 ${overview.row_count.toLocaleString("ko-KR")}행`
-                : "전체 행 수 미계산"}</span></div>
-          {preview && <DatasetQueryPanel key={selected + ":" + reloadRevision} datasetId={selected}
-            columns={columnNames} busy={busy} draft={queryDraft}
-            onDraftChange={draft => setQueryDraftState({ datasetId: selected, draft })}
-            onResult={(data, explicitProjection) => {
-              setQueryPreview({ datasetId: selected, revision: reloadRevision, data, explicitProjection });
-              setPendingQuery(null);
-            }}
-            onInvalidate={() => setPendingQuery({ datasetId: selected, revision: reloadRevision })} />}
-          {displayedPreview && <p className="query-result-context" role="status">
-            {queryPending
-              ? currentQuery
-                ? "변경 사항 미적용 · 아래 표는 이전에 적용한 조회 결과입니다. 조회 적용을 누르면 새 조건으로 갱신됩니다."
-                : "변경 사항 미적용 · 아래 표는 기본 미리보기입니다. 편집 중인 조건은 조회 적용 후 반영됩니다."
-              : currentQuery ? "적용된 조회 결과 · 현재 Dataset 판본 기준"
-                : "기본 미리보기 · 필터·정렬 조건을 적용하지 않은 결과입니다."}
-          </p>}
-          {displayedPreview && <>
-            {availableColumns.length > 12 && <div className="query-column-summary">
-              <span className="hint">전체 {availableColumns.length}개 컬럼 중 {displayedColumns.length}개 표시 · {
-                currentQuery?.explicitProjection
-                  ? "선택한 컬럼 전부 표시"
-                  : "조회한 값의 화면 표시 범위만 변경합니다."
-              }</span>
-              {!currentQuery?.explicitProjection && <button className="secondary"
-                onClick={() => setShowAllPreviewColumns(v => !v)}>
-                {showAllPreviewColumns ? "첫 12개 컬럼만 보기" : "전체 컬럼 보기"}
-              </button>}
-            </div>}
-            <div className="table-scroll" tabIndex={0} role="region" aria-label="데이터 조회 결과 표"><table><thead><tr>
-            {displayedColumns.map(c => <th key={c}>{c}<small>{displayedPreview.schema[c]}</small></th>)}
-          </tr></thead><tbody>{displayedPreview.rows.map((r, i) => <tr key={i}>
-            {displayedColumns.map(c => <td key={c}>{r[c] == null
-              ? <span className="null">NULL</span> : String(r[c])}</td>)}
-          </tr>)}</tbody></table></div>{displayedPreview.rows.length === 0 && <p className="muted">조건에 맞는 행이 없습니다.</p>}</>}
-          {previewStatus === "loading" && <p className="muted" role="status">미리보기를 불러오는 중입니다.</p>}
-          {previewStatus === "error" && <p role="alert">{previewError}</p>}
-          {previewStatus === "error" && <button className="secondary"
-            onClick={() => setReloadRevision(v => v + 1)}>미리보기 다시 시도</button>}
-          <div className="hint">스키마와 파일·스냅샷 버전은 실행 입력으로 고정됩니다.</div>
-        </section>}
+        {tab === "preview" && <DatasetPreviewPanel key={selected} datasetId={selected} revision={reloadRevision}
+          preview={preview} previewStatus={previewStatus} previewError={previewError} overview={overview}
+          columnNames={columnNames} busy={busy} query={query} onRetry={() => setReloadRevision(v => v + 1)} />}
         {tab === "profile" && <section className="panel" role="tabpanel"
           id="sos-panel-profile" aria-labelledby="sos-tab-profile" tabIndex={0}>
           <DiscoveryPanel key={selected + ":" + reloadRevision} datasetId={selected}
             canCreate={canRun} draft={activeExplorationDraft} onDraftChange={changeExploration}
             overview={overview} overviewStatus={overviewStatus}
             overviewError={overviewError} onRetryOverview={retryOverview}
-            onCreated={refreshDiscoveryJobs} onOpenJob={id => openDataJob(id, "exploration")} />
-          <details className="data-profile-details">
-          <summary>컬럼 통계·분포</summary>
-          <div className="panel-head"><div><h3>부분 데이터 프로파일</h3>
-            <p>정렬 기준 없이 제한 조회한 최대 1,000행에서 계산합니다. 전체 데이터 분석은 별도 Job으로 실행할 수 있습니다.</p>
-          </div>{canRun && <button disabled={busy} onClick={() => void submit("profile")}>전체 데이터 프로파일 실행 ↗</button>}</div>
-          {profileStatus === "loading" && <p role="status" className="muted">EDA 통계를 계산하고 있습니다.</p>}
-          {profileStatus === "error" && <p role="alert">{profileError}</p>}
-          {profileStatus === "error" && <button className="secondary"
-            onClick={() => setReloadRevision(v => v + 1)}>EDA 다시 시도</button>}
-          {profile && <>
-            <div className="cards">
-              <div className="stat"><span>분석한 행</span><strong>{profile.row_count.toLocaleString()}</strong></div>
-              <div className="stat"><span>컬럼</span><strong>{profile.columns.length}</strong></div>
-              <div className="stat"><span>결측 셀</span><strong>{profile.columns.reduce(
-                (s, c) => s + c.nulls, 0).toLocaleString()}</strong></div>
-            </div>
-            <AnalysisEvidence
-              summary={(profile.sampled && !profileComplete ? "부분 데이터 분석 · " : "전체 데이터 분석 · ")
-                + profile.row_count.toLocaleString() + "행 분석"}
-              note={profileComplete
-                ? `조회 상한(${(profile.sample_limit ?? 0).toLocaleString()}행)보다 데이터가 작아 전체 행을 분석했습니다.`
-                : profile.sampled
-                ? "정렬 기준 없는 제한 조회 결과입니다. 전체 데이터의 분포를 대표하지 않습니다."
-                : "전체 데이터 대상 분석입니다. 개별 수치의 계산 정확도는 별도 확인이 필요합니다."}
-              details={[
-                { label: "데이터 선택 방식", value: dataSelectionLabel(profile.sampled
-                  ? "limited_rows" : "full_scan") },
-                { label: "조회 행 수 상한", value: !profile.sampled ? "해당 없음 (전체 대상)"
-                  : profile.sample_limit === null ? "미확인" : profile.sample_limit.toLocaleString() + "행" },
-                { label: "계산 대상 행 수", value: profile.row_count.toLocaleString() + "행" },
-                { label: "고유값 수", value: "조회 범위 내 정확 (NULL 포함)" },
-              ]}
-            />
-            <div className="profile-column-tools">
-              <h4>컬럼 통계</h4>
-              <label>컬럼 검색<input type="search" aria-label="프로파일 컬럼 검색" value={profileSearch}
-                onChange={event => { setProfileSearch(event.target.value); setProfilePage(0); }} /></label>
-              <span role="status">{profileColumns.length}개 중 {profileColumns.length ? currentProfilePage * 10 + 1 : 0}–{Math.min(profileColumns.length, (currentProfilePage + 1) * 10)}개</span>
-            </div>
-            <div className="table-scroll" tabIndex={0} role="region" aria-label="컬럼 통계 표"><table><thead><tr>
-              <th>컬럼</th><th>dtype</th><th>NULL</th><th>NaN</th><th>고유 값</th><th>평균</th>
-            </tr></thead><tbody>{profileColumns.slice(currentProfilePage * 10, (currentProfilePage + 1) * 10).map(c => <tr key={c.name}>
-              <td>{c.name}</td><td title={c.dtype}>{formatDtype(c.dtype)}</td><td>{c.nulls}</td>
-              <td>{c.nan_count ?? "—"}</td><td>{c.unique}</td>
-              <td>{typeof c.mean === "number" ? c.mean.toFixed(3) : "—"}</td>
-            </tr>)}</tbody></table></div>
-            {profileColumns.length > 10 && <div className="feature-result-pages">
-              <button type="button" className="secondary" disabled={currentProfilePage === 0} onClick={() => setProfilePage(currentProfilePage - 1)}>이전 컬럼</button>
-              <button type="button" className="secondary" disabled={(currentProfilePage + 1) * 10 >= profileColumns.length} onClick={() => setProfilePage(currentProfilePage + 1)}>다음 컬럼</button>
-            </div>}
-            <div className="chart-controls"><h4>분포·행 비교</h4>
-              <label>값 <select aria-label="값 컬럼" value={visualColumn} onChange={e => setVisualColumn(e.target.value)}>
-                <option value="">값 컬럼 선택</option>
-                {numeric.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-              </select></label>
-              <label>가로축 <select aria-label="가로축 컬럼" value={timeColumn} onChange={e => setTimeColumn(e.target.value)}>
-                <option value="">가로축 선택</option>
-                {columnNames.map(c => <option key={c} value={c}>{c}</option>)}
-              </select></label></div>
-            <div className="charts">
-              <div><h4>행 순서에 따른 값</h4>{chartOption ? <DataChart option={chartOption} ariaLabel="조회 행 순서의 값 차트" /> :
-                <p className="muted">값·가로축 컬럼을 선택하면 변화 여부를 확인합니다. 값이나 축이 일정하면 변화 차트를 만들지 않습니다.</p>}</div>
-              <div><h4>분포 (Histogram)</h4>{distributionOption ? <DataChart option={distributionOption} ariaLabel="데이터 분포 히스토그램" /> :
-                <p className="muted">숫자형 값 컬럼을 선택하면 반환된 행의 분포를 확인합니다.</p>}</div>
-            </div>
-            <p className="hint">차트와 히스토그램은 최대 100행의 기본 미리보기만 사용합니다. 가로축 값으로 정렬하지 않고 조회된 행 순서로 연결하므로 시간적 추세를 확정하지 않습니다.</p>
-          </>}
-          </details>
+            onCreated={dataJobs.refreshExplorations} onOpenJob={id => openDataJob(id, "exploration")} />
+          <ProfileStatistics key={selected} profile={profile} profileStatus={profileStatus}
+            profileError={profileError} preview={preview} columnNames={columnNames} canRun={canRun} busy={busy}
+            onRunFullProfile={() => void submit("profile")} onRetry={() => setReloadRevision(v => v + 1)} />
         </section>}
         {tab === "preparation" && <>
           {!preview && previewStatus === "loading" && <section className="panel">
@@ -803,10 +482,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         datasets={datasets} preferredModelId={context.modelId ?? ""}
         selectedDatasetId={context.datasetId ?? ""}
         onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
-        hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
-        canUpload={canWrite} onDatasetRegistered={data => {
-          setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
-        }}
+        hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
+        canUpload={canWrite} onDatasetRegistered={catalog.upsert}
         onModelSelected={modelId => selectContext({ ...context, modelId })} onNavigate={setTab}
         isAdministrator={actor.roles.includes("administrator")} canRun={canRun} canCancel={canCancel} onOpenResource={openResource} />}
       {(["policies","evaluations","explanations"] as Tab[]).includes(tab) && !resource &&
@@ -823,15 +500,15 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         onChange={view => setTab(view === "ml" ? "ml-jobs" : "jobs")}
         onNavigate={setTab} onOpenResource={openResource} datasets={datasets}
         canCancel={canCancel}>
-        {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
+        {tab === "jobs" && <JobsPanel jobs={[...dataJobs.jobs, ...dataJobs.explorations].sort((a, b) =>
           b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))}
           datasets={datasets} busy={busy} canCancel={canCancel}
           selectedJobId={context.dataJobId} selectedJobKind={context.dataJobKind}
-          nextCursor={nextJobsCursor} discoveryNextCursor={nextDiscoveryCursor}
+          nextCursor={dataJobs.jobsCursor} discoveryNextCursor={dataJobs.explorationsCursor}
           onLoadMore={() => void loadMoreJobs()}
           onLoadMoreDiscovery={() => void loadMoreDiscoveryJobs()}
-          onRefresh={() => void refreshDataJobs()} loading={jobsLoading}
-          readError={Boolean(jobsReadError || discoveryReadError)}
+          onRefresh={() => void dataJobs.refreshAll()} loading={dataJobs.loading}
+          readError={Boolean(dataJobs.jobsError || dataJobs.explorationsError)}
           onSelectJob={openDataJob}
           onOpen={id => void openJobDataset(id)} />}
       </ActivityWorkspace>}
