@@ -11,6 +11,7 @@ import math
 import time
 from collections.abc import Callable
 from datetime import datetime
+from typing import Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -23,6 +24,8 @@ from .mlflow_registry import register_model_version, verify_registered_version
 
 
 logger = logging.getLogger(__name__)
+
+TrackingOutcome = Literal["idle", "delivered", "retry", "unavailable"]
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -325,11 +328,16 @@ def _destination_fingerprint(settings: MLflowSettings) -> str:
     return hashlib.sha256(identity).hexdigest()
 
 
-def run_tracking_once(store, client: MLflowClient) -> bool:
-    """SOS 정본과 독립적으로 전송 한 건만 처리한다."""
+def run_tracking_once(store, client: MLflowClient) -> TrackingOutcome:
+    """SOS 정본과 독립적으로 전송 한 건만 처리한다.
+
+    Returns:
+        TrackingOutcome: 처리할 전송이 없으면 ``idle``, 성공하면 ``delivered``,
+        재시도로 남기면 ``retry``, MLflow에 연결하지 못했으면 ``unavailable``.
+    """
     export = store.claim_tracking_export()
     if export is None:
-        return False
+        return "idle"
     job_id = export["job_id"]
     try:
         if not store.bind_tracking_destination(job_id, _destination_fingerprint(client.settings)):
@@ -359,6 +367,7 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
             store.save_registry_version(model_id, name, version)
     except MLflowDeliveryError as exc:
         store.finish_tracking_export(job_id, error_code=str(exc))
+        return "unavailable" if str(exc) == "SOS-MLFLOW-UNAVAILABLE" else "retry"
     except WorkerOwnershipLost:
         # DB 세션 잠금을 잃으면 새 Worker의 복구 판단에 맡긴다.
         raise
@@ -370,6 +379,6 @@ def run_tracking_once(store, client: MLflowClient) -> bool:
             job_id, type(exc).__name__,
         )
         store.finish_tracking_export(job_id, error_code="SOS-MLFLOW-INTERNAL")
-    else:
-        store.finish_tracking_export(job_id)
-    return True
+        return "retry"
+    store.finish_tracking_export(job_id)
+    return "delivered"

@@ -17,6 +17,10 @@ from .observability import emit
 from .store import Store
 from .worker import cleanup_orphaned_cgroups_before_recovery, run_once
 
+# MLflow가 응답하지 않으면 대기 중인 전송마다 연결 시간 초과를 기다리게 된다.
+# 연결 실패를 확인하면 이 시간 동안 전송을 멈춰 Job 처리 지연을 시간 초과 한 번으로 제한한다.
+TRACKING_OUTAGE_PAUSE_SECONDS = 30.0
+
 
 def main() -> None:
     """실행기와 Tracking은 같은 소유 세션에서 순차 실행·복구한다."""
@@ -63,11 +67,16 @@ def main() -> None:
             if mlflow_client:
                 run_tracking_once(store, mlflow_client)
             return
+        tracking_resume_at = 0.0
         while True:
             store.heartbeat()
             executed = run_once(store)
-            exported = run_tracking_once(store, mlflow_client) if mlflow_client else False
-            if not executed and not exported:
+            outcome = "idle"
+            if mlflow_client and time.monotonic() >= tracking_resume_at:
+                outcome = run_tracking_once(store, mlflow_client)
+                if outcome == "unavailable":
+                    tracking_resume_at = time.monotonic() + TRACKING_OUTAGE_PAUSE_SECONDS
+            if not executed and outcome == "idle":
                 time.sleep(args.poll)
     except KeyboardInterrupt:
         pass
