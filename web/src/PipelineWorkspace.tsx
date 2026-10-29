@@ -82,7 +82,9 @@ function PipelineStart({ datasets, datasetId, onSelectDataset, hasMoreDatasets,
   </div>;
 }
 
-/** 최근 이력·결과 조사를 기본으로 하고 권한 있는 Actor만 고정 정의를 새로 실행한다. */
+/** 학습 권한 계정이 등록된 고정 정의로 모델을 학습·평가하고 단계별 결과를 조사하는 운영 도구.
+ *  작업 조회 권한만 있으면 기존 실행 결과를 열람하고 새 실행은 하지 않는다.
+ */
 export function PipelineWorkspace({ runId, datasetId, datasets, canTrain, canRun, canCancel, canOpenMLflow,
   hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onOpenResource, onOpenDataset }: {
   runId: string; datasetId: string; datasets: Dataset[];
@@ -112,7 +114,7 @@ export function PipelineWorkspace({ runId, datasetId, datasets, canTrain, canRun
       <details key={`history:${runId}`} open={!runId} className="pipeline-history-disclosure">
       <summary>최근 실행 이력</summary>
       <div className="panel-head"><div><h2>등록 파이프라인·실행 이력</h2>
-        <p>활동 이상 탐지 · 입력 분할부터 모델·판정·평가까지 한 실행의 결과를 조사합니다.</p></div>
+        <p>활동 이상 탐지 · 새 모델 학습부터 판정·평가까지의 결과를 확인하고, 사용자에게 제공할 모델을 준비합니다.</p></div>
         <button className="secondary" disabled={loading} onClick={() => setRetry(value => value + 1)}>이력 다시 조회</button>
       </div>
       {loading && <p role="status">최근 실행 이력 조회 중…</p>}

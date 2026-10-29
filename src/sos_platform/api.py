@@ -31,6 +31,7 @@ from .datasets import (
     save_upload_file,
 )
 from .discovery import columns as discovery_columns
+from .ml_input import model_input_issues
 from .discovery import explore as discovery_explore
 from .discovery import overview as discovery_overview
 from .discovery import preview as discovery_preview
@@ -958,6 +959,13 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         except MLflowDeliveryError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         require_job_submission_key(idempotency_key)
+        # 고정 판본의 입력 구조 불일치는 Worker 실패 전에 원인 컬럼과 함께 거부한다.
+        input_issues = model_input_issues(
+            model["features"], model["runtime"].get("feature_dtypes"),
+            {column["name"]: column["dtype"] for column in discovery_columns(store, dataset)["columns"]},
+        )
+        if input_issues:
+            raise HTTPException(status_code=422, detail=" · ".join(input_issues))
         return store.create_job(
             kind="ml_score",
             dataset_id=dataset["id"],

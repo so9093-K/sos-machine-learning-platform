@@ -54,7 +54,7 @@ export function DelimitedImport({ file, disabled, onConfirm, onCancel }: Props) 
       </select>
     </label>
     {error && <p role="alert">{error}</p>}
-    {!error && width >= 2 && <div className="table-scroll">
+    {!error && width >= 2 && <div className="table-scroll" tabIndex={0} role="region" aria-label="가져올 데이터 미리보기 표">
       <table><thead><tr>{labels.map((name, i) =>
         <th key={i}>{name || "(빈 컬럼명)"}</th>)}</tr></thead>
         <tbody>{examples.map((row, i) => <tr key={i}>{labels.map((_, j) =>

@@ -320,12 +320,14 @@ export function MLScoringPanel({
           {datasets.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
         </select>
       </label>
-      <label>정답 레이블 (선택)
+      <label>정답 레이블 (선택 · 0/1 숫자형)
         <select aria-label="Scoring 정답 레이블" value={labelColumn}
           disabled={submitted || uploading}
           onChange={e => setLabelColumn(e.target.value)}>
           <option value="">레이블 없음</option>
-          {columns.filter(col => !model.features.includes(col.name)).map(col =>
+          {/* 서버는 결측 없는 0/1 숫자형 레이블만 받는다. 문자열·시간 컬럼은 후보가 아니다. */}
+          {columns.filter(col => !model.features.includes(col.name) &&
+            /^(?:U?Int(?:8|16|32|64)|Float(?:32|64))$/.test(col.dtype)).map(col =>
             <option key={col.name} value={col.name}>{col.name} ({formatDtype(col.dtype)})</option>)}
         </select>
       </label>

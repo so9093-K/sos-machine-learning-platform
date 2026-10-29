@@ -122,10 +122,16 @@ try {
   const pipelineData = routeAt("/data", "?dataset=data-one&pipelineRun=run-one");
   assert.equal(contextPath("preview", nextNavigationContext(pipelineData, "preview")),
     "/data/query?dataset=data-one&pipelineRun=run-one");
-  const pipelineHiddenMenu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
-    active: "overview", canInspectStorage: false, canViewAudit: false, canViewRuns: false, onNavigate: () => {},
+  // 등록 파이프라인은 학습 권한 계정의 운영 도구다. 일반 메뉴에는 보이지 않는다.
+  assert.doesNotMatch(catalogPendingMenu, /href="\/pipelines"/);
+  const operatorMenu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
+    active: "overview", canInspectStorage: false, canViewAudit: false, canOperatePipelines: true, onNavigate: () => {},
   }));
-  assert.doesNotMatch(pipelineHiddenMenu, /href="\/pipelines"/);
+  assert.match(operatorMenu, /href="\/pipelines"[^>]*><span>등록 파이프라인/);
+  const viewerMenu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
+    active: "overview", canInspectStorage: false, canViewAudit: false, canPrepareData: false, onNavigate: () => {},
+  }));
+  assert.doesNotMatch(viewerMenu, /href="\/data\/prepare"/);
   const { pipelineResultId, PipelineResults } = await vite.ssrLoadModule("/src/PipelineRunDetails.tsx");
   const partialRun = { id: "partial-run", status: "Failed", stages: [
     { name: "training", job: { status: "Succeeded", result: { model_revision_id: "model-ready" } } },
@@ -150,8 +156,6 @@ try {
   assert.deepEqual(nextNavigationContext(first, "ml"), {});
 
   assert.equal(routeAt("/scoring", "?model=model-v1").context.modelId, "model-v1");
-  assert.equal(contextPath("topic", { modelId: "model one" }), "/topics/activity-anomaly?model=model+one");
-  assert.equal(routeAt("/topics/activity-anomaly", "?model=model-one").context.modelId, "model-one");
   assert.deepEqual(routeAt("/topics/activity-anomaly", "").context, {});
   assert.equal(contextPath("scoring", { modelId: "name + / ?" }),
     "/scoring?model=name+%2B+%2F+%3F");
@@ -165,30 +169,6 @@ try {
     { kind: "scoring", id: "score/with space" });
   assert.equal(immutablePath, "/scoring/results/score%2Fwith%20space");
   assert.deepEqual(routeAt("/models/model-v1", "").context, {});
-  const fromModelLab = resourcePath("scoring", "score/one", {
-    modelLabReturn: true, modelId: "model/a",
-  });
-  assert.equal(fromModelLab, "/scoring/results/score%2Fone?from=model-lab&model=model%2Fa");
-  assert.deepEqual(routeAt("/scoring/results/score%2Fone",
-    "?from=model-lab&model=model%2Fa").context,
-    { modelLabReturn: true, modelId: "model/a" });
-  const labDecision = contextPath("policies", {
-    scoringId: "score one", modelLabReturn: true, modelId: "model/a",
-  });
-  assert.equal(labDecision,
-    "/policies?scoring=score+one&from=model-lab&model=model%2Fa");
-  const labDecisionRoute = routeAt("/policies",
-    "?scoring=score+one&from=model-lab&model=model%2Fa");
-  assert.deepEqual(labDecisionRoute.context, {
-    scoringId: "score one", modelLabReturn: true, modelId: "model/a",
-  });
-  assert.equal(contextPath("explanations", nextNavigationContext(
-    labDecisionRoute, "explanations")),
-    "/explanations?scoring=score+one&from=model-lab&model=model%2Fa");
-  assert.deepEqual(routeAt("/models/model-one",
-    "?from=model-lab&model=model%2Fa").context,
-    { modelLabReturn: true, modelId: "model/a" });
-  assert.deepEqual(routeAt("/scoring/results/score-one", "?from=model-lab").context, {});
   // 직접 연 Scoring/Model 상세에서 영역 탭으로 이동해도 동일 자산을 이어받는다.
   assert.equal(nextNavigationContext(
     routeAt("/scoring/results/score-v1", ""), "policies").scoringId, "score-v1");
@@ -565,7 +545,7 @@ try {
   assert.match(candidateWithContext, /18c4be49-18c4-4f32-9894-8c3bfabbd008/);
   const { ExampleGallery } = await vite.ssrLoadModule("/src/ExampleGallery.tsx");
   const failedGallery = renderToStaticMarkup(React.createElement(ExampleGallery, {
-    examples: [], busy: false, loading: false, canUse: true,
+    examples: [], busy: false, loading: false,
     error: "temporary failure", onRetry: () => {}, onUse: () => {},
   }));
   assert.match(failedGallery, /예제 다시 조회/);
@@ -702,7 +682,7 @@ try {
   }));
   assert.match(missingScoreContext, /보존돼 있지 않습니다/);
   assert.doesNotMatch(missingScoreContext, /role="img"|점수 범위 안/);
-  const applicationContext = { modelId: "model-a", modelLabReturn: true };
+  const applicationContext = { modelId: "model-a", datasetId: "data-a" };
   assert.deepEqual(routeAt("/scoring", contextPath("scoring", applicationContext).split("?")[1]).context,
     applicationContext);
   const { PlaygroundExplanations, PlaygroundSensitivity } =
@@ -747,8 +727,6 @@ try {
   assert.match(playgroundHtml, /이상 점수 계산 →/);
   assert.match(playgroundHtml, /항목 찾기/);
   assert.match(playgroundHtml, /표시 항목/);
-  const { ModelLabUse } =
-    await vite.ssrLoadModule("/src/ModelLabUse.tsx");
   const { isActivityModelCompatible } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
   assert.equal(isActivityModelCompatible(
     { algorithm: "isolation_forest", features: ["a", "b"] },
@@ -786,13 +764,12 @@ try {
   }));
   assert.match(offeringReadFailure, /조회 연결 실패/);
   assert.doesNotMatch(offeringReadFailure, /<textarea|제공되지 않은 판본/);
-  const pendingUse = renderToStaticMarkup(React.createElement(ModelLabUse, {
-    datasets: [], hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
-    canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
-    onOpenResource: () => {}, onHistory: () => {},
+  const { ActivityTopic } = await vite.ssrLoadModule("/src/ActivityTopic.tsx");
+  const topicPage = renderToStaticMarkup(React.createElement(ActivityTopic, {
+    canRun: true, onClearDataset: () => {}, onOpenModel: () => {}, onScoreModel: () => {},
   }));
-  assert.match(pendingUse, /모델 적용/);
-  assert.match(pendingUse, /사용할 수 있는 모델을 확인하는 중/);
+  assert.match(topicPage, /분석 개요/);
+  assert.doesNotMatch(topicPage, /등록 파이프라인/);
   const { PlatformOverview } = await vite.ssrLoadModule("/src/PlatformOverview.tsx");
   const home = renderToStaticMarkup(React.createElement(PlatformOverview, {
     brandName: "ACME AI Lab",
@@ -800,12 +777,11 @@ try {
   }));
   assert.match(home, /ACME AI Lab · EXPLORE/);
   assert.doesNotMatch(home, /SOS · EXPLORE/);
-  assert.match(home, /플랫폼 개요/);
   assert.match(home, /주요 기능/);
   assert.match(home, /모델 제공 상태 확인 중/);
   assert.match(home, /<button type="button">모델 목록 →<\/button>/);
-  assert.match(home, /<h4>모델 활용<\/h4>/);
-  assert.doesNotMatch(home, /<h4>연구·실험<\/h4>|새 학습|새로운 실험/);
+  assert.match(home, /<h3>모델 활용<\/h3>/);
+  assert.doesNotMatch(home, /연구·실험|새 학습|새로운 실험|EXPERIMENT/);
   assert.match(home, /활동 이상 탐지/);
   assert.doesNotMatch(home, /최근 ML 실행/);
   const { ActivityWorkspace } = await vite.ssrLoadModule("/src/ActivityWorkspace.tsx");

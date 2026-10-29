@@ -51,7 +51,7 @@ export function DataSourceSidebar(props: Props) {
     {hasMore && <button className="job-navigation secondary" disabled={busy} onClick={onLoadMore}>
       이전 데이터셋 더 불러오기
     </button>}
-    <button className="job-navigation secondary" onClick={onExample}>예제 데이터</button>
+    {canWrite && <button className="job-navigation secondary" onClick={onExample}>예제 데이터</button>}
     {canWrite && <details className="data-import-controls">
       <summary>데이터 추가·연결</summary>
       <div className="data-import-actions">

@@ -126,7 +126,7 @@ export function UnderstandingPanel({
           : "이 Dataset은 등록 시 행 수를 기록하지 않아 원본 행 수를 계산하지 않았습니다."}
         {" · "}{profile ? "원본 규모와 분석 결과의 범위는 구별합니다." : "분포와 역할 후보는 별도 분석에서 계산됩니다."}</p>
       {!profile && <details className="dataset-schema"><summary>전체 컬럼·자료형 ({overview.column_count}개)</summary>
-      <div className="table-scroll"><table><thead><tr>
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="컬럼 특성 표"><table><thead><tr>
         <th>컬럼</th><th>자료형</th>
       </tr></thead><tbody>{overview.columns.map(col => <tr key={col.name}>
         <td>{col.name}</td><td title={col.dtype}>{formatDtype(col.dtype)}</td>
@@ -215,7 +215,7 @@ export function UnderstandingPanel({
         </select></label>
         <span className="filter-count" role="status">{filteredColumns.length.toLocaleString()} / {columns.length.toLocaleString()} 컬럼</span>
       </div>
-      <div className="table-scroll"><table><thead><tr>
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="데이터 이해 결과 표"><table><thead><tr>
         <th>컬럼</th><th>자료형</th><th>NULL</th><th>NaN</th><th>고유값</th><th>역할 후보 (미확정)</th>
       </tr></thead><tbody>{filteredColumns.map(col => <tr key={col.name}>
         <td>{col.name}</td><td title={col.dtype}>{formatDtype(col.dtype)}</td>

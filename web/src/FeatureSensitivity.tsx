@@ -9,7 +9,12 @@ export const formatSensitivityValue = (value: number) =>
   value !== 0 && Math.abs(value) < 1e-8 ? value.toExponential(3)
     : value.toLocaleString("ko-KR", { maximumFractionDigits: 8 });
 
-export function SensitivityChart({ result }: { result: ExplanationResult }) {
+export function SensitivityChart({ result, headingLevel = 6 }: {
+  result: ExplanationResult;
+  /** 놓이는 화면의 제목 단계에 맞춘다. */
+  headingLevel?: 3 | 4 | 5 | 6;
+}) {
+  const Heading = `h${headingLevel}` as "h3" | "h4" | "h5" | "h6";
   const raw = result.output.feature_sensitivities;
   const entries = (Array.isArray(raw) ? raw as Array<Record<string, unknown>> : [])
     .filter(entry => typeof entry.feature === "string" && numeric(entry.anomaly_score_delta) !== null)
@@ -41,7 +46,7 @@ export function SensitivityChart({ result }: { result: ExplanationResult }) {
   const number = (value: unknown) => numeric(value) === null ? "결측" : formatSensitivityValue(Number(value));
   return <div className="sensitivity-result">
     {ranked.length ? <>
-      <h6>점수 변화가 큰 항목 {ranked.length}개</h6>
+      <Heading>점수 변화가 큰 항목 {ranked.length}개</Heading>
       <DataChart option={option} ariaLabel="점수 변화의 절댓값이 큰 상위 5개 항목의 치환 민감도" />
       <p className="hint">각 항목을 학습 중앙값으로 바꿨을 때의 점수 차이입니다. 양수는 점수가 낮아진 경우이며 인과적 기여도는 아닙니다.</p>
     </> : <div className="shap-zero" role="status">{entries.every(item => numeric(item.actual_value) !== null && item.actual_value === item.reference_median)

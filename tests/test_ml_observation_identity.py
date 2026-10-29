@@ -161,7 +161,8 @@ def test_http_scoring_identity_option_respects_dataset_and_model_ownership(
     from sos_platform.security import Actor, IdentitySettings
 
     dataset = {"id": "dataset-a", "version": "v1", "owner_actor": "alice"}
-    model = {"id": "model-a", "owner_actor": "alice", "registry_version": "1"}
+    model = {"id": "model-a", "owner_actor": "alice", "registry_version": "1",
+             "features": ["f1"], "runtime": {"feature_dtypes": ["Float64"]}}
     fake_store = Mock()
     fake_store.get_dataset.return_value = dataset
     fake_store.get_model_revision.return_value = model
@@ -178,6 +179,8 @@ def test_http_scoring_identity_option_respects_dataset_and_model_ownership(
 
     fake_store.create_job.side_effect = created
     monkeypatch.setattr(api, "Store", lambda home: fake_store)
+    monkeypatch.setattr(api, "discovery_columns", lambda store, dataset: {
+        "columns": [{"name": "f1", "dtype": "Float64"}]})
     monkeypatch.setenv("SOS_MLFLOW_TRACKING_URI", "http://localhost:5000")
     monkeypatch.setattr(api, "verify_registered_version", lambda _client, _model: None)
     app = api.create_app(tmp_path, identity=IdentitySettings("development", {}))

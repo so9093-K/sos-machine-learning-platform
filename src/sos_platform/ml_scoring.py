@@ -16,7 +16,7 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 
 from .datasets import pinned_scan_dataset
 from .ml_anomaly import histogram_edges
-from .ml_input import INTEGER_DTYPES, NUMERIC
+from .ml_input import INTEGER_DTYPES, model_input_issues
 from .ml_observation_identity import validate_observation_identity
 from .ml_runtime import load_trusted_isolation_forest
 from .ml_temporal_split import select_temporal_partition, utc_observation_time
@@ -232,12 +232,14 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                 if invalid:
                     raise ValueError("Observation time contains missing, unzoned or malformed timestamps")
             schema = source.collect_schema()
+            issues = model_input_issues(
+                features, model["runtime"].get("feature_dtypes"),
+                {name: str(dtype) for name, dtype in schema.items()},
+            )
+            if issues:
+                raise ValueError(" · ".join(issues))
             if any(name not in schema for name in fields):
-                raise ValueError("Scoring feature or label is missing")
-            if any(schema[name] not in NUMERIC for name in features):
-                raise ValueError("Scoring features must be numeric")
-            if [str(schema[name]) for name in features] != model["runtime"].get("feature_dtypes"):
-                raise ValueError("Scoring feature dtypes differ from Model Revision")
+                raise ValueError("Scoring label, identity or time column is missing")
             source.select(fields).sink_parquet(staged)
 
         identity_evidence = (

@@ -92,11 +92,12 @@ export function StoragePanel() {
         </div>
       </div>
       <details><summary>고급 정책과 설정 출처</summary>
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="보존 정책 설정 표">
         <table><thead><tr><th>설정</th><th>유효 값</th><th>출처</th></tr></thead>
           <tbody>{Object.entries(policy.values).map(([name, value]) =>
             <tr key={name}><td>{name}</td><td>{value}</td>
               <td>{policy.sources[name] === "environment" ? "환경변수" : "기본값"}</td></tr>)}
-          </tbody></table>
+          </tbody></table></div>
         <p className="hint">정책은 서버 환경변수 SOS_OBJECT_*로 관리됩니다.
           이 화면에서는 설정을 변경하거나 삭제를 실행할 수 없습니다.</p>
       </details>

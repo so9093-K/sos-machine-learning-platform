@@ -50,7 +50,7 @@ function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
           ? result.version : "미확인" },
       ]}
     />
-    <div className="table-scroll"><table><thead><tr><th>그룹</th><th>집계값</th></tr></thead>
+    <div className="table-scroll" tabIndex={0} role="region" aria-label="그룹별 집계 결과 표"><table><thead><tr><th>그룹</th><th>집계값</th></tr></thead>
       <tbody>{rows.slice(currentPage * 12, (currentPage + 1) * 12).map((row, index) => <tr key={index}>
         <td>{explorationCategory(row.category, typeof result.group_by === "string" ? result.group_by : null)}</td>
         <td>{explorationValue(row.value as number | string | null)}</td>

@@ -15,7 +15,7 @@ export function ModelCreationEvidence({ model, datasetName }: { model: ModelRevi
       <li><strong>학습 방법</strong> · {algorithmLabel(model.algorithm)} · 학습 점수 계산 {typeof scoreCount === "number" && Number.isFinite(scoreCount) ? `${recordedNumber(scoreCount)}행` : "행 수 기록 없음"}</li>
       <li><strong>생성 결과</strong> · 고정된 모델 판본 · {model.registry_version ? `Registry v${model.registry_version}` : "Registry 판본 기록 없음"}</li>
     </ol>
-    <p className="hint">판본에 고정된 실행 근거 · 추가 학습 없음</p>
+    <p className="hint">판본에 고정된 생성 기록입니다.</p>
     <h4>평가 근거</h4>
     <p>독립 평가 근거 미연결 · 이 화면은 생성·등록 기록을 보여줍니다. 모델 제공과 Registry 등록은 성능 검증이나 사용자 데이터에 대한 적합성을 뜻하지 않습니다.</p>
     <h4>적용 범위·한계</h4>

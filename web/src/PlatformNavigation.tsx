@@ -11,8 +11,6 @@ export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "ex
 export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
 export type MLNavigationContext = {
   datasetId?: string; modelId?: string; scoringId?: string;
-  // 활동 이상 탐지 화면에서 연 결과는 같은 모델 적용 화면으로 돌아갈 수 있다.
-  modelLabReturn?: boolean;
   dataJobId?: string;
   dataJobKind?: "data" | "exploration";
   pipelineRunId?: string;
@@ -33,11 +31,6 @@ function inputDatasetContext(params: URLSearchParams): MLNavigationContext {
   return params.get("dataset") ? { datasetId: params.get("dataset")! } : {};
 }
 
-function modelLabContext(params: URLSearchParams): MLNavigationContext {
-  return params.get("from") === "model-lab" && params.get("model")
-    ? { modelLabReturn: true, modelId: params.get("model")!, ...inputDatasetContext(params) } : {};
-}
-
 function pipelineContext(params: URLSearchParams): MLNavigationContext {
   return params.get("pipelineRun") ? { pipelineRunId: params.get("pipelineRun")! } : {};
 }
@@ -45,7 +38,7 @@ function pipelineContext(params: URLSearchParams): MLNavigationContext {
 function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
   if (tab === "ml") return inputDatasetContext(params);
-  if (tab === "topic") return { ...inputDatasetContext(params), ...(params.get("model") ? { modelId: params.get("model")! } : {}) };
+  if (tab === "topic") return inputDatasetContext(params);
   if (tab === "pipelines") return inputDatasetContext(params);
   if (DATA_TABS.includes(tab)) {
     return { datasetId: params.get("dataset") ?? "", ...pipelineContext(params),
@@ -54,26 +47,21 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
         dataJobKind: params.get("type") === "exploration" ? "exploration" as const : "data" as const,
       } : {}) };
   }
-  if (tab === "scoring") return { modelId: params.get("model") ?? "", ...inputDatasetContext(params), ...modelLabContext(params), ...pipelineContext(params) };
-  if (isDecisionTab(tab)) return { scoringId: params.get("scoring") ?? "", ...modelLabContext(params), ...pipelineContext(params) };
+  if (tab === "scoring") return { modelId: params.get("model") ?? "", ...inputDatasetContext(params), ...pipelineContext(params) };
+  if (isDecisionTab(tab)) return { scoringId: params.get("scoring") ?? "", ...pipelineContext(params) };
   return {};
 }
 
 export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): string {
   const params = new URLSearchParams();
-  if (tab === "topic" && context.modelId) params.set("model", context.modelId);
   if (DATA_TABS.includes(tab) && context.datasetId) params.set("dataset", context.datasetId);
   if (tab === "jobs" && context.dataJobId) {
     params.set("job", context.dataJobId);
     if (context.dataJobKind === "exploration") params.set("type", "exploration");
   }
-  if (tab === "scoring" && context.modelId && !context.modelLabReturn) params.set("model", context.modelId);
+  if (tab === "scoring" && context.modelId) params.set("model", context.modelId);
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
-  if ((isDecisionTab(tab) || tab === "scoring") && context.modelLabReturn && context.modelId) {
-    params.set("from", "model-lab");
-    params.set("model", context.modelId);
-  }
-  if (context.datasetId && (MODEL_INPUT_TABS.includes(tab) || context.modelLabReturn)) params.set("dataset", context.datasetId);
+  if (context.datasetId && MODEL_INPUT_TABS.includes(tab)) params.set("dataset", context.datasetId);
   if ((DATA_TABS.includes(tab) || tab === "scoring" || isDecisionTab(tab)) && context.pipelineRunId) params.set("pipelineRun", context.pipelineRunId);
   const base = tab === "pipelines" && context.pipelineRunId
     ? `${paths.pipelines}/runs/${encodeURIComponent(context.pipelineRunId)}` : paths[tab];
@@ -98,10 +86,7 @@ const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }>
 export function resourcePath(kind: MLResourceKind, id: string, context: MLNavigationContext = {}): string {
   const path = `${resourcePaths[kind].base}/${encodeURIComponent(id)}`;
   const params = new URLSearchParams();
-  if (context.modelLabReturn && context.modelId) {
-    params.set("from", "model-lab"); params.set("model", context.modelId);
-  }
-  if (context.datasetId && (kind === "model" || context.modelLabReturn)) params.set("dataset", context.datasetId);
+  if (context.datasetId && kind === "model") params.set("dataset", context.datasetId);
   if (context.pipelineRunId) params.set("pipelineRun", context.pipelineRunId);
   return path + (params.size ? "?" + params.toString() : "");
 }
@@ -122,7 +107,7 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
       if (id && !id.includes("/")) {
         try { return { tab: config.tab, resource: { kind, id: decodeURIComponent(id) },
           context: { ...(kind === "model" ? inputDatasetContext(new URLSearchParams(search)) : {}),
-            ...modelLabContext(new URLSearchParams(search)), ...pipelineContext(new URLSearchParams(search)) } }; }
+            ...pipelineContext(new URLSearchParams(search)) } }; }
         catch { break; }
       }
     }
@@ -140,7 +125,7 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
   };
   // 결과 상세에서 모델 영역 탭을 직접 선택해도 이미 확인한 리소스를 전달한다.
   if (previous.resource?.kind === "scoring" && isDecisionTab(tab)) {
-    return { scoringId: previous.resource.id, ...(previous.context.modelLabReturn ? previous.context : {}),
+    return { scoringId: previous.resource.id,
       ...(previous.context.pipelineRunId ? { pipelineRunId: previous.context.pipelineRunId } : {}) };
   }
   if (previous.resource?.kind === "model" && tab === "scoring") {
@@ -160,9 +145,6 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
     return {
       scoringId: previous.context.scoringId,
       ...(previous.context.pipelineRunId ? { pipelineRunId: previous.context.pipelineRunId } : {}),
-      ...(previous.context.modelLabReturn && previous.context.modelId
-        ? { modelLabReturn: true, modelId: previous.context.modelId,
-            ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}) } : {}),
     };
   }
   return {};
@@ -220,11 +202,8 @@ export function useWorkspaceNavigation() {
   const openResource = useCallback((kind: MLResourceKind, id: string) => {
     if (!id) return;
     const previous = current.current;
-    const fromLabUse = previous.tab === "topic" || previous.context.modelLabReturn === true;
-    const resultContext: MLNavigationContext = fromLabUse && previous.context.modelId
-      ? { modelLabReturn: true, modelId: previous.context.modelId,
-          ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}) }
-      : kind === "model" && previous.context.datasetId ? { datasetId: previous.context.datasetId } : {};
+    const resultContext: MLNavigationContext = kind === "model" && previous.context.datasetId
+      ? { datasetId: previous.context.datasetId } : {};
     const context = { ...resultContext,
       ...(previous.context.pipelineRunId ? { pipelineRunId: previous.context.pipelineRunId } : {}) };
     update({ tab: resourcePaths[kind].tab, resource: { kind, id }, context },
@@ -240,12 +219,13 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
     { tab: "overview", label: "홈" },
     { tab: "understanding", label: "데이터 탐색" },
     { tab: "ml", label: "모델 활용" },
-    { tab: "pipelines", label: "파이프라인" },
   ] },
   { title: "분석 주제", items: [{ tab: "topic", label: "활동 이상 탐지" }] },
   { title: "DATA TOOLS", items: [{ tab: "preparation", label: "데이터 준비" }] },
   { title: "ACTIVITY & OPERATIONS", items: [
     { tab: "jobs", label: "작업 이력" },
+    // 등록 파이프라인은 학습 권한 계정이 모델을 공급하는 운영 도구다.
+    { tab: "pipelines", label: "등록 파이프라인" },
     { tab: "storage", label: "저장소 상태" },
     { tab: "audit", label: "보안 감사" },
   ] },
@@ -287,13 +267,14 @@ export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
 
 /** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
 export function PlatformNavigation({ active, onNavigate, canInspectStorage, canViewAudit, canViewDataset = true,
-  canViewRuns = true, context = {}, resource = null }: {
+  canPrepareData = true, canOperatePipelines = false, context = {}, resource = null }: {
   active: WorkspaceTab;
   onNavigate: (tab: WorkspaceTab) => void;
   canInspectStorage: boolean;
   canViewAudit: boolean;
   canViewDataset?: boolean;
-  canViewRuns?: boolean;
+  canPrepareData?: boolean;
+  canOperatePipelines?: boolean;
   context?: MLNavigationContext;
   resource?: ResourceRoute;
 }) {
@@ -323,9 +304,15 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
     tab === "understanding" ? ["understanding", "preview", "profile"].includes(active)
       : tab === "ml" ? isModelsArea(active)
       : tab === "jobs" ? ["jobs", "ml-jobs"].includes(active) : active === tab;
+  // 실행할 수 없는 기능의 메뉴는 표시하지 않는다. 서버 권한 검사는 별도로 유지된다.
+  const visible = (item: NavItem) =>
+    item.tab === "pipelines" ? canOperatePipelines
+      : item.tab === "storage" ? canInspectStorage
+      : item.tab === "audit" ? canViewAudit
+      : item.tab === "preparation" ? canViewDataset && canPrepareData
+      : canViewDataset;
   return <nav className="global-nav platform-nav" aria-label="플랫폼 메뉴">
-    {groups.filter(group => (canViewDataset || (canViewRuns && group.title === "WORKSPACE") || group.items.some(item =>
-      (item.tab === "storage" && canInspectStorage) || (item.tab === "audit" && canViewAudit))))
+    {groups.filter(group => group.items.some(visible))
       .map(group => <div className="platform-nav-group" key={group.title}>
       <span className={group.title === "분석 주제" ? "section-title model-lab-tree-title" : "section-title"}>
         {group.title === "분석 주제" && <svg viewBox="0 0 20 20" width="15" height="15"
@@ -399,11 +386,7 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
             </div>}
           </div>;
         })}
-      </div> : group.items.filter(item =>
-        (canViewDataset || (item.tab === "pipelines" && canViewRuns) || item.tab === "storage" || item.tab === "audit") &&
-        (item.tab !== "pipelines" || canViewRuns) &&
-        (item.tab !== "storage" || canInspectStorage) && (item.tab !== "audit" || canViewAudit)
-      ).map(item => <a key={item.tab} href={hrefFor(item.tab)}
+      </div> : group.items.filter(visible).map(item => <a key={item.tab} href={hrefFor(item.tab)}
         className="workspace-link" aria-current={isCurrent(item.tab) ? "page" : undefined}
         onClick={event => {
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

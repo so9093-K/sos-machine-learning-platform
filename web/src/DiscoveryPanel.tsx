@@ -205,7 +205,7 @@ export function DiscoveryPanel({
             { label: "Dataset 판본", value: result.version },
           ]}
         />
-        <div className="table-scroll"><table><thead><tr><th>그룹</th><th>결과</th></tr></thead>
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="그룹별 탐색 결과 표"><table><thead><tr><th>그룹</th><th>결과</th></tr></thead>
           <tbody>{result.rows.map((r, i) => <tr key={i}><td>{explorationCategory(r.category, result.group_by)}</td>
             <td>{explorationValue(r.value)}</td></tr>)}</tbody>
         </table></div>
