@@ -333,7 +333,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .platform-intro h2 { font-size:clamp(22px,2.5vw,29px); margin:10px 0; letter-spacing:-.025em; }
 .platform-intro p { color:var(--sos-muted); font-size:13px; line-height:1.7; max-width:750px; }
 .platform-section-title { font-size:17px; margin-bottom:14px; }
-.platform-destinations { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.platform-destinations { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 /* 사용자 진입 기능은 단순 링크가 아니라 목적·제약·실행 동작을 갖춘 카드다. */
 .platform-destinations>.platform-destination.panel {
   display:flex; flex-direction:column; align-items:flex-start; gap:12px;
@@ -435,22 +435,22 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 @media(max-width:760px) { .ml-resource-fields { grid-template-columns:1fr; } }
 
 
-/* 영역을 구분해 전역 메뉴를 단순하게 유지한다. 독립 실행 경로는 모델 내부에서 탐색한다. */
-.model-area-nav { display:flex; flex-direction:row; flex-wrap:wrap; gap:8px; padding:0 0 20px;
-  margin:0 0 20px; border-bottom:1px solid var(--sos-border); }
-.model-area-link { display:flex; flex-direction:column; align-items:flex-start; gap:3px;
-  padding:10px 15px; border-radius:9px; color:var(--sos-text); background:var(--sos-panel);
-  border:1px solid var(--sos-border); text-decoration:none; min-width:94px; }
-.model-area-link small { color:var(--sos-muted); font-size:11px; }
-.model-area-link span { font-size:13px; font-weight:650; }
+/* 사용자 목적과 그 안의 실행 도구에 서로 다른 위계를 부여한다. */
+.model-area-navigation { margin-bottom:20px; }
+.model-area-nav { display:flex; flex-direction:row; max-height:none; overflow:visible; gap:8px; padding:0 0 12px; border-bottom:1px solid var(--sos-border); }
+.model-area-link { display:block; padding:10px 15px; border-radius:9px; color:var(--sos-text);
+  text-decoration:none; font-size:13px; font-weight:650; }
 .model-area-link:hover, .model-area-link[aria-current="page"] {
-  border-color:var(--sos-accent); background:var(--sos-accent-bg); text-decoration:none; }
+  background:var(--sos-accent-bg); text-decoration:none; }
+.model-area-link[aria-current="page"] { color:var(--sos-accent); }
 .model-area-link:focus-visible { outline:2px solid var(--sos-accent); outline-offset:3px; }
+.model-tools { padding-top:12px; }
+.model-tools summary { color:var(--sos-muted); font-size:13px; cursor:pointer; }
+.model-tools nav { display:flex; flex-direction:row; flex-wrap:wrap; max-height:none; overflow:visible; gap:4px; padding:0; margin-top:8px; }
+.model-tools .model-area-link { font-size:12px; padding:8px 12px; font-weight:500; }
 @media(max-width:620px) {
-  .model-area-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
-  .model-area-link { min-width:0; padding:10px; }
+  .model-area-nav > a { flex:1; text-align:center; }
 }
-
 
 /* 독립 ML·운영 기능의 고급 접근을 유지한다. */
 .platform-quick-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
@@ -856,7 +856,7 @@ button.ghost.pipeline-candidate-top-item[aria-pressed="true"] {
 .model-lab-chart-key { display:inline-block; width:12px; height:3px; border-radius:5px; }
 .model-lab-chart-key.normal { background:#7FB6E4; }
 .model-lab-chart-key.unusual { background:#F0B46A; }
-.model-lab-home-choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.model-lab-home-choices { display:grid; grid-template-columns:1fr; gap:14px; }
 .model-lab-choice { background:var(--sos-raised); border:1px solid var(--sos-border);
   padding:24px; border-radius:13px; display:flex; flex-direction:column; align-items:flex-start; gap:11px; }
 .model-lab-choice h3 { font-size:19px; }
@@ -1465,3 +1465,6 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   .data-job-workspace { grid-template-columns:minmax(0,1fr); }
   .data-job-detail { border-left:0; padding:18px 0 0; border-top:1px solid var(--sos-border); }
 }
+
+.research-group-settings { margin:12px 0; }
+.research-group-settings > .panel { margin-top:12px; }

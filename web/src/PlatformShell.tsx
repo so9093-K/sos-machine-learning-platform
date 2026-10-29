@@ -6,21 +6,22 @@ import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
   type WorkspaceTab, type MLNavigationContext, type ResourceRoute } from "./PlatformNavigation";
 
 const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; description: string }> = {
-  overview: { eyebrow: "WORKSPACE", title: "Workspace", description: "데이터 탐색 · 활동 이상 탐지 · 이전 분석 재개" },
+  overview: { eyebrow: "WORKSPACE", title: "Workspace", description: "데이터 탐색 · 모델 활용 · 연구·실험" },
   understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
   preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
   preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "원본 선택 · 변환 편집 · 결과 Dataset" },
-  pipelines: { eyebrow: "모델 실험실", title: "활동 이상 탐지", description: "활동 패턴을 이해하고, 모델을 사용하거나 직접 학습합니다." },
-  ml: { eyebrow: "MODELS", title: "모델 버전", description: "불변 모델 판본 · 학습 이력 · 비교" },
-  training: { eyebrow: "TRAINING", title: "모델 학습", description: "입력 데이터 · 학습 설정 · 실행 결과" },
+  pipelines: { eyebrow: "분석 주제", title: "활동 이상 탐지", description: "활동 패턴 이해 · 모델 적용 · 결과 분석" },
+  ml: { eyebrow: "MODELS", title: "모델 활용", description: "모델 선택 · 입력 확인 · 적용 · 결과 이해" },
+  research: { eyebrow: "RESEARCH & EXPERIMENTS", title: "연구·실험", description: "이전 실험 · 실행 비교 · 새 학습" },
+  training: { eyebrow: "RESEARCH & EXPERIMENTS", title: "새 학습", description: "입력 데이터 · 학습 설정 · 실행 결과" },
   scoring: { eyebrow: "SCORING", title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
   policies: { eyebrow: "DECISION POLICY", title: "판정 정책", description: "점수 결과 · 정책 판본 · 재사용" },
   evaluations: { eyebrow: "EVALUATION", title: "평가 결과", description: "평가 근거 · 레이블 · 지표" },
   explanations: { eyebrow: "EXPLANATION", title: "점수 설명", description: "관측값 · 점수 기여도 · 기준값 치환" },
   jobs: { eyebrow: "ACTIVITY & JOBS", title: "작업 이력", description: "Data · Exploration · ML 실행 현황" },
   "ml-jobs": { eyebrow: "ACTIVITY & JOBS", title: "ML 작업 이력", description: "학습 · Scoring · 정책 · 평가 · 설명" },
-  "pipeline-jobs": { eyebrow: "ACTIVITY & JOBS", title: "모델 실험실 분석 이력", description: "이전에 수행한 모델 학습과 이상 탐지 결과" },
+  "pipeline-jobs": { eyebrow: "ACTIVITY & JOBS", title: "Workflow 분석 이력", description: "이전에 수행한 모델 학습과 이상 탐지 결과" },
   storage: { eyebrow: "PLATFORM OPERATIONS", title: "저장소 상태", description: "Storage · Health" },
   audit: { eyebrow: "PLATFORM OPERATIONS", title: "보안 감사", description: "Identity · Audit" },
 };
@@ -70,7 +71,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
         </button>
       </div>
       <div id="sos-sidebar-menu" className={"sidebar-menu" + (menuOpen ? " open" : "")}>
-      <PlatformNavigation active={section} onNavigate={onNavigate}
+      <PlatformNavigation active={section} context={modelContext} resource={modelResource} onNavigate={onNavigate}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
         canViewDataset={actor.capabilities.includes("dataset.read")} />
       {dataSidebar}

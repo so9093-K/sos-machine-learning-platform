@@ -38,8 +38,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
     <section className="platform-intro">
       <span className="eyebrow">{brandName} · EXPLORE · EXPERIMENT · UNDERSTAND · EVOLVE</span>
       <h2>작업 시작</h2>
-      <p>현재 사용할 수 있는 데이터를 살펴보거나 준비된 활동 이상 탐지 분석을 이용할 수 있습니다.
-        각 기능은 독립적으로 시작할 수 있습니다.</p>
+      <p>데이터를 살펴보고, 등록된 모델을 활용하거나 새로운 실험을 시작합니다.</p>
     </section>
     <section aria-labelledby="available-work-heading">
       <h3 className="platform-section-title" id="available-work-heading">지금 이용할 수 있는 기능</h3>
@@ -53,12 +52,14 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
           </button>
         </article>
         <article className="panel platform-destination">
-          <span className="eyebrow">모델 실험실</span>
-          <h4>활동 이상 탐지</h4>
-          <p>등록 모델 적용과 새 모델 학습을 선택하고 분석 결과를 살펴봅니다.</p>
-          <button type="button" onClick={() => onNavigate("pipelines")}>
-            활동 이상 탐지 →
-          </button>
+          <span className="eyebrow">MODEL USE</span><h4>모델 활용</h4>
+          <p>등록된 모델의 입력 조건을 확인하고 데이터에 적용합니다.</p>
+          <button type="button" onClick={() => onNavigate("ml")}>모델 선택 →</button>
+        </article>
+        <article className="panel platform-destination">
+          <span className="eyebrow">RESEARCH & EXPERIMENTS</span><h4>연구·실험</h4>
+          <p>이전 실험의 조건과 결과를 확인하고 새 학습을 준비합니다.</p>
+          <button type="button" onClick={() => onNavigate("research")}>연구·실험 →</button>
         </article>
       </div>
     </section>
@@ -73,7 +74,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
       {loading && <p role="status">이전 분석을 확인하는 중입니다.</p>}
       {runError && <p role="alert">이전 분석을 조회하지 못했습니다: {runError}</p>}
       {!loading && !runError && recent.length === 0 &&
-        <p className="muted">아직 실행한 분석이 없습니다. 위에서 활동 이상 탐지를 시작할 수 있습니다.</p>}
+        <p className="muted">아직 실행한 분석이 없습니다.</p>}
       {recent.length > 0 && <div className="platform-compact-list">
         {recent.map(run => <button type="button" key={run.id}
           className="platform-list-link ghost"
@@ -103,11 +104,10 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
         </div>}
     </section>
     <section className="platform-outlook">
-      <h3>독립 ML 기능과 운영</h3>
-      <p>모델·Job·불변 결과는 API에서 독립적으로 사용할 수 있습니다. 필요한 경우
-        기존 상세 주소로 접근하거나 고급 실행·운영 화면에서 조회할 수 있습니다.</p>
+      <h3>분석 주제·작업 이력</h3>
+      <p>활동 이상 탐지의 사용 방법을 살펴보거나 실행한 작업을 확인합니다.</p>
       <div className="platform-outlook-actions">
-        <button className="secondary" type="button" onClick={() => onNavigate("ml")}>독립 ML 실행·모델 →</button>
+        <button className="secondary" type="button" onClick={() => onNavigate("pipelines")}>활동 이상 탐지 →</button>
         <button className="secondary" type="button" onClick={() => onNavigate("jobs")}>작업 이력 →</button>
       </div>
     </section>

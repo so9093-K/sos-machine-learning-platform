@@ -263,6 +263,51 @@ try {
   }));
   assert.match(modelNav, /href="\/scoring\?model=model-v1"/);
 
+  // 새 목적 구분에서도 Dataset·모델 그룹은 직접 URL과 왕복 이동에 유지한다.
+  const researchRoute = routeAt("/research", "?dataset=data-v1&group=research-team");
+  assert.equal(contextPath("training", nextNavigationContext(researchRoute, "training")),
+    "/training?dataset=data-v1&group=research-team");
+  assert.equal(contextPath("research", nextNavigationContext(groupTraining, "research")),
+    "/research?dataset=data-v1&group=research-team");
+  const modelUseRoute = routeAt("/pipelines", "?view=use&dataset=data-v1&group=research-team");
+  assert.equal(contextPath("research", nextNavigationContext(modelUseRoute, "research")),
+    "/research?dataset=data-v1&group=research-team");
+  for (const [source, destination, expected] of [
+    [researchRoute, "ml", "/models?dataset=data-v1&amp;group=research-team"],
+    [modelUseRoute, "research", "/research?dataset=data-v1&amp;group=research-team"],
+  ]) {
+    const menu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
+      active: source.tab, context: source.context, resource: source.resource,
+      canInspectStorage: false, canViewAudit: false, onNavigate: () => {},
+    }));
+    assert.ok(menu.includes('href="' + expected + '"'));
+    assert.equal(expected.replaceAll("&amp;", "&"),
+      contextPath(destination, nextNavigationContext(source, destination)));
+  }
+  const researchNav = renderToStaticMarkup(React.createElement(ModelAreaNavigation, {
+    active: "training", context: researchRoute.context, resource: null, onNavigate: () => {},
+  }));
+  assert.match(researchNav, /href="\/research\?dataset=data-v1&amp;group=research-team" aria-current="page"/);
+  assert.doesNotMatch(researchNav, /href="\/training/);
+  assert.doesNotMatch(researchNav, /모델 적용·결과 도구/);
+  assert.match(modelNav, /<details class="model-tools">/);
+  const { ModelCatalog } = await vite.ssrLoadModule("/src/ModelCatalog.tsx");
+  const catalog = renderToStaticMarkup(React.createElement(ModelCatalog, {
+    datasets: [], registryKey: "default", canManage: true, onSelectGroup: () => {},
+    onOpenModel: () => {}, onScoreModel: () => {}, onResearch: () => {},
+  }));
+  assert.doesNotMatch(catalog, /연구 실행 비교|새 학습 →|새 모델 그룹 생성/);
+  const { MLflowResearch } = await vite.ssrLoadModule("/src/MLflowResearch.tsx");
+  const researchProps = { datasets: [], registryKey: "research-team", canManage: false,
+    onSelectGroup: () => {}, onOpenResource: () => {}, onTrain: () => {}, onWorkflow: () => {} };
+  const researchPage = renderToStaticMarkup(React.createElement(MLflowResearch, { ...researchProps, canTrain: true }));
+  assert.match(researchPage, /새 학습 →/);
+  assert.match(researchPage, /연구 실행 비교/);
+  assert.doesNotMatch(researchPage, /연구 묶음·비교 대상 선택|모델 버전 검색/);
+  const readResearch = renderToStaticMarkup(React.createElement(MLflowResearch, { ...researchProps, canTrain: false }));
+  assert.doesNotMatch(readResearch, /새 학습 →|활동 이상 탐지 Workflow →|MLflow 실험 분석/);
+  assert.match(readResearch, /실험 기록을 조회/);
+
   // 학습 폼도 URL Dataset을 최초 선택값으로 렌더한다.
   const { MLWorkbench } = await vite.ssrLoadModule("/src/MLWorkbench.tsx");
   const trainingForm = renderToStaticMarkup(React.createElement(MLWorkbench, {
@@ -826,9 +871,9 @@ try {
   }));
   assert.match(selectedJourney, /<option value="dataset-1" selected=""/);
   assert.match(selectedJourney, /입력 조건 확인/);
-  // 장기 비전 Preview 주소는 홈으로 이동하되 기존 ML 결과 URL은 보존한다.
-  assert.equal(routeAt("/research", "").tab, "overview");
-  assert.equal(routeAt("/model-experience", "").tab, "overview");
+  // 연구·실험의 직접 진입과 과거 모델 경험 주소는 실제 기능으로 연결한다.
+  assert.equal(routeAt("/research", "").tab, "research");
+  assert.equal(routeAt("/model-experience", "").tab, "ml");
   assert.equal(routeAt("/models/model-v1", "").resource?.kind, "model");
   assert.equal(routeAt("/scoring/results/score-v1", "").resource?.kind, "scoring");
   const { ModelLabPlayground, exampleValues, playgroundInputMatchesResult,
@@ -1021,16 +1066,17 @@ try {
   const pendingUse = renderToStaticMarkup(React.createElement(ModelLabUse, {
     datasets: [], hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
     canRun: true, canCancel: true, selectedModelId: "", onSelectModel: () => {},
-    onOpenResource: () => {}, onBack: () => {}, onLearn: () => {}, canLearn: true,
+    onOpenResource: () => {}, onBack: () => {}, onResearch: () => {}, canLearn: true,
   }));
   assert.match(pendingUse, /모델 적용/);
   assert.match(pendingUse, /사용 가능한 모델을 확인하는 중/);
   const { ModelLabHome } = await vite.ssrLoadModule("/src/ModelLabHome.tsx");
   const labHome = renderToStaticMarkup(React.createElement(ModelLabHome, {
-    onUse: () => {}, onLearn: () => {},
+    onUse: () => {}, onResearch: () => {},
   }));
   assert.match(labHome, /<h3>모델 적용<\/h3>/);
-  assert.match(labHome, /<h3>모델 학습<\/h3>/);
+  assert.match(labHome, /연구·실험 →/);
+  assert.doesNotMatch(labHome, /<h3>모델 학습<\/h3>/);
   assert.match(labHome, /시간대별 활동 패턴/);
   assert.doesNotMatch(labHome, /이해를 돕는 개념도|실제 결과가 아닙니다/);
   const { PlatformOverview } = await vite.ssrLoadModule("/src/PlatformOverview.tsx");
@@ -1042,6 +1088,8 @@ try {
   assert.match(home, /ACME AI Lab · EXPLORE/);
   assert.doesNotMatch(home, /SOS · EXPLORE/);
   assert.match(home, /작업 시작/);
+  assert.match(home, /<h4>모델 활용<\/h4>/);
+  assert.match(home, /<h4>연구·실험<\/h4>/);
   assert.match(home, /활동 이상 탐지/);
   assert.doesNotMatch(home, /최근 ML 실행/);
   const { PipelineHistoryPanel } = await vite.ssrLoadModule("/src/PipelineHistoryPanel.tsx");
@@ -1054,7 +1102,7 @@ try {
     active: "pipeline", onChange: () => {}, onNavigate: () => {},
     onOpenResource: () => {}, onOpenPipelineRun: () => {}, datasets: [], canCancel: false,
   }));
-  assert.match(activity, /모델 실험실 분석/);
+  assert.match(activity, /Workflow 분석/);
   assert.match(activity, /활동 이상 탐지 분석 이력/);
   const { ModelApplicationWorkspace } = await vite.ssrLoadModule("/src/ModelApplicationWorkspace.tsx");
   const useModel = renderToStaticMarkup(React.createElement(ModelApplicationWorkspace, {

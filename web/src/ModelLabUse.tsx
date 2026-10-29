@@ -33,7 +33,7 @@ async function compatiblePage(page: MLflowModelVersionPage, definition: Pipeline
 }
 
 export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, canRun, canCancel,
-  selectedModelId, selectedGroupKey, onSelectModel, onSelectGroup, onOpenResource, onBack, onLearn,
+  selectedModelId, selectedGroupKey, onSelectModel, onSelectGroup, onOpenResource, onBack, onResearch,
   canLearn, canUpload, onDatasetRegistered }: {
   datasets: Dataset[];
   hasMoreDatasets: boolean;
@@ -44,7 +44,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
   onSelectModel: (id: string) => void;
   onSelectGroup: (group: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
-  onBack: () => void; onLearn: () => void;
+  onBack: () => void; onResearch: () => void;
   canLearn: boolean; canUpload: boolean;
   onDatasetRegistered: (dataset: Dataset) => void;
 }) {
@@ -159,7 +159,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
     <header className="model-lab-use-heading">
       <div>
         <h2 id="model-lab-use-heading">모델 적용</h2>
-        <p>데이터를 분석하고, 궁금한 관측값은 직접 바꿔 모델의 반응을 살펴봅니다.</p>
+        <p>활동 이상 탐지 전용 분석입니다. 호환 모델로 이상 점수와 관측값을 조사하고, 입력값을 바꿔 모델의 반응을 살펴봅니다.</p>
       </div>
     </header>
     {!selected && groupOptions}
@@ -196,7 +196,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
           다른 모델 그룹 확인 →
         </button>}
       {!nextPage && !lookupFailures && canLearn &&
-        <button type="button" onClick={onLearn}>모델 학습 →</button>}
+        <button type="button" onClick={onResearch}>연구·실험 →</button>}
     </div>}
     {selected && <div className="model-lab-current-model">
       <div><span className="eyebrow">현재 선택한 모델</span>
@@ -242,7 +242,7 @@ export function ModelLabUse({ datasets, hasMoreDatasets, onLoadMoreDatasets, can
       canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
       canUpload={canUpload} onDatasetRegistered={onDatasetRegistered} onResultViewChange={handleResultViewChange} />}
     {canLearn && <div className="model-lab-use-footer">
-      <button type="button" className="ghost" onClick={onLearn}>새 모델 학습 →</button>
+      <button type="button" className="ghost" onClick={onResearch}>연구·실험 →</button>
     </div>}
   </section>;
 }
