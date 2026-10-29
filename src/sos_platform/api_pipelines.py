@@ -12,7 +12,7 @@ from .store import Store
 
 READ_DATASET = Depends(require("dataset.read"))
 READ_JOB = Depends(require("job.read"))
-CREATE_JOB = Depends(require("job.create"))
+TRAIN_MODEL = Depends(require("model.train"))
 CANCEL_JOB = Depends(require("job.cancel"))
 
 
@@ -188,7 +188,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
     def submit_pipeline(
         definition_id: str,
         body: PipelineStartRequest,
-        actor: Actor = CREATE_JOB,
+        actor: Actor = TRAIN_MODEL,
         idempotency_key: str | None = Header(
             default=None, alias="Idempotency-Key",
             min_length=8, max_length=128,

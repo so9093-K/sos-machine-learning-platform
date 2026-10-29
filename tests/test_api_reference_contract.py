@@ -142,3 +142,57 @@ def test_public_branding_and_admin_edit_contract(tmp_path, monkeypatch):
         assert client.put("/api/branding", json={"brand_name": invalid}, headers=admin).status_code == 422
     assert client.get("/api/branding").json() == payload
     assert client.get("/api/instance").status_code == 401
+
+
+def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatch):
+    """일반 실행 토큰이 직접 API로 학습·정의 변경을 우회하지 못한다."""
+    actors = {
+        "analysis-token-with-enough-entropy": Actor("owner", "human", frozenset({"researcher"})),
+        "builder-token-with-enough-entropy": Actor("owner", "human", frozenset({"model_builder"})),
+    }
+    identity = IdentitySettings("token", {
+        hashlib.sha256(token.encode()).hexdigest(): actor for token, actor in actors.items()
+    })
+    source = {"id": "source", "version": "v1", "kind": "file", "name": "input",
+              "location": "s3://test/source.parquet", "owner_actor": "owner"}
+    submitted = []
+    monkeypatch.setattr(Store, "get_dataset", lambda self, identifier: source if identifier == "source" else None)
+    monkeypatch.setattr(Store, "get_job", lambda self, identifier: None)
+    monkeypatch.setattr(Store, "get_model_revision", lambda self, identifier: None)
+
+    def create_job(self, **values):
+        submitted.append(values)
+        return {**values, "id": "job-1", "status": "Queued", "result": None,
+                "error": None, "error_code": None, "cancel_requested": False,
+                "created_at": "2026-10-29T00:00:00Z", "updated_at": "2026-10-29T00:00:00Z",
+                "attempts": []}
+
+    monkeypatch.setattr(Store, "create_job", create_job)
+    client = TestClient(create_app(tmp_path, identity=identity))
+    analyst, builder = [{"Authorization": "Bearer " + token, "Idempotency-Key": "authoring-test-01"}
+                        for token in actors]
+    train = {"dataset_id": "source", "features": ["f1"]}
+    definition = {"feature_dataset_id": "source", "entity_column": "host",
+                  "timestamp_column": "event_time", "features": ["f1"]}
+    for path, body in [
+        ("/api/ml/train/jobs", train),
+        ("/api/ml/train/jobs/missing/fork", {}),
+        ("/api/pipelines/activity-anomaly-if/runs", {"dataset_id": "source"}),
+        ("/api/features/services/jobs", definition),
+        ("/api/features/services/missing/retirement/jobs", {}),
+        ("/api/ml/registry/groups", {"registry_key": "test", "title": "test"}),
+    ]:
+        assert client.post(path, json=body, headers=analyst).status_code == 403, path
+    assert submitted == []
+    # 일반 실행·기록 조회는 제작 권한 변경의 영향을 받지 않는다.
+    assert client.get("/api/ml/train/jobs/missing", headers=analyst).status_code == 404
+    assert client.post("/api/ml/scoring/jobs", json={
+        "dataset_id": "source", "model_revision_id": "missing",
+    }, headers=analyst).status_code == 404
+    assert client.post("/api/ml/train/jobs", json=train, headers=builder).status_code == 202
+    assert submitted[-1]["kind"] == "ml_train"
+    assert client.post("/api/features/services/jobs", json=definition, headers=builder).status_code == 202
+    assert submitted[-1]["kind"] == "feature_register"
+    capabilities = client.get("/api/v2/auth/me", headers=analyst).json()["capabilities"]
+    assert "job.create" in capabilities
+    assert not {"model.train", "feature.manage", "model.manage"}.intersection(capabilities)

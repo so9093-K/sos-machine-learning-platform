@@ -24,8 +24,8 @@ function useModelAvailability(): ModelAvailability {
 }
 
 /** 활동 이상 탐지 주제: 처리 단계가 아니라 모델의 목적과 실제 사용 행동을 보여준다. */
-export function ModelLabHome({ onUse, onResearch, canLearn = true }: {
-  onUse: () => void; onResearch: () => void; canLearn?: boolean;
+export function ModelLabHome({ onUse, onHistory }: {
+  onUse: () => void; onHistory: () => void;
 }) {
   const availability = useModelAvailability();
   return <section className="model-lab-home" aria-labelledby="model-lab-home-heading">
@@ -70,10 +70,10 @@ export function ModelLabHome({ onUse, onResearch, canLearn = true }: {
         <button type="button" onClick={onUse}>모델 적용 →</button>
       </article>
     </div>
-    {availability === "none" && <p className="model-lab-home-note">기본 모델 그룹에 사용할 수 있는 모델이 아직 없습니다. 연구·실험에서 학습·등록 상태를 확인할 수 있습니다.</p>}
+    {availability === "none" && <p className="model-lab-home-note">기본 모델 그룹에 사용할 수 있는 모델이 없습니다. 모델 제공 담당자에게 등록·접근 상태를 확인하세요.</p>}
     <div className="model-lab-use-footer">
-      <p>{canLearn ? "이전 실험 확인과 새 학습" : "이전 실험과 학습 결과 확인"}</p>
-      <button type="button" className="secondary" onClick={onResearch}>연구·실험 →</button>
+      <p>기록된 실행 조건과 결과 확인</p>
+      <button type="button" className="secondary" onClick={onHistory}>실행 기록 →</button>
     </div>
   </section>;
 }

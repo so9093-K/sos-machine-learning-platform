@@ -23,6 +23,8 @@ ACTIONS = {
     "job.create",
     "job.cancel",
     "model.manage",
+    "model.train",
+    "feature.manage",
     "storage.inspect",
     "snapshot.retain",
     "audit.read",
@@ -37,11 +39,13 @@ GRANTS = {
         "job.read",
         "job.create",
         "job.cancel",
-        "model.manage",
     },
     "operator": {"storage.inspect", "snapshot.read", "snapshot.retain", "audit.read"},
     "administrator": ACTIONS,
 }
+
+# 학습·정의 변경은 명시적으로 부여한 제작 역할에만 허용한다.
+GRANTS["model_builder"] = GRANTS["researcher"] | {"model.train", "model.manage", "feature.manage"}
 
 
 @dataclass(frozen=True)

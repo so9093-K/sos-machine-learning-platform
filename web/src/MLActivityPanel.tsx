@@ -115,9 +115,10 @@ function ActivityJobDetails({ job, canCancel, onChanged }: {
 }
 
 /** 조회된 Job 페이지에 있는 활동만 보여준다. 전체 Job 수나 완료 진행률을 추정하지 않는다. */
-export function MLActivityPanel({ compact = false, canCancel = false, datasets = [], onNavigate,
+export function MLActivityPanel({ canTrain = false, compact = false, canCancel = false, datasets = [], onNavigate,
   onOpenResource, onViewAll }: {
   compact?: boolean;
+  canTrain?: boolean;
   canCancel?: boolean;
   datasets?: Dataset[];
   onNavigate: (tab: WorkspaceTab) => void;
@@ -187,9 +188,9 @@ export function MLActivityPanel({ compact = false, canCancel = false, datasets =
             onClick={() => onOpenResource(operations[job.kind].resource, job.resultId!)}>
             결과 판본 보기 →
           </button>}
-          <button className="secondary" onClick={() => onNavigate(operations[job.kind].tab)}>
+          {(job.kind !== "training" || canTrain) && <button className="secondary" onClick={() => onNavigate(operations[job.kind].tab)}>
             {job.resultId ? "관련 작업" : "실행 화면"} →
-          </button>
+          </button>}
         </div>
         {!compact && <ActivityJobDetails job={job} canCancel={canCancel}
           onChanged={() => void refresh()}/>}

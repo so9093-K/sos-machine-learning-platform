@@ -254,11 +254,11 @@ def test_http_training_submission_and_fork_preserve_input_policy():
     from fastapi import FastAPI, Request
     from fastapi.testclient import TestClient
 
-    from sos_platform.api_ml_training import CREATE_JOB_DEP, training_router
+    from sos_platform.api_ml_training import TRAIN_MODEL_DEP, training_router
     from sos_platform.security import Actor
 
     store = Mock()
-    actor = Actor("alice", "human", frozenset({"researcher"}))
+    actor = Actor("alice", "human", frozenset({"model_builder"}))
     source_job = {
         "id": "original",
         "kind": "ml_train",
@@ -296,7 +296,7 @@ def test_http_training_submission_and_fork_preserve_input_policy():
         existing_job=lambda _job_id, _actor: source_job,
         require_submission_key=lambda key: None,
     ))
-    app.dependency_overrides[CREATE_JOB_DEP.dependency] = lambda: actor
+    app.dependency_overrides[TRAIN_MODEL_DEP.dependency] = lambda: actor
 
     @app.middleware("http")
     async def assign_request_id(request: Request, call_next):

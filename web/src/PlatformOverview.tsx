@@ -38,7 +38,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
     <section className="platform-intro">
       <span className="eyebrow">{brandName} · EXPLORE · EXPERIMENT · UNDERSTAND · EVOLVE</span>
       <h2>작업 시작</h2>
-      <p>데이터를 살펴보고, 등록된 모델을 활용하거나 새로운 실험을 시작합니다.</p>
+      <p>데이터를 이해하고, 사용할 수 있는 모델과 실행 결과를 살펴봅니다.</p>
     </section>
     <section aria-labelledby="available-work-heading">
       <h3 className="platform-section-title" id="available-work-heading">지금 이용할 수 있는 기능</h3>
@@ -55,11 +55,6 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
           <span className="eyebrow">MODEL USE</span><h4>모델 활용</h4>
           <p>등록된 모델의 입력 조건을 확인하고 데이터에 적용합니다.</p>
           <button type="button" onClick={() => onNavigate("ml")}>모델 선택 →</button>
-        </article>
-        <article className="panel platform-destination">
-          <span className="eyebrow">RESEARCH & EXPERIMENTS</span><h4>연구·실험</h4>
-          <p>이전 실험의 조건과 결과를 확인하고 새 학습을 준비합니다.</p>
-          <button type="button" onClick={() => onNavigate("research")}>연구·실험 →</button>
         </article>
       </div>
     </section>

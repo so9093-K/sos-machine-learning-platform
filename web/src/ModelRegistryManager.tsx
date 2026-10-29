@@ -55,9 +55,9 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
     let active = true;
     void Promise.all([
       request<GroupPage>("/api/ml/registry/groups"),
-      request<{items: Array<{id:string; registry_key:string; registry_version:string}>}>(
+      canManage ? request<{items: Array<{id:string; registry_key:string; registry_version:string}>}>(
         "/api/ml/models/deletion-pending",
-      ),
+      ) : Promise.resolve({ items: [] }),
     ]).then(([groupsPage, pendingPage]) => {
       if (active) {
         setGroups(groupsPage.items);
@@ -66,7 +66,7 @@ export function ModelRegistryManager({ activeKey, onSelect, onChanged, canManage
       }
     }).catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
-  }, [revision]);
+  }, [revision, canManage]);
   useEffect(() => {
     setEditTitle(current?.title ?? "");
     setEditDescription(current?.description ?? "");
