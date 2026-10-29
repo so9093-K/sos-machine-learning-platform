@@ -107,7 +107,38 @@ try {
   assert.doesNotMatch(catalogPendingMenu, /href="\/research|href="\/training|학습·실험 관리|제작 도구/);
   assert.equal(routeAt("/training", "").tab, "overview");
   assert.equal(routeAt("/research", "").tab, "overview");
-  assert.equal(routeAt("/pipelines", "").tab, "overview");
+  assert.equal(routeAt("/pipelines", "").tab, "pipelines");
+  const pipelinePath = contextPath("pipelines", { pipelineRunId: "run/one", datasetId: "data one" });
+  assert.equal(pipelinePath, "/pipelines/runs/run%2Fone?dataset=data+one");
+  const pipelineRoute = routeAt("/pipelines/runs/run%2Fone", "?dataset=data+one");
+  assert.deepEqual(pipelineRoute.context, { pipelineRunId: "run/one", datasetId: "data one" });
+  const pipelineScorePath = resourcePath("scoring", "test-score", { pipelineRunId: "run/one" });
+  assert.equal(pipelineScorePath, "/scoring/results/test-score?pipelineRun=run%2Fone");
+  const pipelineScore = routeAt("/scoring/results/test-score", "?pipelineRun=run%2Fone");
+  const pipelinePolicy = nextNavigationContext(pipelineScore, "policies");
+  assert.deepEqual(pipelinePolicy, { scoringId: "test-score", pipelineRunId: "run/one" });
+  assert.equal(contextPath("policies", pipelinePolicy), "/policies?scoring=test-score&pipelineRun=run%2Fone");
+  assert.deepEqual(nextNavigationContext(pipelineScore, "pipelines"), { pipelineRunId: "run/one" });
+  const pipelineData = routeAt("/data", "?dataset=data-one&pipelineRun=run-one");
+  assert.equal(contextPath("preview", nextNavigationContext(pipelineData, "preview")),
+    "/data/query?dataset=data-one&pipelineRun=run-one");
+  const pipelineHiddenMenu = renderToStaticMarkup(React.createElement(PlatformNavigation, {
+    active: "overview", canInspectStorage: false, canViewAudit: false, canViewRuns: false, onNavigate: () => {},
+  }));
+  assert.doesNotMatch(pipelineHiddenMenu, /href="\/pipelines"/);
+  const { pipelineResultId, PipelineResults } = await vite.ssrLoadModule("/src/PipelineRunDetails.tsx");
+  const partialRun = { id: "partial-run", status: "Failed", stages: [
+    { name: "training", job: { status: "Succeeded", result: { model_revision_id: "model-ready" } } },
+    { name: "test", job: { status: "Failed", result: { scoring_result_id: "unconfirmed" } } },
+  ] };
+  assert.equal(pipelineResultId(partialRun, "training", "model_revision_id"), "model-ready");
+  assert.equal(pipelineResultId(partialRun, "test", "scoring_result_id"), null);
+  const partialResults = renderToStaticMarkup(React.createElement(PipelineResults, {
+    run: partialRun, revision: 0, canRun: false, canCancel: false, canOpenMLflow: false,
+    onOpenResource: () => {}, onOpenDataset: () => {},
+  }));
+  assert.match(partialResults, /학습 결과/);
+  assert.doesNotMatch(partialResults, /Test 결과·평가|이상 후보 조사/);
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
   assert.equal(first.tab, "evaluations");

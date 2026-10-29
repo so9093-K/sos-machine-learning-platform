@@ -25,6 +25,10 @@ export function mlflowUrl(): string {
   return origin(ports().mlflow);
 }
 
+export function mlflowRunUrl(runId: string): string {
+  return `${mlflowUrl()}/#/runs/${encodeURIComponent(runId)}`;
+}
+
 export function feastUrl(): string {
   return origin(ports().feast);
 }

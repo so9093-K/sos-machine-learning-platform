@@ -66,11 +66,11 @@ make doctor   # 설정·준비 상태 진단
 - Dagster OSS 운영자 UI: `http://localhost:9607` (localhost 전용, 사용자 인증 기능 없음)
 - Dagster에서 등록형 활동 이상 탐지 실행을 찾을 때는 Code Location `sos`, Job `activity_anomaly_workflow`를 확인하세요.
   자동화가 반환받은 SOS 제출 ID로 Dagster Run의 `sos/submission_id` 태그를 검색합니다.
-  Dagster의 Re-execute는 같은 SOS 단계 Job을 재사용하므로 새 분석이 아닙니다. 새 실행은 자동화 계정이 `POST /api/pipelines/activity-anomaly-if/runs`에 새 멱등성 키로 제출합니다.
+  Dagster의 Re-execute는 같은 SOS 단계 Job을 재사용하므로 새 분석이 아닙니다. 새 실행은 SOS 웹의 **파이프라인 > 새 파이프라인 실행**에서 학습 권한이 있는 계정으로 제출하거나, 자동화 계정이 `POST /api/pipelines/activity-anomaly-if/runs`에 새 멱등성 키로 제출합니다.
 - MLflow에서 한 분석의 Run은 이름 `sos-workflow-<분석 ID 앞 8자>-<Dagster 단계명>`과 태그 `sos.workflow_submission_id`로 묶입니다.
   모델 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 MLflow UI에서 수정하거나 삭제하지 않습니다.
 - Dagster는 SOS 사용자용 학습 화면이 아니라 **로컬 운영자의 Workflow Run·단계·이벤트 확인 도구**입니다.
-  Workflow 상태와 단계별 Job·결과는 SOS API에서 확인하며, Dagster 접속은 같은 PC의 브라우저에서만 가능합니다. SOS 웹에는 Workflow 실행·결과 화면이 없습니다.
+  SOS 웹의 **파이프라인**에서 최근 실행과 단계별 주요 결과를 확인합니다. `/pipelines/runs/<SOS 제출 ID>`로 특정 실행을 직접 열 수 있으며, 활동 이상 탐지에서도 같은 화면으로 이동합니다. 입력 분할·학습·보정·Test 결과를 확인하고 기존 점수·정책·평가 상세와 이상 후보 조사로 이어갈 수 있습니다. 로컬 운영 권한이 있으면 해당 MLflow Run을 열 수 있습니다. Dagster 접속은 같은 PC의 브라우저에서만 가능합니다.
   API 컨테이너의 내부 GraphQL 주소는 `http://dagster-webserver:3000/graphql`입니다.
 - Feast UI는 SOS의 `sos_features` SQL Registry를 **읽기 전용 DB 계정**으로 탐색합니다.
   `make up` 때 기존 Registry를 준비하고 읽기 권한을 설정합니다. 처음 기동할 때 등록된 Feature가 없으면 빈 Catalog가 정상입니다.
@@ -146,7 +146,7 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 ## MLflow 실험·모델 관리
 
-로컬 Compose는 MLflow 관리 서버를 실행합니다. Experiment·Run 비교와 모델 그룹·판본 관리는 개발 환경과 공식 MLflow UI에서 수행하며, SOS 웹은 제공된 모델 판본과 고정된 실행 근거만 보여줍니다. Experiment·Run·Registered Model/Version은 MLflow가 관리하고, SOS는 Dataset·Job/Attempt·Scoring·Evaluation 및 불변 모델 실행 근거와 모델 제공 기록을 소유합니다.
+로컬 Compose는 MLflow 관리 서버를 실행합니다. Experiment·Run 비교와 모델 그룹·판본 관리는 개발 환경과 공식 MLflow UI에서 수행합니다. SOS 웹은 제공 모델의 활용과 등록 Pipeline의 주요 결과·고정된 실행 근거를 연결합니다. Experiment·Run·Registered Model/Version은 MLflow가 관리하고, SOS는 Dataset·Job/Attempt·Scoring·Evaluation 및 불변 모델 실행 근거와 모델 제공 기록을 소유합니다.
 
 학습 성공과 MLflow Registry 등록 성공은 구별합니다. 관리 연결이 실패하면 학습 성공은 유지되지만 새 모델의 Scoring 및 Workflow 후속 단계는 Registry 등록을 기다립니다. 기존 `SOS_MLFLOW_EXPERIMENT_ID`는 사용하지 않습니다. 학습 요청의 연구 Experiment 이름으로 MLflow 내 Actor별 연구 묶음을 만들며, 연구 이름을 지정하지 않은 실행은 기본 실험에 기록합니다.
 
@@ -156,7 +156,7 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 ## Dagster OSS Workflow 운영
 
-등록형 활동 이상 탐지 Workflow의 실행·단계 의존성과 Asset Graph는 Dagster OSS에서 관리한다. Workflow 제출·조회·취소는 자동화 계정이 SOS API를 경유해 수행하며 SOS 웹은 Workflow 실행 화면을 제공하지 않는다. Dagster UI와 GraphQL을 외부 네트워크에 공개하거나 사용자 권한을 위임해선 안 된다. 기존 독립 ML API 및 Worker의 Job/Attempt·무결성 계약은 유지된다.
+등록형 활동 이상 탐지 Workflow의 실행·단계 의존성과 Asset Graph는 Dagster OSS에서 관리한다. SOS 웹과 자동화는 같은 API의 권한·멱등성 계약으로 제출·조회·취소하며, 웹은 주요 단계 결과와 기존 결과 상세·MLflow Run을 연결한다. Dagster UI와 GraphQL을 외부 네트워크에 공개하거나 사용자 권한을 위임해선 안 된다. 기존 독립 ML API 및 Worker의 Job/Attempt·무결성 계약은 유지된다.
 
 Migration 0024는 기존 자체 Pipeline 실행 그룹 테이블을 제거하기 전에 연결된 Job ID와 실행 단계의 관계를 감사 이력에 기록한다. 이전 Pipeline 그룹별 사용자 화면은 종료되지만 실제 Job·Model·Scoring·Evaluation 데이터는 보존된다. 개발 환경이라고 확인되지 않은 볼륨을 무조건 삭제해서는 안 된다.
 
