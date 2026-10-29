@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { SensitivityChart } from "./FeatureSensitivity";
-import { ShapContributionChart } from "./PipelineShapExplanation";
+import { ShapContributionChart } from "./ShapExplanation";
 import { jobStatusLabel } from "./display-format";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary, MLPlaygroundJob } from "./types";
 

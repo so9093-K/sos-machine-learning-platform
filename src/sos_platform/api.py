@@ -47,6 +47,7 @@ from .mlflow_errors import MLflowDeliveryError
 from .mlflow_read import read_experiments, read_runs, read_model_versions
 from .mlflow_registry import verify_registered_version
 from .api_model_management import model_management_router
+from .api_model_offering import model_offering_router
 from .model_deletion import model_deletion_router
 from .mlflow_tracking import MLflowClient
 from .pagination import decode_cursor, page_from_rows
@@ -360,6 +361,34 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
         check_ownership(actor, item.get("owner_actor"), "job", job_id)
         return item
+
+    def model_allowed(actor: Actor, model: dict, *, for_new_work: bool) -> dict:
+        """소유자·관리자가 아니면 소유자가 제공한 판본만 허용한다.
+
+        제공이 중단된 판본은 계속 읽을 수 있지만 새 계산에는 사용할 수 없다.
+        """
+        if not actor.privileged and model.get("owner_actor") != actor.id:
+            offering = store.get_model_offering(model["id"])
+            if offering is not None and (
+                offering["withdrawn_at"] is None or not for_new_work
+            ):
+                return model
+        check_ownership(actor, model.get("owner_actor"), "model", model["id"])
+        return model
+
+    def model_lookup(revision_id: str) -> dict:
+        model = store.get_model_revision(revision_id)
+        if model is None:
+            raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.")
+        return model
+
+    def readable_model(revision_id: str, actor: Actor) -> dict:
+        return model_allowed(actor, model_lookup(revision_id), for_new_work=False)
+
+    def owned_model(revision_id: str, actor: Actor) -> dict:
+        model = model_lookup(revision_id)
+        check_ownership(actor, model.get("owner_actor"), "model", model["id"])
+        return model
 
     @app.get("/docs/assets/scalar.js", include_in_schema=False)
     def scalar_asset():
@@ -798,6 +827,9 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         return job_page(limit, cursor, actor, discovery_only=True)
 
     app.include_router(model_management_router(store))
+    app.include_router(model_offering_router(
+        store, readable_model=readable_model, owned_model=owned_model,
+    ))
     app.include_router(model_deletion_router(store))
 
     app.include_router(feast_router(store, existing_dataset=existing, require_submission_key=require_job_submission_key))
@@ -829,10 +861,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         ),
     ):
         from .ml_playground import ordered_playground_input
-        model = store.get_model_revision(body.model_revision_id)
-        if model is None:
-            raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.")
-        check_ownership(actor, model["owner_actor"], "model", model["id"])
+        model = model_allowed(actor, model_lookup(body.model_revision_id), for_new_work=True)
         if not model.get("registry_version"):
             raise HTTPException(status_code=409, detail="모델 Registry 등록이 진행 중입니다. 잠시 후 다시 조회하세요.")
         try:
@@ -920,10 +949,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         ),
     ):
         dataset = existing(body.dataset_id, actor)
-        model = store.get_model_revision(body.model_revision_id)
-        if model is None:
-            raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.")
-        check_ownership(actor, model["owner_actor"], "model", model["id"])
+        model = model_allowed(actor, model_lookup(body.model_revision_id), for_new_work=True)
         if not model.get("registry_version"):
             raise HTTPException(status_code=409, detail="모델 Registry 등록이 진행 중입니다. 잠시 후 다시 조회하세요.")
         try:
@@ -1236,7 +1262,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             model = store.get_model_revision(source["spec"]["model_revision_id"])
             if model is None or model["lifecycle_state"] != "Active":
                 raise HTTPException(status_code=409, detail="단일 입력 계산에 사용한 모델을 사용할 수 없습니다.")
-            check_ownership(actor, model["owner_actor"], "model", model["id"])
+            model_allowed(actor, model, for_new_work=True)
             dataset_id = None
             source_spec = {
                 "playground_job_id": source["id"],
@@ -1412,11 +1438,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         response_model=ModelRevisionOut,
     )
     def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
-        item = store.get_model_revision(revision_id)
-        if item is None:
-            raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.")
-        check_ownership(actor, item["owner_actor"], "model", revision_id)
-        return item
+        return readable_model(revision_id, actor)
 
     @app.post(
         "/api/jobs",

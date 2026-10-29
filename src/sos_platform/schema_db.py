@@ -202,6 +202,21 @@ model_revisions = Table(
     Index("ix_model_revisions_owner_created", "owner_actor", "created_at"),
 )
 
+# 소유자가 다른 Actor에게 명시적으로 제공한 모델 판본. 학습 데이터 접근 권한은 포함하지 않는다.
+model_offerings = Table(
+    "model_offerings",
+    metadata,
+    Column(
+        "model_revision_id", String(36), ForeignKey("model_revisions.id"), primary_key=True
+    ),
+    Column("description", Text, nullable=False),
+    Column("offered_by", Text, nullable=False),
+    Column("offered_at", Text, nullable=False),
+    Column("withdrawn_by", Text),
+    Column("withdrawn_at", Text),
+    Index("ix_model_offerings_withdrawn_offered", "withdrawn_at", "offered_at"),
+)
+
 scoring_results = Table(
     "scoring_results",
     metadata,

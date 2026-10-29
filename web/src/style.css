@@ -111,7 +111,6 @@ tbody tr:hover{background:var(--sos-raised)}
 .evidence-facts-compact > div { display:flex; flex-wrap:wrap; align-items:baseline;
   gap:3px 8px; padding:7px 10px; }
 
-
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-bottom:28px}
 .stat{border:1px solid var(--sos-border);background:var(--sos-raised);padding:18px;border-radius:12px}
 .stat span{display:block;font-size:12px;color:var(--sos-muted)}
@@ -133,9 +132,6 @@ tbody tr:hover{background:var(--sos-raised)}
 .result h4,.panel h4{margin-bottom:12px}
 .job-list{display:grid;gap:12px}
 .job{padding:17px;background:var(--sos-raised);border:1px solid var(--sos-border);border-radius:11px;display:grid;gap:12px}
-.job-title{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-.job-title strong{font-size:13px}
-.job-title small{display:block;color:var(--sos-muted);margin-top:5px;font-size:11px}
 .status{font-size:11px;padding:5px 9px;border-radius:99px;background:var(--sos-raised);color:var(--sos-accent);white-space:nowrap}
 .status.succeeded{background:var(--sos-success-bg);color:var(--sos-success)}
 .status.failed{background:var(--sos-danger-bg);color:var(--sos-danger)}
@@ -167,7 +163,6 @@ nav{flex-direction:row;overflow:auto;max-height:100px}
 .stat{padding:10px}
 .stat strong{font-size:20px}
 .tabbar{gap:18px}}
-.job-metadata{display:flex;flex-wrap:wrap;gap:6px 20px;color:var(--sos-muted);font-size:12px}
 .job details summary{cursor:pointer;color:var(--sos-text);font-size:12px;margin-bottom:8px}
 .job details:focus-within{outline-offset:4px}
 .step button.ghost{flex-shrink:0}
@@ -218,7 +213,6 @@ nav{flex-direction:row;overflow:auto;max-height:100px}
 @media(max-width:620px){.discovery-panel .cards{grid-template-columns:1fr}
 .discovery-job-result table{min-width:320px}}
 
-
 /* 넓은 Dataset/Feature 스키마는 가로 페이지 전체가 아닌 독립 영역에서 탐색한다. */
 .query-tools { margin: 0.75rem 0; }
 .query-tools details { border: 1px solid var(--border, var(--sos-neutral)); border-radius: 8px; padding: 0.7rem; }
@@ -248,7 +242,6 @@ body { background:var(--sos-base); color:var(--sos-text); }
 .brand-error { color:var(--sos-danger); font-size:11px; overflow-wrap:anywhere; }
 .global-nav { display:grid; gap:6px; padding:11px 0 15px; border-bottom:1px solid var(--sos-border); }
 .global-nav .section-title { padding-top:5px; padding-bottom:6px; }
-.dataset-section-title { margin-top:17px; padding-bottom:4px; }
 .dataset-nav { max-height:32vh; overflow-y:auto; }
 .workspace-header { margin-bottom:23px; align-items:center; }
 .workspace-header h1 { font-size:clamp(24px,2.15vw,29px); font-weight:700; margin:8px 0; }
@@ -306,7 +299,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 }
 .brand-error .ghost { color:var(--sos-accent); padding-left:0; text-decoration:underline; }
 
-
 /* 플랫폼 IA: 기능 단계와 무관한 전역 탐색, 데이터 작업에서만 보이는 데이터 컨텍스트. */
 .platform-nav { gap:16px; padding:8px 0 15px; }
 .platform-nav-group { display:grid; gap:4px; min-width:0; }
@@ -326,7 +318,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .data-sidebar .section-title { padding-top:8px; }
 .data-sidebar .dataset-nav { overflow-y:auto; }
 
-/* 사용 가능한 기능을 먼저 제공하고 이전 Pipeline 실행 문맥을 보존한다. */
+/* 홈: 지금 이용할 수 있는 기능을 먼저 제공한다. */
 .platform-home { display:grid; gap:25px; min-width:0; }
 .platform-intro { padding:28px 30px; border-radius:12px; background:var(--sos-panel);
   border:1px solid var(--sos-border); }
@@ -350,8 +342,6 @@ button.platform-destination.ghost { text-align:left; width:100%; display:grid; g
 button.platform-destination.ghost:hover { border-color:var(--sos-accent); background:var(--sos-raised); }
 .platform-destination strong { display:flex; justify-content:space-between; gap:8px; font-size:15px; }
 .platform-destination span:not(strong span) { font-size:12px; line-height:1.6; color:var(--sos-muted); }
-.platform-overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.platform-overview-grid .panel { min-width:0; padding:22px; }
 .platform-compact-list { display:grid; gap:1px; }
 :is(button, a).platform-list-link.ghost { min-width:0; width:100%; display:flex; justify-content:space-between;
   align-items:center; gap:12px; text-align:left; border-bottom:1px solid var(--sos-border);
@@ -364,12 +354,8 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .platform-outlook h3 { font-size:17px; margin-bottom:8px; }
 .platform-outlook p { font-size:13px; line-height:1.6; color:var(--sos-muted); max-width:790px; }
 .platform-outlook-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:17px; }
-.platform-concept-card { border:1px solid var(--sos-border); background:var(--sos-panel);
-  border-radius:12px; padding:22px; }
-.platform-concept-card h4 { font-size:15px; margin-bottom:8px; }
-.platform-concept-card p { color:var(--sos-muted); font-size:12px; line-height:1.7; }
 @media(max-width:980px) {
-  .platform-destinations,.platform-overview-grid { grid-template-columns:1fr; }
+  .platform-destinations { grid-template-columns:1fr; }
 }
 @media(max-width:850px) {
   .platform-nav { display:grid; gap:10px; }
@@ -381,37 +367,7 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 @media(max-width:620px) {
   .platform-intro { padding:22px 18px; }
   button.platform-destination.ghost { padding:16px; min-height:0; }
-  .platform-overview-grid .panel { padding:18px 14px; }
 }
-
-
-/* Feature 이름·자료형을 한 항목으로 읽고, 현재 검색 범위만 일괄 선택한다. */
-.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
-  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-.feature-selector { margin-top:12px; display:grid; gap:12px; min-width:0; }
-.feature-selector-toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
-.feature-selector-toolbar label { display:grid; gap:6px; flex:1 1 240px;
-  color:var(--sos-muted); font-size:12px; }
-.feature-selector-toolbar label input { width:100%; }
-.feature-selector-toolbar>span { color:var(--sos-muted); font-size:12px; }
-.feature-selector-options { min-width:0; max-height:min(55vh,580px); overflow-y:auto;
-  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px;
-  margin:0; padding:10px; border:1px solid var(--sos-border); border-radius:10px; }
-.feature-selector-item { display:flex; flex-wrap:wrap; align-items:center; gap:8px;
-  min-width:0; padding:10px 12px; font-size:13px; border-radius:8px; background:var(--sos-raised);
-  color:var(--sos-text); cursor:pointer; }
-.feature-selector-item:hover { outline:1px solid var(--sos-accent); }
-.feature-selector-item input { flex-shrink:0; margin:0; }
-.feature-selector-name { flex:1 1 100px; min-width:0; overflow-wrap:anywhere; }
-.feature-selector-item small { flex-shrink:0; color:var(--sos-muted); }
-.feature-selector-options:disabled .feature-selector-item { opacity:.6; cursor:not-allowed; }
-@media(max-width:700px) { .feature-selector-options { grid-template-columns:1fr; } }
-
-
-/* 모델 판본 목록의 Dataset 필터는 기술 입력으로 유지한다. */
-.model-history-filter { display:flex; flex-wrap:wrap; margin-bottom:16px; }
-.model-history-filter label { display:grid; gap:7px; min-width:200px; font-size:12px; color:var(--sos-muted); }
-
 
 /* 불변 ML 리소스: 실행 폼과 판본 상세를 분리하며 ID·근거가 긴 경우에도 읽을 수 있게 한다. */
 .ml-resource-workspace { display:grid; gap:16px; min-width:0; }
@@ -434,10 +390,8 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .evaluation-kind { margin:12px 0 0; font-size:13px; line-height:1.6; }
 @media(max-width:760px) { .ml-resource-fields { grid-template-columns:1fr; } }
 
-
 /* 사용자 목적과 그 안의 실행 도구에 서로 다른 위계를 부여한다. */
 .model-area-navigation { margin-bottom:20px; }
-.model-area-nav { display:flex; flex-direction:row; max-height:none; overflow:visible; gap:8px; padding:0 0 12px; border-bottom:1px solid var(--sos-border); }
 .model-area-link { display:block; padding:10px 15px; border-radius:9px; color:var(--sos-text);
   text-decoration:none; font-size:13px; font-weight:650; }
 .model-area-link:hover, .model-area-link[aria-current="page"] {
@@ -448,14 +402,8 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .model-tools summary { color:var(--sos-muted); font-size:13px; cursor:pointer; }
 .model-tools nav { display:flex; flex-direction:row; flex-wrap:wrap; max-height:none; overflow:visible; gap:4px; padding:0; margin-top:8px; }
 .model-tools .model-area-link { font-size:12px; padding:8px 12px; font-weight:500; }
-@media(max-width:620px) {
-  .model-area-nav > a { flex:1; text-align:center; }
-}
 
 /* 독립 ML·운영 기능의 고급 접근을 유지한다. */
-.platform-quick-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-.platform-quick-actions .platform-destination { min-height:0; }
-.platform-dataset-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:20px; }
 .ml-activity { min-width:0; }
 .ml-activity-list { display:grid; gap:10px; }
 /* 한 작업을 한 줄(내용 · 상태 · 이동)로 보여 목록을 훑기 쉽게 한다. */
@@ -481,35 +429,15 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .platform-section-intro p { color:var(--sos-muted); font-size:13px; line-height:1.65; }
 .activity-scope-nav { display:flex; flex-direction:row; flex-wrap:wrap; gap:8px; padding:0; }
 .activity-scope-nav [aria-current="page"] { box-shadow:0 2px 0 var(--sos-accent); }
-@media(max-width:850px) {
-  .platform-dataset-list,.platform-quick-actions { grid-template-columns:1fr; }
-}
-
-
-/* Research·Model Experience의 실행 가능한 모델 목록과 장기 설계 목표를 구별한다. */
-.platform-discovered-model { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center;
-  gap:14px; padding:16px 2px; border-bottom:1px solid var(--sos-border); }
-.platform-discovered-model:last-child { border-bottom:0; }
-.platform-discovered-model strong { font-size:14px; overflow-wrap:anywhere; }
-.platform-discovered-model p { margin-top:6px; line-height:1.55; }
-.platform-discovered-model .platform-outlook-actions { margin:0; }
-
 
 /* 모델 리소스는 ID 입력 폼보다 이해·근거·다음 행동을 우선한다. */
 .model-index-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
-.model-index-row { align-items:center; }
-.model-index-summary { min-width:0; display:grid; gap:6px; }
-.model-index-summary strong { font-size:14px; overflow-wrap:anywhere; }
-.model-index-summary .status { justify-self:start; }
-.model-lookup { margin-bottom:18px; font-size:13px; }
-.model-lookup summary,.ml-resource-evidence summary { padding:10px 0; cursor:pointer; color:var(--sos-accent); }
-.model-lookup .model-history-filter { margin:12px 0; }
+.ml-resource-evidence summary { padding:10px 0; cursor:pointer; color:var(--sos-accent); }
 .ml-resource-summary { display:grid; gap:9px; border-bottom:1px solid var(--sos-border); padding-bottom:17px; }
 .ml-resource-summary h3 { font-size:18px; }
 .ml-resource-summary p { color:var(--sos-muted); font-size:13px; line-height:1.6; }
 .ml-resource-evidence { border-top:1px solid var(--sos-border); margin-top:15px; }
 .ml-resource-evidence .ml-resource-fields { margin-top:9px; }
-
 
 /* Dataset 탐색을 주 화면 문맥으로, 등록·연결은 필요 시 펼치는 조작으로 둔다. */
 .data-import-controls { margin-top:10px; border-top:1px solid var(--sos-border);
@@ -519,254 +447,52 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .data-import-controls summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:2px; }
 .data-import-actions { display:grid; gap:8px; margin-top:10px; }
 
-
 .ml-activity-details summary { color:var(--sos-muted); cursor:pointer; font-size:12px; padding:6px 0; }
 .ml-activity-details summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:2px; }
 .ml-activity-details pre { padding:12px; border-radius:8px; max-height:300px; overflow:auto;
   font-size:11px; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--sos-sidebar); }
 .ml-activity-details p { font-size:12px; margin:10px 0; line-height:1.6; }
 
-/* 첫 Reference Pipeline: 기능 메뉴가 아닌 하나의 이용 여정을 먼저 보여준다. */
-.pipeline-consumer { gap:18px; }
-.pipeline-hero { display:grid; gap:6px; }
-.pipeline-hero-foot { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
-.pipeline-hero-foot span { padding:9px 12px; border-radius:9px; background:var(--sos-raised);
-  color:var(--sos-text); font-size:12px; }
-.pipeline-journey { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px;
-  padding:0; margin:0; }
-.pipeline-journey-item { display:grid; grid-template-columns:auto 1fr; gap:2px 10px;
-  border:1px solid var(--sos-border); border-radius:12px; padding:16px;
-  background:var(--sos-panel); }
-.pipeline-journey-item span { grid-row:span 2; display:grid; place-items:center; align-self:start;
-  width:30px; height:30px; background:var(--sos-raised); border-radius:8px;
-  color:var(--sos-accent); font-size:12px; font-weight:700; }
-.pipeline-journey-item strong { font-size:13px; }
-.pipeline-journey-item.active { border-color:var(--sos-accent); background:var(--sos-accent-bg); }
-.pipeline-journey-item.active span { background:var(--sos-accent); color:var(--sos-sidebar); }
-.pipeline-journey-item small { font-size:12px; color:var(--sos-muted); line-height:1.5; }
-.pipeline-section-heading { display:flex; justify-content:space-between; gap:18px;
-  align-items:flex-start; flex-wrap:wrap; margin-bottom:20px; }
-.pipeline-section-heading h3 { font-size:21px; margin:7px 0 9px; letter-spacing:-.02em; }
-.pipeline-section-heading p { color:var(--sos-muted); font-size:13px; line-height:1.65;
-  max-width:720px; }
-.pipeline-section-heading .chip { align-self:flex-start; }
-.pipeline-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
-.pipeline-facts>div { background:var(--sos-raised); border:1px solid var(--sos-border);
-  border-radius:10px; padding:16px; }
-.pipeline-capabilities .pipeline-facts>div { display:flex; flex-direction:column; gap:8px; }
-.pipeline-capabilities .pipeline-facts button { align-self:flex-start; margin-top:auto; }
-.pipeline-capabilities .pipeline-facts small { color:var(--sos-muted); font-size:12px; }
-.pipeline-capabilities>.hint { margin-top:14px; }
-.pipeline-prepare .pipeline-input-guide[aria-label="준비된 분석 예제"] button { margin-top:10px; }
-.pipeline-model-usage .ml-scoring-panel { margin-top:16px; }
-.pipeline-facts strong,.pipeline-input-guide strong { font-size:13px; }
-.pipeline-facts p,.pipeline-input-guide p { font-size:13px; color:var(--sos-muted);
-  line-height:1.7; margin-top:8px; }
-.pipeline-scope { margin:15px 0; font-size:12px; line-height:1.7;
-  color:var(--sos-muted); }
-.pipeline-evidence,.pipeline-history { margin-top:18px; border-top:1px solid var(--sos-border);
-  padding-top:14px; font-size:13px; line-height:1.7; }
-.pipeline-evidence summary,.pipeline-history summary,.pipeline-candidates summary {
-  cursor:pointer; color:var(--sos-accent); }
-.pipeline-evidence summary:focus-visible,.pipeline-history summary:focus-visible,
-.pipeline-candidates summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:3px; }
-.pipeline-evidence ul { padding-left:20px; margin:12px 0; color:var(--sos-muted); }
-.pipeline-feature-list { line-height:1.9; overflow-wrap:anywhere; }
-.pipeline-input-guide,.pipeline-next-step { background:var(--sos-raised);
-  border:1px solid var(--sos-border); border-radius:11px; padding:16px;
-  margin:12px 0; font-size:13px; line-height:1.7; }
-.pipeline-input-guide code,.pipeline-run-identity code { font-size:12px; overflow-wrap:anywhere; }
-.pipeline-next-step p { margin-top:8px; color:var(--sos-muted); }
-.pipeline-prepare .form-row label { min-width:min(100%,330px); max-width:100%; flex:1; }
-.pipeline-actions { display:flex; gap:9px; flex-wrap:wrap; align-items:center;
-  margin-top:18px; }
-.pipeline-readiness-blocked,.pipeline-readiness-ready { border-radius:11px;
+/* 차단·확인 안내: 이유와 다음 행동을 함께 보인다. */
+.notice-blocked { border-radius:11px;
   border:1px solid var(--sos-border); padding:18px; margin-top:17px;
   font-size:13px; line-height:1.7; }
-.pipeline-readiness-blocked { background:var(--sos-danger-bg); }
-.pipeline-readiness-ready { background:var(--sos-success-bg); }
-.pipeline-readiness-blocked p,.pipeline-readiness-ready p { margin:8px 0;
+.notice-blocked { background:var(--sos-danger-bg); }
+.notice-blocked p { margin:8px 0;
   line-height:1.7; }
-.pipeline-readiness-blocked ul { padding-left:20px; }
-.pipeline-readiness-ready button { margin-top:9px; }
-.pipeline-run-identity { display:grid; gap:8px; margin:14px 0; padding:14px;
-  background:var(--sos-raised); border-radius:10px; font-size:12px;
-  overflow-wrap:anywhere; }
-.pipeline-run-identity strong { display:inline-block; min-width:80px; }
-.pipeline-result-overview { margin:20px 0; border-top:1px solid var(--sos-border); padding-top:20px; }
-.pipeline-result-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:10px; margin-top:12px; }
-.pipeline-result-metrics>div { min-width:0; border:1px solid var(--sos-border);
-  background:var(--sos-raised); border-radius:10px; padding:15px; }
-.pipeline-result-metrics span { display:block; font-size:12px; color:var(--sos-muted); }
-.pipeline-result-metrics strong { display:block; margin-top:8px; font-size:21px;
-  overflow-wrap:anywhere; }
-.pipeline-candidates { display:grid; gap:10px; margin-top:19px; }
-.pipeline-candidates p { color:var(--sos-muted); line-height:1.7; font-size:13px; }
-.pipeline-candidates pre { max-width:450px; max-height:220px; overflow:auto;
-  white-space:pre-wrap; overflow-wrap:anywhere; }
-.pipeline-history .ml-resource-list { padding-top:11px; }
-.pipeline-return { border:1px solid var(--sos-accent); border-radius:12px;
+.notice-blocked ul { padding-left:20px; }
+.context-return { border:1px solid var(--sos-accent); border-radius:12px;
   padding:16px 18px; display:flex; justify-content:space-between; align-items:center;
   flex-wrap:wrap; gap:14px; background:var(--sos-accent-bg); }
-.pipeline-return p { font-size:12px; line-height:1.65; color:var(--sos-muted);
+.context-return p { font-size:12px; line-height:1.65; color:var(--sos-muted);
   margin-top:5px; max-width:660px; }
-@media(max-width:1050px) {
-  .pipeline-journey { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .pipeline-facts { grid-template-columns:1fr; }
-}
-@media(max-width:620px) {
-  .pipeline-journey,.pipeline-result-metrics { grid-template-columns:1fr; }
-  .pipeline-hero-foot { flex-direction:column; }
-  .pipeline-actions button { width:100%; }
-}
 
+/* 관측값 분석: 선택한 관측값의 실제 근거와 설명을 함께 보인다. */
 
-/* Pipeline Run의 불변 결과를 분석하는 패널: 기능별 분석 근거를 고유하게 표현한다. */
-.pipeline-analysis-report { display: grid; grid-template-columns:minmax(0,1fr); gap: 1.2rem; margin: 1.1rem 0 1.5rem; }
-.pipeline-analysis-report h4 { margin: 0; }
-.training-report { min-width:0; }
-.training-report-heading { display:block; margin:0; }
-.training-report-details { min-width:0; }
-.training-report-heading h4 { font-size:20px; margin:8px 0; }
-.training-report-heading p,.training-report-basis p { margin:0; line-height:1.7; }
-.training-report-outcome { display:grid; grid-template-columns:minmax(150px,.55fr) minmax(0,1fr);
-  gap:20px; align-items:center; padding:20px 0; border-block:1px solid var(--sos-border); }
-.training-report-outcome > div:first-child { display:grid; gap:7px; }
-.training-report-outcome span,.training-report-basis > span { font-size:13px; color:var(--sos-muted); }
-.training-report-outcome strong { font-size:32px; font-variant-numeric:tabular-nums; }
-.training-report-outcome p { margin:0 0 12px; line-height:1.65; }
-.training-report-basis { display:grid; gap:6px; }
-.training-test-distribution { display:grid; gap:12px; min-width:0; }
-.training-test-distribution h4 { font-size:16px; }
-.training-score-comparison { margin:0; font-size:13px; color:var(--sos-muted); }
-.training-report-limitation { margin:0; padding-left:12px; border-left:3px solid var(--sos-accent);
-  color:var(--sos-muted); font-size:13px; line-height:1.65; }
-.training-report-details > details { padding:14px 0; border-bottom:1px solid var(--sos-border); min-width:0; }
-.training-report-details summary { cursor:pointer; font-size:14px; font-weight:600; }
-.training-report-details > details[open] > summary { margin-bottom:16px; }
-.training-report-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 24px; }
-.training-report-facts div { min-width:0; }
-.training-report-facts dt { font-size:12px; color:var(--sos-muted); }
-.training-report-facts dd { margin:4px 0; overflow-wrap:anywhere; }
-@media(max-width:620px) {
-  .training-report-outcome,.training-report-facts { grid-template-columns:minmax(0,1fr); }
-}
-.pipeline-score-chart { min-width: 0; }
-.pipeline-score-chart .chart { min-height: 320px; }
-.pipeline-candidate-inspection { display: grid; grid-template-columns:minmax(0,1fr); gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--sos-border); border-radius: 12px; }
-.pipeline-candidate-inspection h5 { margin: 0; font-size: 1rem; }
-.pipeline-candidate-inspection .chart { min-height: 400px; }
-.pipeline-candidate-inspection .table-scroll { max-height: 320px; }
-
-/* Run을 먼저 확인하고, 선택한 후보와 상세 근거를 함께 검토한다. */
-.pipeline-run-context { display:grid; gap:14px; }
-.pipeline-run-context-header { display:flex; align-items:end; justify-content:space-between; gap:14px; flex-wrap:wrap; }
-.pipeline-run-context-header h3 { font-size:19px; margin:6px 0; }
-.pipeline-run-context-header p { color:var(--sos-muted); line-height:1.6; font-size:12px; }
-.pipeline-run-context-header label { display:grid; gap:7px; color:var(--sos-muted); min-width:min(100%,300px); font-size:12px; }
-.pipeline-context-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
-.pipeline-context-facts>div { display:grid; gap:7px; min-width:0; padding:12px; background:var(--sos-raised); border-radius:9px; }
-.pipeline-context-technical { min-width:0; padding:12px; background:var(--sos-raised); border-radius:9px; }
-.pipeline-context-technical summary { cursor:pointer; font-size:12px; font-weight:600; }
-.pipeline-context-technical dl { display:grid; gap:9px; margin:12px 0 0; }
-.pipeline-context-technical dt { font-size:11px; color:var(--sos-muted); }
-.pipeline-context-technical dd { margin:4px 0 0; overflow-wrap:anywhere; }
-.pipeline-context-facts span { color:var(--sos-muted); font-size:11px; }
-.pipeline-context-facts strong,.pipeline-context-facts code { overflow-wrap:anywhere; font-size:12px; }
-.pipeline-context-error,.pipeline-run-failure-code { color:var(--sos-danger); font-size:12px; }
-.pipeline-candidate-workspace { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); gap:16px; min-width:0; align-items:start; }
-.pipeline-candidate-list,.pipeline-candidate-detail { min-width:0; display:grid; gap:10px; }
-.pipeline-candidate-list .table-scroll { max-height:550px; }
-.pipeline-candidate-selected { background:var(--sos-accent-bg); box-shadow:inset 3px 0 var(--sos-accent); }
-.pipeline-candidate-detail .pipeline-candidate-inspection { margin:0; }
-.pipeline-candidate-detail .pipeline-candidate-inspection .chart { height:340px; }
-.pipeline-result-count { margin:0; }
-.pipeline-consumer h3[tabindex="-1"],.pipeline-consumer h4[tabindex="-1"],
-.pipeline-consumer h5[tabindex="-1"] { scroll-margin-top:24px; }
-.pipeline-consumer [tabindex="-1"]:focus-visible { outline:2px solid var(--sos-accent); outline-offset:4px; }
-@media(max-width:1280px) {
-  .pipeline-context-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .pipeline-candidate-workspace { grid-template-columns:minmax(0,1fr); }
-}
-@media(max-width:620px) {
-  .pipeline-context-facts { grid-template-columns:minmax(0,1fr); }
-  .pipeline-run-context-header label { width:100%; }
-}
-
-/* 모델 실험실: 결과 영역의 카드와 실행 근거. */
-.pipeline-lab-return { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:15px; }
-.pipeline-advanced { border:1px solid var(--sos-border); border-radius:12px; padding:14px; }
-.pipeline-advanced > summary { cursor:pointer; font-weight:600; }
-.pipeline-advanced > .panel { margin-top:16px; }
-.pipeline-lab-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:18px 0; }
-.pipeline-lab-summary > div { display:flex; flex-direction:column; gap:7px; padding:16px; border:1px solid var(--sos-border); border-radius:10px; }
-.pipeline-lab-summary span { color:var(--sos-muted); font-size:.86rem; }
-.pipeline-lab-summary strong { font-size:1.35rem; }
-.pipeline-lab-distributions { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:16px; }
-.pipeline-lab-distributions > section { min-width:0; }
-
-@media (max-width:780px) { .pipeline-lab-summary { grid-template-columns:1fr; } .pipeline-lab-return { flex-direction:column; align-items:flex-start; } }
-
-.pipeline-more { margin-top:16px; }
-.pipeline-history-panel { margin-top:16px; }
-.pipeline-history-panel > details > summary { cursor:pointer; }
-
-/* 관측치의 실제 근거를 선택 후보와 한 공간에서 확인한다. */
-.pipeline-candidate-observation { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
-.pipeline-candidate-observation > div { min-width:0; overflow-wrap:anywhere; }
-.pipeline-candidate-observation dt { color:var(--sos-muted); font-size:.82rem; }
-.pipeline-candidate-observation dd { margin:4px 0; font-weight:600; }
-.pipeline-candidate-comparison { max-height:420px; overflow:auto; }
-
-
-/* 모델 실험실: 완료된 분석은 근거를 먼저, 새 학습은 메뉴의 첫 진입에서 제공한다. */
-.pipeline-run-context { gap:10px; }
-.pipeline-run-context-header { align-items:center; }
-.pipeline-run-context-header h3 { margin:2px 0; }
-.pipeline-results-priority .pipeline-section-heading { margin-bottom:8px; }
-.pipeline-results-priority .pipeline-actions { justify-content:flex-start; }
-.pipeline-results > .pipeline-section-heading { margin-bottom:14px; }
+.observation-inspection { display: grid; grid-template-columns:minmax(0,1fr); gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--sos-border); border-radius: 12px; }
+.observation-inspection h5 { margin: 0; font-size: 1rem; }
+.observation-inspection .chart { min-height: 400px; }
+.observation-inspection .table-scroll { max-height: 320px; }
 
 /* 후보를 선택하면 전체 폭을 관측치 근거·설명에 돌려준다. */
-.pipeline-candidate-workspace { grid-template-columns:minmax(0,1fr); gap:14px; }
-.pipeline-candidate-list { gap:10px; }
-.pipeline-candidate-picker { display:grid; gap:8px; max-width:520px; font-weight:600; }
-.pipeline-candidate-picker select { width:100%; padding:12px; }
-.pipeline-candidate-table { border:1px solid var(--sos-border); border-radius:9px; padding:12px; }
-.pipeline-candidate-table > summary { cursor:pointer; font-weight:600; }
-.pipeline-candidate-table .table-scroll { max-height:340px; margin-top:12px; }
-.pipeline-candidate-list > button { justify-self:start; }
-.pipeline-candidate-detail { width:100%; }
-.pipeline-candidate-detail .pipeline-candidate-inspection { padding:clamp(16px,2.5vw,26px); }
-.pipeline-candidate-observation { grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); }
-.pipeline-feature-details { border:1px solid var(--sos-border); border-radius:9px; padding:13px 16px; }
-.pipeline-feature-details > summary { cursor:pointer; font-weight:600; }
-.pipeline-feature-details .hint { margin-top:12px; }
-.pipeline-feature-details .table-scroll { margin-top:10px; }
-.pipeline-shap-explanation { display:grid; gap:12px; min-width:0; padding-top:14px; border-top:1px solid var(--sos-border); }
-.pipeline-shap-explanation > button { justify-self:start; }
-.pipeline-shap-recalculate { margin-top:4px; }
-.pipeline-shap-job-status { color:var(--sos-muted); }
-.pipeline-shap-result { display:grid; gap:12px; min-width:0; }
-.pipeline-shap-technical { min-width:0; }
-.pipeline-shap-technical > summary { cursor:pointer; }
-.pipeline-shap-technical > summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:3px; }
-.pipeline-shap-technical-content { display:grid; gap:15px; margin:14px 0 16px; }
-.pipeline-shap-technical-content section { display:grid; gap:9px; min-width:0; }
-.pipeline-shap-technical-content h6 { margin:0; font-size:12px; }
-.pipeline-shap-technical-content .hint { margin:0; line-height:1.6; }
-.pipeline-shap-result .chart,
-.pipeline-candidate-detail .pipeline-shap-result .chart { height:400px; min-height:350px; margin-top:0; }
-.pipeline-shap-legend { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:12px; font-weight:600; }
-.pipeline-shap-positive { color:var(--sos-chart-positive); }
-.pipeline-shap-negative { color:var(--sos-chart-negative); }
-.pipeline-threshold-note { color:var(--sos-chart-label); font-size:12px; display:flex; gap:7px; flex-wrap:wrap; margin:4px 0 12px; }
-.pipeline-threshold-note strong { color:var(--sos-chart-threshold); }
+.shap-explanation { display:grid; gap:12px; min-width:0; padding-top:14px; border-top:1px solid var(--sos-border); }
+.shap-explanation > button { justify-self:start; }
+.shap-recalculate { margin-top:4px; }
+.shap-job-status { color:var(--sos-muted); }
+.shap-result { display:grid; gap:12px; min-width:0; }
+.shap-technical { min-width:0; }
+.shap-technical > summary { cursor:pointer; }
+.shap-technical > summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:3px; }
+.shap-technical-content { display:grid; gap:15px; margin:14px 0 16px; }
+.shap-technical-content section { display:grid; gap:9px; min-width:0; }
+.shap-technical-content h6 { margin:0; font-size:12px; }
+.shap-technical-content .hint { margin:0; line-height:1.6; }
+.shap-result .chart { height:400px; min-height:350px; margin-top:0; }
+.shap-legend { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:12px; font-weight:600; }
+.shap-positive { color:var(--sos-chart-positive); }
+.shap-negative { color:var(--sos-chart-negative); }
 @media(max-width:620px) {
-  .pipeline-candidate-detail .pipeline-candidate-inspection { padding:14px; }
-  .pipeline-shap-result .chart,
-  .pipeline-candidate-detail .pipeline-shap-result .chart { height:370px; }
+  .shap-result .chart { height:370px; }
 }
 
 /* 독립 Catalog 분류 정보를 탐색용 폴더로 표시한다. 폴더는 실행 화면이 아니다. */
@@ -784,96 +510,14 @@ button.ghost.model-lab-tree-toggle { padding:9px 5px; color:var(--sos-text); }
 .global-nav a.workspace-link.model-lab-topic-link { width:100%; gap:7px; padding:10px 7px; }
 .model-lab-topic-link[aria-current="page"] { box-shadow:inset 3px 0 var(--sos-accent); background:var(--sos-accent-bg); }
 .model-lab-tree-feedback { display:grid; gap:5px; padding:8px; font-size:12px; color:var(--sos-muted); }
-.model-lab-topic-trail { display:flex; flex-wrap:wrap; gap:4px; font-size:12px;
-  color:var(--sos-muted); margin-bottom:10px; }
-#pipeline-model-try { margin-top:14px; scroll-margin-top:18px; }
-#pipeline-model-try .pipeline-model-usage { margin:0; }
-
-/* 학습 결과에서 모델 사용을 즉시 발견할 수 있도록 버튼을 결과 제목에 둔다. */
-.pipeline-results-priority > .pipeline-section-heading { align-items:center; gap:12px; }
-.pipeline-results-actions > button { flex-shrink:0; }
-#pipeline-model-try[hidden] { display:none; }
-@media(max-width:620px) {
-  .pipeline-results-actions > button { width:100%; }
-}
-
-/* 실제 조회된 후보의 첫 세 항목을 점수·관측 시각과 함께 선택한다. */
-.pipeline-candidate-top-panel { display:grid; gap:12px; margin:0 0 15px; }
-.pipeline-candidate-top-heading { display:flex; justify-content:space-between; flex-wrap:wrap;
-  align-items:baseline; gap:7px; }
-.pipeline-candidate-top-heading span { color:var(--sos-muted); font-size:12px; }
-.pipeline-candidate-top-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-button.ghost.pipeline-candidate-top-item { display:flex; align-items:flex-start; text-align:left; width:100%;
-  gap:9px; min-width:0; border:1px solid var(--sos-border); background:var(--sos-raised);
-  padding:14px; border-radius:10px; color:var(--sos-text); }
-button.ghost.pipeline-candidate-top-item:hover,
-button.ghost.pipeline-candidate-top-item[aria-pressed="true"] {
-  border-color:var(--sos-accent); background:var(--sos-accent-bg); }
-.pipeline-candidate-top-rank { flex-shrink:0; color:var(--sos-accent); font-weight:750; }
-.pipeline-candidate-top-meta { display:grid; gap:5px; flex:1; min-width:0; }
-.pipeline-candidate-top-meta small,.pipeline-candidate-top-score small { font-size:12px; color:var(--sos-muted); }
-.pipeline-candidate-top-meta strong { font-size:12px; }
-.pipeline-candidate-top-score { display:grid; gap:5px; text-align:right; }
-.pipeline-candidate-top-score strong { font-size:12px; }
-.pipeline-candidate-top-panel .hint { margin:0; }
-@media(max-width:900px) {
-  .pipeline-candidate-top-list { grid-template-columns:1fr; }
-}
 
 /* 사이드바에서도 제목과 주제가 좁은 폭에서 구분되어 읽힌다. */
 .model-lab-tree-title { display:flex; align-items:center; gap:7px; }
 .model-lab-tree-feedback { font-size:12px; color:var(--sos-muted); line-height:1.55; }
 @media(max-width:850px) { .model-lab-tree { width:100%; } }
 
-/* 첫 실행 중심: 핵심 행동과 선택적인 데이터 준비를 분리한다. */
-.pipeline-first-entry { display:grid; gap:16px; padding-block:24px; }
-.pipeline-first-entry h2 { max-width:740px; margin:6px 0 10px; font-size:clamp(22px, 2.1vw, 32px); }
-.pipeline-first-entry > div:first-child > p { max-width:640px; line-height:1.6; }
-.pipeline-first-actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
-.pipeline-first-actions button { min-height:42px; }
-.pipeline-first-status { margin:0; }
-.pipeline-first-notice { margin:0; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
-.pipeline-first-details { border-top:1px solid var(--sos-border); padding-top:11px; }
-.pipeline-first-details summary { cursor:pointer; font-size:13px; }
-.pipeline-first-details p { line-height:1.6; font-size:13px; color:var(--sos-muted); }
-.pipeline-results-actions { display:flex; gap:8px; flex-wrap:wrap; }
-.pipeline-lab-summary { grid-template-columns:repeat(4,minmax(0,1fr)); }
-@media(max-width:850px) { .pipeline-lab-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media(max-width:530px) { .pipeline-lab-summary { grid-template-columns:1fr; } .pipeline-first-actions button { width:100%; } }
-
-/* 활동 이상 탐지의 주제 홈: 개념 설명을 기술 절차 대신 실제 변화의 시각적 비유로 전달한다. */
-.model-lab-home { display:grid; gap:22px; }
-.model-lab-home-lead { display:grid; grid-template-columns:minmax(0,0.86fr) minmax(340px,1.14fr);
-  gap:25px; align-items:center; background:var(--sos-raised); border:1px solid var(--sos-border);
-  border-radius:16px; padding:clamp(20px,3vw,38px); }
-.model-lab-home-copy { display:grid; gap:12px; align-content:center; }
-.model-lab-home-copy h2 { font-size:clamp(22px,2.2vw,34px); line-height:1.35; letter-spacing:-0.02em; }
-.model-lab-home-copy p { font-size:14px; line-height:1.85; color:var(--sos-muted); }
-.model-lab-home-visual { min-width:0; display:grid; gap:9px; }
-.model-lab-home-chart { display:block; width:100%; height:auto; color:var(--sos-text); }
-.model-lab-home-visual-foot { display:flex; flex-wrap:wrap; gap:16px; font-size:12px; color:var(--sos-muted); }
-.model-lab-home-visual-foot span { display:inline-flex; gap:7px; align-items:center; }
-.model-lab-chart-key { display:inline-block; width:12px; height:3px; border-radius:5px; }
-.model-lab-chart-key.normal { background:#7FB6E4; }
-.model-lab-chart-key.unusual { background:#F0B46A; }
-.model-lab-home-choices { display:grid; grid-template-columns:1fr; gap:14px; }
-.model-lab-choice { background:var(--sos-raised); border:1px solid var(--sos-border);
-  padding:24px; border-radius:13px; display:flex; flex-direction:column; align-items:flex-start; gap:11px; }
-.model-lab-choice h3 { font-size:19px; }
-.model-lab-choice p { color:var(--sos-muted); font-size:13px; line-height:1.7; flex:1; }
-.model-lab-choice-icon { width:34px; height:34px; border:1px solid var(--sos-border); border-radius:9px;
-  display:flex; align-items:center; justify-content:center; font-weight:750; font-size:19px; }
-.model-lab-choice button { margin-top:4px; }
-.model-lab-home-note { margin:0; color:var(--sos-muted); font-size:12px; }
-@media(max-width:950px) { .model-lab-home-lead { grid-template-columns:1fr; } }
-@media(max-width:700px) {
-  .model-lab-home-choices { grid-template-columns:1fr; }
-  .model-lab-home-lead,.model-lab-choice { padding:17px; }
-}
-
-/* 기존 Registry Scoring을 모델 실험실의 독립된 사용 경험으로 연결한다. */
+/* 활동 이상 탐지 모델 적용 화면. */
 .model-lab-use { display:grid; gap:18px; }
-button.ghost.model-lab-back { justify-self:start; padding-left:0; }
 .model-lab-use-heading { display:flex; justify-content:space-between; align-items:end; gap:18px; flex-wrap:wrap; }
 .model-lab-use-heading > div { display:grid; gap:7px; }
 .model-lab-use-heading h2 { margin:0; font-size:clamp(22px,2vw,28px); }
@@ -882,8 +526,6 @@ button.ghost.model-lab-back { justify-self:start; padding-left:0; }
   background:var(--sos-raised); padding:28px; display:grid; justify-items:start; gap:13px; }
 .model-lab-no-models h3 { font-size:18px; }
 .model-lab-no-models p { color:var(--sos-muted); font-size:13px; line-height:1.7; max-width:620px; }
-.model-lab-registered-list { display:grid; gap:13px; }
-.model-lab-registered-list h3 { font-size:17px; }
 .model-lab-model-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
 .model-lab-model-choice { display:flex; gap:14px; justify-content:space-between; align-items:center;
   min-width:0; padding:16px; text-align:left; border-radius:10px; background:var(--sos-raised);
@@ -895,8 +537,6 @@ button.ghost.model-lab-back { justify-self:start; padding-left:0; }
 .model-lab-use-footer { border-top:1px solid var(--sos-border); padding-top:12px; }
 @media(max-width:700px) { .model-lab-model-list { grid-template-columns:1fr; }
   .model-lab-use-heading { align-items:flex-start; flex-direction:column; } }
-
-.activity-feature-original { display:block; color:var(--sos-muted); font-weight:400; font-size:12px; margin-top:3px; overflow-wrap:anywhere; }
 
 /* 중립적인 선택 표면은 기본 CTA 버튼과 분리해 다른 리소스 목록에도 재사용한다. */
 button.surface-button {
@@ -914,8 +554,8 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-version-picker { min-width:min(100%,480px); }
 .model-lab-version-picker summary { cursor:pointer; padding:9px 0; color:var(--sos-accent); }
 .model-lab-version-picker .model-lab-model-list { margin-top:10px; max-height:340px; overflow:auto; }
-.model-lab-usage-tabs,.playground-explanation-tabs { display:flex; gap:8px; flex-wrap:wrap; }
-.model-lab-usage-tabs button[aria-pressed="true"],.playground-explanation-tabs button[aria-pressed="true"] {
+.model-lab-usage-tabs { display:flex; gap:8px; flex-wrap:wrap; }
+.model-lab-usage-tabs button[aria-pressed="true"] {
   box-shadow:inset 0 -3px var(--sos-accent); border-color:var(--sos-accent); }
 .model-lab-playground { display:grid; grid-template-columns:minmax(0,1fr); gap:15px; }
 .model-lab-workspace { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr);
@@ -991,8 +631,6 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-feature-group-heading > span { color:var(--sos-muted); font-size:12px; }
 .model-lab-input-state { border-left:3px solid var(--sos-accent); background:var(--sos-raised);
   padding:10px 12px; font-size:12px; line-height:1.6; margin:0; }
-.pipeline-shap-current-feature { border-left:3px solid var(--sos-accent); padding-left:10px; margin:0;
-  font-size:12px; line-height:1.6; }
 @media(max-width:780px) {.model-lab-input-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }}
 @media(max-width:520px) {.model-lab-input-grid {grid-template-columns:1fr;} .model-lab-version-picker {width:100%;}}
 
@@ -1005,44 +643,35 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-history-list button.surface-button span { overflow-wrap:anywhere; }
 @media(max-width:700px) { .model-lab-history-list { grid-template-columns:1fr; } }
 
-
-
-/* SHAP 차트에는 개별 Feature만 표시하고 잔여 기여 합계는 별도 맥락으로 읽는다. */
 /* SHAP에서 선택한 개별 Feature를 실제 관측값·참조 중앙값·점수 기여에 연결한다. */
-.pipeline-shap-feature-focus { display:grid; gap:12px; min-width:0; padding:14px;
+.shap-feature-focus { display:grid; gap:12px; min-width:0; padding:14px;
   border:1px solid var(--sos-border); border-radius:9px; background:var(--sos-raised); }
-.pipeline-shap-feature-picker { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+.shap-feature-picker { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
   font-size:13px; font-weight:650; }
-.pipeline-shap-feature-picker select { flex:1; min-width:160px; max-width:100%;
+.shap-feature-picker select { flex:1; min-width:160px; max-width:100%;
   padding:8px 10px; font-weight:500; }
-.pipeline-shap-feature-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
-.pipeline-shap-feature-values > div { display:grid; min-width:0; gap:6px; }
-.pipeline-shap-feature-values span { color:var(--sos-muted); font-size:12px; }
-.pipeline-shap-feature-values strong { font-size:14px; overflow-wrap:anywhere;
+.shap-feature-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.shap-feature-values > div { display:grid; min-width:0; gap:6px; }
+.shap-feature-values span { color:var(--sos-muted); font-size:12px; }
+.shap-feature-values strong { font-size:14px; overflow-wrap:anywhere;
   font-variant-numeric:tabular-nums; }
-.pipeline-shap-feature-focus > .hint { margin:0; }
+.shap-feature-focus > .hint { margin:0; }
 @media(max-width:600px) {
-  .pipeline-shap-feature-values { grid-template-columns:minmax(0,1fr); }
+  .shap-feature-values { grid-template-columns:minmax(0,1fr); }
 }
 
-.pipeline-shap-remainder { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px 12px;
+.shap-remainder { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px 12px;
   padding:12px 14px; border:1px solid var(--sos-border); border-radius:8px; background:var(--sos-raised);
   align-items:center; font-variant-numeric:tabular-nums; }
-.pipeline-shap-remainder > span { color:var(--sos-text); font-size:13px; font-weight:650; }
-.pipeline-shap-remainder > strong { font-size:15px; text-align:right; }
-.pipeline-shap-remainder > small { grid-column:1/-1; color:var(--sos-muted); font-size:12px; line-height:1.5; }
+.shap-remainder > span { color:var(--sos-text); font-size:13px; font-weight:650; }
+.shap-remainder > strong { font-size:15px; text-align:right; }
+.shap-remainder > small { grid-column:1/-1; color:var(--sos-muted); font-size:12px; line-height:1.5; }
 
 /* 모델 활용 결과에서는 기존 입력/모델 설정을 사용자 요청 시에만 다시 노출한다. */
 .model-lab-result-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
   padding:8px 0; border-bottom:1px solid var(--sos-border); }
 .model-lab-result-toolbar > span { color:var(--sos-muted); font-size:12px; }
-.model-lab-use.result-focused:not(.show-setup) > .model-lab-back,
-.model-lab-use.result-focused:not(.show-setup) > .model-lab-use-heading,
-.model-lab-use.result-focused:not(.show-setup) > .model-lab-model-options,
-.model-lab-use.result-focused:not(.show-setup) > .model-lab-current-model,
-.model-lab-use.result-focused:not(.show-setup) > .model-lab-ready-hint,
-.model-lab-use.result-focused:not(.show-setup) > .model-lab-usage-tabs,
-.model-lab-use.result-focused:not(.show-setup) > .model-lab-use-footer { display:none; }
+.model-lab-use.result-focused:not(.show-setup) > .model-lab-use-heading,.model-lab-use.result-focused:not(.show-setup) > .model-lab-current-model,.model-lab-use.result-focused:not(.show-setup) > .model-lab-usage-tabs,.model-lab-use.result-focused:not(.show-setup) > .model-lab-use-footer { display:none; }
 .ml-scoring-panel.scoring-has-result { border:0; padding:0; background:transparent; }
 .scoring-has-result .scoring-result-first { margin-top:0; }
 .scoring-result-interpretation { margin:0; color:var(--sos-muted); font-size:14px; line-height:1.6; }
@@ -1076,7 +705,6 @@ button.surface-button[aria-pressed="true"] {
   border-left:3px solid var(--sos-accent); background:var(--sos-raised); border-radius:5px;
   color:var(--sos-text); font-size:12px; font-variant-numeric:tabular-nums; }
 .scoring-observation-choice[aria-current="true"] { background:var(--sos-accent-bg); border-color:var(--sos-accent); }
-.scoring-observation-detail .pipeline-candidate-observation { margin-top:8px; }
 @media(max-width:1080px) {
   .scoring-workspace-heading { align-items:start; }
   .scoring-observation-list-panel { padding:14px; }
@@ -1110,21 +738,14 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .scoring-observation-score strong { font-size:13px; }
 .scoring-observation-detail { min-width:0; border:1px solid var(--sos-border); border-radius:12px;
   background:var(--sos-panel); padding:clamp(14px,2vw,24px); }
-.scoring-observation-detail .pipeline-candidate-inspection { padding:0; margin:0; border:0; }
+.scoring-observation-detail .observation-inspection { padding:0; margin:0; border:0; }
 @media(max-width:1080px) { .scoring-observation-workspace { grid-template-columns:minmax(0,1fr); }
   .scoring-observation-list { max-height:440px; } }
 @media(max-width:650px) { .scoring-result-summary { grid-template-columns:minmax(0,1fr); }
   .scoring-distribution { padding:12px; }
   .scoring-observation-detail { padding:12px; } }
 
-
 /* 모델 사용: 상세 Registry 선택은 사용자의 기본 입력보다 뒤에 둔다. */
-.model-lab-model-options { padding:12px 16px; border:1px solid var(--sos-border);
-  border-radius:10px; display:grid; gap:12px; }
-.model-lab-model-options > summary { cursor:pointer; font-weight:650; font-size:13px; }
-.model-lab-model-options[open] > summary { margin-bottom:12px; }
-.model-lab-model-options label { display:grid; gap:7px; max-width:360px; }
-.model-lab-model-options button { margin-top:10px; }
 .scoring-file-input { border:1px dashed var(--sos-border); border-radius:12px;
   padding:18px; display:grid; gap:10px; margin:14px 0; }
 .scoring-file-input label { display:grid; gap:10px; font-weight:650; }
@@ -1132,18 +753,8 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .scoring-file-input .hint { margin:0; }
 .scoring-result-complete { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; min-width:0; }
 
-/* 자유 학습에서는 대량 Feature를 요약하고 선택할 때만 펼친다. */
-.training-feature-guidance { margin:10px 0 0; padding:10px 12px; border:1px solid var(--sos-border);
-  border-radius:8px; font-size:12px; line-height:1.6; color:var(--sos-muted); }
-.training-feature-editor { margin-top:12px; min-width:0; border:1px solid var(--sos-border);
-  border-radius:10px; padding:12px 14px; }
-.training-feature-editor > summary { cursor:pointer; font-weight:650; line-height:1.6; }
-.training-feature-editor > summary:focus-visible { outline:2px solid var(--sos-accent); outline-offset:4px; }
-.training-feature-editor[open] > summary { margin-bottom:12px; }
-.training-feature-editor .feature-selector { min-width:0; }
-@media(max-width:900px) {
-  .feature-selector-options { grid-template-columns:minmax(0,1fr); }
-}
+/* 로컬 운영 도구 링크. */
+
 .operator-tools { border-top:1px solid var(--sos-border); padding:14px 12px;
   display:grid; gap:7px; min-width:0; }
 .operator-tools .eyebrow { font-size:11px; color:var(--sos-muted); }
@@ -1170,33 +781,8 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   .auth-form button { width:100%; }
 }
 
-/* 등록 대기 중 운영자 보조 근거는 기본 작업 흐름을 가리지 않는다. */
-.pipeline-operator-links { margin-top:12px; border-top:1px solid var(--sos-border); padding-top:12px;
-  min-width:0; }
-.pipeline-operator-links summary { cursor:pointer; font-size:12px; font-weight:650; }
-.pipeline-operator-links p { color:var(--sos-muted); font-size:12px; line-height:1.6; }
-.pipeline-operator-links .actions { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
-.pipeline-operator-links a { font-size:12px; color:var(--sos-accent); overflow-wrap:anywhere; }
-
-/* 분석 단계 진행: 실제 단계 Job 상태만 표시한다. */
-.pipeline-stage-progress { display:grid; gap:10px; margin-top:14px; }
-.pipeline-stage-count { margin:0; color:var(--sos-muted); font-size:12px; }
-.pipeline-stage-progress ol { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; margin:0; padding:0; list-style:none; }
-.pipeline-stage { display:grid; gap:4px; align-content:start; padding:10px; border:1px solid var(--sos-border); border-radius:9px; min-width:0; }
-.pipeline-stage-marker { font-size:13px; font-weight:700; color:var(--sos-muted); }
-.pipeline-stage-name { font-size:12px; font-weight:650; overflow-wrap:anywhere; }
-.pipeline-stage small { color:var(--sos-muted); font-size:11px; }
-.pipeline-stage.stage-done .pipeline-stage-marker { color:var(--sos-success); }
-.pipeline-stage.stage-active, .pipeline-stage.stage-registering { border-color:var(--sos-accent); background:var(--sos-accent-bg); }
-.pipeline-stage.stage-active .pipeline-stage-marker, .pipeline-stage.stage-registering .pipeline-stage-marker { color:var(--sos-accent); }
-.pipeline-stage.stage-failed { border-color:var(--sos-danger); }
-.pipeline-stage.stage-failed .pipeline-stage-marker, .pipeline-stage.stage-failed small { color:var(--sos-danger); }
-.pipeline-stage.stage-skipped, .pipeline-stage.stage-cancelled { opacity:.65; }
-@media(max-width:980px) { .pipeline-stage-progress ol { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-@media(max-width:520px) { .pipeline-stage-progress ol { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-
 /* 대안 설명 방법은 주요 행동보다 낮은 위계로 둔다. */
-.pipeline-sensitivity-start { justify-self:start; }
+.sensitivity-start { justify-self:start; }
 
 /* 관리자 표시 이름 설정은 하나의 접힌 항목으로 둔다. */
 .brand-settings summary { cursor:pointer; color:var(--sos-muted); font-size:11px; }
@@ -1214,11 +800,9 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   .sidebar-menu.open { display:block; padding-top:10px; }
 }
 
-
 /* 모델 사용: 완료 결과를 입력 설정보다 먼저 확인하고 이전 실행은 인라인에서 조회한다. */
 .model-lab-playground .model-lab-history-list { grid-template-columns:minmax(0,1fr); }
 .scoring-result-first { scroll-margin-top:24px; display:grid; gap:14px; min-width:0; }
-.scoring-next-input-heading { margin:12px 0 0; font-size:16px; }
 .scoring-observation-detail { scroll-margin-top:22px; }
 .model-lab-history-entry { display:grid; gap:8px; min-width:0; align-content:start; }
 .model-lab-history-entry > button.surface-button { width:100%; }
@@ -1227,8 +811,6 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .model-lab-history-detail > p { margin:0; overflow-wrap:anywhere; }
 .model-lab-history-detail > button { justify-self:start; }
 .model-lab-history-detail summary { cursor:pointer; }
-
-
 
 /* 독립 Scoring 결과: 데이터·모델 근거와 선택한 관측치의 실제 활동을 우선 표시한다. */
 .scoring-distribution-heading { display:flex; flex-wrap:wrap; align-items:center;
@@ -1251,21 +833,17 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   color:var(--sos-muted); margin:0; }
 .observation-activity > .hint { margin:0; }
 
-/* 모델 실험실 UX: 요약을 먼저, 근거와 전체 Feature는 선택적으로 제공한다. */
-.pipeline-shap-zero { display:grid; gap:8px; padding:14px 16px; border:1px solid var(--sos-border); background:var(--sos-raised); border-radius:10px; line-height:1.6; }
-.pipeline-shap-zero strong { font-size:14px; }
-.pipeline-shap-zero p { margin:0; color:var(--sos-muted); font-size:13px; }
-.pipeline-shap-summary { font-size:14px; line-height:1.6; }
+/* 설명 결과: 요약을 먼저, 근거와 전체 Feature는 선택적으로 제공한다. */
+.shap-zero { display:grid; gap:8px; padding:14px 16px; border:1px solid var(--sos-border); background:var(--sos-raised); border-radius:10px; line-height:1.6; }
+.shap-zero strong { font-size:14px; }
+.shap-zero p { margin:0; color:var(--sos-muted); font-size:13px; }
+.shap-summary { font-size:14px; line-height:1.6; }
 .scoring-action-hint { margin:0; color:var(--sos-muted); font-size:12px; }
 .scoring-input-guidance { color:var(--sos-muted); font-size:12px; }
 .scoring-input-guidance > summary { cursor:pointer; }
 .scoring-input-guidance .hint { margin:10px 0 0; line-height:1.65; }
-.observation-activity-all { border-top:1px solid var(--sos-border); padding-top:14px; }
-.observation-activity-all > summary { cursor:pointer; font-size:13px; font-weight:650; }
-.observation-activity-all[open] > summary { margin-bottom:14px; }
-.model-lab-home-illustration-note { font-size:11px; color:var(--sos-muted); margin:5px 0 2px; }
 
-/* Model Lab: 데이터 선택은 하나의 시작 경험, 관측값 실험은 같은 분석의 다음 행동이다. */
+/* 모델 적용: 데이터 선택은 하나의 시작 경험, 관측값 실험은 같은 분석의 다음 행동이다. */
 .model-lab-start-choice { display:grid; gap:8px; margin:14px 0 12px; }
 .model-lab-start-choice .hint { margin:0; }
 .model-lab-observation-source { display:grid; justify-items:start; gap:9px; margin-bottom:16px;
@@ -1278,8 +856,6 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 
 /* 모델 활용 시작: 모델 카드 바로 아래에서 분석할 데이터를 고른다. */
 .model-lab-model-actions { display:grid; gap:4px; justify-items:end; min-width:min(100%,320px); }
-.model-lab-current-model .model-lab-model-options { border:0; padding:0; background:transparent; }
-.model-lab-current-model .model-lab-model-options > summary { color:var(--sos-accent); font-weight:500; padding:4px 0; }
 @media(max-width:720px) { .model-lab-model-actions { justify-items:start; width:100%; } }
 
 /* Dataset 분석: 실행 중인 Job과 새 분석 설정을 구분한다. */
@@ -1303,28 +879,17 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .observation-meta strong { color:var(--sos-text); font-weight:600; }
 
 /* 설명 방법은 사용자의 질문을 제목으로 두고 방법 이름은 보조로 표시한다. */
-.pipeline-shap-explanation > h6,.pipeline-sensitivity > h6 { margin:0; font-size:16px; line-height:1.4; }
-.pipeline-shap-explanation > h6 small,.pipeline-sensitivity > h6 small { margin-left:6px; font-size:12px;
+.shap-explanation > h6,.sensitivity-panel > h6 { margin:0; font-size:16px; line-height:1.4; }
+.shap-explanation > h6 small,.sensitivity-panel > h6 small { margin-left:6px; font-size:12px;
   font-weight:500; color:var(--sos-muted); }
-.pipeline-shap-result > h6 { margin:0; font-size:14px; }
-.pipeline-sensitivity { display:grid; gap:12px; min-width:0; padding-top:14px; border-top:1px solid var(--sos-border); }
-.pipeline-sensitivity > button { justify-self:start; }
+.shap-result > h6 { margin:0; font-size:14px; }
+.sensitivity-panel { display:grid; gap:12px; min-width:0; padding-top:14px; border-top:1px solid var(--sos-border); }
+.sensitivity-panel > button { justify-self:start; }
 .ml-scoring-panel > .scoring-next-analysis-body { margin-top:0; }
 .scoring-input-ready { margin:0; font-size:13px; color:var(--sos-success); }
 
 /* 사용자 작업에 필요한 선택·결과를 먼저 배치한다. */
-.model-group-panel > label,.model-search,.group-edit-form label { display:grid; gap:7px; max-width:540px; font-size:13px; }
-.model-group-panel > .panel-head { margin-bottom:14px; }
-.model-group-panel > label select { width:100%; }
-.model-group-description { color:var(--sos-muted); margin-top:10px; font-size:13px; }
-.model-group-settings { margin-top:12px; font-size:13px; }
-.model-group-settings summary,.research-history > summary,.model-version-settings > summary,
-.training-algorithm-settings > summary,.dataset-schema > summary,.resource-id-lookup > summary { cursor:pointer; }
-.group-edit-form { display:grid; gap:14px; padding:16px 0 4px; }
-.group-edit-form textarea { background:var(--sos-field); color:var(--sos-text); border:1px solid var(--sos-border);
-  border-radius:8px; padding:11px; font:inherit; resize:vertical; width:100%; }
-.group-edit-form textarea:focus { outline:2px solid var(--sos-accent); outline-offset:2px; }
-.group-edit-form .actions { justify-content:flex-start; margin:0; flex-wrap:wrap; }
+.dataset-schema > summary,.resource-id-lookup > summary { cursor:pointer; }
 .model-version-list { display:grid; }
 .model-version-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:18px;
   padding:20px 0; border-bottom:1px solid var(--sos-border); align-items:start; }
@@ -1332,59 +897,14 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .model-version-identity { min-width:0; display:grid; gap:7px; }
 .model-version-identity h3 { font-size:17px; overflow-wrap:anywhere; }
 .model-version-identity p,.model-version-identity small { font-size:13px; color:var(--sos-muted); overflow-wrap:anywhere; }
-.model-version-settings { flex-basis:100%; text-align:right; font-size:12px; }
-.model-version-settings[open] { max-width:460px; text-align:left; overflow-wrap:anywhere; }
-.model-version-settings .model-version-management { margin-top:12px; }
-.model-version-panel > .model-search { margin-bottom:6px; }
-.research-history > summary { font-size:16px; font-weight:600; }
-.research-history-body { display:grid; gap:18px; margin-top:18px; }
-.research-run-list { display:grid; gap:8px; max-height:420px; overflow:auto; }
-.research-run-list .ml-resource-row { justify-content:flex-start; }
-.research-run-list small { display:block; margin-top:4px; font-size:12px; color:var(--sos-muted); }
-.research-history > details > summary { cursor:pointer; font-size:14px; color:var(--sos-accent); }
-.research-history-body > p { font-size:13px; line-height:1.65; }
-.research-run-row { display:grid; gap:10px; min-width:0; padding:12px; border:1px solid var(--sos-border); border-radius:9px; font-size:13px; }
-.research-run-choice { display:flex; align-items:start; gap:10px; cursor:pointer; min-width:0; }
-.research-run-choice > input { flex-shrink:0; }
-.research-run-choice > span { min-width:0; overflow-wrap:anywhere; }
-.research-run-row > a { font-size:12px; }
-.research-run-detail { min-width:0; }
-.research-run-detail summary { cursor:pointer; color:var(--sos-muted); }
-.research-run-detail p,.research-run-detail button,.research-run-detail details { margin-top:10px; }
-.research-run-detail pre { max-height:300px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
-.run-comparison { display:grid; gap:12px; min-width:0; }
-.run-comparison > details > summary { cursor:pointer; color:var(--sos-muted); }
-.run-comparison > details section { margin-top:15px; }
-.run-comparison h4 { margin-bottom:10px; }
-.run-comparison table { min-width:0; table-layout:fixed; }
-.run-comparison th:first-child { width:40%; }
-.run-comparison :is(td,th) { max-width:330px; white-space:normal; overflow-wrap:anywhere; }
-.registered-feature-summary { display:grid; gap:12px; min-width:0; padding:16px; border:1px solid var(--sos-border); border-radius:10px; }
-.registered-feature-summary :is(h4,p) { margin:0; }
-.registered-feature-summary summary { cursor:pointer; color:var(--sos-muted); font-size:13px; }
-.registered-feature-summary details p { margin:12px 0; overflow-wrap:anywhere; font-size:13px; line-height:1.65; }
-.feature-retirement-confirmation { display:grid; gap:12px; padding:16px; border:1px solid var(--sos-warning); border-radius:10px; font-size:13px; line-height:1.65; }
-.pipeline-failure-notice { display:grid; gap:12px; }
-.pipeline-failure-notice h3 { font-size:16px; }
-.pipeline-failure-notice :is(p,details) { margin:0; font-size:13px; line-height:1.65; }
-.pipeline-failure-notice summary { cursor:pointer; }
-.pipeline-failure-notice .actions { flex-wrap:wrap; justify-content:flex-start; margin:0; }
-.pipeline-failure-notice .actions button { flex:1 1 160px; }
-.pipeline-failed-stages { margin-top:18px; font-size:13px; }
-.pipeline-failed-stages > summary { cursor:pointer; color:var(--sos-muted); }
-.pipeline-results > .pipeline-evidence:first-child { margin-top:0; padding-top:0; border-top:0; }
 @media(max-width:650px) {
   .model-version-panel > .panel-head { flex-direction:column; align-items:stretch; }
   .model-version-panel > .panel-head .actions { flex-wrap:wrap; margin-top:0; }
   .model-version-panel > .panel-head .actions button { flex:1 1 auto; }
 }
-.run-comparison { display:grid; gap:14px; min-width:0; }
 .explanation-baseline { padding:12px 14px; margin:12px 0; border-left:3px solid var(--sos-accent);
   background:var(--sos-raised); font-size:13px; line-height:1.7; }
-.pipeline-shap-explanation { margin-top:22px; padding-top:20px; border-top:1px solid var(--sos-border); }
-.observation-activity-highlight { grid-template-columns:1fr; align-items:center; gap:8px; }
-.observation-activity-highlight > .feature-reference-comparison { min-width:0; width:100%; }
-.observation-activity-highlight .feature-reference-values strong { text-align:left; }
+.shap-explanation { margin-top:22px; padding-top:20px; border-top:1px solid var(--sos-border); }
 .observation-page-size { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--sos-muted); }
 .observation-page-size select { padding:6px 9px; }
 .dataset-schema { margin:16px 0 24px; }
@@ -1392,14 +912,11 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .window-transform-settings { padding:14px; margin:16px 0; background:var(--sos-raised); border-radius:10px; }
 .window-transform-settings > p { margin:0 0 12px; }
 .window-transform-settings fieldset.column-picks { flex:1 1 100%; }
-.training-algorithm-settings { margin:20px 0; font-size:13px; }
-.training-algorithm-settings > .form-row { margin-top:14px; }
 .resource-id-lookup { font-size:13px; color:var(--sos-muted); }
 .resource-id-lookup label { display:grid; gap:6px; margin-top:10px; }
 @media(max-width:760px) {
   .model-version-row { grid-template-columns:1fr; }
   .model-version-row > .model-index-actions { justify-content:flex-start; }
-  .model-version-settings { text-align:left; }
 }
 
 /* 입력·결과는 짧게 유지하고 전체 수치는 검색해서 확인한다. */
@@ -1420,11 +937,7 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .sensitivity-result { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; min-width:0; }
 .sensitivity-result h6 { margin:0; font-size:14px; }
 .sensitivity-result .chart { height:270px; }
-.pipeline-shap-result > .chart { height:300px; }
-.histogram-bin-picker { display:flex; gap:18px; align-items:center; flex-wrap:wrap; margin-top:12px; }
-.histogram-bin-picker label { display:grid; gap:6px; font-size:12px; }
-.histogram-bin-picker p { display:grid; gap:5px; font-size:14px; }
-.histogram-bin-picker small { color:var(--sos-muted); font-size:12px; }
+.shap-result > .chart { height:300px; }
 @media(max-width:520px) {
   .playground-input-tools { grid-template-columns:1fr; }
   .feature-result-toolbar input { flex-basis:100%; max-width:none; }
@@ -1456,21 +969,21 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .profile-column-tools > h4 { margin-right:auto; }
 .profile-column-tools label { display:grid; gap:6px; font-size:12px; }
 .profile-column-tools span { font-size:12px; color:var(--sos-muted); }
-.feast-feature-panel > summary { cursor:pointer; font-weight:650; }
-.feast-feature-panel > .hint { margin-top:14px; }
-.feast-feature-panel label:not(.feature-selector-item) { display:grid; gap:6px; font-size:13px; min-width:0; }
-.feast-feature-panel select { max-width:100%; }
-.feast-feature-panel .hint { line-height:1.65; }
 @media(max-width:1050px) {
   .data-job-workspace { grid-template-columns:minmax(0,1fr); }
   .data-job-detail { border-left:0; padding:18px 0 0; border-top:1px solid var(--sos-border); }
 }
-
-.research-group-settings { margin:12px 0; }
-.research-group-settings > .panel { margin-top:12px; }
 
 .model-creation-evidence { margin:20px 0; padding:18px 0; border-block:1px solid var(--sos-border); }
 .model-creation-evidence h3, .model-creation-evidence h4 { margin-bottom:10px; }
 .model-creation-evidence ol { padding-left:22px; line-height:1.9; }
 .model-creation-evidence p { font-size:13px; line-height:1.7; }
 .model-creation-evidence details { margin-top:14px; }
+
+/* 모델 제공: 소유자가 작성한 목적·적용 대상·한계 설명을 판본과 함께 보인다. */
+.model-offering { display:grid; gap:8px; margin:16px 0; padding:16px; border:1px solid var(--sos-border);
+  border-radius:10px; }
+.model-offering h3 { font-size:15px; margin:0; }
+.model-offering p { margin:0; font-size:13px; line-height:1.6; }
+.model-offering-meta { color:var(--sos-muted); }
+.model-offering-description { white-space:pre-line; overflow-wrap:anywhere; }

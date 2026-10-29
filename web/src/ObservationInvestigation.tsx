@@ -4,7 +4,7 @@ import { formatError, request } from "./api";
 import { FeatureResultDetails } from "./FeatureResultDetails";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { PipelineCandidates, ModelRevision } from "./types";
-import { PipelineShapExplanation } from "./PipelineShapExplanation";
+import { ShapExplanation } from "./ShapExplanation";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { ObservationSensitivity } from "./ObservationSensitivity";
 import { groupActivityFeatures } from "./ActivityFeatureGroups";
@@ -22,7 +22,7 @@ function format(value: unknown): string {
     num.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
 }
 
-export function PipelineCandidateInvestigation({
+export function ObservationInvestigation({
   candidate, scoringResultId, modelRevisionId, canRun, canCancel, onOpenResource,
   observationMode = false, scoreOrder, isDefaultObservation = false, onTryObservation,
 }: {
@@ -83,12 +83,12 @@ export function PipelineCandidateInvestigation({
     const amount = magnitude < 0.000001 ? magnitude.toExponential(2) : format(magnitude);
     return `학습 중앙값 대비 ${difference > 0 ? "+" : "−"}${amount}`;
   }
-  return <section className="pipeline-candidate-inspection"
+  return <section className="observation-inspection"
     aria-label={observationMode
       ? isDefaultObservation ? "기본 표시 관측값 분석" : "선택한 관측값 분석"
       : "선택한 후보 분석"}>
     <div className="observation-title">
-      <h5 id="pipeline-candidate-detail-heading" tabIndex={-1}>{observationMode ? isDefaultObservation ? "첫 번째 관측값" : "선택한 관측값" : "선택한 검토 대상"}</h5>
+      <h5 id="observation-detail-heading" tabIndex={-1}>{observationMode ? isDefaultObservation ? "첫 번째 관측값" : "선택한 관측값" : "선택한 검토 대상"}</h5>
       {typeof scoreOrder === "number" && <span>점수순 {scoreOrder.toLocaleString("ko-KR")}번째</span>}
     </div>
     <div className="observation-score"><span>모델 이상 점수</span><strong>{format(candidate.anomaly_score)}</strong></div>
@@ -134,7 +134,7 @@ export function PipelineCandidateInvestigation({
       {!modelRevisionId && <p className="hint">학습 모델 판본 참조가 없어 중앙값을 비교할 수 없습니다.</p>}
       {modelRevisionId && !model && !modelError &&
         <p role="status">학습 참조 중앙값을 조회하는 중입니다.</p>}
-      {modelError && <div className="pipeline-readiness-blocked" role="alert">
+      {modelError && <div className="notice-blocked" role="alert">
         <p>학습 중앙값 조회 실패: {modelError}</p>
         <button type="button" className="secondary" onClick={() => setModelReload(n => n + 1)}>
           학습 참조값 다시 조회
@@ -148,7 +148,7 @@ export function PipelineCandidateInvestigation({
           values: [format(value), referenceLabel(name), referenceDifference(name, value) ?? "비교 불가"],
         }))} />
     </section>
-    <PipelineShapExplanation candidate={candidate} scoringResultId={scoringResultId}
+    <ShapExplanation candidate={candidate} scoringResultId={scoringResultId}
       modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
       onOpenResource={onOpenResource} />
     <details className="observation-secondary-analysis" onToggle={event => {

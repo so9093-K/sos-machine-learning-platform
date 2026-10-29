@@ -7,7 +7,6 @@ import { formatDtype } from "./display-format";
 import { histogram, needsTimeOrder } from "./feature-utils";
 import { useFeatureEditor } from "./useFeatureEditor";
 import { FeaturePanel } from "./FeaturePanel";
-import { FeastFeaturePanel } from "./FeastFeaturePanel";
 import { useIcebergConnector } from "./useIcebergConnector";
 import { request, jsonPost, submitJob, formatError, uploadFile, describeError, type ErrorNotice } from "./api";
 import { ExampleGallery } from "./ExampleGallery";
@@ -20,17 +19,13 @@ import { UnderstandingPanel } from "./UnderstandingPanel";
 import { DatasetQueryPanel, emptyQueryDraft, type QueryDraft } from "./DatasetQueryPanel";
 import type { Dataset, DatasetPage, Preview, Job, JobSummary, ExplorationJobSummary, Example, UploadPolicy, Identity } from "./types";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
-import { useWorkspaceNavigation, pipelineRunSelectionContext, type WorkspaceTab } from "./PlatformNavigation";
+import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
-import { PipelineWorkspace } from "./PipelineWorkspace";
-import { ModelLabHome } from "./ModelLabHome";
 import { ModelLabUse } from "./ModelLabUse";
 import { DataSourceSidebar } from "./DataSourceSidebar";
-import { MLWorkbench } from "./MLWorkbench";
 import { ModelCatalog } from "./ModelCatalog";
-import { MLflowResearch } from "./MLflowResearch";
 import { MLResourceDetail, ScoringWorkspace, DecisionWorkspace } from "./MLResourcePages";
 import type { DecisionView } from "./MLDecisionPanel";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
@@ -64,10 +59,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   // 역할→권한 매핑의 정본은 Python security.GRANTS다.
   const canWrite = actor.capabilities.includes("dataset.create");
   const canRun = actor.capabilities.includes("job.create");
-  const canTrain = actor.capabilities.includes("model.train");
-  const canManageFeatures = actor.capabilities.includes("feature.manage");
   const canCancel = actor.capabilities.includes("job.cancel");
-  const canManageModels = actor.capabilities.includes("model.manage");
   const canInspectStorage = actor.capabilities.includes("storage.inspect");
   const canViewAudit = actor.capabilities.includes("audit.read");
   const canConfigure = actor.capabilities.includes("instance.configure");
@@ -94,20 +86,14 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const [examplesError, setExamplesError] = useState("");
   const [examplesReload, setExamplesReload] = useState(0);
   const [reloadRevision, setReloadRevision] = useState(0);
-  function startScoring(modelId: string, modelGroupKey = context.modelGroupKey) {
-    navigateWithContext("scoring", { modelId, modelGroupKey,
-      ...(context.pipelineRunId ? { pipelineReturn: true, pipelineRunId: context.pipelineRunId,
-        datasetId: context.datasetId, candidateRowIndex: context.candidateRowIndex,
-        pipelineAnalysisSection: context.pipelineAnalysisSection } : context.modelLabReturn
-          ? { modelLabReturn: true } : {}),
-    });
+  function startScoring(modelId: string) {
+    navigateWithContext("scoring", { modelId });
   }
   function startDecision(view: DecisionView, scoringId: string) {
     navigateWithContext(
       view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
       { scoringId, ...(context.modelLabReturn && context.modelId
-        ? { modelLabReturn: true, modelId: context.modelId,
-          modelGroupKey: context.modelGroupKey } : {}) },
+        ? { modelLabReturn: true, modelId: context.modelId } : {}) },
     );
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
@@ -228,18 +214,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   }
   function chooseDataset(id: string, target: "understanding" | "preview" | "profile" | "preparation") {
     setSelected(id);
-    navigateWithContext(target, { datasetId: id,
-      ...(context.pipelineReturn ? { pipelineReturn: true, pipelineRunId: context.pipelineRunId,
-        candidateRowIndex: context.candidateRowIndex,
-        pipelineAnalysisSection: context.pipelineAnalysisSection } : {}),
-    });
+    navigateWithContext(target, { datasetId: id });
   }
   function openDataJob(jobId: string, kind: "data" | "exploration" = "data") {
-    navigateWithContext("jobs", { datasetId: selected, dataJobId: jobId, dataJobKind: kind,
-      ...(context.pipelineReturn ? { pipelineReturn: true, pipelineRunId: context.pipelineRunId,
-        candidateRowIndex: context.candidateRowIndex,
-        pipelineAnalysisSection: context.pipelineAnalysisSection } : {}),
-    });
+    navigateWithContext("jobs", { datasetId: selected, dataJobId: jobId, dataJobKind: kind });
   }
   /** 서버 등록 성공을 목록 새로고침 실패 때문에 취소된 작업처럼 표시하지 않는다. */
   async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
@@ -405,13 +383,6 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         "예제는 정상 등록됐습니다. 목록 갱신 결과를 확인하지 못했지만 다시 등록할 필요는 없습니다.");
     });
   }
-  /** Pipeline 예제는 요청할 때만 등록하며 EDA 화면으로 강제 이동하지 않는다. */
-  async function usePipelineExample(): Promise<Dataset> {
-    const data = await jsonPost<Dataset>("/api/examples/activity-anomaly-if/use", {});
-    setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
-    // 선택 반영은 Pipeline 작업 공간에서 요청의 최신성 확인 후 수행한다.
-    return data;
-  }
   async function openJobDataset(datasetId: string) {
     await withFeedback(async () => {
       // 완료 Job의 출력은 최신 Dataset 첫 페이지 밖에 있을 수 있다.
@@ -506,13 +477,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           }}
           onExample={() => {
             setSelected("");
-            const target = tab === "preparation" ? "preparation" : "preview";
-            if (context.pipelineReturn) navigateWithContext(target, {
-              pipelineReturn: true, pipelineRunId: context.pipelineRunId,
-              candidateRowIndex: context.candidateRowIndex,
-              pipelineAnalysisSection: context.pipelineAnalysisSection,
-            });
-            else navigateWithContext(target, {});
+            navigateWithContext(tab === "preparation" ? "preparation" : "preview", {});
           }}
           onChoose={id => {
             chooseDataset(id, ["preparation", "preview", "profile"].includes(tab)
@@ -531,7 +496,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           {error.reference && <small className="alert-reference">{error.reference}</small>}
         </div>
         <button onClick={() => setError(null)} aria-label="오류 닫기">×</button></div>}
-      {datasetReadError && ["overview", "understanding", "preview", "profile", "preparation", "pipelines"].includes(tab) &&
+      {datasetReadError && ["overview", "understanding", "preview", "profile", "preparation", "topic"].includes(tab) &&
         <div role="alert" className="alert error">
           Dataset 목록을 확인하지 못했습니다. 현재 화면의 데이터 선택이 제한될 수 있습니다.
           <details><summary>문제 정보</summary>{datasetReadError}</details>
@@ -580,96 +545,16 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "overview" && <PlatformOverview brandName={brandName}
         datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
         onNavigate={setTab}
-        onOpenPipelineRun={(runId, datasetId) => {
-          setSelected(datasetId);
-          navigateWithContext("pipelines", { datasetId, pipelineRunId: runId });
-        }}
         onOpenDataset={id => chooseDataset(id, "understanding")} />}
-      {tab === "pipelines" && !context.pipelineRunId && !context.datasetId &&
-        !context.pipelineView && <ModelLabHome
-          onUse={() => navigateWithContext("pipelines", { pipelineView: "use" })}
-          onHistory={() => setTab("ml-jobs")} />}
-      {tab === "pipelines" && !context.pipelineRunId && context.pipelineView === "use" &&
-        <ModelLabUse key="activity-anomaly" datasets={datasets}
+      {tab === "topic" && <ModelLabUse key="activity-anomaly" datasets={datasets}
           selectedModelId={context.modelId ?? ""}
-          selectedGroupKey={context.modelGroupKey ?? "default"}
-          onSelectModel={modelId => selectContext({ ...context, pipelineView: "use", modelId,
-            modelGroupKey: context.modelGroupKey })}
-          onSelectGroup={modelGroupKey => selectContext({ ...context, pipelineView: "use",
-            modelId: "", modelGroupKey })}
+          onSelectModel={modelId => selectContext({ modelId })}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
           canUpload={canWrite} onDatasetRegistered={data => {
             setDatasets(previous => [data, ...previous.filter(item => item.id !== data.id)]);
           }}
-          onBack={() => navigateWithContext("pipelines", {})}
           onHistory={() => setTab("ml-jobs")} />}
-      {canTrain && tab === "pipelines" && !context.pipelineRunId && (
-        context.pipelineView === "learn" || Boolean(context.datasetId)) &&
-        <button type="button" className="ghost model-lab-back"
-          onClick={() => navigateWithContext("pipelines", {})}>← 활동 이상 탐지 소개로</button>}
-      {tab === "pipelines" && (Boolean(context.pipelineRunId) || (canTrain && (
-        context.pipelineView === "learn" ||
-        (Boolean(context.datasetId) && context.pipelineView !== "use")))) &&
-        <PipelineWorkspace datasets={datasets} canTrain={canTrain}
-        canInspectOperations={canInspectStorage || canViewAudit}
-        canCreateDataset={canWrite}
-        hasPipelineExample={examples.some(item => item.id === "activity-anomaly-if")}
-        example={examples.find(item => item.id === "activity-anomaly-if")}
-        examplesLoading={examplesLoading}
-        examplesError={examplesError}
-        onRetryExamples={() => setExamplesReload(value => value + 1)}
-        onApplyModel={startScoring}
-        onUseExample={usePipelineExample}
-        initialDatasetId={context.datasetId ?? ""}
-        initialRunId={context.pipelineRunId ?? ""}
-        initialCandidateRowIndex={context.candidateRowIndex}
-        initialAnalysisSection={context.pipelineAnalysisSection}
-        hasMoreDatasets={Boolean(nextDatasetCursor)}
-        onLoadMoreDatasets={loadMoreDatasets}
-        onSelectDataset={id => {
-          setSelected(id);
-          navigateWithContext("pipelines", { datasetId: id, pipelineView: "learn" });
-        }}
-        onSelectRun={(id, datasetId) => {
-          setSelected(datasetId);
-          navigateWithContext("pipelines", pipelineRunSelectionContext(context, id, datasetId));
-        }}
-        onSelectCandidate={rowIndex => selectContext({
-          datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
-          candidateRowIndex: rowIndex, pipelineAnalysisSection: context.pipelineAnalysisSection,
-        })}
-        onSelectAnalysisSection={section => selectContext({
-          datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
-          candidateRowIndex: context.candidateRowIndex, pipelineAnalysisSection: section,
-        })}
-        canRun={canRun} canCancel={canCancel}
-        onNavigate={(tab, datasetId) => navigateWithContext(tab, {
-          pipelineReturn: true, datasetId,
-          pipelineRunId: context.pipelineRunId,
-          candidateRowIndex: context.candidateRowIndex,
-          pipelineAnalysisSection: context.pipelineAnalysisSection,
-        })}
-        onOpenResource={openResource} />}
-      {context.pipelineReturn && (context.pipelineRunId || canTrain) &&
-        (["understanding", "preview", "profile", "preparation", "jobs"] as Tab[]).includes(tab) &&
-        <section className="pipeline-return" role="status">
-          <div><strong>{context.pipelineRunId ? "활동 이상 탐지 결과 확인" :
-            "모델 학습을 위한 데이터를 준비하고 있습니다"}</strong>
-            <p>{context.pipelineRunId
-              ? "분석한 데이터를 살펴본 뒤 같은 결과와 선택했던 후보로 돌아갈 수 있습니다."
-              : "데이터를 확인한 뒤 활동 이상 탐지 Workflow를 준비할 수 있습니다."}</p>
-          </div>
-          <button className="secondary" type="button"
-            onClick={() => navigateWithContext("pipelines", context.pipelineRunId ? {
-              datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
-              candidateRowIndex: context.candidateRowIndex,
-              pipelineAnalysisSection: context.pipelineAnalysisSection,
-            } : { datasetId: selected })}>
-            {context.pipelineRunId ? "살펴보던 분석 결과로 돌아가기 →" :
-              selected ? "이 Dataset으로 모델 학습 →" : "활동 이상 탐지 복귀 →"}
-          </button>
-        </section>}
       {isDataArea && datasets.length > 0 && <div className="dataset-switcher">
         <label>Dataset 선택<select aria-label="현재 Dataset" value={selected}
           onChange={event => chooseDataset(event.target.value, tab as "understanding" | "preview" | "profile" | "preparation")}>
@@ -711,11 +596,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
               onClick={() => setTab("ml")}>
               모델 활용 →
             </button>
-            {canTrain && tab !== "preparation" &&
-              <button className="secondary" type="button"
-                onClick={() => navigateWithContext("research", { datasetId: selected })}>
-                이 Dataset으로 학습 준비 →
-              </button>}
+
             {canRun && tab === "preparation" && <>
               <label className="iceberg-append">적재할 Iceberg 테이블
                 <input value={importTableName} placeholder="예: sensor_data"
@@ -879,86 +760,26 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           {preview && <FeaturePanel editor={editor}
             columnNames={columnNames} busy={busy} canRun={canRun}
             onSubmit={() => void submit("transform")} />}
-          {/* 등록 Feature 재사용은 학습 권한과 별개로 데이터 준비에서 제공한다. */}
-          {(canRun || canManageFeatures) && <FeastFeaturePanel datasets={datasets}
-            canCreate={canRun} canManage={canManageFeatures} purpose="preparation"
-            onDatasetReady={id => chooseDataset(id, "preparation")} />}
         </>}
 
       </>}
-      {!canTrain && !resource && (tab === "training" || tab === "research" ||
-        (tab === "pipelines" && !context.pipelineRunId && (context.pipelineView === "learn" ||
-          (context.datasetId && context.pipelineView !== "use")))) &&
-        <section className="panel" aria-label="제작 도구 접근 안내">
-          <h2>학습·제작 전용 도구</h2>
-          <p>이 도구는 학습 실행 권한이 있는 제작 주체가 사용합니다. 모델 활용과 기존 실행 근거는 아래에서 확인할 수 있습니다.</p>
-          <div className="actions">
-            <button type="button" onClick={() => setTab("ml")}>모델 활용 →</button>
-            <button type="button" className="secondary" onClick={() => setTab("ml-jobs")}>실행 기록 →</button>
-          </div>
-        </section>}
-      {tab === "ml" && !resource && <ModelCatalog canManage={canManageModels}
-        datasets={datasets} registryKey={context.modelGroupKey ?? "default"}
-        canInspectOperations={canInspectStorage || canViewAudit}
-        onSelectGroup={modelGroupKey => selectContext({ ...context, modelGroupKey })}
-        onOpenModel={id => openResource("model", id)} onScoreModel={startScoring}
-        />}
-      {tab === "research" && canTrain && !resource && <MLflowResearch canManage={canManageModels} canTrain={canTrain}
-        datasets={datasets} registryKey={context.modelGroupKey ?? "default"}
-        experimentId={context.experimentId}
-        onSelectExperiment={experiment => selectContext({ ...context,
-          experimentId: experiment?.id, experimentTitle: experiment?.name })}
-        onOpenResource={openResource} canInspectOperations={canInspectStorage || canViewAudit}
-        onSelectGroup={modelGroupKey => selectContext({ ...context, modelGroupKey })}
-        onWorkflow={() => navigateWithContext("pipelines", { pipelineView: "learn", datasetId: context.datasetId })}
-        onTrain={(modelGroupKey, experimentTitle) => navigateWithContext("training", {
-          ...context, modelGroupKey, experimentTitle,
-        })} />}
-      {tab === "training" && canTrain && !resource && (context.experimentId && !context.experimentTitle?.trim()
-        ? <section className="panel" aria-label="학습 연구 확인">
-          <h2>연구 이름 확인</h2>
-          <p>이 주소에는 Experiment ID만 있고 연구 이름이 없습니다. 학습·실험 관리에서 해당 묶음을 확인한 뒤 학습을 준비하세요.</p>
-          <button type="button" onClick={() => setTab("research")}>연구 묶음 확인 →</button>
-        </section>
-        : <MLWorkbench datasets={datasets}
-          initialDatasetId={context.datasetId ?? ""}
-          initialExperimentTitle={context.experimentTitle}
-          registryKey={context.modelGroupKey ?? "default"}
-          onRegistryGroupSelected={modelGroupKey => selectContext({ ...context, modelGroupKey })}
-          onDatasetSelected={datasetId => selectContext({ ...context, datasetId })}
-          onOpenModel={id => openResource("model", id)}
-          canTrain={canTrain} canRun={canRun} canManageFeatures={canManageFeatures} canCancel={canCancel}
-          canInspectOperations={canInspectStorage || canViewAudit} />)}
-      {(resource || tab === "scoring") && context.pipelineReturn && context.pipelineRunId &&
-        <section className="pipeline-return" role="status">
-          <div><strong>학습 결과에서 이어진 작업</strong>
-            <p>새 분석은 별도로 실행되며 원래 학습 결과는 유지됩니다.</p>
-          </div>
-          <button type="button" className="secondary" onClick={() =>
-            navigateWithContext("pipelines", {
-              datasetId: context.datasetId, pipelineRunId: context.pipelineRunId,
-              candidateRowIndex: context.candidateRowIndex,
-              pipelineAnalysisSection: context.pipelineAnalysisSection,
-            })}>학습 결과 복귀 →</button>
-        </section>}
+      {tab === "ml" && !resource && <ModelCatalog
+        onOpenModel={id => openResource("model", id)} onScoreModel={startScoring} />}
       {(resource || (["scoring", "policies", "evaluations", "explanations"] as Tab[]).includes(tab)) &&
         context.modelLabReturn && context.modelId &&
-        <section className="pipeline-return" role="status">
+        <section className="context-return" role="status">
           <div><strong>활동 이상 탐지에서 열린 결과입니다.</strong>
-            <p>선택한 모델과 데이터에 적용한 결과를 살펴본 뒤 모델 사용 화면으로 돌아갈 수 있습니다.</p>
+            <p>선택한 모델과 데이터에 적용한 결과를 살펴본 뒤 모델 적용 화면으로 돌아갈 수 있습니다.</p>
           </div>
           <button type="button" className="secondary"
-            onClick={() => navigateWithContext("pipelines", {
-              pipelineView: "use", modelId: context.modelId,
-              modelGroupKey: context.modelGroupKey,
-            })}>모델 사용 화면으로 돌아가기 →</button>
+            onClick={() => navigateWithContext("topic", { modelId: context.modelId })}>
+            모델 적용 화면으로 돌아가기 →</button>
         </section>}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         canRun={canRun} canCancel={canCancel}
         onScoring={startScoring} onDecision={startDecision} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
-        modelGroupKey={context.modelGroupKey ?? "default"}
         datasets={datasets} preferredModelId={context.modelId ?? ""}
         hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
         canUpload={canWrite} onDatasetRegistered={data => {
@@ -975,15 +796,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onOpenResource={openResource} datasets={datasets} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
-      {(tab === "jobs" || tab === "ml-jobs" || tab === "pipeline-jobs") && <ActivityWorkspace
-        active={tab === "ml-jobs" ? "ml" : tab === "pipeline-jobs" ? "pipeline" : "data"}
-        onChange={view => setTab(view === "ml" ? "ml-jobs" : view === "pipeline" ? "pipeline-jobs" : "jobs")}
+      {(tab === "jobs" || tab === "ml-jobs") && <ActivityWorkspace
+        active={tab === "ml-jobs" ? "ml" : "data"}
+        onChange={view => setTab(view === "ml" ? "ml-jobs" : "jobs")}
         onNavigate={setTab} onOpenResource={openResource} datasets={datasets}
-        onOpenPipelineRun={(runId, datasetId) => {
-          setSelected(datasetId);
-          navigateWithContext("pipelines", { datasetId, pipelineRunId: runId });
-        }}
-        canCancel={canCancel} canTrain={canTrain}>
+        canCancel={canCancel}>
         {tab === "jobs" && <JobsPanel jobs={[...jobs, ...discoveryJobs].sort((a, b) =>
           b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))}
           datasets={datasets} busy={busy} canCancel={canCancel}

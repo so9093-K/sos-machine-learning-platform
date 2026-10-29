@@ -258,7 +258,7 @@ def test_http_training_submission_and_fork_preserve_input_policy():
     from sos_platform.security import Actor
 
     store = Mock()
-    actor = Actor("alice", "human", frozenset({"model_builder"}))
+    actor = Actor("alice", "service", frozenset({"automation"}))
     source_job = {
         "id": "original",
         "kind": "ml_train",

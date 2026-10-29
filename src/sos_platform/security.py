@@ -44,8 +44,10 @@ GRANTS = {
     "administrator": ACTIONS,
 }
 
-# 학습·정의 변경은 명시적으로 부여한 제작 역할에만 허용한다.
-GRANTS["model_builder"] = GRANTS["researcher"] | {"model.train", "model.manage", "feature.manage"}
+# 모델·Feature는 개발 환경에서 만들고 배포 자동화가 공급한다. 학습·정의 변경·모델 제공은
+# 사람 사용자 역할이 아니라 서비스 계정의 자동화 역할과 관리자에게만 허용한다.
+GRANTS["automation"] = GRANTS["researcher"] | {"model.train", "model.manage", "feature.manage"}
+SERVICE_ONLY_ROLES = frozenset({"automation"})
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,7 @@ class IdentitySettings:
                     or not isinstance(roles, list)
                     or not roles
                     or not all(isinstance(role, str) and role in GRANTS for role in roles)
+                    or (kind != "service" and SERVICE_ONLY_ROLES.intersection(roles))
                 ):
                     raise ValueError("Invalid actor or role map")
                 mapping[fingerprint] = Actor(actor_id, kind, frozenset(roles))

@@ -114,19 +114,19 @@ export function ObservationSensitivity({ candidate, scoringResultId, canRun, can
     } catch (e) { setError(formatError(e)); }
     finally { setBusy(false); }
   }
-  return <section className="pipeline-sensitivity" aria-labelledby={`sensitivity-${candidate.row_index}`}>
+  return <section className="sensitivity-panel" aria-labelledby={`sensitivity-${candidate.row_index}`}>
     <h6 id={`sensitivity-${candidate.row_index}`}>기준값 치환 결과
       <small>중앙값 치환 실험</small></h6>
     {previousLookup === "loading" && <p role="status">
       이 {subject}의 기존 민감도 계산을 확인하고 있습니다.
     </p>}
-    {previousLookup === "error" && <div className="pipeline-readiness-blocked" role="alert">
+    {previousLookup === "error" && <div className="notice-blocked" role="alert">
       <p>이전 민감도 계산을 확인하지 못했습니다. 중복 실행을 막기 위해 다시 조회해 주세요.</p>
       <button type="button" className="secondary" onClick={() =>
         setLookupRetry(n => n + 1)}>이전 계산 다시 조회</button>
     </div>}
     {(!job || job.status === "Failed" || job.status === "Cancelled") && canRun &&
-      <button type="button" className="secondary pipeline-sensitivity-start" onClick={() => void start()}
+      <button type="button" className="secondary sensitivity-start" onClick={() => void start()}
         disabled={busy || previousLookup !== "ready"}>
         {busy ? "민감도 계산 요청 중…" : job ? "민감도 다시 계산 →" : "치환 민감도 계산 →"}
       </button>}
@@ -149,7 +149,7 @@ export function ObservationSensitivity({ candidate, scoringResultId, canRun, can
     </button>}
     {job?.status === "Failed" && <p role="alert">민감도 계산이 실패했습니다. 작업 이력에서 오류 근거를 확인하세요.</p>}
     {job?.status === "Cancelled" && <p>민감도 계산이 취소됐습니다.</p>}
-    {error && <div role="alert" className="pipeline-readiness-blocked">{error}
+    {error && <div role="alert" className="notice-blocked">{error}
       {job && <button className="secondary" type="button" onClick={() => {
         setError(""); setRetry(n => n + 1);
       }}>설명 근거 다시 조회</button>}</div>}

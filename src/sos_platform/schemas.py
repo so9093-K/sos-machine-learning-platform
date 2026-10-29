@@ -524,6 +524,42 @@ class ModelRevisionOut(BaseModel):
     created_at: str
 
 
+class ModelOfferingRequest(BaseModel):
+    """다른 Actor가 모델을 고를 때 읽는 목적·적용 대상·한계 설명."""
+
+    description: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_description(self):
+        self.description = self.description.strip()
+        if not self.description:
+            raise ValueError("모델 제공 설명을 입력하세요.")
+        return self
+
+
+class ModelOfferingStateOut(BaseModel):
+    """현재 Actor가 본 모델 판본의 제공 상태. 학습 데이터 접근 권한은 포함하지 않는다."""
+
+    offered: bool
+    description: str | None = None
+    offered_by: str | None = None
+    offered_at: str | None = None
+    withdrawn_at: str | None = None
+    owned: bool
+
+
+class ModelOfferingOut(BaseModel):
+    model: ModelRevisionOut
+    description: str
+    offered_by: str
+    offered_at: str
+
+
+class ModelOfferingPageOut(BaseModel):
+    items: list[ModelOfferingOut]
+    next_cursor: str | None = None
+
+
 class WorkRequest(BaseModel):
     dataset_id: str
     kind: Literal["profile", "transform"]

@@ -192,7 +192,7 @@ def test_http_submit_and_fork_preserve_temporal_boundaries_and_missing_policy():
     from sos_platform.security import Actor
 
     store = Mock()
-    actor = Actor("alice", "human", frozenset({"model_builder"}))
+    actor = Actor("alice", "service", frozenset({"automation"}))
     spec = {
         "algorithm": "isolation_forest",
         "dataset_version": "d1",

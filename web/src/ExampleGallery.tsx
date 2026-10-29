@@ -18,7 +18,7 @@ export function ExampleGallery({ examples, busy, loading, error, onRetry, canUse
       {!canUse && <p className="muted">예제를 등록하려면 Dataset 생성 권한이 필요합니다. 기존 Dataset은 계속 조회할 수 있습니다.</p>}
     </div></div>
     {loading && <p className="muted" role="status">예제를 불러오는 중입니다.</p>}
-    {!loading && error && <div className="pipeline-readiness-blocked" role="alert">
+    {!loading && error && <div className="notice-blocked" role="alert">
       <p>예제 목록을 불러오지 못했습니다.</p>
       {onRetry && <button type="button" className="secondary" onClick={onRetry}>
         예제 다시 조회

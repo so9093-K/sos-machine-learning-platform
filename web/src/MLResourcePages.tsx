@@ -1,23 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { FeatureResultDetails } from "./FeatureResultDetails";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
-import { ShapContributionChart } from "./PipelineShapExplanation";
+import { ShapContributionChart } from "./ShapExplanation";
 import { SensitivityChart } from "./FeatureSensitivity";
 import { MLDecisionPanel, type DecisionView } from "./MLDecisionPanel";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type {
   Dataset, MLScoringJobSummary, MLPolicyJobSummary,
   MLEvaluationJobSummary, MLExplanationJobSummary, ModelRevision, ScoringResult,
-  DecisionPolicyRevision, EvaluationRevision, ExplanationResult, MLflowModelVersionPage,
+  DecisionPolicyRevision, EvaluationRevision, ExplanationResult, ModelOffering, ModelOfferingPage,
 } from "./types";
 import {
   algorithmLabel, explanationMethodLabel, formatRecordedAt, jobStatusLabel, policyModeLabel,
   scoreDirectionLabel,
 } from "./display-format";
 import { ModelCreationEvidence } from "./ModelCreationEvidence";
+import { ModelOfferingPanel, useModelOffering } from "./ModelOffering";
 import { EvaluationSummary } from "./EvaluationSummary";
 
 type OpenResource = (kind: MLResourceKind, id: string) => void;
@@ -135,7 +136,11 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
   }, [key, retry]);
   const current = state?.key === key ? state : null;
   const loaded = current?.data as Partial<ModelRevision> | null | undefined;
-  const datasetName = useDatasetName(kind === "model" || kind === "scoring" ? loaded?.dataset_id : null);
+  const modelOffering = useModelOffering(kind === "model" ? id : null);
+  const modelOwned = modelOffering.offering?.owned ?? false;
+  // 제공받은 모델의 학습 Dataset은 소유자 전용이므로 조회하지 않는다.
+  const datasetName = useDatasetName(kind === "scoring" || (kind === "model" && modelOwned)
+    ? loaded?.dataset_id : null);
   if (current?.error) return <section className="panel" role="alert">
     <h2>결과 열기 실패</h2><p>{current.error}</p>
     <p className="hint">판본 ID, 접근 권한 또는 서비스 상태를 확인하세요.</p>
@@ -160,21 +165,27 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
               : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>
           {m.algorithm === "isolation_forest" && <p>학습한 입력 패턴과 다른 관측값을 점수로 살펴보는 이상 탐지 모델입니다.</p>}
           <div className="ml-resource-actions">
-            <button disabled={m.lifecycle_state !== "Active"}
+            <button disabled={m.lifecycle_state !== "Active" || modelOffering.offering === null ||
+              (!modelOwned && !modelOffering.offering.offered)}
               onClick={() => onScoring(m.id)}>이 모델로 점수 계산 →</button>
           </div>
         </div>
+        <ModelOfferingPanel offering={modelOffering.offering} error={modelOffering.error}
+          onRetry={modelOffering.reload} />
         <dl className="ml-resource-fields">
-          <Field label="학습 Dataset">{datasetName}</Field>
+          <Field label="학습 Dataset">{modelOwned ? datasetName : "제공 모델의 학습 Dataset · 사용자 열람 대상 아님"}</Field>
           <Field label="입력 Feature 수">{m.features.length.toLocaleString("ko-KR")}개</Field>
         </dl>
-        <ModelCreationEvidence key={m.id} model={m} datasetName={datasetName} />
+        <ModelCreationEvidence key={m.id} model={m}
+          datasetName={modelOwned ? datasetName : "제공 모델의 학습 Dataset"} />
         <details className="ml-resource-evidence">
           <summary>모델 입력·학습 Job·Runtime 근거</summary>
           <dl className="ml-resource-fields">
             <Field label="모델 판본 ID">{m.id}</Field>
             <Field label="Dataset ID · 판본">{m.dataset_id} · {m.dataset_version}</Field>
             <Field label="학습 Job">{m.job_id}</Field>
+            <Field label="학습 매개변수">{Object.entries(m.params)
+              .map(([name, value]) => `${name}=${JSON.stringify(value)}`).join(", ") || "기록 없음"}</Field>
             <Field label="Runtime">{String(m.runtime.scikit_learn ?? "상세 근거 미확인")}</Field>
           </dl>
           <FeatureResultDetails key={m.id} summary={`입력 항목 확인 · ${m.features.length}개`}
@@ -282,121 +293,75 @@ function JobRowSummary({ job, subject }: { job: JobRow; subject: string }) {
 
 /** 특정 학습 화면을 거치지 않고 Model Revision과 Dataset으로 Scoring한다. */
 export function ScoringWorkspace({ datasets, preferredModelId, canRun, canCancel,
-  onOpenResource, onModelSelected, onNavigate, modelGroupKey = "default",
+  onOpenResource, onModelSelected, onNavigate,
   hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered }: {
-  modelGroupKey?: string;
   datasets: Dataset[]; preferredModelId: string; canRun: boolean; canCancel: boolean;
   onOpenResource: OpenResource; onModelSelected: (id: string) => void;
   onNavigate: (tab: "ml" | "scoring") => void;
   hasMoreDatasets?: boolean; onLoadMoreDatasets?: () => Promise<void>;
   canUpload?: boolean; onDatasetRegistered?: (dataset: Dataset) => void;
 }) {
-  const [registeredModels, setRegisteredModels] = useState<MLflowModelVersionPage["items"]>([]);
-  const modelPageRequest = useRef(0);
-  const [nextModelPage, setNextModelPage] = useState<string | null>(null);
+  const [offered, setOffered] = useState<ModelOffering[]>([]);
+  const [offeredCursor, setOfferedCursor] = useState<string | null>(null);
   const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
-  const [modelId, setModelId] = useState(preferredModelId);
-  const [loadedModelId, setLoadedModelId] = useState(preferredModelId);
-  const [modelLookupRevision, retryModelLookup] = useState(0);
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    setModelId(preferredModelId);
-    setLoadedModelId(preferredModelId);
-  }, [preferredModelId]);
-  useEffect(() => {
     let active = true;
-    modelPageRequest.current += 1;
-    setError("");
-    setRegisteredModels([]); setNextModelPage(null);
-    void request<MLflowModelVersionPage>("/api/ml/registry/models?registry_key=" + encodeURIComponent(modelGroupKey))
-      .then(page => {
-        if (active) {
-          setRegisteredModels(page.items);
-          setNextModelPage(page.next_page_token ?? null);
-        }
-      })
+    void request<ModelOfferingPage>("/api/ml/offered-models?limit=50")
+      .then(page => { if (active) { setOffered(page.items); setOfferedCursor(page.next_cursor ?? null); } })
       .catch(e => { if (active) setError(formatError(e)); });
     void scores.refresh().catch(e => { if (active) setError(formatError(e)); });
     return () => { active = false; };
-  }, [modelGroupKey]);
+  }, []);
   useEffect(() => {
     let active = true;
     setModel(null);
-    setError("");
-    if (loadedModelId) {
-      void request<ModelRevision>(`/api/ml/models/${encodeURIComponent(loadedModelId)}`)
+    if (preferredModelId) {
+      // 제공 목록 밖의 판본도 조회 권한 안에서는 열 수 있다. 새 적용 가능 여부는 서버가 검사한다.
+      void request<ModelRevision>(`/api/ml/models/${encodeURIComponent(preferredModelId)}`)
         .then(value => { if (active) { setModel(value); setError(""); } })
         .catch(e => { if (active) setError(formatError(e)); });
     }
     return () => { active = false; };
-  }, [loadedModelId, modelLookupRevision]);
-  const available = useMemo(() => [...new Set(registeredModels.map(item => item.model_id))], [registeredModels]);
+  }, [preferredModelId]);
+  async function loadMoreOffered() {
+    if (!offeredCursor) return;
+    try {
+      const page = await request<ModelOfferingPage>(
+        "/api/ml/offered-models?limit=50&cursor=" + encodeURIComponent(offeredCursor));
+      setOffered(previous => [...previous, ...page.items.filter(item =>
+        !previous.some(entry => entry.model.id === item.model.id))]);
+      setOfferedCursor(page.next_cursor ?? null);
+    } catch (e) { setError(formatError(e)); }
+  }
   return <div className="ml-resource-workspace">
     <section className="panel">
-      <h2>점수 계산 모델</h2>
-      <p className="hint">기존 모델 버전을 선택하거나 ID를 직접 입력할 수 있습니다. 새 학습은 필요하지 않습니다.
-        목록은 MLflow Registry에서 현재 Actor가 이용할 수 있는 모델을 조회합니다.</p>
+      <h2>적용할 모델</h2>
+      <p className="hint">준비된 모델을 선택해 자신의 Dataset에 적용합니다. 새 학습은 필요하지 않습니다.</p>
       {error && <p role="alert">{error}</p>}
-      <div className="form-row">
-        <label>등록된 모델 버전
-          <select value={available.includes(modelId) ? modelId : ""}
-            aria-label="조회된 모델 버전 선택" onChange={event => {
-              setModelId(event.target.value);
-              setLoadedModelId(event.target.value);
-              onModelSelected(event.target.value);
-            }}>
-            <option value="">모델 선택</option>
-            {registeredModels.map(item => <option key={item.name + item.version} value={item.model_id}>
-              v{item.version} · {datasets.find(d => d.id === item.dataset_id)?.name ?? "학습 Dataset 정보 없음"}
-              {item.created_at ? " · " + formatRecordedAt(item.created_at) : ""}
-            </option>)}
-          </select>
-        </label>
-        <details className="resource-id-lookup"><summary>모델 판본 ID로 직접 선택</summary>
-          <label>모델 판본 ID
-            <input value={modelId} onChange={event => setModelId(event.target.value)}
-              placeholder="기존 모델 버전 ID" aria-label="점수화 대상 모델 버전 ID"/>
-          </label>
-          <button type="button" className="secondary" disabled={!modelId.trim()}
-            onClick={() => {
-              const identifier = modelId.trim();
-              if (identifier === loadedModelId) retryModelLookup(n => n + 1);
-              else setLoadedModelId(identifier);
-              onModelSelected(identifier);
-            }}>모델 버전 조회</button>
-          {modelId.trim() !== loadedModelId && <p className="hint">
-            모델 ID가 변경됐습니다. 조회 버튼을 눌러 선택을 확정하세요.</p>}
-        </details>
-      </div>
-      {nextModelPage && <button type="button" className="secondary" onClick={() => {
-        const token = nextModelPage;
-        const generation = modelPageRequest.current;
-        setNextModelPage(null);
-        void request<MLflowModelVersionPage>(
-          `/api/ml/registry/models?registry_key=${encodeURIComponent(modelGroupKey)}&page_token=${encodeURIComponent(token)}`,
-        ).then(page => {
-          if (generation !== modelPageRequest.current) return;
-          setRegisteredModels(old => [...old, ...page.items]);
-          setNextModelPage(page.next_page_token ?? null);
-        }).catch(e => {
-          if (generation !== modelPageRequest.current) return;
-          setNextModelPage(token); setError(formatError(e));
-        });
-      }}>모델 버전 더 보기</button>}
-      {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
-        modelId.trim() === loadedModelId &&
+      <label>제공 모델
+        <select value={offered.some(item => item.model.id === preferredModelId) ? preferredModelId : ""}
+          aria-label="적용할 제공 모델 선택" onChange={event => onModelSelected(event.target.value)}>
+          <option value="">모델 선택</option>
+          {offered.map(item => <option key={item.model.id} value={item.model.id}>
+            {algorithmLabel(item.model.algorithm)} · v{item.model.registry_version ?? "?"} · 제공 {formatRecordedAt(item.offered_at)}
+          </option>)}
+        </select>
+      </label>
+      {offeredCursor && <button type="button" className="secondary" onClick={() => void loadMoreOffered()}>
+        모델 더 보기</button>}
+      {model && model.id === preferredModelId &&
         <p className="hint">선택 모델: {model.registry_version ? `v${model.registry_version} · ` : ""}{algorithmLabel(model.algorithm)} · 학습 {formatRecordedAt(model.created_at)}
           · 입력 Feature {model.features.length}개</p>}
-      {!loadedModelId && <div className="steps">
-        <p className="hint">점수를 계산하려면 기존 모델 판본을 선택하세요. 모델이 없다면 독립 학습을 시작할 수 있습니다.</p>
-        <button className="secondary" type="button" onClick={() => onNavigate("ml")}>
-          모델 버전·학습 확인 →
-        </button>
+      {!preferredModelId && <div className="steps">
+        <p className="hint">{offered.length
+          ? "점수를 계산하려면 제공 모델을 선택하세요. 모델 목적과 입력 조건은 모델 활용에서 확인할 수 있습니다."
+          : "아직 준비된 모델이 없습니다. 모델이 제공되면 이곳에서 선택할 수 있습니다."}</p>
+        <button className="secondary" type="button" onClick={() => onNavigate("ml")}>모델 활용 →</button>
       </div>}
     </section>
-    {model && model.id === loadedModelId && preferredModelId === loadedModelId &&
-      modelId.trim() === loadedModelId &&
+    {model && model.id === preferredModelId &&
       <ModelApplicationWorkspace key={model.id} model={model} datasets={datasets}
       hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
       canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
