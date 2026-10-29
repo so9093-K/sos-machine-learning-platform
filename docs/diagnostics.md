@@ -96,3 +96,36 @@ API는 `detail`(안전한 오류 메시지 또는 입력 검증 필드 배열)�
 4. 취소 시 현재 SOS Job의 실제 중단 여부를 조회한다. Dagster 취소 신호만으로 외부 저장소 커밋이 취소됐다고 판단하지 않는다.
 5. 로컬 운영 UI(`http://localhost:9607`)와 `make doctor-dagster`로 Workflow 및 실제 Run 검색 GraphQL 계약을 구별해 확인한다. 기본 GraphQL `__typename`의 200 응답만으로 조회·제출 성공을 가정하지 않는다.
 6. API 구조화 로그 `dagster.request.failed`의 `request_id`, `operation`, `failure_type`, `status`로 HTTP 스키마 오류·연결 장애·응답 시간 초과를 구분한다. 원문 쿼리·데이터·토큰은 기록하지 않는다.
+
+
+### 0030 적용 전 Workflow 종료
+
+0030은 신뢰된 Workflow 출처를 내부 단계 Job의 멱등성 지문에 포함한다. 구버전에서 생성한 단계 Job은 키·입력이 같아도 신버전 재제출에서 `SOS-JOB-IDEMPOTENCY-CONFLICT`가 발생할 수 있다. 기존 Job·결과는 보존하며 구형 지문 수용·출처 추정·일괄 재작성은 하지 않는다.
+
+1. 구버전 서비스를 유지한 상태에서 새 Workflow 요청과 외부 자동화 제출을 중단한다. Dagster의 예약된 재실행·자동 재시도·backfill도 기존 제출을 다시 실행하지 않도록 종료·정리한다.
+2. 기존 Run을 완료하거나 구버전의 취소 경로로 정리한다. Dagster가 최종 상태여도 SOS의 현재 Job·Attempt가 실제 종료됐는지 별도로 확인한다. 실행 중 Iceberg 적재·Feature 폐기처럼 취소가 제한된 작업은 외부 커밋 계약에 따라 완료·상태 확인을 마친다.
+3. 아래 읽기 전용 조회에서 미완료 Run·Workflow 단계 Job·실행 Attempt·미연결 제출이 모두 없어야 한다. Dagster의 backfill·예약된 재실행도 남아 있지 않아야 한다. 삭제로 빈 목록을 만들거나 상태를 직접 수정하지 않는다.
+4. 조건을 확인한 뒤 구버전 전체 서비스를 `make down`으로 종료한다. 새 버전의 `make up`으로 초기화 migration을 적용한 뒤 API·Worker·Dagster를 함께 기동한다. `make restart`나 실행 중 단독 migration으로 이 전환을 대신하지 않는다.
+5. 전환 이후 구버전 Workflow의 Re-execute는 지원하지 않는다. 새 계산은 새 멱등성 키로 SOS에 제출해 새로운 제출 ID와 Dagster Run을 만든다. 지문 충돌이 나타나면 같은 키를 반복 제출하거나 기존 Job을 지우지 말고 전환 전에 끝내지 않은 재실행 요청을 확인한다.
+
+SOS DB:
+
+```sql
+SELECT j.id, j.status
+FROM jobs j JOIN job_submissions s ON s.job_id = j.id
+WHERE s.submission_key LIKE 'workflow:%' AND j.status IN ('Queued', 'Running');
+SELECT id, job_id FROM attempts WHERE status = 'Running';
+SELECT id FROM workflow_submissions
+WHERE dagster_run_id IS NULL AND NOT cancel_requested;
+```
+
+구형 `workflow:` 키는 미완료 후보를 찾는 용도로만 사용하며 신뢰된 출처의 증거로 삼지 않는다.
+
+Dagster DB:
+
+```sql
+SELECT run_id, status FROM runs
+WHERE status NOT IN ('SUCCESS', 'FAILURE', 'CANCELED');
+```
+
+이 조회는 기록된 실행 상태만 확인한다. 아직 접수되지 않은 외부 자동화·수동 재실행 계획의 중단은 운영자가 별도로 확인한다. 중단 이후 배포 직전에 다시 조회하며, 다른 설치의 상태를 로컬 DB 확인 결과로 대신하지 않는다.
