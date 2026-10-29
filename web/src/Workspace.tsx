@@ -896,8 +896,13 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         onTrain={(modelGroupKey, experimentTitle) => navigateWithContext("training", {
           ...context, modelGroupKey, experimentTitle,
         })} />}
-      {tab === "training" && !resource &&
-        <MLWorkbench datasets={datasets}
+      {tab === "training" && !resource && (context.experimentId && !context.experimentTitle?.trim()
+        ? <section className="panel" aria-label="학습 연구 확인">
+          <h2>연구 이름 확인</h2>
+          <p>이 주소에는 Experiment ID만 있고 연구 이름이 없습니다. 연구·실험에서 해당 묶음을 확인한 뒤 학습을 준비하세요.</p>
+          <button type="button" onClick={() => setTab("research")}>연구 묶음 확인 →</button>
+        </section>
+        : <MLWorkbench datasets={datasets}
           initialDatasetId={context.datasetId ?? ""}
           initialExperimentTitle={context.experimentTitle}
           registryKey={context.modelGroupKey ?? "default"}
@@ -905,7 +910,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onDatasetSelected={datasetId => selectContext({ ...context, datasetId })}
           onOpenModel={id => openResource("model", id)}
           canTrain={canRun} canCancel={canCancel}
-          canInspectOperations={canInspectStorage || canViewAudit} />}
+          canInspectOperations={canInspectStorage || canViewAudit} />)}
       {(resource || tab === "scoring") && context.pipelineReturn && context.pipelineRunId &&
         <section className="pipeline-return" role="status">
           <div><strong>학습 결과에서 이어진 작업</strong>
