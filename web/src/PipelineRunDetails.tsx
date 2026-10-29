@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { formatError, request } from "./api";
+import { ApiError, formatError, request } from "./api";
 import { DataChart } from "./DataChart";
 import { verifiedScoreHistogram } from "./ModelScoreContext";
 import { EvaluationSummary } from "./EvaluationSummary";
@@ -235,16 +235,31 @@ export function PipelineRunDetails({ runId, canRun, canCancel, canOpenMLflow, on
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
+    let polling = !run || ["Queued", "Running"].includes(run.status);
+    let delay = 3000;
     async function load() {
       try {
         const item = await request<PipelineRun>(`/api/pipeline-runs/${encodeURIComponent(runId)}`);
         if (!active) return;
         setRun(item); setError("");
+        polling = ["Queued", "Running"].includes(item.status);
+        delay = 3000;
+        if (!polling) { setNotice(""); setCancelError(""); }
         // 학습 후 Registry 대기를 벗어나면 모델 판본의 외부 등록 상태를 다시 읽는다.
         setResultRevision(revision + (item.current_stage === "training" ? 0 : 1));
-        if (["Queued", "Running"].includes(item.status)) timer = setTimeout(() => void load(), 3000);
-      } catch (cause) { if (active) setError(formatError(cause)); }
-      finally { if (active) setLoading(false); }
+      } catch (cause) {
+        if (!active) return;
+        const temporary = cause instanceof TypeError || (cause instanceof ApiError &&
+          (cause.status >= 500 || [408, 429].includes(cause.status)));
+        polling = polling && temporary;
+        delay = Math.min(delay * 2, 30000);
+        setError(formatError(cause) + (polling ? " · 자동 재조회 대기" : ""));
+      } finally {
+        if (active) {
+          setLoading(false);
+          if (polling) timer = setTimeout(() => void load(), delay);
+        }
+      }
     }
     setLoading(true);
     void load();

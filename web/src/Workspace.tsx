@@ -560,7 +560,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           canRun={canRun} canCancel={canCancel} canOpenMLflow={canInspectStorage || canViewAudit}
           hasMoreDatasets={Boolean(nextDatasetCursor)} onLoadMoreDatasets={loadMoreDatasets}
           onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
-          onSelectRun={pipelineRunId => navigateWithContext("pipelines", { ...context, pipelineRunId })}
+          onSelectRun={(pipelineRunId, datasetId) => navigateWithContext("pipelines", { pipelineRunId, datasetId })}
           onOpenResource={openResource} onOpenDataset={id => navigateWithContext("understanding", {
             datasetId: id, pipelineRunId: context.pipelineRunId,
           })} />

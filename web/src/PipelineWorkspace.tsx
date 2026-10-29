@@ -88,7 +88,7 @@ export function PipelineWorkspace({ runId, datasetId, datasets, canTrain, canRun
   runId: string; datasetId: string; datasets: Dataset[];
   canTrain: boolean; canRun: boolean; canCancel: boolean; canOpenMLflow: boolean;
   hasMoreDatasets: boolean; onLoadMoreDatasets: () => Promise<void>;
-  onSelectDataset: (id: string) => void; onSelectRun: (id: string) => void;
+  onSelectDataset: (id: string) => void; onSelectRun: (id: string, datasetId: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onOpenDataset: (id: string) => void;
 }) {
@@ -109,7 +109,7 @@ export function PipelineWorkspace({ runId, datasetId, datasets, canTrain, canRun
   }, [retry]);
   return <div className="pipeline-workspace">
     <section className="panel">
-      <details key={runId || "history"} open={!runId} className="pipeline-history-disclosure">
+      <details key={`history:${runId}`} open={!runId} className="pipeline-history-disclosure">
       <summary>최근 실행 이력</summary>
       <div className="panel-head"><div><h2>등록 파이프라인·실행 이력</h2>
         <p>활동 이상 탐지 · 입력 분할부터 모델·판정·평가까지 한 실행의 결과를 조사합니다.</p></div>
@@ -120,10 +120,10 @@ export function PipelineWorkspace({ runId, datasetId, datasets, canTrain, canRun
       {!loading && !historyError && history.length === 0 && <p>아직 조회 가능한 실행이 없습니다.</p>}
       <ul className="pipeline-history">
         {history.slice(page * 5, page * 5 + 5).map(item => <li key={item.id}>
-          <a href={contextPath("pipelines", { pipelineRunId: item.id, datasetId })}
+          <a href={contextPath("pipelines", { pipelineRunId: item.id, datasetId: item.dataset_id })}
             aria-current={runId === item.id ? "page" : undefined} onClick={event => {
               if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-              event.preventDefault(); onSelectRun(item.id);
+              event.preventDefault(); onSelectRun(item.id, item.dataset_id);
             }}>
             <strong>{datasets.find(dataset => dataset.id === item.dataset_id)?.name ?? "활동 이상 탐지 실행"}</strong>
             <span>{formatRecordedAt(item.created_at)} · {jobStatusLabel(item.status)}{item.cancel_requested ? " · 취소 요청 중" : ""}</span>
@@ -137,12 +137,12 @@ export function PipelineWorkspace({ runId, datasetId, datasets, canTrain, canRun
       </div>}
       <p className="hint">서버가 반환한 최근 실행 최대 30건 · 이력 상태는 마지막 조회 기준</p>
       </details>
-      {canTrain ? <details key={runId || "new"} className="pipeline-new-run"
+      {canTrain ? <details key={`start:${runId}`} className="pipeline-new-run"
         onToggle={event => { if (event.currentTarget.open) setStartContext(runId || "new"); }}>
         <summary>새 파이프라인 실행</summary>
         {startContext === (runId || "new") && <PipelineStart datasets={datasets} datasetId={datasetId} onSelectDataset={onSelectDataset}
           hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
-          onSubmitted={item => { onSelectRun(item.id); setRetry(value => value + 1); }} />}
+          onSubmitted={item => { onSelectRun(item.id, item.dataset_id); setRetry(value => value + 1); }} />}
       </details> : <p className="hint">결과 조회 · 새 실행에는 모델 학습 권한이 필요합니다.</p>}
     </section>
     {runId ? <PipelineRunDetails key={runId} runId={runId} canRun={canRun} canCancel={canCancel} canOpenMLflow={canOpenMLflow}
