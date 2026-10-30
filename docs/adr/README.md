@@ -28,3 +28,4 @@
 - [0017 — 모델 자산 그룹·보관·영구 삭제 계약](0017-model-lifecycle.md) · Accepted (ADR 0015의 단일 모델 그룹 기준 확장)
 
 - [0018 — Feast Feature 관리·조회 정본 전환](0018-feast-feature-ownership.md) · Accepted
+- [0019 — Ray Serve 기반 온라인 서빙](0019-ray-serve-online-serving.md) · Accepted

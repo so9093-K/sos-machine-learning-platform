@@ -39,6 +39,11 @@ dagster = [
   "dagster-graphql==1.13.26",
   "dagster-postgres==0.29.26",
 ]
+# 온라인 추론 Runtime. 모델을 학습한 Worker와 같은 ML 의존성 판본으로 모델을 복원한다.
+serving = [
+  { include-group = "ml" },
+  "ray[serve]==2.59.0",
+]
 dev = [
   { include-group = "ml" },
   "httpx>=0.27,<1",

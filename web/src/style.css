@@ -1128,3 +1128,32 @@ main details > summary { cursor:pointer; font-size:13px; font-weight:600; color:
   .panel-head > button { white-space:nowrap; flex-shrink:0; }
 }
 .ml-resource-created { margin:0 0 12px; font-size:13px; color:var(--sos-muted); }
+
+/* 온라인 API 상태 · 실제 요청 */
+.chip.chip-ready { color:var(--sos-success); background:var(--sos-success-bg); border-color:transparent; }
+.api-online-state { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.api-online-state p { margin:0; flex:1 1 320px; }
+.api-trial { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-top:16px; }
+.api-trial p { margin:0; font-size:13px; }
+.api-trial [role="alert"] { color:var(--sos-danger); }
+
+/* 온라인 서빙 운영 */
+.serving-operations > .job-error { font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.serving-list { display:grid; gap:12px; margin-top:14px; }
+.serving-endpoint { display:grid; gap:10px; padding:14px 16px; border:1px solid var(--sos-border); border-radius:10px; background:var(--sos-raised); min-width:0; }
+.serving-endpoint-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.serving-endpoint h3 { margin:0; font-size:15px; overflow-wrap:anywhere; }
+.serving-endpoint-head .muted { font-size:12px; }
+.serving-endpoint-head .serving-updated { margin-left:auto; }
+.serving-status { font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; background:var(--sos-accent-bg); color:var(--sos-muted); }
+.serving-status-ready { color:var(--sos-success); background:var(--sos-success-bg); }
+.serving-status-pending { color:var(--sos-warning); }
+.serving-status-failed { color:var(--sos-danger); background:var(--sos-danger-bg); }
+.serving-endpoint dl { display:grid; gap:4px; margin:0; }
+.serving-revision { display:grid; grid-template-columns:96px minmax(0,1fr); align-items:baseline; gap:8px; font-size:13px; }
+.serving-revision dt { color:var(--sos-muted); }
+.serving-revision dd { margin:0; min-width:0; }
+.serving-revision button.ghost { padding:2px 4px; font-family:ui-monospace,monospace; color:var(--sos-accent); }
+.serving-failure { display:block; margin-top:4px; color:var(--sos-danger); font-size:12px; overflow-wrap:anywhere; }
+.serving-actions, .serving-confirm { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.serving-confirm span { font-size:13px; color:var(--sos-danger); }

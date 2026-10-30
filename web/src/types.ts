@@ -59,3 +59,5 @@ export type PipelineCandidates = components["schemas"]["PipelineCandidatesOut"];
 export type PipelineRun = components["schemas"]["PipelineRunOut"];
 export type PipelineCheck = components["schemas"]["PipelineCheckOut"];
 export type MLflowExportStatus = components["schemas"]["MLflowExportStatusOut"];
+export type ServingEndpoint = components["schemas"]["ServingEndpointOut"];
+export type Prediction = components["schemas"]["PredictionOut"];

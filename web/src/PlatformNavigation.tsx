@@ -7,7 +7,7 @@ import type { PipelineDefinition } from "./types";
 export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
   | "learning" | "task" | "topic" | "pipelines" | "ml" | "scoring" | "policies" | "evaluations" | "explanations"
-  | "jobs" | "ml-jobs" | "storage" | "audit";
+  | "jobs" | "ml-jobs" | "serving" | "storage" | "audit";
 export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
 export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
 export type MLNavigationContext = {
@@ -82,7 +82,7 @@ const paths: Record<WorkspaceTab, string> = {
   topic: "/topics/activity-anomaly", pipelines: "/pipelines", ml: "/models",
   scoring: "/scoring", policies: "/policies",
   evaluations: "/evaluations", explanations: "/explanations",
-  jobs: "/activity/jobs", "ml-jobs": "/activity/ml", storage: "/operations/storage", audit: "/operations/audit",
+  jobs: "/activity/jobs", "ml-jobs": "/activity/ml", serving: "/operations/serving", storage: "/operations/storage", audit: "/operations/audit",
 };
 const resourcePaths: Record<MLResourceKind, { base: string; tab: WorkspaceTab }> = {
   model: { base: "/models", tab: "ml" },
@@ -243,6 +243,7 @@ const groups: ReadonlyArray<{ title: string; items: NavItem[]; taxonomy?: boolea
     { tab: "jobs", label: "작업 이력" },
     // 등록 파이프라인은 학습 권한 계정이 모델을 공급하는 운영 도구다.
     { tab: "pipelines", label: "등록 파이프라인" },
+    { tab: "serving", label: "온라인 서빙" },
     { tab: "storage", label: "저장소 상태" },
     { tab: "audit", label: "보안 감사" },
   ] },
@@ -281,7 +282,7 @@ export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
 
 /** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
 export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInspectStorage, canViewAudit, canViewDataset = true,
-  canPrepareData = true, canOperatePipelines = false, context = {}, resource = null }: {
+  canPrepareData = true, canOperatePipelines = false, canManageServing = false, context = {}, resource = null }: {
   active: WorkspaceTab;
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenTaxonomy: (tab: "learning" | "task", id: string) => void;
@@ -290,6 +291,7 @@ export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInsp
   canViewDataset?: boolean;
   canPrepareData?: boolean;
   canOperatePipelines?: boolean;
+  canManageServing?: boolean;
   context?: MLNavigationContext;
   resource?: ResourceRoute;
 }) {
@@ -336,6 +338,7 @@ export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInsp
   // 실행할 수 없는 기능의 메뉴는 표시하지 않는다. 서버 권한 검사는 별도로 유지된다.
   const visible = (item: NavItem) =>
     item.tab === "pipelines" ? canOperatePipelines
+      : item.tab === "serving" ? canManageServing
       : item.tab === "storage" ? canInspectStorage
       : item.tab === "audit" ? canViewAudit
       : item.tab === "preparation" ? canViewDataset && canPrepareData

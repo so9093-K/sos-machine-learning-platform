@@ -14,7 +14,8 @@ supply_model = runpy.run_path(str(Path(__file__).parents[1] / "scripts/supply_mo
 @pytest.mark.parametrize("lost_at", ["training", "registry", "offering"])
 def test_supply_resumes_the_same_dataset_and_training_request(tmp_path, lost_at):
     args = argparse.Namespace(state_file=tmp_path / "supply.json", dataset_id=None,
-        dataset_file=tmp_path / "input.parquet", sample_rows=None, seed=None, timeout=1)
+        dataset_file=tmp_path / "input.parquet", sample_rows=None, seed=None, timeout=1,
+        endpoint=None)
     args.dataset_file.write_bytes(b"controlled-upload")
     counts = {"upload": 0, "training": 0, "offer": 0}
     submissions = {}
@@ -75,7 +76,8 @@ def test_supply_resumes_the_same_dataset_and_training_request(tmp_path, lost_at)
 
 def test_uncertain_upload_is_not_repeated_and_can_resume_with_dataset_id(tmp_path, capsys):
     args = argparse.Namespace(state_file=tmp_path / "supply.json", dataset_id=None,
-        dataset_file=tmp_path / "input.parquet", sample_rows=None, seed=None, timeout=1)
+        dataset_file=tmp_path / "input.parquet", sample_rows=None, seed=None, timeout=1,
+        endpoint=None)
     args.dataset_file.write_bytes(b"controlled-upload")
     uploads = []
 

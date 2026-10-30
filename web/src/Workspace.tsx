@@ -9,6 +9,7 @@ import { AvailableExamples } from "./ExampleGallery";
 import { DelimitedImport } from "./DelimitedImport";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
+import { ServingOperations } from "./ServingOperations";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
@@ -371,7 +372,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
         hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
         onDatasetRegistered={catalog.upsert} canRun={canRun} canCancel={canCancel} canUpload={canWrite}
-        onOpenResource={openResource} links={taxonomyLinks} />}
+        canInfer={actor.capabilities.includes("model.infer")} onOpenResource={openResource} links={taxonomyLinks} />}
       {isDataArea && <DataSourceBar datasets={datasets} loading={catalog.loading} readError={Boolean(catalog.readError)} selected={selected} canWrite={canWrite} busy={busy}
           uploadRef={uploadRef} uploadPolicy={uploads.policy}
           onFile={file => {
@@ -509,6 +510,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onScoringSelected={scoringId => selectContext({ ...context, scoringId })}
           onNavigate={setTab} canRun={canRun} canCancel={canCancel}
           onOpenResource={openResource} datasets={datasets} />}
+      {actor.capabilities.includes("model.manage") && tab === "serving" && <ServingOperations onOpenResource={openResource} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
       {(tab === "jobs" || tab === "ml-jobs") && <ActivityWorkspace

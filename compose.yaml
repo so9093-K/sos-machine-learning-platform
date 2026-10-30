@@ -51,6 +51,9 @@ services:
       SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-http://mlflow:5000}
       SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
       SOS_MLFLOW_TOKEN: ${SOS_MLFLOW_TOKEN:-}
+      # 온라인 추론 요청은 SOS가 인증·모델 접근을 판정한 뒤 내부 Serve 경로로 중계한다.
+      SOS_SERVING_DASHBOARD_URL: http://serving:8265
+      SOS_SERVING_INFERENCE_URL: http://serving:8000
     command:
       - uvicorn
       - sos_platform.api:create_app
@@ -83,7 +86,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        SOS_WITH_FEAST: "1"
+        SOS_UV_GROUPS: "ml feast"
     environment:
       <<: *sos-storage-env
       # MLflow는 설정되지 않으면 연결하지 않는다. 자격 증명은 Worker에만 전달한다.
@@ -103,6 +106,67 @@ services:
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
 
+  # Ray Serve 온라인 추론 Runtime. Dashboard(클러스터 제어)와 Serve 포트는 호스트에 공개하지 않고
+  # Compose 내부망의 SOS API·컨트롤러만 접근한다. DB 자격 증명은 전달하지 않는다.
+  serving:
+    logging: *sos-logging
+    profiles: [app]
+    image: ${SOS_SERVING_IMAGE:-sos-platform-serving:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SOS_UV_GROUPS: serving
+    environment:
+      SOS_S3_ENDPOINT: http://storage:8333
+      SOS_S3_ACCESS_KEY: ${SOS_S3_ACCESS_KEY:-sos-dev}
+      SOS_S3_SECRET_KEY: ${SOS_S3_SECRET_KEY:-sos-dev-secret}
+      SOS_S3_BUCKET: ${SOS_S3_BUCKET:-sos-data}
+      SOS_S3_REGION: ${SOS_S3_REGION:-us-east-1}
+      RAY_USAGE_STATS_ENABLED: "0"
+    command:
+      - ray
+      - start
+      - --head
+      - --block
+      - --port=6379
+      - --dashboard-host=0.0.0.0
+      - --dashboard-port=8265
+      - --num-cpus=${SOS_SERVING_CPUS:-2}
+      - --object-store-memory=268435456
+    shm_size: 1gb
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8265/api/version', timeout=3).close()"]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 30
+    depends_on:
+      storage:
+        condition: service_healthy
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  # SOS의 배포 의도(PostgreSQL)를 Ray Serve 실제 상태에 맞춘다. Job Worker·MLflow 전송과 분리해
+  # 그 장애가 온라인 서빙 복구를 막지 않게 한다.
+  serving-controller:
+    logging: *sos-logging
+    profiles: [app]
+    image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
+    build: *sos-python-build
+    environment:
+      <<: *sos-storage-env
+      SOS_SERVING_DASHBOARD_URL: http://serving:8265
+      SOS_SERVING_INFERENCE_URL: http://serving:8000
+    command: ["python", "-m", "sos_platform.serving_controller"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      serving:
+        condition: service_healthy
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
   # UI 전용 계정은 기존 Registry를 한 번 준비한 뒤 SELECT만 허용한다.
   # 모든 기존 볼륨에도 적용되므로 첫 설치 전용 initdb 스크립트에 의존하지 않는다.
   feast-ui-access:
@@ -113,7 +177,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        SOS_WITH_FEAST: "1"
+        SOS_UV_GROUPS: "ml feast"
     environment:
       SOS_FEAST_REGISTRY_URL: postgresql+psycopg2://feast:${SOS_FEAST_DB_PASSWORD:-feast-dev-only}@feast-postgres:5432/sos_feast
       SOS_FEAST_UI_DB_PASSWORD: ${SOS_FEAST_UI_DB_PASSWORD:-feast-ui-dev-only}
@@ -134,7 +198,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        SOS_WITH_FEAST: "1"
+        SOS_UV_GROUPS: "ml feast"
     environment:
       SOS_FEAST_UI_REGISTRY_URL: postgresql+psycopg2://feast_ui:${SOS_FEAST_UI_DB_PASSWORD:-feast-ui-dev-only}@feast-postgres:5432/sos_feast
     command: ["feast", "--chdir", "/app/feast-ui", "ui", "--host", "0.0.0.0", "--port", "8888"]

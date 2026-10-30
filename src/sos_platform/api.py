@@ -24,6 +24,7 @@ from .api_ml_results import ml_results_router
 from .api_ml_training import training_router
 from .api_model_management import model_management_router
 from .api_model_offering import model_offering_router
+from .api_serving import serving_router
 from .api_pipelines import pipeline_router
 from .api_storage import storage_router
 from .dagster_client import DagsterUnavailable
@@ -80,6 +81,7 @@ OPENAPI_TAGS = [
     {"name": "Training", "description": "독립 ML 학습·복제·취소 및 작업 이력"},
     {"name": "Models", "description": "MLflow Registry와 SOS의 불변 모델 실행 참조"},
     {"name": "Scoring", "description": "학습된 모델을 이용한 독립 배치 점수화와 결과 조회"},
+    {"name": "Serving", "description": "온라인 서빙 Endpoint의 배포·판본 전환과 동기 추론"},
     {"name": "Decision Policies", "description": "점수에 적용할 판정 기준의 생성·적용·조회"},
     {"name": "Evaluations", "description": "모델 점수와 정책에 대한 평가 실행·결과 조회"},
     {"name": "Explanations", "description": "선택한 점수 결과에 대한 설명 계산과 판본 조회"},
@@ -104,6 +106,7 @@ OPENAPI_TAG_GROUPS = [
             "Decision Policies", "Evaluations", "Explanations",
         ],
     },
+    {"name": "Serving", "tags": ["Serving"]},
     {"name": "Pipelines", "tags": ["Pipeline Catalog", "Pipeline Runs"]},
     {"name": "Operations", "tags": ["Jobs", "Storage", "Audit & Diagnostics"]},
 ]
@@ -271,6 +274,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     app.include_router(model_management_router(store))
     app.include_router(model_offering_router(store, access))
     app.include_router(model_deletion_router(store))
+    app.include_router(serving_router(store, access))
     app.include_router(feast_router(store, access))
     app.include_router(training_router(store, access))
     app.include_router(ml_results_router(store, access))

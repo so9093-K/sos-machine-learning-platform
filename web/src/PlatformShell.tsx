@@ -22,6 +22,7 @@ const pageLabels: Record<WorkspaceTab, { title: string; description: string }> =
   explanations: { title: "점수 설명", description: "점수 결과 선택 · 관측값 설명 · 작업 이력" },
   jobs: { title: "작업 이력", description: "데이터·탐색 작업 · 모델 적용 작업" },
   "ml-jobs": { title: "작업 이력", description: "데이터·탐색 작업 · 모델 적용 작업" },
+  serving: { title: "온라인 서빙", description: "Endpoint 상태 · 판본 전환 · 되돌리기" },
   storage: { title: "저장소 상태", description: "보존 상태 · 점검 결과" },
   audit: { title: "보안 감사", description: "접근 기록 · 감사 이벤트" },
 };
@@ -78,7 +79,8 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
         canViewDataset={actor.capabilities.includes("dataset.read")}
         canPrepareData={actor.capabilities.includes("job.create")}
-        canOperatePipelines={actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read")} />
+        canOperatePipelines={actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read")}
+        canManageServing={actor.capabilities.includes("model.manage")} />
       {localOperatorHost && (canInspectStorage || canViewAudit) && <div className="operator-tools">
         <span className="eyebrow">로컬 운영 도구</span>
         <a href={dagsterUrl()} target="_blank" rel="noopener noreferrer">

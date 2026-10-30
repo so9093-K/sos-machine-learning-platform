@@ -64,9 +64,10 @@ def begin_delete(store: Store, model_id: str, actor: Actor) -> dict:
                 raise HTTPException(status_code=409, detail="모델 Registry 등록이 완료되지 않았습니다.")
             # 단일 트랜잭션의 행 잠금은 새 사용 요청과 삭제 경합 시 직렬화에 사용한다.
             current = deletion_impact_transaction(db, model_id)
-            if current["active_jobs"] or current["shared_artifacts"]:
+            if current["active_jobs"] or current["shared_artifacts"] or current["serving_endpoints"]:
                 raise HTTPException(status_code=409, detail={
-                    "message":"실행 중인 작업 또는 공유 중인 모델 파일이 있어 삭제할 수 없습니다.",
+                    "message":"실행 중인 작업, 공유 중인 모델 파일 또는 이 모델을 쓰는 서빙 Endpoint가 있어 "
+                              "삭제할 수 없습니다.",
                     "impact":current,
                 })
             db.execute(text(
@@ -82,7 +83,8 @@ def deletion_impact_transaction(db, model_id: str) -> dict:
     """삭제를 막는 참조. 영향 조회와 삭제 트랜잭션이 같은 판정을 쓴다.
 
     활성 Job은 모델 파일을 읽는 모든 접수 경로를 포함한다. 모델을 직접 지정한 Job,
-    Scoring 결과를 거치는 Job, Playground 결과를 거치는 설명 Job이다.
+    Scoring 결과를 거치는 Job, Playground 결과를 거치는 설명 Job이다. 서빙 Endpoint가 활성·
+    전환 대상·롤백 대상으로 참조하는 판본은 상주 복제본이 아티팩트를 쓰거나 다시 쓸 수 있다.
     """
     record=db.execute(text("""
         SELECT
@@ -95,7 +97,9 @@ def deletion_impact_transaction(db, model_id: str) -> dict:
                   AND (spec::jsonb->>'model_revision_id')=:id))) AS active_jobs,
           (SELECT count(*) FROM model_revisions WHERE id!=:id AND location=
             (SELECT location FROM model_revisions WHERE id=:id)
-            AND lifecycle_state!='Deleted') AS shared_artifacts
+            AND lifecycle_state!='Deleted') AS shared_artifacts,
+          (SELECT count(*) FROM serving_endpoints WHERE :id IN (active_model_revision_id,
+            pending_model_revision_id, previous_model_revision_id)) AS serving_endpoints
     """),{"id":model_id}).mappings().one()
     return {key:int(value) for key,value in record.items()}
 

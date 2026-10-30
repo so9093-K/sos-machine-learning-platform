@@ -3,7 +3,7 @@ import { formatError, request } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { activityFeatureGroups } from "./ActivityFeatureGroups";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
-import { ModelApiUsage } from "./ModelApiUsage";
+import { ModelApiUsage, servesModel } from "./ModelApiUsage";
 import type { PlaygroundRun } from "./ModelLabPlayground";
 import { canApplyModel, useModelOffering } from "./ModelOffering";
 import { isActivityModelCompatible } from "./ModelLabTaxonomy";
@@ -11,7 +11,7 @@ import { taskGuides, topicGuides, topicTree, TaxonomyTrail, usePipelineCatalog,
   PLAYGROUND_TOPICS, type TaxonomyLinks } from "./ModelLabGuide";
 import { algorithmLabel, formatRecordedAt } from "./display-format";
 import type { MLResourceKind } from "./PlatformNavigation";
-import type { Dataset, ModelOffering, ModelOfferingPage, ModelRevision } from "./types";
+import type { Dataset, ModelOffering, ModelOfferingPage, ModelRevision, ServingEndpoint } from "./types";
 
 type Choice = { model: ModelRevision; description: string; offered: boolean };
 type Selection =
@@ -22,6 +22,17 @@ type Selection =
 
 const TOPIC = "activity_anomaly";
 const EXAMPLE_ID = "activity-anomaly-if";
+const SERVING_RECHECK_MS = 5000;
+
+/** 이 판본을 서빙하거나 이 판본으로 전환 중인 Endpoint. 이미 요청을 처리하는 쪽을 먼저 고른다.
+ *  이 판본의 배포가 실패한 전환은 준비 중으로 보이지 않게 제외한다. */
+function servingFor(items: ServingEndpoint[], modelId: string): ServingEndpoint | null {
+  const failed = (item: ServingEndpoint) => item.active_model_revision_id !== modelId &&
+    ["DEPLOY_FAILED", "UNHEALTHY"].includes(item.runtime.pending?.status ?? "");
+  const candidates = items.filter(item => item.desired_state === "serving" && !failed(item) &&
+    (item.active_model_revision_id === modelId || item.pending_model_revision_id === modelId));
+  return candidates.find(item => servesModel(item, modelId)) ?? candidates[0] ?? null;
+}
 
 /** 활동 이상 탐지 Playground. 쓸모를 먼저 보이고, 같은 화면에서 실행·결과 확인·API 연결까지 잇는다.
  *
@@ -29,7 +40,7 @@ const EXAMPLE_ID = "activity-anomaly-if";
  */
 export function ActivityPlayground({ datasets, selectedDatasetId, preferredModelId, onSelectModel, isAdministrator,
   onSelectDataset, hasMoreDatasets,
-  onLoadMoreDatasets, onDatasetRegistered, canRun, canCancel, canUpload, onOpenResource, links }: {
+  onLoadMoreDatasets, onDatasetRegistered, canRun, canCancel, canUpload, canInfer, onOpenResource, links }: {
   datasets: Dataset[];
   selectedDatasetId?: string;
   /** 모델 목록·상세에서 고른 모델. 주소에 남아 새로고침·뒤로 가기에서도 유지된다. */
@@ -40,7 +51,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
   onDatasetRegistered: (dataset: Dataset) => void;
-  canRun: boolean; canCancel: boolean; canUpload: boolean;
+  canRun: boolean; canCancel: boolean; canUpload: boolean; canInfer: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   links: TaxonomyLinks;
 }) {
@@ -100,6 +111,28 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
     return { state: "ready", choice: { model: direct.model, description: state.description ?? "", offered: state.offered } };
   })();
   const chosen = selection.state === "ready" ? selection.choice : null;
+  // 선택한 판본의 온라인 API. 준비 중이면 준비될 때까지 다시 확인하고, 없거나 확인하지 못하면
+  // 사용자가 다시 확인할 수 있다.
+  const [serving, setServing] = useState<{ modelId: string; endpoint: ServingEndpoint | null; error: string } | null>(null);
+  const [servingCheck, setServingCheck] = useState(0);
+  const chosenId = chosen?.model.id ?? "";
+  useEffect(() => {
+    if (!chosenId) return;
+    let active = true;
+    void request<ServingEndpoint[]>(`/api/serving/endpoints?model_revision_id=${encodeURIComponent(chosenId)}`)
+      .then(items => { if (active) setServing({ modelId: chosenId, endpoint: servingFor(items, chosenId), error: "" }); })
+      .catch(cause => { if (active) setServing({ modelId: chosenId, endpoint: null, error: formatError(cause) }); });
+    return () => { active = false; };
+  }, [chosenId, servingCheck]);
+  const current = serving?.modelId === chosenId ? serving : null;
+  const endpoint = current?.endpoint ?? null;
+  const onlineReady = servesModel(endpoint, chosenId);
+  const preparing = Boolean(endpoint) && !onlineReady;
+  useEffect(() => {
+    if (!preparing) return;
+    const timer = window.setTimeout(() => setServingCheck(value => value + 1), SERVING_RECHECK_MS);
+    return () => window.clearTimeout(timer);
+  }, [preparing, serving]);
   const guide = topicGuides[TOPIC];
 
   async function useExample() {
@@ -154,6 +187,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
                 {algorithmLabel(item.model.algorithm)} · 제공 {formatRecordedAt(item.offered_at)}</option>)}
             </select>
             : <strong>{algorithmLabel(chosen.model.algorithm)}</strong>}
+          {endpoint && <span className={onlineReady ? "chip chip-ready" : "chip"}>
+            {onlineReady ? "온라인 API 사용 가능" : "온라인 API 준비 중"}</span>}
           <button type="button" className="ghost" onClick={() => onOpenResource("model", chosen.model.id)}>모델 상세 →</button>
           <p className="muted model-offering-description">{chosen.description || "아직 작성된 제공 설명이 없습니다."}</p>
           {!chosen.offered && <p className="hint">사용자에게 제공되지 않은 판본입니다. {isAdministrator
@@ -185,7 +220,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
         <article key={item.title} className="guide-card"><h3>{item.title}</h3><p>{item.text}</p></article>)}</div>
     </section>}
 
-    {chosen && <ModelApiUsage model={chosen.model}
+    {chosen && <ModelApiUsage model={chosen.model} endpoint={endpoint} endpointError={current?.error ?? ""}
+      onRecheckEndpoint={() => setServingCheck(value => value + 1)} canInfer={canInfer}
       lastRun={lastRun?.modelRevisionId === chosen.model.id ? lastRun : undefined}
       datasetId={selectedDatasetId && readyDatasetId === selectedDatasetId ? selectedDatasetId : undefined} />}
 
