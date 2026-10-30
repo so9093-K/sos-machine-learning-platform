@@ -118,11 +118,14 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const [inputSearch, setInputSearch] = useState("");
   const [inputFilter, setInputFilter] = useState("all");
   const [inputPage, setInputPage] = useState(0);
+  const [activeFeature, setActiveFeature] = useState<string>();
   const [importedSource, setImportedSource] = useState<ObservationExperiment | null>(null);
   const [fromHistory, setFromHistory] = useState(false);
   const [importedAfterJobId, setImportedAfterJobId] = useState<string | null>(null);
   const appliedObservation = useRef<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>(() =>
+    reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
+  const [editBaseline, setEditBaseline] = useState<Record<string, string>>(() =>
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
   const [job, setJob] = useState<MLPlaygroundJob | null>(null);
   const [lastScore, setLastScore] = useState<number | null>(null);
@@ -193,9 +196,11 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     setFromHistory(true);
     if (running || !restored.spec.features) return;
     const saved = restored.spec.features as Record<string, unknown>;
-    setFields(Object.fromEntries(model.features.map(name => [
+    const restoredFields = Object.fromEntries(model.features.map(name => [
       name, saved[name] == null ? "" : String(saved[name]),
-    ])));
+    ]));
+    setFields(restoredFields);
+    setEditBaseline(restoredFields);
     setImportedSource(null);
     setImportedAfterJobId(null);
     if (restored.status === "Succeeded" && typeof restored.result?.anomaly_score === "number" &&
@@ -259,6 +264,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     // 실행 중 입력을 바꾸지 않으며, 새 관측값을 가져와도 Job은 자동 제출하지 않는다.
     appliedObservation.current = observationInput.id;
     setFields(observationInput.fields);
+    setEditBaseline(observationInput.fields);
     setInputSearch(""); setInputFilter("all"); setInputPage(0);
     setImportedSource(observationInput);
     // 과거 Job 결과를 새 관측값 실험의 결과로 표시하지 않는다.
@@ -270,7 +276,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     ? submittedFeatures as Record<string, unknown> : null;
   const matchesCompletedInput = job?.status === "Succeeded" && lastScore !== null &&
     playgroundInputMatchesResult(fields, submittedInput, model.features);
-  const editedNames = reference ? playgroundChangedFeatures(fields, reference, model.features) : [];
+  const editedNames = playgroundChangedFeatures(fields, editBaseline, model.features);
   const observationEdits = importedSource
     ? playgroundChangedFeatures(fields, importedSource.fields, model.features) : [];
   const showCurrentJob = playgroundJobVisibleAfterImport(importedSource, importedAfterJobId, job?.id ?? null);
@@ -352,6 +358,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const featureInput = (name: string) => <input type="number" inputMode="decimal"
     step={/^U?Int/.test(featureDtypes[model.features.indexOf(name)] ?? "") ? 1 : "any"}
     value={fields[name] ?? ""} disabled={running}
+    onFocus={() => setActiveFeature(name)}
     aria-invalid={!playgroundNumberValid(fields[name] ?? "", featureDtypes[model.features.indexOf(name)] ?? "")}
     onChange={event => setFields(current => ({ ...current, [name]: event.target.value }))}
     aria-label={activityFeatureLabel(name) + " 입력값"} />;
@@ -383,6 +390,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       {reference && <button type="button" className="ghost" disabled={running}
         onClick={() => {
           setFields(reference); setImportedSource(null); setImportedAfterJobId(null);
+          setEditBaseline(reference);
           setFromHistory(false);
           setInputSearch(""); setInputFilter("all"); setInputPage(0);
         }}>
@@ -392,7 +400,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       : fromHistory ? "이전 계산 기록에서 가져온 입력입니다. 값을 수정해 새 계산과 비교할 수 있습니다."
       : reference ? "초깃값은 학습 중앙값을 조합한 합성 입력입니다(정수 항목 반올림). 실제 관측값이나 정상 활동 예제가 아닙니다."
       : "초기 기준값이 없는 모델입니다. 모든 필수 항목을 입력해 주세요."}</p>
-    <ActivityProfile model={model} names={profileNames} editing
+    <ActivityProfile model={model} names={profileNames} editing changedNames={editedNames}
+      activeName={activeFeature} onEdit={editFeature}
       values={Object.fromEntries(input.map(item => [item.name, item.valid ? item.value : null]))}
       control={name => <div className="activity-profile-editor">{featureInput(name)}
         {(name === "io_bytes_per_sec" || name === "net_bytes_per_sec") && <small>B/s</small>}
@@ -408,7 +417,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       <label>표시 항목<select value={inputFilter}
         onChange={event => { setInputFilter(event.target.value); setInputPage(0); }}>
         <option value="all">전체 {model.features.length}개</option>
-        {reference && <option value="changed">수정한 항목 { (importedSource ? observationEdits : editedNames).length }개</option>}
+        <option value="changed">수정한 항목 {editedNames.length}개</option>
         {invalid.length > 0 && <option value="invalid">입력 확인 {invalid.length}개</option>}
         {inputGroups.map(group => <option key={group.id} value={group.id}>{group.title}</option>)}
       </select></label>

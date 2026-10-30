@@ -580,8 +580,25 @@ try {
     model: profileModel, values: { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 },
   }));
   assert.match(profile, /활동 프로필|학습 중간 80%/);
-  assert.match(profile, /중간 80% 구간 초과/);
+  assert.match(profile, /P90 초과/);
+  assert.match(profile, /P10=P90 · 학습 구간 폭 0/);
+  assert.match(profile, /<span>P10 <strong>0.1<\/strong>/);
+  assert.match(profile, /<span>P90 <strong>0.9<\/strong>/);
   assert.doesNotMatch(profile, /Infinity|NaN/);
+  const outlierProfile = value => renderToStaticMarkup(React.createElement(ActivityProfile, {
+    model: profileModel, values: { cnt_file_create: 0, ratio_outbound_traffic: value },
+  }));
+  assert.match(outlierProfile(0.91), /학습 구간 폭의 0.0125배/);
+  assert.match(outlierProfile(80.9), /학습 구간 폭의 100배/);
+  assert.match(outlierProfile(-10.3), /P10 미만/);
+  assert.match(outlierProfile(-10.3), /학습 구간 폭의 13배/);
+  const changedProfile = renderToStaticMarkup(React.createElement(ActivityProfile, {
+    model: profileModel, names: ["cnt_file_create"], changedNames: profileModel.features,
+    values: { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 }, editing: true,
+  }));
+  assert.match(changedProfile, /추가 수정 항목 · 1개/);
+  assert.equal((changedProfile.match(/title="cnt_file_create"/g) ?? []).length, 1);
+  assert.equal((changedProfile.match(/is-changed/g) ?? []).length, 2);
   assert.deepEqual(profileFeatureNames(profileModel, { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 }),
     ["cnt_file_create", "ratio_outbound_traffic"]);
   const medianOnly = { ...profileModel, runtime: { feature_reference_medians: [0, 0.5] } };
