@@ -63,6 +63,20 @@ DEFINITIONS = (
     ),
     spec("SOS-API-CONFLICT", "상태 충돌", "현재 상태에서는 처리할 수 없습니다.", "conflict"),
     spec(
+        "SOS-SERVING-NOT-READY",
+        "서빙 준비 전",
+        "Endpoint가 아직 요청을 처리할 수 없습니다. 배포 상태를 확인한 뒤 다시 요청하세요.",
+        "conflict",
+        "after_refresh",
+    ),
+    spec(
+        "SOS-SERVING-UNAVAILABLE",
+        "서빙 Runtime 응답 없음",
+        "온라인 추론 Runtime에 연결할 수 없거나 응답 시간이 초과됐습니다. 잠시 후 다시 요청하세요.",
+        "dependency",
+        "after_refresh",
+    ),
+    spec(
         "SOS-JOB-IDEMPOTENCY-REQUIRED",
         "제출 키 필요",
         "토큰 인증 환경에서 비동기 Job 제출에는 Idempotency-Key가 필요합니다.",
@@ -142,7 +156,7 @@ DEFINITIONS = (
     spec(
         "SOS-ML-MODEL-RUNTIME-INCOMPATIBLE",
         "모델 실행 환경 불일치",
-        "이 모델을 학습한 실행 환경(Python minor·numpy·scikit-learn 버전)이 현재 Worker와 달라 모델을 불러올 수 없습니다. 현재 환경에서 다시 학습하세요.",
+        "이 모델을 학습한 실행 환경(Python minor·numpy·scikit-learn 버전)이 현재 실행 Runtime과 달라 모델을 불러올 수 없습니다. 현재 환경에서 다시 학습하세요.",
         "precondition",
     ),
     spec(

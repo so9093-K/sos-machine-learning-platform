@@ -224,6 +224,35 @@ model_offerings = Table(
     Index("ix_model_offerings_withdrawn_offered", "withdrawn_at", "offered_at"),
 )
 
+# 온라인 서빙의 배포 의도. 실제 실행 상태는 Ray Serve가 정본이므로 저장하지 않는다.
+# Endpoint는 외부 소비자의 안정 식별자이고, 판본 전환은 준비가 확인된 뒤 활성 판본을 바꾼다.
+serving_endpoints = Table(
+    "serving_endpoints",
+    metadata,
+    Column("id", String(36), primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("owner_actor", Text, nullable=False),
+    Column("owner_actor_type", Text, nullable=False),
+    Column("desired_state", Text, nullable=False),
+    Column("active_model_revision_id", String(36), ForeignKey("model_revisions.id")),
+    Column("pending_model_revision_id", String(36), ForeignKey("model_revisions.id")),
+    Column("previous_model_revision_id", String(36), ForeignKey("model_revisions.id")),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
+    UniqueConstraint("owner_actor", "name"),
+    CheckConstraint("desired_state IN ('serving','stopped')", name="ck_serving_endpoints_state"),
+    CheckConstraint(
+        "active_model_revision_id IS NOT NULL OR pending_model_revision_id IS NOT NULL",
+        name="ck_serving_endpoints_revision",
+    ),
+    CheckConstraint(
+        "pending_model_revision_id IS NULL "
+        "OR pending_model_revision_id IS DISTINCT FROM active_model_revision_id",
+        name="ck_serving_endpoints_pending",
+    ),
+    Index("ix_serving_endpoints_active", "active_model_revision_id"),
+)
+
 scoring_results = Table(
     "scoring_results",
     metadata,

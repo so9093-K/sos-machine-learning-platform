@@ -1,4 +1,4 @@
-"""개발 환경의 활동 이상 탐지 모델을 SOS에 공급한다.
+"""개발 환경의 활동 이상 탐지 모델을 SOS에 공급하고, 선택하면 온라인 서빙 Endpoint에 배포한다.
 
 같은 --state-file로 재실행하면 등록 Dataset·학습 요청·멱등성 키를 재사용한다.
 상태 파일에는 토큰을 저장하지 않는다. 새 학습은 별도의 상태 파일로 명시한다.
@@ -8,6 +8,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -169,6 +170,36 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> 
     if not offering["offered"]:
         fail("제공 상태를 확인하지 못했습니다.")
     print(f"제공 완료 · {model_id}")
+    if args.endpoint:
+        serve(client, args, model_id)
+
+
+def serve(client: httpx.Client, args: argparse.Namespace, model_id: str) -> None:
+    """공급한 판본을 온라인 서빙 Endpoint에 배포하거나 전환한다.
+
+    서빙 Runtime이 새 판본의 준비를 확인한 뒤 활성 판본을 바꾸므로, 그때까지 기존 판본이 계속 처리한다.
+    """
+    endpoints = checked(client.get("/api/serving/endpoints"))
+    existing = next((item for item in endpoints if item["owned"] and item["name"] == args.endpoint), None)
+    if existing is None:
+        endpoint = checked(client.post("/api/serving/endpoints",
+                                       json={"name": args.endpoint, "model_revision_id": model_id}))
+    elif existing["active_model_revision_id"] == model_id and existing["pending_model_revision_id"] is None:
+        endpoint = existing
+    else:
+        endpoint = checked(client.put(f"/api/serving/endpoints/{existing['id']}/revision",
+                                      json={"model_revision_id": model_id}))
+
+    def serving(item: dict) -> bool:
+        pending = (item.get("runtime") or {}).get("pending") or {}
+        if pending.get("status") == "DEPLOY_FAILED":
+            fail(f"서빙 배포 실패 · {pending.get('failure_reason') or '서빙 Runtime 로그를 확인하세요.'} "
+                 "기존 판본은 계속 요청을 처리합니다.")
+        return item["active_model_revision_id"] == model_id and item["ready"]
+
+    wait(client, f"/api/serving/endpoints/{endpoint['id']}", serving, interval=2,
+         timeout=args.timeout, label="온라인 서빙 준비")
+    print(f"온라인 서빙 · Endpoint {args.endpoint} ({endpoint['id']}) · 활성 판본 {model_id}")
 
 
 def main() -> None:
@@ -185,6 +216,7 @@ def main() -> None:
     parser.add_argument("--sample-rows", type=int, help="명시적으로 선택할 표본 행 수")
     parser.add_argument("--seed", type=int, help="표본 추출 Seed (새 공급 기본값: 42)")
     parser.add_argument("--timeout", type=float, default=3600, help="학습·등록 대기 초")
+    parser.add_argument("--endpoint", help="공급한 판본을 배포하거나 전환할 온라인 서빙 Endpoint 이름")
     args = parser.parse_args()
     args.state_file = args.state_file.resolve()
     if args.sample_rows is not None and args.sample_rows < 2:
@@ -195,6 +227,8 @@ def main() -> None:
         parser.error("새 공급의 --seed는 --sample-rows와 함께 지정하세요.")
     if args.timeout <= 0:
         parser.error("--timeout은 양수여야 합니다.")
+    if args.endpoint is not None and not re.fullmatch(r"[a-z0-9][a-z0-9-]*[a-z0-9]", args.endpoint):
+        parser.error("--endpoint는 영문 소문자·숫자·하이픈으로 된 2~63자 이름이어야 합니다.")
     token = os.getenv("SOS_SUPPLY_TOKEN")
     if not token:
         fail("SOS_SUPPLY_TOKEN 환경변수에 automation 서비스 계정 토큰이 필요합니다.")

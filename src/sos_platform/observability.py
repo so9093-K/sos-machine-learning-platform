@@ -23,6 +23,8 @@ _FIELDS = {
     "failure_type",
     "operation",
     "kind",
+    "endpoint_id",
+    "model_revision_id",
 }
 _SAFE_VALUE = re.compile(r"[a-zA-Z0-9_.:/-]{1,128}\Z")
 

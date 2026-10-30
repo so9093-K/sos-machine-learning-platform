@@ -24,6 +24,7 @@ ACTIONS = {
     "job.cancel",
     "model.manage",
     "model.train",
+    "model.infer",
     "feature.manage",
     "storage.inspect",
     "snapshot.retain",
@@ -39,6 +40,8 @@ GRANTS = {
         "job.read",
         "job.create",
         "job.cancel",
+        # 온라인 추론 호출. 배포·전환·중단(model.manage)과 분리한다.
+        "model.infer",
     },
     "operator": {"storage.inspect", "snapshot.read", "snapshot.retain", "audit.read"},
     "administrator": ACTIONS,

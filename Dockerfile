@@ -24,13 +24,10 @@ COPY src/ ./src/
 COPY --from=scalar-assets /build/src/sos_platform/static/scalar.js ./src/sos_platform/static/scalar.js
 COPY migrations/ ./migrations/
 COPY alembic.ini ./
-# API는 기본 의존성, 기존 통합 Worker 이미지는 ML·Feast 실행 그룹을 사용한다.
-ARG SOS_WITH_FEAST=0
-RUN if [ "$SOS_WITH_FEAST" = "1" ]; then \
-      uv sync --locked --no-dev --no-editable --group ml --group feast --python /usr/local/bin/python; \
-    else \
-      uv sync --locked --no-dev --no-editable --python /usr/local/bin/python; \
-    fi
+# API·컨트롤러는 기본 의존성만, Worker는 "ml feast", 온라인 추론 Runtime은 "serving" 그룹을 고른다.
+ARG SOS_UV_GROUPS=""
+RUN uv sync --locked --no-dev --no-editable --python /usr/local/bin/python \
+      $(for group in $SOS_UV_GROUPS; do printf -- '--group %s ' "$group"; done)
 RUN groupadd --gid 10001 sos && useradd --uid 10001 --gid sos --create-home sos \
     && mkdir -p /var/lib/sos && chown sos:sos /var/lib/sos
 USER sos
