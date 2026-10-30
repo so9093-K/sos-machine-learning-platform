@@ -41,7 +41,6 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenLearni
       <h2 className="platform-section-title" id="available-work-heading">주요 기능</h2>
       <div className="platform-destinations">
         <article className="panel platform-destination">
-          <span className="eyebrow">DATA EXPLORER</span>
           <h3>데이터 탐색</h3>
           <p>Dataset을 등록하고 구조·품질·분포를 확인합니다.</p>
           <button type="button" onClick={() => onNavigate("understanding")}>
@@ -49,7 +48,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenLearni
           </button>
         </article>
         <article className="panel platform-destination">
-          <span className="eyebrow">MODEL USE</span><h3>모델 활용</h3>
+          <h3>모델 활용</h3>
           <p>제공된 모델의 목적과 입력 조건을 확인하고 데이터에 적용합니다.</p>
           {!canViewModels ? <p>모델 조회 권한 없음</p> : <>
             <p role="status">{modelState === "loading" ? "모델 제공 상태 확인 중…"

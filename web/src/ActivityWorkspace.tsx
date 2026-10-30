@@ -16,10 +16,6 @@ export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource
   children: ReactNode;
 }) {
   return <div className="platform-activity">
-    <section className="platform-section-intro">
-      <h2>실행 이력과 결과</h2>
-      <p>데이터·탐색 작업과 모델 적용 결과를 확인합니다. 각 목록은 실제 조회된 범위만 표시합니다.</p>
-    </section>
     <nav className="activity-scope-nav" aria-label="작업 이력 종류">
       <button type="button" aria-current={active === "data" ? "page" : undefined}
         className={active === "data" ? "" : "secondary"} onClick={() => onChange("data")}>

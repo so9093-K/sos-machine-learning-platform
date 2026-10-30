@@ -252,9 +252,8 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
   const sensitivities = Array.isArray(details?.feature_sensitivities)
     ? details.feature_sensitivities as Array<Record<string, unknown>> : [];
   return <div className="steps" role="region" aria-label="임계값 정책과 평가">
-    <h3>{view === "policy" ? "판정 정책" : view === "evaluation" ? "평가" : "설명"}</h3>
+    <h3>{view === "policy" ? "새 판정 정책" : view === "evaluation" ? "새 평가" : "새 설명"}</h3>
     {error && <p role="alert">{error}</p>}
-    <p className="hint">선택한 점수 결과({scoring.row_count.toLocaleString("ko-KR")}건)를 재사용합니다. 모델 재학습이나 재점수화를 수행하지 않습니다.</p>
     {view === "policy" && <>
     <p className="hint">분위수 정책은 선택한 점수 결과에서 임계값을 산정하며, 별도 보정·검증 데이터의 근거가 아닙니다.</p>
     <div className="form-row">
@@ -273,9 +272,9 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
           value={fraction} onChange={e => setFraction(Number(e.target.value))} />
       </label>}
     </div>
-    <button disabled={!canRun || (policyJob !== null && !DONE.has(policyJob.status)) ||
+    <button className="primary-action" disabled={!canRun || (policyJob !== null && !DONE.has(policyJob.status)) ||
       (mode === "fixed" ? !Number.isFinite(fixed) : !(fraction > 0 && fraction < 1))}
-      onClick={() => void createPolicy()}>새 정책 판본 생성</button>
+      onClick={() => void createPolicy()}>판정 정책 만들기</button>
     {policyJob && <p role="status">정책 Job · {jobStatusLabel(policyJob.status)}
       {policyJob.cancel_requested && policyJob.status === "Running" && " · 취소 요청됨"}
     </p>}
@@ -299,7 +298,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
         {" "}{String(policy.decision_summary.predicted_anomalies ?? "—")}건</p>
       <p className="hint">동점이 있으면 분위수로 설정한 경보 비율과 실제 판정 비율은 다를 수 있습니다.</p>
       <button type="button" className="secondary"
-        onClick={() => onOpenResult("policy", policy.id)}>정책 판본 상세 보기 →</button>
+        onClick={() => onOpenResult("policy", policy.id)}>정책 상세 →</button>
     </div>}
     </>}
     {view === "evaluation" && <>
@@ -332,7 +331,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       <button type="button" className="secondary"
         disabled={!policyIdDraft.trim() || loadingPolicy}
         onClick={() => void loadPolicyById()}>
-        {loadingPolicy ? "정책 조회 중" : "정책 판본 조회"}
+        {loadingPolicy ? "정책 조회 중" : "정책 조회"}
       </button>
     </div>
     <p className="hint">다른 점수 결과의 정책도 호환된다면 적용할 수 있습니다.
@@ -342,9 +341,9 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       이전 정책 더 보기
     </button>}
     {policy && <p className="hint" title={policy.id}>선택한 정책: {policyModeLabel(policy.mode)} · 점수 경계 {metric(policy.threshold)}</p>}
-    <button disabled={!canRun || loadingPolicy || (policyJob !== null && policy === null) ||
+    <button className="primary-action" disabled={!canRun || loadingPolicy || (policyJob !== null && policy === null) ||
       (evaluationJob !== null && !DONE.has(evaluationJob.status))}
-      onClick={() => void createEvaluation()}>평가 판본 생성</button>
+      onClick={() => void createEvaluation()}>평가 실행</button>
     {policyJob && !policy && <p role="status">선택한 정책 판본을 확인하는 중입니다.
       완료 전에는 평가를 제출할 수 없습니다.</p>}
     {evaluationJob && <p role="status">평가 작업 · {jobStatusLabel(evaluationJob.status)}
@@ -371,7 +370,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
         <p className="hint">이 평가의 기준 정책은 현재 선택된 정책과 다를 수 있습니다.</p>}
       <p className="hint">동일 평가 점수에서 임계값을 선택하고 평가한 지표는 독립 검증셋 성능을 보증하지 않습니다. 레이블이 없거나 정의할 수 없는 경우에는 미정의로 표시합니다.</p>
       <button type="button" className="secondary"
-        onClick={() => onOpenResult("evaluation", evaluation.id)}>평가 판본 상세 보기 →</button>
+        onClick={() => onOpenResult("evaluation", evaluation.id)}>평가 상세 →</button>
     </div>}
     </>}
     {view === "explanation" && <>

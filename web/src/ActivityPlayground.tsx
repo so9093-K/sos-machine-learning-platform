@@ -19,10 +19,14 @@ const EXAMPLE_ID = "activity-anomaly-if";
  *
  *  모델 공급·학습 같은 운영 정보는 이 화면의 흐름에 두지 않는다.
  */
-export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDataset, hasMoreDatasets,
+export function ActivityPlayground({ datasets, selectedDatasetId, preferredModelId, onSelectModel,
+  onSelectDataset, hasMoreDatasets,
   onLoadMoreDatasets, onDatasetRegistered, canRun, canCancel, canUpload, onOpenResource, links }: {
   datasets: Dataset[];
   selectedDatasetId?: string;
+  /** 모델 목록·상세에서 고른 모델. 주소에 남아 새로고침·뒤로 가기에서도 유지된다. */
+  preferredModelId?: string;
+  onSelectModel: (id: string) => void;
   onSelectDataset: (id: string) => void;
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
@@ -37,7 +41,6 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
   const [offered, setOffered] = useState<ModelOffering[] | null>(null);
   const [offeredError, setOfferedError] = useState("");
   const [retry, setRetry] = useState(0);
-  const [modelId, setModelId] = useState("");
   // 입력 구조가 확인된 Dataset만 API 예시에 채운다. 맞지 않는 ID로 실패하는 예시를 만들지 않는다.
   const [readyDatasetId, setReadyDatasetId] = useState("");
   // 단일 입력 예시는 Playground에서 실제로 계산한 마지막 입력을 그대로 재현한다.
@@ -54,7 +57,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
   }, [retry]);
   const models = definition && offered
     ? offered.filter(item => isActivityModelCompatible(item.model, definition)) : [];
-  const chosen = models.find(item => item.model.id === modelId) ?? models[0] ?? null;
+  const chosen = models.find(item => item.model.id === preferredModelId) ?? models[0] ?? null;
   const guide = topicGuides[TOPIC];
 
   async function useExample() {
@@ -78,11 +81,10 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
       </article>)}</div>
     </section>
 
-    <section className="panel playground-try" aria-labelledby="playground-try-heading">
-      <div className="panel-head"><div>
-        <h2 id="playground-try-heading">직접 체험</h2>
-        <p>준비된 모델을 활동 데이터나 직접 입력한 값에 적용하고, 점수가 높은 관측부터 무엇이 달랐는지 살펴봅니다.</p>
-      </div></div>
+    {/* 적용 화면이 자체 카드이므로 바깥은 카드로 감싸지 않는다. */}
+    <section className="guide-section playground-try" aria-labelledby="playground-try-heading">
+      <h2 id="playground-try-heading">직접 체험</h2>
+      <p className="muted">준비된 모델을 활동 데이터나 직접 입력한 값에 적용하고, 점수가 높은 관측부터 무엇이 달랐는지 살펴봅니다.</p>
       {(catalog.error || offeredError) && <div role="alert" className="guide-state">
         <p>모델을 불러오지 못했습니다. {catalog.error || offeredError}</p>
         <button type="button" className="secondary" onClick={() => { catalog.reload(); setRetry(value => value + 1); }}>
@@ -95,7 +97,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
         <div className="playground-model">
           <span className="eyebrow">사용 모델</span>
           {models.length > 1
-            ? <select aria-label="사용할 모델" value={chosen.model.id} onChange={event => setModelId(event.target.value)}>
+            ? <select aria-label="사용할 모델" value={chosen.model.id} onChange={event => onSelectModel(event.target.value)}>
               {models.map(item => <option key={item.model.id} value={item.model.id}>
                 {algorithmLabel(item.model.algorithm)} · 제공 {formatRecordedAt(item.offered_at)}</option>)}
             </select>

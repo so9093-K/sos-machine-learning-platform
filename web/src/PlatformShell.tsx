@@ -5,31 +5,31 @@ import { dagsterUrl, feastUrl, isLocalOperatorHost, mlflowUrl } from "./operator
 import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
   type WorkspaceTab, type MLNavigationContext, type ResourceRoute } from "./PlatformNavigation";
 
-const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; description: string }> = {
-  overview: { eyebrow: "WORKSPACE", title: "Workspace", description: "데이터 탐색 · 모델 활용 · 실행 근거" },
-  understanding: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
-  preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
-  profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
-  preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "원본 선택 · 변환 편집 · 결과 Dataset" },
-  learning: { eyebrow: "학습 유형", title: "학습 유형", description: "개요 · 활용 상황 · 분석 과제" },
-  task: { eyebrow: "분석 과제", title: "분석 과제", description: "원리 · 활용 방법 · 결과 해석 · 주제" },
-  topic: { eyebrow: "PLAYGROUND", title: "활동 이상 탐지", description: "활용 방법 · 직접 체험 · 결과 해석 · 서비스 연동" },
-  pipelines: { eyebrow: "MODEL OPERATIONS", title: "등록 파이프라인", description: "모델 공급 운영 · 단계별 결과 · 실행 근거" },
-  ml: { eyebrow: "MODELS", title: "모델 활용", description: "모델 선택 · 입력 확인 · 적용 · 결과 이해" },
-  scoring: { eyebrow: "SCORING", title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
-  policies: { eyebrow: "DECISION POLICY", title: "판정 정책", description: "점수 결과 · 정책 판본 · 재사용" },
-  evaluations: { eyebrow: "EVALUATION", title: "평가 결과", description: "평가 근거 · 레이블 · 지표" },
-  explanations: { eyebrow: "EXPLANATION", title: "점수 설명", description: "관측값 · 점수 기여도 · 기준값 치환" },
-  jobs: { eyebrow: "ACTIVITY & JOBS", title: "작업 이력", description: "Data · Exploration · ML 실행 현황" },
-  "ml-jobs": { eyebrow: "ACTIVITY & JOBS", title: "ML 작업 이력", description: "점수 계산 · 정책 · 평가 · 설명" },
-  storage: { eyebrow: "PLATFORM OPERATIONS", title: "저장소 상태", description: "Storage · Health" },
-  audit: { eyebrow: "PLATFORM OPERATIONS", title: "보안 감사", description: "Identity · Audit" },
+const pageLabels: Record<WorkspaceTab, { title: string; description: string }> = {
+  overview: { title: "Workspace", description: "데이터 탐색 · 모델 활용 · 실행 근거" },
+  understanding: { title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
+  preview: { title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
+  profile: { title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
+  preparation: { title: "데이터 준비", description: "원본 선택 · 변환 편집 · 결과 Dataset" },
+  learning: { title: "학습 유형", description: "개요 · 활용 상황 · 분석 과제" },
+  task: { title: "분석 과제", description: "원리 · 활용 방법 · 결과 해석 · 주제" },
+  topic: { title: "활동 이상 탐지", description: "활용 방법 · 직접 체험 · 결과 해석 · 서비스 연동" },
+  pipelines: { title: "등록 파이프라인", description: "모델 공급 운영 · 단계별 결과 · 실행 근거" },
+  ml: { title: "모델 활용", description: "모델 선택 · 입력 확인 · 적용 · 결과 이해" },
+  scoring: { title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
+  policies: { title: "판정 정책", description: "점수 결과 선택 · 판정 기준 · 작업 이력" },
+  evaluations: { title: "평가 결과", description: "점수 결과 선택 · 평가 · 작업 이력" },
+  explanations: { title: "점수 설명", description: "점수 결과 선택 · 관측값 설명 · 작업 이력" },
+  jobs: { title: "작업 이력", description: "데이터·탐색 작업 · 모델 적용 작업" },
+  "ml-jobs": { title: "작업 이력", description: "데이터·탐색 작업 · 모델 적용 작업" },
+  storage: { title: "저장소 상태", description: "보존 상태 · 점검 결과" },
+  audit: { title: "보안 감사", description: "접근 기록 · 감사 이벤트" },
 };
 
 /** 모든 페이지에 공통인 탐색·인증 문맥을 업무 화면에서 분리한다. */
 export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTaxonomy, onSignOut, canConfigure,
   brandName, brandReady, brandLoadError, onBrandChange, onBrandRetry,
-  canInspectStorage, canViewAudit, modelContext, modelResource, dataSidebar, children }: {
+  canInspectStorage, canViewAudit, modelContext, modelResource, children }: {
   actor: Identity;
   section: WorkspaceTab;
   /** 분류 ID처럼 화면 내용에 따라 정해지는 제목. */
@@ -47,7 +47,6 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
   onBrandRetry: () => void;
   canInspectStorage: boolean;
   canViewAudit: boolean;
-  dataSidebar?: ReactNode;
   children: ReactNode;
 }) {
   const [localOperatorHost, setLocalOperatorHost] = useState(false);
@@ -80,7 +79,6 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
         canViewDataset={actor.capabilities.includes("dataset.read")}
         canPrepareData={actor.capabilities.includes("job.create")}
         canOperatePipelines={actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read")} />
-      {dataSidebar}
       {localOperatorHost && (canInspectStorage || canViewAudit) && <div className="operator-tools">
         <span className="eyebrow">로컬 운영 도구</span>
         <a href={dagsterUrl()} target="_blank" rel="noopener noreferrer">
@@ -102,7 +100,6 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
     </aside>
     <main className="main">
       <header className="workspace-header"><div>
-        <span className="eyebrow">{label.eyebrow}</span>
         <h1 id="sos-page-heading" tabIndex={-1}>{title}</h1>
         <p>{label.description}</p>
       </div>
@@ -118,7 +115,6 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
       {isModelsArea(section) && <ModelAreaNavigation active={section}
         context={modelContext} resource={modelResource} onNavigate={onNavigate} />}
       {children}
-      <footer>{brandName} · {label.eyebrow}<span>데이터 · 모델 · 분석 결과</span></footer>
     </main>
   </div>;
 }

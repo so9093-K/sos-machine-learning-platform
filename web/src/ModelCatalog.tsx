@@ -18,7 +18,7 @@ export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datase
   datasetName?: string;
   onClearDataset?: () => void;
   onOpenModel: (id: string) => void;
-  onScoreModel: (id: string) => void;
+  onScoreModel: (model: ModelRevision) => void;
 }) {
   const headingPrefix = useId();
   const [items, setItems] = useState<ModelOffering[]>([]);
@@ -89,14 +89,13 @@ export function ModelCatalog({ onOpenModel, onScoreModel, canRun = false, datase
         <div className="model-version-identity">
           <p id={`${headingPrefix}-${item.model.id}-purpose`} className="model-offering-description model-offering-purpose">{item.description}</p>
           <h3 id={`${headingPrefix}-${item.model.id}`} className="model-card-meta" aria-describedby={`${headingPrefix}-${item.model.id}-purpose`}>
-            {`${algorithmLabel(item.model.algorithm)} · Registry v${item.model.registry_version ?? "?"} · 판본 ${item.model.id.slice(0, 8)}`}</h3>
-          <small>제공 {formatRecordedAt(item.offered_at)} · 입력 Feature {item.model.features.length}개</small>
+            {`${algorithmLabel(item.model.algorithm)} · 제공 ${formatRecordedAt(item.offered_at)}`}</h3>
           {datasetId && currentSchema?.columns && <ModelDatasetCompatibility compact model={item.model} columns={currentSchema.columns} />}
         </div>
         <div className="model-index-actions">
           <button type="button" disabled={!canRun || Boolean(datasetId &&
             (!currentSchema?.columns || !checkModelDatasetInput(item.model, currentSchema.columns).ready))}
-            onClick={() => onScoreModel(item.model.id)}>{datasetId ? "선택 Dataset에 적용 →" : "데이터에 적용 →"}</button>
+            onClick={() => onScoreModel(item.model)}>{datasetId ? "선택 Dataset에 적용 →" : "데이터에 적용 →"}</button>
           <button type="button" className="secondary" onClick={() => onOpenModel(item.model.id)}>모델 상세</button>
         </div>
       </article>)}

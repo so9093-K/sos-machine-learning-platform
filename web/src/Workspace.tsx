@@ -12,20 +12,19 @@ import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
-import type { Dataset, Job, Identity, ExplorationRequest } from "./types";
+import type { Dataset, Job, Identity, ExplorationRequest, ModelRevision } from "./types";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
 import { ActivityPlayground } from "./ActivityPlayground";
-import { AnalysisTaskPage, LearningTypePage, learningTypeGuides, taskGuides,
-  type TaxonomyLinks } from "./ModelLabGuide";
+import { AnalysisTaskPage, LearningTypePage, learningTypeGuides, playgroundTopicFor, taskGuides,
+  usePipelineCatalog, type TaxonomyLinks } from "./ModelLabGuide";
 import { PipelineWorkspace } from "./PipelineWorkspace";
-import { DataSourceSidebar } from "./DataSourceSidebar";
+import { DataSourceBar } from "./DataSourceBar";
 import { ModelCatalog } from "./ModelCatalog";
 import { MLResourceDetail, ScoringWorkspace, DecisionWorkspace } from "./MLResourcePages";
-import type { DecisionView } from "./MLDecisionPanel";
 import { draftForDataset, type ExplorationDraft } from "./ExplorationDraft";
 import { useDatasetOverview } from "./useDatasetOverview";
 import { useDatasetInspection } from "./useDatasetInspection";
@@ -37,10 +36,6 @@ import { ProfileStatistics, useProfileSelection } from "./ProfileStatistics";
 
 type Tab = WorkspaceTab;
 const DATA_TABS: Tab[] = ["understanding", "preview", "profile", "preparation"];
-
-function readableVersion(d: Dataset) {
-  return d.kind === "iceberg" ? `Snapshot ${d.version}` : `SHA256 ${d.version.slice(0, 12)}`;
-}
 
 /** 화면 이동(URL)·공유 Dataset 목록·전역 안내를 소유하고 업무 화면을 조합한다.
  *
@@ -90,14 +85,15 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     onOpenTask: id => navigateWithContext("task", { taxonomyId: id }),
     onOpenTopic: () => setTab("topic"),
   };
+  const pipelineCatalog = usePipelineCatalog();
+  // 체험 주제가 있는 모델은 그 Playground에서, 그 밖의 모델은 공통 모델 적용 화면에서 적용한다.
+  function applyModel(model: ModelRevision) {
+    if (playgroundTopicFor(model, pipelineCatalog.items) === "activity_anomaly") {
+      navigateWithContext("topic", { modelId: model.id, datasetId: context.datasetId });
+    } else startScoring(model.id);
+  }
   function startScoring(modelId: string) {
     navigateWithContext("scoring", { modelId, datasetId: context.datasetId, pipelineRunId: context.pipelineRunId });
-  }
-  function startDecision(view: DecisionView, scoringId: string) {
-    navigateWithContext(
-      view === "policy" ? "policies" : view === "evaluation" ? "evaluations" : "explanations",
-      { scoringId, pipelineRunId: context.pipelineRunId },
-    );
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -279,33 +275,16 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
 
   return <PlatformShell actor={actor} section={tab} modelContext={context}
     pageTitle={tab === "learning" ? learningTypeGuides[context.taxonomyId ?? ""]?.title
-      : tab === "task" ? taskGuides[context.taxonomyId ?? ""]?.title : undefined}
+      : tab === "task" ? taskGuides[context.taxonomyId ?? ""]?.title
+      : resource ? { model: "모델 상세", scoring: "점수 결과", policy: "판정 정책",
+        evaluation: "평가 결과", explanation: "설명 결과" }[resource.kind] : undefined}
     modelResource={resource} onNavigate={setTab}
     onOpenTaxonomy={(target, id) => navigateWithContext(target, { taxonomyId: id })}
     onSignOut={onSignOut} canConfigure={canConfigure}
     brandName={brandName} brandReady={brandReady} brandLoadError={brandLoadError}
     onBrandChange={onBrandChange} onBrandRetry={onBrandRetry}
     canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
-    dataSidebar={isDataArea &&
-        <DataSourceSidebar datasets={datasets} loading={catalog.loading} readError={Boolean(catalog.readError)} selected={selected} canWrite={canWrite} busy={busy}
-          uploadRef={uploadRef} uploadPolicy={uploads.policy}
-          onFile={file => {
-            if (uploads.choose(file) === "confirm") { setError(""); setNotice(""); }
-          }}
-          onExample={() => {
-            setSelected("");
-            navigateWithContext(tab === "preparation" ? "preparation" : "preview", {});
-          }}
-          onChoose={id => {
-            chooseDataset(id, ["preparation", "preview", "profile"].includes(tab)
-              ? tab as "preparation" | "preview" | "profile" : "understanding");
-          }}
-          existingTableName={existingTableName} onChangeExistingName={changeExistingTableName}
-          snapshots={snapshots} snapshotId={snapshotId} onSnapshotId={setSnapshotId}
-          snapshotsLoading={snapshotsLoading}
-          onLoadSnapshots={() => void loadSnapshots()}
-          onConnectExisting={() => void connectExisting()}
-          hasMore={Boolean(catalog.nextCursor)} onLoadMore={() => void loadMoreDatasets()} />}>
+    >
       {error && <div role="alert" className="alert error">
         <div className="alert-body">
           <strong>{error.message}</strong>
@@ -375,20 +354,31 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "learning" && <LearningTypePage id={context.taxonomyId ?? ""} links={taxonomyLinks} />}
       {tab === "task" && <AnalysisTaskPage id={context.taxonomyId ?? ""} links={taxonomyLinks} />}
       {tab === "topic" && <ActivityPlayground datasets={datasets} selectedDatasetId={context.datasetId}
+        preferredModelId={context.modelId} onSelectModel={modelId => selectContext({ ...context, modelId })}
         onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
         hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
         onDatasetRegistered={catalog.upsert} canRun={canRun} canCancel={canCancel} canUpload={canWrite}
         onOpenResource={openResource} links={taxonomyLinks} />}
-      {isDataArea && datasets.length > 0 && <div className="dataset-switcher">
-        <label>Dataset 선택<select aria-label="현재 Dataset" value={selected}
-          onChange={event => chooseDataset(event.target.value, tab as "understanding" | "preview" | "profile" | "preparation")}>
-          <option value="">Dataset 선택</option>
-          {selected && !dataset && <option value={selected}>{requested.error ? "선택한 Dataset · 조회 실패" : "선택한 Dataset · 조회 중"}</option>}
-          {datasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select></label>
-        {catalog.nextCursor && <button type="button" className="secondary" disabled={busy}
-          onClick={() => void loadMoreDatasets()}>Dataset 더 보기</button>}
-      </div>}
+      {isDataArea && <DataSourceBar datasets={datasets} loading={catalog.loading} readError={Boolean(catalog.readError)} selected={selected} canWrite={canWrite} busy={busy}
+          uploadRef={uploadRef} uploadPolicy={uploads.policy}
+          onFile={file => {
+            if (uploads.choose(file) === "confirm") { setError(""); setNotice(""); }
+          }}
+          onExample={() => {
+            setSelected("");
+            navigateWithContext(tab === "preparation" ? "preparation" : "preview", {});
+          }}
+          onChoose={id => {
+            chooseDataset(id, ["preparation", "preview", "profile"].includes(tab)
+              ? tab as "preparation" | "preview" | "profile" : "understanding");
+          }}
+          existingTableName={existingTableName} onChangeExistingName={changeExistingTableName}
+          snapshots={snapshots} snapshotId={snapshotId} onSnapshotId={setSnapshotId}
+          snapshotsLoading={snapshotsLoading}
+          onLoadSnapshots={() => void loadSnapshots()}
+          onConnectExisting={() => void connectExisting()}
+          hasMore={Boolean(catalog.nextCursor)} onLoadMore={() => void loadMoreDatasets()}
+          pendingLabel={selected && !dataset ? (requested.error ? "선택한 Dataset · 조회 실패" : "선택한 Dataset · 조회 중") : undefined} />}
       {isDataArea && selected && !dataset && <section className="panel" aria-label="선택한 Dataset 조회">
         {requested.error ? <ErrorNoticeView title="선택한 Dataset을 열지 못했습니다" notice={requested.error}>
           <p className="hint">다른 계정의 Dataset이거나 삭제된 Dataset은 열 수 없습니다.</p>
@@ -399,7 +389,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {!selected && isDataArea && <div className="empty">
         <h2>{tab === "preparation" ? "데이터 준비 시작" : "첫 데이터 탐색"}</h2>
         <p>{!canWrite
-          ? "조회 전용 계정입니다. 이 계정 소유의 Dataset이 있으면 왼쪽 목록에서 선택해 살펴볼 수 있습니다."
+          ? "조회 전용 계정입니다. 이 계정 소유의 Dataset이 있으면 위의 Dataset 선택에서 골라 살펴볼 수 있습니다."
           : tab === "preparation"
           ? "데이터 준비는 탐색 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
           : "CSV·Parquet·탭 구분 TSV/TXT, Iceberg 테이블 또는 합성 예제로 시작하세요."}</p>
@@ -414,8 +404,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       </div>}
       {dataset && isDataArea && <>
         <div className="dataset-hero">
-          <div><span className="eyebrow">DATASET</span><h2>{dataset.name}</h2>
-            <p>{dataset.kind.toUpperCase()} · {readableVersion(dataset)}</p></div>
+          <div><h2>{dataset.name}</h2>
+            <p>{dataset.kind === "iceberg" ? `Iceberg 테이블 · Snapshot ${dataset.version}` : "파일"}</p></div>
           <div className="hero-actions">
             <button className="secondary" onClick={() => setReloadRevision(value => value + 1)}>
               데이터 다시 불러오기
@@ -484,13 +474,13 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "ml" && !resource && <ModelCatalog canRun={canRun}
         datasetId={context.datasetId} datasetName={datasets.find(item => item.id === context.datasetId)?.name}
         onClearDataset={() => selectContext({ ...context, datasetId: undefined })}
-        onOpenModel={id => openResource("model", id)} onScoreModel={startScoring} />}
+        onOpenModel={id => openResource("model", id)} onScoreModel={applyModel} />}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         canRun={canRun} canCancel={canCancel}
         canManageModel={actor.capabilities.includes("model.manage")} isAdministrator={actor.roles.includes("administrator")}
         onOpenModelCatalog={() => navigateWithContext("ml", { datasetId: context.datasetId })}
-        onScoring={startScoring} onDecision={startDecision} />}
+        onScoring={startScoring} onApplyModel={applyModel} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
         datasets={datasets} preferredModelId={context.modelId ?? ""}
         selectedDatasetId={context.datasetId ?? ""}

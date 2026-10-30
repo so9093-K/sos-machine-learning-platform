@@ -24,7 +24,6 @@ import { canApplyModel, ModelOfferingPanel, useModelOffering } from "./ModelOffe
 import { EvaluationSummary } from "./EvaluationSummary";
 
 type OpenResource = (kind: MLResourceKind, id: string) => void;
-type ResultKind = "policy" | "evaluation" | "explanation";
 const resultConfig = {
   policy: { title: "판정 정책", api: "/api/ml/policies", jobs: "/api/ml/policies/jobs", field: "policy_revision_id" },
   evaluation: { title: "평가", api: "/api/ml/evaluations", jobs: "/api/ml/evaluations/jobs", field: "evaluation_revision_id" },
@@ -110,11 +109,11 @@ export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
 }
 
 /** 불변 ID로 직접 조회하므로 목록 첫 페이지나 이전 학습 화면을 요구하지 않는다. */
-export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecision, canRun, canCancel,
+export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyModel, canRun, canCancel,
   canManageModel = false, isAdministrator = false, onOpenModelCatalog }: {
   kind: MLResourceKind; id: string; onOpenResource: OpenResource;
   onScoring: (modelId: string) => void;
-  onDecision: (kind: ResultKind, scoringId: string) => void;
+  onApplyModel: (model: ModelRevision) => void;
   canRun: boolean; canCancel: boolean;
   canManageModel?: boolean; isAdministrator?: boolean;
   onOpenModelCatalog: () => void;
@@ -153,33 +152,27 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
       <button className="secondary" onClick={() => setRetry(value => value + 1)}>다시 조회</button>
     </ErrorNotice>
   </section>;
-  if (!current?.data) return <section className="panel" role="status">불변 결과를 조회하는 중입니다.</section>;
+  if (!current?.data) return <section className="panel" role="status">결과를 불러오는 중입니다.</section>;
   const data = current.data;
+  // 화면 제목은 셸이 보이므로 여기서는 생성 시각만 덧붙인다.
   return <section className="panel ml-resource-detail">
-<div className="panel-head"><div><h2>{{
-      model: "모델 상세", scoring: "모델 적용 분석 결과", policy: "판정 정책",
-      evaluation: "평가 결과", explanation: "설명 결과",
-    }[kind]}</h2>{kind !== "model" && <p>생성 {formatRecordedAt(data.created_at)}</p>}</div></div>
+    {kind !== "model" && <p className="ml-resource-created">생성 {formatRecordedAt(data.created_at)}</p>}
     {kind === "model" && (() => {
       const m = data as ModelRevision;
       return <>
         <div className="ml-resource-summary">
-          <h3>사용 목적·적용 범위</h3>
+          <h3>제공 설명</h3>
           {modelOffering.offering?.description
             ? <p className="model-offering-description model-offering-purpose">{modelOffering.offering.description}</p>
             : modelOffering.offering && <p className="muted">아직 작성된 제공 설명이 없습니다.</p>}
-          <p className="model-card-meta">{algorithmLabel(m.algorithm)}{m.registry_version ? ` · Registry v${m.registry_version}` : ""}
-            · 학습 {formatRecordedAt(m.created_at)}</p>
-          <p>{m.lifecycle_state === "Active"
-            ? "Dataset이나 직접 입력한 값에 적용해 관측값별 이상 점수를 계산할 수 있는 고정 판본입니다."
-            : m.lifecycle_state === "Deleting"
-              ? "모델 파일을 삭제 중입니다. 현재 새 점수화에 사용할 수 없습니다."
-              : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>
-          {m.algorithm === "isolation_forest" && <p>학습한 입력 패턴과 다른 관측값을 점수로 살펴보는 이상 탐지 모델입니다.</p>}
+          <p className="model-card-meta">{algorithmLabel(m.algorithm)} · 학습 {formatRecordedAt(m.created_at)}</p>
+          {m.lifecycle_state !== "Active" && <p>{m.lifecycle_state === "Deleting"
+            ? "모델 파일을 삭제 중입니다. 현재 새 점수화에 사용할 수 없습니다."
+            : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>}
           <div className="ml-resource-actions">
             <button disabled={!canRun || modelOffering.offering === null || modelOffering.loading ||
               Boolean(modelOffering.error) || !canApplyModel(m, modelOffering.offering, isAdministrator)}
-              onClick={() => onScoring(m.id)}>이 모델로 점수 계산 →</button>
+              onClick={() => onApplyModel(m)}>데이터에 적용 →</button>
           </div>
         </div>
         {!canRun && <p className="hint">조회 전용 · 점수 계산에는 작업 실행 권한이 필요합니다.</p>}
@@ -221,19 +214,14 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
       const r = data as ScoringResult;
       return <>
         <dl className="ml-resource-fields"><Field label="분석 Dataset">{datasetName}</Field></dl>
-        <ScoringObservationExplorer key={r.id} result={r} canRun={canRun}
+        <ScoringObservationExplorer key={r.id} result={r} canRun={canRun} showHeading={false}
           canCancel={canCancel} onOpenResource={onOpenResource} />
         <div className="ml-resource-actions">
           <button type="button" className="secondary" onClick={() => onScoring(r.model_revision_id)}>
             이 모델로 다른 입력 분석 →</button>
-          {(["policy", "evaluation", "explanation"] as const).map(k =>
-            <button key={k} className="secondary"
-              onClick={() => onDecision(k, r.id)}>
-              {resultConfig[k].title}
-            </button>)}
         </div>
         <details className="ml-resource-evidence">
-          <summary>모델 판본 · 입력 Feature · 평가 지표와 기술 근거</summary>
+          <summary>모델·입력 기술 근거</summary>
           <dl className="ml-resource-fields">
             <Field label="모델 판본"><ResourceLink label="모델 판본 열기" id={r.model_revision_id}
               onOpen={() => onOpenResource("model", r.model_revision_id)} /></Field>
@@ -495,8 +483,8 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
   const config = resultConfig[view];
   return <div className="ml-resource-workspace">
     <section className="panel">
-      <h2>{config.title} · 원본 점수 선택</h2>
-      <p className="hint">이미 계산된 점수 결과를 재사용합니다. 학습이나 재점수화 없이 실행할 수 있습니다.</p>
+      <h2>점수 결과 선택</h2>
+      <p className="hint">이미 계산한 점수 결과에 바로 적용합니다. 모델을 다시 실행하지 않습니다.</p>
       {error && <p role="alert">{error}</p>}
       <div className="form-row">
         <label>조회된 점수 결과
@@ -548,8 +536,8 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
         onOpenResult={(kind,id) => onOpenResource(kind,id)} />}
     </section>}
     <section className="panel">
-      <div className="panel-head"><div><h2>{config.title} 작업 이력</h2>
-        <p>현재 조회된 Job에서 결과 판본을 찾습니다. 개별 결과 ID로 직접 다시 열 수 있습니다.</p></div>
+      <div className="panel-head"><div><h2>작업 이력</h2>
+        <p>이전에 실행한 {config.title} 결과를 다시 엽니다.</p></div>
         <button className="secondary" onClick={() => void history.refresh().catch(e => setError(formatError(e)))}>새로고침</button>
       </div>
       <div className="ml-resource-list">
@@ -557,7 +545,7 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
           <JobRowSummary job={j} subject={config.title} />
           {revisionId(j,config.field) && <button className="secondary"
             onClick={() => onOpenResource(view, revisionId(j,config.field)!)}>
-            결과 판본 열기 →
+            결과 열기 →
           </button>}
         </div>)}
         {history.items.length === 0 && <p className="muted">조회된 {config.title} Job이 없습니다.</p>}

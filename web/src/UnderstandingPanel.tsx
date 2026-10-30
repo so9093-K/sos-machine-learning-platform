@@ -146,7 +146,7 @@ export function UnderstandingPanel({
     </div>
     {!state && !error && <p role="status">분석 실행 상태를 확인하는 중입니다.</p>}
     {error && <div role="alert">{error} <button onClick={() => setRevision(n => n + 1)}>다시 조회</button></div>}
-    {state && <p className="hint">원본 판본 {state.version.slice(0, 12)} · 분석 상태 {
+    {state && <p className="hint" title={`원본 판본 ${state.version}`}>분석 상태 {
       state.job_status ? jobStatusLabel(state.job_status) : profile ? "완료" : "미실행"
     }{state.job_id && <> · 작업 <code title={state.job_id}>{state.job_id.slice(0, 8)}</code></>}</p>}
     {state?.job_id && <button className="secondary" onClick={() => onViewJobs(state.job_id!)}>
@@ -156,7 +156,7 @@ export function UnderstandingPanel({
       최근 분석에 실패했습니다. Dataset과 이전 완료 결과는 그대로 사용할 수 있습니다.
     </p>}
     {!profile && !state?.job_status && canCreate && <p className="hint">
-      기본 분석은 Reservoir 방식으로 최대 1,000행을 선택합니다. 원본 읽기와 Worker 자원을 사용하므로 실행할 때에만 Job을 접수합니다.
+      기본 분석은 무작위로 고른 최대 1,000행으로 계산하며, 실행할 때만 작업이 시작됩니다.
       분석 없이 데이터 조회나 데이터 준비로 이동할 수도 있습니다.
     </p>}
     {profile && <>

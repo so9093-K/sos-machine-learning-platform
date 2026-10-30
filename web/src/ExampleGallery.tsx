@@ -27,7 +27,7 @@ export function ExampleGallery({ examples, busy, loading, error, onRetry, onUse,
     {!loading && !error && examples.length === 0 && <p>현재 제공되는 예제가 없습니다.</p>}
     <div className="example-grid">
       {examples.map(item => <article className="example-card" key={item.id}>
-        <span className="eyebrow">SAMPLE DATASET · {item.row_count} rows</span>
+        <span className="eyebrow">예제 데이터 · {item.row_count.toLocaleString("ko-KR")}행</span>
         <h4>{item.title}</h4>
         <p>{item.description}</p>
         <p className="muted">컬럼: {item.columns.join(" · ")}</p>
