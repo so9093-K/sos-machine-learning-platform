@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { request } from "./api";
 import { modelLabLabels, modelLabTree } from "./ModelLabTaxonomy";
+import { PLAYGROUND_TOPICS } from "./ModelLabGuide";
 import type { PipelineDefinition } from "./types";
 
 export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
-  | "topic" | "pipelines" | "ml" | "scoring" | "policies" | "evaluations" | "explanations"
+  | "learning" | "task" | "topic" | "pipelines" | "ml" | "scoring" | "policies" | "evaluations" | "explanations"
   | "jobs" | "ml-jobs" | "storage" | "audit";
 export type MLResourceKind = "model" | "scoring" | "policy" | "evaluation" | "explanation";
 export type ResourceRoute = { kind: MLResourceKind; id: string } | null;
@@ -14,6 +15,8 @@ export type MLNavigationContext = {
   dataJobId?: string;
   dataJobKind?: "data" | "exploration";
   pipelineRunId?: string;
+  /** 학습 유형·분석 과제 화면의 분류 ID. */
+  taxonomyId?: string;
 };
 type WorkspaceRoute = {
   tab: WorkspaceTab; resource: ResourceRoute; context: MLNavigationContext;
@@ -22,6 +25,7 @@ type WorkspaceRoute = {
 const MODEL_INPUT_TABS: ReadonlyArray<WorkspaceTab> = ["ml", "topic", "scoring", "pipelines"];
 
 const DATA_TABS: ReadonlyArray<WorkspaceTab> = ["understanding", "preparation", "preview", "profile", "jobs"];
+const TAXONOMY_TABS: ReadonlyArray<WorkspaceTab> = ["learning", "task"];
 
 function isDecisionTab(tab: WorkspaceTab): boolean {
   return tab === "policies" || tab === "evaluations" || tab === "explanations";
@@ -64,13 +68,16 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
   if (context.datasetId && MODEL_INPUT_TABS.includes(tab)) params.set("dataset", context.datasetId);
   if ((DATA_TABS.includes(tab) || tab === "scoring" || isDecisionTab(tab)) && context.pipelineRunId) params.set("pipelineRun", context.pipelineRunId);
   const base = tab === "pipelines" && context.pipelineRunId
-    ? `${paths.pipelines}/runs/${encodeURIComponent(context.pipelineRunId)}` : paths[tab];
+    ? `${paths.pipelines}/runs/${encodeURIComponent(context.pipelineRunId)}`
+    : TAXONOMY_TABS.includes(tab) && context.taxonomyId
+      ? `${paths[tab]}/${encodeURIComponent(context.taxonomyId)}` : paths[tab];
   return base + (params.size ? "?" + params.toString() : "");
 }
 
 const paths: Record<WorkspaceTab, string> = {
   overview: "/", understanding: "/data", preview: "/data/query",
   profile: "/data/profile", preparation: "/data/prepare",
+  learning: "/learning-types", task: "/tasks",
   topic: "/topics/activity-anomaly", pipelines: "/pipelines", ml: "/models",
   scoring: "/scoring", policies: "/policies",
   evaluations: "/evaluations", explanations: "/explanations",
@@ -92,6 +99,15 @@ export function resourcePath(kind: MLResourceKind, id: string, context: MLNaviga
 }
 
 export function routeAt(pathname: string, search: string): WorkspaceRoute {
+  for (const tab of TAXONOMY_TABS) {
+    if (pathname.startsWith(paths[tab] + "/")) {
+      const id = pathname.slice(paths[tab].length + 1);
+      if (id && !id.includes("/")) {
+        try { return { tab, resource: null, context: { taxonomyId: decodeURIComponent(id) } }; }
+        catch { /* 잘못 인코딩된 URL은 기본 화면으로 돌린다. */ }
+      }
+    }
+  }
   if (pathname.startsWith("/pipelines/runs/")) {
     const id = pathname.slice("/pipelines/runs/".length);
     if (id && !id.includes("/")) {
@@ -266,10 +282,11 @@ export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
 }
 
 /** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
-export function PlatformNavigation({ active, onNavigate, canInspectStorage, canViewAudit, canViewDataset = true,
+export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInspectStorage, canViewAudit, canViewDataset = true,
   canPrepareData = true, canOperatePipelines = false, context = {}, resource = null }: {
   active: WorkspaceTab;
   onNavigate: (tab: WorkspaceTab) => void;
+  onOpenTaxonomy: (tab: "learning" | "task", id: string) => void;
   canInspectStorage: boolean;
   canViewAudit: boolean;
   canViewDataset?: boolean;
@@ -293,8 +310,22 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
       .finally(() => { if (active) setCatalogLoading(false); });
     return () => { active = false; };
   }, [catalogReload, canViewDataset]);
-  // 현재 웹에서 모델을 적용할 수 있는 등록 분석 주제만 연결한다. 미구현 주제 링크를 생성하지 않는다.
-  const topics = modelLabTree(catalog.filter(item => item.id === "activity-anomaly-if"));
+  // 화면에서 체험할 수 있는 주제만 연결한다. 미구현 주제 링크를 생성하지 않는다.
+  const topics = modelLabTree(catalog.filter(item => PLAYGROUND_TOPICS[item.topic] === item.id));
+  const taxonomyLink = (tab: "learning" | "task", id: string, label: string, kind: string) => <a
+    href={contextPath(tab, { taxonomyId: id })} className="workspace-link model-lab-tree-link"
+    aria-current={active === tab && context.taxonomyId === id ? "page" : undefined}
+    onClick={event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      onOpenTaxonomy(tab, id);
+    }}>
+    <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <path d="M2.5 5.5h6l2 2h7v8h-15z"/>
+    </svg>
+    <span className="model-lab-tree-name">{label}</span>
+    <small>{kind}</small>
+  </a>;
   const isExpanded = (key: string) => !collapsed[key];
   const toggle = (key: string) => setCollapsed(previous => ({ ...previous, [key]: !previous[key] }));
 
@@ -342,28 +373,22 @@ export function PlatformNavigation({ active, onNavigate, canInspectStorage, canV
         {topics.map(learning => {
           const learningKey = "learning:" + learning.id;
           return <div className="model-lab-tree-group" key={learning.id}>
-            <button type="button" className="ghost model-lab-tree-toggle"
-              aria-expanded={isExpanded(learningKey)} onClick={() => toggle(learningKey)}>
-              <span className="model-lab-tree-caret" aria-hidden="true">{isExpanded(learningKey) ? "▾" : "▸"}</span>
-              <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                <path d="M2.5 5.5h6l2 2h7v8h-15z"/>
-              </svg>
-              <span className="model-lab-tree-name">{learning.label}</span>
-              <small>학습 유형</small>
-            </button>
+            <div className="model-lab-tree-row">
+              <button type="button" className="ghost model-lab-tree-caret" aria-expanded={isExpanded(learningKey)}
+                aria-label={`${learning.label} ${isExpanded(learningKey) ? "접기" : "펼치기"}`}
+                onClick={() => toggle(learningKey)}>{isExpanded(learningKey) ? "▾" : "▸"}</button>
+              {taxonomyLink("learning", learning.id, learning.label, "학습 유형")}
+            </div>
             {isExpanded(learningKey) && <div className="model-lab-tree-children">
               {learning.tasks.map(task => {
                 const taskKey = learningKey + ":task:" + task.id;
                 return <div key={task.id}>
-                  <button type="button" className="ghost model-lab-tree-toggle"
-                    aria-expanded={isExpanded(taskKey)} onClick={() => toggle(taskKey)}>
-                    <span className="model-lab-tree-caret" aria-hidden="true">{isExpanded(taskKey) ? "▾" : "▸"}</span>
-                    <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-                      <path d="M2.5 5.5h6l2 2h7v8h-15z"/>
-                    </svg>
-                    <span className="model-lab-tree-name">{task.label}</span>
-                    <small>분석 과제</small>
-                  </button>
+                  <div className="model-lab-tree-row">
+                    <button type="button" className="ghost model-lab-tree-caret" aria-expanded={isExpanded(taskKey)}
+                      aria-label={`${task.label} ${isExpanded(taskKey) ? "접기" : "펼치기"}`}
+                      onClick={() => toggle(taskKey)}>{isExpanded(taskKey) ? "▾" : "▸"}</button>
+                    {taxonomyLink("task", task.id, task.label, "분석 과제")}
+                  </div>
                   {isExpanded(taskKey) && <div className="model-lab-tree-children">
                     {task.topics.map(topic => <a key={topic.id}
                       className="workspace-link model-lab-topic-link" href={hrefFor("topic")}

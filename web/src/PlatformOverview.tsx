@@ -12,12 +12,13 @@ type Props = {
   canWrite?: boolean;
   canPrepare?: boolean;
   onNavigate: (tab: WorkspaceTab) => void;
+  onOpenLearningType: (id: string) => void;
   onOpenDataset: (id: string) => void;
 };
 
 const kindLabels: Record<string, string> = { file: "파일", iceberg: "Iceberg 테이블" };
 
-export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDataset, canViewModels = true,
+export function PlatformOverview({ brandName, datasets, onNavigate, onOpenLearningType, onOpenDataset, canViewModels = true,
   canWrite = true, canPrepare = true }: Props) {
   const [modelState, setModelState] = useState<"loading" | "ready" | "empty" | "error">("loading");
   const [modelError, setModelError] = useState("");
@@ -81,10 +82,11 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenDatase
         </div>}
     </section>
     <section className="platform-outlook">
-      <h2>분석 주제·작업 이력</h2>
-      <p>활동 이상 탐지의 입력 조건과 모델을 확인하거나 실행한 작업을 다시 엽니다.</p>
+      <h2>ML 분석 체험</h2>
+      <p>비지도 학습으로 무엇을 할 수 있는지 살펴보고, 활동 이상 탐지를 내 데이터로 직접 해봅니다.</p>
       <div className="platform-outlook-actions">
-        <button className="secondary" type="button" onClick={() => onNavigate("topic")}>활동 이상 탐지 →</button>
+        <button className="secondary" type="button" onClick={() => onOpenLearningType("unsupervised")}>비지도 학습 →</button>
+        <button className="secondary" type="button" onClick={() => onNavigate("topic")}>활동 이상 탐지 Playground →</button>
         <button className="secondary" type="button" onClick={() => onNavigate("jobs")}>작업 이력 →</button>
       </div>
     </section>
