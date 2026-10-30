@@ -391,7 +391,7 @@ export function MLScoringPanel({
     {!datasetId && <p className="scoring-action-hint">분석할 Dataset을 먼저 선택하세요.</p>}
     {datasetId && !inputReady && columnStatus === "loading" && <p className="scoring-action-hint">Dataset의 입력 조건을 확인하는 중입니다.</p>}
     {!canRun && <p className="scoring-action-hint">현재 계정에는 점수 계산 실행 권한이 없습니다.</p>}
-    <button disabled={!canRun || submitted || uploading || !inputReady} onClick={() => void create()}>
+    <button className="primary-action" disabled={!canRun || submitted || uploading || !inputReady} onClick={() => void create()}>
       {submitted ? "점수 계산 요청 중…" : "이 Dataset 분석 시작 →"}
     </button>
     {datasets.length > 0 && canUpload && onDatasetRegistered && <details className="scoring-file-input"

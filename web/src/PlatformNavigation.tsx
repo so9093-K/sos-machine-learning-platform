@@ -42,7 +42,8 @@ function pipelineContext(params: URLSearchParams): MLNavigationContext {
 function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
   const params = new URLSearchParams(search);
   if (tab === "ml") return inputDatasetContext(params);
-  if (tab === "topic") return inputDatasetContext(params);
+  if (tab === "topic") return { ...inputDatasetContext(params),
+    ...(params.get("model") ? { modelId: params.get("model")! } : {}) };
   if (tab === "pipelines") return inputDatasetContext(params);
   if (DATA_TABS.includes(tab)) {
     return { datasetId: params.get("dataset") ?? "", ...pipelineContext(params),
@@ -63,7 +64,7 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
     params.set("job", context.dataJobId);
     if (context.dataJobKind === "exploration") params.set("type", "exploration");
   }
-  if (tab === "scoring" && context.modelId) params.set("model", context.modelId);
+  if ((tab === "scoring" || tab === "topic") && context.modelId) params.set("model", context.modelId);
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
   if (context.datasetId && MODEL_INPUT_TABS.includes(tab)) params.set("dataset", context.datasetId);
   if ((DATA_TABS.includes(tab) || tab === "scoring" || isDecisionTab(tab)) && context.pipelineRunId) params.set("pipelineRun", context.pipelineRunId);
@@ -230,15 +231,15 @@ export function useWorkspaceNavigation() {
 }
 
 type NavItem = { tab: WorkspaceTab; label: string };
-const groups: ReadonlyArray<{ title: string; items: NavItem[] }> = [
-  { title: "WORKSPACE", items: [
-    { tab: "overview", label: "홈" },
+// 목적별 묶음. ML 분석은 학습 유형 → 분석 과제 → 주제 트리를 먼저 보이고 모델 목록을 잇는다.
+const groups: ReadonlyArray<{ title: string; items: NavItem[]; taxonomy?: boolean }> = [
+  { title: "", items: [{ tab: "overview", label: "홈" }] },
+  { title: "데이터", items: [
     { tab: "understanding", label: "데이터 탐색" },
-    { tab: "ml", label: "모델 활용" },
+    { tab: "preparation", label: "데이터 준비" },
   ] },
-  { title: "분석 주제", items: [{ tab: "topic", label: "활동 이상 탐지" }] },
-  { title: "DATA TOOLS", items: [{ tab: "preparation", label: "데이터 준비" }] },
-  { title: "ACTIVITY & OPERATIONS", items: [
+  { title: "ML 분석", taxonomy: true, items: [{ tab: "ml", label: "모델 활용" }] },
+  { title: "작업·운영", items: [
     { tab: "jobs", label: "작업 이력" },
     // 등록 파이프라인은 학습 권한 계정이 모델을 공급하는 운영 도구다.
     { tab: "pipelines", label: "등록 파이프라인" },
@@ -271,14 +272,11 @@ export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate(item.tab);
     }}>{item.label}</a>;
-  return <div className="model-area-navigation">
-    <details className="model-tools" open={active !== "ml"}>
-      <summary>모델 적용·결과 도구</summary>
-      <nav aria-label="모델 적용과 결과 도구">
-        {modelTools.map(item => link(item, active === item.tab))}
-      </nav>
-    </details>
-  </div>;
+  // 모델 목록·상세에서는 아직 다룰 결과가 없으므로 결과 도구를 보이지 않는다.
+  if (active === "ml") return null;
+  return <nav className="model-area-navigation model-tools" aria-label="모델 적용과 결과 도구">
+    {modelTools.map(item => link(item, active === item.tab))}
+  </nav>;
 }
 
 /** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
@@ -344,15 +342,9 @@ export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInsp
       : canViewDataset;
   return <nav className="global-nav platform-nav" aria-label="플랫폼 메뉴">
     {groups.filter(group => group.items.some(visible))
-      .map(group => <div className="platform-nav-group" key={group.title}>
-      <span className={group.title === "분석 주제" ? "section-title model-lab-tree-title" : "section-title"}>
-        {group.title === "분석 주제" && <svg viewBox="0 0 20 20" width="15" height="15"
-          fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-          <path d="M7 2h6M9 2v6l-5 7a2 2 0 0 0 1.7 3h8.6a2 2 0 0 0 1.7-3l-5-7V2M7 13h6"/>
-        </svg>}
-        {group.title}
-      </span>
-      {group.title === "분석 주제" ? <div className="model-lab-tree" aria-label="등록된 분석 주제">
+      .map(group => <div className="platform-nav-group" key={group.title || "home"}>
+      {group.title && <span className="section-title">{group.title}</span>}
+      {group.taxonomy && <div className="model-lab-tree" aria-label="등록된 분석 주제">
         {catalogLoading && <p className="model-lab-tree-feedback" role="status">주제 목록을 불러오는 중입니다.</p>}
         {!catalogLoading && !catalogError && topics.length === 0 &&
           <p className="model-lab-tree-feedback">현재 사용 가능한 주제가 없습니다.</p>}
@@ -411,7 +403,8 @@ export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInsp
             </div>}
           </div>;
         })}
-      </div> : group.items.filter(visible).map(item => <a key={item.tab} href={hrefFor(item.tab)}
+      </div>}
+      {group.items.filter(visible).map(item => <a key={item.tab} href={hrefFor(item.tab)}
         className="workspace-link" aria-current={isCurrent(item.tab) ? "page" : undefined}
         onClick={event => {
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

@@ -350,7 +350,7 @@ export function ShapExplanation({
     {job?.status === "Cancelled" && <p>SHAP 계산이 취소됐습니다.</p>}
     {result && <><ShapContributionChart result={result} />
       <button type="button" className="secondary"
-        onClick={() => onOpenResource("explanation", result.id)}>SHAP 결과 판본 보기 →</button>
+        onClick={() => onOpenResource("explanation", result.id)}>SHAP 결과 보기 →</button>
       {canRun && <button type="button" className="secondary shap-recalculate"
         disabled={busy || lookup !== "ready"} onClick={() => void submit()}>
         {busy ? "SHAP 분석 요청 중…" : "SHAP 다시 계산"}

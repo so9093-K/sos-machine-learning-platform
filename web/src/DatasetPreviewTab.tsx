@@ -78,7 +78,7 @@ export function DatasetPreviewPanel({ datasetId, revision, preview, previewStatu
           {showAllColumns ? "첫 12개 컬럼만 보기" : "전체 컬럼 보기"}
         </button>}
       </div>}
-      <div className="table-scroll" tabIndex={0} role="region" aria-label="데이터 조회 결과 표"><table><thead><tr>
+      <div className="table-scroll data-table-scroll" tabIndex={0} role="region" aria-label="데이터 조회 결과 표"><table><thead><tr>
         {columns.map(c => <th key={c}>{c}<small>{displayed.schema[c]}</small></th>)}
       </tr></thead><tbody>{displayed.rows.map((r, i) => <tr key={i}>
         {columns.map(c => <td key={c}>{r[c] == null ? <span className="null">NULL</span> : String(r[c])}</td>)}

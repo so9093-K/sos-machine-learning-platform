@@ -15,8 +15,6 @@ export function ModelCreationEvidence({ model, datasetName }: { model: ModelRevi
       <li><strong>학습 방법</strong> · {algorithmLabel(model.algorithm)} · 학습 점수 계산 {typeof scoreCount === "number" && Number.isFinite(scoreCount) ? `${recordedNumber(scoreCount)}행` : "행 수 기록 없음"}</li>
       <li><strong>생성 결과</strong> · 고정된 모델 판본 · {model.registry_version ? `Registry v${model.registry_version}` : "Registry 판본 기록 없음"}</li>
     </ol>
-    <p className="hint">판본에 고정된 생성 기록입니다.</p>
-    <h4>적용 범위·한계</h4>
-    <p>입력 Feature 이름·순서·자료형을 확인한 뒤 데이터를 적용하세요. 학습 데이터의 점수는 독립 평가 성능이나 사건 발생 확률이 아닙니다. 이 기록만으로 다른 데이터에서의 정확도나 적합성을 확정할 수 없습니다.</p>
+    <p className="hint">학습 데이터의 점수는 독립 평가 성능이나 사건 발생 확률이 아니며, 이 기록만으로 다른 데이터에서의 정확도를 확정할 수 없습니다.</p>
   </section>;
 }

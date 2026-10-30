@@ -57,9 +57,9 @@ try {
   assert.match(resultView, /최고 이상 점수/);
   assert.match(resultView, /평균 이상 점수/);
   assert.doesNotMatch(resultView, /선택 관측값 점수/);
-  assert.match(resultView, /점수순 조회/);
+  assert.match(resultView, /점수가 높은 순서이며 판정 기준을 적용한 결과가 아닙니다/);
   assert.match(resultView, /점수 상위 관측값/);
-  assert.match(resultView, /분석 판본과 식별자/);
+  assert.match(resultView, /결과 식별자/);
   assert.match(resultView, /evidence-facts-compact/);
   assert.match(resultView, /Dataset 판본/);
   assert.match(resultView, /Model Revision/);
@@ -192,8 +192,8 @@ try {
     active: "ml", context: {},
     resource: { kind: "model", id: "model-v1" }, onNavigate: () => {},
   }));
-  assert.match(modelNav, /href="\/scoring\?model=model-v1"/);
-  assert.match(modelNav, /<details class="model-tools">/);
+  // 모델 목록·상세에는 다룰 결과가 없으므로 결과 도구를 보이지 않는다. 적용은 모델 상세의 버튼이 맡는다.
+  assert.equal(modelNav, "");
   const { ModelCatalog } = await vite.ssrLoadModule("/src/ModelCatalog.tsx");
   const catalog = renderToStaticMarkup(React.createElement(ModelCatalog, {
     onOpenModel: () => {}, onScoreModel: () => {},

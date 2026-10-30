@@ -5,8 +5,8 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { formatError, request } from "./api";
-import { modelLabTree, type ModelLabTree } from "./ModelLabTaxonomy";
-import type { PipelineDefinition } from "./types";
+import { isActivityModelCompatible, modelLabTree, type ModelLabTree } from "./ModelLabTaxonomy";
+import type { ModelRevision, PipelineDefinition } from "./types";
 
 type Point = readonly [number, number];
 type GuideItem = { title: string; text: string };
@@ -61,6 +61,16 @@ export const topicGuides: Record<string, Guide & { route: "topic" }> = {
 
 /** 화면에서 직접 체험할 수 있는 주제만 연결한다. 카탈로그에만 있는 주제는 안내하지 않는다. */
 export const PLAYGROUND_TOPICS: Record<string, string> = { activity_anomaly: "activity-anomaly-if" };
+
+/** 모델이 입력 계약과 알고리즘이 맞는 체험 주제를 가지면 그 주제를 돌려준다. */
+export function playgroundTopicFor(model: Pick<ModelRevision, "algorithm" | "features">,
+  definitions: readonly PipelineDefinition[] | null): string | null {
+  for (const [topic, pipelineId] of Object.entries(PLAYGROUND_TOPICS)) {
+    const definition = definitions?.find(item => item.id === pipelineId);
+    if (definition && isActivityModelCompatible(model, definition)) return topic;
+  }
+  return null;
+}
 
 /** 등록 Pipeline 카탈로그. 제공 분류와 주제의 입력 계약을 함께 확인한다. */
 export function usePipelineCatalog() {

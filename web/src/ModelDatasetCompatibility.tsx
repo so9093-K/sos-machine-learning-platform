@@ -33,7 +33,7 @@ export function ModelDatasetCompatibility({ model, columns, compact = false }: {
       `${item.name}: 실제 ${item.actual} / 요구 ${item.expected ?? "수치형"}`).join(", ")}{input.mismatches.length > 3 ? " 외" : ""}</p>}
     {!input.knownTypes && <p>모델의 입력 자료형 기록이 없어 호환 여부를 확인할 수 없습니다.</p>}
     {!compact && <p className="hint">{input.ready
-      ? "Feature 이름·자료형 확인 완료 · 값·결측 조건은 실행 시 검증합니다. 데이터의 업무적 의미나 모델 적합성을 보장하지 않습니다."
+      ? "이름·자료형 일치 · 값과 결측은 실행할 때 확인하며, 업무 적합성을 뜻하지는 않습니다."
       : "이 모델의 입력 조건을 확인하거나 다른 Dataset을 선택하세요. 데이터는 자동 변환하지 않습니다."}</p>}
   </div>;
 }

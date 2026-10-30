@@ -5,12 +5,20 @@ import { activityFeatureGroups } from "./ActivityFeatureGroups";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { ModelApiUsage } from "./ModelApiUsage";
 import type { PlaygroundRun } from "./ModelLabPlayground";
+import { canApplyModel, useModelOffering } from "./ModelOffering";
 import { isActivityModelCompatible } from "./ModelLabTaxonomy";
 import { taskGuides, topicGuides, topicTree, TaxonomyTrail, usePipelineCatalog,
   PLAYGROUND_TOPICS, type TaxonomyLinks } from "./ModelLabGuide";
 import { algorithmLabel, formatRecordedAt } from "./display-format";
 import type { MLResourceKind } from "./PlatformNavigation";
-import type { Dataset, ModelOffering, ModelOfferingPage } from "./types";
+import type { Dataset, ModelOffering, ModelOfferingPage, ModelRevision } from "./types";
+
+type Choice = { model: ModelRevision; description: string; offered: boolean };
+type Selection =
+  | { state: "ready"; choice: Choice }
+  | { state: "loading" }
+  | { state: "blocked"; reason: string }
+  | { state: "none" };
 
 const TOPIC = "activity_anomaly";
 const EXAMPLE_ID = "activity-anomaly-if";
@@ -19,10 +27,15 @@ const EXAMPLE_ID = "activity-anomaly-if";
  *
  *  모델 공급·학습 같은 운영 정보는 이 화면의 흐름에 두지 않는다.
  */
-export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDataset, hasMoreDatasets,
+export function ActivityPlayground({ datasets, selectedDatasetId, preferredModelId, onSelectModel, isAdministrator,
+  onSelectDataset, hasMoreDatasets,
   onLoadMoreDatasets, onDatasetRegistered, canRun, canCancel, canUpload, onOpenResource, links }: {
   datasets: Dataset[];
   selectedDatasetId?: string;
+  /** 모델 목록·상세에서 고른 모델. 주소에 남아 새로고침·뒤로 가기에서도 유지된다. */
+  preferredModelId?: string;
+  onSelectModel: (id: string) => void;
+  isAdministrator: boolean;
   onSelectDataset: (id: string) => void;
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
@@ -37,7 +50,6 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
   const [offered, setOffered] = useState<ModelOffering[] | null>(null);
   const [offeredError, setOfferedError] = useState("");
   const [retry, setRetry] = useState(0);
-  const [modelId, setModelId] = useState("");
   // 입력 구조가 확인된 Dataset만 API 예시에 채운다. 맞지 않는 ID로 실패하는 예시를 만들지 않는다.
   const [readyDatasetId, setReadyDatasetId] = useState("");
   // 단일 입력 예시는 Playground에서 실제로 계산한 마지막 입력을 그대로 재현한다.
@@ -54,7 +66,40 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
   }, [retry]);
   const models = definition && offered
     ? offered.filter(item => isActivityModelCompatible(item.model, definition)) : [];
-  const chosen = models.find(item => item.model.id === modelId) ?? models[0] ?? null;
+  // 지정한 모델이 첫 목록 페이지에 없으면 그 판본을 직접 확인한다. 다른 모델로 대체하지 않는다.
+  const listed = preferredModelId ? models.find(item => item.model.id === preferredModelId) ?? null : null;
+  const lookupId = preferredModelId && definition && offered !== null && !listed ? preferredModelId : null;
+  const [direct, setDirect] = useState<{ id: string; model: ModelRevision | null; error: string } | null>(null);
+  useEffect(() => {
+    if (!lookupId) return;
+    let active = true;
+    setDirect(null);
+    void request<ModelRevision>(`/api/ml/models/${encodeURIComponent(lookupId)}`)
+      .then(model => { if (active) setDirect({ id: lookupId, model, error: "" }); })
+      .catch(cause => { if (active) setDirect({ id: lookupId, model: null, error: formatError(cause) }); });
+    return () => { active = false; };
+  }, [lookupId]);
+  const directOffering = useModelOffering(lookupId);
+  const selection = ((): Selection => {
+    if (!preferredModelId) return models[0]
+      ? { state: "ready", choice: { model: models[0].model, description: models[0].description, offered: true } }
+      : { state: "none" };
+    if (listed) return { state: "ready", choice: { model: listed.model, description: listed.description, offered: true } };
+    if (!lookupId || direct?.id !== lookupId) return { state: "loading" };
+    if (direct.error || !direct.model) return { state: "blocked", reason: `선택한 모델을 열 수 없습니다. ${direct.error}` };
+    if (definition && !isActivityModelCompatible(direct.model, definition)) return { state: "blocked",
+      reason: "선택한 모델은 활동 이상 탐지의 입력 조건(Feature·알고리즘)과 맞지 않습니다. 모델 상세에서 입력 조건을 확인하세요." };
+    const state = directOffering.offering;
+    if (directOffering.error && !state) return { state: "blocked",
+      reason: `선택한 모델의 제공 상태를 확인하지 못했습니다. ${directOffering.error}` };
+    if (!state) return { state: "loading" };
+    if (!canApplyModel(direct.model, state, isAdministrator)) return { state: "blocked",
+      reason: direct.model.lifecycle_state !== "Active" || !direct.model.registry_version
+        ? "선택한 모델은 현재 새 계산에 사용할 수 없습니다."
+        : "선택한 모델은 제공이 중단됐습니다. 이미 만든 결과는 확인할 수 있지만 새 적용은 할 수 없습니다." };
+    return { state: "ready", choice: { model: direct.model, description: state.description ?? "", offered: state.offered } };
+  })();
+  const chosen = selection.state === "ready" ? selection.choice : null;
   const guide = topicGuides[TOPIC];
 
   async function useExample() {
@@ -78,30 +123,41 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
       </article>)}</div>
     </section>
 
-    <section className="panel playground-try" aria-labelledby="playground-try-heading">
-      <div className="panel-head"><div>
-        <h2 id="playground-try-heading">직접 체험</h2>
-        <p>준비된 모델을 활동 데이터나 직접 입력한 값에 적용하고, 점수가 높은 관측부터 무엇이 달랐는지 살펴봅니다.</p>
-      </div></div>
+    {/* 적용 화면이 자체 카드이므로 바깥은 카드로 감싸지 않는다. */}
+    <section className="guide-section playground-try" aria-labelledby="playground-try-heading">
+      <h2 id="playground-try-heading">직접 체험</h2>
+      <p className="muted">준비된 모델을 활동 데이터나 직접 입력한 값에 적용하고, 점수가 높은 관측부터 무엇이 달랐는지 살펴봅니다.</p>
       {(catalog.error || offeredError) && <div role="alert" className="guide-state">
         <p>모델을 불러오지 못했습니다. {catalog.error || offeredError}</p>
         <button type="button" className="secondary" onClick={() => { catalog.reload(); setRetry(value => value + 1); }}>
           다시 조회</button></div>}
       {!catalog.error && !offeredError && (offered === null || catalog.items === null) &&
         <p role="status" className="muted">사용할 수 있는 모델을 확인하는 중입니다.</p>}
-      {offered !== null && definition && models.length === 0 && <p className="muted">
+      {selection.state === "loading" && preferredModelId && offered !== null && definition &&
+        <p role="status" className="muted">선택한 모델을 확인하는 중입니다.</p>}
+      {selection.state === "blocked" && <div className="playground-notice" role="alert">
+        <strong>선택한 모델을 사용할 수 없습니다</strong>
+        <p>{selection.reason}</p>
+        {models.length > 0 && <button type="button" className="secondary" onClick={() => onSelectModel("")}>
+          제공 모델 중에서 다시 선택</button>}
+      </div>}
+      {selection.state === "none" && offered !== null && definition && <p className="muted">
         아직 사용할 수 있는 활동 이상 탐지 모델이 없습니다. 모델이 준비되면 이곳에서 바로 적용할 수 있습니다.</p>}
       {chosen && <>
         <div className="playground-model">
           <span className="eyebrow">사용 모델</span>
-          {models.length > 1
-            ? <select aria-label="사용할 모델" value={chosen.model.id} onChange={event => setModelId(event.target.value)}>
+          {models.length > 1 || (models.length > 0 && !listed && preferredModelId)
+            ? <select aria-label="사용할 모델" value={chosen.model.id} onChange={event => onSelectModel(event.target.value)}>
+              {!models.some(item => item.model.id === chosen.model.id) && <option value={chosen.model.id}>
+                {algorithmLabel(chosen.model.algorithm)} · 선택한 모델</option>}
               {models.map(item => <option key={item.model.id} value={item.model.id}>
                 {algorithmLabel(item.model.algorithm)} · 제공 {formatRecordedAt(item.offered_at)}</option>)}
             </select>
             : <strong>{algorithmLabel(chosen.model.algorithm)}</strong>}
           <button type="button" className="ghost" onClick={() => onOpenResource("model", chosen.model.id)}>모델 상세 →</button>
-          <p className="muted model-offering-description">{chosen.description}</p>
+          <p className="muted model-offering-description">{chosen.description || "아직 작성된 제공 설명이 없습니다."}</p>
+          {!chosen.offered && <p className="hint">사용자에게 제공되지 않은 판본입니다. {isAdministrator
+            ? "관리자 권한으로 적용합니다." : "소유자 권한으로 적용합니다."}</p>}
         </div>
         {!canRun && <div className="playground-notice" role="status">
           <strong>조회 전용 계정</strong>

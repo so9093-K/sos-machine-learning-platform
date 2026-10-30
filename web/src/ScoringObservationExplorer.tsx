@@ -17,6 +17,11 @@ function shortIdentifier(value: string, limit = 12): string {
 function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
+/** 요약 카드는 비교에 충분한 3자리로 보이고, 전체 값은 title과 관측값 상세에서 확인한다. */
+function summaryScore(value: unknown): string {
+  const number = finiteNumber(value);
+  return number === null ? "근거 없음" : number.toFixed(3);
+}
 function readable(value: unknown): string {
   const number = finiteNumber(value);
   return number === null ? "근거 없음" : number.toLocaleString("ko-KR", { maximumFractionDigits: 6 });
@@ -52,8 +57,11 @@ export function observationSelectionLabel(userSelected: boolean): string {
   return userSelected ? "현재 선택" : "기본 표시";
 }
 
-export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenResource, onTryObservation }: {
+export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenResource, onTryObservation,
+  showHeading = true }: {
   result: ScoringResult;
+  /** 화면 제목이 이미 점수 결과일 때는 같은 제목을 반복하지 않는다. */
+  showHeading?: boolean;
   canRun: boolean;
   canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
@@ -147,22 +155,17 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   }
 
   return <section className="scoring-observation-explorer" aria-label="모델 적용 분석 결과">
-    <header className="scoring-workspace-heading">
-      <div>
-        <span className="eyebrow">모델 적용 완료</span>
-        <h3>데이터 점수 결과</h3>
-      </div>
-      <p>점수를 계산한 관측값의 분포와 개별 입력값을 확인합니다.</p>
-    </header>
+    {showHeading && <header className="scoring-workspace-heading">
+      <h3>점수 결과</h3>
+    </header>}
     {partitionLabel && <p className="scoring-scope">계산 범위: {partitionLabel} · {result.row_count.toLocaleString("ko-KR")}건</p>}
     {summary.training_data_reused === true && <p className="hint">학습에 사용한 Dataset 판본의 점수입니다. 독립 검증 데이터의 성능을 나타내지 않습니다.</p>}
     <div className="scoring-result-summary" aria-label="분석 결과 요약">
       <div><span>분석한 관측값</span><strong>{result.row_count.toLocaleString("ko-KR")}건</strong></div>
-      <div><span>최고 이상 점수</span><strong>{readable(summary.score_max)}</strong></div>
-      <div><span>평균 이상 점수</span><strong>{readable(summary.score_mean)}</strong></div>
+      <div><span>최고 이상 점수</span><strong title={readable(summary.score_max)}>{summaryScore(summary.score_max)}</strong></div>
+      <div><span>평균 이상 점수</span><strong title={readable(summary.score_mean)}>{summaryScore(summary.score_mean)}</strong></div>
     </div>
-    <p className="scoring-result-interpretation">점수가 높은 관측값부터 실제 입력값과 모델의 반응을 확인할 수 있습니다.
-      <small>점수순 조회 · 이 목록은 판정 정책에 따른 이상 판정을 표시하지 않습니다. 점수는 사건 발생 확률을 뜻하지 않습니다.</small></p>
+    <p className="scoring-result-interpretation"><small>점수가 높은 순서이며 판정 기준을 적용한 결과가 아닙니다. 점수는 사건 발생 확률을 뜻하지 않습니다.</small></p>
     <section className="scoring-distribution" aria-label="전체 이상 점수 분포">
       <div className="scoring-distribution-heading">
         <h4>전체 관측값의 점수 분포</h4>
@@ -257,7 +260,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
       </section>
     </div>
     <details className="scoring-result-provenance">
-      <summary>분석 판본과 식별자</summary>
+      <summary>결과 식별자</summary>
       <EvidenceFacts compact facts={[
         { label: "Dataset", value: shortIdentifier(result.dataset_id, 8),
           title: result.dataset_id },

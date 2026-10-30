@@ -88,7 +88,7 @@ function ActivityJobDetails({ job, canCancel, onChanged }: {
   return <details className="ml-activity-details" onToggle={event => {
     if (event.currentTarget.open && !detail && !loading && !error) void loadDetails();
   }}>
-    <summary>Job 상태·설정·진단</summary>
+    <summary>실행 상세</summary>
     {loading && <p role="status">실행 상세 조회 중…</p>}
     {error && <div><p role="alert">{error}</p>
       <button className="secondary" onClick={() => void loadDetails()}>다시 조회</button></div>}
@@ -145,12 +145,12 @@ export function MLActivityPanel({ compact = false, canCancel = false, datasets =
     .filter(job => filter === "all" || filter === job.kind)
     .sort((a, b) => b.created.localeCompare(a.created) || b.id.localeCompare(a.id))
     .slice(0, compact ? 4 : undefined);
-  return <section className="panel ml-activity" aria-labelledby={compact ? "recent-ml-heading" : "ml-activity-heading"}>
+  // 작업 이력 화면에서는 위의 종류 탭이 제목 역할을 하므로 같은 제목을 반복하지 않는다.
+  return <section className="panel ml-activity" aria-labelledby={compact ? "recent-ml-heading" : undefined}
+    aria-label={compact ? undefined : "모델 적용 작업"}>
     <div className="panel-head"><div>
-      <h3 id={compact ? "recent-ml-heading" : "ml-activity-heading"}>
-        {compact ? "최근 ML 실행" : "ML 실행 이력"}
-      </h3>
-      <p>점수 계산·정책·평가·설명 Job의 조회된 페이지 범위입니다.</p>
+      {compact && <h3 id="recent-ml-heading">최근 모델 적용 작업</h3>}
+      <p>점수 계산·판정 정책·평가·설명 작업입니다.</p>
     </div>
       {compact
         ? <button className="secondary" onClick={onViewAll ?? (() => onNavigate("ml-jobs"))}>작업 이력 →</button>
@@ -183,7 +183,7 @@ export function MLActivityPanel({ compact = false, canCancel = false, datasets =
         <div className="ml-activity-actions">
           {job.resultId && <button className="secondary"
             onClick={() => onOpenResource(operations[job.kind].resource, job.resultId!)}>
-            결과 판본 보기 →
+            결과 보기 →
           </button>}
           <button className="secondary" onClick={() => onNavigate(operations[job.kind].tab)}>
             {job.resultId ? "관련 작업" : "실행 화면"} →
@@ -202,6 +202,6 @@ export function MLActivityPanel({ compact = false, canCancel = false, datasets =
         이전 {operations[filter].label} Job 더 보기
       </button>}
     {!compact && filter === "all" &&
-      <p className="hint">더 오래된 Job을 찾으려면 작업 유형을 선택한 다음 이전 페이지를 조회하세요.</p>}
+      <p className="hint">더 오래된 작업을 찾으려면 작업 유형을 선택한 다음 이전 페이지를 조회하세요.</p>}
   </section>;
 }

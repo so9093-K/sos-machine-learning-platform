@@ -24,34 +24,33 @@ type Props = {
   onConnectExisting: () => void;
   hasMore: boolean;
   onLoadMore: () => void;
+  /** URL로 지정했지만 목록에 아직 없는 Dataset의 표시 이름. */
+  pendingLabel?: string;
 };
 
 const mebibytes = (size: number) => (size / (1024 * 1024)).toFixed(2);
 
-/** 데이터 등록·선택 조작은 데이터 영역에서만 제공한다. */
-export function DataSourceSidebar(props: Props) {
+/** 데이터 영역 상단의 Dataset 선택과 등록·연결. 좁은 화면에서도 본문에서 바로 쓴다. */
+export function DataSourceBar(props: Props) {
   const {
     datasets, selected, canWrite, busy, loading = false, readError = false, uploadRef, uploadPolicy,
     onFile, onExample, onChoose, existingTableName, onChangeExistingName,
     snapshots, snapshotId, onSnapshotId, snapshotsLoading,
-    onLoadSnapshots, onConnectExisting, hasMore, onLoadMore,
+    onLoadSnapshots, onConnectExisting, hasMore, onLoadMore, pendingLabel,
   } = props;
-  return <div className="data-sidebar">
-    <div className="section-title">DATASETS</div>
-    <nav className="dataset-nav" aria-label="데이터셋 목록">
-      {loading && <p className="muted" role="status">Dataset 조회 중…</p>}
-      {!loading && !readError && datasets.length === 0 && <p className="muted">등록된 데이터가 없습니다.</p>}
-      {datasets.map(item => <button key={item.id}
-        className={`dataset ${selected === item.id ? "active" : ""}`}
-        onClick={() => onChoose(item.id)}>
-        <span className="dataset-name">{item.name}</span>
-        <span className="dataset-kind">{item.kind === "iceberg" ? "◆ Iceberg" : "◫ File"}</span>
-      </button>)}
-    </nav>
-    {hasMore && <button className="job-navigation secondary" disabled={busy} onClick={onLoadMore}>
-      이전 데이터셋 더 불러오기
-    </button>}
-    {canWrite && <button className="job-navigation secondary" onClick={onExample}>예제 데이터</button>}
+  return <div className="data-source-bar">
+    {loading && datasets.length === 0 && <p className="muted" role="status">Dataset 조회 중…</p>}
+    {!loading && !readError && datasets.length === 0 && <p className="muted">등록된 Dataset이 없습니다.</p>}
+    {datasets.length > 0 && <label className="data-source-select">Dataset
+      <select aria-label="현재 Dataset" value={selected} onChange={event => onChoose(event.target.value)}>
+        <option value="">Dataset 선택</option>
+        {pendingLabel && <option value={selected}>{pendingLabel}</option>}
+        {datasets.map(item => <option key={item.id} value={item.id}>
+          {item.name}{item.kind === "iceberg" ? " · Iceberg" : ""}</option>)}
+      </select>
+    </label>}
+    {hasMore && <button type="button" className="secondary" disabled={busy} onClick={onLoadMore}>Dataset 더 보기</button>}
+    {canWrite && <button type="button" className="secondary" onClick={onExample}>예제 데이터</button>}
     {canWrite && <details className="data-import-controls">
       <summary>데이터 추가·연결</summary>
       <div className="data-import-actions">

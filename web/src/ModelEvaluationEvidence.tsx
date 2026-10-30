@@ -112,7 +112,6 @@ export function ModelEvaluationEvidence({ modelId, onOpenResource, supplierEvide
     {!current && <p role="status">모델의 평가 근거 확인 중…</p>}
     {current?.error && <EvidenceFailure error={current.error} onRetry={() => setRevision(value => value + 1)} />}
     {page && <>
-      <p className="hint">열람 가능한 평가를 최신순으로 5건씩 조회합니다. 평가별 데이터와 정책 조건을 확인하세요.</p>
       {page.items.length > 0 && <p className="hint">기본 표시는 조회한 목록의 최근 평가입니다.
         모델의 대표 평가나 승인된 성능을 뜻하지 않습니다.</p>}
       {page.items.length === 0 && <p>{cursor ? "이 페이지에서 확인된 평가 근거가 없습니다."

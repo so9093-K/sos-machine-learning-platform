@@ -156,7 +156,7 @@ export function ObservationSensitivity({ candidate, scoringResultId, canRun, can
     {result && <>
       <SensitivityChart result={result} />
       <button type="button" className="secondary" onClick={() =>
-        onOpenResource("explanation", result.id)}>설명 결과 판본 보기 →</button>
+        onOpenResource("explanation", result.id)}>설명 결과 보기 →</button>
     </>}
     </section>;
 }
