@@ -727,16 +727,14 @@ try {
   assert.match(playgroundHtml, /이상 점수 계산 →/);
   assert.match(playgroundHtml, /항목 찾기/);
   assert.match(playgroundHtml, /표시 항목/);
-  const { isActivityModelCompatible } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
-  assert.equal(isActivityModelCompatible(
-    { algorithm: "isolation_forest", features: ["a", "b"] },
-    { algorithm: "isolation_forest", required_features: ["a", "b"] }), true);
-  assert.equal(isActivityModelCompatible(
-    { algorithm: "isolation_forest", features: ["b", "a"] },
-    { algorithm: "isolation_forest", required_features: ["a", "b"] }), false);
-  assert.equal(isActivityModelCompatible(
-    { algorithm: "other", features: ["a", "b"] },
-    { algorithm: "isolation_forest", required_features: ["a", "b"] }), false);
+  // 주제 적합성은 입력 Feature 이름과 출력 계약으로 판정한다. 알고리즘·Pipeline은 보지 않는다.
+  const { isTopicCompatible } = await vite.ssrLoadModule("/src/ModelLabTaxonomy.ts");
+  const topic = { required_features: ["a", "b"], output_type: "anomaly_score_v1" };
+  assert.equal(isTopicCompatible({ features: ["a", "b"], output_type: "anomaly_score_v1" }, topic), true);
+  assert.equal(isTopicCompatible({ features: ["b", "a"], output_type: "anomaly_score_v1" }, topic), true);
+  assert.equal(isTopicCompatible({ features: ["a", "b"], output_type: "class_probability_v1" }, topic), false);
+  assert.equal(isTopicCompatible({ features: ["a"], output_type: "anomaly_score_v1" }, topic), false);
+  assert.equal(isTopicCompatible({ features: ["a", "c"], output_type: "anomaly_score_v1" }, topic), false);
   const { ModelOfferingPanel } = await vite.ssrLoadModule("/src/ModelOffering.tsx");
   const offeringProps = {
     model: { id: "model-offering", lifecycle_state: "Active", registry_version: "1" },

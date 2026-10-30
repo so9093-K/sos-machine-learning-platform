@@ -13,7 +13,7 @@ import { ServingOperations } from "./ServingOperations";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
-import type { Dataset, Job, Identity, ExplorationRequest, ModelRevision, PipelineDefinition } from "./types";
+import type { AnalysisTopic, Dataset, Job, Identity, ExplorationRequest, ModelRevision } from "./types";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformShell } from "./PlatformShell";
@@ -21,7 +21,7 @@ import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
 import { ActivityPlayground } from "./ActivityPlayground";
 import { AnalysisTaskPage, LearningTypePage, learningTypeGuides, playgroundTopicFor, taskGuides,
-  usePipelineCatalog, type TaxonomyLinks } from "./ModelLabGuide";
+  useTopicCatalog, type TaxonomyLinks } from "./ModelLabGuide";
 import { PipelineWorkspace } from "./PipelineWorkspace";
 import { DataSourceBar } from "./DataSourceBar";
 import { ModelCatalog } from "./ModelCatalog";
@@ -86,14 +86,14 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     onOpenTask: id => navigateWithContext("task", { taxonomyId: id }),
     onOpenTopic: () => setTab("topic"),
   };
-  const pipelineCatalog = usePipelineCatalog();
+  const topicCatalog = useTopicCatalog();
   // 체험 주제가 있는 모델은 그 Playground에서, 그 밖의 모델은 공통 모델 적용 화면에서 적용한다.
   // 체험 주제 판단에는 카탈로그가 필요하다. 조회 전이면 기다리고, 실패하면 다른 화면으로 보내지 않는다.
   async function applyModel(model: ModelRevision) {
-    let definitions = pipelineCatalog.items;
-    if (!definitions) {
+    let topics = topicCatalog.items;
+    if (!topics) {
       try {
-        definitions = await request<PipelineDefinition[]>("/api/pipelines");
+        topics = await request<AnalysisTopic[]>("/api/topics");
       } catch (cause) {
         const notice = describeError(cause);
         setErrorNotice({ ...notice, message: "모델을 적용할 화면을 확인하지 못했습니다. 다시 시도하세요.",
@@ -101,7 +101,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         return;
       }
     }
-    if (playgroundTopicFor(model, definitions) === "activity_anomaly") {
+    if (playgroundTopicFor(model, topics) === "activity_anomaly") {
       navigateWithContext("topic", { modelId: model.id, datasetId: context.datasetId });
     } else startScoring(model.id);
   }
@@ -510,7 +510,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onScoringSelected={scoringId => selectContext({ ...context, scoringId })}
           onNavigate={setTab} canRun={canRun} canCancel={canCancel}
           onOpenResource={openResource} datasets={datasets} />}
-      {actor.capabilities.includes("model.manage") && tab === "serving" && <ServingOperations onOpenResource={openResource} />}
+      {actor.capabilities.includes("model.manage") && tab === "serving" && <ServingOperations onOpenResource={openResource}
+        canOpenOperatorTools={canInspectStorage || canViewAudit} />}
       {canInspectStorage && tab === "storage" && <StoragePanel />}
       {canViewAudit && tab === "audit" && <AuditPanel />}
       {(tab === "jobs" || tab === "ml-jobs") && <ActivityWorkspace

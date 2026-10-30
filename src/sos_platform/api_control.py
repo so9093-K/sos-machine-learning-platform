@@ -19,6 +19,7 @@ from .schemas import (
     ReadyOut,
 )
 from .security import ACTIONS, Actor, IdentitySettings, current_actor, require
+from .serving_client import ServingClient
 from .store import Store
 
 IDENTITY_DEP = Depends(current_actor)
@@ -29,6 +30,7 @@ INSTANCE_CONFIG_DEP = Depends(require("instance.configure"))
 def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
     """제어 API의 기존 URL·권한·응답 모델을 변경하지 않고 별도 Router로 등록한다."""
     router = APIRouter()
+    serving = ServingClient.from_env()
 
     @router.get(
         "/api/health",
@@ -44,13 +46,15 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
     @router.get(
         "/api/ready",
         tags=["System"],
-        summary="필수 서비스 준비 상태 확인",
-        description="데이터베이스·객체 저장소·Worker를 확인하며 하나라도 준비되지 않으면 503을 반환합니다.",
+        summary="준비 상태 확인",
+        description="API에 필요한 데이터베이스·객체 저장소가 준비되지 않으면 503을 반환합니다. "
+        "Job 실행(Worker)과 온라인 서빙 Runtime은 API와 따로 실행되는 기능이므로 features에 상태를 "
+        "보고하고, 하나라도 멈추면 status가 degraded(200)입니다.",
         response_model=ReadyOut,
-        responses={503: {"model": ReadyOut, "description": "필수 서비스가 준비되지 않음"}},
+        responses={503: {"model": ReadyOut, "description": "API에 필요한 저장소가 준비되지 않음"}},
     )
     def ready():
-        """실제 필수 저장소와 실행기가 준비됐을 때만 200을 반환한다."""
+        """API 전체 장애와 일부 기능 장애를 구별한다. Worker가 멈춰도 온라인 추론은 계속 될 수 있다."""
         checks = {}
         try:
             store.initialize()
@@ -62,15 +66,17 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
             checks["storage"] = "ready"
         except Exception:
             checks["storage"] = "unavailable"
+        features = {}
         try:
-            checks["worker"] = "ready" if store.worker_ready() else "unavailable"
+            features["job_execution"] = "ready" if store.worker_ready() else "unavailable"
         except Exception:
-            checks["worker"] = "unavailable"
-        result = {
-            "status": "ready" if all(v == "ready" for v in checks.values()) else "unavailable",
-            "services": checks,
-        }
-        if result["status"] != "ready":
+            features["job_execution"] = "unavailable"
+        features["online_serving"] = ("not_configured" if serving is None
+                                      else "ready" if serving.reachable() else "unavailable")
+        status = ("unavailable" if any(v != "ready" for v in checks.values())
+                  else "degraded" if "unavailable" in features.values() else "ready")
+        result = {"status": status, "services": checks, "features": features}
+        if status == "unavailable":
             return JSONResponse(status_code=503, content=result)
         return result
 

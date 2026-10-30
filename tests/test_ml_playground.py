@@ -11,7 +11,8 @@ from sos_platform.ml_playground import run_playground_scoring
 
 def _model(*, legacy=False):
     return {
-        "id": "model-one", "owner_actor": "actor-1", "features": ["a", "b"],
+        "id": "model-one", "owner_actor": "actor-1", "algorithm": "isolation_forest",
+        "features": ["a", "b"],
         "runtime": {
             "feature_dtypes": ["Float64", "Int64"],
             "artifact_schema": None if legacy else "if_model_with_preprocessing_v1",

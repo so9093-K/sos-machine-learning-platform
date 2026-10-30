@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { formatRecordedAt } from "./display-format";
+import { isLocalOperatorHost, rayServeApplicationUrl } from "./operator-tools";
 import type { MLResourceKind } from "./PlatformNavigation";
-import type { ServingEndpoint } from "./types";
+import type { ServingApplication, ServingEndpoint } from "./types";
 
 type Action = "rollback" | "cancel" | "stop" | "resume" | "delete";
 // 전환·복구 중에는 컨트롤러의 판정을 짧게 따라가고, 장애·실패 중에는 복구를 확인할 만큼만 다시 조회한다.
@@ -12,14 +13,17 @@ const RECOVERY_POLL_MS = 10000;
 const runtimeLabels: Record<string, string> = {
   RUNNING: "실행 중", DEPLOYING: "준비 중", NOT_DEPLOYED: "배포 대기", DEPLOY_FAILED: "배포 실패",
   UNHEALTHY: "비정상", DELETING: "정리 중",
+  // SOS 판정: 이름은 같지만 의도와 다른 Config로 실행 중이라 컨트롤러가 되돌리는 중이다.
+  OUT_OF_SYNC: "설정 복구 중",
 };
+const FAILED = new Set(["DEPLOY_FAILED", "UNHEALTHY"]);
 
 /** 실제 실행 상태를 운영자가 바로 판단할 수 있는 문장으로 바꾼다. */
 function endpointStatus(endpoint: ServingEndpoint): { label: string; tone: "ready" | "pending" | "failed" | "idle" } {
   const { runtime } = endpoint;
   if (endpoint.desired_state === "stopped") return { label: "중단됨", tone: "idle" };
   if (!runtime.reachable) return { label: "서빙 Runtime 연결 안 됨", tone: "failed" };
-  const pendingFailed = runtime.pending?.status === "DEPLOY_FAILED" || runtime.pending?.status === "UNHEALTHY";
+  const pendingFailed = FAILED.has(runtime.pending?.status ?? "");
   if (!endpoint.active_model_revision_id) return pendingFailed
     ? { label: "첫 배포 실패", tone: "failed" } : { label: "첫 배포 준비 중", tone: "pending" };
   if (!endpoint.ready) return { label: "활성 판본 복구 중", tone: "pending" };
@@ -33,9 +37,13 @@ function endpointStatus(endpoint: ServingEndpoint): { label: string; tone: "read
  *  배포와 새 판본 전환은 모델 공급 과정(scripts/supply_model.py --endpoint)이 맡는다.
  *  이 화면은 지금 어떤 판본이 요청을 처리하는지 확인하고 되돌리기·중단 같은 안전 조작을 제공한다.
  */
-export function ServingOperations({ onOpenResource }: {
+export function ServingOperations({ onOpenResource, canOpenOperatorTools }: {
   onOpenResource: (kind: MLResourceKind, id: string) => void;
+  /** 로컬 운영 도구를 볼 수 있는 계정. 같은 PC에서 접속한 경우에만 Ray Dashboard로 잇는다. */
+  canOpenOperatorTools: boolean;
 }) {
+  const [localTools, setLocalTools] = useState(false);
+  useEffect(() => { setLocalTools(canOpenOperatorTools && isLocalOperatorHost()); }, [canOpenOperatorTools]);
   const [endpoints, setEndpoints] = useState<ServingEndpoint[] | null>(null);
   // 목록 조회 실패와 조작 실패는 따로 둔다. 조작 뒤 재조회가 성공해도 조작 실패 안내는 남아야 한다.
   const [loadError, setLoadError] = useState("");
@@ -89,13 +97,16 @@ export function ServingOperations({ onOpenResource }: {
     }
   }
 
-  const revision = (label: string, id: string | null | undefined, detail?: { status: string; failure_reason?: string | null } | null) =>
+  const revision = (label: string, id: string | null | undefined, detail?: ServingApplication | null) =>
     id ? <div className="serving-revision">
       <dt>{label}</dt>
       <dd>
         <button type="button" className="ghost" onClick={() => onOpenResource("model", id)}>{id.slice(0, 8)}</button>
         {detail && <span className="muted"> · {runtimeLabels[detail.status] ?? detail.status}</span>}
-        {detail?.failure_reason && <span className="serving-failure" role="note">{detail.failure_reason}</span>}
+        {detail && localTools && <a className="serving-runtime-link" href={rayServeApplicationUrl(detail.runtime_application)}
+          target="_blank" rel="noopener noreferrer">복제본·로그 ↗</a>}
+        {detail?.status_reason && <span className={FAILED.has(detail.status)
+          ? "serving-reason serving-failure" : "serving-reason serving-waiting"} role="note">{detail.status_reason}</span>}
       </dd>
     </div> : null;
 

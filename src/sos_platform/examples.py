@@ -53,14 +53,14 @@ def _data_quality() -> bytes:
 
 
 def _activity_anomaly_if() -> bytes:
-    """첫 등록형 IF Pipeline의 실제 입력 계약을 충족하는 재현 가능한 합성 데이터.
+    """활동 이상 탐지 주제의 입력 계약(등록형 IF Pipeline의 입력)을 충족하는 재현 가능한 합성 데이터.
 
     원본 보안 이벤트나 학습 품질을 보증하는 자료가 아니다. 서로 다른 시간대와
     인위적인 값 변화를 포함하여 학습·보정·Test의 실행 경로를 경험하게 한다.
     """
     from datetime import datetime, timedelta, timezone
 
-    from .pipeline_reference import FEATURES
+    from .analysis_topics import ACTIVITY_FEATURES
 
     rows: list[list[object]] = []
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -68,7 +68,7 @@ def _activity_anomaly_if() -> bytes:
         observed = start + timedelta(minutes=tick)
         outlier = tick in (204, 216, 228)
         values: list[object] = []
-        for index, feature in enumerate(FEATURES):
+        for index, feature in enumerate(ACTIVITY_FEATURES):
             if feature.startswith("ratio_"):
                 value = round(min(0.99, 0.07 + ((tick * 3 + index * 7) % 42) / 100
                                   + (0.42 if outlier else 0.0)), 5)
@@ -85,7 +85,7 @@ def _activity_anomaly_if() -> bytes:
         digest = hashlib.sha256(f"sos-if-example-row:{tick}".encode()).digest()
         identity = str(UUID(bytes=digest[:16], version=4))
         rows.append([observed.isoformat(), identity, *values])
-    return _csv(["ts", "sos_observation_id", *FEATURES], rows)
+    return _csv(["ts", "sos_observation_id", *ACTIVITY_FEATURES], rows)
 
 
 # 샘플은 서버 시작 시 DB에 등록하지 않는다. 사용자가 선택할 때 같은 Dataset API를 사용한다.

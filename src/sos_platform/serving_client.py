@@ -1,10 +1,12 @@
-"""SOS 내부에서 Ray Serve를 다루는 HTTP 클라이언트. Ray를 import하지 않는다.
+"""SOS 내부에서 Ray Serve를 다루는 Config 구성과 HTTP 클라이언트. Ray를 import하지 않는다.
 
 Dashboard의 Serve REST API로 선언형 Serve Config를 적용·조회하고, 내부 Serve 경로로 추론을 중계한다.
-두 포트는 Compose 내부망에만 열리며 외부 소비자는 SOS API만 사용한다.
+외부 소비자는 SOS API만 사용한다. 의도한 Config는 컨트롤러(적용)와 API(준비 판정)가 같은 함수로 만든다.
 """
 
+import hashlib
 import json
+import math
 import os
 import urllib.error
 import urllib.request
@@ -25,6 +27,14 @@ class ServingRequestRejected(RuntimeError):
         self.status = status
 
 
+IMPORT_PATH = "sos_platform.serving_app:build"
+# 판본마다 복제본 하나. 새 판본은 기존 판본 옆에서 준비되므로 전환 중에는 복제본이 하나 더 필요하다.
+REPLICA_CPUS = 0.25
+FAILED_STATUSES = frozenset({"DEPLOY_FAILED", "UNHEALTHY"})
+# Ray가 실제로 적용한 Config에서 의도와 비교하는 항목. Ray는 제출한 값을 그대로 돌려준다.
+_COMPARED = ("import_path", "route_prefix", "args", "deployments")
+
+
 def application_name(endpoint_id: str, revision_id: str) -> str:
     """Endpoint·판본 쌍마다 별도 애플리케이션을 둔다. 새 판본은 기존 판본과 함께 준비된다."""
     return f"{endpoint_id}--{revision_id}"
@@ -32,6 +42,43 @@ def application_name(endpoint_id: str, revision_id: str) -> str:
 
 def route_prefix(endpoint_id: str, revision_id: str) -> str:
     return f"/sos/{endpoint_id}/{revision_id}"
+
+
+def application_config(endpoint_id: str, revision: dict) -> dict:
+    """Endpoint·판본 하나의 Serve 애플리케이션. 같은 판본 기록은 같은 설정을 만든다."""
+    deployments = [{"name": "model", "num_replicas": 1,
+                    "ray_actor_options": {"num_cpus": REPLICA_CPUS}}]
+    # 판본 기록·배포 설정이 바뀌면 지문도 바뀐다. 복제본은 시작할 때 받은 지문을 그대로 알린다.
+    digest = hashlib.sha256(json.dumps(
+        {"import_path": IMPORT_PATH, "revision": revision, "deployments": deployments},
+        sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return {
+        "name": application_name(endpoint_id, revision["id"]),
+        "route_prefix": route_prefix(endpoint_id, revision["id"]),
+        "import_path": IMPORT_PATH,
+        "args": {"revision": revision, "digest": digest},
+        "deployments": deployments,
+    }
+
+
+def desired_config(applications: list[dict]) -> dict:
+    """서빙 의도 전체의 선언형 Serve Config. Endpoint·판본 쌍마다 애플리케이션 하나다."""
+    return {
+        "http_options": {"host": "0.0.0.0", "port": 8000},
+        "applications": [application_config(item["endpoint_id"], item["revision"])
+                         for item in applications],
+    }
+
+
+def config_matches(deployed: dict | None, desired: dict) -> bool:
+    """Ray에 적용된 애플리케이션 Config가 의도와 같다. 직접 바뀐 Config는 같지 않다."""
+    deployed = deployed or {}
+    return all(deployed.get(key) == desired[key] for key in _COMPARED)
+
+
+def replica_capacity(cpus: float) -> int:
+    """주어진 CPU로 동시에 실행할 수 있는 복제본 수."""
+    return math.floor(cpus / REPLICA_CPUS + 1e-9)
 
 
 @dataclass(frozen=True)
@@ -66,6 +113,23 @@ class ServingClient:
             return json.loads(raw) if raw else {}
         except ValueError as exc:
             raise ServingUnavailable("invalid_json") from exc
+
+    def reachable(self) -> bool:
+        """서빙 Runtime이 응답하는지만 확인한다. 준비 상태 확인처럼 자주 부르는 곳에 쓴다."""
+        try:
+            self._request("GET", f"{self.dashboard_url}/api/version", None, min(self.timeout, 2.0))
+        except (ServingUnavailable, ServingRequestRejected):
+            return False
+        return True
+
+    def cpu_capacity(self) -> float:
+        """살아 있는 노드의 전체 CPU. Ray State API(`ray list nodes`와 같은 정보)를 읽는다."""
+        state = self._request("GET", f"{self.dashboard_url}/api/v0/nodes", None, self.timeout)
+        nodes = ((state.get("data") or {}).get("result") or {}).get("result")
+        if not isinstance(nodes, list):
+            raise ServingUnavailable("unexpected_nodes")
+        return sum(float((node.get("resources_total") or {}).get("CPU", 0))
+                   for node in nodes if isinstance(node, dict) and node.get("state") == "ALIVE")
 
     def applications(self) -> dict[str, dict]:
         """실제 실행 상태. 애플리케이션 이름별 status·message·배포 설정을 돌려준다."""

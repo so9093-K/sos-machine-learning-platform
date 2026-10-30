@@ -13,7 +13,8 @@ import sklearn
 from ray import serve
 from starlette.requests import Request
 
-from .ml_inference import OUTPUT_TYPE, SCORE_DIRECTION, SCORE_SCALE, score_observations
+from .ml_inference import score_observations
+from .ml_outputs import output_contract
 from .ml_runtime import load_trusted_isolation_forest
 
 MAX_ROWS = 100
@@ -29,8 +30,10 @@ class ModelServer:
     def __init__(self, revision: dict, digest: str):
         self._revision = revision
         self._digest = digest
-        scratch = Path(tempfile.mkdtemp(prefix="sos-serving-"))
-        self._adapter = load_trusted_isolation_forest(revision, scratch)
+        self._contract = output_contract(revision["algorithm"])
+        # 내려받은 아티팩트는 복원 뒤 필요 없다. 복제본이 재시작·교체돼도 임시 파일이 쌓이지 않는다.
+        with tempfile.TemporaryDirectory(prefix="sos-serving-") as scratch:
+            self._adapter = load_trusted_isolation_forest(revision, Path(scratch))
         self._runtime = {"python": platform.python_version(), "numpy": np.__version__,
                          "scikit_learn": sklearn.__version__}
 
@@ -52,9 +55,9 @@ class ModelServer:
         scores = score_observations(self._adapter, rows)
         return {
             "model_revision_id": self._revision["id"],
-            "output_type": OUTPUT_TYPE,
-            "score_direction": SCORE_DIRECTION,
-            "score_scale": SCORE_SCALE,
+            "output_type": self._contract.output_type,
+            "score_direction": self._contract.score_direction,
+            "score_scale": self._contract.score_scale,
             "outputs": [{"anomaly_score": score} for score in scores],
             "runtime": self._runtime,
         }

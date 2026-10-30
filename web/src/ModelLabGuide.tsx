@@ -1,12 +1,12 @@
 /** 학습 유형 → 분석 과제 → 주제로 이어지는 ML 기능 소개 화면.
  *
- *  어떤 분류·주제가 실제로 제공되는지는 등록 Pipeline 카탈로그가 정본이고,
- *  사용자에게 보여 줄 가치·활용 설명은 이 파일이 소유한다.
+ *  어떤 분류·주제가 실제로 제공되는지와 주제의 입력·출력 계약은 분석 주제 카탈로그(/api/topics)가
+ *  정본이고, 사용자에게 보여 줄 가치·활용 설명은 이 파일이 소유한다. 주제는 등록 Pipeline에 묶이지 않는다.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { formatError, request } from "./api";
-import { isActivityModelCompatible, modelLabTree, type ModelLabTree } from "./ModelLabTaxonomy";
-import type { ModelRevision, PipelineDefinition } from "./types";
+import { isTopicCompatible, modelLabTree, type ModelLabTree } from "./ModelLabTaxonomy";
+import type { AnalysisTopic, ModelRevision } from "./types";
 
 type Point = readonly [number, number];
 type GuideItem = { title: string; text: string };
@@ -59,33 +59,31 @@ export const topicGuides: Record<string, Guide & { route: "topic" }> = {
   },
 };
 
-/** 화면에서 직접 체험할 수 있는 주제만 연결한다. 카탈로그에만 있는 주제는 안내하지 않는다. */
-export const PLAYGROUND_TOPICS: Record<string, string> = { activity_anomaly: "activity-anomaly-if" };
-
-/** 모델이 입력 계약과 알고리즘이 맞는 체험 주제를 가지면 그 주제를 돌려준다. */
-export function playgroundTopicFor(model: Pick<ModelRevision, "algorithm" | "features">,
-  definitions: readonly PipelineDefinition[] | null): string | null {
-  for (const [topic, pipelineId] of Object.entries(PLAYGROUND_TOPICS)) {
-    const definition = definitions?.find(item => item.id === pipelineId);
-    if (definition && isActivityModelCompatible(model, definition)) return topic;
-  }
-  return null;
+/** 화면에서 직접 체험할 수 있는 주제. 카탈로그에만 있고 Playground가 없는 주제는 안내하지 않는다. */
+function hasPlayground(topic: Pick<AnalysisTopic, "id">): boolean {
+  return topicGuides[topic.id]?.route === "topic";
 }
 
-/** 등록 Pipeline 카탈로그. 제공 분류와 주제의 입력 계약을 함께 확인한다. */
-export function usePipelineCatalog() {
-  const [items, setItems] = useState<PipelineDefinition[] | null>(null);
+/** 모델이 입력·출력 계약이 맞는 체험 주제를 가지면 그 주제를 돌려준다. 알고리즘은 묻지 않는다. */
+export function playgroundTopicFor(model: Pick<ModelRevision, "features" | "output_type">,
+  topics: readonly AnalysisTopic[] | null): string | null {
+  return topics?.find(topic => hasPlayground(topic) && isTopicCompatible(model, topic))?.id ?? null;
+}
+
+/** 분석 주제 카탈로그. 제공 분류와 주제의 입력·출력 계약을 함께 확인한다. */
+export function useTopicCatalog() {
+  const [items, setItems] = useState<AnalysisTopic[] | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
     setError("");
-    void request<PipelineDefinition[]>("/api/pipelines")
+    void request<AnalysisTopic[]>("/api/topics")
       .then(value => { if (active) setItems(value); })
       .catch(cause => { if (active) setError(formatError(cause)); });
     return () => { active = false; };
   }, [retry]);
-  const playable = (items ?? []).filter(item => PLAYGROUND_TOPICS[item.topic] === item.id);
+  const playable = (items ?? []).filter(hasPlayground).map(topic => ({ ...topic, topic: topic.id }));
   return { items, tree: modelLabTree(playable), error, reload: () => setRetry(value => value + 1) };
 }
 
@@ -131,7 +129,7 @@ function CatalogState({ error, loading, onRetry }: { error: string; loading: boo
 
 /** 학습 유형 소개. 개요·도식과 SOS에서 체험할 수 있는 분석 과제를 보여준다. */
 export function LearningTypePage({ id, links }: { id: string; links: TaxonomyLinks }) {
-  const catalog = usePipelineCatalog();
+  const catalog = useTopicCatalog();
   const guide = learningTypeGuides[id];
   const tasks = catalog.tree.find(item => item.id === id)?.tasks ?? [];
   if (!guide) return <section className="panel"><h2>알 수 없는 학습 유형</h2>
@@ -159,7 +157,7 @@ export function LearningTypePage({ id, links }: { id: string; links: TaxonomyLin
 
 /** 분석 과제 소개. 원리 도식·활용·결과 읽는 법과 체험할 주제로 연결한다. */
 export function AnalysisTaskPage({ id, links }: { id: string; links: TaxonomyLinks }) {
-  const catalog = usePipelineCatalog();
+  const catalog = useTopicCatalog();
   const guide = taskGuides[id];
   const learning = catalog.tree.find(item => item.tasks.some(task => task.id === id));
   const topics = learning?.tasks.find(task => task.id === id)?.topics ?? [];

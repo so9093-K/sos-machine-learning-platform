@@ -79,19 +79,26 @@ def test_status_responses_and_token_permissions(tmp_path, monkeypatch):
         "ObjectStore",
         lambda: SimpleNamespace(ready=lambda: None),
     )
-    unavailable = client.get("/api/ready")
-    assert unavailable.status_code == 503
-    assert unavailable.json() == {
-        "status": "unavailable",
-        "services": {"database": "ready", "storage": "ready", "worker": "unavailable"},
+    # Worker 장애는 API 전체 장애가 아니라 Job 실행 기능의 장애다.
+    degraded = client.get("/api/ready")
+    assert degraded.status_code == 200
+    assert degraded.json() == {
+        "status": "degraded",
+        "services": {"database": "ready", "storage": "ready"},
+        "features": {"job_execution": "unavailable", "online_serving": "not_configured"},
     }
     monkeypatch.setattr(Store, "worker_ready", lambda self: True)
     ready = client.get("/api/ready")
     assert ready.status_code == 200
     assert ready.json() == {
         "status": "ready",
-        "services": {"database": "ready", "storage": "ready", "worker": "ready"},
+        "services": {"database": "ready", "storage": "ready"},
+        "features": {"job_execution": "ready", "online_serving": "not_configured"},
     }
+    monkeypatch.setattr(api_control, "ObjectStore", lambda: SimpleNamespace(ready=lambda: 1 / 0))
+    unavailable = client.get("/api/ready")
+    assert unavailable.status_code == 503
+    assert unavailable.json()["status"] == "unavailable"
 
     token = "valid-test-token-with-enough-entropy-value"
     fingerprint = hashlib.sha256(token.encode()).hexdigest()

@@ -22,7 +22,7 @@ logs:
 doctor:
 	@$(COMPOSE) config --quiet
 	@$(COMPOSE) ps --all
-	@$(COMPOSE) exec -T api python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:9602/api/ready', timeout=5).close()"
+	@$(COMPOSE) exec -T api python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:9602/api/ready', timeout=5).read().decode())"
 	@$(COMPOSE) exec -T feast-ui python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8888/health', timeout=5).close()"
 	@$(COMPOSE) exec -T serving python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8265/api/serve/applications/', timeout=5).close()"
 

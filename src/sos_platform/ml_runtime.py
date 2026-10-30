@@ -1,7 +1,7 @@
-"""불변 Model Revision의 신뢰된 Worker 복원 계약.
+"""불변 Model Revision의 신뢰된 복원 계약.
 
-joblib은 코드 실행이 가능한 직렬화 형식이다. API·사용자 제공 파일에서는
-호출하지 않고, SOS가 게시한 모델만 전용 Worker 프로세스에서 복원한다.
+joblib은 코드 실행이 가능한 직렬화 형식이다. API·사용자 제공 파일에서는 호출하지 않고,
+SOS가 게시한 모델만 신뢰된 SOS 실행 환경(Worker 자식 프로세스·온라인 서빙 복제본)에서 복원한다.
 """
 
 import platform
@@ -20,6 +20,9 @@ from .ml_isolation_forest import TrainedIsolationForest
 from .object_store import ObjectStore
 
 IF_BUNDLE_SCHEMA = "if_model_with_preprocessing_v1"
+# 판본에 기록되는 복원 계약 식별자. 이름과 달리 Worker만이 아니라 신뢰된 SOS 실행 환경 전체를 뜻한다.
+# 기존 판본의 복원 호환을 위해 값을 바꾸지 않는다.
+TRUSTED_LOADING = "trusted_worker_only"
 
 
 def _python_minor(version: object) -> tuple[str, str] | None:
@@ -37,12 +40,12 @@ def assert_model_runtime_compatible(revision: dict) -> None:
 
     Raises:
         ValueError: 지원하지 않는 알고리즘·직렬화 계약 또는 손상된 모델 서명.
-        PlatformError: 모델을 학습한 실행 버전이 현재 Worker와 호환되지 않음.
+        PlatformError: 모델을 학습한 실행 버전이 현재 실행 Runtime과 호환되지 않음.
     """
     runtime = revision["runtime"]
     if revision["algorithm"] != "isolation_forest":
         raise ValueError("Unsupported model algorithm")
-    if runtime.get("model_format") != "joblib" or runtime.get("loading") != "trusted_worker_only":
+    if runtime.get("model_format") != "joblib" or runtime.get("loading") != TRUSTED_LOADING:
         raise ValueError("Unsupported model serialization contract")
     if runtime.get("artifact_schema") not in (None, IF_BUNDLE_SCHEMA):
         raise ValueError("Unknown model artifact schema")
@@ -66,7 +69,7 @@ def load_trusted_isolation_forest(revision: dict, scratch: Path) -> TrainedIsola
 
     Args:
         revision: PostgreSQL의 불변 Model Revision.
-        scratch: 실행 Attempt 소유의 임시 디렉터리.
+        scratch: 호출자가 소유한 임시 디렉터리(Worker Attempt·서빙 복제본).
 
     Returns:
         TrainedIsolationForest: 점수 방향이 표준화된 모델 어댑터.

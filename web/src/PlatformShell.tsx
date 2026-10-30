@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Identity } from "./types";
 import { InstanceBrand } from "./InstanceBrand";
-import { dagsterUrl, feastUrl, isLocalOperatorHost, mlflowUrl } from "./operator-tools";
+import { dagsterUrl, feastUrl, isLocalOperatorHost, mlflowUrl, rayDashboardUrl } from "./operator-tools";
 import { PlatformNavigation, ModelAreaNavigation, isModelsArea,
   type WorkspaceTab, type MLNavigationContext, type ResourceRoute } from "./PlatformNavigation";
 
@@ -91,6 +91,9 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
         </a>
         <a href={feastUrl()} target="_blank" rel="noopener noreferrer">
           Feast · Feature Catalog/Lineage ↗
+        </a>
+        <a href={rayDashboardUrl()} target="_blank" rel="noopener noreferrer">
+          Ray · 온라인 서빙 복제본/로그 ↗
         </a>
         <small>운영자용 별도 관리 UI입니다. 같은 PC에서만 접속할 수 있으며
           SOS 로그인 권한이 이 도구에 적용되는 것은 아닙니다.</small>

@@ -1,12 +1,13 @@
-/** Pipeline Catalog의 독립 분류 차원을 사용자에게 읽을 수 있게 표시한다. */
-import type { ModelRevision, PipelineDefinition } from "./types";
+/** 분석 주제 카탈로그의 독립 분류 차원을 사용자에게 읽을 수 있게 표시한다. */
+import type { AnalysisTopic, ModelRevision } from "./types";
 
-/** 활동 이상 탐지 화면과 제공 후 이동에 같은 등록 분석 계약을 적용한다. */
-export function isActivityModelCompatible(model: Pick<ModelRevision, "algorithm" | "features">,
-  definition: Pick<PipelineDefinition, "algorithm" | "required_features">): boolean {
-  return model.algorithm === definition.algorithm &&
-    model.features.length === definition.required_features.length &&
-    model.features.every((feature, index) => feature === definition.required_features[index]);
+/** 모델이 주제의 입력·출력 계약을 따른다. 알고리즘과 등록 Pipeline은 보지 않는다.
+ *  입력은 Feature 이름으로 대응하므로 순서는 비교하지 않는다. */
+export function isTopicCompatible(model: Pick<ModelRevision, "features" | "output_type">,
+  topic: Pick<AnalysisTopic, "required_features" | "output_type">): boolean {
+  const required = new Set(topic.required_features);
+  return model.output_type === topic.output_type && model.features.length === required.size &&
+    model.features.every(feature => required.has(feature));
 }
 
 const learningTypes: Record<string, string> = { unsupervised: "비지도 학습" };

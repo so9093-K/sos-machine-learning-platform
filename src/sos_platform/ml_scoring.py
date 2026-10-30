@@ -18,6 +18,7 @@ from .datasets import pinned_scan_dataset
 from .ml_anomaly import histogram_edges
 from .ml_input import INTEGER_DTYPES, model_input_issues
 from .ml_observation_identity import validate_observation_identity
+from .ml_outputs import ISOLATION_FOREST_OUTPUT
 from .ml_runtime import load_trusted_isolation_forest
 from .ml_scoring_staging import scoring_stage_prefix
 from .ml_temporal_split import select_temporal_partition, utc_observation_time
@@ -66,7 +67,7 @@ def _scoring_scope(source: pl.LazyFrame, dataset: dict, model: dict, raw_scope: 
 def _score_summary(score_sums: list[float], count: int, low: float, high: float) -> dict:
     """모든 점수를 Python 목록에 보관하지 않고 기본 분포 통계를 계산한다."""
     return {
-        "score_direction": "higher_is_more_anomalous",
+        "score_direction": ISOLATION_FOREST_OUTPUT.score_direction,
         "score_count": count,
         "score_min": float(low),
         "score_max": float(high),
@@ -273,7 +274,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
             pending, low=low, high=high, expected_rows=count,
         )
         score_summary["scope"] = "scoring_dataset"
-        score_summary["score_scale"] = "negative_sklearn_score_samples"
+        score_summary["score_scale"] = ISOLATION_FOREST_OUTPUT.score_scale
         same_input_revision = (
             model.get("dataset_id") == dataset.get("id")
             and model.get("dataset_version") == dataset["version"]
@@ -316,7 +317,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
             "dataset_version": dataset["version"],
             "feature_names": features,
             "row_count": count,
-            "score_direction": "higher_is_more_anomalous",
+            "score_direction": ISOLATION_FOREST_OUTPUT.score_direction,
             "score_summary": score_summary,
             "ranking_metrics": ranked_metrics,
             "label_column": label,

@@ -208,7 +208,7 @@ def serve(client: httpx.Client, args: argparse.Namespace, state: dict, path: Pat
     def serving(item: dict) -> bool:
         pending = (item.get("runtime") or {}).get("pending") or {}
         if pending.get("status") == "DEPLOY_FAILED":
-            fail(f"서빙 배포 실패 · {pending.get('failure_reason') or '서빙 Runtime 로그를 확인하세요.'} "
+            fail(f"서빙 배포 실패 · {pending.get('status_reason') or '서빙 Runtime 로그를 확인하세요.'} "
                  "기존 판본은 계속 요청을 처리합니다.")
         return item["active_model_revision_id"] == model_id and item["ready"]
 

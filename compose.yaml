@@ -106,8 +106,8 @@ services:
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
 
-  # Ray Serve 온라인 추론 Runtime. Dashboard(클러스터 제어)와 Serve 포트는 호스트에 공개하지 않고
-  # Compose 내부망의 SOS API·컨트롤러만 접근한다. DB 자격 증명은 전달하지 않는다.
+  # Ray Serve 온라인 추론 Runtime. 추론(Serve 8000)의 공식 경로는 SOS API이므로 호스트에 공개하지 않는다.
+  # Dashboard는 복제본 상태·로그를 보는 로컬 운영 도구로 localhost에만 공개한다. DB 자격 증명은 전달하지 않는다.
   serving:
     logging: *sos-logging
     profiles: [app]
@@ -134,6 +134,8 @@ services:
       - --dashboard-port=8265
       - --num-cpus=${SOS_SERVING_CPUS:-2}
       - --object-store-memory=268435456
+    ports:
+      - "127.0.0.1:${SOS_RAY_DASHBOARD_PORT:-9609}:8265"
     shm_size: 1gb
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8265/api/version', timeout=3).close()"]
@@ -231,6 +233,7 @@ services:
       SOS_DAGSTER_PORT: ${SOS_DAGSTER_PORT:-9607}
       SOS_MLFLOW_PORT: ${SOS_MLFLOW_PORT:-9606}
       SOS_FEAST_UI_PORT: ${SOS_FEAST_UI_PORT:-9608}
+      SOS_RAY_DASHBOARD_PORT: ${SOS_RAY_DASHBOARD_PORT:-9609}
     ports:
       - "127.0.0.1:${SOS_WEB_PORT:-9601}:9601"
     depends_on:
