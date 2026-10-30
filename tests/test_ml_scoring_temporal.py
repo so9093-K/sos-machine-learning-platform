@@ -27,6 +27,7 @@ def scoring_env(monkeypatch, tmp_path):
     model = {
         "id": "model-v1",
         "owner_actor": "researcher",
+        "algorithm": "isolation_forest",
         "dataset_id": "data-one",
         "dataset_version": "pinned-v1",
         "features": ["count"],

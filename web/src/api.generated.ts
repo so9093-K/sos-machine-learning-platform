@@ -3455,7 +3455,7 @@ export interface components {
             location: string;
             /**
              * Output Type
-             * @description 알고리즘별 출력 계약의 종류. 분석 주제·소비자가 출력의 의미를 구별한다.
+             * @description 판본이 학습 때 기록한 출력 계약의 종류. 분석 주제·소비자가 출력의 의미를 구별한다.
              */
             readonly output_type: string | null;
             /** Params */

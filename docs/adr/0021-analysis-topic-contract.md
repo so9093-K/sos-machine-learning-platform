@@ -22,9 +22,12 @@
    없이도 제공될 수 있다.
 3. **적합성은 계약으로 판정한다:** 모델이 주제에 맞는지는 입력 Feature 이름 집합과 출력 계약이 같은지로
    판정하며 알고리즘과 Pipeline은 보지 않는다. 입력은 이름으로 대응하므로 순서는 비교하지 않는다.
-4. **출력 계약은 알고리즘별로 한곳에 둔다:** 알고리즘이 내는 출력 계약(종류·점수 방향·척도)은
-   `ml_outputs.py`가 정하고, Scoring·Playground·온라인 추론·설명이 이를 쓴다. 모델 응답은 알고리즘에서
-   정해지는 `output_type`을 함께 보낸다. 새 알고리즘은 자기 출력 계약을 여기에 더한다.
+4. **출력 계약은 판본에 기록한다:** 알고리즘이 새 판본에 남길 출력 계약(종류·점수 방향·척도)은
+   `ml_outputs.py`가 정하고, 학습은 이를 판본의 Runtime 기록(`runtime.output`)에 남긴다. 모델 응답의
+   `output_type`과 Scoring·Playground·온라인 추론·설명은 판본의 기록을 따르므로, 나중에 같은 알고리즘의
+   출력을 바꿔도 이미 만든 판본의 의미는 바뀌지 않는다. 기록을 도입하기 전에 학습된 판본은 당시
+   알고리즘이 실제로 낸 계약(Isolation Forest는 `anomaly_score_v1`)을 고정값으로 따른다. 새 알고리즘은
+   자기 출력 계약을 `ml_outputs.py`에 더한다.
 
 ## 근거
 
@@ -37,5 +40,5 @@
 ## 영향
 
 - `GET /api/topics`가 추가되고, Pipeline 정의 응답에서 `learning_type`·`task_type`이 빠진다.
-- 모델 판본 응답에 `output_type`이 추가된다(`isolation_forest` → `anomaly_score_v1`).
+- 모델 판본 응답에 판본이 기록한 `output_type`이 추가된다. 새로 학습한 판본의 Runtime 기록에 `output`이 생긴다.
 - 웹의 분류 탐색·주제 Playground·모델 적용 경로는 주제 카탈로그를 쓴다. 등록 Pipeline 화면은 그대로다.

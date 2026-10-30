@@ -14,7 +14,7 @@ from pydantic import (
     model_validator,
 )
 
-from .ml_outputs import output_contract
+from .ml_outputs import revision_output_contract
 
 
 class Step(BaseModel):
@@ -553,8 +553,8 @@ class ModelRevisionOut(BaseModel):
     @computed_field
     @property
     def output_type(self) -> str | None:
-        """알고리즘별 출력 계약의 종류. 분석 주제·소비자가 출력의 의미를 구별한다."""
-        contract = output_contract(self.algorithm)
+        """판본이 학습 때 기록한 출력 계약의 종류. 분석 주제·소비자가 출력의 의미를 구별한다."""
+        contract = revision_output_contract({"algorithm": self.algorithm, "runtime": self.runtime})
         return contract.output_type if contract else None
 
 

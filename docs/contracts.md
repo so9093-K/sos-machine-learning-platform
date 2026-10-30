@@ -63,7 +63,7 @@ Dataset 없는 단일 관측치 Playground Job은 입력 Feature와 실제 모�
 
 - **주제 계약:** 분석 주제는 식별자, 학습 유형·분석 과제 분류, 입력 Feature, 출력 계약(`output_type`)을 가진다(`GET /api/topics`). 등록 Pipeline은 주제에 모델을 공급하는 선택적 Workflow이며 정의의 `topic`으로 주제를 가리킨다.
 - **적합성:** 모델은 입력 Feature 이름 집합과 `output_type`이 주제와 같으면 그 주제에 맞는다. 알고리즘과 공급 Pipeline은 판정에 쓰지 않으며 입력 순서도 비교하지 않는다. 같은 `output_type`이라도 점수 척도는 알고리즘마다 다를 수 있으므로 점수는 같은 판본끼리 비교한다.
-- **출력 계약:** 모델 판본의 `output_type`은 알고리즘에서 정해진다. 현재 `isolation_forest`는 관측마다 이상 점수 하나(`anomaly_score_v1`, 높을수록 이상)를 낸다.
+- **출력 계약:** 판본은 학습할 때 출력 계약(`output_type`·점수 방향·척도)을 Runtime 기록에 남기고, 모델 응답과 Scoring·Playground·온라인 추론·설명은 그 기록을 따른다. 같은 알고리즘의 출력이 나중에 바뀌어도 기존 판본의 의미는 바뀌지 않는다. 기록 이전에 학습된 판본은 당시 알고리즘의 출력을 따른다. 현재 `isolation_forest`는 관측마다 이상 점수 하나(`anomaly_score_v1`, 높을수록 이상)를 낸다.
 
 ## ML 기능별 책임과 공통화 경계
 
