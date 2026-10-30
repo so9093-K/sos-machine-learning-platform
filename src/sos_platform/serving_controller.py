@@ -46,19 +46,6 @@ def drifted(current: dict[str, dict], config: dict) -> bool:
                for app in config["applications"])
 
 
-def serves_as_desired(client: ServingClient, endpoint_id: str, revision_id: str,
-                      desired: dict | None) -> bool:
-    """그 경로의 실제 복제본이 의도한 설정 지문으로 응답해야 준비된 것으로 본다."""
-    if desired is None:
-        return False
-    try:
-        answer = client.probe(endpoint_id, revision_id)
-    except (ServingUnavailable, ServingRequestRejected):
-        return False
-    return answer.get("model_revision_id") == revision_id \
-        and answer.get("digest") == desired["args"]["digest"]
-
-
 def reconcile_once(store: Store, client: ServingClient, state: ReconcileState) -> ReconcileOutcome:
     """의도와 실제 상태가 다르면 의도를 적용하고, 준비된 전환 대상을 승격한다.
 
@@ -101,7 +88,7 @@ def reconcile_once(store: Store, client: ServingClient, state: ReconcileState) -
             continue
         name = application_name(endpoint_id, pending)
         if current.get(name, {}).get("status") == "RUNNING" \
-                and serves_as_desired(client, endpoint_id, pending, desired.get(name)) \
+                and client.is_ready(endpoint_id, pending, desired.get(name)) \
                 and store.promote_serving_revision(endpoint_id, pending):
             emit("serving.revision.activated", service="sos-serving-controller",
                  endpoint_id=endpoint_id, model_revision_id=pending)

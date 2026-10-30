@@ -569,30 +569,43 @@ try {
     { a: 1000, b: 0.25 }, ["a", "b"]), false);
   assert.equal(playgroundInputMatchesResult({ a: "1000", b: "0.25" },
     { a: 1000, b: 0.25, c: 1 }, ["a", "b"]), false);
-  const { ActivityProfile, trainingFeatureRanges, profileFeatureNames } = await vite.ssrLoadModule("/src/ActivityProfile.tsx");
+  const { FeatureProfile, trainingFeatureRanges, profileFeatureNames } = await vite.ssrLoadModule("/src/FeatureProfile.tsx");
   const profileModel = { id: "profile", features: ["cnt_file_create", "ratio_outbound_traffic"],
     runtime: { feature_reference_medians: [0, 0.5], feature_training_profile: {
       method: "linear_quantiles_v1", input_space: "model_input_after_preprocessing", row_count: 100,
       features: { cnt_file_create: { min: 0, p10: 0, p50: 0, p90: 0, max: 2 },
         ratio_outbound_traffic: { min: 0, p10: 0.1, p50: 0.5, p90: 0.9, max: 1 } },
     } } };
-  const profile = renderToStaticMarkup(React.createElement(ActivityProfile, {
+  const profile = renderToStaticMarkup(React.createElement(FeatureProfile, {
     model: profileModel, values: { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 },
   }));
-  assert.match(profile, /활동 프로필|학습 중간 80%/);
+  assert.match(profile, /입력 프로필|학습 중간 80%/);
   assert.match(profile, /P90 초과/);
   assert.match(profile, /P10=P90 · 학습 구간 폭 0/);
   assert.match(profile, /<span>P10 <strong>0.1<\/strong>/);
   assert.match(profile, /<span>P90 <strong>0.9<\/strong>/);
   assert.doesNotMatch(profile, /Infinity|NaN/);
-  const outlierProfile = value => renderToStaticMarkup(React.createElement(ActivityProfile, {
+  assert.doesNotMatch(profile, /활동 프로필/);
+  const sampledModel = { ...profileModel, runtime: { ...profileModel.runtime,
+    feature_training_profile: { ...profileModel.runtime.feature_training_profile,
+      method: "sampled_linear_quantiles_v1", row_count: 10000, sample_rows: 4096, sampling_seed: 42 } } };
+  const sampledProfile = renderToStaticMarkup(React.createElement(FeatureProfile, {
+    model: sampledModel, values: { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 },
+  }));
+  assert.match(sampledProfile, /10,000건 중 4,096건 표본의 근사 분포/);
+  assert.match(sampledProfile, /최솟값·최댓값도 표본 기준/);
+  assert.match(sampledProfile, /표본 중앙값/);
+  assert.equal(trainingFeatureRanges({ ...sampledModel, runtime: {
+    ...sampledModel.runtime, feature_training_profile: {
+      ...sampledModel.runtime.feature_training_profile, sample_rows: 0 } } }), null);
+  const outlierProfile = value => renderToStaticMarkup(React.createElement(FeatureProfile, {
     model: profileModel, values: { cnt_file_create: 0, ratio_outbound_traffic: value },
   }));
   assert.match(outlierProfile(0.91), /학습 구간 폭의 0.0125배/);
   assert.match(outlierProfile(80.9), /학습 구간 폭의 100배/);
   assert.match(outlierProfile(-10.3), /P10 미만/);
   assert.match(outlierProfile(-10.3), /학습 구간 폭의 13배/);
-  const changedProfile = renderToStaticMarkup(React.createElement(ActivityProfile, {
+  const changedProfile = renderToStaticMarkup(React.createElement(FeatureProfile, {
     model: profileModel, names: ["cnt_file_create"], changedNames: profileModel.features,
     values: { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 }, editing: true,
   }));
@@ -622,12 +635,12 @@ try {
   assert.deepEqual(profileFeatureNames(outsideModel, { inside: 90, outside: 1.01 }), ["outside", "inside"]);
   const medianOnly = { ...profileModel, runtime: { feature_reference_medians: [0, 0.5] } };
   assert.equal(trainingFeatureRanges(medianOnly), null);
-  const fallback = renderToStaticMarkup(React.createElement(ActivityProfile, {
+  const fallback = renderToStaticMarkup(React.createElement(FeatureProfile, {
     model: medianOnly, values: { cnt_file_create: 1000, ratio_outbound_traffic: null },
   }));
   assert.match(fallback, /학습 분포 기록이 없어/);
   assert.match(fallback, /결측값/);
-  assert.doesNotMatch(fallback, /role="img"|activity-profile-band|Infinity|NaN/);
+  assert.doesNotMatch(fallback, /role="img"|feature-profile-band|Infinity|NaN/);
   assert.equal(trainingFeatureRanges({ ...profileModel, runtime: {
     feature_training_profile: { ...profileModel.runtime.feature_training_profile,
       features: { ...profileModel.runtime.feature_training_profile.features,

@@ -30,6 +30,7 @@ from .serving_client import (
     application_config,
     application_name,
     application_status,
+    replica_matches,
     replica_capacity,
 )
 from .store import Store
@@ -59,14 +60,14 @@ class ServingStateRequest(BaseModel):
 class ServingApplicationOut(BaseModel):
     model_revision_id: str
     runtime_application: str = Field(description="서빙 Runtime의 애플리케이션 이름. 로컬 운영 도구에서 찾을 때 쓴다.")
-    status: str = Field(description="서빙 Runtime 상태. OUT_OF_SYNC는 의도와 다른 Config로 실행 중이며 "
-                        "추론이 차단된 상태다.")
+    status: str = Field(description="Dashboard에서 관측한 배포 상태. OUT_OF_SYNC는 의도와 다른 배포 설정이다. "
+                        "실제 활성 판본의 추론 준비 여부는 Endpoint의 ready로 구별한다.")
     status_reason: str | None = Field(
         default=None, description="실패 원인이나 준비가 늦어지는 이유. 소유자·관리자에게만 보인다.")
 
 
 class ServingRuntimeOut(BaseModel):
-    reachable: bool
+    reachable: bool = Field(description="배포 운영 상태를 조회하는 Ray Dashboard에 연결 가능함")
     active: ServingApplicationOut | None = None
     pending: ServingApplicationOut | None = None
 
@@ -75,7 +76,7 @@ class ServingEndpointOut(BaseModel):
     id: str
     name: str
     desired_state: Literal["serving", "stopped"]
-    ready: bool
+    ready: bool = Field(description="실제 활성 복제본이 의도한 판본·설정 지문으로 응답함. Dashboard 가용성과 별개다.")
     active_model_revision_id: str | None
     pending_model_revision_id: str | None = None
     previous_model_revision_id: str | None = None
@@ -166,14 +167,18 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
     def endpoint_view(endpoint: dict, actor: Actor, manageable: bool,
                       applications: dict[str, dict] | None, desired: dict[str, dict]) -> dict:
         def application(revision_id: str | None) -> dict | None:
-            if not revision_id or applications is None:
+            if not revision_id:
                 return None
             name = application_name(endpoint["id"], revision_id)
-            app = applications.get(name)
-            status = application_status(app, desired.get(name))
+            app = applications.get(name) if applications is not None else None
+            status = application_status(app, desired.get(name)) if applications is not None else "UNKNOWN"
             return {"model_revision_id": revision_id, "runtime_application": name, "status": status,
                     "status_reason": _status_reason(app, status) if manageable and app else None}
         active = application(endpoint["active_model_revision_id"])
+        active_id = endpoint["active_model_revision_id"]
+        ready = bool(endpoint["desired_state"] == "serving" and active_id and client
+                     and client.is_ready(endpoint["id"], active_id,
+                                         desired.get(application_name(endpoint["id"], active_id))))
         return {
             **{key: endpoint[key] for key in ("id", "name", "desired_state", "created_at",
                                              "updated_at", "active_model_revision_id")},
@@ -183,8 +188,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             "owned": endpoint["owner_actor"] == actor.id,
             "manageable": manageable,
             "owner_actor": endpoint["owner_actor"] if manageable else None,
-            "ready": endpoint["desired_state"] == "serving" and bool(active)
-                and active["status"] == "RUNNING",
+            "ready": ready,
             "runtime": {"reachable": applications is not None, "active": active,
                         "pending": application(endpoint["pending_model_revision_id"])
                         if manageable else None},
@@ -350,7 +354,8 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         description="Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. "
         "다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관됐거나 Registry 상태를 "
         "확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다. "
-        "Runtime이 준비되지 않았거나 활성 판본의 설정과 다르면 요청을 거부합니다.",
+        "실제로 계산한 복제본의 판본·설정 지문·출력 계약이 일치할 때만 결과를 전달합니다. "
+        "배포 운영 상태를 조회하는 Dashboard는 추론 요청의 의존성이 아닙니다.",
         response_model=PredictionOut,
     )
     def predict(endpoint_id: str, body: PredictionRequest, actor: Actor = INFER):
@@ -372,12 +377,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             rows.append([None if math.isnan(value) else value for value in ordered])
         if client is None:
             raise PlatformError("SOS-SERVING-UNAVAILABLE")
-        applications = runtime_applications()
-        if applications is None:
-            raise PlatformError("SOS-SERVING-UNAVAILABLE")
         desired = application_config(endpoint_id, model)
-        if application_status(applications.get(desired["name"]), desired) != "RUNNING":
-            raise PlatformError("SOS-SERVING-NOT-READY")
         try:
             result = client.predict(endpoint_id, revision_id, rows, timeout)
         except ServingRequestRejected as exc:
@@ -387,11 +387,9 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         except ServingUnavailable as exc:
             raise PlatformError("SOS-SERVING-UNAVAILABLE") from exc
         # 복제본의 응답이 판본에 기록된 출력 계약(종류·방향·척도)과 결과 구조를 모두 따를 때만 전달한다.
-        # Dashboard 조회 뒤 복제본이 교체돼도 실제 계산한 복제본의 설정 지문을 대조한다.
+        # Dashboard 관측 상태 대신 실제 계산한 복제본을 검증한다. 배포 설정 조정은 컨트롤러가 맡는다.
         expected = revision_output_contract(model)
-        if expected is None or not isinstance(result, dict) \
-                or result.get("model_revision_id") != revision_id \
-                or result.get("digest") != desired["args"]["digest"] \
+        if expected is None or not replica_matches(result, desired) \
                 or not response_matches(expected, result, len(rows)):
             raise PlatformError("SOS-SERVING-UNAVAILABLE")
         return {"endpoint_id": endpoint_id, "model_revision_id": revision_id,

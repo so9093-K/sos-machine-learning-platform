@@ -3,6 +3,7 @@
 import hashlib
 import os
 import platform
+import random
 from contextlib import contextmanager, nullcontext
 from dataclasses import asdict
 from pathlib import Path
@@ -377,17 +378,28 @@ def _training_score_summary(model, matrix: np.ndarray) -> tuple[dict, int]:
 
 
 def _feature_training_profile(matrix: np.ndarray, features: list[str]) -> dict:
-    """실제 적합 입력의 분포를 기록한다. 전체 행렬을 복제하지 않고 열별로 집계한다.
+    """적합 입력의 참고 분포. 행 수와 표본 행렬 크기를 제한한다.
 
-    결측 대체·시간 분할·표본 선택 이후의 값이다. 분위 범위는 정상 판정 경계가 아니다.
+    큰 입력은 고정 시드의 비복원 균등 표본만 읽는다. 학습 입력 자체는 바꾸지 않으며,
+    분위수·최솟값·최댓값 모두 분석한 표본의 값임을 기록한다.
     """
+    count = matrix.shape[0]
+    limit = max(1, min(4096, 262144 // len(features)))
+    sampled = count > limit
+    if sampled:
+        indices = random.Random(42).sample(range(count), limit)
+        values = matrix[indices]
+    else:
+        values = matrix
     return {
-        "method": "linear_quantiles_v1",
+        "method": "sampled_linear_quantiles_v1" if sampled else "linear_quantiles_v1",
         "input_space": "model_input_after_preprocessing",
-        "row_count": int(matrix.shape[0]),
+        "row_count": int(count),
+        "sample_rows": int(values.shape[0]),
+        "sampling_seed": 42 if sampled else None,
         "features": {
             name: dict(zip(("min", "p10", "p50", "p90", "max"),
-                           np.quantile(matrix[:, index], [0, .1, .5, .9, 1],
+                           np.quantile(values[:, index], [0, .1, .5, .9, 1],
                                        method="linear").tolist(), strict=True))
             for index, name in enumerate(features)
         },

@@ -5,7 +5,7 @@ import { FeatureResultDetails } from "./FeatureResultDetails";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { PipelineCandidates, ModelRevision } from "./types";
 import { ShapExplanation } from "./ShapExplanation";
-import { ActivityProfile } from "./ActivityProfile";
+import { FeatureProfile } from "./FeatureProfile";
 import { formatObservedAt } from "./display-format";
 
 type Candidate = PipelineCandidates["items"][number];
@@ -103,8 +103,8 @@ export function ObservationInvestigation({
       }}>이 관측값으로 실험 →</button>
       {experimentError && <p role="alert">{experimentError}</p>}
     </div>}
-    <section className="observation-activity" aria-label="관측된 활동 특징">
-      {model && <ActivityProfile model={model} values={candidate.features} />}
+    <section className="observation-features" aria-label="관측된 입력 특성">
+      {model && <FeatureProfile model={model} values={candidate.features} />}
       {missing.length > 0 && <p className="hint">비어 있거나 유효한 숫자가 아닌 입력 {missing.length}개가 있습니다. 실제 값과 학습 시 대체 기준을 확인하세요.</p>}
       {!modelRevisionId && <p className="hint">학습 모델 판본 참조가 없어 중앙값을 비교할 수 없습니다.</p>}
       {modelRevisionId && !model && !modelError &&

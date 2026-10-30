@@ -1,6 +1,6 @@
 /** Dataset 등록 없이 실제 Worker Playground Job으로 한 관측치를 점수화한다. */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityProfile, profileFeatureNames } from "./ActivityProfile";
+import { FeatureProfile, profileFeatureNames } from "./FeatureProfile";
 import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { groupActivityFeatures } from "./ActivityFeatureGroups";
@@ -372,7 +372,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   return <section className="panel model-lab-playground" tabIndex={-1} aria-label="직접 모델 점수 계산">
     <div className="model-lab-playground-head">
       <div><h3>입력 실험</h3>
-        <p>활동 특징을 수정한 뒤 점수를 계산해 모델의 반응을 비교합니다.</p></div>
+        <p>입력 특성을 수정한 뒤 점수를 계산해 모델의 반응을 비교합니다.</p></div>
     </div>
     {observationInput && appliedObservation.current !== observationInput.id && running &&
       <p className="hint" role="status">진행 중인 점수 계산이 끝나면 선택한 관측값을 입력에 가져옵니다.</p>}
@@ -400,10 +400,10 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       : fromHistory ? "이전 계산 기록에서 가져온 입력입니다. 값을 수정해 새 계산과 비교할 수 있습니다."
       : reference ? "초깃값은 학습 중앙값을 조합한 합성 입력입니다(정수 항목 반올림). 실제 관측값이나 정상 활동 예제가 아닙니다."
       : "초기 기준값이 없는 모델입니다. 모든 필수 항목을 입력해 주세요."}</p>
-    <ActivityProfile model={model} names={profileNames} editing changedNames={editedNames}
+    <FeatureProfile model={model} names={profileNames} editing changedNames={editedNames}
       activeName={activeFeature} onEdit={editFeature}
       values={Object.fromEntries(input.map(item => [item.name, item.valid ? item.value : null]))}
-      control={name => <div className="activity-profile-editor">{featureInput(name)}
+      control={name => <div className="feature-profile-editor">{featureInput(name)}
         {(name === "io_bytes_per_sec" || name === "net_bytes_per_sec") && <small>B/s</small>}
         {reference && <button type="button" className="ghost" disabled={running || fields[name] === reference[name]}
           title={`학습 중앙값 기반 ${reference[name]} · 정수 항목 반올림`}

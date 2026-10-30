@@ -12,9 +12,9 @@ const RECOVERY_POLL_MS = 10000;
 // 서빙 Runtime(Ray Serve)이 보고하는 애플리케이션 상태.
 const runtimeLabels: Record<string, string> = {
   RUNNING: "실행 중", DEPLOYING: "준비 중", NOT_DEPLOYED: "배포 대기", DEPLOY_FAILED: "배포 실패",
-  UNHEALTHY: "비정상", DELETING: "정리 중",
-  // SOS 판정: 이름은 같지만 의도와 다른 Config로 실행 중이라 컨트롤러가 되돌리는 중이다.
-  OUT_OF_SYNC: "설정 복구 중",
+  UNHEALTHY: "비정상", DELETING: "정리 중", UNKNOWN: "운영 상태 미확인",
+  // 배포 설정과 실제 추론 준비 상태는 별도로 표시한다.
+  OUT_OF_SYNC: "배포 설정 불일치",
 };
 const FAILED = new Set(["DEPLOY_FAILED", "UNHEALTHY"]);
 
@@ -22,11 +22,13 @@ const FAILED = new Set(["DEPLOY_FAILED", "UNHEALTHY"]);
 function endpointStatus(endpoint: ServingEndpoint): { label: string; tone: "ready" | "pending" | "failed" | "idle" } {
   const { runtime } = endpoint;
   if (endpoint.desired_state === "stopped") return { label: "중단됨", tone: "idle" };
-  if (!runtime.reachable) return { label: "서빙 Runtime 연결 안 됨", tone: "failed" };
+  if (!runtime.reachable) return { label: endpoint.ready
+    ? "추론 가능 · 운영 상태 조회 실패" : "추론 불가 · 운영 상태 조회 실패", tone: "failed" };
   const pendingFailed = FAILED.has(runtime.pending?.status ?? "");
   if (!endpoint.active_model_revision_id) return pendingFailed
     ? { label: "첫 배포 실패", tone: "failed" } : { label: "첫 배포 준비 중", tone: "pending" };
   if (!endpoint.ready) return { label: "활성 판본 복구 중", tone: "pending" };
+  if (runtime.active?.status === "OUT_OF_SYNC") return { label: "추론 가능 · 배포 설정 불일치", tone: "pending" };
   if (endpoint.pending_model_revision_id) return pendingFailed
     ? { label: "전환 실패 · 현재 판본 유지", tone: "failed" } : { label: "판본 전환 중", tone: "pending" };
   return { label: "요청 처리 중", tone: "ready" };
