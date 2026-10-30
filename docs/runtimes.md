@@ -57,11 +57,13 @@ SELECT만 허용하며, DDL·Feature 적용·폐기 권한을 주지 않는다. 
 
 ## 온라인 서빙 Runtime
 
-온라인 추론은 Ray Serve가 실행한다([ADR 0019](adr/0019-ray-serve-online-serving.md)). `serving` 컨테이너가 Ray head와 Serve 복제본을 실행하며 Dashboard·Serve 포트는 Compose 내부망에만 열린다. 복제본은 DB 자격 증명 없이 판본 기록이 가리키는 S3 아티팩트만 읽고, Worker와 같은 신뢰 복원 함수로 모델을 복원한다.
+온라인 추론은 Ray Serve가 실행한다([ADR 0019](adr/0019-ray-serve-online-serving.md)). `serving` 컨테이너가 Ray head와 Serve 복제본을 실행한다. 추론의 공식 경로는 SOS API이므로 Serve 포트는 호스트에 공개하지 않고, Ray Dashboard는 복제본 상태·로그를 보는 로컬 운영 도구로 localhost에만 공개한다([ADR 0020](adr/0020-serving-operator-visibility.md)). 복제본은 DB 자격 증명 없이 판본 기록이 가리키는 S3 아티팩트만 읽고, Worker와 같은 신뢰 복원 함수로 모델을 복원한다.
 
 같은 `uv.lock`에서 설치했다는 사실이 같은 Runtime을 뜻하지 않는다. 복원 시 판본에 기록된 학습 Runtime(Python minor·numpy·scikit-learn)과 서빙 이미지에 실제 설치된 판본, 아티팩트 SHA-256을 대조하며, 불일치하면 복제본이 시작되지 않고 배포 실패 사유로 보고된다. 서빙 이미지의 이 판본들을 바꿀 때는 새 Runtime에서 학습한 판본으로 먼저 전환한 뒤 이미지를 교체한다.
 
-`serving-controller`는 Job Worker·MLflow·Dagster와 분리된 프로세스로 SOS의 Endpoint 의도를 Ray Serve 선언형 Config에 반영한다. Ray Serve가 응답하지 않으면 잠시 기다렸다가 다시 시도하고, Ray가 재시작되면 다음 조정에서 같은 Config를 다시 적용해 복구한다. 현재 구성은 단일 Ray head 노드이며 판본당 복제본 하나(CPU 0.25)를 둔다. 전체 CPU는 `SOS_SERVING_CPUS`(기본 2)로 정한다.
+`serving-controller`는 Job Worker·MLflow·Dagster와 분리된 프로세스로 SOS의 Endpoint 의도를 Ray Serve 선언형 Config에 반영한다. Ray Serve가 응답하지 않으면 잠시 기다렸다가 다시 시도하고, Ray가 재시작되거나 Ray에 적용된 Config가 의도와 다르면 다음 조정에서 의도한 Config를 다시 적용한다. 복제본 로그는 컨테이너 표준 출력이 아니라 Ray 세션 로그에 남으며 Ray Dashboard에서 확인한다. 현재 구성은 단일 Ray head 노드이며 판본당 복제본 하나(CPU 0.25)를 둔다. 전체 CPU는 `SOS_SERVING_CPUS`(기본 2)로 정하며, 기본값에서는 전환 중인 판본을 포함해 복제본 8개까지 실행한다. SOS API는 이 수용량을 Ray State API의 실제 노드 자원으로 확인해 넘치는 서빙 의도를 접수 단계에서 거절한다.
+
+API의 `/api/ready`는 DB·객체 저장소를 API의 필수 의존성으로, Job Worker와 온라인 서빙 Runtime을 따로 실행되는 기능으로 구분해 보고한다. Worker가 멈춰도 API와 온라인 추론은 계속 동작하며 상태는 `degraded`다.
 
 ## 현재 구현의 범위
 
