@@ -1471,7 +1471,7 @@ export interface paths {
         put?: never;
         /**
          * 온라인 추론
-         * @description Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. 다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다.
+         * @description Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. 다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관됐거나 Registry 상태를 확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다.
          */
         post: operations["predict_api_serving_endpoints__endpoint_id__predict_post"];
         delete?: never;
@@ -3800,10 +3800,23 @@ export interface components {
             desired_state: "serving" | "stopped";
             /** Id */
             id: string;
+            /**
+             * Manageable
+             * @description 소유자 또는 관리자라 전환·중단·삭제를 할 수 있다.
+             */
+            manageable: boolean;
             /** Name */
             name: string;
-            /** Owned */
+            /**
+             * Owned
+             * @description 호출한 계정이 이 Endpoint의 소유자다.
+             */
             owned: boolean;
+            /**
+             * Owner Actor
+             * @description 관리할 수 있는 사용자에게만 보인다.
+             */
+            owner_actor?: string | null;
             /** Pending Model Revision Id */
             pending_model_revision_id?: string | null;
             /** Previous Model Revision Id */

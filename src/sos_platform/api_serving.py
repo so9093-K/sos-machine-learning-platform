@@ -7,14 +7,18 @@
 
 import math
 import os
+import time
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, StrictFloat, StrictInt
 
 from .api_access import ResourceAccess
+from .api_ml_models import management_client
 from .errors import InvalidRequestError, PlatformError
 from .ml_input import ordered_playground_input
+from .mlflow_errors import MLflowDeliveryError
+from .mlflow_registry import verify_registered_version
 from .security import Actor, require
 from .serving_client import (
     ServingClient,
@@ -29,6 +33,8 @@ READ_JOB = Depends(require("job.read"))
 MANAGE_MODEL = Depends(require("model.manage"))
 INFER = Depends(require("model.infer"))
 MAX_INPUTS = 100
+# 확인에 성공한 Registry 상태를 재사용하는 시간. 보관·등록 무효화는 이 시간 안에 추론에 반영된다.
+REGISTRY_CHECK_SECONDS = 30.0
 
 
 class ServingEndpointCreate(BaseModel):
@@ -64,7 +70,9 @@ class ServingEndpointOut(BaseModel):
     active_model_revision_id: str | None
     pending_model_revision_id: str | None = None
     previous_model_revision_id: str | None = None
-    owned: bool
+    owned: bool = Field(description="호출한 계정이 이 Endpoint의 소유자다.")
+    manageable: bool = Field(description="소유자 또는 관리자라 전환·중단·삭제를 할 수 있다.")
+    owner_actor: str | None = Field(default=None, description="관리할 수 있는 사용자에게만 보인다.")
     created_at: str
     updated_at: str
     runtime: ServingRuntimeOut
@@ -111,7 +119,23 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         except (ServingUnavailable, ServingRequestRejected):
             return None
 
-    def endpoint_view(endpoint: dict, owned: bool, applications: dict[str, dict] | None) -> dict:
+    # 보관·등록 무효화는 Playground·Scoring과 같은 Registry 검증으로 판정한다. 확인에 성공한
+    # 판본만 잠시 재사용하며, MLflow 장애로 확인할 수 없으면 다른 새 사용과 같이 거절한다.
+    registry_checked: dict[str, float] = {}
+
+    def require_registered(model: dict) -> None:
+        checked_at = registry_checked.get(model["id"])
+        if checked_at is not None and time.monotonic() - checked_at < REGISTRY_CHECK_SECONDS:
+            return
+        try:
+            verify_registered_version(management_client(), model)
+        except MLflowDeliveryError as exc:
+            registry_checked.pop(model["id"], None)
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        registry_checked[model["id"]] = time.monotonic()
+
+    def endpoint_view(endpoint: dict, actor: Actor, manageable: bool,
+                      applications: dict[str, dict] | None) -> dict:
         def application(revision_id: str | None) -> dict | None:
             if not revision_id or applications is None:
                 return None
@@ -119,20 +143,22 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             status = app.get("status", "UNKNOWN") if app else "NOT_DEPLOYED"
             failed = app is not None and status in ("DEPLOY_FAILED", "UNHEALTHY")
             return {"model_revision_id": revision_id, "status": status,
-                    "failure_reason": _failure_reason(app) if owned and failed else None}
+                    "failure_reason": _failure_reason(app) if manageable and failed else None}
         active = application(endpoint["active_model_revision_id"])
         return {
             **{key: endpoint[key] for key in ("id", "name", "desired_state", "created_at",
                                              "updated_at", "active_model_revision_id")},
-            # 전환·롤백 대상은 소유자의 운영 정보다. 소비자에게는 활성 판본만 보인다.
-            "pending_model_revision_id": endpoint["pending_model_revision_id"] if owned else None,
-            "previous_model_revision_id": endpoint["previous_model_revision_id"] if owned else None,
-            "owned": owned,
+            # 전환·롤백 대상과 소유자는 운영 정보다. 소비자에게는 활성 판본만 보인다.
+            "pending_model_revision_id": endpoint["pending_model_revision_id"] if manageable else None,
+            "previous_model_revision_id": endpoint["previous_model_revision_id"] if manageable else None,
+            "owned": endpoint["owner_actor"] == actor.id,
+            "manageable": manageable,
+            "owner_actor": endpoint["owner_actor"] if manageable else None,
             "ready": endpoint["desired_state"] == "serving" and bool(active)
                 and active["status"] == "RUNNING",
             "runtime": {"reachable": applications is not None, "active": active,
                         "pending": application(endpoint["pending_model_revision_id"])
-                        if owned else None},
+                        if manageable else None},
         }
 
     def visible_endpoint(endpoint_id: str, actor: Actor) -> tuple[dict, bool]:
@@ -149,7 +175,8 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         access.check_ownership(actor, endpoint["owner_actor"], "serving_endpoint", endpoint_id)
         return endpoint, True
 
-    def owned_endpoint(endpoint_id: str, actor: Actor) -> dict:
+    def managed_endpoint(endpoint_id: str, actor: Actor) -> dict:
+        """전환·중단·삭제 대상. 소유자 또는 관리자만 다룬다."""
         endpoint = store.get_serving_endpoint(endpoint_id)
         if endpoint is None:
             raise HTTPException(status_code=404, detail="Endpoint를 찾을 수 없습니다.")
@@ -174,14 +201,14 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         model_revision_id: str | None = Query(default=None, max_length=36),
         actor: Actor = READ_JOB,
     ):
-        owned = store.list_serving_endpoints(
+        managed = store.list_serving_endpoints(
             owner_actor=None if actor.privileged else actor.id, model_revision_id=model_revision_id)
         shared = [] if actor.privileged or model_revision_id is None else [
             item for item in store.list_offered_serving_endpoints(model_revision_id)
             if item["owner_actor"] != actor.id]
         applications = runtime_applications()
-        return [endpoint_view(item, True, applications) for item in owned] + [
-            endpoint_view(item, False, applications) for item in shared]
+        return [endpoint_view(item, actor, True, applications) for item in managed] + [
+            endpoint_view(item, actor, False, applications) for item in shared]
 
     @router.post(
         "/api/serving/endpoints",
@@ -194,12 +221,12 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
     )
     def create_endpoint(body: ServingEndpointCreate, request: Request,
                         actor: Actor = MANAGE_MODEL):
-        access.owned_model(body.model_revision_id, actor)
+        require_registered(access.owned_model(body.model_revision_id, actor))
         endpoint = change(lambda: store.create_serving_endpoint(
             name=body.name, model_revision_id=body.model_revision_id, owner_actor=actor.id,
             owner_actor_type=actor.kind, privileged=actor.privileged,
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, True, runtime_applications())
+        return endpoint_view(endpoint, actor, True, runtime_applications())
 
     @router.get(
         "/api/serving/endpoints/{endpoint_id}",
@@ -208,8 +235,8 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         response_model=ServingEndpointOut,
     )
     def get_endpoint(endpoint_id: str, actor: Actor = READ_JOB):
-        endpoint, owned = visible_endpoint(endpoint_id, actor)
-        return endpoint_view(endpoint, owned, runtime_applications())
+        endpoint, manageable = visible_endpoint(endpoint_id, actor)
+        return endpoint_view(endpoint, actor, manageable, runtime_applications())
 
     @router.put(
         "/api/serving/endpoints/{endpoint_id}/revision",
@@ -221,11 +248,12 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
     )
     def request_revision(endpoint_id: str, body: ServingRevisionRequest, request: Request,
                          actor: Actor = MANAGE_MODEL):
-        owned_endpoint(endpoint_id, actor)
+        managed_endpoint(endpoint_id, actor)
+        require_registered(access.model(body.model_revision_id))
         endpoint = change(lambda: store.request_serving_revision(
             endpoint_id, body.model_revision_id, actor_id=actor.id, actor_type=actor.kind,
             privileged=actor.privileged, request_id=request.state.request_id))
-        return endpoint_view(endpoint, True, runtime_applications())
+        return endpoint_view(endpoint, actor, True, runtime_applications())
 
     @router.post(
         "/api/serving/endpoints/{endpoint_id}/rollback",
@@ -235,11 +263,13 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         response_model=ServingEndpointOut,
     )
     def rollback(endpoint_id: str, request: Request, actor: Actor = MANAGE_MODEL):
-        owned_endpoint(endpoint_id, actor)
+        previous = managed_endpoint(endpoint_id, actor)["previous_model_revision_id"]
+        if previous:
+            require_registered(access.model(previous))
         endpoint = change(lambda: store.rollback_serving_endpoint(
             endpoint_id, actor_id=actor.id, actor_type=actor.kind, privileged=actor.privileged,
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, True, runtime_applications())
+        return endpoint_view(endpoint, actor, True, runtime_applications())
 
     @router.delete(
         "/api/serving/endpoints/{endpoint_id}/revision-request",
@@ -248,11 +278,11 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         response_model=ServingEndpointOut,
     )
     def cancel_revision(endpoint_id: str, request: Request, actor: Actor = MANAGE_MODEL):
-        owned_endpoint(endpoint_id, actor)
+        managed_endpoint(endpoint_id, actor)
         endpoint = change(lambda: store.cancel_serving_revision(
             endpoint_id, actor_id=actor.id, actor_type=actor.kind,
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, True, runtime_applications())
+        return endpoint_view(endpoint, actor, True, runtime_applications())
 
     @router.put(
         "/api/serving/endpoints/{endpoint_id}/state",
@@ -263,11 +293,11 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
     )
     def set_state(endpoint_id: str, body: ServingStateRequest, request: Request,
                   actor: Actor = MANAGE_MODEL):
-        owned_endpoint(endpoint_id, actor)
+        managed_endpoint(endpoint_id, actor)
         endpoint = change(lambda: store.set_serving_state(
             endpoint_id, body.desired_state, actor_id=actor.id, actor_type=actor.kind,
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, True, runtime_applications())
+        return endpoint_view(endpoint, actor, True, runtime_applications())
 
     @router.delete(
         "/api/serving/endpoints/{endpoint_id}",
@@ -276,7 +306,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         status_code=204,
     )
     def delete_endpoint(endpoint_id: str, request: Request, actor: Actor = MANAGE_MODEL):
-        owned_endpoint(endpoint_id, actor)
+        managed_endpoint(endpoint_id, actor)
         change(lambda: store.delete_serving_endpoint(
             endpoint_id, actor_id=actor.id, actor_type=actor.kind,
             request_id=request.state.request_id))
@@ -286,7 +316,8 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         tags=["Serving"],
         summary="온라인 추론",
         description="Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. "
-        "다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다.",
+        "다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관됐거나 Registry 상태를 "
+        "확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다.",
         response_model=PredictionOut,
     )
     def predict(endpoint_id: str, body: PredictionRequest, actor: Actor = INFER):
@@ -295,6 +326,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         if endpoint["desired_state"] != "serving" or not revision_id:
             raise PlatformError("SOS-SERVING-NOT-READY")
         model = access.model_allowed(actor, access.model(revision_id), for_new_work=True)
+        require_registered(model)
         rows = []
         for index, values in enumerate(body.inputs, start=1):
             try:

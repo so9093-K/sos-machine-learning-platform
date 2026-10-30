@@ -5,7 +5,9 @@ import type { MLResourceKind } from "./PlatformNavigation";
 import type { ServingEndpoint } from "./types";
 
 type Action = "rollback" | "cancel" | "stop" | "resume" | "delete";
-const POLL_MS = 3000;
+// 전환·복구 중에는 컨트롤러의 판정을 짧게 따라가고, 장애·실패 중에는 복구를 확인할 만큼만 다시 조회한다.
+const SETTLING_POLL_MS = 3000;
+const RECOVERY_POLL_MS = 10000;
 // 서빙 Runtime(Ray Serve)이 보고하는 애플리케이션 상태.
 const runtimeLabels: Record<string, string> = {
   RUNNING: "실행 중", DEPLOYING: "준비 중", NOT_DEPLOYED: "배포 대기", DEPLOY_FAILED: "배포 실패",
@@ -35,7 +37,9 @@ export function ServingOperations({ onOpenResource }: {
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
   const [endpoints, setEndpoints] = useState<ServingEndpoint[] | null>(null);
-  const [error, setError] = useState("");
+  // 목록 조회 실패와 조작 실패는 따로 둔다. 조작 뒤 재조회가 성공해도 조작 실패 안내는 남아야 한다.
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState<string>("");
   const [confirming, setConfirming] = useState<string>("");
   const [notice, setNotice] = useState("");
@@ -43,24 +47,25 @@ export function ServingOperations({ onOpenResource }: {
   const load = useCallback(async () => {
     try {
       setEndpoints(await request<ServingEndpoint[]>("/api/serving/endpoints"));
-      setError("");
+      setLoadError("");
     } catch (cause) {
-      setError(formatError(cause));
+      setLoadError(formatError(cause));
     }
   }, []);
   useEffect(() => { void load(); }, [load]);
-  // 전환·복구 중에는 컨트롤러의 판정을 따라가도록 짧게 다시 조회한다.
-  const settling = endpoints?.some(item => endpointStatus(item).tone === "pending") ?? false;
+  const tones = endpoints?.map(item => endpointStatus(item).tone) ?? [];
+  const pollMs = tones.includes("pending") ? SETTLING_POLL_MS
+    : tones.includes("failed") || loadError ? RECOVERY_POLL_MS : null;
   useEffect(() => {
-    if (!settling) return;
-    const timer = window.setInterval(() => void load(), POLL_MS);
+    if (pollMs === null) return;
+    const timer = window.setInterval(() => void load(), pollMs);
     return () => window.clearInterval(timer);
-  }, [settling, load]);
+  }, [pollMs, load]);
 
   async function run(endpoint: ServingEndpoint, action: Action) {
     const key = `${endpoint.id}:${action}`;
     if ((action === "stop" || action === "delete") && confirming !== key) { setConfirming(key); return; }
-    setConfirming(""); setBusy(key); setNotice(""); setError("");
+    setConfirming(""); setBusy(key); setNotice(""); setActionError("");
     const base = `/api/serving/endpoints/${encodeURIComponent(endpoint.id)}`;
     const json = (body: unknown) => ({ headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     try {
@@ -77,7 +82,7 @@ export function ServingOperations({ onOpenResource }: {
         delete: `${endpoint.name} · Endpoint를 삭제했습니다.`,
       }[action]);
     } catch (cause) {
-      setError(`${endpoint.name} · ${formatError(cause)}`);
+      setActionError(`${endpoint.name} · ${formatError(cause)}`);
     } finally {
       setBusy("");
       await load();
@@ -102,14 +107,16 @@ export function ServingOperations({ onOpenResource }: {
       </div>
       <button type="button" className="secondary" onClick={() => void load()}>다시 조회</button>
     </div>
-    {error && <p className="job-error" role="alert">요청 실패 · {error}</p>}
+    {loadError && <p className="job-error" role="alert">상태 조회 실패 · {loadError}{endpoints
+      ? " · 아래는 마지막으로 확인한 상태이며, 10초마다 다시 확인합니다." : " · 10초마다 다시 확인합니다."}</p>}
+    {actionError && <p className="job-error" role="alert">요청 실패 · {actionError}</p>}
     {notice && <p className="hint" role="status">{notice}</p>}
-    {endpoints === null && !error && <p role="status" className="muted">Endpoint를 불러오는 중입니다.</p>}
+    {endpoints === null && !loadError && <p role="status" className="muted">Endpoint를 불러오는 중입니다.</p>}
     {endpoints?.length === 0 && <p className="muted">아직 Endpoint가 없습니다. 모델 공급 과정에서 Endpoint를 지정하면 이곳에 표시됩니다.</p>}
     <div className="serving-list">{endpoints?.map(endpoint => {
       const status = endpointStatus(endpoint);
       const pending = (action: Action) => busy === `${endpoint.id}:${action}`;
-      const disabled = Boolean(busy) || !endpoint.owned;
+      const disabled = Boolean(busy) || !endpoint.manageable;
       const confirm = (action: Action, text: string, verb: string) => confirming === `${endpoint.id}:${action}` &&
         <div className="serving-confirm" role="group" aria-label={`${endpoint.name} ${verb} 확인`}>
           <span>{text}</span>
@@ -120,7 +127,8 @@ export function ServingOperations({ onOpenResource }: {
         <div className="serving-endpoint-head">
           <h3>{endpoint.name}</h3>
           <span className={`serving-status serving-status-${status.tone}`}>{status.label}</span>
-          <span className="muted">갱신 {formatRecordedAt(endpoint.updated_at)}</span>
+          {!endpoint.owned && endpoint.owner_actor && <span className="muted">소유 계정 {endpoint.owner_actor}</span>}
+          <span className="muted serving-updated">갱신 {formatRecordedAt(endpoint.updated_at)}</span>
         </div>
         <dl>
           {revision("활성 판본", endpoint.active_model_revision_id, endpoint.runtime.active)}
@@ -128,7 +136,7 @@ export function ServingOperations({ onOpenResource }: {
             endpoint.pending_model_revision_id, endpoint.runtime.pending)}
           {revision("직전 판본", endpoint.previous_model_revision_id)}
         </dl>
-        {endpoint.owned && <div className="serving-actions">
+        {endpoint.manageable && <div className="serving-actions">
           {endpoint.previous_model_revision_id && !endpoint.pending_model_revision_id && endpoint.desired_state === "serving" &&
             <button type="button" className="secondary" disabled={disabled} onClick={() => void run(endpoint, "rollback")}>
               {pending("rollback") ? "요청 중…" : "직전 판본으로 되돌리기"}</button>}

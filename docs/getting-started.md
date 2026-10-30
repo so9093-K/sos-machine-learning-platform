@@ -84,7 +84,7 @@ SOS_SUPPLY_TOKEN=<automation 토큰> .venv/bin/python scripts/supply_model.py \
 
 제공 설명에는 모델의 목적·적용할 데이터·결과 해석 시 주의할 한계를 적는다. 제공·재제공은 `PUT`, 중단은 `DELETE /api/ml/models/{id}/offering`이며 중단은 새 적용만 막고 이미 만든 결과는 유지한다. 웹에서는 관리자 또는 모델을 소유한 자동화 계정이 **모델 상세**에서 제공·설명 수정·중단을 실행한다. 학습 데이터를 조용히 줄이지 않으므로 큰 데이터는 `--sample-rows`로 행 수를 명시한다.
 
-`--endpoint`를 지정하면 공급한 판본을 그 이름의 온라인 서빙 Endpoint에 배포한다. 같은 이름의 Endpoint가 있으면 새 판본으로 전환을 요청하며, 서빙 Runtime이 새 판본의 준비를 확인할 때까지 기존 판본이 요청을 처리한다. 스크립트는 새 판본이 활성 판본이 되면 끝나고, 배포에 실패하면 사유를 출력하고 실패한다. 이후 상태 확인·되돌리기·중단은 웹의 **작업·운영 → 온라인 서빙** 또는 `/api/serving/endpoints` API로 한다. 추론 요청은 다음과 같다.
+`--endpoint`를 지정하면 공급한 판본을 그 이름의 온라인 서빙 Endpoint에 배포한다. 대상은 공급 계정이 소유한 같은 이름의 Endpoint이며, 처음 선택하거나 만든 Endpoint ID를 상태 파일에 고정한다. 관리자 토큰으로 실행해도 다른 계정의 Endpoint는 바꾸지 않는다. 이 계정의 Endpoint가 있으면 새 판본으로 전환을 요청하며, 서빙 Runtime이 새 판본의 준비를 확인할 때까지 기존 판본이 요청을 처리한다. 스크립트는 새 판본이 활성 판본이 되면 끝나고, 배포에 실패하면 사유를 출력하고 실패한다. 이후 상태 확인·되돌리기·중단은 웹의 **작업·운영 → 온라인 서빙** 또는 `/api/serving/endpoints` API로 한다. 추론 요청은 다음과 같다.
 
 ```bash
 curl -X POST "$SOS_API/api/serving/endpoints/<Endpoint ID>/predict" -H "Authorization: Bearer $SOS_TOKEN" \

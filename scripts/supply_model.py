@@ -171,16 +171,28 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> 
         fail("제공 상태를 확인하지 못했습니다.")
     print(f"제공 완료 · {model_id}")
     if args.endpoint:
-        serve(client, args, model_id)
+        serve(client, args, state, path, model_id)
 
 
-def serve(client: httpx.Client, args: argparse.Namespace, model_id: str) -> None:
-    """공급한 판본을 온라인 서빙 Endpoint에 배포하거나 전환한다.
+def serve(client: httpx.Client, args: argparse.Namespace, state: dict, path: Path,
+          model_id: str) -> None:
+    """공급한 판본을 이 계정이 소유한 온라인 서빙 Endpoint에 배포하거나 전환한다.
 
+    Endpoint 이름은 계정 안에서만 고유하고 관리자는 다른 계정의 Endpoint도 조회하므로,
+    대상은 소유 Actor·이름으로 고른 뒤 상태 파일에 ID로 고정한다.
     서빙 Runtime이 새 판본의 준비를 확인한 뒤 활성 판본을 바꾸므로, 그때까지 기존 판본이 계속 처리한다.
     """
-    endpoints = checked(client.get("/api/serving/endpoints"))
-    existing = next((item for item in endpoints if item["owned"] and item["name"] == args.endpoint), None)
+    pinned = state.get("endpoint")
+    if pinned is not None and pinned.get("name") != args.endpoint:
+        fail(f"이 상태 파일은 Endpoint {pinned.get('name')}에 공급합니다. 다른 Endpoint에는 새 상태 파일을 사용하세요.")
+    if pinned is not None:
+        existing = checked(client.get(f"/api/serving/endpoints/{pinned['id']}"))
+        if existing.get("owner_actor") != state["actor_id"] or existing["name"] != args.endpoint:
+            fail("상태 파일의 Endpoint가 이 계정의 같은 이름 Endpoint가 아닙니다.")
+    else:
+        existing = next((item for item in checked(client.get("/api/serving/endpoints"))
+                         if item.get("owner_actor") == state["actor_id"]
+                         and item["name"] == args.endpoint), None)
     if existing is None:
         endpoint = checked(client.post("/api/serving/endpoints",
                                        json={"name": args.endpoint, "model_revision_id": model_id}))
@@ -189,6 +201,9 @@ def serve(client: httpx.Client, args: argparse.Namespace, model_id: str) -> None
     else:
         endpoint = checked(client.put(f"/api/serving/endpoints/{existing['id']}/revision",
                                       json={"model_revision_id": model_id}))
+    if pinned is None:
+        state["endpoint"] = {"name": args.endpoint, "id": endpoint["id"]}
+        save_state(path, state)
 
     def serving(item: dict) -> bool:
         pending = (item.get("runtime") or {}).get("pending") or {}

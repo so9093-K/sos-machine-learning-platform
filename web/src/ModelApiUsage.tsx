@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatError, jsonPost } from "./api";
 import { exampleValues, type PlaygroundRun } from "./ModelLabPlayground";
 import { formatPlaygroundScore } from "./PlaygroundResult";
@@ -40,15 +40,24 @@ function exampleInput(model: ModelRevision, lastRun?: PlaygroundRun) {
   };
 }
 
+/** Endpoint가 지금 이 판본으로 요청을 처리한다. 전환 대상으로만 준비 중이면 아직 다른 판본이 계산한다. */
+export function servesModel(endpoint: ServingEndpoint | null, modelId: string): boolean {
+  return Boolean(endpoint?.ready && endpoint.active_model_revision_id === modelId);
+}
+
 /** 화면에서 해본 계산을 외부 시스템에서 같은 계약으로 요청하는 방법.
  *
  *  한 건씩 바로 받는 온라인 추론(서빙 Endpoint)과 Dataset 전체 점수(비동기 Job)를 안내한다.
  *  선택한 모델의 Endpoint, 입력 구조가 확인된 Dataset ID, Playground에서 계산한 입력을 채운다.
  */
-export function ModelApiUsage({ model, datasetId, lastRun, endpoint, canInfer }: {
+export function ModelApiUsage({ model, datasetId, lastRun, endpoint, endpointError, onRecheckEndpoint, canInfer }: {
   model: ModelRevision; datasetId?: string; lastRun?: PlaygroundRun;
-  /** 이 판본을 지금 활성 판본으로 서빙하는 Endpoint. 없으면 온라인 API가 아직 없다. */
-  endpoint: ServingEndpoint | null; canInfer: boolean;
+  /** 이 판본을 서빙하거나 이 판본으로 전환 중인 Endpoint. 없으면 온라인 API가 아직 없다. */
+  endpoint: ServingEndpoint | null;
+  /** Endpoint 상태를 확인하지 못한 이유. */
+  endpointError: string;
+  onRecheckEndpoint: () => void;
+  canInfer: boolean;
 }) {
   const [flow, setFlow] = useState<Flow>("online");
   const [trial, setTrial] = useState<{ busy: boolean; error: string; result: Prediction | null }>(
@@ -58,6 +67,14 @@ export function ModelApiUsage({ model, datasetId, lastRun, endpoint, canInfer }:
   const origin = typeof window === "undefined" ? "http://127.0.0.1:9601" : window.location.origin;
   const auth = `-H "Authorization: Bearer $SOS_TOKEN"`;
   const input = exampleInput(model, lastRun);
+  const ready = servesModel(endpoint, model.id);
+  // 모델·Endpoint·입력이 바뀌면 이전 응답을 지우고, 이전 요청의 늦은 응답이 현재 결과를 덮지 않게 한다.
+  const trialKey = `${model.id}|${endpoint?.id ?? ""}|${JSON.stringify(input.features)}`;
+  const trialSeq = useRef(0);
+  useEffect(() => {
+    trialSeq.current += 1;
+    setTrial({ busy: false, error: "", result: null });
+  }, [trialKey]);
   const onlineBody = input.features ? JSON.stringify({ inputs: [input.features] })
     : `{"inputs": [{${model.features.map(name => `"${name}": <값>`).join(", ")}}]}`;
   const onlineSteps: Step[] = endpoint ? [
@@ -83,13 +100,17 @@ export function ModelApiUsage({ model, datasetId, lastRun, endpoint, canInfer }:
 
   async function sendTrial() {
     if (!endpoint || !input.features) return;
+    const seq = ++trialSeq.current;
     setTrial({ busy: true, error: "", result: null });
     try {
       const result = await jsonPost<Prediction>(
         `/api/serving/endpoints/${encodeURIComponent(endpoint.id)}/predict`, { inputs: [input.features] });
-      setTrial({ busy: false, error: "", result });
+      if (seq === trialSeq.current) setTrial({ busy: false, error: "", result });
     } catch (cause) {
+      if (seq !== trialSeq.current) return;
       setTrial({ busy: false, error: formatError(cause), result: null });
+      // 요청 사이에 준비 상태가 바뀌었을 수 있으므로 Endpoint 상태를 다시 확인한다.
+      onRecheckEndpoint();
     }
   }
 
@@ -104,10 +125,15 @@ export function ModelApiUsage({ model, datasetId, lastRun, endpoint, canInfer }:
       <button type="button" className="secondary" aria-pressed={flow === "dataset"}
         onClick={() => setFlow("dataset")}>Dataset 전체 점수</button>
     </div>
-    {flow === "online" && !endpoint && <p className="muted">이 모델은 아직 온라인 API로 배포되지 않았습니다.
-      모델 공급 과정에서 배포되면 이곳에서 호출 방법과 실제 요청을 제공합니다. 지금은 Dataset 전체 점수를 API로 요청할 수 있습니다.</p>}
-    {flow === "online" && endpoint && !endpoint.ready && <p className="muted" role="status">
-      온라인 API를 준비하고 있습니다. 준비되면 아래 요청으로 바로 계산할 수 있습니다.</p>}
+    {flow === "online" && !endpoint && <div className="api-online-state">
+      <p className="muted" role={endpointError ? "alert" : undefined}>{endpointError
+        ? `온라인 API 상태를 확인하지 못했습니다. ${endpointError}`
+        : "이 모델은 아직 온라인 API로 배포되지 않았습니다. 모델 공급 과정에서 배포되면 이곳에서 호출 방법과 실제 요청을 제공합니다. " +
+          "지금은 Dataset 전체 점수를 API로 요청할 수 있습니다."}</p>
+      <button type="button" className="secondary" onClick={onRecheckEndpoint}>다시 확인</button>
+    </div>}
+    {flow === "online" && endpoint && !ready && <p className="muted" role="status">
+      온라인 API를 준비하고 있습니다. 준비되면 이 화면이 자동으로 바뀌고 아래 요청으로 바로 계산할 수 있습니다.</p>}
     {steps.length > 0 && <>
       <CodeBlock label="API 접속 정보" code={`export SOS_API="${origin}"\nexport SOS_TOKEN="<발급받은 토큰>"`} />
       <ol className="api-steps">{steps.map(step => <li key={step.title}>
@@ -117,7 +143,7 @@ export function ModelApiUsage({ model, datasetId, lastRun, endpoint, canInfer }:
       </li>)}</ol>
     </>}
     {flow === "online" && endpoint && canInfer && input.features && <div className="api-trial">
-      <button type="button" className="secondary" disabled={!endpoint.ready || trial.busy}
+      <button type="button" className="secondary" disabled={!ready || trial.busy}
         onClick={() => void sendTrial()}>{trial.busy ? "요청 중…" : "이 요청 보내기"}</button>
       {trial.result && typeof trialScore === "number" && <p role="status">
         응답 · 이상 점수 <strong>{formatPlaygroundScore(trialScore)}</strong> · 판본 {trial.result.model_revision_id.slice(0, 8)}
