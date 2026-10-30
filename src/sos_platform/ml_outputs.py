@@ -88,10 +88,21 @@ def output_records(contract: OutputContract, values: Sequence[float]) -> list[di
     return [{field: float(value)} for value in values]
 
 
-def output_records_valid(output_type: object, records: object, count: int) -> bool:
-    """응답의 결과가 출력 종류의 구조를 따르고 관측 수와 같다."""
-    field = _RESULT_FIELDS.get(output_type) if isinstance(output_type, str) else None
+def _score(value: object) -> bool:
+    """유한한 실수 점수. bool은 int의 하위 유형이지만 점수가 아니다."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def response_matches(contract: OutputContract, response: object, count: int) -> bool:
+    """응답이 판본의 출력 계약(종류·점수 방향·척도)과 그 종류의 결과 구조를 모두 따른다.
+
+    필드가 빠지거나 다르면 거짓이다. 관측별 결과는 입력 관측 수와 같아야 한다.
+    """
+    if not isinstance(response, Mapping) or any(
+            response.get(name) != value for name, value in contract.record().items()):
+        return False
+    field = _RESULT_FIELDS.get(contract.output_type)
+    records = response.get("outputs")
     return field is not None and isinstance(records, list) and len(records) == count and all(
-        isinstance(record, dict) and set(record) == {field}
-        and isinstance(record[field], (int, float)) and math.isfinite(record[field])
+        isinstance(record, dict) and set(record) == {field} and _score(record[field])
         for record in records)

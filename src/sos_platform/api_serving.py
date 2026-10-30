@@ -17,7 +17,7 @@ from .api_access import ResourceAccess
 from .api_ml_models import management_client
 from .errors import InvalidRequestError, PlatformError
 from .ml_input import ordered_playground_input
-from .ml_outputs import output_records_valid, revision_output_contract
+from .ml_outputs import response_matches, revision_output_contract
 from .mlflow_errors import MLflowDeliveryError
 from .mlflow_registry import verify_registered_version
 from .security import Actor, require
@@ -382,15 +382,14 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
                                 else "SOS-SERVING-UNAVAILABLE") from exc
         except ServingUnavailable as exc:
             raise PlatformError("SOS-SERVING-UNAVAILABLE") from exc
-        outputs = result.get("outputs")
-        # 복제본의 응답이 판본에 기록된 출력 종류와 그 결과 구조를 따를 때만 전달한다.
+        # 복제본의 응답이 판본에 기록된 출력 계약(종류·방향·척도)과 결과 구조를 모두 따를 때만 전달한다.
+        # 다르거나 빠진 응답은 Runtime 불일치로 보고 서빙 장애로 처리한다.
         expected = revision_output_contract(model)
-        if result.get("model_revision_id") != revision_id or expected is None \
-                or result.get("output_type") != expected.output_type \
-                or not output_records_valid(expected.output_type, outputs, len(rows)):
+        if expected is None or not isinstance(result, dict) \
+                or result.get("model_revision_id") != revision_id \
+                or not response_matches(expected, result, len(rows)):
             raise PlatformError("SOS-SERVING-UNAVAILABLE")
         return {"endpoint_id": endpoint_id, "model_revision_id": revision_id,
-                "output_type": result["output_type"], "score_direction": result["score_direction"],
-                "score_scale": result["score_scale"], "outputs": outputs}
+                **expected.record(), "outputs": result["outputs"]}
 
     return router
