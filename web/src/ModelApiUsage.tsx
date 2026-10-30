@@ -31,12 +31,12 @@ function exampleInput(model: ModelRevision, lastRun?: PlaygroundRun) {
   const reference = exampleValues(model);
   if (reference) return {
     features: Object.fromEntries(model.features.map(name => [name, Number(reference[name])])),
-    source: "아래 값은 이 모델의 학습 기준값입니다. Playground의 값 직접 입력에서 계산하면 그 입력으로 바뀝니다.",
+    source: "아래 값은 학습 중앙값으로 만든 합성 입력입니다(정수 항목 반올림). Playground의 입력 실험에서 계산하면 그 입력으로 바뀝니다.",
   };
   return {
     features: null,
     source: "이 모델에는 학습 기준값 기록이 없어 값을 채우지 않았습니다. <값>을 실제 숫자로 바꾸거나, " +
-      "Playground의 값 직접 입력에서 계산하면 그 입력으로 채워집니다.",
+      "Playground의 입력 실험에서 계산하면 그 입력으로 채워집니다.",
   };
 }
 
@@ -62,7 +62,7 @@ export function ModelApiUsage({ model, datasetId, lastRun, endpoint, endpointErr
   const [flow, setFlow] = useState<Flow>("online");
   const [trial, setTrial] = useState<{ busy: boolean; error: string; result: Prediction | null }>(
     { busy: false, error: "", result: null });
-  // 값 직접 입력으로 계산하면 그 입력을 재현하는 온라인 예시를 바로 보여준다.
+  // 입력 실험으로 계산하면 그 입력을 재현하는 온라인 예시를 바로 보여준다.
   useEffect(() => { if (lastRun) setFlow("online"); }, [lastRun]);
   const origin = typeof window === "undefined" ? "http://127.0.0.1:9601" : window.location.origin;
   const auth = `-H "Authorization: Bearer $SOS_TOKEN"`;

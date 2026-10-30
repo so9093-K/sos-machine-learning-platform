@@ -1210,3 +1210,38 @@ def test_all_model_and_sample_training_have_separate_selection_modes(monkeypatch
     assert full["training_selection"]["method"] == "all_rows"
     assert sampled["training_selection"]["method"] != "all_rows"
     assert full["runtime"]["feature_reference_medians"] != sampled["runtime"]["feature_reference_medians"]
+    assert full["runtime"]["feature_training_profile"]["row_count"] == count
+    assert sampled["runtime"]["feature_training_profile"]["row_count"] == 200
+    for result in (full, sampled):
+        profile = result["runtime"]["feature_training_profile"]
+        if profile["method"] == "linear_quantiles_v1":
+            assert profile["features"]["x"]["p50"] == result["runtime"]["feature_reference_medians"][0]
+        else:
+            assert profile["method"] == "sampled_linear_quantiles_v1"
+            assert profile["sample_rows"] == 4096
+            assert profile["sampling_seed"] == 42
+
+
+@pytest.mark.parametrize("width", [44, 1024])
+def test_feature_profile_reads_only_bounded_reproducible_rows(width):
+    """큰 행렬을 읽거나 복제하지 않고 참고 분포의 표본만 요청한다."""
+    reads = []
+
+    class LargeMatrix:
+        shape = (1_000_000_000, width)
+
+        def __getitem__(self, indices):
+            assert len(indices) <= 4096
+            assert len(indices) * width <= 262144
+            assert len(set(indices)) == len(indices)
+            reads.append(indices)
+            return np.broadcast_to(np.asarray(indices, dtype=float)[:, None], (len(indices), width))
+
+    names = [f"f{i}" for i in range(width)]
+    first = ml_training._feature_training_profile(LargeMatrix(), names)
+    second = ml_training._feature_training_profile(LargeMatrix(), names)
+    assert reads[0] == reads[1]
+    assert first == second
+    assert first["row_count"] == 1_000_000_000
+    assert first["sample_rows"] == len(reads[0])
+    assert first["features"]["f0"]["p50"] == np.median(reads[0])

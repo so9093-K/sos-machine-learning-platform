@@ -76,6 +76,22 @@ def config_matches(deployed: dict | None, desired: dict) -> bool:
     return all(deployed.get(key) == desired[key] for key in _COMPARED)
 
 
+def application_status(application: dict | None, desired: dict | None) -> str:
+    """Dashboard에서 관측한 배포 설정 상태. 실제 추론 가능 여부와 구별한다."""
+    if application is None:
+        return "NOT_DEPLOYED"
+    if desired is None or not config_matches(application.get("deployed_app_config"), desired):
+        return "OUT_OF_SYNC"
+    return application.get("status", "UNKNOWN")
+
+
+def replica_matches(answer: object, desired: dict | None) -> bool:
+    """실제로 응답한 복제본의 판본·시작 지문을 대조한다. 운영 설정 상태를 추정하지 않는다."""
+    return isinstance(answer, dict) and desired is not None \
+        and answer.get("model_revision_id") == desired["args"]["revision"]["id"] \
+        and answer.get("digest") == desired["args"]["digest"]
+
+
 def replica_capacity(cpus: float) -> int:
     """주어진 CPU로 동시에 실행할 수 있는 복제본 수."""
     return math.floor(cpus / REPLICA_CPUS + 1e-9)
@@ -114,13 +130,26 @@ class ServingClient:
         except ValueError as exc:
             raise ServingUnavailable("invalid_json") from exc
 
-    def reachable(self) -> bool:
-        """서빙 Runtime이 응답하는지만 확인한다. 준비 상태 확인처럼 자주 부르는 곳에 쓴다."""
+    def inference_reachable(self) -> bool:
+        """실제 추론 Proxy의 생존 확인. Dashboard 장애를 추론 장애로 보고하지 않는다."""
+        if not self.inference_url:
+            return False
         try:
-            self._request("GET", f"{self.dashboard_url}/api/version", None, min(self.timeout, 2.0))
+            # Ray의 healthz는 JSON이 아닌 텍스트를 반환한다.
+            with urllib.request.urlopen(self.inference_url + "/-/healthz",
+                                        timeout=min(self.timeout, 2.0)):
+                return True
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return False
+
+    def is_ready(self, endpoint_id: str, revision_id: str, desired: dict | None) -> bool:
+        """컨트롤러와 API가 실제 복제본의 준비 응답에 같은 판정을 적용한다."""
+        if desired is None:
+            return False
+        try:
+            return replica_matches(self.probe(endpoint_id, revision_id), desired)
         except (ServingUnavailable, ServingRequestRejected):
             return False
-        return True
 
     def cpu_capacity(self) -> float:
         """살아 있는 노드의 전체 CPU. Ray State API(`ray list nodes`와 같은 정보)를 읽는다."""

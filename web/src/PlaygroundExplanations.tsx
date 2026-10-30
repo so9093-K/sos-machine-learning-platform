@@ -1,21 +1,16 @@
-/** 완료된 Playground 입력의 두 설명 방법을 독립 Job으로 탐구한다. */
+/** 사용자가 요청한 완료 입력의 SHAP 점수 설명. 값 변경 실험은 입력 화면에서 수행한다. */
 import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
-import { SensitivityChart } from "./FeatureSensitivity";
 import { ShapContributionChart } from "./ShapExplanation";
 import { jobStatusLabel } from "./display-format";
 import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary, MLPlaygroundJob } from "./types";
 
-type Method = "permutation_shap_median_v1" | "median_reference_feature_replacement";
+const method = "permutation_shap_median_v1";
 type PlaygroundResult = ExplanationResult & { playground_job_id?: string | null };
 type JobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
-export function PlaygroundSensitivity({ result }: { result: PlaygroundResult }) {
-  return <SensitivityChart result={result} />;
-}
-
-function MethodExplanation({ source, method, canRun, canCancel }: {
-  source: MLPlaygroundJob; method: Method; canRun: boolean; canCancel: boolean;
+function ShapExplanation({ source, canRun, canCancel }: {
+  source: MLPlaygroundJob; canRun: boolean; canCancel: boolean;
 }) {
   const [job, setJob] = useState<MLExplanationJob | null>(null);
   const [result, setResult] = useState<PlaygroundResult | null>(null);
@@ -23,7 +18,7 @@ function MethodExplanation({ source, method, canRun, canCancel }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
-  const title = method === "permutation_shap_median_v1" ? "SHAP 기여도" : "Feature 치환 민감도";
+  const title = "SHAP 기여도";
   const score = source.result?.anomaly_score;
   const modelId = source.spec.model_revision_id;
 
@@ -103,9 +98,7 @@ function MethodExplanation({ source, method, canRun, canCancel }: {
   return <section className="playground-explanation-method">
     <div className="model-lab-feature-group-heading"><strong>{title}</strong>
       <span>{job ? jobStatusLabel(job.status) : "선택적으로 계산"}</span></div>
-    <p className="hint">{method === "permutation_shap_median_v1"
-      ? "실제 점수에 대한 기여도를 한 개의 합성 Train 중앙값 입력을 기준으로 설명합니다. 사건 원인이나 확률이 아닙니다."
-      : "Feature 하나를 참조 중앙값으로 치환할 때 점수가 어떻게 달라지는지 측정합니다."}</p>
+    <p className="hint">실제 점수에 대한 기여도를 한 개의 합성 Train 중앙값 입력을 기준으로 설명합니다. 사건 원인이나 확률이 아닙니다.</p>
     {lookup === "loading" && <p role="status">이 입력의 기존 설명을 확인 중입니다.</p>}
     {lookup === "error" && <button type="button" className="secondary"
       onClick={() => setRetry(current => current + 1)}>기존 설명 다시 조회</button>}
@@ -123,10 +116,7 @@ function MethodExplanation({ source, method, canRun, canCancel }: {
     {job?.status === "Cancelled" && <p role="status">{title} 계산이 취소됐습니다.</p>}
     {error && <p role="alert">{error}</p>}
     {result && <div>
-      {method === "permutation_shap_median_v1"
-        ? <ShapContributionChart result={result}
-            valueLabel="제출한 입력값" inputLabel="이 제출 입력" />
-        : <PlaygroundSensitivity result={result} />}
+      <ShapContributionChart result={result} valueLabel="제출한 입력값" inputLabel="이 제출 입력" />
       {canRun && <button type="button" className="secondary"
         disabled={busy} onClick={() => void run()}>{title} 다시 계산</button>}
     </div>}
@@ -137,18 +127,7 @@ export function PlaygroundExplanations({ source, canRun, canCancel, shapSupporte
   source: MLPlaygroundJob; canRun: boolean; canCancel: boolean;
   shapSupported?: boolean;
 }) {
-  const [sensitivityVisited, setSensitivityVisited] = useState(false);
-  if (source.status !== "Succeeded" || typeof source.result?.anomaly_score !== "number")
-    return null;
-  return <section className="playground-explanations" aria-label="단일 입력 모델 설명">
-    {shapSupported && <MethodExplanation key={source.id + ":shap"} source={source}
-      method="permutation_shap_median_v1" canRun={canRun} canCancel={canCancel} />}
-    <details className="observation-secondary-analysis" onToggle={event => {
-      if (event.currentTarget.open) setSensitivityVisited(true);
-    }}>
-      <summary>추가 실험 · 기준값 치환</summary>
-      {sensitivityVisited && <MethodExplanation key={source.id + ":sensitivity"} source={source}
-        method="median_reference_feature_replacement" canRun={canRun} canCancel={canCancel} />}
-    </details>
-  </section>;
+  if (source.status !== "Succeeded" || typeof source.result?.anomaly_score !== "number") return null;
+  return shapSupported ? <ShapExplanation key={source.id} source={source}
+    canRun={canRun} canCancel={canCancel} /> : <p className="hint">이 모델의 입력 수는 SHAP 계산 범위를 넘습니다.</p>;
 }

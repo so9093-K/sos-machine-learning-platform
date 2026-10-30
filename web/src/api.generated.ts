@@ -1471,7 +1471,7 @@ export interface paths {
         put?: never;
         /**
          * 온라인 추론
-         * @description Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. 다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관됐거나 Registry 상태를 확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다.
+         * @description Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. 다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관됐거나 Registry 상태를 확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다. 실제로 계산한 복제본의 판본·설정 지문·출력 계약이 일치할 때만 결과를 전달합니다. 배포 운영 상태를 조회하는 Dashboard는 추론 요청의 의존성이 아닙니다.
          */
         post: operations["predict_api_serving_endpoints__endpoint_id__predict_post"];
         delete?: never;
@@ -3846,7 +3846,7 @@ export interface components {
             runtime_application: string;
             /**
              * Status
-             * @description 서빙 Runtime 상태. OUT_OF_SYNC는 의도와 다른 Config로 실행 중이라 컨트롤러가 되돌리는 중임을 뜻한다.
+             * @description Dashboard에서 관측한 배포 상태. OUT_OF_SYNC는 의도와 다른 배포 설정이다. 실제 활성 판본의 추론 준비 여부는 Endpoint의 ready로 구별한다.
              */
             status: string;
             /**
@@ -3896,7 +3896,10 @@ export interface components {
             pending_model_revision_id?: string | null;
             /** Previous Model Revision Id */
             previous_model_revision_id?: string | null;
-            /** Ready */
+            /**
+             * Ready
+             * @description 실제 활성 복제본이 의도한 판본·설정 지문으로 응답함. Dashboard 가용성과 별개다.
+             */
             ready: boolean;
             runtime: components["schemas"]["ServingRuntimeOut"];
             /** Updated At */
@@ -3911,7 +3914,10 @@ export interface components {
         ServingRuntimeOut: {
             active?: components["schemas"]["ServingApplicationOut"] | null;
             pending?: components["schemas"]["ServingApplicationOut"] | null;
-            /** Reachable */
+            /**
+             * Reachable
+             * @description 배포 운영 상태를 조회하는 Ray Dashboard에 연결 가능함
+             */
             reachable: boolean;
         };
         /** ServingStateRequest */

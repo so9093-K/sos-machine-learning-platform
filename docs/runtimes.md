@@ -65,6 +65,8 @@ SELECT만 허용하며, DDL·Feature 적용·폐기 권한을 주지 않는다. 
 
 API의 `/api/ready`는 DB·객체 저장소를 API의 필수 의존성으로, Job Worker와 온라인 서빙 Runtime을 따로 실행되는 기능으로 구분해 보고한다. Worker가 멈춰도 API와 온라인 추론은 계속 동작하며 상태는 `degraded`다.
 
+추론 요청은 Dashboard를 선행 조회하지 않고 실제 응답의 판본·시작 설정 지문·출력 계약을 검증한다. Endpoint의 준비 상태는 실제 복제본 응답으로, 온라인 서빙 기능의 연결은 Serve HTTP Proxy의 생존 경로로 확인한다. 배포 Config 관측·복구와 추론 준비의 경계는 [ADR 0022](adr/0022-serving-inference-readiness.md)를 따른다.
+
 ## 현재 구현의 범위
 
 등록형 Workflow 정의·스케줄·상태의 Dagster OSS Runtime은 별도 Python 이미지와 Code Location·Daemon·Webserver·메타데이터 DB를 사용하되 SOS와 동일한 uv.lock의 Dagster dependency group에서 설치한다. PostgreSQL 드라이버는 현재 dagster-postgres의 upstream psycopg2 의존성과 맞추어 유지한다. Dagster가 독립 SOS Worker의 자원 격리·ML 계산·결과 게시 책임을 대신하지 않는다. Dagster Run 실패·취소 후 진행 중인 SOS Job 취소는 Dagster 상태 센서가 요청하며, 실제 중단 확정은 SOS Job/Attempt의 계약이다.

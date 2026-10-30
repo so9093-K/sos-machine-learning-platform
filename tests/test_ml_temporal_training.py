@@ -75,6 +75,11 @@ def test_fitted_model_does_not_use_calibration_or_test_to_impute(monkeypatch, tm
     assert result["training_rows"] == 4
     assert result["runtime"]["training_missing_policy"] == "train_median"
     assert result["training_selection"]["temporal_split"]["calibration_rows"] == 3
+    profile = result["runtime"]["feature_training_profile"]
+    assert profile["row_count"] == 4
+    assert profile["input_space"] == "model_input_after_preprocessing"
+    np.testing.assert_allclose(list(profile["features"]["value"].values()),
+                               np.quantile([1, 3, 3, 9], [0, .1, .5, .9, 1]))
 
 
 def test_identical_timestamp_rows_do_not_cross_cutoff():

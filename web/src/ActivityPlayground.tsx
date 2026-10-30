@@ -61,6 +61,9 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   const trail = topicTree(catalog.tree, TOPIC);
   const [offered, setOffered] = useState<ModelOffering[] | null>(null);
   const [offeredError, setOfferedError] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [requestCursor, setRequestCursor] = useState<string | null>(null);
+  const [loadingModels, setLoadingModels] = useState(true);
   const [retry, setRetry] = useState(0);
   // 입력 구조가 확인된 Dataset만 API 예시에 채운다. 맞지 않는 ID로 실패하는 예시를 만들지 않는다.
   const [readyDatasetId, setReadyDatasetId] = useState("");
@@ -71,11 +74,19 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   useEffect(() => {
     let active = true;
     setOfferedError("");
-    void request<ModelOfferingPage>("/api/ml/offered-models?limit=50")
-      .then(page => { if (active) setOffered(page.items); })
-      .catch(cause => { if (active) setOfferedError(formatError(cause)); });
+    setLoadingModels(true);
+    void request<ModelOfferingPage>("/api/ml/offered-models?limit=50" +
+      (requestCursor ? "&cursor=" + encodeURIComponent(requestCursor) : ""))
+      .then(page => { if (active) {
+        setOffered(previous => requestCursor
+          ? [...new Map([...(previous ?? []), ...page.items].map(item => [item.model.id, item])).values()]
+          : page.items);
+        setNextCursor(page.next_cursor ?? null);
+      } })
+      .catch(cause => { if (active) setOfferedError(formatError(cause)); })
+      .finally(() => { if (active) setLoadingModels(false); });
     return () => { active = false; };
-  }, [retry]);
+  }, [retry, requestCursor]);
   const models = topic && offered
     ? offered.filter(item => isTopicCompatible(item.model, topic)) : [];
   // 지정한 모델이 첫 목록 페이지에 없으면 그 판본을 직접 확인한다. 다른 모델로 대체하지 않는다.
@@ -176,7 +187,13 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
           제공 모델 중에서 다시 선택</button>}
       </div>}
       {selection.state === "none" && offered !== null && topic && <p className="muted">
-        아직 사용할 수 있는 활동 이상 탐지 모델이 없습니다. 모델이 준비되면 이곳에서 바로 적용할 수 있습니다.</p>}
+        {nextCursor ? "현재 조회한 목록에 호환 모델이 없습니다. 다음 제공 모델을 조회할 수 있습니다."
+          : "아직 사용할 수 있는 활동 이상 탐지 모델이 없습니다. 모델이 준비되면 이곳에서 바로 적용할 수 있습니다."}</p>}
+      {nextCursor && <button type="button" className="secondary" disabled={loadingModels}
+        onClick={() => {
+          if (requestCursor === nextCursor) setRetry(value => value + 1);
+          else setRequestCursor(nextCursor);
+        }}>{loadingModels ? "모델 조회 중…" : "다음 제공 모델 조회"}</button>}
       {chosen && <>
         <div className="playground-model">
           <span className="eyebrow">사용 모델</span>
@@ -185,7 +202,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
               {!models.some(item => item.model.id === chosen.model.id) && <option value={chosen.model.id}>
                 {algorithmLabel(chosen.model.algorithm)} · 선택한 모델</option>}
               {models.map(item => <option key={item.model.id} value={item.model.id}>
-                {algorithmLabel(item.model.algorithm)} · 제공 {formatRecordedAt(item.offered_at)}</option>)}
+                {item.description.slice(0, 70) || algorithmLabel(item.model.algorithm)} · 제공 {formatRecordedAt(item.offered_at)}</option>)}
             </select>
             : <strong>{algorithmLabel(chosen.model.algorithm)}</strong>}
           {endpoint && <span className={onlineReady ? "chip chip-ready" : "chip"}>

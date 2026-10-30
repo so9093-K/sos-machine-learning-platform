@@ -6,6 +6,8 @@ Dagster는 단계 의존성과 Workflow Run을 소유한다. Job/Attempt와 결�
 import os
 import time
 
+from sqlalchemy import text
+
 from dagster import (
     AssetMaterialization,
     AssetSpec,
@@ -20,10 +22,9 @@ from dagster import (
     op,
     run_status_sensor,
 )
-from sqlalchemy import text
-
+from sos_platform.analysis_topics import ACTIVITY_FEATURES
 from sos_platform.dagster_workflows import workflow_job_key
-from sos_platform.pipeline_reference import FEATURES, PIPELINE_ID, PIPELINE_VERSION, STAGES
+from sos_platform.pipeline_reference import PIPELINE_ID, PIPELINE_VERSION, STAGES
 from sos_platform.store import Store
 
 
@@ -111,7 +112,7 @@ def training(context: OpExecutionContext, state: dict) -> dict:
     result = _job(context, row, "training", {
         "algorithm": "isolation_forest",
         "dataset_version": row["dataset_version"],
-        "features": list(FEATURES),
+        "features": list(ACTIVITY_FEATURES),
         "params": {
             "n_estimators": 100, "max_samples": "auto",
             "max_features": 1.0, "bootstrap": False, "random_state": 42,

@@ -56,6 +56,7 @@ class ModelServer:
         scores = score_observations(self._adapter, rows)
         return {
             "model_revision_id": self._revision["id"],
+            "digest": self._digest,
             "output_type": self._contract.output_type,
             "score_direction": self._contract.score_direction,
             "score_scale": self._contract.score_scale,

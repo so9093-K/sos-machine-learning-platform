@@ -1,6 +1,6 @@
 # 0020 — 온라인 서빙 운영 가시성과 실제 상태 정합성
 
-- 상태: **Accepted**
+- 상태: **Accepted** · API 준비 판정은 [ADR 0022](0022-serving-inference-readiness.md)로 대체
 - 관련: [ADR 0019](0019-ray-serve-online-serving.md), [Runtimes](../runtimes.md#온라인-서빙-runtime), [Getting Started](../getting-started.md#로컬-운영-도구), [Diagnostics](../diagnostics.md#온라인-서빙-장애전환-실패)
 - 범위: Ray Dashboard 공개 범위, 실제 Serve Config와 의도의 대조, 서빙 자원 수용, API 준비 상태의 범위
 - 대체: ADR 0019 결정 1의 "Dashboard 포트는 Compose 내부망에만 연다" 조항

@@ -72,7 +72,7 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
         except Exception:
             features["job_execution"] = "unavailable"
         features["online_serving"] = ("not_configured" if serving is None
-                                      else "ready" if serving.reachable() else "unavailable")
+                                      else "ready" if serving.inference_reachable() else "unavailable")
         status = ("unavailable" if any(v != "ready" for v in checks.values())
                   else "degraded" if "unavailable" in features.values() else "ready")
         result = {"status": status, "services": checks, "features": features}

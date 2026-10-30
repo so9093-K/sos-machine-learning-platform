@@ -1,5 +1,5 @@
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
-import { formatFeatureValue } from "./FeatureValueComparison";
+import { formatFeatureValue } from "./feature-format";
 import { FeatureResultDetails } from "./FeatureResultDetails";
 import { ModelScoreContext } from "./ModelScoreContext";
 import type { MLPlaygroundJob, ModelRevision } from "./types";
