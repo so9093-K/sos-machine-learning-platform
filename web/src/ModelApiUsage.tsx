@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { exampleValues } from "./ModelLabPlayground";
+import { useEffect, useState } from "react";
+import { exampleValues, type PlaygroundRun } from "./ModelLabPlayground";
+import { formatPlaygroundScore } from "./PlaygroundResult";
 import type { ModelRevision } from "./types";
 
 type Step = { title: string; result: string; command: string; note?: string };
@@ -16,17 +17,42 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
   </div>;
 }
 
+/** 단일 입력 예시의 출처. 실제로 계산한 입력 → 학습 기준값 → 값 없는 형식 순서로 고른다.
+ *  기준값이 없는 모델에 임의 값을 채워 실행 가능한 예시처럼 보이지 않게 한다.
+ */
+function singleInputExample(model: ModelRevision, lastRun?: PlaygroundRun) {
+  if (lastRun) return {
+    body: JSON.stringify({ model_revision_id: model.id,
+      features: Object.fromEntries(model.features.map(name => [name, lastRun.features[name] ?? null])) }),
+    source: `Playground에서 마지막으로 계산한 입력입니다(이상 점수 ${formatPlaygroundScore(lastRun.score)}). ` +
+      "같은 모델에 같은 입력을 보내면 같은 점수를 받습니다.",
+  };
+  const reference = exampleValues(model);
+  if (reference) return {
+    body: JSON.stringify({ model_revision_id: model.id,
+      features: Object.fromEntries(model.features.map(name => [name, Number(reference[name])])) }),
+    source: "아래 값은 이 모델의 학습 기준값입니다. Playground의 값 직접 입력에서 계산하면 그 입력으로 바뀝니다.",
+  };
+  return {
+    body: `{"model_revision_id": "${model.id}", "features": {${model.features.map(name => `"${name}": <값>`).join(", ")}}}`,
+    source: "이 모델에는 학습 기준값 기록이 없어 값을 채우지 않았습니다. <값>을 실제 숫자로 바꾸거나, " +
+      "Playground의 값 직접 입력에서 계산하면 그 입력으로 채워집니다.",
+  };
+}
+
 /** 화면에서 해본 점수 계산을 외부 시스템에서 같은 계약으로 요청하는 방법.
  *
- *  실제 선택한 모델 ID와 Dataset ID를 채우며, 단일 입력 예시는 모델의 학습 기준값을 쓴다.
+ *  선택한 모델 ID, 입력 구조가 확인된 Dataset ID, Playground에서 계산한 입력을 채운다.
  */
-export function ModelApiUsage({ model, datasetId }: { model: ModelRevision; datasetId?: string }) {
+export function ModelApiUsage({ model, datasetId, lastRun }: {
+  model: ModelRevision; datasetId?: string; lastRun?: PlaygroundRun;
+}) {
   const [flow, setFlow] = useState<"dataset" | "single">("dataset");
+  // 값 직접 입력으로 계산하면 그 입력을 재현하는 연동 예시를 바로 보여준다.
+  useEffect(() => { if (lastRun) setFlow("single"); }, [lastRun]);
   const origin = typeof window === "undefined" ? "http://127.0.0.1:9601" : window.location.origin;
   const auth = `-H "Authorization: Bearer $SOS_TOKEN"`;
-  const reference = exampleValues(model);
-  const features = Object.fromEntries(model.features.map(name =>
-    [name, reference ? Number(reference[name]) : 0]));
+  const single = singleInputExample(model, lastRun);
   const datasetSteps: Step[] = [
     { title: "데이터 등록", result: "응답의 id가 Dataset ID입니다. 이미 등록한 Dataset이면 건너뜁니다.",
       command: `curl -X POST "$SOS_API/api/datasets/files" ${auth} \\\n  -F "file=@activity.parquet"` },
@@ -40,9 +66,9 @@ export function ModelApiUsage({ model, datasetId }: { model: ModelRevision; data
       command: `curl "$SOS_API/api/ml/scoring/results/$RESULT_ID/observations?limit=25" ${auth}` },
   ];
   const singleSteps: Step[] = [
-    { title: "관측 1건 점수 요청", result: `모델 입력 Feature ${model.features.length}개를 모두 보냅니다. 아래 값은 이 모델의 학습 기준값입니다.`,
+    { title: "관측 1건 점수 요청", result: `모델 입력 Feature ${model.features.length}개를 모두 보냅니다. ${single.source}`,
       command: `curl -X POST "$SOS_API/api/ml/playground/jobs" ${auth} \\\n  -H "Idempotency-Key: activity-check-001" -H "Content-Type: application/json" \\\n` +
-        `  -d '${JSON.stringify({ model_revision_id: model.id, features })}'` },
+        `  -d '${single.body}'` },
     { title: "점수 확인", result: "status가 Succeeded이면 result.anomaly_score가 이 관측의 이상 점수입니다.",
       command: `curl "$SOS_API/api/ml/playground/jobs/$JOB_ID" ${auth}` },
   ];

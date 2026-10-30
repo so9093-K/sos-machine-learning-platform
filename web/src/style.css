@@ -521,7 +521,7 @@ button.surface-button[aria-pressed="true"] {
   box-shadow:inset 3px 0 var(--sos-accent);
 }
 .model-lab-usage-tabs { display:flex; gap:8px; flex-wrap:wrap; }
-.model-lab-usage-tabs button[aria-pressed="true"] {
+.model-lab-usage-tabs button[aria-pressed="true"], .api-usage-flows button[aria-pressed="true"] {
   box-shadow:inset 0 -3px var(--sos-accent); border-color:var(--sos-accent); }
 .model-lab-playground { display:grid; grid-template-columns:minmax(0,1fr); gap:15px; }
 .model-lab-workspace { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr);

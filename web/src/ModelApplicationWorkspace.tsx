@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MLScoringPanel } from "./MLScoringPanel";
-import { ModelLabPlayground, observationInputForPlayground, type ObservationExperiment } from "./ModelLabPlayground";
+import { ModelLabPlayground, observationInputForPlayground, type ObservationExperiment,
+  type PlaygroundRun } from "./ModelLabPlayground";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { Dataset, ModelRevision } from "./types";
@@ -8,7 +9,7 @@ import type { Dataset, ModelRevision } from "./types";
 /** 진입 위치와 관계없이 같은 모델 적용·관측값 실험·결과 복귀 경험을 사용한다. */
 export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, model, datasets, canRun, canCancel, onOpenResource,
   hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered, onResultViewChange,
-  onInputReadyChange }: {
+  onInputReadyChange, onPlaygroundRun }: {
   selectedDatasetId?: string;
   onSelectDataset?: (id: string) => void;
   model: ModelRevision; datasets: Dataset[]; canRun: boolean; canCancel: boolean;
@@ -17,6 +18,7 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
   canUpload?: boolean; onDatasetRegistered?: (dataset: Dataset) => void;
   onResultViewChange?: (visible: boolean) => void;
   onInputReadyChange?: (datasetId: string, ready: boolean) => void;
+  onPlaygroundRun?: (run: PlaygroundRun) => void;
 }) {
   const [usage, setUsage] = useState<"dataset" | "playground">("dataset");
   const [observationInput, setObservationInput] = useState<ObservationExperiment | null>(null);
@@ -67,7 +69,7 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
     </div>
     <div hidden={usage !== "playground"} ref={playgroundPanel}>
       <ModelLabPlayground model={model} canRun={canRun} canCancel={canCancel}
-        observationInput={observationInput} onBackToAnalysis={backToObservation} />
+        observationInput={observationInput} onBackToAnalysis={backToObservation} onLatestRun={onPlaygroundRun} />
     </div>
     <div hidden={usage !== "dataset"} ref={datasetPanel}>
       <MLScoringPanel selectedDatasetId={selectedDatasetId} onSelectDataset={onSelectDataset} model={model} datasets={datasets} hasMoreDatasets={hasMoreDatasets}

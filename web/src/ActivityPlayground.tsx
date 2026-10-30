@@ -4,6 +4,7 @@ import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { activityFeatureGroups } from "./ActivityFeatureGroups";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { ModelApiUsage } from "./ModelApiUsage";
+import type { PlaygroundRun } from "./ModelLabPlayground";
 import { isActivityModelCompatible } from "./ModelLabTaxonomy";
 import { taskGuides, topicGuides, topicTree, TaxonomyTrail, usePipelineCatalog,
   PLAYGROUND_TOPICS, type TaxonomyLinks } from "./ModelLabGuide";
@@ -39,6 +40,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
   const [modelId, setModelId] = useState("");
   // 입력 구조가 확인된 Dataset만 API 예시에 채운다. 맞지 않는 ID로 실패하는 예시를 만들지 않는다.
   const [readyDatasetId, setReadyDatasetId] = useState("");
+  // 단일 입력 예시는 Playground에서 실제로 계산한 마지막 입력을 그대로 재현한다.
+  const [lastRun, setLastRun] = useState<PlaygroundRun | null>(null);
   const [example, setExample] = useState<{ busy: boolean; error: string; datasetId: string }>(
     { busy: false, error: "", datasetId: "" });
   useEffect(() => {
@@ -115,7 +118,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
           hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
           canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
           canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
-          onInputReadyChange={(datasetId, ready) => setReadyDatasetId(ready ? datasetId : "")} />}
+          onInputReadyChange={(datasetId, ready) => setReadyDatasetId(ready ? datasetId : "")}
+          onPlaygroundRun={setLastRun} />}
       </>}
     </section>
 
@@ -126,6 +130,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
     </section>}
 
     {chosen && <ModelApiUsage model={chosen.model}
+      lastRun={lastRun?.modelRevisionId === chosen.model.id ? lastRun : undefined}
       datasetId={selectedDatasetId && readyDatasetId === selectedDatasetId ? selectedDatasetId : undefined} />}
 
     {definition && <details className="panel playground-details">

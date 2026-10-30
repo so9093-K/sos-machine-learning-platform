@@ -104,10 +104,14 @@ export function playgroundChangedFeatures(
   });
 }
 
-export function ModelLabPlayground({ model, canRun, canCancel, observationInput, onBackToAnalysis }: {
+export type PlaygroundRun = { modelRevisionId: string; features: Record<string, number | null>; score: number };
+
+export function ModelLabPlayground({ model, canRun, canCancel, observationInput, onBackToAnalysis, onLatestRun }: {
   model: ModelRevision; canRun: boolean; canCancel: boolean;
   observationInput?: ObservationExperiment | null;
   onBackToAnalysis?: () => void;
+  /** 마지막으로 점수가 확인된 실제 제출 입력. 편집 중인 값이 아니다. */
+  onLatestRun?: (run: PlaygroundRun) => void;
 }) {
   const reference = exampleValues(model);
   const [inputSearch, setInputSearch] = useState("");
@@ -222,6 +226,16 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     timer = setTimeout(() => void poll(), 1200);
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [job?.id, job?.status]);
+
+  const latestRunHandler = useRef(onLatestRun);
+  latestRunHandler.current = onLatestRun;
+  useEffect(() => {
+    const score = latestSuccessfulJob?.result?.anomaly_score;
+    const submitted = latestSuccessfulJob?.spec.features;
+    if (!latestSuccessfulJob || typeof score !== "number" || !submitted || typeof submitted !== "object") return;
+    latestRunHandler.current?.({ modelRevisionId: model.id, score,
+      features: submitted as Record<string, number | null> });
+  }, [latestSuccessfulJob?.id, model.id]);
 
   const featureDtypes = Array.isArray(model.runtime.feature_dtypes)
     ? model.runtime.feature_dtypes as string[] : [];
