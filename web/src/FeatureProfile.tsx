@@ -80,7 +80,8 @@ export function FeatureProfile({ model, values, names, editing = false, control,
   const row = (name: string, editable: boolean) => {
       const value = values[name];
       const range = ranges?.[name];
-      const median = range?.p50 ?? referenceMedian(model, name);
+      const reference = referenceMedian(model, name);
+      const median = range?.p50 ?? reference;
       // 항목마다 자기 단위의 범위를 쓴다. 서로 다른 단위의 원시 수치를 같은 축에 올리지 않는다.
       const span = range ? range.p90 - range.p10 : 0;
       const padding = span > 0 ? span / 4 : Math.max(Math.abs(median ?? 0) / 10, 1);
@@ -90,7 +91,8 @@ export function FeatureProfile({ model, values, names, editing = false, control,
       const direction = range && finite(value) ? value < range.p10 ? -1 : value > range.p90 ? 1 : 0 : 0;
       const excess = range && finite(value) && direction ? direction < 0 ? range.p10 - value : value - range.p90 : null;
       const relativeExcess = excess !== null && span > 0 && Number.isFinite(excess / span) ? excess / span : null;
-      const difference = finite(value) && median !== null && Number.isFinite(value - median) ? value - median : null;
+      // 표본 P50과 입력 복원의 근거인 학습 중앙값을 구별한다.
+      const difference = finite(value) && reference !== null && Number.isFinite(value - reference) ? value - reference : null;
       return <div className={`feature-profile-row${changedNames.includes(name) ? " is-changed" : ""}`} key={name}>
         <div className="feature-profile-feature"><strong title={name}>{activityFeatureLabel(name)}</strong>
           {changedNames.includes(name) && <span className="feature-profile-changed-label">수정</span>}
@@ -101,7 +103,7 @@ export function FeatureProfile({ model, values, names, editing = false, control,
           </div>}</div>
         {range && <div className="feature-profile-scale" role="img"
           title={`학습 하위 10% 지점 ${formatFeatureValue(name, range.p10)} · 하위 90% 지점 ${formatFeatureValue(name, range.p90)}`}
-          aria-label={`${activityFeatureLabel(name)} · 학습 하위 10% 지점 ${range.p10}, 중앙값 ${range.p50}, 하위 90% 지점 ${range.p90}, 현재 ${finite(value) ? value : "유효한 값 없음"}`}>
+          aria-label={`${activityFeatureLabel(name)} · 학습 하위 10% 지점 ${range.p10}, ${sampled ? "표본 중앙값" : "중앙값"} ${range.p50}, 하위 90% 지점 ${range.p90}, 현재 ${finite(value) ? value : "유효한 값 없음"}`}>
           <span className="feature-profile-band" style={{ left: `${position(range.p10)}%`, width: `${span / width * 100}%` }} />
           <span className="feature-profile-median" style={{ left: `${position(range.p50)}%` }} />
           {finite(value) && <span className={`feature-profile-dot${direction ? direction < 0 ? " outside-low" : " outside-high" : ""}`}
@@ -113,9 +115,9 @@ export function FeatureProfile({ model, values, names, editing = false, control,
           <span>P90 <strong>{formatFeatureValue(name, range.p90)}</strong></span>
         </div>}
         <div className="feature-profile-caption">
-          {!range && <span>학습 중앙값 {median === null ? "기록 없음" : formatFeatureValue(name, median)}</span>}
-          <span>{difference === null ? "비교 불가" : difference === 0 ? "중앙값과 동일" :
-            `중앙값 차이 ${difference > 0 ? "+" : ""}${formatFeatureValue(name, difference)}`}</span>
+          <span>학습 기준값 {reference === null ? "기록 없음" : formatFeatureValue(name, reference)}</span>
+          <span>{difference === null ? "비교 불가" : difference === 0 ? "학습 기준값과 동일" :
+            `학습 기준값 차이 ${difference > 0 ? "+" : ""}${formatFeatureValue(name, difference)}`}</span>
         </div>
         {direction !== 0 && excess !== null && finite(excess) && <p className="feature-profile-excess">
           <strong>{direction < 0 ? "◀ P10 미만" : "P90 초과 ▶"}</strong>
@@ -131,7 +133,7 @@ export function FeatureProfile({ model, values, names, editing = false, control,
     <p className="hint">{ranges ? "항목별 학습 중간 80% 구간과 현재 값을 비교합니다. 정상 범위나 모델 기여도가 아닙니다."
       : "이 판본에는 학습 분포 기록이 없어 중앙값과 수치만 비교합니다."}</p>
     {sampled && <p className="hint feature-profile-scope">학습 입력 {profile?.row_count?.toLocaleString("ko-KR")}건 중 {profile?.sample_rows?.toLocaleString("ko-KR")}건 표본의 근사 분포입니다. 최솟값·최댓값도 표본 기준입니다.</p>}
-    {ranges && <div className="feature-profile-legend"><span>━ 학습 P10–P90 구간</span><span>│ 중앙값</span>
+    {ranges && <div className="feature-profile-legend"><span>━ 학습 P10–P90 구간</span><span>│ {sampled ? "표본 중앙값" : "중앙값"}</span>
       <span>● 현재 값 · ◀ ▶ 구간 밖</span></div>}
     <div className="feature-profile-rows">{selected.map(name => row(name, true))}</div>
     <p className="hint">{selected.length < model.features.length ? editing ? `기본 ${selected.length}개 · ` : `${model.features.length}개 중 ${selected.length}개 표시 · ` : ""}

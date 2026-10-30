@@ -598,6 +598,30 @@ try {
   assert.equal(trainingFeatureRanges({ ...sampledModel, runtime: {
     ...sampledModel.runtime, feature_training_profile: {
       ...sampledModel.runtime.feature_training_profile, sample_rows: 0 } } }), null);
+  // 표본 P50과 실제 학습 기준 중앙값이 달라도 기준값 적용 뒤 차이는 0이다.
+  const distinctMedianModel = { ...sampledModel, features: ["value"], runtime: {
+    feature_reference_medians: [4999.5], feature_dtypes: ["Float64"],
+    feature_training_profile: { ...sampledModel.runtime.feature_training_profile,
+      features: { value: { min: 0, p10: 1000, p50: 5055.5, p90: 9000, max: 9999 } } },
+  } };
+  const medianComparison = value => renderToStaticMarkup(React.createElement(FeatureProfile, {
+    model: distinctMedianModel, values: { value },
+  }));
+  const restoredMedian = medianComparison(Number(exampleValues(distinctMedianModel).value));
+  assert.match(restoredMedian, /P50 · 표본 중앙값 <strong>5,055.5<\/strong>/);
+  assert.match(restoredMedian, /학습 기준값 4,999.5/);
+  assert.match(restoredMedian, /학습 기준값과 동일/);
+  assert.doesNotMatch(restoredMedian, /학습 기준값 차이/);
+  assert.match(medianComparison(5055.5), /학습 기준값 차이 \+56/);
+  assert.match(medianComparison(4990), /학습 기준값 차이 -9.5/);
+  const missingReference = renderToStaticMarkup(React.createElement(FeatureProfile, {
+    model: { ...distinctMedianModel, runtime: { ...distinctMedianModel.runtime, feature_reference_medians: undefined } },
+    values: { value: 5055.5 },
+  }));
+  assert.match(missingReference, /P50 · 표본 중앙값/);
+  assert.match(missingReference, /학습 기준값 기록 없음/);
+  assert.match(missingReference, /비교 불가/);
+  assert.doesNotMatch(missingReference, /학습 기준값과 동일/);
   const outlierProfile = value => renderToStaticMarkup(React.createElement(FeatureProfile, {
     model: profileModel, values: { cnt_file_create: 0, ratio_outbound_traffic: value },
   }));
