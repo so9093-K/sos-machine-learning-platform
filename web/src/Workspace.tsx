@@ -12,7 +12,7 @@ import { StoragePanel } from "./StoragePanel";
 import { AuditPanel } from "./AuditPanel";
 import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
-import type { Dataset, Job, Identity, ExplorationRequest, ModelRevision } from "./types";
+import type { Dataset, Job, Identity, ExplorationRequest, ModelRevision, PipelineDefinition } from "./types";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
 import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformShell } from "./PlatformShell";
@@ -87,8 +87,20 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   };
   const pipelineCatalog = usePipelineCatalog();
   // 체험 주제가 있는 모델은 그 Playground에서, 그 밖의 모델은 공통 모델 적용 화면에서 적용한다.
-  function applyModel(model: ModelRevision) {
-    if (playgroundTopicFor(model, pipelineCatalog.items) === "activity_anomaly") {
+  // 체험 주제 판단에는 카탈로그가 필요하다. 조회 전이면 기다리고, 실패하면 다른 화면으로 보내지 않는다.
+  async function applyModel(model: ModelRevision) {
+    let definitions = pipelineCatalog.items;
+    if (!definitions) {
+      try {
+        definitions = await request<PipelineDefinition[]>("/api/pipelines");
+      } catch (cause) {
+        const notice = describeError(cause);
+        setErrorNotice({ ...notice, message: "모델을 적용할 화면을 확인하지 못했습니다. 다시 시도하세요.",
+          guidance: notice.message });
+        return;
+      }
+    }
+    if (playgroundTopicFor(model, definitions) === "activity_anomaly") {
       navigateWithContext("topic", { modelId: model.id, datasetId: context.datasetId });
     } else startScoring(model.id);
   }
@@ -355,6 +367,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "task" && <AnalysisTaskPage id={context.taxonomyId ?? ""} links={taxonomyLinks} />}
       {tab === "topic" && <ActivityPlayground datasets={datasets} selectedDatasetId={context.datasetId}
         preferredModelId={context.modelId} onSelectModel={modelId => selectContext({ ...context, modelId })}
+        isAdministrator={actor.roles.includes("administrator")}
         onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
         hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
         onDatasetRegistered={catalog.upsert} canRun={canRun} canCancel={canCancel} canUpload={canWrite}
@@ -474,13 +487,13 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       {tab === "ml" && !resource && <ModelCatalog canRun={canRun}
         datasetId={context.datasetId} datasetName={datasets.find(item => item.id === context.datasetId)?.name}
         onClearDataset={() => selectContext({ ...context, datasetId: undefined })}
-        onOpenModel={id => openResource("model", id)} onScoreModel={applyModel} />}
+        onOpenModel={id => openResource("model", id)} onScoreModel={model => void applyModel(model)} />}
       {resource && <MLResourceDetail key={resource.kind + ":" + resource.id}
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         canRun={canRun} canCancel={canCancel}
         canManageModel={actor.capabilities.includes("model.manage")} isAdministrator={actor.roles.includes("administrator")}
         onOpenModelCatalog={() => navigateWithContext("ml", { datasetId: context.datasetId })}
-        onScoring={startScoring} onApplyModel={applyModel} />}
+        onScoring={startScoring} onApplyModel={model => void applyModel(model)} />}
       {tab === "scoring" && !resource && <ScoringWorkspace
         datasets={datasets} preferredModelId={context.modelId ?? ""}
         selectedDatasetId={context.datasetId ?? ""}

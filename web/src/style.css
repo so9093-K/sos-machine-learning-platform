@@ -258,7 +258,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   .sidebar { width:100%; }
 .workspace-header { align-items:flex-start; }
 .header-meta { justify-content:flex-start; }
-.dataset-nav { max-height:130px; }
 }
 @media(prefers-reduced-motion:reduce) {
   *,*::before,*::after { transition:none!important; scroll-behavior:auto!important; }
@@ -278,7 +277,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 @media(max-width:850px) {
   .global-nav { max-height:none; overflow:visible; display:flex; flex-wrap:wrap; gap:8px; }
   .global-nav .section-title { width:100%; }
-  .global-nav .job-navigation { width:auto; }
 }
 @media(max-width:620px) {
   .profile-findings { grid-template-columns:1fr; }
@@ -308,9 +306,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   border-color:var(--sos-border); box-shadow:inset 3px 0 var(--sos-accent);
 }
 .workspace-link small { font-size:11px; color:var(--sos-muted); }
-.data-sidebar { display:grid; gap:8px; margin-top:8px; }
-.data-sidebar .section-title { padding-top:8px; }
-.data-sidebar .dataset-nav { overflow-y:auto; }
 
 /* 홈: 제품 영역과 모델 제공 상태를 함께 표시한다. */
 .platform-home { display:grid; gap:25px; min-width:0; }
@@ -355,7 +350,6 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
   .platform-nav-group { display:flex; align-items:center; flex-wrap:wrap; }
   .platform-nav .section-title { flex-basis:100%; }
   .global-nav a.workspace-link { width:auto; }
-  .data-sidebar { width:100%; }
 }
 @media(max-width:620px) {
   .platform-intro { padding:22px 18px; }
@@ -416,8 +410,6 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
 .ml-activity-filter { display:grid; gap:6px; max-width:320px; margin-bottom:18px;
   color:var(--sos-muted); font-size:12px; }
 .platform-activity { display:grid; gap:18px; }
-.platform-section-intro h2 { font-size:19px; margin-bottom:7px; }
-.platform-section-intro p { color:var(--sos-muted); font-size:13px; line-height:1.65; }
 .activity-scope-nav { display:flex; flex-direction:row; flex-wrap:wrap; gap:8px; padding:0; }
 .activity-scope-nav [aria-current="page"] { box-shadow:0 2px 0 var(--sos-accent); }
 
@@ -910,9 +902,6 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 }
 
 /* 데이터 선택과 결과 조사는 좁은 화면에서도 본문에서 이어진다. */
-.dataset-switcher { display:flex; align-items:end; flex-wrap:wrap; gap:12px; margin:0 0 16px; min-width:0; }
-.dataset-switcher > label { display:grid; gap:7px; font-size:13px; min-width:0; width:min(100%,520px); }
-.dataset-switcher select { width:100%; }
 .data-job-workspace { display:grid; grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr); gap:24px; min-width:0; align-items:start; }
 .data-job-list,.data-job-detail { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; min-width:0; }
 .data-job-search { display:grid; gap:7px; font-size:13px; }
@@ -1038,14 +1027,6 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .model-input-contract > p { margin:0; font-size:13px; line-height:1.6; color:var(--sos-muted); }
 .model-creation-evidence h4 { margin-top:18px; }
 .feature-result-details th small { display:block; margin-top:2px; color:var(--sos-muted); font-size:12px; font-weight:400; }
-.activity-topic { display:grid; gap:16px; min-width:0; }
-.activity-topic .panel > p { font-size:14px; line-height:1.7; max-width:820px; }
-.activity-topic .panel > h2 { margin-bottom:10px; }
-.activity-topic .panel > .evidence-facts { margin:16px 0 4px; }
-.activity-topic .panel > .hint { margin-top:12px; }
-.activity-topic-features { margin:14px 0; }
-.activity-topic-features > div { margin-top:10px; }
-.activity-topic-features p { margin:4px 0 0; font-size:13px; line-height:1.7; color:var(--sos-muted); }
 
 /* 학습 유형·분석 과제 소개와 주제 Playground */
 .guide-page, .playground-page { display:grid; gap:22px; min-width:0; }
@@ -1093,6 +1074,7 @@ button.surface-button.guide-choice:hover { background:var(--sos-raised); }
 .playground-notice { margin-top:4px; padding:14px 16px; border:1px solid var(--sos-border); border-radius:11px;
   background:var(--sos-raised); font-size:13px; line-height:1.65; }
 .playground-notice p { margin:6px 0 0; color:var(--sos-muted); }
+.playground-notice button { margin-top:10px; }
 .playground-model { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:6px 0 14px; }
 .playground-model strong { font-size:15px; }
 .playground-model .muted { flex-basis:100%; margin:0; }
