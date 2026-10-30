@@ -28,16 +28,10 @@ def deletion_impact(store: Store, model_id: str) -> dict:
             (SELECT count(*) FROM evaluation_revisions e
                 JOIN scoring_results s ON s.id=e.scoring_result_id
                 WHERE s.model_revision_id=:id) AS evaluations,
-            (SELECT count(*) FROM explanation_results WHERE model_revision_id=:id) AS explanations,
-            (SELECT count(*) FROM jobs WHERE status IN ('Queued','Running')
-                AND ((spec::jsonb->>'model_revision_id')=:id OR
-                  (spec::jsonb->>'scoring_result_id') IN
-                    (SELECT id FROM scoring_results WHERE model_revision_id=:id))) AS active_jobs,
-            (SELECT count(*) FROM model_revisions WHERE id!=:id AND location=
-                (SELECT location FROM model_revisions WHERE id=:id)
-                AND lifecycle_state!='Deleted') AS shared_artifacts
+            (SELECT count(*) FROM explanation_results WHERE model_revision_id=:id) AS explanations
         """), {"id": model_id}).mappings().one()
-    return {key:int(value) for key,value in counts.items()}
+        return {**{key:int(value) for key,value in counts.items()},
+                **deletion_impact_transaction(db, model_id)}
 
 
 def begin_delete(store: Store, model_id: str, actor: Actor) -> dict:
@@ -85,13 +79,20 @@ def begin_delete(store: Store, model_id: str, actor: Actor) -> dict:
 
 
 def deletion_impact_transaction(db, model_id: str) -> dict:
-    """삭제 트랜잭션 안에서 참조를 재확인한다."""
+    """삭제를 막는 참조. 영향 조회와 삭제 트랜잭션이 같은 판정을 쓴다.
+
+    활성 Job은 모델 파일을 읽는 모든 접수 경로를 포함한다. 모델을 직접 지정한 Job,
+    Scoring 결과를 거치는 Job, Playground 결과를 거치는 설명 Job이다.
+    """
     record=db.execute(text("""
         SELECT
           (SELECT count(*) FROM jobs WHERE status IN ('Queued','Running')
             AND ((spec::jsonb->>'model_revision_id')=:id OR
               (spec::jsonb->>'scoring_result_id') IN
-                (SELECT id FROM scoring_results WHERE model_revision_id=:id))) AS active_jobs,
+                (SELECT id FROM scoring_results WHERE model_revision_id=:id) OR
+              (spec::jsonb->>'playground_job_id') IN
+                (SELECT id FROM jobs WHERE kind='ml_playground'
+                  AND (spec::jsonb->>'model_revision_id')=:id))) AS active_jobs,
           (SELECT count(*) FROM model_revisions WHERE id!=:id AND location=
             (SELECT location FROM model_revisions WHERE id=:id)
             AND lifecycle_state!='Deleted') AS shared_artifacts

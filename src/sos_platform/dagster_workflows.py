@@ -15,7 +15,8 @@ def workflow_job_key(submission_id: str, stage: str) -> str:
     return f"workflow:{submission_id}:{stage}"
 
 
-def _submission(store, submission_id: str) -> dict | None:
+def get_submission(store, submission_id: str) -> dict | None:
+    """SOS 접수 기록만 읽는다. 소유권 판정은 Dagster 조회 전에 이 기록으로 한다."""
     with store.connection() as db:
         row = db.execute(
             text("SELECT * FROM workflow_submissions WHERE id=:id"),
@@ -36,7 +37,9 @@ def _job_by_stage(store, row: dict, stage: str) -> dict | None:
     return store.get_job(job_id) if job_id else None
 
 
-def _run(store, row: dict, *, include_jobs: bool = True, client: DagsterClient | None = None) -> dict:
+def describe_run(store, row: dict, *, include_jobs: bool = True,
+                 client: DagsterClient | None = None) -> dict:
+    """접수 기록에 Dagster 실행 상태와 단계별 SOS Job을 합친다."""
     client = client or DagsterClient()
     run_id = row["dagster_run_id"]
     if not run_id:
@@ -172,12 +175,7 @@ def create_run(store, dataset: dict, owner_actor: str, inspection: dict,
             action="workflow.submit", resource_type="workflow",
             resource_id=submission_id,
         )
-    return get_run(store, submission_id)
-
-
-def get_run(store, submission_id: str, *, include_jobs: bool = True) -> dict | None:
-    row = _submission(store, submission_id)
-    return _run(store, row, include_jobs=include_jobs) if row else None
+    return describe_run(store, get_submission(store, submission_id))
 
 
 def list_runs(store, *, actor_id: str | None, limit: int = 30) -> list[dict]:
@@ -192,13 +190,12 @@ def list_runs(store, *, actor_id: str | None, limit: int = 30) -> list[dict]:
                 "ORDER BY created_at DESC,id DESC LIMIT :n"
             ), {"actor": actor_id, "n": limit}).mappings().all()
     client = DagsterClient()
-    return [_run(store, dict(row), include_jobs=False, client=client) for row in rows]
+    return [describe_run(store, dict(row), include_jobs=False, client=client) for row in rows]
 
 
-def cancel_run(store, submission_id: str) -> dict | None:
-    row = _submission(store, submission_id)
-    if row is None:
-        return None
+def cancel_run(store, row: dict) -> dict:
+    """소유권을 확인한 접수 기록의 실행을 취소한다."""
+    submission_id = row["id"]
     # 접수만 완료된 요청에도 취소 의도를 보존한다. 실제 Run 상태는 Dagster 정본이다.
     with store.connection() as db:
         db.execute(text(
@@ -218,7 +215,7 @@ def cancel_run(store, submission_id: str) -> dict | None:
                         actor_type=row["owner_actor_type"],
                     )
             client.terminate(run_id)
-    result = get_run(store, submission_id)
-    if result and result["status"] in ("Queued", "Running"):
+    result = describe_run(store, get_submission(store, submission_id))
+    if result["status"] in ("Queued", "Running"):
         result["cancel_requested"] = True
     return result

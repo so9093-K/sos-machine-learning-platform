@@ -746,12 +746,12 @@ try {
   const offeringReadOnly = renderToStaticMarkup(React.createElement(ModelOfferingPanel, {
     ...offeringProps, canManage: false,
   }));
-  assert.match(offeringReadOnly, /제공되지 않은 판본/);
+  assert.match(offeringReadOnly, /제공되지 않은 모델/);
   assert.doesNotMatch(offeringReadOnly, /<textarea|type="submit"|모델 제공 중단/);
   const offeringEditable = renderToStaticMarkup(React.createElement(ModelOfferingPanel, {
     ...offeringProps, canManage: true,
   }));
-  assert.match(offeringEditable, /사용 목적·적용 대상·알려진 한계/);
+  assert.match(offeringEditable, /사용 목적·적용 대상·주의사항/);
   assert.match(offeringEditable, /<button type="submit" disabled/);
   const unregisteredOffering = renderToStaticMarkup(React.createElement(ModelOfferingPanel, {
     ...offeringProps, model: { ...offeringProps.model, registry_version: null },
@@ -763,7 +763,7 @@ try {
     ...offeringProps, offering: null, error: "조회 연결 실패", canManage: true,
   }));
   assert.match(offeringReadFailure, /조회 연결 실패/);
-  assert.doesNotMatch(offeringReadFailure, /<textarea|제공되지 않은 판본/);
+  assert.doesNotMatch(offeringReadFailure, /<textarea|제공되지 않은 모델/);
   const { ActivityTopic } = await vite.ssrLoadModule("/src/ActivityTopic.tsx");
   const topicPage = renderToStaticMarkup(React.createElement(ActivityTopic, {
     canRun: true, onClearDataset: () => {}, onOpenModel: () => {}, onScoreModel: () => {},
