@@ -70,19 +70,23 @@ export function playgroundTopicFor(model: Pick<ModelRevision, "features" | "outp
   return topics?.find(topic => hasPlayground(topic) && isTopicCompatible(model, topic))?.id ?? null;
 }
 
-/** 분석 주제 카탈로그. 제공 분류와 주제의 입력·출력 계약을 함께 확인한다. */
-export function useTopicCatalog() {
+/** 분석 주제 카탈로그. 제공 분류와 주제의 입력·출력 계약을 함께 확인한다.
+ *
+ *  enabled가 거짓이면(주제를 쓰지 않는 계정) 요청하지 않아 불필요한 접근 거부를 만들지 않는다.
+ */
+export function useTopicCatalog(enabled = true) {
   const [items, setItems] = useState<AnalysisTopic[] | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     setError("");
     void request<AnalysisTopic[]>("/api/topics")
       .then(value => { if (active) setItems(value); })
       .catch(cause => { if (active) setError(formatError(cause)); });
     return () => { active = false; };
-  }, [retry]);
+  }, [retry, enabled]);
   const playable = (items ?? []).filter(hasPlayground).map(topic => ({ ...topic, topic: topic.id }));
   return { items, tree: modelLabTree(playable), error, reload: () => setRetry(value => value + 1) };
 }

@@ -293,7 +293,8 @@ export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInsp
   context?: MLNavigationContext;
   resource?: ResourceRoute;
 }) {
-  const catalog = useTopicCatalog();
+  // 주제 트리는 데이터 조회 권한이 있는 계정의 ML 분석 메뉴에만 있다. 운영 전용 계정은 조회하지 않는다.
+  const catalog = useTopicCatalog(canViewDataset);
   const catalogError = Boolean(catalog.error);
   const catalogLoading = catalog.items === null && !catalogError;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
