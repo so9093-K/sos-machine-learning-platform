@@ -764,11 +764,14 @@ try {
   }));
   assert.match(offeringReadFailure, /조회 연결 실패/);
   assert.doesNotMatch(offeringReadFailure, /<textarea|제공되지 않은 모델/);
-  const { ActivityTopic } = await vite.ssrLoadModule("/src/ActivityTopic.tsx");
-  const topicPage = renderToStaticMarkup(React.createElement(ActivityTopic, {
-    canRun: true, onClearDataset: () => {}, onOpenModel: () => {}, onScoreModel: () => {},
+  const { ActivityPlayground } = await vite.ssrLoadModule("/src/ActivityPlayground.tsx");
+  const topicPage = renderToStaticMarkup(React.createElement(ActivityPlayground, {
+    datasets: [], onSelectDataset: () => {}, hasMoreDatasets: false, onLoadMoreDatasets: async () => {},
+    onDatasetRegistered: () => {}, canRun: true, canCancel: true, canUpload: true, onOpenResource: () => {},
+    links: { onOpenLearningType: () => {}, onOpenTask: () => {}, onOpenTopic: () => {} },
   }));
-  assert.match(topicPage, /분석 개요/);
+  assert.match(topicPage, /활용 방법/);
+  assert.match(topicPage, /직접 체험/);
   assert.doesNotMatch(topicPage, /등록 파이프라인/);
   const { PlatformOverview } = await vite.ssrLoadModule("/src/PlatformOverview.tsx");
   const home = renderToStaticMarkup(React.createElement(PlatformOverview, {

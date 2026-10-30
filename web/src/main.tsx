@@ -17,13 +17,14 @@ function OperatorWorkspace({ actor, brandName, brandReady, brandLoadError, onBra
   actor: Identity; brandName: string; brandReady: boolean; brandLoadError: string;
   onBrandRetry: () => void; onSignOut: () => void;
 }) {
-  const { tab, navigate } = useWorkspaceNavigation();
+  const { tab, navigate, navigateWithContext } = useWorkspaceNavigation();
   const canInspectStorage = actor.capabilities.includes("storage.inspect");
   const canViewAudit = actor.capabilities.includes("audit.read");
   const section = tab === "audit" && canViewAudit ? "audit"
     : canInspectStorage ? "storage" : "audit";
   useEffect(() => { if (tab !== section) navigate(section); }, [tab, section, navigate]);
   return <PlatformShell actor={actor} section={section} onNavigate={navigate}
+    onOpenTaxonomy={(target, id) => navigateWithContext(target, { taxonomyId: id })}
     modelContext={{}} modelResource={null} onSignOut={onSignOut}
     canConfigure={false} brandName={brandName} brandReady={brandReady}
     brandLoadError={brandLoadError} onBrandRetry={onBrandRetry} onBrandChange={() => {}}

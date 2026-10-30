@@ -23,6 +23,8 @@ type Props = {
   canUpload?: boolean;
   onDatasetRegistered?: (dataset: Dataset) => void;
   onResultViewChange?: (visible: boolean) => void;
+  /** 선택한 Dataset의 입력 구조가 모델과 일치하는지 확인될 때마다 알린다. */
+  onInputReadyChange?: (datasetId: string, ready: boolean) => void;
   onTryObservation?: (
     features: Record<string, number | null>, rowIndex: number, score: number,
     scoringResultId: string, modelRevisionId: string,
@@ -34,7 +36,7 @@ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 /** 학습된 모델을 다른 Dataset에 적용하는 독립 Scoring 경험. */
 export function MLScoringPanel({
   selectedDatasetId, onSelectDataset, model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult, onOpenResource,
-  canUpload = false, onDatasetRegistered, onResultViewChange, onTryObservation,
+  canUpload = false, onDatasetRegistered, onResultViewChange, onInputReadyChange, onTryObservation,
 }: Props) {
   const [localDatasetId, setLocalDatasetId] = useState("");
   const datasetId = selectedDatasetId ?? localDatasetId;
@@ -143,6 +145,9 @@ export function MLScoringPanel({
     ? timeColumns.find(col => col.name === "ts")?.name ?? ""
     : timeColumns.some(col => col.name === timeColumnChoice) ? timeColumnChoice : "";
   const inputReady = datasetId !== "" && inputCheck?.ready === true;
+  const inputReadyHandler = useRef(onInputReadyChange);
+  inputReadyHandler.current = onInputReadyChange;
+  useEffect(() => { inputReadyHandler.current?.(datasetId, inputReady); }, [datasetId, inputReady]);
   function chooseDataset(id: string) {
     historySelectionRequest.current += 1;
     setLoadingHistoryId(null);

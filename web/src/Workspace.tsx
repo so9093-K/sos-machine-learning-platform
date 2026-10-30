@@ -18,7 +18,9 @@ import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation"
 import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
-import { ActivityTopic } from "./ActivityTopic";
+import { ActivityPlayground } from "./ActivityPlayground";
+import { AnalysisTaskPage, LearningTypePage, learningTypeGuides, taskGuides,
+  type TaxonomyLinks } from "./ModelLabGuide";
 import { PipelineWorkspace } from "./PipelineWorkspace";
 import { DataSourceSidebar } from "./DataSourceSidebar";
 import { ModelCatalog } from "./ModelCatalog";
@@ -83,6 +85,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   useEffect(() => {
     if (selectionActive) setSelected(context.datasetId ?? "");
   }, [selectionActive, tab, context.datasetId]);
+  const taxonomyLinks: TaxonomyLinks = {
+    onOpenLearningType: id => navigateWithContext("learning", { taxonomyId: id }),
+    onOpenTask: id => navigateWithContext("task", { taxonomyId: id }),
+    onOpenTopic: () => setTab("topic"),
+  };
   function startScoring(modelId: string) {
     navigateWithContext("scoring", { modelId, datasetId: context.datasetId, pipelineRunId: context.pipelineRunId });
   }
@@ -271,7 +278,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   }
 
   return <PlatformShell actor={actor} section={tab} modelContext={context}
+    pageTitle={tab === "learning" ? learningTypeGuides[context.taxonomyId ?? ""]?.title
+      : tab === "task" ? taskGuides[context.taxonomyId ?? ""]?.title : undefined}
     modelResource={resource} onNavigate={setTab}
+    onOpenTaxonomy={(target, id) => navigateWithContext(target, { taxonomyId: id })}
     onSignOut={onSignOut} canConfigure={canConfigure}
     brandName={brandName} brandReady={brandReady} brandLoadError={brandLoadError}
     onBrandChange={onBrandChange} onBrandRetry={onBrandRetry}
@@ -342,7 +352,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
         canViewModels={actor.capabilities.includes("job.read")}
         canWrite={canWrite} canPrepare={canRun}
-        onNavigate={setTab}
+        onNavigate={setTab} onOpenLearningType={taxonomyLinks.onOpenLearningType}
         onOpenDataset={id => chooseDataset(id, "understanding")} />}
       {context.pipelineRunId && tab !== "pipelines" && <div className="pipeline-return">
         <button className="secondary" onClick={() => navigateWithContext("pipelines", {
@@ -362,11 +372,13 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         : <section className="panel"><h2>파이프라인 조회 권한 없음</h2>
           <p>실행 결과 조회에는 작업 조회 권한이 필요합니다. 준비된 모델은 모델 활용에서 선택해 데이터에 적용할 수 있습니다.</p>
           <button type="button" onClick={() => setTab("ml")}>모델 활용 →</button></section>)}
-      {tab === "topic" && <ActivityTopic canRun={canRun} datasetId={context.datasetId}
-        datasetName={datasets.find(item => item.id === context.datasetId)?.name}
-        onClearDataset={() => selectContext({ ...context, datasetId: undefined })}
-        onOpenModel={id => openResource("model", id)} onScoreModel={startScoring}
-        onOpenPipelines={canOperatePipelines ? () => setTab("pipelines") : undefined} />}
+      {tab === "learning" && <LearningTypePage id={context.taxonomyId ?? ""} links={taxonomyLinks} />}
+      {tab === "task" && <AnalysisTaskPage id={context.taxonomyId ?? ""} links={taxonomyLinks} />}
+      {tab === "topic" && <ActivityPlayground datasets={datasets} selectedDatasetId={context.datasetId}
+        onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
+        hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
+        onDatasetRegistered={catalog.upsert} canRun={canRun} canCancel={canCancel} canUpload={canWrite}
+        onOpenResource={openResource} links={taxonomyLinks} />}
       {isDataArea && datasets.length > 0 && <div className="dataset-switcher">
         <label>Dataset 선택<select aria-label="현재 Dataset" value={selected}
           onChange={event => chooseDataset(event.target.value, tab as "understanding" | "preview" | "profile" | "preparation")}>

@@ -11,7 +11,9 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
   preview: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
   profile: { eyebrow: "DATA EXPLORER", title: "데이터 탐색", description: "구조·품질 이해 · 조건 조회 · 분포 탐색" },
   preparation: { eyebrow: "DATA PREPARATION", title: "데이터 준비", description: "원본 선택 · 변환 편집 · 결과 Dataset" },
-  topic: { eyebrow: "분석 주제", title: "활동 이상 탐지", description: "활동 패턴 이해 · 모델 적용 · 결과 분석" },
+  learning: { eyebrow: "학습 유형", title: "학습 유형", description: "개요 · 활용 상황 · 분석 과제" },
+  task: { eyebrow: "분석 과제", title: "분석 과제", description: "원리 · 활용 방법 · 결과 해석 · 주제" },
+  topic: { eyebrow: "PLAYGROUND", title: "활동 이상 탐지", description: "활용 방법 · 직접 체험 · 결과 해석 · 서비스 연동" },
   pipelines: { eyebrow: "MODEL OPERATIONS", title: "등록 파이프라인", description: "모델 공급 운영 · 단계별 결과 · 실행 근거" },
   ml: { eyebrow: "MODELS", title: "모델 활용", description: "모델 선택 · 입력 확인 · 적용 · 결과 이해" },
   scoring: { eyebrow: "SCORING", title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
@@ -25,14 +27,17 @@ const pageLabels: Record<WorkspaceTab, { eyebrow: string; title: string; descrip
 };
 
 /** 모든 페이지에 공통인 탐색·인증 문맥을 업무 화면에서 분리한다. */
-export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfigure,
+export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTaxonomy, onSignOut, canConfigure,
   brandName, brandReady, brandLoadError, onBrandChange, onBrandRetry,
   canInspectStorage, canViewAudit, modelContext, modelResource, dataSidebar, children }: {
   actor: Identity;
   section: WorkspaceTab;
+  /** 분류 ID처럼 화면 내용에 따라 정해지는 제목. */
+  pageTitle?: string;
   modelContext: MLNavigationContext;
   modelResource: ResourceRoute;
   onNavigate: (tab: WorkspaceTab) => void;
+  onOpenTaxonomy: (tab: "learning" | "task", id: string) => void;
   onSignOut: () => void;
   canConfigure: boolean;
   brandName: string;
@@ -53,7 +58,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
     setLocalOperatorHost(isLocalOperatorHost());
   }, []);
   const label = pageLabels[section];
-  const title = section === "overview" ? `${brandName} Workspace` : label.title;
+  const title = section === "overview" ? `${brandName} Workspace` : pageTitle ?? label.title;
   useEffect(() => {
     document.title = section === "overview" ? title : `${title} · ${brandName}`;
   }, [section, title, brandName]);
@@ -70,6 +75,7 @@ export function PlatformShell({ actor, section, onNavigate, onSignOut, canConfig
       </div>
       <div id="sos-sidebar-menu" className={"sidebar-menu" + (menuOpen ? " open" : "")}>
       <PlatformNavigation active={section} context={modelContext} resource={modelResource} onNavigate={onNavigate}
+        onOpenTaxonomy={onOpenTaxonomy}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
         canViewDataset={actor.capabilities.includes("dataset.read")}
         canPrepareData={actor.capabilities.includes("job.create")}

@@ -489,20 +489,21 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
   .shap-result .chart { height:370px; }
 }
 
-/* 독립 Catalog 분류 정보를 탐색용 폴더로 표시한다. 폴더는 실행 화면이 아니다. */
+/* 학습 유형 → 분석 과제 → 주제. 각 단계는 소개 화면이며 펼침 버튼은 하위 목록만 접는다. */
 .model-lab-tree { display:grid; gap:3px; padding:0 2px 4px; min-width:0; }
 .model-lab-tree-group { min-width:0; }
 .model-lab-tree-children { padding-left:12px; margin-left:8px; border-left:1px solid var(--sos-border); min-width:0; }
-.model-lab-tree-toggle, .model-lab-topic-link { display:flex; align-items:center; gap:6px;
+.model-lab-tree-row { display:flex; align-items:center; gap:2px; min-width:0; }
+button.ghost.model-lab-tree-caret { width:22px; flex-shrink:0; padding:8px 0; color:var(--sos-muted); font-size:11px; }
+.model-lab-tree-link, .model-lab-topic-link { display:flex; align-items:center; gap:6px;
   width:100%; min-width:0; text-align:left; border-radius:8px; font-size:12px; }
-button.ghost.model-lab-tree-toggle { padding:9px 5px; color:var(--sos-text); }
-.model-lab-tree-toggle:hover { background:var(--sos-raised); }
-.model-lab-tree-toggle svg, .model-lab-topic-link svg { flex-shrink:0; }
-.model-lab-tree-caret { width:10px; flex-shrink:0; color:var(--sos-muted); }
+.model-lab-tree-link svg, .model-lab-topic-link svg { flex-shrink:0; }
 .model-lab-tree-name { min-width:0; overflow-wrap:anywhere; font-weight:650; }
-.model-lab-tree-toggle small, .model-lab-topic-link small { color:var(--sos-muted); flex-shrink:0; font-size:11px; }
+.model-lab-tree-link small, .model-lab-topic-link small { color:var(--sos-muted); flex-shrink:0; font-size:11px; }
+.global-nav a.workspace-link.model-lab-tree-link { flex:1; gap:7px; padding:9px 6px; }
 .global-nav a.workspace-link.model-lab-topic-link { width:100%; gap:7px; padding:10px 7px; }
-.model-lab-topic-link[aria-current="page"] { box-shadow:inset 3px 0 var(--sos-accent); background:var(--sos-accent-bg); }
+.model-lab-tree-link[aria-current="page"], .model-lab-topic-link[aria-current="page"] {
+  box-shadow:inset 3px 0 var(--sos-accent); background:var(--sos-accent-bg); }
 .model-lab-tree-feedback { display:grid; gap:5px; padding:8px; font-size:12px; color:var(--sos-muted); }
 
 /* 사이드바에서도 제목과 주제가 좁은 폭에서 구분되어 읽힌다. */
@@ -520,7 +521,7 @@ button.surface-button[aria-pressed="true"] {
   box-shadow:inset 3px 0 var(--sos-accent);
 }
 .model-lab-usage-tabs { display:flex; gap:8px; flex-wrap:wrap; }
-.model-lab-usage-tabs button[aria-pressed="true"] {
+.model-lab-usage-tabs button[aria-pressed="true"], .api-usage-flows button[aria-pressed="true"] {
   box-shadow:inset 0 -3px var(--sos-accent); border-color:var(--sos-accent); }
 .model-lab-playground { display:grid; grid-template-columns:minmax(0,1fr); gap:15px; }
 .model-lab-workspace { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr);
@@ -1054,3 +1055,80 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .activity-topic-features { margin:14px 0; }
 .activity-topic-features > div { margin-top:10px; }
 .activity-topic-features p { margin:4px 0 0; font-size:13px; line-height:1.7; color:var(--sos-muted); }
+
+/* 학습 유형·분석 과제 소개와 주제 Playground */
+.guide-page, .playground-page { display:grid; gap:22px; min-width:0; }
+.guide-page > *, .playground-page > *, .api-steps li, .api-code { min-width:0; }
+.taxonomy-trail ol { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:0; padding:0; list-style:none; font-size:13px; }
+.taxonomy-trail li { display:flex; align-items:center; gap:4px; color:var(--sos-muted); }
+.taxonomy-trail li + li::before { content:"›"; color:var(--sos-muted); }
+.taxonomy-trail button.ghost { padding:4px 6px; color:var(--sos-accent); font-size:13px; }
+.taxonomy-trail [aria-current="page"] { color:var(--sos-text); font-weight:650; padding:4px 6px; }
+.guide-hero { display:grid; gap:18px; }
+.guide-lead { margin:0; font-size:19px; line-height:1.6; font-weight:600; max-width:860px; }
+.guide-diagram { margin:0; padding:14px; border:1px solid var(--sos-border); border-radius:12px; background:var(--sos-field); }
+.guide-diagram svg { display:block; width:100%; height:auto; max-height:300px; }
+.diagram-title { fill:var(--sos-text); font-size:14px; font-weight:700; }
+.diagram-label { fill:var(--sos-text); font-size:13px; font-weight:600; }
+.diagram-note { fill:var(--sos-muted); font-size:12px; }
+.diagram-note-active { fill:var(--sos-warning); font-weight:700; }
+.diagram-box { fill:var(--sos-panel); stroke:var(--sos-border); }
+.diagram-box-active { stroke:var(--sos-warning); stroke-width:1.5; }
+.diagram-dot { fill:var(--sos-neutral); }
+.diagram-dot-known { fill:var(--sos-accent); }
+.diagram-dot-odd { fill:var(--sos-warning); }
+.diagram-ring { fill:none; stroke:var(--sos-warning); stroke-width:1.5; stroke-dasharray:3 3; }
+.diagram-group { fill:var(--sos-accent-bg); stroke:var(--sos-accent); stroke-dasharray:5 4; }
+.diagram-arrow, .diagram-axis, .diagram-brace { fill:none; stroke:var(--sos-muted); stroke-width:1.6; }
+.diagram-axis { stroke:var(--sos-accent); }
+.diagram-brace { stroke:var(--sos-warning); }
+.diagram-bar { fill:var(--sos-neutral); }
+.diagram-bar-odd { fill:var(--sos-warning); }
+.guide-section { display:grid; gap:12px; }
+.guide-section > h2 { margin:0; font-size:18px; }
+.guide-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.guide-card { padding:16px 18px; border:1px solid var(--sos-border); border-radius:12px; background:var(--sos-panel); }
+.guide-card h3 { margin:0 0 6px; font-size:15px; }
+.guide-card p { margin:0; font-size:13px; line-height:1.65; color:var(--sos-muted); }
+.guide-choices { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+button.surface-button.guide-choice { display:grid; gap:7px; justify-items:start; text-align:left; padding:18px 20px;
+  border:1px solid var(--sos-accent); border-radius:12px; background:var(--sos-panel); color:var(--sos-text); }
+button.surface-button.guide-choice:hover { background:var(--sos-raised); }
+.guide-choice strong { font-size:18px; }
+.guide-choice span:not(.eyebrow) { font-size:13px; line-height:1.6; color:var(--sos-muted); }
+.guide-choice small { color:var(--sos-accent); font-weight:650; font-size:13px; }
+.guide-state { display:grid; gap:8px; justify-items:start; }
+.guide-state p { margin:0; font-size:14px; line-height:1.6; }
+.playground-notice { margin-top:4px; padding:14px 16px; border:1px solid var(--sos-border); border-radius:11px;
+  background:var(--sos-raised); font-size:13px; line-height:1.65; }
+.playground-notice p { margin:6px 0 0; color:var(--sos-muted); }
+.playground-model { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:6px 0 14px; }
+.playground-model strong { font-size:15px; }
+.playground-model .muted { flex-basis:100%; margin:0; }
+.playground-model select { min-width:260px; max-width:100%; }
+.playground-example { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:16px; }
+.playground-example .hint { margin:0; }
+.playground-details summary { cursor:pointer; font-weight:650; }
+.playground-details[open] summary { margin-bottom:12px; }
+.playground-details p { font-size:13px; line-height:1.65; }
+.playground-feature-group { margin-top:10px; }
+.playground-feature-group p { margin:4px 0 0; color:var(--sos-muted); }
+.api-usage-flows { display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 14px; }
+.api-steps { display:grid; gap:16px; margin:16px 0 0; padding-left:20px; }
+.api-steps li { display:grid; gap:8px; }
+.api-steps .hint { margin:0; }
+.api-code { position:relative; }
+.api-code pre { margin:0; padding:12px 64px 12px 14px; overflow-x:auto; border:1px solid var(--sos-border);
+  border-radius:10px; background:var(--sos-field); font-size:12.5px; line-height:1.6; white-space:pre; }
+.api-code pre code { white-space:pre; }
+.api-code button.ghost { position:absolute; top:6px; right:6px; padding:5px 9px; font-size:12px; }
+.api-reference-link { display:inline-block; margin-top:16px; color:var(--sos-accent); font-size:13px; font-weight:650; }
+@media(max-width:900px) {
+  .guide-cards { grid-template-columns:1fr; }
+  .guide-lead { font-size:17px; }
+}
+@media(max-width:620px) {
+  /* 도식 글자가 읽히는 크기를 유지하고 페이지 대신 도식 안에서 가로로 이동한다. */
+  .guide-diagram { overflow-x:auto; }
+  .guide-diagram svg { min-width:620px; max-height:none; }
+}
