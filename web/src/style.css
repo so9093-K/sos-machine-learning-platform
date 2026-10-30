@@ -1098,6 +1098,10 @@ button.surface-button.guide-choice:hover { background:var(--sos-raised); }
 .guide-choice span:not(.eyebrow) { font-size:13px; line-height:1.6; color:var(--sos-muted); }
 .guide-choice small { color:var(--sos-accent); font-weight:650; font-size:13px; }
 .guide-state { display:grid; gap:8px; justify-items:start; }
+.guide-state p { margin:0; font-size:14px; line-height:1.6; }
+.playground-notice { margin-top:4px; padding:14px 16px; border:1px solid var(--sos-border); border-radius:11px;
+  background:var(--sos-raised); font-size:13px; line-height:1.65; }
+.playground-notice p { margin:6px 0 0; color:var(--sos-muted); }
 .playground-model { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:6px 0 14px; }
 .playground-model strong { font-size:15px; }
 .playground-model .muted { flex-basis:100%; margin:0; }

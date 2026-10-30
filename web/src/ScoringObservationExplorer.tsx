@@ -33,7 +33,7 @@ function distributionOption(summary: Record<string, unknown>, rowCount: number,
     tooltip: { trigger: "item" },
     grid: { left: 58, right: 24, top: 26, bottom: 56 },
     xAxis: { type: "value", name: "이상 점수", min: edges[0], max: edges[edges.length - 1],
-      axisLabel: { formatter: (value: number) => value.toPrecision(3) } },
+      axisLabel: { hideOverlap: true, formatter: (value: number) => value.toPrecision(3) } },
     yAxis: { type: "value", name: "관측 수", minInterval: 1 },
     series: [{
       name: "점수 구간별 관측 수", type: "bar",

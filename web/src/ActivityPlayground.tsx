@@ -37,6 +37,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
   const [offeredError, setOfferedError] = useState("");
   const [retry, setRetry] = useState(0);
   const [modelId, setModelId] = useState("");
+  // 입력 구조가 확인된 Dataset만 API 예시에 채운다. 맞지 않는 ID로 실패하는 예시를 만들지 않는다.
+  const [readyDatasetId, setReadyDatasetId] = useState("");
   const [example, setExample] = useState<{ busy: boolean; error: string; datasetId: string }>(
     { busy: false, error: "", datasetId: "" });
   useEffect(() => {
@@ -94,21 +96,26 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
               {models.map(item => <option key={item.model.id} value={item.model.id}>
                 {algorithmLabel(item.model.algorithm)} · 제공 {formatRecordedAt(item.offered_at)}</option>)}
             </select>
-            : <strong>{algorithmLabel(chosen.model.algorithm)} · 제공 {formatRecordedAt(chosen.offered_at)}</strong>}
+            : <strong>{algorithmLabel(chosen.model.algorithm)}</strong>}
           <button type="button" className="ghost" onClick={() => onOpenResource("model", chosen.model.id)}>모델 상세 →</button>
           <p className="muted model-offering-description">{chosen.description}</p>
         </div>
-        {canUpload && example.datasetId !== selectedDatasetId && <div className="playground-example">
+        {!canRun && <div className="playground-notice" role="status">
+          <strong>조회 전용 계정</strong>
+          <p>점수 계산은 작업 실행 권한이 있는 계정에서 할 수 있습니다. 이 화면의 활용 방법·결과 해석·서비스 연동 방법은 그대로 확인할 수 있습니다.</p>
+        </div>}
+        {canRun && canUpload && example.datasetId !== selectedDatasetId && <div className="playground-example">
           <button type="button" className="secondary" disabled={example.busy} onClick={() => void useExample()}>
             {example.busy ? "예제 준비 중…" : "예제 데이터로 시작"}</button>
           <span className="hint">합성 예제를 내 Dataset으로 등록해 선택합니다. 이미 등록했다면 그대로 다시 씁니다.</span>
           {example.error && <p role="alert">예제를 준비하지 못했습니다. {example.error}</p>}
         </div>}
-        <ModelApplicationWorkspace key={chosen.model.id} model={chosen.model} datasets={datasets}
+        {canRun && <ModelApplicationWorkspace key={chosen.model.id} model={chosen.model} datasets={datasets}
           selectedDatasetId={selectedDatasetId} onSelectDataset={onSelectDataset}
           hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
           canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
-          canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />
+          canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
+          onInputReadyChange={(datasetId, ready) => setReadyDatasetId(ready ? datasetId : "")} />}
       </>}
     </section>
 
@@ -118,7 +125,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, onSelectDatase
         <article key={item.title} className="guide-card"><h3>{item.title}</h3><p>{item.text}</p></article>)}</div>
     </section>}
 
-    {chosen && <ModelApiUsage model={chosen.model} datasetId={selectedDatasetId} />}
+    {chosen && <ModelApiUsage model={chosen.model}
+      datasetId={selectedDatasetId && readyDatasetId === selectedDatasetId ? selectedDatasetId : undefined} />}
 
     {definition && <details className="panel playground-details">
       <summary>입력 조건 · 모델 정보</summary>

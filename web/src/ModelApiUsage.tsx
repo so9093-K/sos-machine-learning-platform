@@ -2,7 +2,7 @@ import { useState } from "react";
 import { exampleValues } from "./ModelLabPlayground";
 import type { ModelRevision } from "./types";
 
-type Step = { title: string; result: string; command: string };
+type Step = { title: string; result: string; command: string; note?: string };
 
 function CodeBlock({ code, label }: { code: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -32,7 +32,8 @@ export function ModelApiUsage({ model, datasetId }: { model: ModelRevision; data
       command: `curl -X POST "$SOS_API/api/datasets/files" ${auth} \\\n  -F "file=@activity.parquet"` },
     { title: "점수 계산 요청", result: "응답의 id로 진행 상태를 확인합니다. Idempotency-Key는 요청마다 새 값을 쓰고, 응답을 받지 못해 같은 요청을 다시 보낼 때만 같은 값을 씁니다.",
       command: `curl -X POST "$SOS_API/api/ml/scoring/jobs" ${auth} \\\n  -H "Idempotency-Key: activity-score-001" -H "Content-Type: application/json" \\\n` +
-        `  -d '{"model_revision_id": "${model.id}", "dataset_id": "${datasetId || "$DATASET_ID"}"}'` },
+        `  -d '{"model_revision_id": "${model.id}", "dataset_id": "${datasetId || "$DATASET_ID"}"}'`,
+      note: datasetId ? undefined : "$DATASET_ID에는 이 모델의 입력 조건과 맞는 Dataset의 ID를 넣습니다." },
     { title: "완료 확인", result: "status가 Succeeded이면 result.scoring_result_id로 결과를 조회합니다.",
       command: `curl "$SOS_API/api/ml/scoring/jobs/$JOB_ID" ${auth}` },
     { title: "점수 상위 관측 조회", result: "items는 anomaly_score가 높은 순서이며 관측의 입력값과 관측 시각을 함께 줍니다. next_cursor로 다음 페이지를 받습니다.",
@@ -61,7 +62,7 @@ export function ModelApiUsage({ model, datasetId }: { model: ModelRevision; data
     <ol className="api-steps">{steps.map(step => <li key={step.title}>
       <strong>{step.title}</strong>
       <CodeBlock label={step.title} code={step.command} />
-      <p className="hint">{step.result}</p>
+      <p className="hint">{step.result}{step.note ? ` ${step.note}` : ""}</p>
     </li>)}</ol>
     <a className="api-reference-link" href="/docs" target="_blank" rel="noreferrer">API Reference · 요청·응답 전체 형식 ↗</a>
   </section>;

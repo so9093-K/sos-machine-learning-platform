@@ -7,7 +7,8 @@ import type { Dataset, ModelRevision } from "./types";
 
 /** 진입 위치와 관계없이 같은 모델 적용·관측값 실험·결과 복귀 경험을 사용한다. */
 export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, model, datasets, canRun, canCancel, onOpenResource,
-  hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered, onResultViewChange }: {
+  hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered, onResultViewChange,
+  onInputReadyChange }: {
   selectedDatasetId?: string;
   onSelectDataset?: (id: string) => void;
   model: ModelRevision; datasets: Dataset[]; canRun: boolean; canCancel: boolean;
@@ -15,6 +16,7 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
   hasMoreDatasets?: boolean; onLoadMoreDatasets?: () => Promise<void>;
   canUpload?: boolean; onDatasetRegistered?: (dataset: Dataset) => void;
   onResultViewChange?: (visible: boolean) => void;
+  onInputReadyChange?: (datasetId: string, ready: boolean) => void;
 }) {
   const [usage, setUsage] = useState<"dataset" | "playground">("dataset");
   const [observationInput, setObservationInput] = useState<ObservationExperiment | null>(null);
@@ -72,7 +74,8 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
         onLoadMoreDatasets={onLoadMoreDatasets} canRun={canRun} canCancel={canCancel}
         onOpenResult={id => onOpenResource("scoring", id)} onOpenResource={onOpenResource}
         canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
-        onResultViewChange={setResultVisible} onTryObservation={tryObservation} />
+        onResultViewChange={setResultVisible} onInputReadyChange={onInputReadyChange}
+        onTryObservation={tryObservation} />
     </div>
   </div>;
 }
