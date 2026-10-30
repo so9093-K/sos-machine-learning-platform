@@ -106,7 +106,7 @@ def test_scoring_observation_api_respects_actor_and_ownership(tmp_path, monkeypa
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from sos_platform.security import Actor, CURRENT_ACTOR_DEP, resource_allowed
+    from sos_platform.security import CURRENT_ACTOR_DEP, Actor, resource_allowed
 
     parquet = tmp_path / "visible.parquet"
     pq.write_table(pa.Table.from_pylist([
@@ -126,7 +126,7 @@ def test_scoring_observation_api_respects_actor_and_ownership(tmp_path, monkeypa
     } if result_id == "score-1" else None)
     app = FastAPI()
     app.include_router(scoring_observations.scoring_observations_router(
-        store, lambda actor, owner, _kind, _id: resource_allowed(actor, owner),
+        store, SimpleNamespace(check_ownership=lambda actor, owner, _kind, _id: resource_allowed(actor, owner)),
     ))
     actor = Actor("alice", "human", frozenset({"viewer"}))
     app.dependency_overrides[CURRENT_ACTOR_DEP.dependency] = lambda: actor

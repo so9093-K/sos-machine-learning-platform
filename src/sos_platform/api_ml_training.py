@@ -1,9 +1,8 @@
 """ML Training HTTP 계약. 앱의 인증·소유권·멱등성 검사를 그대로 사용한다."""
 
-from collections.abc import Callable
-
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
+from .api_access import ResourceAccess
 from .ml_input import TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
 from .pagination import decode_cursor, page_from_rows
 from .schemas import (
@@ -21,13 +20,7 @@ READ_JOB_DEP = Depends(require("job.read"))
 CANCEL_JOB_DEP = Depends(require("job.cancel"))
 
 
-def training_router(
-    store: Store,
-    *,
-    existing_dataset: Callable[[str, Actor], dict],
-    existing_job: Callable[[str, Actor], dict],
-    require_submission_key: Callable[[str | None], None],
-) -> APIRouter:
+def training_router(store: Store, access: ResourceAccess) -> APIRouter:
     """Training·Fork·조회·취소를 앱의 기존 공통 검증 규칙에 연결한다."""
     router = APIRouter()
 
@@ -51,8 +44,8 @@ def training_router(
             pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
         ),
     ):
-        dataset = existing_dataset(body.dataset_id, actor)
-        require_submission_key(idempotency_key)
+        dataset = access.dataset(body.dataset_id, actor)
+        access.require_submission_key(idempotency_key)
         from .ml_if_config import IsolationForestConfig
 
         try:
@@ -84,7 +77,7 @@ def training_router(
         )
 
     def existing_ml_training_job(job_id: str, actor: Actor) -> dict:
-        item = existing_job(job_id, actor)
+        item = access.job(job_id, actor)
         if item["kind"] != "ml_train":
             raise HTTPException(status_code=404, detail="학습 작업을 찾을 수 없습니다.")
         return item
@@ -112,10 +105,10 @@ def training_router(
         source = existing_ml_training_job(source_job_id, actor)
         if source["status"] != "Succeeded":
             raise HTTPException(status_code=409, detail="완료된 학습 작업만 복제할 수 있습니다.")
-        dataset = existing_dataset(source["dataset_id"], actor)
+        dataset = access.dataset(source["dataset_id"], actor)
         if dataset["version"] != source["spec"]["dataset_version"]:
             raise HTTPException(status_code=409, detail="학습 Dataset 판본을 사용할 수 없습니다.")
-        require_submission_key(idempotency_key)
+        access.require_submission_key(idempotency_key)
         params = body.params.model_dump() if body.params is not None else source["spec"]["params"]
         from .ml_if_config import IsolationForestConfig
 

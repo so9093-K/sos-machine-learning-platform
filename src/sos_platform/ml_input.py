@@ -1,5 +1,9 @@
-"""현재 ML 어댑터들이 공유하는 수치형 입력 타입 계약."""
+"""현재 ML 어댑터들이 공유하는 수치형 입력 타입 계약.
 
+API 사전 검사도 사용하므로 ML 계산 라이브러리에 의존하지 않는다.
+"""
+
+import math
 from collections.abc import Mapping
 
 import polars as pl
@@ -55,3 +59,53 @@ def model_input_issues(
 # Job 제출 시 확정하며, 기존 Job에 버전 필드가 없으면 이전 선택 의미를 보존한다.
 TRAINING_SELECTION_LEGACY = "row_priority_bottom_k_v1"
 TRAINING_SELECTION_CURRENT = "canonical_multiset_v1"
+
+
+# IEEE 754 binary32의 최대 유한값.
+FLOAT32_MAX = 3.4028234663852886e38
+MAX_PLAYGROUND_FEATURES = 256
+
+
+def ordered_playground_input(model: dict, values: dict) -> list[float]:
+    """모델 입력 서명과 값의 정확성·결측 조건을 확인해 순서 있는 벡터를 만든다."""
+    features = model["features"]
+    if not 1 <= len(features) <= MAX_PLAYGROUND_FEATURES or set(values) != set(features):
+        raise ValueError("Playground input must exactly match model features")
+    allows_missing = model["runtime"].get("artifact_schema") == "if_model_with_preprocessing_v1"
+    ordered = []
+    expected_dtypes = model["runtime"].get("feature_dtypes")
+    if not isinstance(expected_dtypes, list) or len(expected_dtypes) != len(features):
+        raise ValueError("Playground Model Feature dtypes are missing")
+    for index, name in enumerate(features):
+        value = values[name]
+        dtype = expected_dtypes[index]
+        if dtype not in (
+            "Int8", "Int16", "Int32", "Int64",
+            "UInt8", "UInt16", "UInt32", "UInt64",
+            "Float32", "Float64",
+        ):
+            raise ValueError("Unsupported Playground Feature dtype")
+        if value is None:
+            if not allows_missing:
+                raise ValueError("This model does not support missing values")
+            ordered.append(float("nan"))
+        elif isinstance(value, bool) or not isinstance(value, (float, int)):
+            raise ValueError("Playground Features must be numeric or explicit missing")
+        elif isinstance(value, int) and abs(value) > 2**53:
+            raise ValueError("Playground integer exceeds exact float64 range")
+        elif not math.isfinite(value):
+            raise ValueError("Non-finite Playground value")
+        elif dtype.startswith(("Int", "UInt")) and not float(value).is_integer():
+            raise ValueError("Integer Playground Feature must be an integer")
+        elif dtype.startswith(("Int", "UInt")):
+            bits = int(dtype[4:] if dtype.startswith("UInt") else dtype[3:])
+            minimum = 0 if dtype.startswith("UInt") else -(2 ** (bits - 1))
+            maximum = 2**bits - 1 if dtype.startswith("UInt") else 2 ** (bits - 1) - 1
+            if not minimum <= value <= maximum:
+                raise ValueError("Integer Playground Feature is outside its dtype range")
+            ordered.append(float(value))
+        elif dtype == "Float32" and abs(value) > FLOAT32_MAX:
+            raise ValueError("Float32 Playground Feature is outside its dtype range")
+        else:
+            ordered.append(float(value))
+    return ordered

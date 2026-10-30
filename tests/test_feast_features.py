@@ -99,8 +99,7 @@ def test_registration_list_restores_server_blocking_without_local_retirement():
             return blocked & set(job_ids)
 
     app = FastAPI()
-    app.include_router(feast_router(RegistrationStore(), existing_dataset=None,
-                                   require_submission_key=None))
+    app.include_router(feast_router(RegistrationStore(), None))
     app.dependency_overrides[READ_JOB.dependency] = lambda: Actor(
         "owner", "human", frozenset({"viewer"})
     )

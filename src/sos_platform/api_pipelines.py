@@ -4,10 +4,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .api_access import ResourceAccess
 from .dagster_workflows import cancel_run, create_run, get_run, list_runs
 from .pipeline_reference import PIPELINE_ID, definition, inspect_dataset
 from .scoring_observations import ranked_scoring_rows
-from .security import Actor, require, resource_allowed
+from .security import Actor, require
 from .store import Store
 
 READ_DATASET = Depends(require("dataset.read"))
@@ -107,14 +108,6 @@ class PipelineStartRequest(BaseModel):
     dataset_id: str = Field(min_length=1)
 
 
-def _visible(actor: Actor, item: dict | None) -> dict:
-    if item is None:
-        raise HTTPException(status_code=404, detail="요청한 리소스를 찾을 수 없습니다.")
-    resource_allowed(actor, item["owner_actor"])
-    return item
-
-
-
 def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None, row_index: int | None = None) -> dict:
     by_stage = {entry["name"]: entry["job"] for entry in run["stages"]}
     # Dagster Run의 SUCCESS만으로 SOS 개별 결과 게시가 검증됐다고 간주하지 않는다.
@@ -137,8 +130,14 @@ def _candidate_rows(store: Store, run: dict, limit: int, cursor: str | None, row
     return {**page, "threshold": policy["threshold"]}
 
 
-def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
+def pipeline_router(store: Store, access: ResourceAccess, *, identity_mode: str) -> APIRouter:
     router = APIRouter()
+
+    def visible(actor: Actor, item: dict | None, kind: str) -> dict:
+        if item is None:
+            raise HTTPException(status_code=404, detail="요청한 리소스를 찾을 수 없습니다.")
+        access.check_ownership(actor, item["owner_actor"], kind, item["id"])
+        return item
 
     @router.get(
         "/api/pipelines",
@@ -174,7 +173,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         if definition_id != PIPELINE_ID:
             raise HTTPException(status_code=404, detail="Pipeline을 찾을 수 없습니다.")
         dataset = store.get_dataset(dataset_id)
-        _visible(actor, dataset)
+        visible(actor, dataset, "dataset")
         return inspect_dataset(store, dataset)
 
     @router.post(
@@ -198,7 +197,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         if definition_id != PIPELINE_ID:
             raise HTTPException(status_code=404, detail="Pipeline을 찾을 수 없습니다.")
         dataset = store.get_dataset(body.dataset_id)
-        _visible(actor, dataset)
+        visible(actor, dataset, "dataset")
         if identity_mode == "token" and idempotency_key is None:
             raise HTTPException(status_code=400, detail="Idempotency-Key 헤더가 필요합니다.")
         inspected = inspect_dataset(store, dataset)
@@ -227,7 +226,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         response_model=PipelineRunOut,
     )
     def pipeline_run_detail(run_id: str, actor: Actor = READ_JOB):
-        return _visible(actor, get_run(store, run_id))
+        return visible(actor, get_run(store, run_id), "workflow_submission")
 
     @router.post(
         "/api/pipeline-runs/{run_id}/cancel",
@@ -236,7 +235,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         response_model=PipelineRunOut,
     )
     def pipeline_cancel(run_id: str, actor: Actor = CANCEL_JOB):
-        _visible(actor, get_run(store, run_id, include_jobs=False))
+        visible(actor, get_run(store, run_id, include_jobs=False), "workflow_submission")
         return cancel_run(store, run_id)
 
     @router.get(
@@ -251,7 +250,7 @@ def pipeline_router(store: Store, *, identity_mode: str) -> APIRouter:
         row_index: int | None = Query(default=None, ge=0),
         actor: Actor = READ_JOB,
     ):
-        run = _visible(actor, get_run(store, run_id))
+        run = visible(actor, get_run(store, run_id), "workflow_submission")
         if run["status"] != "Succeeded":
             raise HTTPException(status_code=409, detail="Pipeline 실행이 완료되지 않았습니다.")
         return _candidate_rows(store, run, limit, cursor, row_index=row_index)

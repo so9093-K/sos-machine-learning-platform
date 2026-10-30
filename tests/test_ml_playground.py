@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from sos_platform.ml_playground import ordered_playground_input, run_playground_scoring
+from sos_platform.ml_input import ordered_playground_input
+from sos_platform.ml_playground import run_playground_scoring
 
 
 def _model(*, legacy=False):
