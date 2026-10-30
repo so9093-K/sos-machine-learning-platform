@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import joblib
 import numpy as np
@@ -10,8 +11,8 @@ import pytest
 from pydantic import ValidationError
 
 from sos_platform import ml_training
-from sos_platform.schemas import MLTemporalSplitSpec, MLTrainRequest, MLTrainingInputPolicy
 from sos_platform.ml_temporal_split import split_training_source
+from sos_platform.schemas import MLTemporalSplitSpec, MLTrainingInputPolicy, MLTrainRequest
 
 
 def bind_frame(monkeypatch, frame: pl.DataFrame) -> None:
@@ -217,12 +218,11 @@ def test_http_submit_and_fork_preserve_temporal_boundaries_and_missing_policy():
 
     store.create_job.side_effect = created
     app = FastAPI()
-    app.include_router(training_router(
-        store,
-        existing_dataset=lambda dataset_id, _actor: {"id": dataset_id, "version": "d1"},
-        existing_job=lambda _job_id, _actor: source_job,
+    app.include_router(training_router(store, SimpleNamespace(
+        dataset=lambda dataset_id, _actor: {"id": dataset_id, "version": "d1"},
+        job=lambda _job_id, _actor: source_job,
         require_submission_key=lambda _: None,
-    ))
+    )))
     app.dependency_overrides[TRAIN_MODEL_DEP.dependency] = lambda: actor
 
     @app.middleware("http")

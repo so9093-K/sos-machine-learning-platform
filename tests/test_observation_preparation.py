@@ -120,7 +120,7 @@ def test_transform_job_http_submission_pins_source_revision_and_uses_existing_pe
 
     from fastapi.testclient import TestClient
 
-    from sos_platform import api
+    from sos_platform import api, api_jobs
     from sos_platform.security import Actor, IdentitySettings
 
     dataset = {"id": "raw-dataset", "version": "raw-v1", "owner_actor": "alice"}
@@ -138,7 +138,7 @@ def test_transform_job_http_submission_pins_source_revision_and_uses_existing_pe
     store.create_job.side_effect = created
     monkeypatch.setattr(api, "Store", lambda home: store)
     app = api.create_app(tmp_path, identity=IdentitySettings("development", {}))
-    app.dependency_overrides[api.CREATE_JOB_DEP.dependency] = (
+    app.dependency_overrides[api_jobs.CREATE_JOB_DEP.dependency] = (
         lambda: Actor("alice", "human", frozenset({"researcher"}))
     )
     body = {

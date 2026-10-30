@@ -1,9 +1,8 @@
 """Feast 등록 Feature Service와 역사적 조회를 SOS Job 및 Actor 권한에 연결한다."""
 
-from collections.abc import Callable
-
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
+from .api_access import ResourceAccess
 from .feature_contracts import FeatureDefinitionRequest, FeatureRetrievalRequest, feature_identity
 from .pagination import decode_cursor, page_from_rows
 from .schemas import FeatureRegistrationPageOut, JobOut
@@ -15,12 +14,7 @@ MANAGE_FEATURE = Depends(require("feature.manage"))
 READ_JOB = Depends(require("job.read"))
 
 
-def feast_router(
-    store: Store,
-    *,
-    existing_dataset: Callable[[str, Actor], dict],
-    require_submission_key: Callable[[str | None], None],
-) -> APIRouter:
+def feast_router(store: Store, access: ResourceAccess) -> APIRouter:
     router = APIRouter()
 
     @router.post(
@@ -37,8 +31,8 @@ def feast_router(
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key",
             min_length=8, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$"),
     ):
-        source = existing_dataset(body.feature_dataset_id, actor)
-        require_submission_key(idempotency_key)
+        source = access.dataset(body.feature_dataset_id, actor)
+        access.require_submission_key(idempotency_key)
         return store.create_job(
             kind="feature_register",
             dataset_id=source["id"],
@@ -103,11 +97,11 @@ def feast_router(
             raise HTTPException(status_code=404, detail="사용 가능한 Feature Service 등록 기록이 없습니다.")
         if body.registration_job_id in store.blocked_feature_registration_ids([body.registration_job_id]):
             raise HTTPException(status_code=409, detail="폐기된 Feature Service 등록은 조회할 수 없습니다.")
-        source = existing_dataset(registration["dataset_id"], actor)
-        entity = existing_dataset(body.entity_dataset_id, actor)
+        source = access.dataset(registration["dataset_id"], actor)
+        entity = access.dataset(body.entity_dataset_id, actor)
         if source["version"] != registration["spec"]["feature_dataset_version"]:
             raise HTTPException(status_code=409, detail="등록 Feature Source 판본을 사용할 수 없습니다.")
-        require_submission_key(idempotency_key)
+        access.require_submission_key(idempotency_key)
         return store.create_job(
             kind="feature_retrieve",
             dataset_id=source["id"],
@@ -144,10 +138,10 @@ def feast_router(
             [registration_job_id], include_failed=False
         ):
             raise HTTPException(status_code=409, detail="이미 폐기된 Feature 등록입니다.")
-        source = existing_dataset(registration["dataset_id"], actor)
+        source = access.dataset(registration["dataset_id"], actor)
         if source["version"] != registration["spec"]["feature_dataset_version"]:
             raise HTTPException(status_code=409, detail="Feature Source 판본이 달라졌습니다.")
-        require_submission_key(idempotency_key)
+        access.require_submission_key(idempotency_key)
         return store.create_job(
             kind="feature_retire", dataset_id=source["id"],
             spec={

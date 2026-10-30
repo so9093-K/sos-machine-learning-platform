@@ -210,7 +210,7 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
 
 def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path, monkeypatch):
     """제공은 모델 사용만 허용하며 중단 후 신규 실행과 과거 결과를 구별한다."""
-    from sos_platform import api
+    from sos_platform import api_ml_models, api_ml_results
 
     actors = {
         "supplier-token-with-enough-entropy": Actor("supplier", "service", frozenset({"automation"})),
@@ -237,10 +237,10 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
         "id": did, "owner_actor": "consumer" if did == "user-data" else "supplier", "version": "v1"})
     monkeypatch.setattr(Store, "get_job", lambda self, jid: {
         "id": jid, "kind": "ml_train", "owner_actor": "supplier"})
-    monkeypatch.setattr(api.MLflowSettings, "from_env", lambda: object())
-    monkeypatch.setattr(api, "MLflowClient", lambda settings: object())
-    monkeypatch.setattr(api, "verify_registered_version", lambda *args: None)
-    monkeypatch.setattr(api, "discovery_columns", lambda store, dataset: {
+    monkeypatch.setattr(api_ml_models.MLflowSettings, "from_env", lambda: object())
+    monkeypatch.setattr(api_ml_models, "MLflowClient", lambda settings: object())
+    monkeypatch.setattr(api_ml_results, "verify_registered_version", lambda *args: None)
+    monkeypatch.setattr(api_ml_results, "discovery_columns", lambda store, dataset: {
         "columns": [{"name": "a", "dtype": "Float64"}]})
 
     def offer(self, mid, **values):
