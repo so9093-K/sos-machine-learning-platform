@@ -88,6 +88,14 @@ Worker의 `worker.staging.cleanup_failed`는 정리를 모두 시도한 뒤 실�
 2. `GET /api/ml/tracking/jobs/{job_id}`의 `state`, `attempts`, `last_error_code`를 조회하고, 필요하면 로컬 운영 UI(`http://localhost:9606`)에서 해당 Registered Model·Version을 확인한다.
 3. 코드나 연결 문제를 수정한 뒤 기존 전송 Outbox의 `Retry`가 다시 시도하는지 확인한다. 중복 Model Version 등록을 막는 Job ID·SHA 검증은 유지한다.
 
+### 온라인 서빙 장애·전환 실패
+
+1. `GET /api/serving/endpoints/{id}`의 `ready`, `runtime.reachable`, `runtime.active`·`runtime.pending`의 `status`·`failure_reason`을 확인한다. 웹에서는 **온라인 서빙** 화면이 같은 값을 보인다.
+2. `runtime.reachable`이 거짓이면 `make status`에서 `serving`·`serving-controller` 상태를 확인한다. Ray가 재시작되면 컨트롤러가 다음 조정에서 같은 Config를 다시 적용하며, 그동안 추론은 `SOS-SERVING-UNAVAILABLE` 또는 `SOS-SERVING-NOT-READY`로 응답한다.
+3. 전환 대상이 배포 실패면 기존 활성 판본은 그대로 요청을 처리한다. `failure_reason`이 Runtime 불일치면 서빙 이미지의 Python minor·numpy·scikit-learn이 판본의 학습 Runtime과 다른 것이므로 같은 Runtime에서 학습한 판본을 공급한다. 원인을 고치기 전에는 전환을 취소한다.
+4. 컨트롤러 구조화 로그 `serving.reconcile.unavailable`(`failure_type`·`status`)로 Ray 연결 장애와 Config 거절을 구분하고, `serving.revision.activated`(`endpoint_id`·`model_revision_id`)로 전환 시점을 확인한다. 복제본 Traceback 원문은 `make logs`의 `serving` 로그에서만 확인한다.
+5. 서빙 의도와 판본은 SOS DB가 정본이므로 Ray Serve Config를 직접 적용하지 않는다. 애플리케이션이 사라지면 컨트롤러가 다음 조정에서 다시 적용한다.
+
 ### Dagster OSS 장애·복구
 
 1. `make status`에서 `dagster-postgres`, `dagster-code`, `dagster-webserver`, `dagster-daemon` 상태를 확인한다.

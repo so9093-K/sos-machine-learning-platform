@@ -20,6 +20,7 @@
 - 단일 입력 Playground는 Dataset 등록 없이 입력과 점수를 Job으로 보존하며, Dataset 관측값을 초깃값으로 가져와 다시 실험할 수 있다.
 - 판정 정책은 보정 결과와 별도로 판본 관리해 호환되는 다른 Scoring Result에 적용하고, 평가는 레이블 유무에 따라 지표를 구별한다.
 - 비지도 학습 → 이상 탐지 → 활동 이상 탐지로 이어지는 소개 화면과 주제 Playground에서 활용 방법을 보고, 같은 화면에서 예제·자신의 Dataset·직접 입력에 모델을 적용해 결과 해석과 API 연동 방법까지 확인한다.
+- 서빙 중인 모델은 `POST /api/serving/endpoints/{id}/predict`로 관측값을 바로 점수화한다. Playground는 온라인 API 사용 가능 여부를 보이고, 계산한 입력을 그대로 보내 같은 점수를 확인한다.
 
 ### 모델 공급과 운영
 
@@ -27,6 +28,7 @@
 - 모델 제공·설명 수정·중단을 명시적으로 관리하며, 제공 중단은 새 적용만 막고 기존 결과를 유지한다. 제공 중인 판본은 중단 후 삭제할 수 있다.
 - Isolation Forest 학습은 전체·명시적 표본 입력, UTC 시간 분할, Train 중앙값 결측 정책을 지원하고 불변 Model Revision을 남긴다.
 - MLflow가 Experiment·Run·Registered Model/Version의 관리 정본이다. SOS는 Outbox로 기록·등록을 재시도하며, Registry 등록이 확인된 모델만 Scoring에 사용한다. 모델 그룹·보관과 영향 확인 후 영구 삭제를 지원한다.
+- Ray Serve 기반 온라인 서빙 Endpoint를 제공한다. 공급 과정이 배포·판본 전환을 요청하고, 독립 컨트롤러가 새 판본의 준비를 확인한 뒤에만 전환하며 실패 시 기존 판본을 유지한다. 운영 화면에서 상태 확인·되돌리기·중단·삭제를 한다.
 - 등록형 활동 이상 탐지 Pipeline은 Dagster OSS로 실행하고, 학습 권한 계정이 SOS 웹에서 단계별 결과를 조사한다. 각 단계 Job은 신뢰된 Workflow 출처를 기록한다.
 - Feast가 등록 Feature 정의·Feature Service·시점 조회의 정본이다. 등록·조회·폐기는 별개 Job이며 로컬 운영자는 읽기 전용 Feast UI로 Registry를 탐색한다.
 

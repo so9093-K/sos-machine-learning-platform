@@ -48,6 +48,15 @@ Feast는 등록 Entity·Feature View·Feature Service와 Historical Retrieval의
 
 Dataset 없는 단일 관측치 Playground Job은 입력 Feature와 실제 모델 점수를 Job 명세·결과로 보존한다. Explanation의 출처는 Scoring Result의 특정 행 또는 성공한 Playground Job 중 정확히 하나이며, 출처·모델 판본·방법을 결과에 보존하고 Dataset에 존재하지 않는 관측치 번호를 만들지 않는다. Playground는 배치 Scoring Result나 독립 평가를 만들지 않으며 모델 판본·Actor 권한·Registry·입력 서명·Runtime을 Scoring과 같이 검증한다.
 
+## 온라인 서빙 Endpoint
+
+- **의도와 실제 상태:** Endpoint는 소유 Actor 안에서 고유한 이름, 서빙·중단 의도, 활성·전환 대상·직전 판본을 가진다. 실제 실행 상태(실행 중·준비 중·배포 실패 등)는 서빙 Runtime에서 조회해 응답하며 저장하지 않는다. `ready`는 서빙 의도이고 활성 판본이 실제로 실행 중일 때만 참이다.
+- **판본 전환:** 새 판본은 전환 대상으로 준비되고, 서빙 Runtime의 실제 복제본이 그 판본과 설정으로 시작된 것을 확인한 뒤에만 활성 판본이 된다. 그 전과 실패 시에는 기존 활성 판본이 요청을 처리한다. 되돌리기는 직전 판본을 같은 방식으로 다시 준비한다. 전환 취소는 기존 활성 판본이 있을 때만 가능하다. 서빙 대상은 Registry 등록이 확인된 활성 판본이다.
+- **추론 계약:** `POST /api/serving/endpoints/{id}/predict`는 `inputs`에 관측값 1~100건을 Feature 이름별 객체로 받고, 모델 입력 서명(이름·자료형)을 Playground와 같은 규칙으로 검증한다. 결측은 `null`이다. 응답은 `model_revision_id`, `output_type`(현재 `anomaly_score_v1`), 점수 방향·척도와 입력 순서대로의 `outputs[i].anomaly_score`를 준다. 같은 판본에 같은 입력을 보내면 Playground·Scoring과 같은 점수다. 추론 요청은 Job·결과로 저장하지 않는다.
+- **접근:** 추론은 `model.infer` 권한이 필요하다(viewer 제외). 소유자·관리자가 아니면 활성 판본이 지금 제공 중이고 서빙 의도인 Endpoint만 조회·호출하며, 전환 대상·직전 판본과 실패 사유는 보지 않는다. 전환·되돌리기·취소·중단·재개·삭제는 소유자 또는 관리자(`model.manage`)만 하며 감사 기록에 남는다.
+- **수명주기:** Endpoint는 중단한 뒤에만 삭제한다. 어떤 Endpoint의 활성·전환 대상·직전 판본으로 참조되는 모델은 영구 삭제할 수 없다. 모델 제공 중단은 다른 Actor의 호출을 즉시 막지만 소유자의 서빙은 유지한다.
+- **오류:** 서빙 의도가 아니거나 활성 판본이 아직 실행 중이 아니면 `SOS-SERVING-NOT-READY`(409), 서빙 Runtime에 연결할 수 없거나 응답 시간이 초과되면 `SOS-SERVING-UNAVAILABLE`이다. 둘 다 상태를 다시 조회한 뒤 재시도한다.
+
 ## ML 기능별 책임과 공통화 경계
 
 ![Data & Feature, Training/Execution, Scoring/Prediction, Evaluation, Decision Policy, Explanation의 역할과 공통화 범위를 비교한 표](references/ml-capability-responsibility-boundaries.png)
@@ -68,7 +77,7 @@ Dataset 없는 단일 관측치 Playground Job은 입력 Feature와 실제 모�
 
 - 사용자 화면의 기능 가시성은 인증 API에서 서버 역할 정책으로 계산한 `capabilities`를 사용한다. UI 제어는 편의 기능이며 서버의 Action 검사가 최종 권한 정본이다. 기록 조회와 실행 제출은 독립적이며 데이터·모델 소유권 검사는 역할과 별개로 적용한다.
 - 모델 학습·Fork·학습 포함 Workflow와 모델·Feature 정의 변경 권한은 일반 Job 실행 권한에 포함되지 않는다. 이 권한은 `kind: service` Actor에만 부여할 수 있는 `automation` 역할과 관리자에게만 있다.
-- 다른 Actor의 모델 판본은 그 모델을 소유한 자동화 계정이나 관리자(`model.manage`)가 목적·적용 대상·한계 설명과 함께 명시적으로 제공한 경우에만 조회·적용한다. 소유자와 관리자는 제공 전 판본도 적용할 수 있다. 제공은 판본 조회와 새 Scoring·단일 입력 계산·설명 제출만 허용하며 학습 Dataset·학습 Job·실험 기록의 소유권 검사를 완화하지 않는다. 결과는 실행한 Actor가 소유한다. 제공 중단은 새 모델 적용만 막고 이미 만든 결과와 판본 설명 조회는 유지하며, 제공·중단은 감사 기록에 남긴다. 제공 중인 판본의 물리 삭제는 먼저 제공 중단을 요구한다. 제공·중단·새 적용 접수·삭제 전환은 같은 모델 행 잠금으로 직렬화한다.
+- 다른 Actor의 모델 판본은 그 모델을 소유한 자동화 계정이나 관리자(`model.manage`)가 목적·적용 대상·한계 설명과 함께 명시적으로 제공한 경우에만 조회·적용한다. 소유자와 관리자는 제공 전 판본도 적용할 수 있다. 제공은 판본 조회와 새 Scoring·단일 입력 계산·설명 제출, 그 판본을 활성 판본으로 둔 Endpoint의 온라인 추론만 허용하며 학습 Dataset·학습 Job·실험 기록의 소유권 검사를 완화하지 않는다. 결과는 실행한 Actor가 소유한다. 제공 중단은 새 모델 적용만 막고 이미 만든 결과와 판본 설명 조회는 유지하며, 제공·중단은 감사 기록에 남긴다. 제공 중인 판본의 물리 삭제는 먼저 제공 중단을 요구한다. 제공·중단·새 적용 접수·삭제 전환은 같은 모델 행 잠금으로 직렬화한다.
 - 제품 브랜드명(`brand_name`)과 인스턴스 표시명(`display_name`)은 설치 인스턴스의 표시 설정이다. 로그인 전에는 브랜드명만 공개 조회할 수 있고, 변경은 `instance.configure` 권한과 감사를 따른다. 두 값은 인증 모드·배포 환경 의미를 갖지 않으며 내부 패키지·API 식별자·환경변수·오류 코드 및 데이터·모델 식별자와 독립적이다. 인증 모드는 `/api/v2/auth/me`가 정본이다.
 
 ## 데이터 해석과 분석 범위

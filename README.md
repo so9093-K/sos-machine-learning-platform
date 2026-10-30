@@ -23,7 +23,7 @@ make validate
 
 현재 `make validate`는 구성된 Python pytest 검증을 실행합니다. 전체 플랫폼 기능의 검증 완료를 뜻하지 않습니다.
 
-웹의 Data Explorer에서는 Dataset 개요·데이터 조회·탐색을, 별도 Data Preparation에서는 데이터 변환을 이용할 수 있습니다. 합성 예제는 선택 시에만 Dataset으로 등록되며, 분석과 Job 실행은 사용자가 선택합니다. 모델과 Feature는 개발 환경에서 만들고 배포 과정이 SOS에 공급하며, 웹의 모델 활용에서는 제공된 모델을 자신의 데이터에 적용하고 결과를 이해합니다. 공급 방법은 [시작하기](docs/getting-started.md#모델-공급-개발배포)를 참고하세요.
+웹의 Data Explorer에서는 Dataset 개요·데이터 조회·탐색을, 별도 Data Preparation에서는 데이터 변환을 이용할 수 있습니다. 합성 예제는 선택 시에만 Dataset으로 등록되며, 분석과 Job 실행은 사용자가 선택합니다. 모델과 Feature는 개발 환경에서 만들고 배포 과정이 SOS에 공급하며, 웹의 모델 활용에서는 제공된 모델을 자신의 데이터에 적용하고 결과를 이해합니다. 온라인 서빙 Endpoint로 배포한 모델은 API로 관측값의 점수를 바로 받을 수 있습니다. 공급 방법은 [시작하기](docs/getting-started.md#모델-공급-개발배포)를 참고하세요.
 
 `make` 또는 `make help`로 공개 명령을 확인할 수 있습니다. 기본 Web UI는
 `http://localhost:9601`, API는 `http://localhost:9602`,

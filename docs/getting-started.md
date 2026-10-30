@@ -76,12 +76,22 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 ```bash
 SOS_SUPPLY_TOKEN=<automation 토큰> .venv/bin/python scripts/supply_model.py \
   --state-file .sos/supply/activity.json \
-  --dataset-file <학습 데이터.parquet> --description-file <제공 설명.txt> [--sample-rows 200000]
+  --dataset-file <학습 데이터.parquet> --description-file <제공 설명.txt> [--sample-rows 200000] \
+  [--endpoint activity-anomaly]
 ```
 
 스크립트는 학습 데이터를 등록하고 활동 이상 탐지의 필수 Feature로 SOS Worker 학습을 실행한 뒤, Registry 등록을 확인하고 설명과 함께 판본을 제공한다. `--state-file`은 하나의 공급 실행을 식별하며, 같은 파일로 재실행하면 기존 등록·학습에서 이어 간다. 새로운 입력·학습에는 새 상태 파일을 쓴다. 파일 등록 응답이 유실되면 자동 재업로드하지 않으므로, `GET /api/datasets`에서 등록 상태를 확인하고 같은 `--state-file`과 확인한 `--dataset-id`로 재개한다.
 
 제공 설명에는 모델의 목적·적용할 데이터·결과 해석 시 주의할 한계를 적는다. 제공·재제공은 `PUT`, 중단은 `DELETE /api/ml/models/{id}/offering`이며 중단은 새 적용만 막고 이미 만든 결과는 유지한다. 웹에서는 관리자 또는 모델을 소유한 자동화 계정이 **모델 상세**에서 제공·설명 수정·중단을 실행한다. 학습 데이터를 조용히 줄이지 않으므로 큰 데이터는 `--sample-rows`로 행 수를 명시한다.
+
+`--endpoint`를 지정하면 공급한 판본을 그 이름의 온라인 서빙 Endpoint에 배포한다. 같은 이름의 Endpoint가 있으면 새 판본으로 전환을 요청하며, 서빙 Runtime이 새 판본의 준비를 확인할 때까지 기존 판본이 요청을 처리한다. 스크립트는 새 판본이 활성 판본이 되면 끝나고, 배포에 실패하면 사유를 출력하고 실패한다. 이후 상태 확인·되돌리기·중단은 웹의 **작업·운영 → 온라인 서빙** 또는 `/api/serving/endpoints` API로 한다. 추론 요청은 다음과 같다.
+
+```bash
+curl -X POST "$SOS_API/api/serving/endpoints/<Endpoint ID>/predict" -H "Authorization: Bearer $SOS_TOKEN" \
+  -H "Content-Type: application/json" -d '{"inputs": [{"<Feature 이름>": <값>, ...}]}'
+```
+
+Endpoint를 삭제하려면 먼저 중단한다. Endpoint가 활성·전환 대상·직전 판본으로 참조하는 모델은 삭제할 수 없으므로, 모델을 삭제하기 전에 다른 판본으로 전환하거나 Endpoint를 중단·삭제한다.
 
 제공 중인 모델은 먼저 제공을 중단해야 삭제할 수 있다. 모델을 소유한 자동화 계정이 `GET /api/ml/models/{id}/deletion-impact`로 영향을 확인한 뒤 `DELETE /api/ml/models/{id}`로 삭제한다. MLflow Version과 S3 모델 파일은 제거되고 과거 Job·Scoring·평가 근거는 보존된다.
 
@@ -94,6 +104,7 @@ Feast Feature Service의 등록·시점 조회·폐기는 `automation` 계정이
 아래 도구는 SOS Actor 권한을 적용하지 않는 로컬 운영자 도구이므로 **localhost 외부로 공개하거나 일반 사용자에게 전달하지 않는다.**
 
 - **등록 파이프라인 (SOS 웹):** 학습 권한 계정의 **작업·운영 → 등록 파이프라인**에서 실행 이력과 단계별 결과를 확인하고 새 실행을 제출한다. 자동화는 `POST /api/pipelines/activity-anomaly-if/runs`에 새 멱등성 키로 제출한다. 새 실행에는 Feature와 함께 시간 분할용 UTC 시각 `ts`가 필요하다. `/pipelines/runs/<SOS 제출 ID>` 링크의 결과 열람은 작업 조회 권한을 따른다.
+- **온라인 서빙 (SOS 웹):** 모델 관리 권한 계정의 **작업·운영 → 온라인 서빙**에서 Endpoint별 활성·전환 대상·직전 판본과 실제 실행 상태·배포 실패 사유를 확인하고 되돌리기·전환 취소·중단·재개·삭제를 실행한다. Ray Dashboard는 Compose 내부망에만 열려 있으며 호스트에 공개하지 않는다.
 - **Dagster** (`http://localhost:9607`): Code Location `sos`, Job `activity_anomaly_workflow`의 Run·단계·이벤트를 확인한다. SOS 제출 ID는 Run 태그 `sos/submission_id`로 검색한다. Dagster의 Re-execute는 같은 SOS 단계 Job을 재사용하므로 새 분석이 아니다. `make doctor-dagster`는 SOS가 사용하는 Run 검색 계약을 읽기 전용으로 확인한다.
 - **MLflow** (`http://localhost:9606`): 한 분석의 Run은 태그 `sos.workflow_submission_id`로 묶인다. 모델 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 수정하거나 삭제하지 않는다. 외부 서버는 `SOS_MLFLOW_TRACKING_URI`·`SOS_MLFLOW_TOKEN`으로 연결한다.
 - **Feast UI** (`http://localhost:9608`): `sos_features` SQL Registry를 읽기 전용 DB 계정으로 탐색한다. 등록된 Feature가 없으면 빈 Catalog가 정상이다.

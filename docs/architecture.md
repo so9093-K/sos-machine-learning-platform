@@ -10,11 +10,12 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**의 
 - **Application / Control Plane:** SOS는 Dataset·Job/Attempt·정책·평가·모델의 불변 실행 참조 및 접근 권한을 관리한다. MLflow는 Experiment·Run·Registered Model/Version·Alias 관리 정본이다.
 - **Feature Store:** 등록 Feature의 Entity·Feature View·Feature Service와 Point-in-Time Historical Retrieval은 Feast가 관리한다. SOS는 원본 Dataset·Snapshot·조회 Job·불변 결과·Actor 권한을 소유한다. Data Preparation과 직접 모델 입력은 독립 기능이다. [ADR 0018](adr/0018-feast-feature-ownership.md)을 따른다.
 - **Workflow Orchestration:** Dagster OSS는 등록형 Workflow 정의·의존성·Run 상태·운영 Lineage의 정본이다. 독립 SOS Job은 Workflow 없이 실행할 수 있다. Dagster 운영 메타데이터는 별도 DB에 기록하며 Dataset·Model·Result의 불변 실행 참조 및 Actor 권한은 SOS가 소유한다.
+- **Online Serving:** Endpoint의 의도(서빙·중단, 활성·전환 대상·직전 판본)는 SOS가, 복제본 실행·라우팅은 Ray Serve가 맡는다. 독립 `serving-controller`가 실제 상태를 의도에 맞추고 준비가 확인된 판본으로만 전환한다. 외부 요청은 SOS API의 인증·권한·입력 검증을 거친다. [ADR 0019](adr/0019-ray-serve-online-serving.md)를 따른다.
 - **Execution Boundary:** Job 요청과 Runtime 요구를 실행기에 전달하고 시도·취소·결과·오류를 연결한다.
 - **Training / Evaluation / Serving Runtime:** 실제 계산을 수행하며 프레임워크나 배치 엔진의 내부 형식이 공통 계약을 바꾸지 않도록 분리한다.
 - **Data / Artifacts / Tracking:** 불변 결과와 그 참조 관계를 보관한다. 메타데이터, 원본 파일, 외부 추적은 각자 다른 정본을 가진다.
 
-다이어그램은 장기 목표의 책임 경계를 나타낸다. 표시된 저장소·프레임워크와 아직 구현되지 않은 Serving 능력이 현재 필수 구성임을 의미하지 않는다. Data Explorer와 Model Playground도 같은 계약을 사용하는 경험이며 별도 플랫폼이 아니다.
+다이어그램은 장기 목표의 책임 경계를 나타낸다. 표시된 저장소·프레임워크가 현재 필수 구성임을 의미하지 않는다. Data Explorer와 Model Playground도 같은 계약을 사용하는 경험이며 별도 플랫폼이 아니다.
 
 ![신뢰 가능한 실행 및 데이터·결과 계약이 실험 플랫폼과 모델 개발 경험을 뒷받침하는 계층](references/ml-platform-execution-experiment-development-layers.png)
 
@@ -41,4 +42,4 @@ Job 저장소는 실행 소유권·Attempt·취소 판정과 종료 트랜잭션
 
 현재 DuckDB는 Dataset 탐색·프로파일, Polars는 Feature·변환 연산을 수행한다. 데이터 이해 결과는 원본 판본과 연결하지만 Dataset 등록 자체를 바꾸지 않는다. 이들은 현행 어댑터의 선택이며, 다른 연산기나 실행기를 도입하더라도 Dataset·Job의 의미가 달라져서는 안 된다.
 
-현재 서비스는 [Compose](../compose.yaml)로 로컬 실행한다. API·Worker·Web을 한 Compose 프로젝트에서 실행하는 것은 배포 방식이지 장기 아키텍처 정의가 아니다. 운영 절차는 [Getting Started](getting-started.md), 오류·복구는 [Diagnostics](diagnostics.md)를 따른다.
+현재 서비스는 [Compose](../compose.yaml)로 로컬 실행한다. API·Worker·서빙·Web을 한 Compose 프로젝트에서 실행하는 것은 배포 방식이지 장기 아키텍처 정의가 아니다. 운영 절차는 [Getting Started](getting-started.md), 오류·복구는 [Diagnostics](diagnostics.md)를 따른다.

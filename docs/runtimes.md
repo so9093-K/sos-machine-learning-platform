@@ -23,7 +23,7 @@ Worker는 자식 실행의 시간·메모리·스테이징 사용량을 감시�
 
 Dataset 캐시는 재사용 가능한 로컬 복사본이며 원본 S3 객체·모델·Iceberg Snapshot의 보존 정책과 다르다. 사용 중인 캐시를 임의 축출하지 않으며 데이터 손상 시 원본으로부터 무결성을 확인한다.
 
-API·초기화·Dagster는 기본 의존성을 사용하고 ML 계산용 numpy·joblib·scikit-learn·SHAP은 `ml` dependency group으로 설치한다. 학습 제출·Fork의 매개변수 검증은 SDK를 로딩하지 않는다. 개발 검사는 실제 ML 계산을 포함하므로 `dev` 그룹에 `ml`을 포함한다. 호스트 Worker 실행에는 `uv sync --locked --group ml`을 사용하고, 등록 Feature 실행에는 `--group feast`를 함께 선택한다.
+API·초기화·Dagster는 기본 의존성을 사용하고 ML 계산용 numpy·joblib·scikit-learn·SHAP은 `ml` dependency group으로 설치한다. 학습 제출·Fork의 매개변수 검증은 SDK를 로딩하지 않는다. 개발 검사는 실제 ML 계산을 포함하므로 `dev` 그룹에 `ml`을 포함한다. 호스트 Worker 실행에는 `uv sync --locked --group ml`을 사용하고, 등록 Feature 실행에는 `--group feast`를 함께 선택한다. `serving` 그룹은 `ml`에 Ray Serve를 더한 서빙 이미지용이다. 컨테이너 이미지는 Dockerfile의 `SOS_UV_GROUPS` 인자로 그룹을 고른다.
 
 MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·Alias의 정본은 MLflow이지만 SOS는 신뢰된 Worker가 발급한 모델 위치·SHA-256·Feature·Runtime·권한을 검증한 뒤 실행한다. 외부 Registry 등록만으로 임의 직렬화 파일을 신뢰하지 않는다. 인증정보는 서버 측에만 제공한다. 연결 상태의 의미는 [Workflows](workflows.md)를 따른다.
 
@@ -54,6 +54,14 @@ SELECT만 허용하며, DDL·Feature 적용·폐기 권한을 주지 않는다. 
 127.0.0.1 포트 바인딩을 함께 유지한다. SOS Actor 권한이 자동 상속되지 않으므로
 일반 사용자·외부 네트워크에 직접 공개하지 않는다. Feast UI는 관리용 정의
 탐색이며 Dataset·Job·Model 사용자 동작은 기존 SOS API로 수행한다.
+
+## 온라인 서빙 Runtime
+
+온라인 추론은 Ray Serve가 실행한다([ADR 0019](adr/0019-ray-serve-online-serving.md)). `serving` 컨테이너가 Ray head와 Serve 복제본을 실행하며 Dashboard·Serve 포트는 Compose 내부망에만 열린다. 복제본은 DB 자격 증명 없이 판본 기록이 가리키는 S3 아티팩트만 읽고, Worker와 같은 신뢰 복원 함수로 모델을 복원한다.
+
+같은 `uv.lock`에서 설치했다는 사실이 같은 Runtime을 뜻하지 않는다. 복원 시 판본에 기록된 학습 Runtime(Python minor·numpy·scikit-learn)과 서빙 이미지에 실제 설치된 판본, 아티팩트 SHA-256을 대조하며, 불일치하면 복제본이 시작되지 않고 배포 실패 사유로 보고된다. 서빙 이미지의 이 판본들을 바꿀 때는 새 Runtime에서 학습한 판본으로 먼저 전환한 뒤 이미지를 교체한다.
+
+`serving-controller`는 Job Worker·MLflow·Dagster와 분리된 프로세스로 SOS의 Endpoint 의도를 Ray Serve 선언형 Config에 반영한다. Ray Serve가 응답하지 않으면 잠시 기다렸다가 다시 시도하고, Ray가 재시작되면 다음 조정에서 같은 Config를 다시 적용해 복구한다. 현재 구성은 단일 Ray head 노드이며 판본당 복제본 하나(CPU 0.25)를 둔다. 전체 CPU는 `SOS_SERVING_CPUS`(기본 2)로 정한다.
 
 ## 현재 구현의 범위
 
