@@ -6,9 +6,9 @@ import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { ModelApiUsage, servesModel } from "./ModelApiUsage";
 import type { PlaygroundRun } from "./ModelLabPlayground";
 import { canApplyModel, useModelOffering } from "./ModelOffering";
-import { isActivityModelCompatible } from "./ModelLabTaxonomy";
-import { taskGuides, topicGuides, topicTree, TaxonomyTrail, usePipelineCatalog,
-  PLAYGROUND_TOPICS, type TaxonomyLinks } from "./ModelLabGuide";
+import { isTopicCompatible } from "./ModelLabTaxonomy";
+import { taskGuides, topicGuides, topicTree, TaxonomyTrail, useTopicCatalog,
+  type TaxonomyLinks } from "./ModelLabGuide";
 import { algorithmLabel, formatRecordedAt } from "./display-format";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { Dataset, ModelOffering, ModelOfferingPage, ModelRevision, ServingEndpoint } from "./types";
@@ -55,8 +55,9 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   links: TaxonomyLinks;
 }) {
-  const catalog = usePipelineCatalog();
-  const definition = catalog.items?.find(item => item.id === PLAYGROUND_TOPICS[TOPIC]) ?? null;
+  const catalog = useTopicCatalog();
+  // 주제의 입력·출력 계약. 어떤 알고리즘·Pipeline으로 만든 모델이든 이 계약을 따르면 체험할 수 있다.
+  const topic = catalog.items?.find(item => item.id === TOPIC) ?? null;
   const trail = topicTree(catalog.tree, TOPIC);
   const [offered, setOffered] = useState<ModelOffering[] | null>(null);
   const [offeredError, setOfferedError] = useState("");
@@ -75,11 +76,11 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
       .catch(cause => { if (active) setOfferedError(formatError(cause)); });
     return () => { active = false; };
   }, [retry]);
-  const models = definition && offered
-    ? offered.filter(item => isActivityModelCompatible(item.model, definition)) : [];
+  const models = topic && offered
+    ? offered.filter(item => isTopicCompatible(item.model, topic)) : [];
   // 지정한 모델이 첫 목록 페이지에 없으면 그 판본을 직접 확인한다. 다른 모델로 대체하지 않는다.
   const listed = preferredModelId ? models.find(item => item.model.id === preferredModelId) ?? null : null;
-  const lookupId = preferredModelId && definition && offered !== null && !listed ? preferredModelId : null;
+  const lookupId = preferredModelId && topic && offered !== null && !listed ? preferredModelId : null;
   const [direct, setDirect] = useState<{ id: string; model: ModelRevision | null; error: string } | null>(null);
   useEffect(() => {
     if (!lookupId) return;
@@ -98,8 +99,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
     if (listed) return { state: "ready", choice: { model: listed.model, description: listed.description, offered: true } };
     if (!lookupId || direct?.id !== lookupId) return { state: "loading" };
     if (direct.error || !direct.model) return { state: "blocked", reason: `선택한 모델을 열 수 없습니다. ${direct.error}` };
-    if (definition && !isActivityModelCompatible(direct.model, definition)) return { state: "blocked",
-      reason: "선택한 모델은 활동 이상 탐지의 입력 조건(Feature·알고리즘)과 맞지 않습니다. 모델 상세에서 입력 조건을 확인하세요." };
+    if (topic && !isTopicCompatible(direct.model, topic)) return { state: "blocked",
+      reason: "선택한 모델은 활동 이상 탐지의 입력 조건(Feature)이나 출력 형식(이상 점수)과 맞지 않습니다. 모델 상세에서 입력 조건을 확인하세요." };
     const state = directOffering.offering;
     if (directOffering.error && !state) return { state: "blocked",
       reason: `선택한 모델의 제공 상태를 확인하지 못했습니다. ${directOffering.error}` };
@@ -166,7 +167,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
           다시 조회</button></div>}
       {!catalog.error && !offeredError && (offered === null || catalog.items === null) &&
         <p role="status" className="muted">사용할 수 있는 모델을 확인하는 중입니다.</p>}
-      {selection.state === "loading" && preferredModelId && offered !== null && definition &&
+      {selection.state === "loading" && preferredModelId && offered !== null && topic &&
         <p role="status" className="muted">선택한 모델을 확인하는 중입니다.</p>}
       {selection.state === "blocked" && <div className="playground-notice" role="alert">
         <strong>선택한 모델을 사용할 수 없습니다</strong>
@@ -174,7 +175,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
         {models.length > 0 && <button type="button" className="secondary" onClick={() => onSelectModel("")}>
           제공 모델 중에서 다시 선택</button>}
       </div>}
-      {selection.state === "none" && offered !== null && definition && <p className="muted">
+      {selection.state === "none" && offered !== null && topic && <p className="muted">
         아직 사용할 수 있는 활동 이상 탐지 모델이 없습니다. 모델이 준비되면 이곳에서 바로 적용할 수 있습니다.</p>}
       {chosen && <>
         <div className="playground-model">
@@ -225,13 +226,13 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
       lastRun={lastRun?.modelRevisionId === chosen.model.id ? lastRun : undefined}
       datasetId={selectedDatasetId && readyDatasetId === selectedDatasetId ? selectedDatasetId : undefined} />}
 
-    {definition && <details className="panel playground-details">
+    {topic && <details className="panel playground-details">
       <summary>입력 조건 · 모델 정보</summary>
-      <p>모델은 사용자·호스트 단위로 집계한 숫자형 활동 Feature {definition.required_features.length}개를 이름과 자료형 그대로 요구합니다.
+      <p>모델은 사용자·호스트 단위로 집계한 숫자형 활동 Feature {topic.required_features.length}개를 이름과 자료형 그대로 요구합니다.
         컬럼 순서는 달라도 되며, 원시 로그에서 Feature를 자동으로 만들지 않습니다. 관측 시각 컬럼은 선택입니다.</p>
       {[...activityFeatureGroups.map(group => ({ id: group.id, title: group.title,
-        names: definition.required_features.filter(name => (group.features as readonly string[]).includes(name)) })),
-        { id: "other", title: "그 밖의 Feature", names: definition.required_features.filter(name =>
+        names: topic.required_features.filter(name => (group.features as readonly string[]).includes(name)) })),
+        { id: "other", title: "그 밖의 Feature", names: topic.required_features.filter(name =>
           !activityFeatureGroups.some(group => (group.features as readonly string[]).includes(name))) }]
         .filter(group => group.names.length > 0).map(group => <div key={group.id} className="playground-feature-group">
           <strong>{group.title} · {group.names.length}개</strong>

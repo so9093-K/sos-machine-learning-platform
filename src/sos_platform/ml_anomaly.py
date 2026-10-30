@@ -8,6 +8,8 @@ import math
 from bisect import bisect_right
 from collections.abc import Sequence
 
+from .ml_outputs import ISOLATION_FOREST_OUTPUT
+
 
 def _finite_scores(values: Sequence[float]) -> tuple[float, ...]:
     if not values:
@@ -108,7 +110,7 @@ def evaluate_anomaly_scores(
     """
     checked = _finite_scores(scores)
     result: dict = {
-        "score_direction": "higher_is_more_anomalous",
+        "score_direction": ISOLATION_FOREST_OUTPUT.score_direction,
         "score_count": len(checked),
         "score_min": min(checked),
         "score_max": max(checked),

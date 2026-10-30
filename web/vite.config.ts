@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
     dagster: port(env.SOS_DAGSTER_PORT, "9607"),
     mlflow: port(env.SOS_MLFLOW_PORT, "9606"),
     feast: port(env.SOS_FEAST_UI_PORT, "9608"),
+    ray: port(env.SOS_RAY_DASHBOARD_PORT, "9609"),
   };
   return {
     plugins: [react()],

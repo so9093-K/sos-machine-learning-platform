@@ -4,13 +4,13 @@
 """
 
 import math
-
 from importlib.metadata import version
 
 import numpy as np
 
 from .ml_decision import _verified_scoring_row
 from .ml_input import ordered_playground_input
+from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
 from .ml_runtime import load_trusted_isolation_forest
 
 
@@ -142,10 +142,11 @@ def explain_playground_job(store, spec: dict) -> dict:
         ordered_playground_input(model, source["spec"]["features"]), dtype=np.float64
     )
     saved_result = source.get("result")
+    contract = require_output_contract(model, produces=ANOMALY_SCORE_V1)
     if not isinstance(saved_result, dict) or (
         saved_result.get("model_revision_id") != model["id"]
-        or saved_result.get("score_direction") != "higher_is_more_anomalous"
-        or saved_result.get("score_scale") != "negative_sklearn_score_samples"
+        or saved_result.get("score_direction") != contract.score_direction
+        or saved_result.get("score_scale") != contract.score_scale
         or saved_result.get("feature_count") != len(names)
     ):
         raise ValueError("Playground score provenance and model revision disagree")
@@ -216,7 +217,7 @@ def _permutation_shap_result(
         "baseline_score": baseline_score,
         "reconstructed_score": reconstructed_score,
         "additivity_residual": residual,
-        "model_output": "negative_sklearn_score_samples",
+        "model_output": require_output_contract(model, produces=ANOMALY_SCORE_V1).score_scale,
         "baseline_source": "model_training_feature_medians_single_synthetic_row",
         "baseline_row_count": 1,
         "sampling_seed": seed,

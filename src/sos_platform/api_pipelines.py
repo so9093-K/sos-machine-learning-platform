@@ -22,9 +22,7 @@ class PipelineDefinitionOut(BaseModel):
     version: str
     name: str
     description: str
-    learning_type: str
-    task_type: str
-    topic: str
+    topic: str = Field(description="이 Pipeline이 모델을 공급하는 분석 주제")
     algorithm: str
     required_time_column: str
     required_features: list[str]

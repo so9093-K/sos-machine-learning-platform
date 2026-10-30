@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { request } from "./api";
-import { modelLabLabels, modelLabTree } from "./ModelLabTaxonomy";
-import { PLAYGROUND_TOPICS } from "./ModelLabGuide";
-import type { PipelineDefinition } from "./types";
+import { modelLabLabels } from "./ModelLabTaxonomy";
+import { useTopicCatalog } from "./ModelLabGuide";
 
 export type WorkspaceTab =
   | "overview" | "understanding" | "preview" | "profile" | "preparation"
@@ -295,23 +293,13 @@ export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInsp
   context?: MLNavigationContext;
   resource?: ResourceRoute;
 }) {
-  const [catalog, setCatalog] = useState<PipelineDefinition[]>([]);
-  const [catalogError, setCatalogError] = useState(false);
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogReload, setCatalogReload] = useState(0);
+  // 주제 트리는 데이터 조회 권한이 있는 계정의 ML 분석 메뉴에만 있다. 운영 전용 계정은 조회하지 않는다.
+  const catalog = useTopicCatalog(canViewDataset);
+  const catalogError = Boolean(catalog.error);
+  const catalogLoading = catalog.items === null && !catalogError;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  useEffect(() => {
-    if (!canViewDataset) { setCatalogLoading(false); return; }
-    let active = true;
-    setCatalogError(false); setCatalogLoading(true);
-    void request<PipelineDefinition[]>("/api/pipelines")
-      .then(items => { if (active) setCatalog(items); })
-      .catch(() => { if (active) { setCatalog([]); setCatalogError(true); } })
-      .finally(() => { if (active) setCatalogLoading(false); });
-    return () => { active = false; };
-  }, [catalogReload, canViewDataset]);
   // 화면에서 체험할 수 있는 주제만 연결한다. 미구현 주제 링크를 생성하지 않는다.
-  const topics = modelLabTree(catalog.filter(item => PLAYGROUND_TOPICS[item.topic] === item.id));
+  const topics = catalog.tree;
   const taxonomyLink = (tab: "learning" | "task", id: string, label: string, kind: string) => <a
     href={contextPath(tab, { taxonomyId: id })} className="workspace-link model-lab-tree-link"
     aria-current={active === tab && context.taxonomyId === id ? "page" : undefined}
@@ -353,7 +341,7 @@ export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInsp
           <p className="model-lab-tree-feedback">현재 사용 가능한 주제가 없습니다.</p>}
         {catalogError && <div className="model-lab-tree-feedback" role="status">
           <span>분석 주제 목록을 불러오지 못했습니다.</span>
-          <button type="button" className="ghost" onClick={() => setCatalogReload(n => n + 1)}>다시 조회</button>
+          <button type="button" className="ghost" onClick={catalog.reload}>다시 조회</button>
         </div>}
         {(catalogLoading || catalogError) && <a
           href={hrefFor("topic")} className="workspace-link model-lab-topic-link"

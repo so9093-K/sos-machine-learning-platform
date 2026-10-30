@@ -18,6 +18,7 @@ from .datasets import pinned_scan_dataset
 from .ml_anomaly import histogram_edges
 from .ml_input import INTEGER_DTYPES, model_input_issues
 from .ml_observation_identity import validate_observation_identity
+from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
 from .ml_runtime import load_trusted_isolation_forest
 from .ml_scoring_staging import scoring_stage_prefix
 from .ml_temporal_split import select_temporal_partition, utc_observation_time
@@ -63,10 +64,11 @@ def _scoring_scope(source: pl.LazyFrame, dataset: dict, model: dict, raw_scope: 
     return frame, evidence
 
 
-def _score_summary(score_sums: list[float], count: int, low: float, high: float) -> dict:
+def _score_summary(score_sums: list[float], count: int, low: float, high: float,
+                   direction: str) -> dict:
     """모든 점수를 Python 목록에 보관하지 않고 기본 분포 통계를 계산한다."""
     return {
-        "score_direction": "higher_is_more_anomalous",
+        "score_direction": direction,
         "score_count": count,
         "score_min": float(low),
         "score_max": float(high),
@@ -126,6 +128,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
         raise ValueError("Model Revision is unavailable")
     if model["owner_actor"] != spec["model_owner_actor"]:
         raise ValueError("Model ownership changed")
+    contract = require_output_contract(model, produces=ANOMALY_SCORE_V1)
     features = model["features"]
     label = spec.get("label_column")
     identity_column = spec.get("observation_id_column")
@@ -268,12 +271,12 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
             raise ValueError("Scoring requires at least one row")
         if scope_evidence is not None and count != scope_evidence[f"{scope_evidence['partition']}_rows"]:
             raise ValueError("Scoring partition row count differs from pinned temporal evidence")
-        score_summary = _score_summary(score_sums, count, low, high)
+        score_summary = _score_summary(score_sums, count, low, high, contract.score_direction)
         score_summary["histogram"] = histogram_from_scoring_file(
             pending, low=low, high=high, expected_rows=count,
         )
         score_summary["scope"] = "scoring_dataset"
-        score_summary["score_scale"] = "negative_sklearn_score_samples"
+        score_summary["score_scale"] = contract.score_scale
         same_input_revision = (
             model.get("dataset_id") == dataset.get("id")
             and model.get("dataset_version") == dataset["version"]
@@ -316,7 +319,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
             "dataset_version": dataset["version"],
             "feature_names": features,
             "row_count": count,
-            "score_direction": "higher_is_more_anomalous",
+            "score_direction": contract.score_direction,
             "score_summary": score_summary,
             "ranking_metrics": ranked_metrics,
             "label_column": label,

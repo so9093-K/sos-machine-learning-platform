@@ -19,6 +19,10 @@ class ServingChangeRejected(Exception):
     """현재 상태에서 받을 수 없는 배포 의도 변경. 사유 문장은 사용자 안내에 그대로 쓴다."""
 
 
+# 서빙 의도의 복제본 수 판정을 직렬화한다. 동시에 접수된 변경이 함께 수용량을 넘지 않게 한다.
+_CAPACITY_LOCK = "SELECT pg_advisory_xact_lock(hashtext('sos.serving.capacity'))"
+
+
 class ServingStoreMixin:
     def _servable_model(self, db, revision_id: str, endpoint_owner: str, privileged: bool) -> dict:
         row = db.execute(text(
@@ -30,6 +34,25 @@ class ServingStoreMixin:
         if row["lifecycle_state"] != "Active" or not row["registry_version"]:
             raise ServingChangeRejected("Registry 등록이 확인된 활성 모델만 서빙할 수 있습니다.")
         return dict(row)
+
+    def _admit_replicas(self, db, endpoint_id: str, revisions: set[str], capacity: int) -> None:
+        """이 Endpoint가 변경 뒤 서빙할 판본까지 더해도 서빙 Runtime이 실행할 수 있는지 확인한다.
+
+        새 판본은 기존 판본 옆에서 준비되므로 전환 대상도 복제본 하나를 차지한다.
+        """
+        db.execute(text(_CAPACITY_LOCK))
+        others = db.execute(text(
+            "SELECT count(*) FROM serving_endpoints e JOIN model_revisions m ON m.id IN "
+            "(e.active_model_revision_id, e.pending_model_revision_id) "
+            "WHERE e.desired_state='serving' AND m.lifecycle_state='Active' AND e.id<>:id"
+        ), {"id": endpoint_id}).scalar_one()
+        needed = others + len(revisions)
+        if needed > capacity:
+            raise ServingChangeRejected(
+                f"서빙 Runtime 자원이 부족합니다. 이 변경 뒤 복제본 {needed}개가 필요하지만 지금 "
+                f"{capacity}개까지 실행할 수 있습니다. 새 판본은 기존 판본 옆에서 준비되므로 전환 중에는 "
+                "복제본이 하나 더 필요합니다. 쓰지 않는 Endpoint를 중단하거나 서빙 CPU(SOS_SERVING_CPUS)를 "
+                "늘리세요.")
 
     def _locked_endpoint(self, db, endpoint_id: str) -> dict:
         row = db.execute(text("SELECT * FROM serving_endpoints WHERE id=:id FOR UPDATE"),
@@ -73,13 +96,14 @@ class ServingStoreMixin:
         return [dict(row) for row in rows]
 
     def create_serving_endpoint(self, *, name: str, model_revision_id: str, owner_actor: str,
-                                owner_actor_type: str, privileged: bool,
+                                owner_actor_type: str, privileged: bool, replica_capacity: int,
                                 request_id: str | None = None) -> dict:
         """첫 판본은 전환 대상으로 두고, 준비가 확인되면 컨트롤러가 활성 판본으로 승격한다."""
         endpoint_id = str(uuid4())
         at = now()
         with self.connection() as db:
             self._servable_model(db, model_revision_id, owner_actor, privileged)
+            self._admit_replicas(db, endpoint_id, {model_revision_id}, replica_capacity)
             inserted = db.execute(text(
                 "INSERT INTO serving_endpoints(id,name,owner_actor,owner_actor_type,desired_state,"
                 "pending_model_revision_id,created_at,updated_at) "
@@ -95,11 +119,15 @@ class ServingStoreMixin:
         return self.get_serving_endpoint(endpoint_id)
 
     def _request_revision(self, db, endpoint: dict, model_revision_id: str, *, actor_id: str,
-                          actor_type: str, privileged: bool, action: str,
+                          actor_type: str, privileged: bool, replica_capacity: int, action: str,
                           request_id: str | None) -> None:
         self._servable_model(db, model_revision_id, endpoint["owner_actor"], privileged)
         pending = None if model_revision_id == endpoint["active_model_revision_id"] \
             else model_revision_id
+        if endpoint["desired_state"] == "serving":
+            self._admit_replicas(db, endpoint["id"], {
+                revision for revision in (endpoint["active_model_revision_id"], pending) if revision
+            }, replica_capacity)
         db.execute(text(
             "UPDATE serving_endpoints SET pending_model_revision_id=:pending,updated_at=:at "
             "WHERE id=:id"
@@ -110,17 +138,19 @@ class ServingStoreMixin:
 
     def request_serving_revision(self, endpoint_id: str, model_revision_id: str, *,
                                  actor_id: str, actor_type: str, privileged: bool,
-                                 request_id: str | None = None) -> dict:
+                                 replica_capacity: int, request_id: str | None = None) -> dict:
         """새 판본을 전환 대상으로 둔다. 기존 활성 판본은 새 판본이 준비될 때까지 계속 서빙한다."""
         with self.connection() as db:
             endpoint = self._locked_endpoint(db, endpoint_id)
             self._request_revision(db, endpoint, model_revision_id, actor_id=actor_id,
                                    actor_type=actor_type, privileged=privileged,
+                                   replica_capacity=replica_capacity,
                                    action="serving.revision_requested", request_id=request_id)
         return self.get_serving_endpoint(endpoint_id)
 
     def rollback_serving_endpoint(self, endpoint_id: str, *, actor_id: str, actor_type: str,
-                                  privileged: bool, request_id: str | None = None) -> dict:
+                                  privileged: bool, replica_capacity: int,
+                                  request_id: str | None = None) -> dict:
         """직전 판본을 다시 준비해 전환한다. 준비 전까지 현재 판본이 계속 서빙한다."""
         with self.connection() as db:
             endpoint = self._locked_endpoint(db, endpoint_id)
@@ -128,6 +158,7 @@ class ServingStoreMixin:
                 raise ServingChangeRejected("되돌릴 직전 판본이 없습니다.")
             self._request_revision(db, endpoint, endpoint["previous_model_revision_id"],
                                    actor_id=actor_id, actor_type=actor_type, privileged=privileged,
+                                   replica_capacity=replica_capacity,
                                    action="serving.rollback_requested", request_id=request_id)
         return self.get_serving_endpoint(endpoint_id)
 
@@ -148,11 +179,20 @@ class ServingStoreMixin:
         return self.get_serving_endpoint(endpoint_id)
 
     def set_serving_state(self, endpoint_id: str, desired_state: str, *, actor_id: str,
-                          actor_type: str, request_id: str | None = None) -> dict:
+                          actor_type: str, replica_capacity: int | None = None,
+                          request_id: str | None = None) -> dict:
+        """재개는 서빙 Runtime이 그 판본들을 실행할 수 있을 때만 받는다. 중단은 언제나 받는다."""
         if desired_state not in ("serving", "stopped"):
             raise ServingChangeRejected("알 수 없는 서빙 상태입니다.")
         with self.connection() as db:
-            self._locked_endpoint(db, endpoint_id)
+            endpoint = self._locked_endpoint(db, endpoint_id)
+            if desired_state == "serving" and endpoint["desired_state"] != "serving":
+                if replica_capacity is None:
+                    raise ServingChangeRejected("서빙 Runtime의 수용량을 확인하지 못했습니다.")
+                self._admit_replicas(db, endpoint_id, {
+                    revision for revision in (endpoint["active_model_revision_id"],
+                                              endpoint["pending_model_revision_id"]) if revision
+                }, replica_capacity)
             db.execute(text(
                 "UPDATE serving_endpoints SET desired_state=:state,updated_at=:at WHERE id=:id"
             ), {"state": desired_state, "at": now(), "id": endpoint_id})

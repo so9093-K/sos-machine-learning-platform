@@ -17,14 +17,20 @@ from .api_access import ResourceAccess
 from .api_ml_models import management_client
 from .errors import InvalidRequestError, PlatformError
 from .ml_input import ordered_playground_input
+from .ml_outputs import response_matches, revision_output_contract
 from .mlflow_errors import MLflowDeliveryError
 from .mlflow_registry import verify_registered_version
 from .security import Actor, require
 from .serving_client import (
+    FAILED_STATUSES,
+    REPLICA_CPUS,
     ServingClient,
     ServingRequestRejected,
     ServingUnavailable,
+    application_config,
     application_name,
+    config_matches,
+    replica_capacity,
 )
 from .store import Store
 from .store_serving import ServingChangeRejected
@@ -52,8 +58,11 @@ class ServingStateRequest(BaseModel):
 
 class ServingApplicationOut(BaseModel):
     model_revision_id: str
-    status: str
-    failure_reason: str | None = None
+    runtime_application: str = Field(description="서빙 Runtime의 애플리케이션 이름. 로컬 운영 도구에서 찾을 때 쓴다.")
+    status: str = Field(description="서빙 Runtime 상태. OUT_OF_SYNC는 의도와 다른 Config로 실행 중이라 "
+                        "컨트롤러가 되돌리는 중임을 뜻한다.")
+    status_reason: str | None = Field(
+        default=None, description="실패 원인이나 준비가 늦어지는 이유. 소유자·관리자에게만 보인다.")
 
 
 class ServingRuntimeOut(BaseModel):
@@ -91,15 +100,20 @@ class PredictionOut(BaseModel):
     output_type: str
     score_direction: str
     score_scale: str
-    outputs: list[dict[str, float]]
+    outputs: list[dict[str, float]] = Field(
+        description="입력 순서대로 관측별 결과. 구조는 output_type이 정한다(anomaly_score_v1: anomaly_score).")
 
 
-def _failure_reason(application: dict) -> str | None:
-    """traceback 대신 마지막 원인 문장만 소유자에게 보인다."""
+def _status_reason(application: dict, status: str) -> str | None:
+    """실패하면 traceback 대신 마지막 원인 문장을, 자원을 기다리면 그 이유를 보인다."""
     messages = [application.get("message") or ""] + [
         deployment.get("message") or "" for deployment in (application.get("deployments") or {}).values()]
     lines = [line.strip() for message in messages for line in message.splitlines() if line.strip()]
-    if not lines:
+    if status == "DEPLOYING" and any("to be scheduled" in line for line in lines):
+        # Ray는 복제본을 둘 자원이 없으면 30초 뒤부터 배치 대기를 알린다.
+        return (f"서빙 Runtime에 이 판본의 복제본(CPU {REPLICA_CPUS})을 실행할 자원이 없어 대기 중입니다. "
+                "쓰지 않는 Endpoint를 중단하거나 서빙 CPU(SOS_SERVING_CPUS)를 늘리세요.")
+    if status not in FAILED_STATUSES or not lines:
         return None
     # "sos_platform.errors.PlatformError: 사유"처럼 예외 경로가 붙은 끝 줄에서 사유만 남긴다.
     head, separator, reason = lines[-1].partition(": ")
@@ -119,6 +133,21 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         except (ServingUnavailable, ServingRequestRejected):
             return None
 
+    def desired_applications() -> dict[str, dict]:
+        """지금 의도한 애플리케이션 Config. 실제 Config와 비교해 준비 여부를 판정한다."""
+        return {app["name"]: app for app in (
+            application_config(item["endpoint_id"], item["revision"])
+            for item in store.serving_applications())}
+
+    def capacity() -> int:
+        """서빙 Runtime이 지금 실행할 수 있는 복제본 수. 확인할 수 없으면 새 서빙 의도를 받지 않는다."""
+        if client is None:
+            raise PlatformError("SOS-SERVING-UNAVAILABLE")
+        try:
+            return replica_capacity(client.cpu_capacity())
+        except (ServingUnavailable, ServingRequestRejected) as exc:
+            raise PlatformError("SOS-SERVING-UNAVAILABLE") from exc
+
     # 보관·등록 무효화는 Playground·Scoring과 같은 Registry 검증으로 판정한다. 확인에 성공한
     # 판본만 잠시 재사용하며, MLflow 장애로 확인할 수 없으면 다른 새 사용과 같이 거절한다.
     registry_checked: dict[str, float] = {}
@@ -135,15 +164,18 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         registry_checked[model["id"]] = time.monotonic()
 
     def endpoint_view(endpoint: dict, actor: Actor, manageable: bool,
-                      applications: dict[str, dict] | None) -> dict:
+                      applications: dict[str, dict] | None, desired: dict[str, dict]) -> dict:
         def application(revision_id: str | None) -> dict | None:
             if not revision_id or applications is None:
                 return None
-            app = applications.get(application_name(endpoint["id"], revision_id))
+            name = application_name(endpoint["id"], revision_id)
+            app = applications.get(name)
             status = app.get("status", "UNKNOWN") if app else "NOT_DEPLOYED"
-            failed = app is not None and status in ("DEPLOY_FAILED", "UNHEALTHY")
-            return {"model_revision_id": revision_id, "status": status,
-                    "failure_reason": _failure_reason(app) if manageable and failed else None}
+            # 이름이 같아도 의도와 다른 Config로 실행 중이면 그 판본이 준비된 것이 아니다.
+            if app and name in desired and not config_matches(app.get("deployed_app_config"), desired[name]):
+                status = "OUT_OF_SYNC"
+            return {"model_revision_id": revision_id, "runtime_application": name, "status": status,
+                    "status_reason": _status_reason(app, status) if manageable and app else None}
         active = application(endpoint["active_model_revision_id"])
         return {
             **{key: endpoint[key] for key in ("id", "name", "desired_state", "created_at",
@@ -207,8 +239,9 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             item for item in store.list_offered_serving_endpoints(model_revision_id)
             if item["owner_actor"] != actor.id]
         applications = runtime_applications()
-        return [endpoint_view(item, actor, True, applications) for item in managed] + [
-            endpoint_view(item, actor, False, applications) for item in shared]
+        desired = desired_applications()
+        return [endpoint_view(item, actor, True, applications, desired) for item in managed] + [
+            endpoint_view(item, actor, False, applications, desired) for item in shared]
 
     @router.post(
         "/api/serving/endpoints",
@@ -224,9 +257,9 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         require_registered(access.owned_model(body.model_revision_id, actor))
         endpoint = change(lambda: store.create_serving_endpoint(
             name=body.name, model_revision_id=body.model_revision_id, owner_actor=actor.id,
-            owner_actor_type=actor.kind, privileged=actor.privileged,
+            owner_actor_type=actor.kind, privileged=actor.privileged, replica_capacity=capacity(),
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications())
+        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
 
     @router.get(
         "/api/serving/endpoints/{endpoint_id}",
@@ -236,7 +269,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
     )
     def get_endpoint(endpoint_id: str, actor: Actor = READ_JOB):
         endpoint, manageable = visible_endpoint(endpoint_id, actor)
-        return endpoint_view(endpoint, actor, manageable, runtime_applications())
+        return endpoint_view(endpoint, actor, manageable, runtime_applications(), desired_applications())
 
     @router.put(
         "/api/serving/endpoints/{endpoint_id}/revision",
@@ -252,8 +285,9 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         require_registered(access.model(body.model_revision_id))
         endpoint = change(lambda: store.request_serving_revision(
             endpoint_id, body.model_revision_id, actor_id=actor.id, actor_type=actor.kind,
-            privileged=actor.privileged, request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications())
+            privileged=actor.privileged, replica_capacity=capacity(),
+            request_id=request.state.request_id))
+        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
 
     @router.post(
         "/api/serving/endpoints/{endpoint_id}/rollback",
@@ -268,8 +302,8 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             require_registered(access.model(previous))
         endpoint = change(lambda: store.rollback_serving_endpoint(
             endpoint_id, actor_id=actor.id, actor_type=actor.kind, privileged=actor.privileged,
-            request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications())
+            replica_capacity=capacity(), request_id=request.state.request_id))
+        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
 
     @router.delete(
         "/api/serving/endpoints/{endpoint_id}/revision-request",
@@ -282,7 +316,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         endpoint = change(lambda: store.cancel_serving_revision(
             endpoint_id, actor_id=actor.id, actor_type=actor.kind,
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications())
+        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
 
     @router.put(
         "/api/serving/endpoints/{endpoint_id}/state",
@@ -296,8 +330,9 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         managed_endpoint(endpoint_id, actor)
         endpoint = change(lambda: store.set_serving_state(
             endpoint_id, body.desired_state, actor_id=actor.id, actor_type=actor.kind,
+            replica_capacity=capacity() if body.desired_state == "serving" else None,
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications())
+        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
 
     @router.delete(
         "/api/serving/endpoints/{endpoint_id}",
@@ -347,12 +382,14 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
                                 else "SOS-SERVING-UNAVAILABLE") from exc
         except ServingUnavailable as exc:
             raise PlatformError("SOS-SERVING-UNAVAILABLE") from exc
-        outputs = result.get("outputs")
-        if result.get("model_revision_id") != revision_id or not isinstance(outputs, list) \
-                or len(outputs) != len(rows):
+        # 복제본의 응답이 판본에 기록된 출력 계약(종류·방향·척도)과 결과 구조를 모두 따를 때만 전달한다.
+        # 다르거나 빠진 응답은 Runtime 불일치로 보고 서빙 장애로 처리한다.
+        expected = revision_output_contract(model)
+        if expected is None or not isinstance(result, dict) \
+                or result.get("model_revision_id") != revision_id \
+                or not response_matches(expected, result, len(rows)):
             raise PlatformError("SOS-SERVING-UNAVAILABLE")
         return {"endpoint_id": endpoint_id, "model_revision_id": revision_id,
-                "output_type": result["output_type"], "score_direction": result["score_direction"],
-                "score_scale": result["score_scale"], "outputs": outputs}
+                **expected.record(), "outputs": result["outputs"]}
 
     return router

@@ -1,11 +1,13 @@
 """Pipeline 제작자가 제공하는 첫 IF Pipeline 정의와 Dataset 적합성 검사.
 
-이 정의의 Feature 계약은 SOS Core의 공통 입력 규칙이 아니다.
+이 Pipeline은 활동 이상 탐지 주제에 모델을 공급하는 하나의 Workflow다. 입력 Feature는 주제의
+입력 계약을 따르며, SOS Core의 공통 입력 규칙이 아니다.
 """
 from datetime import datetime, timedelta, timezone
 
 import polars as pl
 
+from .analysis_topics import ACTIVITY_FEATURES
 from .datasets import pinned_scan_dataset
 from .ml_input import NUMERIC
 from .ml_observation_identity import validate_observation_identity
@@ -13,7 +15,6 @@ from .ml_temporal_split import select_temporal_partition
 
 PIPELINE_ID = "activity-anomaly-if"
 PIPELINE_VERSION = "1"
-FEATURES = ("io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create", "cnt_file_del", "cnt_file_write", "cnt_file_rename", "cnt_proc_exec", "cnt_net_tcp", "cnt_net_udp", "cnt_large_write", "cnt_rename_ext_change", "cnt_proc_completed_in_batch", "max_write_size", "ratio_offhour_activity", "delta_file_vol", "velocity_net_conn", "velocity_proc_exec", "delta_avg_filename_entropy", "avg_write_chunk_size", "cv_write_chunk_size", "uniq_browser_pages", "uniq_file_touched", "uniq_new_ext_on_rename", "uniq_proc_image", "uniq_dest_port", "uniq_dest_ip", "ratio_private_ip", "uniq_file_ext", "uniq_dir_touched", "avg_filename_entropy", "max_cmd_len", "max_url_len", "avg_file_path_depth", "avg_net_payload_out", "ratio_no_ui", "ratio_hidden_file_ops", "read_write_bytes_ratio", "ratio_rename_burst", "ratio_large_write", "ratio_ext_change_on_rename", "ratio_proc_churn", "ratio_top1_dest_bytes_out", "ratio_outbound_traffic", "avg_ops_per_file")
 STAGES = ("preflight", "training", "calibration", "policy", "test", "evaluation")
 
 
@@ -23,14 +24,12 @@ def definition() -> dict:
         "id": PIPELINE_ID,
         "version": PIPELINE_VERSION,
         "name": "활동 이상 탐지",
-        "learning_type": "unsupervised",
-        "task_type": "anomaly_detection",
         "topic": "activity_anomaly",
         "description": "호환되는 사용자·호스트 활동 Feature 데이터로 새 Isolation Forest 모델을 학습하고, "
                        "Calibration 정책을 별도 Test 구간에 적용합니다.",
         "algorithm": "isolation_forest",
         "required_time_column": "ts",
-        "required_features": list(FEATURES),
+        "required_features": list(ACTIVITY_FEATURES),
         "stages": list(STAGES),
         "model_reuse": False,
         "label_requirement": "none",
@@ -73,11 +72,11 @@ def inspect_dataset(store, dataset: dict, *, full: bool = False) -> dict:
     plan = None
     with pinned_scan_dataset(store, dataset) as source:
         schema = source.collect_schema()
-        missing = [name for name in ("ts", *FEATURES) if name not in schema]
+        missing = [name for name in ("ts", *ACTIVITY_FEATURES) if name not in schema]
         if missing:
             issues.append("필수 컬럼 없음: " + ", ".join(missing[:12])
                           + (" 외 " + str(len(missing)-12) + "개" if len(missing)>12 else ""))
-        bad_types = [name for name in FEATURES if name in schema and schema[name] not in NUMERIC]
+        bad_types = [name for name in ACTIVITY_FEATURES if name in schema and schema[name] not in NUMERIC]
         if bad_types:
             issues.append("숫자형이 아닌 Feature: " + ", ".join(bad_types[:12]))
         if "ts" in schema and schema["ts"] != pl.String and not (
@@ -128,5 +127,5 @@ def inspect_dataset(store, dataset: dict, *, full: bool = False) -> dict:
     return {
         "pipeline_id": PIPELINE_ID, "pipeline_version": PIPELINE_VERSION,
         "dataset_id": dataset["id"], "dataset_version": dataset["version"],
-        "ready": not issues, "issues": issues, "feature_count": len(FEATURES), "plan": plan,
+        "ready": not issues, "issues": issues, "feature_count": len(ACTIVITY_FEATURES), "plan": plan,
     }

@@ -23,7 +23,7 @@ def test_permutation_shap_reconstructs_actual_sos_score():
     score = runtime.score_anomalies(row.reshape(1, -1))[0]
     args = (
         "scoring",
-        {"id": "model", "features": ["first", "second", "third"]},
+        {"id": "model", "algorithm": "isolation_forest", "features": ["first", "second", "third"]},
         4, row, [0.0, 0.0, 0.0], score, runtime,
     )
     first = _permutation_shap_result(*args)
@@ -58,7 +58,7 @@ def test_permutation_shap_reconstructs_real_isolation_forest_score():
     reference = np.median(training, axis=0).tolist()
     score = model.score_anomalies(values.reshape(1, -1))[0]
     result = _permutation_shap_result(
-        "scoring", {"id": "model", "features": [f"f{i}" for i in range(44)]},
+        "scoring", {"id": "model", "algorithm": "isolation_forest", "features": [f"f{i}" for i in range(44)]},
         4, values, reference, score, model,
     )
     assert len(result["feature_contributions"]) == 44
@@ -73,7 +73,7 @@ def test_permutation_shap_includes_missing_value_preprocessing():
     row = np.asarray([float("nan"), 2.0, 2.0])
     score = runtime.score_anomalies(row.reshape(1, -1))[0]
     result = _permutation_shap_result(
-        "s", {"id": "m", "features": ["x", "y", "z"]},
+        "s", {"id": "m", "algorithm": "isolation_forest", "features": ["x", "y", "z"]},
         0, row, [0.0, 0.0, 0.0], score, runtime,
     )
     assert result["feature_contributions"][0]["missing_imputed"] is True
@@ -98,7 +98,7 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
                         lambda *_: _LinearRuntime())
     scoring = {"id": "s", "owner_actor": "owner", "model_revision_id": "m",
                "score_summary": {}}
-    model = {"id": "m", "features": ["a", "b", "c"],
+    model = {"id": "m", "algorithm": "isolation_forest", "features": ["a", "b", "c"],
              "runtime": {"feature_reference_medians": [0.0, 0.0, 0.0]}}
     store = SimpleNamespace(
         get_scoring_result=lambda _: scoring, get_model_revision=lambda _: model,
@@ -145,7 +145,7 @@ def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_p
     from sos_platform import ml_explanation
     runtime = _LinearRuntime()
     model = {
-        "id": "model", "owner_actor": "actor-1", "lifecycle_state": "Active",
+        "id": "model", "owner_actor": "actor-1", "lifecycle_state": "Active", "algorithm": "isolation_forest",
         "features": ["first", "second", "third"],
         "runtime": {
             "feature_dtypes": ["Float64", "Float64", "Float64"],
@@ -229,7 +229,7 @@ def test_playground_explanation_api_checks_source_authority_and_status(tmp_path,
                  "features": {"first": 2}},
         "result": {"anomaly_score": 0.5},
     }
-    model = {"id": "model", "owner_actor": "owner", "lifecycle_state": "Active"}
+    model = {"id": "model", "owner_actor": "owner", "lifecycle_state": "Active", "algorithm": "isolation_forest"}
     calls = []
     monkeypatch.setattr(Store, "get_job", lambda self, _: source)
     monkeypatch.setattr(Store, "get_model_revision", lambda self, _: model)

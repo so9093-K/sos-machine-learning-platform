@@ -5,7 +5,7 @@ from urllib.error import URLError
 import pytest
 from fastapi import HTTPException
 
-from sos_platform import dagster_workflows, pipeline_reference
+from sos_platform import analysis_topics, dagster_workflows, pipeline_reference
 from sos_platform.api_pipelines import PipelineRunOut, _candidate_rows
 from sos_platform.dagster_client import DagsterClient, DagsterUnavailable
 
@@ -13,8 +13,10 @@ from sos_platform.dagster_client import DagsterClient, DagsterUnavailable
 def test_registered_activity_method_keeps_independent_ml_contract():
     definition = pipeline_reference.definition()
     assert definition["id"] == "activity-anomaly-if"
-    assert definition["learning_type"] == "unsupervised"
-    assert definition["task_type"] == "anomaly_detection"
+    # 분류와 입력 계약은 주제가 소유하고, Pipeline은 그 주제를 가리킨다.
+    topic = next(item for item in analysis_topics.topics() if item["id"] == definition["topic"])
+    assert (topic["learning_type"], topic["task_type"]) == ("unsupervised", "anomaly_detection")
+    assert definition["required_features"] == topic["required_features"]
     assert len(definition["required_features"]) == 44
     assert definition["stages"] == list(dagster_workflows.STAGES)
 

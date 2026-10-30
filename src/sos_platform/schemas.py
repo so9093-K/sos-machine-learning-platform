@@ -4,7 +4,17 @@ from datetime import datetime
 from typing import Literal
 from unicodedata import category
 
-from pydantic import BaseModel, Field, StrictFloat, StrictInt, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    StrictFloat,
+    StrictInt,
+    computed_field,
+    field_validator,
+    model_validator,
+)
+
+from .ml_outputs import revision_output_contract
 
 
 class Step(BaseModel):
@@ -76,18 +86,29 @@ class HealthOut(BaseModel):
 
 
 class ReadyServicesOut(BaseModel):
-    """API에서 확인하는 필수 저장소·Worker 준비 상태."""
+    """API가 요청을 처리하는 데 반드시 필요한 저장소. 하나라도 없으면 API 전체가 준비되지 않았다."""
 
     database: Literal["ready", "unavailable"]
     storage: Literal["ready", "unavailable"]
-    worker: Literal["ready", "unavailable"]
+
+
+class ReadyFeaturesOut(BaseModel):
+    """API와 따로 실행되는 기능의 상태. 하나가 멈춰도 API와 다른 기능은 계속 동작한다."""
+
+    job_execution: Literal["ready", "unavailable"] = Field(description="비동기 Job을 실행하는 Worker")
+    online_serving: Literal["ready", "unavailable", "not_configured"] = Field(
+        description="온라인 추론을 실행하는 서빙 Runtime 연결")
 
 
 class ReadyOut(BaseModel):
-    """필수 구성요소에 대한 준비 상태. 실패 시에도 동일한 JSON 구조를 반환한다."""
+    """준비 상태. unavailable은 API 전체 장애(503), degraded는 일부 기능 장애(200)다.
 
-    status: Literal["ready", "unavailable"]
+    실패 시에도 동일한 JSON 구조를 반환한다.
+    """
+
+    status: Literal["ready", "degraded", "unavailable"]
     services: ReadyServicesOut
+    features: ReadyFeaturesOut
 
 
 class AuthMeOut(BaseModel):
@@ -512,6 +533,7 @@ class MLTrainRequest(BaseModel):
 
 
 class ModelRevisionOut(BaseModel):
+
     registry_version: str | None = None
     lifecycle_state: Literal["Active", "Deleting", "Deleted"] = "Active"
     id: str
@@ -527,6 +549,13 @@ class ModelRevisionOut(BaseModel):
     training_score_summary: dict[str, object]
     runtime: dict[str, object]
     created_at: str
+
+    @computed_field
+    @property
+    def output_type(self) -> str | None:
+        """판본이 학습 때 기록한 출력 계약의 종류. 분석 주제·소비자가 출력의 의미를 구별한다."""
+        contract = revision_output_contract({"algorithm": self.algorithm, "runtime": self.runtime})
+        return contract.output_type if contract else None
 
 
 class ModelOfferingRequest(BaseModel):

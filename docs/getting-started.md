@@ -104,7 +104,8 @@ Feast Feature Service의 등록·시점 조회·폐기는 `automation` 계정이
 아래 도구는 SOS Actor 권한을 적용하지 않는 로컬 운영자 도구이므로 **localhost 외부로 공개하거나 일반 사용자에게 전달하지 않는다.**
 
 - **등록 파이프라인 (SOS 웹):** 학습 권한 계정의 **작업·운영 → 등록 파이프라인**에서 실행 이력과 단계별 결과를 확인하고 새 실행을 제출한다. 자동화는 `POST /api/pipelines/activity-anomaly-if/runs`에 새 멱등성 키로 제출한다. 새 실행에는 Feature와 함께 시간 분할용 UTC 시각 `ts`가 필요하다. `/pipelines/runs/<SOS 제출 ID>` 링크의 결과 열람은 작업 조회 권한을 따른다.
-- **온라인 서빙 (SOS 웹):** 모델 관리 권한 계정의 **작업·운영 → 온라인 서빙**에서 Endpoint별 활성·전환 대상·직전 판본과 실제 실행 상태·배포 실패 사유를 확인하고 되돌리기·전환 취소·중단·재개·삭제를 실행한다. Ray Dashboard는 Compose 내부망에만 열려 있으며 호스트에 공개하지 않는다.
+- **온라인 서빙 (SOS 웹):** 모델 관리 권한 계정의 **작업·운영 → 온라인 서빙**에서 Endpoint별 활성·전환 대상·직전 판본과 실제 실행 상태·배포 실패 사유를 확인하고 되돌리기·전환 취소·중단·재개·삭제를 실행한다. 같은 PC에서 접속한 운영 계정에는 판본마다 Ray Dashboard의 해당 애플리케이션 화면으로 가는 **복제본·로그** 링크가 보인다.
+- **Ray Dashboard** (`http://localhost:9609`): 온라인 서빙 복제본 상태, 배포 실패 메시지 전체, 복제본 로그와 자원 사용량을 확인한다. 애플리케이션 이름은 `<Endpoint ID>--<모델 판본 ID>`다. 보는 용도로 쓰며, 배포·전환은 SOS로 요청한다. Ray에 직접 적용한 Serve Config는 컨트롤러가 다음 조정에서 SOS 의도로 되돌린다.
 - **Dagster** (`http://localhost:9607`): Code Location `sos`, Job `activity_anomaly_workflow`의 Run·단계·이벤트를 확인한다. SOS 제출 ID는 Run 태그 `sos/submission_id`로 검색한다. Dagster의 Re-execute는 같은 SOS 단계 Job을 재사용하므로 새 분석이 아니다. `make doctor-dagster`는 SOS가 사용하는 Run 검색 계약을 읽기 전용으로 확인한다.
 - **MLflow** (`http://localhost:9606`): 한 분석의 Run은 태그 `sos.workflow_submission_id`로 묶인다. 모델 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 수정하거나 삭제하지 않는다. 외부 서버는 `SOS_MLFLOW_TRACKING_URI`·`SOS_MLFLOW_TOKEN`으로 연결한다.
 - **Feast UI** (`http://localhost:9608`): `sos_features` SQL Registry를 읽기 전용 DB 계정으로 탐색한다. 등록된 Feature가 없으면 빈 Catalog가 정상이다.

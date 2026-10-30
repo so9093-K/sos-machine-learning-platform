@@ -1406,8 +1406,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 필수 서비스 준비 상태 확인
-         * @description 데이터베이스·객체 저장소·Worker를 확인하며 하나라도 준비되지 않으면 503을 반환합니다.
+         * 준비 상태 확인
+         * @description API에 필요한 데이터베이스·객체 저장소가 준비되지 않으면 503을 반환합니다. Job 실행(Worker)과 온라인 서빙 Runtime은 API와 따로 실행되는 기능이므로 features에 상태를 보고하고, 하나라도 멈추면 status가 degraded(200)입니다.
          */
         get: operations["ready_api_ready_get"];
         put?: never;
@@ -1637,6 +1637,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 분석 주제 조회
+         * @description 제공하는 분석 주제의 분류·입력 Feature·출력 계약을 반환합니다. 주제에 맞는 모델은 알고리즘과 관계없이 입력 Feature 이름과 출력 계약(output_type)이 같은 모델입니다.
+         */
+        get: operations["list_topics_api_topics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/audit": {
         parameters: {
             query?: never;
@@ -1701,6 +1721,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnalysisTopicOut */
+        AnalysisTopicOut: {
+            /** Id */
+            id: string;
+            /** Learning Type */
+            learning_type: string;
+            /** Name */
+            name: string;
+            /**
+             * Output Type
+             * @description 주제가 기대하는 모델 출력 계약(모델의 output_type과 비교)
+             */
+            output_type: string;
+            /**
+             * Required Features
+             * @description 주제의 입력 Feature. 이름이 모두 같은 모델이 이 주제의 입력을 받는다.
+             */
+            required_features: string[];
+            /** Task Type */
+            task_type: string;
+        };
         /** AttemptOut */
         AttemptOut: {
             /** Error */
@@ -3412,6 +3453,11 @@ export interface components {
             lifecycle_state: "Active" | "Deleting" | "Deleted";
             /** Location */
             location: string;
+            /**
+             * Output Type
+             * @description 판본이 학습 때 기록한 출력 계약의 종류. 분석 주제·소비자가 출력의 의미를 구별한다.
+             */
+            readonly output_type: string | null;
             /** Params */
             params: {
                 [key: string]: unknown;
@@ -3495,8 +3541,6 @@ export interface components {
             id: string;
             /** Label Requirement */
             label_requirement: string;
-            /** Learning Type */
-            learning_type: string;
             /** Limitations */
             limitations: string[];
             /** Model Reuse */
@@ -3509,9 +3553,10 @@ export interface components {
             required_time_column: string;
             /** Stages */
             stages: string[];
-            /** Task Type */
-            task_type: string;
-            /** Topic */
+            /**
+             * Topic
+             * @description 이 Pipeline이 모델을 공급하는 분석 주제
+             */
             topic: string;
             /** Version */
             version: string;
@@ -3607,7 +3652,10 @@ export interface components {
             model_revision_id: string;
             /** Output Type */
             output_type: string;
-            /** Outputs */
+            /**
+             * Outputs
+             * @description 입력 순서대로 관측별 결과. 구조는 output_type이 정한다(anomaly_score_v1: anomaly_score).
+             */
             outputs: {
                 [key: string]: number;
             }[];
@@ -3678,20 +3726,41 @@ export interface components {
             sampled: boolean;
         };
         /**
+         * ReadyFeaturesOut
+         * @description API와 따로 실행되는 기능의 상태. 하나가 멈춰도 API와 다른 기능은 계속 동작한다.
+         */
+        ReadyFeaturesOut: {
+            /**
+             * Job Execution
+             * @description 비동기 Job을 실행하는 Worker
+             * @enum {string}
+             */
+            job_execution: "ready" | "unavailable";
+            /**
+             * Online Serving
+             * @description 온라인 추론을 실행하는 서빙 Runtime 연결
+             * @enum {string}
+             */
+            online_serving: "ready" | "unavailable" | "not_configured";
+        };
+        /**
          * ReadyOut
-         * @description 필수 구성요소에 대한 준비 상태. 실패 시에도 동일한 JSON 구조를 반환한다.
+         * @description 준비 상태. unavailable은 API 전체 장애(503), degraded는 일부 기능 장애(200)다.
+         *
+         *     실패 시에도 동일한 JSON 구조를 반환한다.
          */
         ReadyOut: {
+            features: components["schemas"]["ReadyFeaturesOut"];
             services: components["schemas"]["ReadyServicesOut"];
             /**
              * Status
              * @enum {string}
              */
-            status: "ready" | "unavailable";
+            status: "ready" | "degraded" | "unavailable";
         };
         /**
          * ReadyServicesOut
-         * @description API에서 확인하는 필수 저장소·Worker 준비 상태.
+         * @description API가 요청을 처리하는 데 반드시 필요한 저장소. 하나라도 없으면 API 전체가 준비되지 않았다.
          */
         ReadyServicesOut: {
             /**
@@ -3704,11 +3773,6 @@ export interface components {
              * @enum {string}
              */
             storage: "ready" | "unavailable";
-            /**
-             * Worker
-             * @enum {string}
-             */
-            worker: "ready" | "unavailable";
         };
         /** ScoringObservationOut */
         ScoringObservationOut: {
@@ -3773,12 +3837,23 @@ export interface components {
         };
         /** ServingApplicationOut */
         ServingApplicationOut: {
-            /** Failure Reason */
-            failure_reason?: string | null;
             /** Model Revision Id */
             model_revision_id: string;
-            /** Status */
+            /**
+             * Runtime Application
+             * @description 서빙 Runtime의 애플리케이션 이름. 로컬 운영 도구에서 찾을 때 쓴다.
+             */
+            runtime_application: string;
+            /**
+             * Status
+             * @description 서빙 Runtime 상태. OUT_OF_SYNC는 의도와 다른 Config로 실행 중이라 컨트롤러가 되돌리는 중임을 뜻한다.
+             */
             status: string;
+            /**
+             * Status Reason
+             * @description 실패 원인이나 준비가 늦어지는 이유. 소유자·관리자에게만 보인다.
+             */
+            status_reason?: string | null;
         };
         /** ServingEndpointCreate */
         ServingEndpointCreate: {
@@ -7043,7 +7118,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReadyOut"];
                 };
             };
-            /** @description 필수 서비스가 준비되지 않음 */
+            /** @description API에 필요한 저장소가 준비되지 않음 */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7463,6 +7538,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StoragePolicyOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_topics_api_topics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisTopicOut"][];
                 };
             };
             /** @description Structured API error */

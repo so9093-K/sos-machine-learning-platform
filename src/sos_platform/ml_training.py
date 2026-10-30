@@ -26,6 +26,8 @@ from .ml_input import (
     TRAINING_SELECTION_LEGACY,
 )
 from .ml_isolation_forest import train_isolation_forest
+from .ml_outputs import output_contract_for_training
+from .ml_runtime import IF_BUNDLE_SCHEMA, TRUSTED_LOADING
 from .ml_sampling import canonical_sorted_batches
 from .ml_temporal_split import split_training_source
 from .schemas import MLTemporalSplitSpec, MLTrainingInputPolicy
@@ -441,8 +443,10 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
         "training_score_summary": summary,
         "runtime": {
             "model_format": "joblib",
-            "artifact_schema": "if_model_with_preprocessing_v1",
-            "loading": "trusted_worker_only",
+            "artifact_schema": IF_BUNDLE_SCHEMA,
+            "loading": TRUSTED_LOADING,
+            # 판본이 내는 출력의 의미. 알고리즘의 출력이 나중에 바뀌어도 이 판본은 이 계약을 따른다.
+            "output": output_contract_for_training("isolation_forest").record(),
             "feature_dtypes": feature_dtypes,
             "feature_reference_medians": list(preprocessing.medians),
             "preprocessing_mode": "train_median_v1",

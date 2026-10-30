@@ -161,7 +161,7 @@ def test_http_scoring_identity_option_respects_dataset_and_model_ownership(
     from sos_platform.security import Actor, IdentitySettings
 
     dataset = {"id": "dataset-a", "version": "v1", "owner_actor": "alice"}
-    model = {"id": "model-a", "owner_actor": "alice", "registry_version": "1",
+    model = {"id": "model-a", "owner_actor": "alice", "registry_version": "1", "algorithm": "isolation_forest",
              "features": ["f1"], "runtime": {"feature_dtypes": ["Float64"]}}
     fake_store = Mock()
     fake_store.get_dataset.return_value = dataset

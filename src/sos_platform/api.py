@@ -25,6 +25,7 @@ from .api_ml_training import training_router
 from .api_model_management import model_management_router
 from .api_model_offering import model_offering_router
 from .api_serving import serving_router
+from .api_topics import topic_router
 from .api_pipelines import pipeline_router
 from .api_storage import storage_router
 from .dagster_client import DagsterUnavailable
@@ -45,7 +46,7 @@ SOS는 데이터 이해·준비, 독립 ML 작업, 등록형 Pipeline과 결과 
 
 ### 시작하기
 
-1. `GET /api/health`로 API 프로세스 응답을 확인하고, `GET /api/ready`로 저장소·Worker 준비 상태를 확인합니다.
+1. `GET /api/health`로 API 프로세스 응답을 확인하고, `GET /api/ready`로 저장소 준비 상태와 Job 실행·온라인 서빙 기능의 상태를 확인합니다.
 2. Token 모드에서는 `Authorization: Bearer <TOKEN>`을 전달하고 `GET /api/v2/auth/me`로 권한을 확인합니다.
 3. `GET /api/datasets` 또는 `GET /api/pipelines`로 현재 이용 가능한 데이터와 분석 방법을 살펴봅니다.
 4. 데이터를 등록하거나 Job을 제출하려면 해당 Actor 권한이 필요합니다. 변경·실행 API는 **실제 데이터를 생성하거나 계산을 시작**할 수 있습니다.
@@ -66,7 +67,7 @@ curl -H "Authorization: Bearer <TOKEN>" http://localhost:9602/api/v2/auth/me
 현재 지원되는 등록형 모델 실험 주제는 활동 이상 탐지(Isolation Forest)입니다.
 온라인 Serving, 임의 사용자 코드 실행 및 범용 모델 플러그인은 이 API의 현재 지원 범위가 아닙니다.
 
-공개 계약은 [OpenAPI JSON](/openapi.json)입니다. 일반적인 API 오류는 분류·코드·요청 ID를 포함한 구조화된 응답을 사용합니다. `/api/ready`의 503은 준비되지 않은 서비스를 나타내는 상태 응답입니다.
+공개 계약은 [OpenAPI JSON](/openapi.json)입니다. 일반적인 API 오류는 분류·코드·요청 ID를 포함한 구조화된 응답을 사용합니다. `/api/ready`의 503은 API에 필요한 저장소가 준비되지 않았음을 나타내는 상태 응답이며, 일부 기능만 멈춘 경우는 200의 `degraded`입니다.
 """
 
 OPENAPI_TAGS = [
@@ -80,6 +81,7 @@ OPENAPI_TAGS = [
     {"name": "Experiments", "description": "MLflow Experiment·Run 조회 및 외부 기록 상태"},
     {"name": "Training", "description": "독립 ML 학습·복제·취소 및 작업 이력"},
     {"name": "Models", "description": "MLflow Registry와 SOS의 불변 모델 실행 참조"},
+    {"name": "Analysis Topics", "description": "분석 주제의 분류·입력 의미·출력 계약"},
     {"name": "Scoring", "description": "학습된 모델을 이용한 독립 배치 점수화와 결과 조회"},
     {"name": "Serving", "description": "온라인 서빙 Endpoint의 배포·판본 전환과 동기 추론"},
     {"name": "Decision Policies", "description": "점수에 적용할 판정 기준의 생성·적용·조회"},
@@ -102,7 +104,7 @@ OPENAPI_TAG_GROUPS = [
     {
         "name": "Research & ML",
         "tags": [
-            "Experiments", "Training", "Models", "Scoring",
+            "Analysis Topics", "Experiments", "Training", "Models", "Scoring",
             "Decision Policies", "Evaluations", "Explanations",
         ],
     },
@@ -275,6 +277,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     app.include_router(model_offering_router(store, access))
     app.include_router(model_deletion_router(store))
     app.include_router(serving_router(store, access))
+    app.include_router(topic_router())
     app.include_router(feast_router(store, access))
     app.include_router(training_router(store, access))
     app.include_router(ml_results_router(store, access))
