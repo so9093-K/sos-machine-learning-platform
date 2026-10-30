@@ -29,7 +29,7 @@ from .serving_client import (
     ServingUnavailable,
     application_config,
     application_name,
-    config_matches,
+    application_status,
     replica_capacity,
 )
 from .store import Store
@@ -59,8 +59,8 @@ class ServingStateRequest(BaseModel):
 class ServingApplicationOut(BaseModel):
     model_revision_id: str
     runtime_application: str = Field(description="서빙 Runtime의 애플리케이션 이름. 로컬 운영 도구에서 찾을 때 쓴다.")
-    status: str = Field(description="서빙 Runtime 상태. OUT_OF_SYNC는 의도와 다른 Config로 실행 중이라 "
-                        "컨트롤러가 되돌리는 중임을 뜻한다.")
+    status: str = Field(description="서빙 Runtime 상태. OUT_OF_SYNC는 의도와 다른 Config로 실행 중이며 "
+                        "추론이 차단된 상태다.")
     status_reason: str | None = Field(
         default=None, description="실패 원인이나 준비가 늦어지는 이유. 소유자·관리자에게만 보인다.")
 
@@ -170,10 +170,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
                 return None
             name = application_name(endpoint["id"], revision_id)
             app = applications.get(name)
-            status = app.get("status", "UNKNOWN") if app else "NOT_DEPLOYED"
-            # 이름이 같아도 의도와 다른 Config로 실행 중이면 그 판본이 준비된 것이 아니다.
-            if app and name in desired and not config_matches(app.get("deployed_app_config"), desired[name]):
-                status = "OUT_OF_SYNC"
+            status = application_status(app, desired.get(name))
             return {"model_revision_id": revision_id, "runtime_application": name, "status": status,
                     "status_reason": _status_reason(app, status) if manageable and app else None}
         active = application(endpoint["active_model_revision_id"])
@@ -352,7 +349,8 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         summary="온라인 추론",
         description="Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. "
         "다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관됐거나 Registry 상태를 "
-        "확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다.",
+        "확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다. "
+        "Runtime이 준비되지 않았거나 활성 판본의 설정과 다르면 요청을 거부합니다.",
         response_model=PredictionOut,
     )
     def predict(endpoint_id: str, body: PredictionRequest, actor: Actor = INFER):
@@ -374,6 +372,12 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             rows.append([None if math.isnan(value) else value for value in ordered])
         if client is None:
             raise PlatformError("SOS-SERVING-UNAVAILABLE")
+        applications = runtime_applications()
+        if applications is None:
+            raise PlatformError("SOS-SERVING-UNAVAILABLE")
+        desired = application_config(endpoint_id, model)
+        if application_status(applications.get(desired["name"]), desired) != "RUNNING":
+            raise PlatformError("SOS-SERVING-NOT-READY")
         try:
             result = client.predict(endpoint_id, revision_id, rows, timeout)
         except ServingRequestRejected as exc:
@@ -383,10 +387,11 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         except ServingUnavailable as exc:
             raise PlatformError("SOS-SERVING-UNAVAILABLE") from exc
         # 복제본의 응답이 판본에 기록된 출력 계약(종류·방향·척도)과 결과 구조를 모두 따를 때만 전달한다.
-        # 다르거나 빠진 응답은 Runtime 불일치로 보고 서빙 장애로 처리한다.
+        # Dashboard 조회 뒤 복제본이 교체돼도 실제 계산한 복제본의 설정 지문을 대조한다.
         expected = revision_output_contract(model)
         if expected is None or not isinstance(result, dict) \
                 or result.get("model_revision_id") != revision_id \
+                or result.get("digest") != desired["args"]["digest"] \
                 or not response_matches(expected, result, len(rows)):
             raise PlatformError("SOS-SERVING-UNAVAILABLE")
         return {"endpoint_id": endpoint_id, "model_revision_id": revision_id,

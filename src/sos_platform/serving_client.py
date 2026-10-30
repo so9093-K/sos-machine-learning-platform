@@ -76,6 +76,15 @@ def config_matches(deployed: dict | None, desired: dict) -> bool:
     return all(deployed.get(key) == desired[key] for key in _COMPARED)
 
 
+def application_status(application: dict | None, desired: dict | None) -> str:
+    """조회와 추론에 같은 준비 조건을 쓴다. 이름만 같은 애플리케이션은 준비된 판본이 아니다."""
+    if application is None:
+        return "NOT_DEPLOYED"
+    if desired is None or not config_matches(application.get("deployed_app_config"), desired):
+        return "OUT_OF_SYNC"
+    return application.get("status", "UNKNOWN")
+
+
 def replica_capacity(cpus: float) -> int:
     """주어진 CPU로 동시에 실행할 수 있는 복제본 수."""
     return math.floor(cpus / REPLICA_CPUS + 1e-9)

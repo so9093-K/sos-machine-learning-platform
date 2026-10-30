@@ -65,7 +65,8 @@ curl -H "Authorization: Bearer <TOKEN>" http://localhost:9602/api/v2/auth/me
 - 예제 확인은 등록·학습을 자동 실행하지 않습니다. 합성 예제의 이상 점수는 실제 사건이나 탐지 정확도의 근거가 아닙니다.
 
 현재 지원되는 등록형 모델 실험 주제는 활동 이상 탐지(Isolation Forest)입니다.
-온라인 Serving, 임의 사용자 코드 실행 및 범용 모델 플러그인은 이 API의 현재 지원 범위가 아닙니다.
+등록된 모델의 온라인 Serving Endpoint 관리와 동기 추론을 지원합니다.
+임의 사용자 코드 실행 및 범용 모델 플러그인은 현재 지원 범위가 아닙니다.
 
 공개 계약은 [OpenAPI JSON](/openapi.json)입니다. 일반적인 API 오류는 분류·코드·요청 ID를 포함한 구조화된 응답을 사용합니다. `/api/ready`의 503은 API에 필요한 저장소가 준비되지 않았음을 나타내는 상태 응답이며, 일부 기능만 멈춘 경우는 200의 `degraded`입니다.
 """

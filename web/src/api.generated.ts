@@ -1471,7 +1471,7 @@ export interface paths {
         put?: never;
         /**
          * 온라인 추론
-         * @description Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. 다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관됐거나 Registry 상태를 확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다.
+         * @description Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. 다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관됐거나 Registry 상태를 확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다. Runtime이 준비되지 않았거나 활성 판본의 설정과 다르면 요청을 거부합니다.
          */
         post: operations["predict_api_serving_endpoints__endpoint_id__predict_post"];
         delete?: never;
@@ -3846,7 +3846,7 @@ export interface components {
             runtime_application: string;
             /**
              * Status
-             * @description 서빙 Runtime 상태. OUT_OF_SYNC는 의도와 다른 Config로 실행 중이라 컨트롤러가 되돌리는 중임을 뜻한다.
+             * @description 서빙 Runtime 상태. OUT_OF_SYNC는 의도와 다른 Config로 실행 중이며 추론이 차단된 상태다.
              */
             status: string;
             /**

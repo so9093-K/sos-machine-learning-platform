@@ -1,9 +1,10 @@
 /** Dataset 등록 없이 실제 Worker Playground Job으로 한 관측치를 점수화한다. */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ActivityProfile, profileFeatureNames } from "./ActivityProfile";
 import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { groupActivityFeatures } from "./ActivityFeatureGroups";
-import { formatFeatureValue } from "./FeatureValueComparison";
+import { formatFeatureValue } from "./feature-format";
 import { FeatureResultDetails } from "./FeatureResultDetails";
 import { PlaygroundResult, formatPlaygroundScore as formatScore, type PlaygroundComparison } from "./PlaygroundResult";
 import { PlaygroundExplanations } from "./PlaygroundExplanations";
@@ -118,6 +119,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const [inputFilter, setInputFilter] = useState("all");
   const [inputPage, setInputPage] = useState(0);
   const [importedSource, setImportedSource] = useState<ObservationExperiment | null>(null);
+  const [fromHistory, setFromHistory] = useState(false);
   const [importedAfterJobId, setImportedAfterJobId] = useState<string | null>(null);
   const appliedObservation = useRef<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>(() =>
@@ -126,6 +128,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   const [lastScore, setLastScore] = useState<number | null>(null);
   const [latestSuccessfulJob, setLatestSuccessfulJob] = useState<MLPlaygroundJob | null>(null);
   const [comparison, setComparison] = useState<PlaygroundComparison | null>(null);
+  const [shapVisited, setShapVisited] = useState(false);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const submitting = useRef(false);
@@ -187,6 +190,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   }
 
   function useHistoryInput(restored: MLPlaygroundJob) {
+    setFromHistory(true);
     if (running || !restored.spec.features) return;
     const saved = restored.spec.features as Record<string, unknown>;
     setFields(Object.fromEntries(model.features.map(name => [
@@ -329,29 +333,39 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
         { method: "POST" }));
     } catch (cause) { setError(formatError(cause)); }
   }
-  const inputPane = useRef<HTMLDivElement>(null);
+  const allInputs = useRef<HTMLDetailsElement>(null);
+  const profileAnchor = importedSource?.fields;
+  const profileNames = useMemo(() => profileFeatureNames(model, Object.fromEntries(
+    model.features.map(name => {
+      const raw = profileAnchor?.[name];
+      return [name, raw !== undefined && raw !== null && String(raw).trim() && Number.isFinite(Number(raw)) ? Number(raw) : null];
+    }))), [model.id, importedSource?.id]);
   function editFeature(name?: string) {
     setInputSearch(name ?? ""); setInputFilter("all"); setInputPage(0);
+    if (allInputs.current) allInputs.current.open = true;
     requestAnimationFrame(() => {
-      const target = inputPane.current?.querySelector<HTMLInputElement>(name ? 'input[type="number"]' : 'input[type="search"]');
+      const target = allInputs.current?.querySelector<HTMLInputElement>(name ? 'input[type="number"]' : 'input[type="search"]');
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     });
   }
+  const featureInput = (name: string) => <input type="number" inputMode="decimal"
+    step={/^U?Int/.test(featureDtypes[model.features.indexOf(name)] ?? "") ? 1 : "any"}
+    value={fields[name] ?? ""} disabled={running}
+    aria-invalid={!playgroundNumberValid(fields[name] ?? "", featureDtypes[model.features.indexOf(name)] ?? "")}
+    onChange={event => setFields(current => ({ ...current, [name]: event.target.value }))}
+    aria-label={activityFeatureLabel(name) + " 입력값"} />;
   const featureField = (name: string) => <label className="model-lab-feature" key={name}>
     <span title={name + " · " + (featureDtypes[model.features.indexOf(name)] ?? "자료형 미확인")}>
       {activityFeatureLabel(name)}</span>
-    <input type="number" inputMode="decimal" step="any" value={fields[name] ?? ""}
-      disabled={running}
-      onChange={event => setFields(current => ({ ...current, [name]: event.target.value }))}
-      aria-label={activityFeatureLabel(name) + " 입력값"} />
-    {reference && <small title={reference[name]}>학습 기준 {formatFeatureValue(name, Number(reference[name]))}
+    {featureInput(name)}
+    {reference && <small title={reference[name]}>초기값 {formatFeatureValue(name, Number(reference[name]))}
       {(name === "io_bytes_per_sec" || name === "net_bytes_per_sec") && " · 입력 단위 B/s"}</small>}
   </label>;
   return <section className="panel model-lab-playground" tabIndex={-1} aria-label="직접 모델 점수 계산">
     <div className="model-lab-playground-head">
-      <div><h3>단일 입력 점수 계산</h3>
-        <p>값을 바꾸고 모델의 점수 변화를 확인하세요.</p></div>
+      <div><h3>입력 실험</h3>
+        <p>활동 특징을 수정한 뒤 점수를 계산해 모델의 반응을 비교합니다.</p></div>
     </div>
     {observationInput && appliedObservation.current !== observationInput.id && running &&
       <p className="hint" role="status">진행 중인 점수 계산이 끝나면 선택한 관측값을 입력에 가져옵니다.</p>}
@@ -363,19 +377,31 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
         onClick={onBackToAnalysis}>Dataset 분석 복귀 →</button>}
     </div>}
     <div className="model-lab-workspace">
-      <div className="model-lab-input-pane" ref={inputPane}>
+      <div className="model-lab-input-pane">
     <div className="playground-input-heading">
-      <h4>입력값</h4>
+      <h4>실험 입력</h4>
       {reference && <button type="button" className="ghost" disabled={running}
         onClick={() => {
           setFields(reference); setImportedSource(null); setImportedAfterJobId(null);
+          setFromHistory(false);
           setInputSearch(""); setInputFilter("all"); setInputPage(0);
         }}>
-        학습 기준값으로 초기화</button>}
+        학습 초기값 복원</button>}
     </div>
     <p className="hint">{importedSource ? "가져온 관측값에서 바꿀 항목을 고르세요."
-      : reference ? "학습 기준값을 채웠습니다. 바꿀 항목만 수정해 보세요."
+      : fromHistory ? "이전 계산 기록에서 가져온 입력입니다. 값을 수정해 새 계산과 비교할 수 있습니다."
+      : reference ? "초깃값은 학습 중앙값을 조합한 합성 입력입니다(정수 항목 반올림). 실제 관측값이나 정상 활동 예제가 아닙니다."
       : "초기 기준값이 없는 모델입니다. 모든 필수 항목을 입력해 주세요."}</p>
+    <ActivityProfile model={model} names={profileNames} editing
+      values={Object.fromEntries(input.map(item => [item.name, item.valid ? item.value : null]))}
+      control={name => <div className="activity-profile-editor">{featureInput(name)}
+        {(name === "io_bytes_per_sec" || name === "net_bytes_per_sec") && <small>B/s</small>}
+        {reference && <button type="button" className="ghost" disabled={running || fields[name] === reference[name]}
+          aria-label={activityFeatureLabel(name) + " 학습 초기값 적용"}
+          onClick={() => setFields(current => ({ ...current, [name]: reference[name] }))}>초기값 적용</button>}
+      </div>} />
+    <details className="playground-all-inputs" ref={allInputs}>
+      <summary>전체 입력 편집 · {model.features.length}개 항목</summary>
     <div className="playground-input-tools">
       <label>항목 찾기<input type="search" value={inputSearch} placeholder="예: 파일 쓰기"
         onChange={event => { setInputSearch(event.target.value); setInputPage(0); }} /></label>
@@ -398,9 +424,11 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
           onClick={() => setInputPage(currentInputPage + 1)}>다음 입력</button>
       </>}
     </div>
+    </details>
     {invalid.length > 0 && <p role="alert" className="model-lab-input-error">
       필수 입력값이나 자료형·정수 범위가 맞지 않는 Feature {invalid.length}개가 있습니다.
       {invalid.length <= 3 && " 확인: " + invalid.map(item => activityFeatureLabel(item.name)).join(", ")}
+      <button type="button" className="ghost" onClick={() => editFeature(invalid[0].name)}>입력 오류 확인</button>
     </p>}
       </div>
       <aside className="model-lab-results-pane" aria-label="단일 입력 계산과 결과">
@@ -436,10 +464,12 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
           setInputSearch(""); setInputFilter("all"); setInputPage(0);
         }} />}
     {showCurrentJob && job?.status === "Succeeded" && (explanationAvailable
-      ? <details className="model-lab-explanation-toggle">
-          <summary>점수 설명</summary>
-          <PlaygroundExplanations key={job.id} source={job} canRun={canRun}
-            canCancel={canCancel} shapSupported={model.features.length <= 64} />
+      ? <details className="model-lab-explanation-toggle" onToggle={event => {
+          if (event.currentTarget.open) setShapVisited(true);
+        }}>
+          <summary>모델 점수 설명 · SHAP</summary>
+          {shapVisited && <PlaygroundExplanations key={job.id} source={job} canRun={canRun}
+            canCancel={canCancel} shapSupported={model.features.length <= 64} />}
         </details>
       : <p className="hint">이 모델에는 학습 Feature 중앙값이 없어 현재 설명 방법을 계산할 수 없습니다.
           점수 계산 결과는 정상적으로 이용할 수 있습니다.</p>)}

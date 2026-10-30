@@ -5,10 +5,7 @@ import { FeatureResultDetails } from "./FeatureResultDetails";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { PipelineCandidates, ModelRevision } from "./types";
 import { ShapExplanation } from "./ShapExplanation";
-import { activityFeatureLabel } from "./ActivityFeatureLabels";
-import { ObservationSensitivity } from "./ObservationSensitivity";
-import { groupActivityFeatures } from "./ActivityFeatureGroups";
-import { FeatureValueComparison } from "./FeatureValueComparison";
+import { ActivityProfile } from "./ActivityProfile";
 import { formatObservedAt } from "./display-format";
 
 type Candidate = PipelineCandidates["items"][number];
@@ -58,12 +55,7 @@ export function ObservationInvestigation({
     medians.length === model.features.length &&
     medians.every(v => typeof v === "number" && Number.isFinite(v))
     ? new Map(model.features.map((name, i) => [name, medians[i] as number])) : null;
-  const [activityGroup, setActivityGroup] = useState("");
-  const [featureName, setFeatureName] = useState("");
-  const [sensitivityVisited, setSensitivityVisited] = useState(false);
-  const groups = groupActivityFeatures(candidate.features);
-  const group = groups.find(item => item.id === activityGroup);
-  const selectedFeature = group?.entries.find(([name]) => name === featureName);
+  const [shapVisited, setShapVisited] = useState(false);
   const missing = Object.entries(candidate.features).filter(([, value]) => value === null || !Number.isFinite(value));
   function referenceLabel(name: string): string {
     if (referenceMap?.has(name)) return format(referenceMap.get(name));
@@ -112,25 +104,8 @@ export function ObservationInvestigation({
       {experimentError && <p role="alert">{experimentError}</p>}
     </div>}
     <section className="observation-activity" aria-label="관측된 활동 특징">
-      <div className="observation-activity-heading">
-        <h6>활동 선택</h6>
-      </div>
+      {model && <ActivityProfile model={model} values={candidate.features} />}
       {missing.length > 0 && <p className="hint">비어 있거나 유효한 숫자가 아닌 입력 {missing.length}개가 있습니다. 실제 값과 학습 시 대체 기준을 확인하세요.</p>}
-      <div className="observation-activity-picker">
-        <label>활동 그룹<select aria-label="활동 그룹" value={activityGroup} onChange={event => {
-          setActivityGroup(event.target.value); setFeatureName("");
-        }}><option value="">활동 그룹 선택</option>
-          {groups.map(item => <option key={item.id} value={item.id}>{item.title} · {item.entries.length}개 항목</option>)}
-        </select></label>
-        {group && <label>입력 항목<select aria-label="입력 항목" value={featureName} onChange={event => setFeatureName(event.target.value)}>
-          <option value="">비교 항목 선택</option>
-          {group.entries.map(([name]) => <option key={name} value={name}>{activityFeatureLabel(name)}</option>)}
-        </select></label>}
-      </div>
-      {selectedFeature && <div className="observation-selected-feature">
-        <strong>{activityFeatureLabel(selectedFeature[0])}</strong>
-        <FeatureValueComparison feature={selectedFeature[0]} actual={selectedFeature[1]} reference={referenceMap?.get(selectedFeature[0])} />
-      </div>}
       {!modelRevisionId && <p className="hint">학습 모델 판본 참조가 없어 중앙값을 비교할 수 없습니다.</p>}
       {modelRevisionId && !model && !modelError &&
         <p role="status">학습 참조 중앙값을 조회하는 중입니다.</p>}
@@ -148,15 +123,12 @@ export function ObservationInvestigation({
           values: [format(value), referenceLabel(name), referenceDifference(name, value) ?? "비교 불가"],
         }))} />
     </section>
-    <ShapExplanation candidate={candidate} scoringResultId={scoringResultId}
-      modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
-      onOpenResource={onOpenResource} />
     <details className="observation-secondary-analysis" onToggle={event => {
-      if (event.currentTarget.open) setSensitivityVisited(true);
+      if (event.currentTarget.open) setShapVisited(true);
     }}>
-      <summary>추가 실험 · 기준값 치환</summary>
-      {sensitivityVisited && <ObservationSensitivity key={scoringResultId + ":" + candidate.row_index}
-        candidate={candidate} scoringResultId={scoringResultId} canRun={canRun} canCancel={canCancel}
+      <summary>모델 점수 설명 · SHAP</summary>
+      {shapVisited && <ShapExplanation candidate={candidate} scoringResultId={scoringResultId}
+        modelRevisionId={modelRevisionId} canRun={canRun} canCancel={canCancel}
         onOpenResource={onOpenResource} />}
     </details>
   </section>;

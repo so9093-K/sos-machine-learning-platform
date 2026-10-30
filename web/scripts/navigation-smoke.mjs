@@ -255,7 +255,6 @@ try {
   assert.equal(dataJobLabel({ kind: "feature_retire", spec: {} }), "Feature Service 폐기");
   const { ObservationInvestigation } = await vite.ssrLoadModule("/src/ObservationInvestigation.tsx");
   const { SensitivityChart, formatSensitivityValue } = await vite.ssrLoadModule("/src/FeatureSensitivity.tsx");
-  const { matchingExplanationJob } = await vite.ssrLoadModule("/src/ObservationSensitivity.tsx");
   const candidateWithContext = renderToStaticMarkup(
     React.createElement(ObservationInvestigation, {
       candidate: {
@@ -270,7 +269,7 @@ try {
   assert.match(candidateWithContext, /2026-01-01T02:00:00Z/);
   assert.match(candidateWithContext, /학습 중앙값/);
   assert.match(candidateWithContext, /입력값 확인 · 1개 항목/);
-  assert.match(candidateWithContext, /점수 기여도/);
+  assert.match(candidateWithContext, /모델 점수 설명 · SHAP/);
   const groupedObservation = renderToStaticMarkup(
     React.createElement(ObservationInvestigation, {
       candidate: {
@@ -295,7 +294,6 @@ try {
   assert.match(defaultObservation, /기본 표시 관측값 분석/);
   assert.match(defaultObservation, /2026-01-01 02:00:00 UTC/);
   assert.doesNotMatch(defaultObservation, /관측 시각·원본 관측치 ID 없음/);
-  assert.match(groupedObservation, /활동 선택/);
   const observationWithExperiment = renderToStaticMarkup(
     React.createElement(ObservationInvestigation, {
       candidate: {
@@ -318,15 +316,14 @@ try {
   assert.match(groupedObservation, /학습 중앙값/);
   assert.match(groupedObservation, /모델 판본 없음/);
   assert.doesNotMatch(groupedObservation, /feature-reference-bars/);
-  assert.match(groupedObservation, /observation-activity-picker/);
   assert.match(groupedObservation, /입력값 확인 · 3개 항목/);
   assert.match(groupedObservation, /관측 시각·원본 관측치 ID 없음/);
   assert.match(groupedObservation, /결과 내부 행 #9/);
   assert.doesNotMatch(groupedObservation, /scoring-activity-group-details/);
   assert.match(groupedObservation, /점수순 2번째/);
   assert.doesNotMatch(groupedObservation, /기본 미리보기|observation-selected-feature/);
-  assert.ok(groupedObservation.indexOf("활동 선택") <
-    groupedObservation.indexOf("점수 기여도"));
+  assert.ok(groupedObservation.indexOf("입력값 확인") <
+    groupedObservation.indexOf("모델 점수 설명 · SHAP"));
   assert.match(groupedObservation, /학습 모델 판본 참조가 없어/);
   const pipelineViewOnly = renderToStaticMarkup(
     React.createElement(ObservationInvestigation, {
@@ -334,9 +331,8 @@ try {
       scoringResultId: "score-1", modelRevisionId: null,
       canRun: false, canCancel: false, onOpenResource: () => {},
     }));
-  assert.match(pipelineViewOnly, /observation-activity-picker/);
   assert.ok(pipelineViewOnly.indexOf("입력값 확인 · 1개 항목") <
-    pipelineViewOnly.indexOf("점수 기여도"));
+    pipelineViewOnly.indexOf("모델 점수 설명 · SHAP"));
   const { ShapContributionChart } = await vite.ssrLoadModule("/src/ShapExplanation.tsx");
   const shapPreview = renderToStaticMarkup(React.createElement(ShapContributionChart, {
     result: { output: {
@@ -573,27 +569,33 @@ try {
     { a: 1000, b: 0.25 }, ["a", "b"]), false);
   assert.equal(playgroundInputMatchesResult({ a: "1000", b: "0.25" },
     { a: 1000, b: 0.25, c: 1 }, ["a", "b"]), false);
-  const { FeatureValueComparison } = await vite.ssrLoadModule("/src/FeatureValueComparison.tsx");
-  const numericComparison = renderToStaticMarkup(React.createElement(FeatureValueComparison,
-    { actual: 500, reference: 5, actualLabel: "현재 입력값" }));
-  assert.match(numericComparison, /현재 입력값/);
-  assert.match(numericComparison, /학습 중앙값/);
-  assert.match(numericComparison, /500/);
-  assert.match(numericComparison, /약 100배/);
-  assert.doesNotMatch(numericComparison, /feature-reference-bars|width:/);
-  const tinyValue = renderToStaticMarkup(React.createElement(FeatureValueComparison,
-    { actual: 0.0000000034, reference: 1 }));
-  assert.match(tinyValue, /3[.]400e-9/);
-  assert.doesNotMatch(tinyValue, /<strong>0<\/strong>/);
-  const noRatio = renderToStaticMarkup(React.createElement(FeatureValueComparison,
-    { actual: -5, reference: 0 }));
-  assert.match(noRatio, /-5/);
-  assert.doesNotMatch(noRatio, /약 .*배|Infinity|NaN/);
-  const zeroMedian = renderToStaticMarkup(React.createElement(FeatureValueComparison,
-    { actual: 1000, reference: 0 }));
-  assert.match(zeroMedian, /학습 중앙값/);
-  assert.match(zeroMedian, /\+1,000/);
-  assert.doesNotMatch(zeroMedian, /약 .*배|Infinity|NaN/);
+  const { ActivityProfile, trainingFeatureRanges, profileFeatureNames } = await vite.ssrLoadModule("/src/ActivityProfile.tsx");
+  const profileModel = { id: "profile", features: ["cnt_file_create", "ratio_outbound_traffic"],
+    runtime: { feature_reference_medians: [0, 0.5], feature_training_profile: {
+      method: "linear_quantiles_v1", input_space: "model_input_after_preprocessing", row_count: 100,
+      features: { cnt_file_create: { min: 0, p10: 0, p50: 0, p90: 0, max: 2 },
+        ratio_outbound_traffic: { min: 0, p10: 0.1, p50: 0.5, p90: 0.9, max: 1 } },
+    } } };
+  const profile = renderToStaticMarkup(React.createElement(ActivityProfile, {
+    model: profileModel, values: { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 },
+  }));
+  assert.match(profile, /활동 프로필|학습 중간 80%/);
+  assert.match(profile, /중간 80% 구간 초과/);
+  assert.doesNotMatch(profile, /Infinity|NaN/);
+  assert.deepEqual(profileFeatureNames(profileModel, { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 }),
+    ["cnt_file_create", "ratio_outbound_traffic"]);
+  const medianOnly = { ...profileModel, runtime: { feature_reference_medians: [0, 0.5] } };
+  assert.equal(trainingFeatureRanges(medianOnly), null);
+  const fallback = renderToStaticMarkup(React.createElement(ActivityProfile, {
+    model: medianOnly, values: { cnt_file_create: 1000, ratio_outbound_traffic: null },
+  }));
+  assert.match(fallback, /학습 분포 기록이 없어/);
+  assert.match(fallback, /결측값/);
+  assert.doesNotMatch(fallback, /role="img"|activity-profile-band|Infinity|NaN/);
+  assert.equal(trainingFeatureRanges({ ...profileModel, runtime: {
+    feature_training_profile: { ...profileModel.runtime.feature_training_profile,
+      features: { ...profileModel.runtime.feature_training_profile.features,
+        cnt_file_create: { min: 0, p10: 5, p50: 0, p90: 0, max: 2 } } } } }), null);
   const exampleModel = {
     id: "model-test", features: ["cnt_proc_exec", "cnt_file_del"],
     runtime: { feature_reference_medians: [12, 2], feature_dtypes: ["Int64", "Int64"] },
@@ -628,7 +630,7 @@ try {
     model: { ...exampleModel, runtime: { feature_dtypes: ["Int64", "Int64"] } },
     canRun: true, canCancel: false,
   }));
-  assert.match(manualHtml, /단일 입력 점수 계산/);
+  assert.match(manualHtml, /입력 실험/);
   assert.match(manualHtml, /초기 기준값이 없는 모델/);
   assert.match(manualHtml, /입력 확인 2개/);
   const playgroundHtml = renderToStaticMarkup(React.createElement(ModelLabPlayground, {
@@ -639,7 +641,7 @@ try {
   assert.match(playgroundHtml, /파일 활동/);
   assert.match(playgroundHtml, /프로세스 활동/);
   assert.doesNotMatch(playgroundHtml, /네트워크 활동/); // 입력에 없는 그룹은 만들지 않는다.
-  assert.match(playgroundHtml, /학습 기준값을 채웠습니다/);
+  assert.match(playgroundHtml, /학습 중앙값을 조합한 합성 입력/);
   assert.doesNotMatch(playgroundHtml, /model-lab-reference-grid|model-lab-feature-groups/);
   assert.match(playgroundHtml, /입력값을 준비한 뒤 점수를 계산하세요/);
   assert.match(playgroundHtml, /model-lab-workspace/);
@@ -685,7 +687,7 @@ try {
   const applicationContext = { modelId: "model-a", datasetId: "data-a" };
   assert.deepEqual(routeAt("/scoring", contextPath("scoring", applicationContext).split("?")[1]).context,
     applicationContext);
-  const { PlaygroundExplanations, PlaygroundSensitivity } =
+  const { PlaygroundExplanations } =
     await vite.ssrLoadModule("/src/PlaygroundExplanations.tsx");
   assert.equal(formatSensitivityValue(0.00000000052), "5.200e-10");
   const explained = renderToStaticMarkup(React.createElement(PlaygroundExplanations, {
@@ -694,9 +696,9 @@ try {
     canRun: true, canCancel: true,
   }));
   assert.match(explained, /SHAP 기여도/);
-  assert.match(explained, /추가 실험 · 기준값 치환/);
+  assert.doesNotMatch(explained, /기준값 치환|Feature 치환 민감도/);
   assert.doesNotMatch(explained, /설명 방법|Feature 치환 민감도 계산/);
-  const playgroundSensitivity = renderToStaticMarkup(React.createElement(PlaygroundSensitivity, {
+  const playgroundSensitivity = renderToStaticMarkup(React.createElement(SensitivityChart, {
     result: { id: "explanation-1", output: {
       feature_sensitivities: [
         { feature: "file_create_count", actual_value: 6, reference_median: 2,
@@ -704,7 +706,7 @@ try {
       ],
     } },
   }));
-  const zeroSensitivity = renderToStaticMarkup(React.createElement(PlaygroundSensitivity, {
+  const zeroSensitivity = renderToStaticMarkup(React.createElement(SensitivityChart, {
     result: { id: "zero-sensitivity", output: {
       feature_sensitivities: [
         { feature: "file_create_count", actual_value: 2, reference_median: 2,
@@ -713,7 +715,7 @@ try {
     } },
   }));
   assert.match(zeroSensitivity, /입력값이 이미 학습 중앙값과 같습니다/);
-  const unchangedScore = renderToStaticMarkup(React.createElement(PlaygroundSensitivity, {
+  const unchangedScore = renderToStaticMarkup(React.createElement(SensitivityChart, {
     result: { output: { feature_sensitivities: [{ feature: "cnt_file_create", actual_value: 5,
       reference_median: 2, score_if_replaced: 0.3, anomaly_score_delta: 0 }] } },
   }));
@@ -798,7 +800,8 @@ try {
     canCancel: true, onOpenResource: () => {},
   }));
   assert.match(useModel, /Dataset 분석/);
-  assert.match(useModel, /값 직접 입력/);
+  assert.match(useModel, /aria-pressed="true">입력 실험/);
+  assert.match(useModel, /전체 입력 편집/);
   const { MLScoringPanel } = await vite.ssrLoadModule("/src/MLScoringPanel.tsx");
   const restoredInput = renderToStaticMarkup(React.createElement(MLScoringPanel, {
     model: exampleModel, datasets: [], selectedDatasetId: "outside-first-page",
@@ -812,21 +815,6 @@ try {
     ] } },
   }));
   assert.match(sensitivity, /인과적 기여도는 아닙니다/);
-  const explanationJobSummary = (id, scoring_result_id, row_index, created_at) => ({
-    id, spec: { scoring_result_id, row_index }, created_at,
-  });
-  assert.equal(matchingExplanationJob([
-    explanationJobSummary("older", "score-1", 5, "2026-10-20T12:00:00Z"),
-    explanationJobSummary("other-row", "score-1", 6, "2026-10-22T12:00:00Z"),
-    explanationJobSummary("latest", "score-1", 5, "2026-10-23T12:00:00Z"),
-  ], "score-1", 5)?.id, "latest");
-  assert.equal(matchingExplanationJob([
-    explanationJobSummary("other", "score-2", 5, "2026-10-23T12:00:00Z"),
-  ], "score-1", 5), undefined);
-  assert.match(renderToStaticMarkup(React.createElement(ObservationInvestigation, {
-    candidate: { row_index: 5, anomaly_score: 0.8, features: { "io_bytes_per_sec": 42 } },
-    scoringResultId: "score-1", canRun: true, canCancel: true, onOpenResource: () => {},
-  })), /추가 실험 · 기준값 치환/);
   console.log("Navigation and model use: assertions passed");
 } finally {
   await vite.close();

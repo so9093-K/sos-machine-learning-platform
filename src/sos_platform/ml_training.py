@@ -376,6 +376,24 @@ def _training_score_summary(model, matrix: np.ndarray) -> tuple[dict, int]:
     return summary, len(scores)
 
 
+def _feature_training_profile(matrix: np.ndarray, features: list[str]) -> dict:
+    """실제 적합 입력의 분포를 기록한다. 전체 행렬을 복제하지 않고 열별로 집계한다.
+
+    결측 대체·시간 분할·표본 선택 이후의 값이다. 분위 범위는 정상 판정 경계가 아니다.
+    """
+    return {
+        "method": "linear_quantiles_v1",
+        "input_space": "model_input_after_preprocessing",
+        "row_count": int(matrix.shape[0]),
+        "features": {
+            name: dict(zip(("min", "p10", "p50", "p90", "max"),
+                           np.quantile(matrix[:, index], [0, .1, .5, .9, 1],
+                                       method="linear").tolist(), strict=True))
+            for index, name in enumerate(features)
+        },
+    }
+
+
 def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
     """자식 Worker에서 학습 입력을 확정하고 모델과 실행 근거를 기록한다."""
     if dataset["version"] != spec["dataset_version"]:
@@ -419,11 +437,13 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
                 )
                 model = train_isolation_forest(transformed, config)
                 summary, count = _training_score_summary(model, transformed)
+                profile = _feature_training_profile(transformed, features)
         else:
             preprocessing = fit_if_median_imputer(matrix, feature_names=features)
             transformed = preprocessing.transform(matrix, feature_names=features)
             model = train_isolation_forest(transformed, config)
             summary, count = _training_score_summary(model, transformed)
+            profile = _feature_training_profile(transformed, features)
     joblib.dump(
         {
             "schema": "if_model_with_preprocessing_v1",
@@ -449,6 +469,7 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
             "output": output_contract_for_training("isolation_forest").record(),
             "feature_dtypes": feature_dtypes,
             "feature_reference_medians": list(preprocessing.medians),
+            "feature_training_profile": profile,
             "preprocessing_mode": "train_median_v1",
             "training_missing_policy": missing_policy,
             "training_selection": selection,

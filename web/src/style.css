@@ -536,11 +536,6 @@ button.surface-button[aria-pressed="true"] {
 .observation-score { display:flex; align-items:baseline; gap:14px; }
 .observation-score > span { font-size:13px; color:var(--sos-muted); }
 .observation-score > strong { font-size:26px; font-variant-numeric:tabular-nums; }
-.observation-activity-picker { display:flex; flex-wrap:wrap; gap:12px; }
-.observation-activity-picker label { display:grid; gap:6px; min-width:0; max-width:100%; font-size:13px; }
-.observation-activity-picker select { max-width:100%; }
-.observation-selected-feature { display:grid; gap:12px; padding-top:8px; }
-.observation-selected-feature > strong { font-size:14px; }
 .observation-secondary-analysis { padding-top:14px; border-top:1px solid var(--sos-border); min-width:0; }
 
 .observation-secondary-analysis[open] > summary { margin-bottom:12px; }
@@ -550,9 +545,9 @@ button.surface-button[aria-pressed="true"] {
   font-weight:650; color:var(--sos-accent); }
 .model-lab-explanation-toggle > summary:focus-visible { outline:2px solid var(--sos-accent);
   outline-offset:3px; }
-.playground-explanations,.playground-explanation-method {
+.playground-explanation-method {
   display:grid; grid-template-columns:minmax(0,1fr); gap:12px; min-width:0; padding-top:14px; border-top:1px solid var(--sos-border); }
-.playground-explanation-method > .hint,.playground-explanations > .hint { margin:0; }
+.playground-explanation-method > .hint { margin:0; }
 @media(max-width:1050px) {
   .model-lab-workspace { display:flex; flex-direction:column; }
   .model-lab-results-pane { width:100%; box-sizing:border-box; }
@@ -569,11 +564,6 @@ button.surface-button[aria-pressed="true"] {
 .model-lab-playground-actions { display:flex; gap:10px; flex-wrap:wrap; }
 .model-lab-input-error { color:var(--sos-danger); font-size:12px; }
 /* 관측값·학습 참조값·차이를 같은 행에서 읽는다. */
-.feature-reference-comparison { display:grid; gap:8px; min-width:0; }
-.feature-reference-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
-.feature-reference-values > div { display:grid; gap:3px; min-width:0; }
-.feature-reference-values span { font-size:12px; color:var(--sos-muted); }
-.feature-reference-values strong { font-size:13px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .model-lab-feature-group-heading { display:flex; flex-wrap:wrap; justify-content:space-between;
   align-items:baseline; gap:6px 12px; }
 .model-lab-feature-group-heading > span { color:var(--sos-muted); font-size:12px; }
@@ -776,10 +766,6 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
   font-variant-numeric:tabular-nums; }
 .observation-activity { display:grid; grid-template-columns:minmax(0,1fr); gap:13px;
   padding:14px 0; border-top:1px solid var(--sos-border); }
-.observation-activity-heading { display:grid; gap:5px; }
-.observation-activity-heading h6 { font-size:15px; margin:0; }
-.observation-activity-heading p { font-size:12px; line-height:1.6;
-  color:var(--sos-muted); margin:0; }
 .observation-activity > .hint { margin:0; }
 
 /* 설명 결과: 요약을 먼저, 근거와 전체 Feature는 선택적으로 제공한다. */
@@ -1160,3 +1146,29 @@ main details > summary { cursor:pointer; font-size:13px; font-weight:600; color:
 .serving-waiting { color:var(--sos-warning); }
 .serving-actions, .serving-confirm { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .serving-confirm span { font-size:13px; color:var(--sos-danger); }
+
+/* 항목별 실제 학습 분위 범위. 원시 수치를 서로 다른 단위의 축에서 비교하지 않는다. */
+.activity-profile { min-width:0; }
+.activity-profile-heading,.activity-profile-feature { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 14px; }
+.activity-profile-heading h4 { margin:0; font-size:16px; }
+.activity-profile-legend { display:flex; flex-wrap:wrap; gap:8px 16px; color:var(--sos-muted); font-size:11px; margin:12px 0; }
+.activity-profile-rows { display:grid; gap:0; }
+.activity-profile-row { padding:14px 0; border-bottom:1px solid var(--sos-border); min-width:0; }
+.activity-profile-feature > strong { font-size:13px; overflow-wrap:anywhere; }
+.activity-profile-value { font-variant-numeric:tabular-nums; }
+.activity-profile-editor { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.activity-profile-editor input { width:140px; max-width:100%; min-height:38px; font-variant-numeric:tabular-nums; }
+.activity-profile-editor button { font-size:11px; padding:6px; }
+.activity-profile-scale { position:relative; height:24px; margin:8px 7px; }
+.activity-profile-scale::before { content:""; position:absolute; inset:11px 0 auto; height:2px; background:var(--sos-border); }
+.activity-profile-band { position:absolute; top:7px; height:10px; min-width:2px; border-radius:5px; background:var(--sos-accent); opacity:.25; }
+.activity-profile-median { position:absolute; top:4px; width:2px; height:16px; background:var(--sos-muted); }
+.activity-profile-dot { position:absolute; top:6px; width:12px; height:12px; border-radius:50%; transform:translateX(-50%); background:var(--sos-accent); border:2px solid var(--sos-panel); box-sizing:border-box; }
+.activity-profile-caption { display:flex; flex-wrap:wrap; justify-content:space-between; gap:5px 12px; font-size:11px; color:var(--sos-muted); margin-top:6px; font-variant-numeric:tabular-nums; }
+.playground-all-inputs { border-top:1px solid var(--sos-border); padding-top:12px; }
+.playground-all-inputs[open] > summary { margin-bottom:14px; }
+@media(max-width:520px) {
+  .activity-profile-feature { align-items:flex-start; flex-direction:column; }
+  .activity-profile-editor { width:100%; }
+  .activity-profile-editor input { flex:1; min-width:0; }
+}

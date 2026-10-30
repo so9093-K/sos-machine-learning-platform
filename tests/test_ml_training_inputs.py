@@ -1210,3 +1210,8 @@ def test_all_model_and_sample_training_have_separate_selection_modes(monkeypatch
     assert full["training_selection"]["method"] == "all_rows"
     assert sampled["training_selection"]["method"] != "all_rows"
     assert full["runtime"]["feature_reference_medians"] != sampled["runtime"]["feature_reference_medians"]
+    assert full["runtime"]["feature_training_profile"]["row_count"] == count
+    assert sampled["runtime"]["feature_training_profile"]["row_count"] == 200
+    for result in (full, sampled):
+        profile = result["runtime"]["feature_training_profile"]
+        assert profile["features"]["x"]["p50"] == result["runtime"]["feature_reference_medians"][0]
