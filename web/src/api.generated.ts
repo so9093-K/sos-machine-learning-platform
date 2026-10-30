@@ -1418,6 +1418,145 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/serving/endpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 온라인 서빙 Endpoint 조회
+         * @description 소유자·관리자는 자신의(관리자는 전체) Endpoint를, 그 밖의 사용자는 지정한 모델을 지금 제공 중인 Endpoint만 봅니다. 실제 준비 상태는 서빙 Runtime에서 조회합니다.
+         */
+        get: operations["list_endpoints_api_serving_endpoints_get"];
+        put?: never;
+        /**
+         * 온라인 서빙 Endpoint 생성
+         * @description 소유한 활성 모델 판본으로 Endpoint를 만듭니다. 판본은 서빙 Runtime에서 준비가 확인된 뒤 활성 판본이 됩니다. 모델 제공과 별개입니다.
+         */
+        post: operations["create_endpoint_api_serving_endpoints_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/serving/endpoints/{endpoint_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 온라인 서빙 Endpoint 상태 조회 */
+        get: operations["get_endpoint_api_serving_endpoints__endpoint_id__get"];
+        put?: never;
+        post?: never;
+        /** 중단된 Endpoint 삭제 */
+        delete: operations["delete_endpoint_api_serving_endpoints__endpoint_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/serving/endpoints/{endpoint_id}/predict": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 온라인 추론
+         * @description Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. 다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다.
+         */
+        post: operations["predict_api_serving_endpoints__endpoint_id__predict_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/serving/endpoints/{endpoint_id}/revision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 서빙 판본 전환 요청
+         * @description 새 판본을 준비하고, 서빙 Runtime이 실행 중으로 확인한 뒤 활성 판본을 바꿉니다. 준비되기 전이나 실패해도 현재 판본이 계속 요청을 처리합니다.
+         */
+        put: operations["request_revision_api_serving_endpoints__endpoint_id__revision_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/serving/endpoints/{endpoint_id}/revision-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 판본 전환 요청 취소 */
+        delete: operations["cancel_revision_api_serving_endpoints__endpoint_id__revision_request_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/serving/endpoints/{endpoint_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 직전 판본으로 되돌리기
+         * @description 직전 판본을 다시 준비해 전환합니다. 준비 전까지 현재 판본이 계속 요청을 처리합니다.
+         */
+        post: operations["rollback_api_serving_endpoints__endpoint_id__rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/serving/endpoints/{endpoint_id}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 서빙 중단·재개
+         * @description 중단하면 서빙 Runtime에서 내려가 새 요청을 받지 않습니다. 기록과 판본은 유지됩니다.
+         */
+        put: operations["set_state_api_serving_endpoints__endpoint_id__state_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/storage/iceberg-references": {
         parameters: {
             query?: never;
@@ -3460,6 +3599,33 @@ export interface components {
             /** Dataset Id */
             dataset_id: string;
         };
+        /** PredictionOut */
+        PredictionOut: {
+            /** Endpoint Id */
+            endpoint_id: string;
+            /** Model Revision Id */
+            model_revision_id: string;
+            /** Output Type */
+            output_type: string;
+            /** Outputs */
+            outputs: {
+                [key: string]: number;
+            }[];
+            /** Score Direction */
+            score_direction: string;
+            /** Score Scale */
+            score_scale: string;
+        };
+        /** PredictionRequest */
+        PredictionRequest: {
+            /**
+             * Inputs
+             * @description 관측값별 모델 입력 Feature. 이름은 모델 입력 서명과 같아야 하며 null은 결측이다.
+             */
+            inputs: {
+                [key: string]: number | null;
+            }[];
+        };
         /**
          * PreviewOut
          * @description 제한된 행 미리보기와 컬럼 타입.
@@ -3604,6 +3770,69 @@ export interface components {
             };
             /** Sha256 */
             sha256: string;
+        };
+        /** ServingApplicationOut */
+        ServingApplicationOut: {
+            /** Failure Reason */
+            failure_reason?: string | null;
+            /** Model Revision Id */
+            model_revision_id: string;
+            /** Status */
+            status: string;
+        };
+        /** ServingEndpointCreate */
+        ServingEndpointCreate: {
+            /** Model Revision Id */
+            model_revision_id: string;
+            /** Name */
+            name: string;
+        };
+        /** ServingEndpointOut */
+        ServingEndpointOut: {
+            /** Active Model Revision Id */
+            active_model_revision_id: string | null;
+            /** Created At */
+            created_at: string;
+            /**
+             * Desired State
+             * @enum {string}
+             */
+            desired_state: "serving" | "stopped";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Owned */
+            owned: boolean;
+            /** Pending Model Revision Id */
+            pending_model_revision_id?: string | null;
+            /** Previous Model Revision Id */
+            previous_model_revision_id?: string | null;
+            /** Ready */
+            ready: boolean;
+            runtime: components["schemas"]["ServingRuntimeOut"];
+            /** Updated At */
+            updated_at: string;
+        };
+        /** ServingRevisionRequest */
+        ServingRevisionRequest: {
+            /** Model Revision Id */
+            model_revision_id: string;
+        };
+        /** ServingRuntimeOut */
+        ServingRuntimeOut: {
+            active?: components["schemas"]["ServingApplicationOut"] | null;
+            pending?: components["schemas"]["ServingApplicationOut"] | null;
+            /** Reachable */
+            reachable: boolean;
+        };
+        /** ServingStateRequest */
+        ServingStateRequest: {
+            /**
+             * Desired State
+             * @enum {string}
+             */
+            desired_state: "serving" | "stopped";
         };
         /** SnapshotOut */
         SnapshotOut: {
@@ -6808,6 +7037,297 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadyOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_endpoints_api_serving_endpoints_get: {
+        parameters: {
+            query?: {
+                model_revision_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServingEndpointOut"][];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_endpoint_api_serving_endpoints_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServingEndpointCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServingEndpointOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_endpoint_api_serving_endpoints__endpoint_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServingEndpointOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_endpoint_api_serving_endpoints__endpoint_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    predict_api_serving_endpoints__endpoint_id__predict_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PredictionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictionOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    request_revision_api_serving_endpoints__endpoint_id__revision_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServingRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServingEndpointOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_revision_api_serving_endpoints__endpoint_id__revision_request_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServingEndpointOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    rollback_api_serving_endpoints__endpoint_id__rollback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServingEndpointOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    set_state_api_serving_endpoints__endpoint_id__state_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                endpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServingStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServingEndpointOut"];
                 };
             };
             /** @description Structured API error */

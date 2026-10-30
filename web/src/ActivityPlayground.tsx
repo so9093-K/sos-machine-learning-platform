@@ -11,7 +11,7 @@ import { taskGuides, topicGuides, topicTree, TaxonomyTrail, usePipelineCatalog,
   PLAYGROUND_TOPICS, type TaxonomyLinks } from "./ModelLabGuide";
 import { algorithmLabel, formatRecordedAt } from "./display-format";
 import type { MLResourceKind } from "./PlatformNavigation";
-import type { Dataset, ModelOffering, ModelOfferingPage, ModelRevision } from "./types";
+import type { Dataset, ModelOffering, ModelOfferingPage, ModelRevision, ServingEndpoint } from "./types";
 
 type Choice = { model: ModelRevision; description: string; offered: boolean };
 type Selection =
@@ -29,7 +29,7 @@ const EXAMPLE_ID = "activity-anomaly-if";
  */
 export function ActivityPlayground({ datasets, selectedDatasetId, preferredModelId, onSelectModel, isAdministrator,
   onSelectDataset, hasMoreDatasets,
-  onLoadMoreDatasets, onDatasetRegistered, canRun, canCancel, canUpload, onOpenResource, links }: {
+  onLoadMoreDatasets, onDatasetRegistered, canRun, canCancel, canUpload, canInfer, onOpenResource, links }: {
   datasets: Dataset[];
   selectedDatasetId?: string;
   /** 모델 목록·상세에서 고른 모델. 주소에 남아 새로고침·뒤로 가기에서도 유지된다. */
@@ -40,7 +40,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   hasMoreDatasets: boolean;
   onLoadMoreDatasets: () => Promise<void>;
   onDatasetRegistered: (dataset: Dataset) => void;
-  canRun: boolean; canCancel: boolean; canUpload: boolean;
+  canRun: boolean; canCancel: boolean; canUpload: boolean; canInfer: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   links: TaxonomyLinks;
 }) {
@@ -100,6 +100,19 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
     return { state: "ready", choice: { model: direct.model, description: state.description ?? "", offered: state.offered } };
   })();
   const chosen = selection.state === "ready" ? selection.choice : null;
+  // 선택한 판본을 지금 활성 판본으로 서빙하는 Endpoint. 온라인 API 안내와 실제 요청에 쓴다.
+  const [serving, setServing] = useState<{ modelId: string; endpoint: ServingEndpoint | null } | null>(null);
+  const chosenId = chosen?.model.id ?? "";
+  useEffect(() => {
+    if (!chosenId) return;
+    let active = true;
+    void request<ServingEndpoint[]>(`/api/serving/endpoints?model_revision_id=${encodeURIComponent(chosenId)}`)
+      .then(items => { if (active) setServing({ modelId: chosenId, endpoint: items.find(item =>
+        item.active_model_revision_id === chosenId && item.desired_state === "serving") ?? null }); })
+      .catch(() => { if (active) setServing({ modelId: chosenId, endpoint: null }); });
+    return () => { active = false; };
+  }, [chosenId]);
+  const endpoint = serving?.modelId === chosenId ? serving.endpoint : null;
   const guide = topicGuides[TOPIC];
 
   async function useExample() {
@@ -154,6 +167,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
                 {algorithmLabel(item.model.algorithm)} · 제공 {formatRecordedAt(item.offered_at)}</option>)}
             </select>
             : <strong>{algorithmLabel(chosen.model.algorithm)}</strong>}
+          {endpoint && <span className={endpoint.ready ? "chip chip-ready" : "chip"}>
+            {endpoint.ready ? "온라인 API 사용 가능" : "온라인 API 준비 중"}</span>}
           <button type="button" className="ghost" onClick={() => onOpenResource("model", chosen.model.id)}>모델 상세 →</button>
           <p className="muted model-offering-description">{chosen.description || "아직 작성된 제공 설명이 없습니다."}</p>
           {!chosen.offered && <p className="hint">사용자에게 제공되지 않은 판본입니다. {isAdministrator
@@ -185,7 +200,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
         <article key={item.title} className="guide-card"><h3>{item.title}</h3><p>{item.text}</p></article>)}</div>
     </section>}
 
-    {chosen && <ModelApiUsage model={chosen.model}
+    {chosen && <ModelApiUsage model={chosen.model} endpoint={endpoint} canInfer={canInfer}
       lastRun={lastRun?.modelRevisionId === chosen.model.id ? lastRun : undefined}
       datasetId={selectedDatasetId && readyDatasetId === selectedDatasetId ? selectedDatasetId : undefined} />}
 
