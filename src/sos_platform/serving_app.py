@@ -14,7 +14,7 @@ from ray import serve
 from starlette.requests import Request
 
 from .ml_inference import score_observations
-from .ml_outputs import require_output_contract
+from .ml_outputs import ANOMALY_SCORE_V1, output_records, require_output_contract
 from .ml_runtime import load_trusted_isolation_forest
 
 MAX_ROWS = 100
@@ -30,7 +30,8 @@ class ModelServer:
     def __init__(self, revision: dict, digest: str):
         self._revision = revision
         self._digest = digest
-        self._contract = require_output_contract(revision)
+        # 이 복제본은 이상 점수를 계산한다. 다른 출력 종류의 판본은 시작하지 않고 배포 실패로 보고된다.
+        self._contract = require_output_contract(revision, produces=ANOMALY_SCORE_V1)
         # 내려받은 아티팩트는 복원 뒤 필요 없다. 복제본이 재시작·교체돼도 임시 파일이 쌓이지 않는다.
         with tempfile.TemporaryDirectory(prefix="sos-serving-") as scratch:
             self._adapter = load_trusted_isolation_forest(revision, Path(scratch))
@@ -58,7 +59,7 @@ class ModelServer:
             "output_type": self._contract.output_type,
             "score_direction": self._contract.score_direction,
             "score_scale": self._contract.score_scale,
-            "outputs": [{"anomaly_score": score} for score in scores],
+            "outputs": output_records(self._contract, scores),
             "runtime": self._runtime,
         }
 

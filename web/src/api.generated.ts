@@ -3652,7 +3652,10 @@ export interface components {
             model_revision_id: string;
             /** Output Type */
             output_type: string;
-            /** Outputs */
+            /**
+             * Outputs
+             * @description 입력 순서대로 관측별 결과. 구조는 output_type이 정한다(anomaly_score_v1: anomaly_score).
+             */
             outputs: {
                 [key: string]: number;
             }[];

@@ -17,6 +17,7 @@ from .api_access import ResourceAccess
 from .api_ml_models import management_client
 from .errors import InvalidRequestError, PlatformError
 from .ml_input import ordered_playground_input
+from .ml_outputs import output_records_valid, revision_output_contract
 from .mlflow_errors import MLflowDeliveryError
 from .mlflow_registry import verify_registered_version
 from .security import Actor, require
@@ -99,7 +100,8 @@ class PredictionOut(BaseModel):
     output_type: str
     score_direction: str
     score_scale: str
-    outputs: list[dict[str, float]]
+    outputs: list[dict[str, float]] = Field(
+        description="입력 순서대로 관측별 결과. 구조는 output_type이 정한다(anomaly_score_v1: anomaly_score).")
 
 
 def _status_reason(application: dict, status: str) -> str | None:
@@ -381,8 +383,11 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         except ServingUnavailable as exc:
             raise PlatformError("SOS-SERVING-UNAVAILABLE") from exc
         outputs = result.get("outputs")
-        if result.get("model_revision_id") != revision_id or not isinstance(outputs, list) \
-                or len(outputs) != len(rows):
+        # 복제본의 응답이 판본에 기록된 출력 종류와 그 결과 구조를 따를 때만 전달한다.
+        expected = revision_output_contract(model)
+        if result.get("model_revision_id") != revision_id or expected is None \
+                or result.get("output_type") != expected.output_type \
+                or not output_records_valid(expected.output_type, outputs, len(rows)):
             raise PlatformError("SOS-SERVING-UNAVAILABLE")
         return {"endpoint_id": endpoint_id, "model_revision_id": revision_id,
                 "output_type": result["output_type"], "score_direction": result["score_direction"],

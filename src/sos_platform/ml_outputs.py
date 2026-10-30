@@ -5,7 +5,8 @@
 바뀌지 않는다. API도 읽으므로 계산 의존성(numpy 등)을 두지 않는다.
 """
 
-from collections.abc import Mapping
+import math
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 
 
@@ -22,6 +23,9 @@ class OutputContract:
 
 # 관측마다 이상 점수 하나. 척도는 알고리즘마다 다를 수 있어 점수는 같은 판본끼리 비교한다.
 ANOMALY_SCORE_V1 = "anomaly_score_v1"
+# 출력 종류마다 관측 하나의 결과 구조. 출력 종류를 더할 때는 그 종류를 만드는 계산과 이 구조·검증을
+# 함께 더한다. 메타데이터만 바꿔 다른 종류를 기존 구조로 내보내지 않게 한다.
+_RESULT_FIELDS = {ANOMALY_SCORE_V1: "anomaly_score"}
 
 ISOLATION_FOREST_OUTPUT = OutputContract(
     output_type=ANOMALY_SCORE_V1,
@@ -60,13 +64,34 @@ def revision_output_contract(revision: Mapping) -> OutputContract | None:
     return OutputContract(**{name: recorded[name] for name in fields})
 
 
-def require_output_contract(revision: Mapping) -> OutputContract:
-    """실행 경로용. 출력 계약을 정할 수 없는 판본은 계산에 쓰지 않는다.
+def require_output_contract(revision: Mapping, *, produces: str) -> OutputContract:
+    """실행 경로용. 판본의 출력 종류가 이 경로가 실제로 계산하는 종류일 때만 계산에 쓴다.
+
+    Args:
+        revision: 계산할 Model Revision.
+        produces: 이 경로가 만드는 출력 종류(예: 이상 점수 경로는 ANOMALY_SCORE_V1).
 
     Raises:
-        ValueError: 지원하지 않는 알고리즘이거나 기록이 손상됐다.
+        ValueError: 지원하지 않는 알고리즘, 손상된 기록 또는 이 경로가 만들지 않는 출력 종류.
     """
     contract = revision_output_contract(revision)
     if contract is None:
         raise ValueError("Unsupported model algorithm")
+    if contract.output_type != produces:
+        raise ValueError(f"Model output type {contract.output_type} is not produced by this path")
     return contract
+
+
+def output_records(contract: OutputContract, values: Sequence[float]) -> list[dict[str, float]]:
+    """계산 결과를 출력 종류의 결과 구조로 만든다. 관측 하나에 결과 하나다."""
+    field = _RESULT_FIELDS[contract.output_type]
+    return [{field: float(value)} for value in values]
+
+
+def output_records_valid(output_type: object, records: object, count: int) -> bool:
+    """응답의 결과가 출력 종류의 구조를 따르고 관측 수와 같다."""
+    field = _RESULT_FIELDS.get(output_type) if isinstance(output_type, str) else None
+    return field is not None and isinstance(records, list) and len(records) == count and all(
+        isinstance(record, dict) and set(record) == {field}
+        and isinstance(record[field], (int, float)) and math.isfinite(record[field])
+        for record in records)

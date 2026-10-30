@@ -18,7 +18,7 @@ from .datasets import pinned_scan_dataset
 from .ml_anomaly import histogram_edges
 from .ml_input import INTEGER_DTYPES, model_input_issues
 from .ml_observation_identity import validate_observation_identity
-from .ml_outputs import require_output_contract
+from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
 from .ml_runtime import load_trusted_isolation_forest
 from .ml_scoring_staging import scoring_stage_prefix
 from .ml_temporal_split import select_temporal_partition, utc_observation_time
@@ -128,7 +128,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
         raise ValueError("Model Revision is unavailable")
     if model["owner_actor"] != spec["model_owner_actor"]:
         raise ValueError("Model ownership changed")
-    contract = require_output_contract(model)
+    contract = require_output_contract(model, produces=ANOMALY_SCORE_V1)
     features = model["features"]
     label = spec.get("label_column")
     identity_column = spec.get("observation_id_column")
