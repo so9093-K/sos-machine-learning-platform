@@ -1,6 +1,6 @@
 # 0012 — ML 실험·이상 점수·외부 추적의 책임 경계
 
-- 상태: 관리 정본·외부 Tracking 항목(6·7)은 [ADR 0015](0015-mlflow-management-ownership.md)로 대체. 나머지 ML 실행·평가 계약은 유지.
+- 상태: Accepted · 관리 정본·외부 Tracking 항목(6·7)은 [ADR 0015](0015-mlflow-management-ownership.md)가 대체
 - 범위: 첫 Isolation Forest 실험과 이후 모델 계열의 공통 도메인 계약
 - 관련 기준: [Contracts](../contracts.md), [Runtimes](../runtimes.md), [Workflows](../workflows.md)
 

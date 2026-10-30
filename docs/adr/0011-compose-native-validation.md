@@ -1,6 +1,6 @@
 # 0011 — 서비스와 검증의 Compose 실행 경계 통합
 
-상태: **Accepted** · [ADR 0010](0010-container-execution-boundary.md)을 대체
+상태: **Accepted** · [ADR 0010](0010-container-execution-boundary.md)을 대체 · 테스트 관리 조항(브라우저 E2E·Inventory·Protected Contracts·JUnit·Manifest)은 [0013](0013-validation-reset.md)이 종료
 
 ## 결정
 

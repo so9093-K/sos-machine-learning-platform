@@ -1,6 +1,6 @@
 # 0001 — Dataset·Job 결과 게시의 저장소 간 일관성
 
-- 상태: Accepted
+- 상태: Accepted · 결과 객체 즉시 보상 삭제 조항은 [0002](0002-object-lifecycle.md)가 대체
 - 범위: Data Workspace의 파일 Dataset 등록과 Transform Job 결과 게시
 
 ## 배경
