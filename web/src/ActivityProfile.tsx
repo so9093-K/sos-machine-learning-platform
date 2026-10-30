@@ -29,19 +29,29 @@ function referenceMedian(model: ModelRevision, name: string): number | null {
   return finite(value) ? value : null;
 }
 
-/** 큰 차이를 먼저 고르되 모델 기여도나 희귀도 순위로 해석하지 않는다. 편집 중에는 선택을 고정한다. */
+/** 구간 밖 여부와 학습 기준 대비 차이로 고른다. 관측값 자체로 차이를 나누지 않는다. */
 export function profileFeatureNames(model: ModelRevision, values: Record<string, number | null>, limit = 6): string[] {
   const ranges = trainingFeatureRanges(model);
   const priority = (name: string) => featured.includes(name) ? featured.indexOf(name) : featured.length + model.features.indexOf(name);
-  const distance = (name: string) => {
+  const ranked = model.features.map(name => {
     const value = values[name];
     const median = ranges?.[name].p50 ?? referenceMedian(model, name);
-    if (!finite(value) || median === null) return 0;
     const range = ranges?.[name];
-    const scale = range && range.p90 > range.p10 ? range.p90 - range.p10 : Math.max(Math.abs(value), Math.abs(median), 1);
-    return Math.abs(value - median) / scale;
-  };
-  return [...model.features].sort((a, b) => distance(b) - distance(a) || priority(a) - priority(b)).slice(0, limit);
+    const valid = finite(value) && median !== null;
+    const difference = valid ? Math.abs(value - median) : 0;
+    // 고정 구간에서는 학습 중앙값 대비 변화율을 쓴다. 큰 관측값이 자기 차이를 축소하지 않게 한다.
+    const scale = range && range.p90 > range.p10 ? range.p90 - range.p10 : Math.abs(median ?? 0);
+    return { name, outside: Boolean(range && valid && (value < range.p10 || value > range.p90)),
+      // 폭도 중앙값도 0이면 배수는 정의되지 않는다. 0에서 벗어난 값끼리는 기존 표시 순서를 쓴다.
+      zeroReferenceChange: scale === 0 && difference > 0,
+      distance: scale > 0 ? difference / scale : 0 };
+  });
+  return ranked.sort((a, b) => {
+    if (a.outside !== b.outside) return a.outside ? -1 : 1;
+    if (a.zeroReferenceChange !== b.zeroReferenceChange) return a.zeroReferenceChange ? -1 : 1;
+    if (a.distance !== b.distance) return a.distance > b.distance ? -1 : 1;
+    return priority(a.name) - priority(b.name);
+  }).slice(0, limit).map(item => item.name);
 }
 
 export function ActivityProfile({ model, values, names, editing = false, control, changedNames = [], activeName, onEdit }: {
@@ -119,7 +129,9 @@ export function ActivityProfile({ model, values, names, editing = false, control
       <span>● 현재 값 · ◀ ▶ 구간 밖</span></div>}
     <div className="activity-profile-rows">{selected.map(name => row(name, true))}</div>
     <p className="hint">{selected.length < model.features.length ? editing ? `기본 ${selected.length}개 · ` : `${model.features.length}개 중 ${selected.length}개 표시 · ` : ""}
-      {editing ? "값 변경 후 점수 계산으로 모델 반응을 확인합니다." : "학습 중앙값과의 차이가 큰 항목을 먼저 표시합니다."}</p>
+      {editing ? "값 변경 후 점수 계산으로 모델 반응을 확인합니다." : ranges
+        ? "학습 구간 밖 항목을 먼저 표시하고, 학습 기준 대비 차이를 비교합니다. 모델 중요도 순위가 아닙니다."
+        : "학습 중앙값 대비 변화로 고른 항목입니다. 모델 중요도 순위가 아닙니다."}</p>
     {extraChanged.length > 0 && <section className="activity-profile-changes" aria-label="기본 항목 외 수정한 활동">
       <h5>추가 수정 항목 · {extraChanged.length}개</h5>
       <div className="activity-profile-rows">{extraChanged.slice(currentPage * 6, (currentPage + 1) * 6).map(name => row(name, false))}</div>

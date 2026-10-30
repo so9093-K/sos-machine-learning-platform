@@ -366,7 +366,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     <span title={name + " · " + (featureDtypes[model.features.indexOf(name)] ?? "자료형 미확인")}>
       {activityFeatureLabel(name)}</span>
     {featureInput(name)}
-    {reference && <small title={reference[name]}>초기값 {formatFeatureValue(name, Number(reference[name]))}
+    {reference && <small title={reference[name]}>학습 기준값 {formatFeatureValue(name, Number(reference[name]))}
       {(name === "io_bytes_per_sec" || name === "net_bytes_per_sec") && " · 입력 단위 B/s"}</small>}
   </label>;
   return <section className="panel model-lab-playground" tabIndex={-1} aria-label="직접 모델 점수 계산">
@@ -406,8 +406,9 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       control={name => <div className="activity-profile-editor">{featureInput(name)}
         {(name === "io_bytes_per_sec" || name === "net_bytes_per_sec") && <small>B/s</small>}
         {reference && <button type="button" className="ghost" disabled={running || fields[name] === reference[name]}
-          aria-label={activityFeatureLabel(name) + " 학습 초기값 적용"}
-          onClick={() => setFields(current => ({ ...current, [name]: reference[name] }))}>초기값 적용</button>}
+          title={`학습 중앙값 기반 ${reference[name]} · 정수 항목 반올림`}
+          aria-label={activityFeatureLabel(name) + " 학습 기준값 적용"}
+          onClick={() => setFields(current => ({ ...current, [name]: reference[name] }))}>학습 기준값 적용</button>}
       </div>} />
     <details className="playground-all-inputs" ref={allInputs}>
       <summary>전체 입력 편집 · {model.features.length}개 항목</summary>
@@ -460,7 +461,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       </button>
       {importedSource && observationEdits.length > 0 && <button type="button" className="secondary"
         onClick={() => setFields({ ...importedSource.fields })} disabled={running}>
-        원래 관측값으로 복원</button>}
+        가져온 관측값 복원</button>}
       {job && !TERMINAL.has(job.status) && canCancel &&
         <button type="button" className="secondary" disabled={job.cancel_requested} onClick={() => void cancel()}>취소 요청</button>}
     </div>

@@ -601,6 +601,25 @@ try {
   assert.equal((changedProfile.match(/is-changed/g) ?? []).length, 2);
   assert.deepEqual(profileFeatureNames(profileModel, { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 }),
     ["cnt_file_create", "ratio_outbound_traffic"]);
+  // 고정 구간의 큰 변화가 관측값 자체로 나뉘어 1 이하로 눌리지 않아야 한다.
+  const narrowFeatures = Array.from({ length: 6 }, (_, index) => `narrow_${index}`);
+  const rankingModel = { id: "ranking", features: [...narrowFeatures, "cnt_file_create"], runtime: {
+    feature_training_profile: { method: "linear_quantiles_v1", input_space: "model_input_after_preprocessing", row_count: 100,
+      features: { ...Object.fromEntries(narrowFeatures.map(name => [name, { min: 0, p10: 0, p50: 0.0001, p90: 0.0002, max: 0.003 }])),
+        cnt_file_create: { min: 1, p10: 1, p50: 1, p90: 1, max: 1 } } },
+  } };
+  const narrowValues = Object.fromEntries(narrowFeatures.map(name => [name, 0.002]));
+  assert.equal(profileFeatureNames(rankingModel, { ...narrowValues, cnt_file_create: 18917 })[0], "cnt_file_create");
+  assert.doesNotMatch(profileFeatureNames(rankingModel, { ...narrowValues, cnt_file_create: 1 }).join(","), /cnt_file_create/);
+  assert.equal(profileFeatureNames(profileModel, { cnt_file_create: 1, ratio_outbound_traffic: 100 })[0], "cnt_file_create");
+  // 구간 안의 중앙값 차이보다 구간 이탈을 먼저 표시한다.
+  const outsideModel = { ...rankingModel, features: ["inside", "outside"], runtime: { feature_training_profile: {
+    ...rankingModel.runtime.feature_training_profile, features: {
+      inside: { min: 0, p10: 0, p50: 0, p90: 100, max: 100 },
+      outside: { min: 0, p10: 0, p50: 0.5, p90: 1, max: 1 },
+    },
+  } } };
+  assert.deepEqual(profileFeatureNames(outsideModel, { inside: 90, outside: 1.01 }), ["outside", "inside"]);
   const medianOnly = { ...profileModel, runtime: { feature_reference_medians: [0, 0.5] } };
   assert.equal(trainingFeatureRanges(medianOnly), null);
   const fallback = renderToStaticMarkup(React.createElement(ActivityProfile, {
