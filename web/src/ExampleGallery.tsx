@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { formatError, request } from "./api";
 import type { Example } from "./types";
 
 type Props = {
@@ -36,4 +38,26 @@ export function ExampleGallery({ examples, busy, loading, error, onRetry, onUse,
       </article>)}
     </div>
   </section>;
+}
+
+/** 예제 목록을 실제로 보여주는 화면에서만 조회한다. 목록을 여는 것만으로는 등록하지 않는다. */
+export function AvailableExamples({ busy, startLabel, onUse }: {
+  busy: boolean; startLabel?: string; onUse: (id: string) => void;
+}) {
+  const [examples, setExamples] = useState<Example[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    void request<Example[]>("/api/examples")
+      .then(items => { if (active) setExamples(items); })
+      .catch(e => { if (active) { setExamples([]); setError(formatError(e)); } })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [reload]);
+  return <ExampleGallery examples={examples} loading={loading} error={error} busy={busy}
+    onRetry={() => setReload(value => value + 1)} startLabel={startLabel} onUse={onUse} />;
 }
