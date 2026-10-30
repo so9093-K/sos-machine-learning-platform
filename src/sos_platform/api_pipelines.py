@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .api_access import ResourceAccess
-from .dagster_workflows import cancel_run, create_run, get_run, list_runs
+from .dagster_workflows import cancel_run, create_run, describe_run, get_submission, list_runs
 from .pipeline_reference import PIPELINE_ID, definition, inspect_dataset
 from .scoring_observations import ranked_scoring_rows
 from .security import Actor, require
@@ -139,6 +139,11 @@ def pipeline_router(store: Store, access: ResourceAccess, *, identity_mode: str)
         access.check_ownership(actor, item["owner_actor"], kind, item["id"])
         return item
 
+    def owned_submission(actor: Actor, run_id: str) -> dict:
+        # Dagster 장애가 다른 Actor 실행의 존재 여부를 503으로 드러내지 않도록
+        # SOS 접수 기록으로 소유권을 먼저 확정한 뒤 외부 상태를 조회한다.
+        return visible(actor, get_submission(store, run_id), "workflow_submission")
+
     @router.get(
         "/api/pipelines",
         tags=["Pipeline Catalog"],
@@ -226,7 +231,7 @@ def pipeline_router(store: Store, access: ResourceAccess, *, identity_mode: str)
         response_model=PipelineRunOut,
     )
     def pipeline_run_detail(run_id: str, actor: Actor = READ_JOB):
-        return visible(actor, get_run(store, run_id), "workflow_submission")
+        return describe_run(store, owned_submission(actor, run_id))
 
     @router.post(
         "/api/pipeline-runs/{run_id}/cancel",
@@ -235,8 +240,7 @@ def pipeline_router(store: Store, access: ResourceAccess, *, identity_mode: str)
         response_model=PipelineRunOut,
     )
     def pipeline_cancel(run_id: str, actor: Actor = CANCEL_JOB):
-        visible(actor, get_run(store, run_id, include_jobs=False), "workflow_submission")
-        return cancel_run(store, run_id)
+        return cancel_run(store, owned_submission(actor, run_id))
 
     @router.get(
         "/api/pipeline-runs/{run_id}/candidates",
@@ -250,7 +254,7 @@ def pipeline_router(store: Store, access: ResourceAccess, *, identity_mode: str)
         row_index: int | None = Query(default=None, ge=0),
         actor: Actor = READ_JOB,
     ):
-        run = visible(actor, get_run(store, run_id), "workflow_submission")
+        run = describe_run(store, owned_submission(actor, run_id))
         if run["status"] != "Succeeded":
             raise HTTPException(status_code=409, detail="Pipeline 실행이 완료되지 않았습니다.")
         return _candidate_rows(store, run, limit, cursor, row_index=row_index)

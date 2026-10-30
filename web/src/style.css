@@ -963,7 +963,7 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .model-offering-description { white-space:pre-line; overflow-wrap:anywhere; }
 .model-offering > button { justify-self:start; }
 .model-offering-management { border-top:1px solid var(--sos-border); padding-top:14px; }
-.model-offering-management summary { cursor:pointer; font-weight:650; }
+.model-offering-management summary { cursor:pointer; font-weight:650; font-size:14px; }
 .model-offering-management details[open] > summary { margin-bottom:14px; }
 .model-offering-management form { display:grid; gap:10px; max-width:760px; margin-top:14px; }
 .model-offering-management textarea { width:100%; min-height:140px; resize:vertical; line-height:1.6; }
@@ -973,6 +973,11 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .model-offering-withdraw .notice-blocked p { margin:8px 0; }
 .model-offering-withdraw .notice-blocked button + button { margin-left:10px; }
 .model-offering-management > [role] { margin-top:12px; }
+.model-offering-management > h4 { margin:0; font-size:14px; }
+.model-offering-management label { font-size:13px; font-weight:600; }
+.model-offering-guide { display:grid; gap:2px; margin:0; padding-left:18px; }
+.model-offering-submit { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.model-offering-failure { display:grid; gap:8px; justify-items:start; }
 
 .model-dataset-context { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; margin:12px 0; overflow-wrap:anywhere; }
 .model-dataset-context p { flex-basis:100%; margin:0; }

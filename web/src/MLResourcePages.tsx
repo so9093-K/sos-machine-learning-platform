@@ -165,8 +165,9 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onDecisi
       return <>
         <div className="ml-resource-summary">
           <h3>사용 목적·적용 범위</h3>
-          {modelOffering.offering?.description && <p className="model-offering-description model-offering-purpose">
-            {modelOffering.offering.description}</p>}
+          {modelOffering.offering?.description
+            ? <p className="model-offering-description model-offering-purpose">{modelOffering.offering.description}</p>
+            : modelOffering.offering && <p className="muted">아직 작성된 제공 설명이 없습니다.</p>}
           <p className="model-card-meta">{algorithmLabel(m.algorithm)}{m.registry_version ? ` · Registry v${m.registry_version}` : ""}
             · 학습 {formatRecordedAt(m.created_at)}</p>
           <p>{m.lifecycle_state === "Active"

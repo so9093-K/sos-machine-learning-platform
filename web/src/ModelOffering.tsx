@@ -37,9 +37,9 @@ export function canApplyModel(model: ModelRevision, offering: ModelOfferingState
     (offering.offered || offering.owned || isAdministrator);
 }
 
-function OfferingEditor({ model, offering, disabled, onSaved }: {
-  model: ModelRevision; offering: ModelOfferingState; disabled: boolean;
-  onSaved: (value: ModelOfferingState) => void;
+function OfferingEditor({ model, offering, disabled, statusError, onSaved, onRetry }: {
+  model: ModelRevision; offering: ModelOfferingState; disabled: boolean; statusError: boolean;
+  onSaved: (value: ModelOfferingState) => void; onRetry: () => void;
 }) {
   const [description, setDescription] = useState(offering.description ?? "");
   const [operation, setOperation] = useState<"save" | "withdraw" | null>(null);
@@ -56,8 +56,12 @@ function OfferingEditor({ model, offering, disabled, onSaved }: {
   }, []);
   useEffect(() => { setDescription(offering.description ?? ""); }, [offering.description]);
   useEffect(() => { if (!offering.offered) setConfirmWithdrawal(false); }, [offering.offered]);
+  // 조회에 성공해야 새 상태 객체가 오며, 실패한 재조회는 이전 객체를 유지한다.
+  // 새로 확인한 서버 상태가 있으면 이전 요청의 확인 실패는 더 이상 현재 상황이 아니다.
+  useEffect(() => { setError(""); }, [offering]);
   const length = Array.from(description.trim()).length;
   const eligible = model.lifecycle_state === "Active" && Boolean(model.registry_version);
+  const verb = offering.offered ? "저장" : "제공";
   async function change(action: "save" | "withdraw") {
     if (disabled || busy.current || (action === "save" && (!eligible || length < 1 || length > 1000)) ||
       (action === "withdraw" && (!offering.offered || !confirmWithdrawal))) return;
@@ -80,24 +84,33 @@ function OfferingEditor({ model, offering, disabled, onSaved }: {
       if (mounted.current) setOperation(null);
     }
   }
+  const form = <form onSubmit={event => { event.preventDefault(); void change("save"); }}>
+    <label htmlFor={fieldId}>사용 목적·적용 대상·주의사항 (필수)</label>
+    <ul id={`${fieldId}-guide`} className="hint model-offering-guide">
+      <li><strong>사용 목적</strong> · 어떤 업무에 쓰는 모델인지</li>
+      <li><strong>적용 대상</strong> · 어떤 데이터와 환경에 맞는지</li>
+      <li><strong>주의사항</strong> · 학습 데이터의 특성, 맞지 않는 데이터나 상황</li>
+    </ul>
+    <p className="hint">모델 목록 카드에는 앞부분만 표시되므로 사용 목적을 첫 줄에 적으세요.
+      Feature·자료형·평가 지표·임계값은 기존 기록으로 표시하며, 학습 Dataset과 학습 Job은 공유되지 않습니다.</p>
+    <textarea id={fieldId} value={description} rows={5} required
+      aria-describedby={`${fieldId}-guide ${fieldId}-length`}
+      disabled={disabled || Boolean(operation)} onChange={event => setDescription(event.target.value)} />
+    <span id={`${fieldId}-length`} className="hint">{length.toLocaleString("ko-KR")} / 1,000자
+      {length > 1000 ? " · 1,000자 이하로 줄여야 합니다" : ""}</span>
+    {!eligible && <p className="hint">Registry 등록이 확인된 활성 모델만 제공할 수 있습니다.</p>}
+    <div className="model-offering-submit">
+      <button type="submit" disabled={disabled || Boolean(operation) || !eligible || length < 1 || length > 1000}>
+        {operation === "save" ? "제공 상태 저장 중…" : offering.offered ? "제공 설명 저장"
+          : offering.withdrawn_at ? "모델 다시 제공" : "모델 제공"}
+      </button>
+      {eligible && length < 1 && <span className="hint">설명을 입력하면 {verb}할 수 있습니다.</span>}
+    </div>
+  </form>;
   return <div className="model-offering-management">
-    <details open={!offering.offered}>
-      <summary>{offering.offered ? "제공 설명 수정" : "모델 제공 등록"}</summary>
-      <p className="hint">이 모델 판본을 SOS 사용자의 신규 적용 대상으로 제공합니다. 학습 Dataset과 학습 Job은 공유되지 않습니다.</p>
-      <form onSubmit={event => { event.preventDefault(); void change("save"); }}>
-        <label htmlFor={fieldId}>사용 목적·적용 대상·알려진 한계</label>
-        <p className="hint">모델을 사용할 업무와 적합한 대상, 알려진 제외 조건을 작성하세요.
-          Feature·자료형·모델 판본과 평가 지표·임계값은 기존 기록으로 표시하므로 다시 입력할 필요가 없습니다.</p>
-        <textarea id={fieldId} value={description} rows={5} required aria-describedby={`${fieldId}-length`}
-          disabled={disabled || Boolean(operation)} onChange={event => setDescription(event.target.value)}
-          placeholder={"사용 목적: 어떤 업무에 도움이 되는 모델인지\n적용 대상: 적합한 데이터와 수집·집계 환경\n알려진 한계: 확인된 제약과 사용을 피해야 하는 조건"} />
-        <span id={`${fieldId}-length`} className="hint">{length.toLocaleString("ko-KR")} / 1,000자 · 1~1,000자 필수</span>
-        {!eligible && <p className="hint">Registry 등록이 확인된 활성 모델만 제공할 수 있습니다.</p>}
-        <button type="submit" disabled={disabled || Boolean(operation) || !eligible || length < 1 || length > 1000}>
-          {operation === "save" ? "제공 상태 저장 중…" : offering.offered ? "제공 설명 저장" : "모델 제공"}
-        </button>
-      </form>
-    </details>
+    {offering.offered
+      ? <details><summary>제공 설명 수정</summary>{form}</details>
+      : <><h4>{offering.withdrawn_at ? "모델 다시 제공" : "모델 제공 등록"}</h4>{form}</>}
     {offering.offered && <div className="model-offering-withdraw">
       <button ref={withdrawalTrigger} type="button" className="secondary" disabled={disabled || Boolean(operation)}
         aria-expanded={confirmWithdrawal} aria-controls={`${fieldId}-confirmation`}
@@ -113,7 +126,10 @@ function OfferingEditor({ model, offering, disabled, onSaved }: {
         }}>취소</button>
       </div> : <p className="hint">제공 중단은 새 적용만 차단하며 이미 만든 결과는 유지합니다.</p>}
     </div>}
-    {error && <p role="alert">{error}</p>}
+    {/* 상태 조회도 실패했으면 패널의 다시 조회 버튼 하나만 둔다. */}
+    {error && <div role="alert" className="model-offering-failure"><p>{error}</p>
+      {!statusError && <button type="button" className="secondary" disabled={disabled || Boolean(operation)}
+        onClick={onRetry}>제공 상태 다시 조회</button>}</div>}
     {notice && <p role="status">{notice}</p>}
   </div>;
 }
@@ -135,20 +151,21 @@ export function ModelOfferingPanel({ model, offering, error, loading, canManage,
   </section>;
   if (!offering) return <p className="hint" role="status">모델 제공 상태를 확인하는 중입니다.</p>;
   return <section className="model-offering" aria-label="모델 제공 정보">
-    <h3>{offering.offered ? "제공 중인 모델" : offering.withdrawn_at ? "제공이 중단된 모델" : "제공되지 않은 판본"}</h3>
+    <h3>{offering.offered ? "제공 중인 모델" : offering.withdrawn_at ? "제공이 중단된 모델" : "제공되지 않은 모델"}</h3>
     <p className="model-offering-meta">
       {offering.offered
         ? `제공 ${formatRecordedAt(offering.offered_at ?? "")}`
         : offering.withdrawn_at ? `제공 중단 ${formatRecordedAt(offering.withdrawn_at)} · 기존 결과 유지`
-          : "학습·Registry 등록과 모델 제공은 별도입니다."}
+          : "소유자와 관리자 외의 사용자는 아직 이 판본을 볼 수 없습니다."}
     </p>
     {loading && <p role="status">제공 상태 확인 중…</p>}
     {error && <p role="alert">제공 상태 조회 실패 · {error} · 표시는 마지막 확인 기록입니다.</p>}
-    <p className="hint">모델 제공은 SOS에서 해당 판본을 사용할 수 있게 하는 작업입니다. 성능 승인이나 프로덕션 Serving 배포를 뜻하지 않습니다.</p>
-    {(canManage || error) && <button type="button" className="secondary" disabled={loading} onClick={onRetry}>
+    <p className="hint">제공은 SOS 사용자가 이 판본을 새 분석에 적용할 수 있게 하는 것이며, 성능 승인이나 프로덕션 Serving 배포를 뜻하지 않습니다.</p>
+    {error && <button type="button" className="secondary" disabled={loading} onClick={onRetry}>
       제공 상태 다시 조회</button>}
-    {canManage && <OfferingEditor key={model.id} model={model} offering={offering}
-      disabled={loading || Boolean(error)} onSaved={onSaved} />}
+    {/* 삭제는 제공 중단을 먼저 요구하고 삭제된 판본은 다시 제공할 수 없으므로 활성 판본만 관리한다. */}
+    {canManage && model.lifecycle_state === "Active" && <OfferingEditor key={model.id} model={model} offering={offering}
+      disabled={loading || Boolean(error)} statusError={Boolean(error)} onSaved={onSaved} onRetry={onRetry} />}
     {offering.offered && !loading && !error && <div className="model-offering-destinations">
       <button type="button" className="secondary" onClick={onOpenCatalog}>제공 모델 목록 →</button>
     </div>}

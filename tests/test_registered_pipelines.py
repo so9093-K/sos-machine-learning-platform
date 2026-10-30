@@ -55,7 +55,7 @@ def _row():
 def test_unknown_dagster_run_status_is_reported_as_dependency_error(monkeypatch):
     monkeypatch.setattr(dagster_workflows, "_job_by_stage", lambda *_: None)
     with pytest.raises(DagsterUnavailable) as failed:
-        dagster_workflows._run(FakeStore(), _row(), client=FakeDagster("UNKNOWN"))
+        dagster_workflows.describe_run(FakeStore(), _row(), client=FakeDagster("UNKNOWN"))
     assert failed.value.operation == "run_status"
     assert failed.value.failure_type == "unexpected_result"
 
@@ -66,7 +66,7 @@ def test_dagster_run_status_is_only_workflow_status(monkeypatch):
         ("QUEUED", "Queued"), ("STARTED", "Running"),
         ("SUCCESS", "Succeeded"), ("FAILURE", "Failed"), ("CANCELED", "Cancelled"),
     ]:
-        result = dagster_workflows._run(
+        result = dagster_workflows.describe_run(
             FakeStore(), _row(), client=FakeDagster(dagster_status)
         )
         assert result["status"] == expected
@@ -88,7 +88,7 @@ def test_workflow_job_evidence_is_derived_not_replicated(monkeypatch):
         dagster_workflows, "_job_by_stage",
         lambda store, row, stage: jobs.get(stage)
     )
-    result = dagster_workflows._run(
+    result = dagster_workflows.describe_run(
         FakeStore(), _row(), client=FakeDagster("STARTED")
     )
     assert result["status"] == "Running"
@@ -107,7 +107,7 @@ def test_failed_stage_preserves_public_error_and_retry_policy(monkeypatch):
     }
     monkeypatch.setattr(dagster_workflows, "_job_by_stage",
                         lambda store, row, stage: job if stage == "training" else None)
-    response = PipelineRunOut.model_validate(dagster_workflows._run(
+    response = PipelineRunOut.model_validate(dagster_workflows.describe_run(
         FakeStore(), _row(), client=FakeDagster("FAILURE")
     )).model_dump()
     failed = response["stages"][0]["job"]
@@ -130,7 +130,7 @@ def test_dagster_graphql_outage_is_reported(monkeypatch):
 def test_cancelled_submission_without_dagster_run_is_not_queued(monkeypatch):
     monkeypatch.setattr(dagster_workflows, "_job_by_stage", lambda *_: None)
     row = {**_row(), "dagster_run_id": None, "cancel_requested": True}
-    result = dagster_workflows._run(
+    result = dagster_workflows.describe_run(
         FakeStore(), row, client=FakeDagster("STARTED")
     )
     assert result["status"] == "Cancelled"
@@ -163,7 +163,7 @@ def test_registry_not_configured_retains_domain_error(monkeypatch):
     monkeypatch.setattr(
         dagster_workflows, "_job_by_stage", lambda store, row, stage: jobs.get(stage)
     )
-    result = dagster_workflows._run(
+    result = dagster_workflows.describe_run(
         UnregisteredStore(), _row(), client=FakeDagster("FAILURE")
     )
     assert result["status"] == "Failed"
