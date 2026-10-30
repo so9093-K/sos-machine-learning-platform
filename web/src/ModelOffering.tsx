@@ -37,8 +37,8 @@ export function canApplyModel(model: ModelRevision, offering: ModelOfferingState
     (offering.offered || offering.owned || isAdministrator);
 }
 
-function OfferingEditor({ model, offering, disabled, onSaved, onRetry }: {
-  model: ModelRevision; offering: ModelOfferingState; disabled: boolean;
+function OfferingEditor({ model, offering, disabled, statusError, onSaved, onRetry }: {
+  model: ModelRevision; offering: ModelOfferingState; disabled: boolean; statusError: boolean;
   onSaved: (value: ModelOfferingState) => void; onRetry: () => void;
 }) {
   const [description, setDescription] = useState(offering.description ?? "");
@@ -56,6 +56,9 @@ function OfferingEditor({ model, offering, disabled, onSaved, onRetry }: {
   }, []);
   useEffect(() => { setDescription(offering.description ?? ""); }, [offering.description]);
   useEffect(() => { if (!offering.offered) setConfirmWithdrawal(false); }, [offering.offered]);
+  // 조회에 성공해야 새 상태 객체가 오며, 실패한 재조회는 이전 객체를 유지한다.
+  // 새로 확인한 서버 상태가 있으면 이전 요청의 확인 실패는 더 이상 현재 상황이 아니다.
+  useEffect(() => { setError(""); }, [offering]);
   const length = Array.from(description.trim()).length;
   const eligible = model.lifecycle_state === "Active" && Boolean(model.registry_version);
   const verb = offering.offered ? "저장" : "제공";
@@ -123,9 +126,10 @@ function OfferingEditor({ model, offering, disabled, onSaved, onRetry }: {
         }}>취소</button>
       </div> : <p className="hint">제공 중단은 새 적용만 차단하며 이미 만든 결과는 유지합니다.</p>}
     </div>}
+    {/* 상태 조회도 실패했으면 패널의 다시 조회 버튼 하나만 둔다. */}
     {error && <div role="alert" className="model-offering-failure"><p>{error}</p>
-      <button type="button" className="secondary" disabled={Boolean(operation)} onClick={onRetry}>
-        제공 상태 다시 조회</button></div>}
+      {!statusError && <button type="button" className="secondary" disabled={disabled || Boolean(operation)}
+        onClick={onRetry}>제공 상태 다시 조회</button>}</div>}
     {notice && <p role="status">{notice}</p>}
   </div>;
 }
@@ -161,7 +165,7 @@ export function ModelOfferingPanel({ model, offering, error, loading, canManage,
       제공 상태 다시 조회</button>}
     {/* 삭제는 제공 중단을 먼저 요구하고 삭제된 판본은 다시 제공할 수 없으므로 활성 판본만 관리한다. */}
     {canManage && model.lifecycle_state === "Active" && <OfferingEditor key={model.id} model={model} offering={offering}
-      disabled={loading || Boolean(error)} onSaved={onSaved} onRetry={onRetry} />}
+      disabled={loading || Boolean(error)} statusError={Boolean(error)} onSaved={onSaved} onRetry={onRetry} />}
     {offering.offered && !loading && !error && <div className="model-offering-destinations">
       <button type="button" className="secondary" onClick={onOpenCatalog}>제공 모델 목록 →</button>
     </div>}
