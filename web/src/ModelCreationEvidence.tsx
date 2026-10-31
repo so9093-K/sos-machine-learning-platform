@@ -7,6 +7,7 @@ function recordedRows(value: unknown): string {
 
 /** 불변 학습 기록에서 입력 규모를 설명한다. 참고 분포 표본 수를 학습 행 수로 쓰지 않는다. */
 export function ModelTrainingInput({ model }: { model: ModelRevision }) {
+  if (model.creation_evidence_visible === false) return <p className="hint">학습 규모·선택·결측 정책은 공급자·관리자 전용입니다.</p>;
   const selection = model.runtime.training_selection as Record<string, unknown> | undefined;
   const split = selection?.temporal_split as Record<string, unknown> | undefined;
   const profile = model.runtime.feature_training_profile as Record<string, unknown> | undefined;
@@ -29,7 +30,8 @@ export function ModelCreationEvidence({ model, datasetName }: { model: ModelRevi
     <h3>모델 생성 과정</h3>
     <p>{datasetName} · {algorithmLabel(model.algorithm)}</p>
     <ModelTrainingInput model={model} />
-    <p>학습 점수 계산 {recordedRows(model.training_score_summary.score_count)} · {model.registry_version ? `Registry v${model.registry_version}` : "Registry 등록 미확인"}</p>
+    {model.creation_evidence_visible !== false && <p>학습 점수 계산 {recordedRows(model.training_score_summary.score_count)}</p>}
+    <p>{model.registry_version ? `Registry v${model.registry_version}` : "Registry 등록 미확인"}</p>
     <p className="hint">학습 데이터의 점수는 독립 평가 성능이나 사건 발생 확률이 아니며, 이 기록만으로 다른 데이터에서의 정확도를 확정할 수 없습니다.</p>
   </section>;
 }

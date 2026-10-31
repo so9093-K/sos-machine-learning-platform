@@ -86,6 +86,34 @@ class ResourceAccess:
     def readable_model(self, revision_id: str, actor: Actor) -> dict:
         return self.model_allowed(actor, self.model(revision_id), for_new_work=False)
 
+    def model_response(self, model: dict, actor: Actor) -> dict:
+        """조회 응답만 Actor에 맞게 투영한다. Worker·추론의 원본 판본은 변경하지 않는다."""
+        visible = actor.privileged or model.get("owner_actor") == actor.id
+        response = {**model, "creation_evidence_visible": visible}
+        if visible:
+            return response
+        runtime = model["runtime"]
+        # 소비자에게 필요한 입력·출력·실행 호환 정보만 허용한다. 내부 선택 정책은 포함하지 않는다.
+        public_runtime = {key: runtime[key] for key in (
+            "model_format", "artifact_schema", "loading", "output", "feature_dtypes",
+            "feature_reference_medians", "python", "numpy", "scikit_learn", "polars",
+        ) if key in runtime}
+        profile = runtime.get("feature_training_profile")
+        if isinstance(profile, dict):
+            public_profile = {key: profile[key] for key in ("method", "input_space") if key in profile}
+            ranges = profile.get("features")
+            if isinstance(ranges, dict):
+                public_profile["features"] = {
+                    name: {key: ranges[name][key] for key in ("min", "p10", "p50", "p90", "max")
+                           if key in ranges[name]}
+                    for name in model["features"] if isinstance(ranges.get(name), dict)
+                }
+            public_runtime["feature_training_profile"] = public_profile
+        response["runtime"] = public_runtime
+        # Histogram의 건수를 합해도 학습 행 수를 알 수 있으므로 요약 전체를 공급자 전용으로 둔다.
+        response["training_score_summary"] = {}
+        return response
+
     def owned_model(self, revision_id: str, actor: Actor) -> dict:
         item = self.model(revision_id)
         self.check_ownership(actor, item.get("owner_actor"), "model", item["id"])

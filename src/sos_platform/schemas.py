@@ -533,6 +533,8 @@ class MLTrainRequest(BaseModel):
 
 
 class ModelRevisionOut(BaseModel):
+    creation_evidence_visible: bool = Field(
+        description="학습 규모·내부 선택·결측 정책·학습 점수 집계의 조회 권한. 소유자·관리자만 참이다.")
 
     registry_version: str | None = None
     lifecycle_state: Literal["Active", "Deleting", "Deleted"] = "Active"

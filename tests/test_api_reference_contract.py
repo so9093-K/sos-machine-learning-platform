@@ -328,3 +328,60 @@ def test_dataset_origin_job_reference_keeps_dataset_ownership(tmp_path, monkeypa
     assert client.get("/api/datasets/derived", headers={"Authorization": "Bearer other-token-000000000000000000000000"}).status_code == 404
     dataset["source_job_id"] = None
     assert client.get("/api/datasets/derived", headers={"Authorization": "Bearer owner-token-000000000000000000000000"}).json()["source_job_id"] is None
+
+
+def test_model_training_evidence_is_private_in_detail_and_offering_list(tmp_path, monkeypatch):
+    """모델 소비자는 입력 계약·참고 분위만 받고, 학습 규모를 우회 조회할 수 없다."""
+    from copy import deepcopy
+
+    actors = {
+        "owner-token-with-at-least-32-characters": Actor("supplier", "service", frozenset({"automation"})),
+        "admin-token-with-at-least-32-characters": Actor("admin", "human", frozenset({"administrator"})),
+        "consumer-token-with-at-least-32-chars": Actor("consumer", "human", frozenset({"researcher"})),
+        "other-supplier-token-at-least-32-chars": Actor("other", "service", frozenset({"automation"})),
+    }
+    identity = IdentitySettings("token", {hashlib.sha256(key.encode()).hexdigest(): actor for key, actor in actors.items()})
+    model = {"id": "model", "owner_actor": "supplier", "job_id": "training", "attempt_id": "attempt",
+             "dataset_id": "private-data", "dataset_version": "v1", "algorithm": "isolation_forest",
+             "location": "s3://models/artifact", "sha256": "abc", "features": ["a"], "params": {},
+             "training_score_summary": {"score_count": 10000, "histogram": {"bin_counts": [6000, 4000]}},
+             "runtime": {"feature_dtypes": ["Float64"], "feature_reference_medians": [5.0],
+                         "training_selection": {"source_rows": 20000, "selected_rows": 10000},
+                         "training_missing_policy": "train_median", "preprocessing_mode": "train_median_v1",
+                         "feature_retrieval": {"retrieval_job_id": "private-job"},
+                         "feature_training_profile": {"method": "sampled_linear_quantiles_v1",
+                             "input_space": "model_input_after_preprocessing", "row_count": 10000,
+                             "sample_rows": 4096, "sampling_seed": 42,
+                             "features": {"a": {"min": 0, "p10": 1, "p50": 5, "p90": 9, "max": 10, "count": 10000}}}},
+             "created_at": "2026-10-31T00:00:00Z", "lifecycle_state": "Active", "registry_version": "1"}
+    original = deepcopy(model)
+    offering = {"withdrawn_at": None}
+    monkeypatch.setattr(Store, "get_model_revision", lambda *_: model)
+    monkeypatch.setattr(Store, "get_model_offering", lambda *_: offering)
+    monkeypatch.setattr(Store, "list_model_offerings", lambda *args, **kwargs: [
+        {"id": "model", "created_at": model["created_at"], "model": model, "description": "사용 목적",
+         "offered_by": "supplier", "offered_at": model["created_at"]}])
+    client = TestClient(create_app(tmp_path, identity=identity))
+    for token, actor in actors.items():
+        headers = {"Authorization": f"Bearer {token}"}
+        detail = client.get("/api/ml/models/model", headers=headers)
+        page = client.get("/api/ml/offered-models", headers=headers)
+        assert detail.status_code == page.status_code == 200
+        for result in (detail.json(), page.json()["items"][0]["model"]):
+            full = actor.privileged or actor.id == "supplier"
+            assert result["creation_evidence_visible"] is full
+            assert result["features"] == ["a"]
+            assert result["runtime"]["feature_dtypes"] == ["Float64"]
+            assert result["runtime"]["feature_reference_medians"] == [5.0]
+            if full:
+                assert result["runtime"] == original["runtime"]
+                assert result["training_score_summary"] == original["training_score_summary"]
+            else:
+                assert result["training_score_summary"] == {}
+                assert set(result["runtime"]) == {"feature_dtypes", "feature_reference_medians", "feature_training_profile"}
+                assert set(result["runtime"]["feature_training_profile"]) == {"method", "input_space", "features"}
+                assert set(result["runtime"]["feature_training_profile"]["features"]["a"]) == {"min", "p10", "p50", "p90", "max"}
+    assert model == original  # 응답 투영이 Worker·추론에 전달할 원본을 바꾸지 않는다.
+    offering["withdrawn_at"] = model["created_at"]
+    token = next(token for token, actor in actors.items() if actor.id == "consumer")
+    assert client.get("/api/ml/models/model", headers={"Authorization": f"Bearer {token}"}).json()["creation_evidence_visible"] is False

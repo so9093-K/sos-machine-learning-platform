@@ -51,7 +51,10 @@ def model_offering_router(store: Store, access: ResourceAccess) -> APIRouter:
         rows = store.list_model_offerings(
             limit=limit + 1, before=decode_cursor(cursor, "제공 모델")
         )
-        return page_from_rows(rows, limit)
+        page = page_from_rows(rows, limit)
+        page["items"] = [{**item, "model": access.model_response(item["model"], actor)}
+                         for item in page["items"]]
+        return page
 
     @router.get(
         "/api/ml/models/{revision_id}/offering",

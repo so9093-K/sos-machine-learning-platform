@@ -781,7 +781,7 @@ export interface paths {
         };
         /**
          * 모델 실행 판본 조회
-         * @description Dataset·Job·Runtime·Feature·아티팩트 근거가 고정된 SOS 모델 실행 참조를 조회합니다.
+         * @description Dataset·Job·Runtime·Feature·아티팩트 근거가 고정된 SOS 모델 실행 참조를 조회합니다. 학습 규모·선택·결측 정책과 학습 점수 집계는 소유자·관리자만 조회합니다.
          */
         get: operations["get_model_revision_api_ml_models__revision_id__get"];
         put?: never;
@@ -3440,6 +3440,11 @@ export interface components {
             attempt_id: string;
             /** Created At */
             created_at: string;
+            /**
+             * Creation Evidence Visible
+             * @description 학습 규모·내부 선택·결측 정책·학습 점수 집계의 조회 권한. 소유자·관리자만 참이다.
+             */
+            creation_evidence_visible: boolean;
             /** Dataset Id */
             dataset_id: string;
             /** Dataset Version */

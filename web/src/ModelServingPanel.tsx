@@ -2,17 +2,32 @@ import { useEffect, useRef, useState } from "react";
 import { formatError, jsonPost, request } from "./api";
 import type { ModelRevision, ServingEndpoint } from "./types";
 
+const FAILED = new Set(["DEPLOY_FAILED", "UNHEALTHY"]);
+
 /** 선택 판본과 Endpoint 활성·전환 판본을 대조한다. 다른 판본의 ready를 재사용하지 않는다. */
 export function modelServingStatus(endpoint: ServingEndpoint, modelId: string): string {
   if (endpoint.desired_state === "stopped") return "중단됨";
   const active = endpoint.active_model_revision_id === modelId;
   const pending = endpoint.pending_model_revision_id === modelId;
   if (active && endpoint.ready) return endpoint.runtime.reachable
-    ? "이 판본으로 추론 가능" : "이 판본으로 추론 가능 · 운영 상태 조회 실패";
+    ? "서빙 Runtime 준비됨" : "서빙 Runtime 준비됨 · 운영 상태 조회 실패";
   const application = active ? endpoint.runtime.active : pending ? endpoint.runtime.pending : null;
-  if (["DEPLOY_FAILED", "UNHEALTHY"].includes(application?.status ?? "")) return "이 판본 배포 실패";
-  if (!endpoint.runtime.reachable) return "추론 미준비 · 운영 상태 조회 실패";
+  if (FAILED.has(application?.status ?? "")) return "이 판본 배포 실패";
+  if (!endpoint.runtime.reachable) return "서빙 Runtime 미준비 · 운영 상태 조회 실패";
   return pending ? "이 판본 준비 중 · 활성 전환 전" : active ? "이 판본 복구 중" : "이 판본과 연결 미확인";
+}
+
+/** 준비 중에는 짧게 확인하고, 명시적 실패는 복구 확인 간격을 늦춘다. */
+export function modelServingPollMs(items: ServingEndpoint[]): number | null {
+  const delays = items.filter(item => item.desired_state === "serving").flatMap(item => {
+    if (!item.runtime.reachable) return [10000];
+    const pendingFailed = FAILED.has(item.runtime.pending?.status ?? "");
+    const activeFailed = FAILED.has(item.runtime.active?.status ?? "");
+    if (item.pending_model_revision_id && !pendingFailed) return [5000];
+    if (pendingFailed || activeFailed) return [30000];
+    return item.ready ? [] : [5000];
+  });
+  return delays.length ? Math.min(...delays) : null;
 }
 
 /** 기존 Serving API로 판본의 배포를 확인하고 명시적 최초 배포를 요청한다. */
@@ -37,8 +52,8 @@ export function ModelServingPanel({ model, canManage = false, onOpenServing, rev
         const items = await request<ServingEndpoint[]>(`/api/serving/endpoints?model_revision_id=${encodeURIComponent(model.id)}`);
         if (!active) return;
         setState({ items, error: "", loading: false });
-        if (items.some(item => item.desired_state === "serving" &&
-            (!item.ready || item.pending_model_revision_id || !item.runtime.reachable))) timer = setTimeout(() => void load(), 5000);
+        const delay = modelServingPollMs(items);
+        if (delay !== null) timer = setTimeout(() => void load(), delay);
       } catch (cause) {
         if (!active) return;
         setState(previous => ({ ...previous, error: formatError(cause), loading: false }));
@@ -59,7 +74,7 @@ export function ModelServingPanel({ model, canManage = false, onOpenServing, rev
     try {
       const endpoint = await jsonPost<ServingEndpoint>("/api/serving/endpoints", { name: name.trim(), model_revision_id: model.id });
       if (!mounted.current) return;
-      setNotice(`${endpoint.name} · 배포 요청 접수. 실제 복제본의 준비를 확인한 뒤 추론이 가능합니다.`);
+      setNotice(`${endpoint.name} · 배포 요청 접수. 현재 Runtime 준비 상태는 위 목록에서 확인하세요.`);
       setName("");
     } catch (cause) {
       if (mounted.current) setSubmitError(`${formatError(cause)} 배포 상태를 다시 확인한 뒤 재시도하세요.`);
@@ -73,6 +88,7 @@ export function ModelServingPanel({ model, canManage = false, onOpenServing, rev
       <button type="button" className="secondary" disabled={state.loading || submitting}
         onClick={() => setRetry(value => value + 1)}>배포 상태 다시 조회</button></div>
     <p className="hint">모델 제공과 별개로, 이 판본을 메모리에 적재해 온라인 추론을 준비합니다.</p>
+    <p className="hint">Runtime 준비는 복제본의 판본·시작 지문 확인입니다. 실제 API 요청은 Registry 유효성·호출 권한·입력 검증도 통과해야 합니다.</p>
     {state.loading && <p role="status">배포 상태 조회 중…</p>}
     {state.error && <p role="alert">배포 상태 조회 실패 · {state.error}{state.items ? " · 표시는 마지막 확인 기록입니다." : ""}</p>}
     {!state.loading && !state.error && state.items?.length === 0 && <p>조회 가능한 이 판본의 온라인 배포 기록이 없습니다.</p>}

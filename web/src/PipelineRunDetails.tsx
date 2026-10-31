@@ -71,6 +71,28 @@ function TrackingLink({ jobId, label, revision }: { jobId: string; label: string
   </div>;
 }
 
+/** Feast 조회는 값의 Source와 조회할 Entity·시점 입력을 함께 보존한다. */
+export function FeastInputSources({ job, onOpenDataset }: {
+  job: Job; onOpenDataset: (id: string) => void;
+}) {
+  const result = job.result ?? {};
+  const text = (value: unknown) => typeof value === "string" && value.length > 0 ? value : null;
+  const source = text(result.feature_dataset_id) ?? job.dataset_id;
+  const entity = text(result.entity_dataset_id) ?? text(job.spec.entity_dataset_id);
+  const sourceVersion = text(result.feature_dataset_version) ?? text(job.spec.feature_dataset_version);
+  const entityVersion = text(result.entity_dataset_version) ?? text(job.spec.entity_dataset_version);
+  return <div className="execution-feast-sources">
+    <div><p>Feature Source Dataset · 고정 판본 {sourceVersion ?? "기록 없음"}</p>
+      {source ? <button className="secondary" onClick={() => onOpenDataset(source)}>Feature Source Dataset →</button>
+        : <p>Feature Source Dataset 기록 없음</p>}</div>
+    <div><p>Entity 시점 Dataset · 고정 판본 {entityVersion ?? "기록 없음"}</p>
+      {entity ? <button className="secondary" onClick={() => onOpenDataset(entity)}>Entity 시점 Dataset →</button>
+        : <p>Entity 시점 Dataset 기록 없음</p>}</div>
+    <p className="hint">조회 기준 컬럼 · Entity {text(result.entity_column) ?? text(job.spec.entity_column) ?? "기록 없음"}
+      {" · 시각 "}{text(result.timestamp_column) ?? text(job.spec.timestamp_column) ?? "기록 없음"}</p>
+  </div>;
+}
+
 function ScoreSummary({ result, threshold }: { result: ScoringResult; threshold?: number }) {
   const histogram = verifiedScoreHistogram(result.score_summary, result.row_count);
   return <>
@@ -181,12 +203,13 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
               ? <div className="execution-origin"><p>입력 준비 · {origin.data.kind === "feature_retrieve" ? "Feast 시점 조회" : origin.data.kind === "transform" ? "데이터 변환" : origin.data.kind === "iceberg_import" ? "Iceberg 적재" : "Dataset 게시 작업"}</p>
                 {origin.data.kind === "feature_retrieve" && <p>Feature Service · {String(origin.data.result.feature_service ?? "기록 없음")}</p>}
                 <details><summary>입력 준비 작업 근거</summary><p>Job {origin.data.id} · {jobStatusLabel(origin.data.status)}</p>
-                  <p>원본 판본 {String(origin.data.spec.dataset_version ?? origin.data.spec.feature_dataset_version ?? "기록 없음")}</p>
+                  {origin.data.kind !== "feature_retrieve" && <p>원본 판본 {String(origin.data.spec.dataset_version ?? "기록 없음")}</p>}
                   {origin.data.kind === "transform" && <pre>{JSON.stringify(origin.data.spec.transform, null, 2)}</pre>}
                   {origin.data.kind === "feature_retrieve" && <p>Feature 등록 Job {String(origin.data.result.registration_job_id ?? "기록 없음")}</p>}
                 </details>
                 <button className="secondary" onClick={() => onOpenJob(origin.data!.id, origin.data!.dataset_id ?? run.dataset_id)}>입력 준비 Job →</button>
-                {origin.data.dataset_id && <button className="secondary" onClick={() => onOpenDataset(origin.data!.dataset_id!)}>준비 전 원본 Dataset →</button>}
+                {origin.data.kind === "feature_retrieve" ? <FeastInputSources job={origin.data} onOpenDataset={onOpenDataset} />
+                  : origin.data.dataset_id && <button className="secondary" onClick={() => onOpenDataset(origin.data!.dataset_id!)}>준비 전 원본 Dataset →</button>}
               </div> : <p role="alert">입력 Dataset과 게시 작업의 확정 결과가 일치하지 않아 출처를 표시하지 않습니다.</p>)}</AssetState>}
         </>}
       </>}</AssetState>
