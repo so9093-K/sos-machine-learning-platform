@@ -25,7 +25,7 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
 function exampleInput(model: ModelRevision, lastRun?: PlaygroundRun) {
   if (lastRun) return {
     features: Object.fromEntries(model.features.map(name => [name, lastRun.features[name] ?? null])),
-    source: `Playground에서 마지막으로 계산한 입력입니다(이상 점수 ${formatPlaygroundScore(lastRun.score)}). ` +
+    source: `값 직접 입력에서 마지막으로 계산한 입력입니다(이상 점수 ${formatPlaygroundScore(lastRun.score)}). ` +
       "같은 판본에 같은 입력을 보내면 같은 점수를 받습니다.",
   };
   const reference = exampleValues(model);
@@ -48,7 +48,7 @@ export function servesModel(endpoint: ServingEndpoint | null, modelId: string): 
 /** 화면에서 해본 계산을 외부 시스템에서 같은 계약으로 요청하는 방법.
  *
  *  한 건씩 바로 받는 온라인 추론(서빙 Endpoint)과 Dataset 전체 점수(비동기 Job)를 안내한다.
- *  선택한 모델의 Endpoint, 입력 구조가 확인된 Dataset ID, Playground에서 계산한 입력을 채운다.
+ *  선택한 모델의 Endpoint, 입력 구조가 확인된 Dataset ID, 값 직접 입력에서 계산한 입력을 채운다.
  */
 export function ModelApiUsage({ model, datasetId, lastRun, endpoint, endpointError, onRecheckEndpoint, canInfer }: {
   model: ModelRevision; datasetId?: string; lastRun?: PlaygroundRun;
@@ -62,7 +62,7 @@ export function ModelApiUsage({ model, datasetId, lastRun, endpoint, endpointErr
   const [flow, setFlow] = useState<Flow>("online");
   const [trial, setTrial] = useState<{ busy: boolean; error: string; result: Prediction | null }>(
     { busy: false, error: "", result: null });
-  // 입력 실험으로 계산하면 그 입력을 재현하는 온라인 예시를 바로 보여준다.
+  // 값 직접 입력에서 계산하면 그 입력을 재현하는 온라인 예시를 바로 보여준다.
   useEffect(() => { if (lastRun) setFlow("online"); }, [lastRun]);
   const origin = typeof window === "undefined" ? "http://127.0.0.1:9601" : window.location.origin;
   const auth = `-H "Authorization: Bearer $SOS_TOKEN"`;
@@ -148,8 +148,8 @@ export function ModelApiUsage({ model, datasetId, lastRun, endpoint, endpointErr
       {trial.result && typeof trialScore === "number" && <p role="status">
         응답 · 이상 점수 <strong>{formatPlaygroundScore(trialScore)}</strong> · 판본 {trial.result.model_revision_id.slice(0, 8)}
         {lastRun && lastRun.modelRevisionId === trial.result.model_revision_id && (trialScore === lastRun.score
-          ? " · Playground 계산과 같은 점수입니다."
-          : ` · Playground 계산(${formatPlaygroundScore(lastRun.score)})과 다릅니다.`)}</p>}
+          ? " · 값 직접 입력 결과와 같은 점수입니다."
+          : ` · 값 직접 입력 결과(${formatPlaygroundScore(lastRun.score)})와 다릅니다.`)}</p>}
       {trial.error && <p role="alert">요청 실패 · {trial.error}</p>}
     </div>}
     <a className="api-reference-link" href="/docs" target="_blank" rel="noreferrer">API Reference · 요청·응답 전체 형식 ↗</a>

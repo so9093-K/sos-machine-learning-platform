@@ -67,7 +67,7 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
         <button type="button" className="secondary" aria-pressed={usage === "playground"}
           onClick={() => setUsage("playground")}>값 직접 입력</button>
       </div>
-      <p className="hint">{usage === "playground" ? "한 관측값의 특징을 바꾸고, 계산 전후 점수를 비교합니다." : "Dataset 전체를 점수화하고, 관심 관측값을 입력 실험으로 가져옵니다."}</p>
+      <p className="hint">{usage === "playground" ? "한 관측값의 특징을 바꾸고, 계산 전후 점수를 비교합니다." : "Dataset 전체를 점수화하고, 관심 관측값을 값 직접 입력으로 가져옵니다."}</p>
     </div>
     <div hidden={usage !== "playground"} ref={playgroundPanel}>
       <ModelLabPlayground model={model} canRun={canRun} canCancel={canCancel}
