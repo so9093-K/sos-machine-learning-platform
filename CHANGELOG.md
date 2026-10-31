@@ -38,5 +38,6 @@
 - Token 인증과 역할(`viewer`·`researcher`·`operator`·`administrator`·`automation`), Dataset·Job·모델 소유권, PostgreSQL 감사 이벤트를 적용한다.
 - Job·Attempt는 멱등성 키, 취소, Worker 복구, 자원 수용 판단과 선택적 cgroup v2 메모리 격리, Attempt별 결과 게시 무결성을 따른다.
 - API 오류는 코드·재시도 정책·요청 ID를 포함한 구조화 응답으로 제공하며 웹 타입은 생성 OpenAPI를 사용한다.
+- **API 호환성 변경 — 모델 조회:** `GET /api/ml/models/{revision_id}`와 `GET /api/ml/offered-models`의 `items[].model`은 소유자·관리자가 아닌 소비자에게 `dataset_id`, `dataset_version`, `job_id`, `attempt_id`, `location`, `sha256`, `params`를 반환하지 않는다. 필드는 `null`이 아니라 응답에서 제거되며, `training_score_summary`는 빈 객체이고 Runtime도 공개 정보로 제한된다. 기존 전체 응답을 전제로 한 필수 필드 검증·직접 접근은 수정이 필요하다. 배포 전에 OpenAPI의 공개·전체 응답을 반영해 클라이언트 타입을 갱신하고, `creation_evidence_visible`로 응답을 구분해 비공개 필드 의존을 제거해야 한다. 필드 부재는 모델 오류나 기록 부재를 뜻하지 않는다. API와 SOS 웹은 함께 갱신하며 소유자·관리자의 전체 응답은 유지한다.
 - 저장소 보존 상태 진단과 감사 조회를 운영 권한에 제공하며 객체를 자동 삭제하지 않는다.
 - `make up`으로 API·Worker·Web·Dagster·MLflow·Feast UI를 Docker Compose로 실행하고, Scalar API Reference를 외부 CDN 없이 제공한다. 설치별 제품 브랜드명과 인스턴스 표시명을 관리자 권한으로 설정한다.

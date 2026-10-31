@@ -48,6 +48,8 @@ Feast는 등록 Entity·Feature View·Feature Service와 Historical Retrieval의
 
 모델의 원본 학습 규모·내부 입력 선택·결측 처리 정책과 학습 점수 집계는 소유자·관리자만 조회한다. 제공 모델의 상세·목록 응답에서도 같은 제한을 적용한다. 소비자에게는 Feature·자료형·입력 기준값·출력 계약과 입력 비교용 분위값을 제공하되, 행 수·표본 수·학습 Dataset·Job·Attempt 식별자와 판본·아티팩트 위치·해시·학습 매개변수·내부 Feature 출처·학습 점수 Histogram 건수는 포함하지 않는다. 권한별 응답 투영은 불변 모델 원본이나 Worker·추론의 실행 계약을 변경하지 않는다.
 
+모델 조회 클라이언트는 OpenAPI의 공개·전체 응답을 `creation_evidence_visible`로 구분한다. 공개 응답에서 내부 필드는 `null`이 아니라 제외되므로, 모든 응답을 전체 모델 판본으로 파싱하거나 비공개 필드를 필수로 요구하면 안 된다. 기존 클라이언트의 전환 범위와 배포 전 대응은 [Changelog의 API 호환성 변경](../CHANGELOG.md#플랫폼)을 따른다.
+
 Dataset 없는 단일 관측치 Playground Job은 입력 Feature와 실제 모델 점수를 Job 명세·결과로 보존한다. Explanation의 출처는 Scoring Result의 특정 행 또는 성공한 Playground Job 중 정확히 하나이며, 출처·모델 판본·방법을 결과에 보존하고 Dataset에 존재하지 않는 관측치 번호를 만들지 않는다. Playground는 배치 Scoring Result나 독립 평가를 만들지 않으며 모델 판본·Actor 권한·Registry·입력 서명·Runtime을 Scoring과 같이 검증한다.
 
 ## 온라인 서빙 Endpoint
