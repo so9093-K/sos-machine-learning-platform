@@ -21,8 +21,8 @@ import httpx
 
 DEFINITION_ID = "activity-anomaly-if"
 EXAMPLE_DESCRIPTION = (
-    "활동 이상 탐지의 입력·점수·결과 조사 흐름을 체험하는 합성 예제 모델입니다. "
-    "44개 숫자형 활동 Feature를 사용하며 예제의 인위적인 활동 변화와 점수 반응을 살펴볼 수 있습니다. "
+    "활동 이상 탐지의 입력·점수·결과 조사 흐름을 확인하기 위한 합성 예제 모델입니다. "
+    "44개 숫자형 활동 Feature를 사용하며 예제의 인위적인 활동 변화에 대한 점수 반응을 확인할 수 있습니다. "
     "실제 보안 사건으로 학습·검증한 모델이 아니며, 탐지 정확도·사고 확률·업무 적합성을 보장하지 않습니다."
 )
 TERMINAL = {"Succeeded", "Failed", "Cancelled"}
@@ -237,7 +237,7 @@ def main() -> None:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--dataset-file", type=Path, help="새로 등록할 CSV·Parquet 파일")
     source.add_argument("--dataset-id", help="기존 Dataset ID 또는 등록 응답 유실 후 확인한 ID")
-    source.add_argument("--example", choices=[DEFINITION_ID], help="서버의 합성 예제로 체험용 모델을 명시적으로 공급")
+    source.add_argument("--example", choices=[DEFINITION_ID], help="서버의 합성 예제 Dataset으로 예제 모델을 명시적으로 공급")
     description = parser.add_mutually_exclusive_group()
     description.add_argument("--description", help="목적·적용 대상·한계 설명")
     description.add_argument("--description-file", type=Path, help="설명 텍스트 파일")

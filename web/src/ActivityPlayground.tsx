@@ -56,7 +56,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   links: TaxonomyLinks;
 }) {
   const catalog = useTopicCatalog();
-  // 주제의 입력·출력 계약. 어떤 알고리즘·Pipeline으로 만든 모델이든 이 계약을 따르면 체험할 수 있다.
+  // 주제의 입력·출력 계약. 어떤 알고리즘·Pipeline으로 만든 모델이든 이 계약을 따르면 적용할 수 있다.
   const topic = catalog.items?.find(item => item.id === TOPIC) ?? null;
   const trail = topicTree(catalog.tree, TOPIC);
   const [offered, setOffered] = useState<ModelOffering[] | null>(null);
@@ -170,8 +170,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
 
     {/* 적용 화면이 자체 카드이므로 바깥은 카드로 감싸지 않는다. */}
     <section className="guide-section playground-try" aria-labelledby="playground-try-heading">
-      <h2 id="playground-try-heading">직접 체험</h2>
-      <p className="muted">준비된 모델을 활동 데이터나 직접 입력한 값에 적용하고, 점수가 높은 관측부터 무엇이 달랐는지 살펴봅니다.</p>
+      <h2 id="playground-try-heading">모델 적용</h2>
+      <p className="muted">제공 모델을 활동 Dataset 또는 직접 입력한 값에 적용해 이상 점수를 계산하고, 점수가 높은 관측의 입력값을 학습 기준과 비교합니다.</p>
       {(catalog.error || offeredError) && <div role="alert" className="guide-state">
         <p>모델을 불러오지 못했습니다. {catalog.error || offeredError}</p>
         <button type="button" className="secondary" onClick={() => { catalog.reload(); setRetry(value => value + 1); }}>
@@ -189,7 +189,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
       {selection.state === "none" && offered !== null && topic && <div className="playground-notice">
         <p className="muted">
         {nextCursor ? "현재 조회한 목록에 호환 모델이 없습니다. 다음 제공 모델을 조회할 수 있습니다."
-          : "첫 점수 계산에는 활동 이상 탐지용 제공 모델이 필요합니다. 개발·배포 담당자가 체험용 합성 예제 모델을 준비할 수 있습니다."}</p>
+          : "이상 점수 계산에는 활동 이상 탐지 제공 모델이 필요합니다. 개발·배포 담당자가 합성 예제 모델을 공급할 수 있습니다."}</p>
         {!nextCursor && <button type="button" className="secondary" disabled={loadingModels}
           onClick={() => { setRequestCursor(null); setRetry(value => value + 1); }}>제공 모델 다시 조회</button>}
       </div>}

@@ -40,7 +40,7 @@ export const taskGuides: Record<string, Guide> = {
     ],
     reading: [
       { title: "상대적 순위", text: "같은 모델의 점수끼리 비교합니다. 사고가 일어날 확률이나 문제의 확정이 아닙니다." },
-      { title: "높은 점수의 원인 확인", text: "높은 점수의 관측에서 어떤 값이 학습 기준과 달랐는지 비교하고 기여도를 계산해 봅니다." },
+      { title: "높은 점수의 원인 확인", text: "높은 점수의 관측에서 어떤 값이 학습 기준과 달랐는지 비교하고 기여도를 계산합니다." },
       { title: "새로운 정상 변화", text: "학습 데이터에 없던 정상적인 변화도 평소와 다르면 높은 점수를 받습니다." },
     ],
   },
@@ -59,12 +59,12 @@ export const topicGuides: Record<string, Guide & { route: "topic" }> = {
   },
 };
 
-/** 화면에서 직접 체험할 수 있는 주제. 카탈로그에만 있고 Playground가 없는 주제는 안내하지 않는다. */
+/** 화면에서 모델을 적용할 수 있는 주제. 카탈로그에만 있고 Playground가 없는 주제는 안내하지 않는다. */
 function hasPlayground(topic: Pick<AnalysisTopic, "id">): boolean {
   return topicGuides[topic.id]?.route === "topic";
 }
 
-/** 모델이 입력·출력 계약이 맞는 체험 주제를 가지면 그 주제를 돌려준다. 알고리즘은 묻지 않는다. */
+/** 모델이 입력·출력 계약이 맞는 Playground 주제를 가지면 그 주제를 돌려준다. 알고리즘은 묻지 않는다. */
 export function playgroundTopicFor(model: Pick<ModelRevision, "features" | "output_type">,
   topics: readonly AnalysisTopic[] | null): string | null {
   return topics?.find(topic => hasPlayground(topic) && isTopicCompatible(model, topic))?.id ?? null;
@@ -131,7 +131,7 @@ function CatalogState({ error, loading, onRetry }: { error: string; loading: boo
   return null;
 }
 
-/** 학습 유형 소개. 개요·도식과 SOS에서 체험할 수 있는 분석 과제를 보여준다. */
+/** 학습 유형 소개. 개요·도식과 SOS가 지원하는 분석 과제를 보여준다. */
 export function LearningTypePage({ id, links }: { id: string; links: TaxonomyLinks }) {
   const catalog = useTopicCatalog();
   const guide = learningTypeGuides[id];
@@ -145,9 +145,9 @@ export function LearningTypePage({ id, links }: { id: string; links: TaxonomyLin
     </section>
     <GuideCards heading="활용 상황" items={guide.uses} />
     <section className="guide-section" aria-labelledby="learning-tasks">
-      <h2 id="learning-tasks">체험 가능한 분석 과제</h2>
+      <h2 id="learning-tasks">분석 과제</h2>
       <CatalogState error={catalog.error} loading={catalog.items === null} onRetry={catalog.reload} />
-      {catalog.items && tasks.length === 0 && <p className="muted">아직 체험할 수 있는 분석 과제가 없습니다.</p>}
+      {catalog.items && tasks.length === 0 && <p className="muted">지원하는 분석 과제가 없습니다.</p>}
       <div className="guide-choices">{tasks.map(task => <button key={task.id} type="button"
         className="surface-button guide-choice" onClick={() => links.onOpenTask(task.id)}>
         <span className="eyebrow">분석 과제</span>
@@ -159,7 +159,7 @@ export function LearningTypePage({ id, links }: { id: string; links: TaxonomyLin
   </div>;
 }
 
-/** 분석 과제 소개. 원리 도식·활용·결과 읽는 법과 체험할 주제로 연결한다. */
+/** 분석 과제 소개. 원리 도식·활용·결과 해석과 모델을 적용할 주제로 연결한다. */
 export function AnalysisTaskPage({ id, links }: { id: string; links: TaxonomyLinks }) {
   const catalog = useTopicCatalog();
   const guide = taskGuides[id];
@@ -176,9 +176,9 @@ export function AnalysisTaskPage({ id, links }: { id: string; links: TaxonomyLin
     <GuideCards heading="활용 방법" items={guide.uses} />
     {guide.reading && <GuideCards heading="결과 해석" items={guide.reading} />}
     <section className="guide-section" aria-labelledby="task-topics">
-      <h2 id="task-topics">체험 가능한 주제</h2>
+      <h2 id="task-topics">분석 주제</h2>
       <CatalogState error={catalog.error} loading={catalog.items === null} onRetry={catalog.reload} />
-      {catalog.items && topics.length === 0 && <p className="muted">아직 체험할 수 있는 주제가 없습니다.</p>}
+      {catalog.items && topics.length === 0 && <p className="muted">지원하는 분석 주제가 없습니다.</p>}
       <div className="guide-choices">{topics.map(topic => <button key={topic.id} type="button"
         className="surface-button guide-choice" onClick={() => links.onOpenTopic(topic.topic)}>
         <span className="eyebrow">주제 · Playground</span>
@@ -243,7 +243,7 @@ export function UnsupervisedDiagram() {
       <rect width={200} height={52} rx={9} className="diagram-box diagram-box-active" />
       <circle cx={24} cy={26} r={10} className="diagram-ring" /><circle cx={24} cy={26} r={5} className="diagram-dot-odd" />
       <text x={46} y={23} className="diagram-label">평소와 다른 관측</text>
-      <text x={46} y={41} className="diagram-note diagram-note-active">이상 탐지 · SOS 체험 가능</text>
+      <text x={46} y={41} className="diagram-note diagram-note-active">이상 탐지 · SOS 지원</text>
     </g>
     <g transform="translate(540 176)">
       <rect width={200} height={52} rx={9} className="diagram-box" />

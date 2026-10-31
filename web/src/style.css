@@ -572,7 +572,7 @@ button.surface-button[aria-pressed="true"] {
 @media(max-width:780px) {.model-lab-input-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }}
 @media(max-width:520px) {.model-lab-input-grid {grid-template-columns:1fr;}}
 
-/* Playground 이력은 기술적 Job 목록이 아닌 체험 복구의 보조 경로다. */
+/* Playground 이력은 기술적 Job 목록이 아닌 이전 계산을 다시 여는 보조 경로다. */
 .model-lab-playground-history { border-top:1px solid var(--sos-border); padding-top:13px; }
 
 .model-lab-history-body { display:grid; grid-template-columns:minmax(0,1fr); min-width:0; gap:11px; margin-top:13px; }

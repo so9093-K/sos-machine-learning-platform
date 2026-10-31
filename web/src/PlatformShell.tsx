@@ -13,7 +13,7 @@ const pageLabels: Record<WorkspaceTab, { title: string; description: string }> =
   preparation: { title: "데이터 준비", description: "원본 선택 · 변환 편집 · 결과 Dataset" },
   learning: { title: "학습 유형", description: "개요 · 활용 상황 · 분석 과제" },
   task: { title: "분석 과제", description: "원리 · 활용 방법 · 결과 해석 · 주제" },
-  topic: { title: "활동 이상 탐지", description: "활용 방법 · 직접 체험 · 결과 해석 · 서비스 연동" },
+  topic: { title: "활동 이상 탐지", description: "활용 방법 · 모델 적용 · 결과 해석 · 서비스 연동" },
   pipelines: { title: "등록 파이프라인", description: "모델 공급 운영 · 단계별 결과 · 실행 근거" },
   ml: { title: "모델 활용", description: "모델 선택 · 입력 확인 · 적용 · 결과 이해" },
   scoring: { title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
