@@ -10,7 +10,7 @@ from .store_administration import now
 
 class TrackingStoreMixin:
     def enqueue_tracking_export(self, db: Connection, job_id: str, kind: str) -> None:
-        """성공 결과의 DB 게시와 함께 외부 전송 의도만 남긴다."""
+        """ML Job의 최종 상태(성공·실패·취소) 확정과 같은 트랜잭션에서 외부 전송 의도만 남긴다."""
         if kind not in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain"):
             return
         if not os.getenv("SOS_MLFLOW_TRACKING_URI"):

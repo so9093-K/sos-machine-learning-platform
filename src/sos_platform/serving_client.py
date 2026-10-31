@@ -130,6 +130,14 @@ class ServingClient:
         except ValueError as exc:
             raise ServingUnavailable("invalid_json") from exc
 
+    def runtime_reachable(self) -> bool:
+        """Ray head가 응답한다. 서빙할 애플리케이션이 없어 추론 Proxy가 준비되지 않았을 때의 생존 확인이다."""
+        try:
+            self._request("GET", f"{self.dashboard_url}/api/version", None, min(self.timeout, 2.0))
+        except (ServingUnavailable, ServingRequestRejected):
+            return False
+        return True
+
     def inference_reachable(self) -> bool:
         """실제 추론 Proxy의 생존 확인. Dashboard 장애를 추론 장애로 보고하지 않는다."""
         if not self.inference_url:

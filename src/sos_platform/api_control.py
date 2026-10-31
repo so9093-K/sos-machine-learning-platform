@@ -71,8 +71,17 @@ def control_router(store: Store, identity: IdentitySettings) -> APIRouter:
             features["job_execution"] = "ready" if store.worker_ready() else "unavailable"
         except Exception:
             features["job_execution"] = "unavailable"
-        features["online_serving"] = ("not_configured" if serving is None
-                                      else "ready" if serving.inference_reachable() else "unavailable")
+        if serving is None:
+            features["online_serving"] = "not_configured"
+        else:
+            try:
+                intended = store.serving_intended()
+            except Exception:
+                intended = True
+            # 서빙할 Endpoint가 없으면 Ray는 추론 Proxy를 503으로 알린다. 그때는 Runtime 자체의 응답으로
+            # 판정하고, 서빙 중인 Endpoint가 있으면 Dashboard가 아닌 실제 추론 Proxy로 판정한다.
+            alive = serving.inference_reachable() if intended else serving.runtime_reachable()
+            features["online_serving"] = "ready" if alive else "unavailable"
         status = ("unavailable" if any(v != "ready" for v in checks.values())
                   else "degraded" if "unavailable" in features.values() else "ready")
         result = {"status": status, "services": checks, "features": features}
