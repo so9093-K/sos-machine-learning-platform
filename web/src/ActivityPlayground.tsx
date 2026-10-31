@@ -69,8 +69,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   const [readyDatasetId, setReadyDatasetId] = useState("");
   // 단일 입력 예시는 Playground에서 실제로 계산한 마지막 입력을 그대로 재현한다.
   const [lastRun, setLastRun] = useState<PlaygroundRun | null>(null);
-  const [example, setExample] = useState<{ busy: boolean; error: string; datasetId: string }>(
-    { busy: false, error: "", datasetId: "" });
+  const [example, setExample] = useState({ busy: false, error: "", datasetId: "", analysisRequest: 0 });
   useEffect(() => {
     let active = true;
     setOfferedError("");
@@ -153,7 +152,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
       const dataset = await request<Dataset>(`/api/examples/${EXAMPLE_ID}/use`, { method: "POST" });
       onDatasetRegistered(dataset);
       onSelectDataset(dataset.id);
-      setExample({ busy: false, error: "", datasetId: dataset.id });
+      setExample(state => ({ busy: false, error: "", datasetId: dataset.id,
+        analysisRequest: state.analysisRequest + 1 }));
     } catch (cause) {
       setExample(state => ({ ...state, busy: false, error: formatError(cause) }));
     }
@@ -228,6 +228,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
         </div>}
         {canRun && <ModelApplicationWorkspace key={chosen.model.id} model={chosen.model} datasets={datasets}
           selectedDatasetId={selectedDatasetId} onSelectDataset={onSelectDataset}
+          datasetAnalysisRequest={example.analysisRequest}
           hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
           canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
           canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
