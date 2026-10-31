@@ -3,7 +3,6 @@
 import csv
 import hashlib
 import io
-from uuid import UUID
 
 from .datasets import save_upload
 from .store import Store
@@ -52,53 +51,8 @@ def _data_quality() -> bytes:
     return _csv(["row_id", "batch", "measurement", "quality", "line"], rows)
 
 
-def _activity_anomaly_if() -> bytes:
-    """활동 이상 탐지 주제의 입력 계약(등록형 IF Pipeline의 입력)을 충족하는 재현 가능한 합성 데이터.
-
-    원본 보안 이벤트나 학습 품질을 보증하는 자료가 아니다. 서로 다른 시간대와
-    인위적인 값 변화를 포함하여 학습·보정·Test의 실행 경로를 경험하게 한다.
-    """
-    from datetime import datetime, timedelta, timezone
-
-    from .analysis_topics import ACTIVITY_FEATURES
-
-    rows: list[list[object]] = []
-    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    for tick in range(240):
-        observed = start + timedelta(minutes=tick)
-        outlier = tick in (204, 216, 228)
-        values: list[object] = []
-        for index, feature in enumerate(ACTIVITY_FEATURES):
-            if feature.startswith("ratio_"):
-                value = round(min(0.99, 0.07 + ((tick * 3 + index * 7) % 42) / 100
-                                  + (0.42 if outlier else 0.0)), 5)
-            elif feature.startswith(("cnt_", "uniq_")):
-                value = (tick * (index % 4 + 1) + index * 3) % 17 + 1
-                if outlier:
-                    value += 90 + index
-            else:
-                value = round(1.0 + (index + 1) * 0.4
-                              + ((tick * 7 + index * 11) % 37) / 12
-                              + (110.0 + index if outlier else 0.0), 5)
-            values.append(value)
-        # 예제에서만 고정된 비식별 UUIDv4를 생성한다. 일반 사용자 데이터를 추정하지 않는다.
-        digest = hashlib.sha256(f"sos-if-example-row:{tick}".encode()).digest()
-        identity = str(UUID(bytes=digest[:16], version=4))
-        rows.append([observed.isoformat(), identity, *values])
-    return _csv(["ts", "sos_observation_id", *ACTIVITY_FEATURES], rows)
-
-
 # 샘플은 서버 시작 시 DB에 등록하지 않는다. 사용자가 선택할 때 같은 Dataset API를 사용한다.
 _EXAMPLES = {
-    "activity-anomaly-if": {
-        "show_in_catalog": False,
-        "name": "example-activity-anomaly-if.csv",
-        "title": "활동 Feature 구조 예제",
-        "description": "44개 활동 Feature·UTC 시각·재현 가능한 비식별 관측치 ID를 포함한 합성 예제입니다.",
-        "columns": ["ts", "sos_observation_id", "io_bytes_per_sec", "net_bytes_per_sec", "cnt_file_create", "cnt_proc_exec"],
-        "content": _activity_anomaly_if(),
-        "guide": "데이터 탐색에서 활동 Feature의 구조·분포를 확인하세요. 제공 모델과 입력 조건이 맞으면 점수 계산에 사용할 수 있습니다. 실제 침해 사건이나 탐지 정확도를 검증하는 데이터가 아닙니다.",
-    },
     "machine-sensors": {
         "name": "example-machine-sensors.csv",
         "title": "설비 센서 시계열",
@@ -119,7 +73,7 @@ _EXAMPLES = {
 
 
 def list_examples() -> list[dict]:
-    """탐색용 예제만 제공한다. 개발용 활동 입력은 명시적 사용 경로로 남긴다."""
+    """탐색용 예제의 구조와 내용 버전을 읽기 전용으로 제공한다."""
     return [
         {
             "id": key,
@@ -131,7 +85,6 @@ def list_examples() -> list[dict]:
             "version": hashlib.sha256(value["content"]).hexdigest(),
         }
         for key, value in _EXAMPLES.items()
-        if value.get("show_in_catalog", True)
     ]
 
 

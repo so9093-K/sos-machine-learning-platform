@@ -99,22 +99,6 @@ Endpoint를 삭제하려면 먼저 중단한다. Endpoint가 활성·전환 대�
 
 제공 중인 모델은 먼저 제공을 중단해야 삭제할 수 있다. 모델을 소유한 자동화 계정이 `GET /api/ml/models/{id}/deletion-impact`로 영향을 확인한 뒤 `DELETE /api/ml/models/{id}`로 삭제한다. MLflow Version과 S3 모델 파일은 제거되고 과거 Job·Scoring·평가 근거는 보존된다.
 
-<details>
-<summary>개발용 합성 데이터의 실행 경로 점검</summary>
-
-합성 활동 예제는 일반 예제 목록에서 제외하고 등록·학습·Registry·모델 적용의 연결 점검에만 사용한다. 실제 활동 모델의 연구 근거나 배포 품질을 증명하지 않는다. 필요한 개발 환경에서만 다음 명령으로 모델을 준비한다. 제공 목록에 추가하지 않으며, 준비한 판본은 소유자·관리자가 출력된 직접 링크에서 사용할 수 있다. 제공 설명 옵션은 사용하지 않는다.
-
-```bash
-SOS_SUPPLY_TOKEN='관리자 또는 automation 토큰' uv run --locked --group dev python scripts/supply_model.py \
-  --state-file .sos/supply/example-activity.json --example activity-anomaly-if
-```
-
-같은 상태 파일은 Dataset·Job·모델을 재사용해 재개하며, 제공 중단한 모델도 재제공 없이 개발용으로 재사용한다. 서비스 기동이나 사용자 화면 진입으로 실행하지 않는다. 기본 주소가 다르면 `SOS_API_URL`·`SOS_WEB_URL`을 지정한다.
-
-이전 `make supply-example` 등으로 이미 제공한 합성 모델은 화면·명령을 제거해도 제공 상태가 유지된다. 공급 상태 파일의 모델·학습 Job·Dataset 판본을 대조해 대상을 확인한 뒤 모델 상세에서 제공을 중단하거나 `DELETE /api/ml/models/{id}/offering`을 요청한다. 이후 제공 상태와 제공 모델 목록을 다시 조회한다. 상태 파일은 재사용 근거로 보존하며, 모델·Dataset·과거 결과를 삭제할 필요는 없다. 아직 제공 중인 합성 모델로 이 스크립트를 재개하면 자동 변경 없이 중단을 안내한다.
-
-</details>
-
 ## Feature 등록 (개발·배포)
 
 Feast Feature Service의 등록·시점 조회·폐기는 `automation` 계정이 SOS API로 실행하며 웹 화면은 제공하지 않는다. 등록(`POST /api/features/services/jobs`)과 조회(`POST /api/features/retrieval/jobs`)는 별개 Job이고, 조회 결과 Dataset을 모델 학습 입력으로 사용한다. 폐기는 `POST /api/features/services/{registration_job_id}/retirement/jobs`로 요청한다. 요청 필드는 API Reference, 의미는 [Contracts](contracts.md#등록-feature)를 따른다.

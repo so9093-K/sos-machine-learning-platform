@@ -1,4 +1,4 @@
-"""활동 이상 탐지 모델을 SOS에 공급하고, 개발용 합성 모델은 제공 없이 준비한다.
+"""Dataset으로 학습한 활동 이상 탐지 모델을 SOS에 공급하고 선택적으로 온라인 서빙에 배포한다.
 
 같은 --state-file로 재실행하면 등록 Dataset·학습 요청·멱등성 키를 재사용한다.
 상태 파일에는 토큰을 저장하지 않는다. 새 학습은 별도의 상태 파일로 명시한다.
@@ -74,20 +74,21 @@ def wait(client: httpx.Client, path: str, done: Callable[[dict], bool], *, inter
         time.sleep(interval)
 
 
-def supply(client: httpx.Client, args: argparse.Namespace, description: str | None) -> None:
-    """고정된 학습 요청을 재개한다. 합성 입력은 제공 목록에 추가하지 않는다."""
+def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> None:
+    """고정된 Dataset·학습 요청을 재개하고 Registry 등록을 확인한 판본만 제공한다."""
     identity = checked(client.get("/api/v2/auth/me"))
     if not {"model.train", "model.manage"}.issubset(identity["capabilities"]):
         fail("학습·모델 제공 권한이 있는 관리자 또는 automation 서비스 계정이 필요합니다.")
     path = args.state_file
     api = str(client.base_url).rstrip("/")
     source = ({"file": str(args.dataset_file.resolve())} if args.dataset_file else
-              {"id": args.dataset_id} if args.dataset_id else
-              {"example": args.example} if args.example else None)
+              {"id": args.dataset_id} if args.dataset_id else None)
     if path.exists():
         state = json.loads(path.read_text(encoding="utf-8"))
         if (not isinstance(state, dict) or state.get("version") != 1
-                or state.get("api") != api or state.get("actor_id") != identity["actor_id"]):
+                or state.get("api") != api or state.get("actor_id") != identity["actor_id"]
+                or not isinstance(state.get("source"), dict)
+                or set(state["source"]) not in ({"file"}, {"id"})):
             fail("상태 파일의 API·Actor·형식을 확인하세요. 다른 공급에는 새 상태 파일이 필요합니다.")
         # 업로드 응답이 유실된 경우 확인한 Dataset ID를 명시해 복구할 수 있다.
         recovering_upload = (args.dataset_id and state.get("upload_started") and
@@ -102,7 +103,7 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str | No
             fail("상태 파일의 Seed와 다릅니다.")
     else:
         if source is None:
-            fail("새 공급에는 --dataset-file, --dataset-id 또는 --example이 필요합니다.")
+            fail("새 공급에는 --dataset-file 또는 --dataset-id가 필요합니다.")
         state = {
             "version": 1, "api": api, "actor_id": identity["actor_id"], "source": source,
             "submission_key": str(uuid.uuid4()),
@@ -112,17 +113,8 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str | No
         }
         save_state(path, state)
 
-    is_example = "example" in state["source"]
-    if not is_example and (description is None or not 1 <= len(description) <= 1000):
-        fail("일반 Dataset 모델 공급에는 1~1000자의 --description 또는 --description-file이 필요합니다.")
-    if is_example and description is not None:
-        fail("개발용 합성 모델은 제공하지 않습니다. 제공 설명 옵션을 제외하세요.")
-
     if not state.get("dataset_id"):
-        if "example" in state["source"]:
-            # 서버가 같은 Actor·예제 판본을 재사용하므로 응답 유실 후에도 재요청할 수 있다.
-            dataset = checked(client.post(f"/api/examples/{state['source']['example']}/use"))
-        elif "file" in state["source"]:
+        if "file" in state["source"]:
             if state.get("upload_started"):
                 fail("파일 등록 응답이 확인되지 않았습니다. GET /api/datasets로 등록 상태를 확인한 뒤 "
                      "같은 --state-file과 --dataset-id로 재개하세요. 파일은 다시 전송하지 않습니다.")
@@ -173,19 +165,14 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str | No
                  timeout=args.timeout, label="Registry 등록")
     print(f"모델 판본 확인 · {model_id} · Registry v{model['registry_version']}", flush=True)
     offering = checked(client.get(f"/api/ml/models/{model_id}/offering"))
-    if is_example:
-        if offering["offered"]:
-            fail("기존 합성 모델이 제공 중입니다. 모델 상세 또는 제공 API에서 명시적으로 중단한 뒤 재개하세요.")
-        print(f"개발용 합성 모델 준비 완료 · {model_id} · 소유자·관리자 전용, 제공 요청 없음")
-    else:
-        if offering.get("withdrawn_at") is not None:
-            fail("제공이 중단된 판본입니다. 재제공은 제공 API로 명시적으로 요청하세요.")
-        if not offering["offered"] or offering.get("description") != description:
-            offering = checked(client.put(f"/api/ml/models/{model_id}/offering",
-                                          json={"description": description}))
-        if not offering["offered"]:
-            fail("제공 상태를 확인하지 못했습니다.")
-        print(f"제공 완료 · {model_id}")
+    if offering.get("withdrawn_at") is not None:
+        fail("제공이 중단된 판본입니다. 재제공은 제공 API로 명시적으로 요청하세요.")
+    if not offering["offered"] or offering.get("description") != description:
+        offering = checked(client.put(f"/api/ml/models/{model_id}/offering",
+                                      json={"description": description}))
+    if not offering["offered"]:
+        fail("제공 상태를 확인하지 못했습니다.")
+    print(f"제공 완료 · {model_id}")
     if args.endpoint:
         serve(client, args, state, path, model_id)
     web = os.getenv("SOS_WEB_URL", "http://localhost:9601").rstrip("/")
@@ -243,8 +230,7 @@ def main() -> None:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--dataset-file", type=Path, help="새로 등록할 CSV·Parquet 파일")
     source.add_argument("--dataset-id", help="기존 Dataset ID 또는 등록 응답 유실 후 확인한 ID")
-    source.add_argument("--example", choices=[DEFINITION_ID], help="개발용 합성 모델 준비 (제공 목록에 추가하지 않음)")
-    description = parser.add_mutually_exclusive_group()
+    description = parser.add_mutually_exclusive_group(required=True)
     description.add_argument("--description", help="목적·적용 대상·한계 설명")
     description.add_argument("--description-file", type=Path, help="설명 텍스트 파일")
     parser.add_argument("--api", default=os.getenv("SOS_API_URL", "http://127.0.0.1:9602"))
@@ -268,11 +254,10 @@ def main() -> None:
     if not token:
         fail("SOS_SUPPLY_TOKEN 환경변수에 관리자 또는 automation 서비스 계정 토큰이 필요합니다.")
     try:
-        text = args.description
-        if args.description_file is not None:
-            text = args.description_file.read_text(encoding="utf-8")
-        if text is not None:
-            text = text.strip()
+        text = (args.description if args.description is not None else
+                args.description_file.read_text(encoding="utf-8")).strip()
+        if not 1 <= len(text) <= 1000:
+            fail("제공 설명은 1~1000자여야 합니다.")
         args.state_file.parent.mkdir(parents=True, exist_ok=True)
         # 원자적 상태 파일 교체와 별도로 같은 공급의 동시 실행을 막는다.
         with args.state_file.with_suffix(args.state_file.suffix + ".lock").open("a") as lock:

@@ -25,7 +25,7 @@
 
 ### 모델 공급과 운영
 
-- 학습·모델 관리·Feature 정의 변경은 `kind: service` 전용 `automation` 역할과 관리자만 할 수 있다. `scripts/supply_model.py`는 상태 파일로 중단 후 재개하며 일반 Dataset 학습 후 설명과 함께 모델을 제공한다. 개발용 `--example`은 합성 모델을 준비하되 자동 제공·재제공하지 않으며, 기존에 제공 중인 합성 모델은 명시적으로 중단해야 재개할 수 있다. 일반 예제 목록의 활동 합성 입력과 모델 적용 화면의 예제 시작 버튼·전용 전환 상태를 제거한다. 모델 적용은 Dataset 선택·등록을 기본으로 하고 값 직접 입력을 선택적으로 제공한다.
+- 학습·모델 관리·Feature 정의 변경은 `kind: service` 전용 `automation` 역할과 관리자만 할 수 있다. `scripts/supply_model.py`는 실제 Dataset 파일 또는 ID로 학습·Registry 등록·제공·선택적 온라인 서빙을 연결하고 상태 파일로 중단 후 재개한다. 모델 적용은 Dataset 선택·등록을 기본으로 하고 값 직접 입력을 선택적으로 제공한다.
 - 모델 제공·설명 수정·중단을 명시적으로 관리하며, 제공 중단은 새 적용만 막고 기존 결과를 유지한다. 제공 중인 판본은 중단 후 삭제할 수 있다.
 - Isolation Forest 학습은 전체·명시적 표본 입력, UTC 시간 분할, Train 중앙값 결측 정책을 지원하고 불변 Model Revision을 남긴다.
 - MLflow가 Experiment·Run·Registered Model/Version의 관리 정본이다. SOS는 Outbox로 기록·등록을 재시도하며, Registry 등록이 확인된 모델만 Scoring에 사용한다. 모델 그룹·보관과 영향 확인 후 영구 삭제를 지원한다.
