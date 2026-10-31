@@ -306,3 +306,25 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
     model["lifecycle_state"] = "Deleting"
     offering["withdrawn_at"] = None
     assert client.get(path, headers=supplier).json()["offered"] is False
+
+
+def test_dataset_origin_job_reference_keeps_dataset_ownership(tmp_path, monkeypatch):
+    """저장된 게시 Job만 반환하고 타 Actor의 Dataset 출처는 공개하지 않는다."""
+    owner = Actor("owner", "human", frozenset({"researcher"}))
+    other = Actor("other", "human", frozenset({"researcher"}))
+    identity = IdentitySettings("token", {
+        hashlib.sha256(b"owner-token-000000000000000000000000").hexdigest(): owner,
+        hashlib.sha256(b"other-token-000000000000000000000000").hexdigest(): other,
+    })
+    dataset = {"id": "derived", "name": "prepared", "kind": "file", "location": "s3://data/prepared",
+               "version": "v1", "created_at": "2026-10-31T00:00:00Z", "owner_actor": "owner",
+               "source_job_id": "transform-job"}
+    monkeypatch.setattr(Store, "get_dataset", lambda *_: dataset)
+    monkeypatch.setattr(Store, "record_audit", lambda *args, **kwargs: None)
+    client = TestClient(create_app(tmp_path, identity=identity))
+    response = client.get("/api/datasets/derived", headers={"Authorization": "Bearer owner-token-000000000000000000000000"})
+    assert response.status_code == 200
+    assert response.json()["source_job_id"] == "transform-job"
+    assert client.get("/api/datasets/derived", headers={"Authorization": "Bearer other-token-000000000000000000000000"}).status_code == 404
+    dataset["source_job_id"] = None
+    assert client.get("/api/datasets/derived", headers={"Authorization": "Bearer owner-token-000000000000000000000000"}).json()["source_job_id"] is None

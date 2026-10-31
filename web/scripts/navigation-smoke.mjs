@@ -145,6 +145,25 @@ try {
   }));
   assert.match(partialResults, /학습 결과/);
   assert.doesNotMatch(partialResults, /Test 결과·평가|이상 후보 조사/);
+  const { ModelTrainingInput } = await vite.ssrLoadModule("/src/ModelCreationEvidence.tsx");
+  const trainingEvidence = renderToStaticMarkup(React.createElement(ModelTrainingInput, { model: {
+    features: ["a", "b"], runtime: { training_selection: { source_rows: 6000, selected_rows: 6000,
+      method: "all_rows", temporal_split: { input_total_rows: 10000 } },
+      training_missing_policy: "train_median", feature_training_profile: { sample_rows: 4096 } },
+  } }));
+  assert.match(trainingEvidence, /시간 분할 전 입력<\/dt><dd>10,000행/);
+  assert.match(trainingEvidence, /실제 학습 입력<\/dt><dd>6,000행 × 2 Feature/);
+  assert.match(trainingEvidence, /참고 분포 분석 4,096행/);
+  assert.match(trainingEvidence, /Train 중앙값 대체/);
+  const { modelServingStatus } = await vite.ssrLoadModule("/src/ModelServingPanel.tsx");
+  const serving = { desired_state: "serving", ready: true, active_model_revision_id: "old",
+    pending_model_revision_id: "new", runtime: { reachable: true, pending: { status: "DEPLOYING" } } };
+  assert.match(modelServingStatus(serving, "new"), /준비 중 · 활성 전환 전/);
+  assert.match(modelServingStatus({ ...serving, active_model_revision_id: "new", runtime: { reachable: false } }, "new"), /추론 가능 · 운영 상태 조회 실패/);
+  assert.match(modelServingStatus({ ...serving, runtime: { reachable: true, pending: { status: "DEPLOY_FAILED" } } }, "new"), /배포 실패/);
+  assert.equal(modelServingStatus({ ...serving, desired_state: "stopped" }, "old"), "중단됨");
+  const servingContext = contextPath("serving", { pipelineRunId: "run-source" });
+  assert.equal(routeAt("/operations/serving", servingContext.slice(servingContext.indexOf("?"))).context.pipelineRunId, "run-source");
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
   assert.equal(first.tab, "evaluations");

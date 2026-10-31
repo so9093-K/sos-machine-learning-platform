@@ -1897,6 +1897,11 @@ export interface components {
             location: string;
             /** Name */
             name: string;
+            /**
+             * Source Job Id
+             * @description 이 Dataset을 게시한 SOS Job. 직접 등록한 데이터는 null이다.
+             */
+            source_job_id?: string | null;
             /** Version */
             version: string;
         };

@@ -36,7 +36,7 @@ function endpointStatus(endpoint: ServingEndpoint): { label: string; tone: "read
 
 /** 온라인 서빙 Endpoint의 실제 상태와 운영 조작.
  *
- *  배포와 새 판본 전환은 모델 공급 과정(scripts/supply_model.py --endpoint)이 맡는다.
+ *  최초 배포는 모델 상세 또는 공급 자동화에서 요청한다. 새 판본 전환은 공급 API가 맡는다.
  *  이 화면은 지금 어떤 판본이 요청을 처리하는지 확인하고 되돌리기·중단 같은 안전 조작을 제공한다.
  */
 export function ServingOperations({ onOpenResource, canOpenOperatorTools }: {
@@ -116,7 +116,7 @@ export function ServingOperations({ onOpenResource, canOpenOperatorTools }: {
     <div className="panel-head">
       <div><h2 id="serving-heading">온라인 서빙 Endpoint</h2>
         <p>Endpoint마다 지금 요청을 처리하는 판본과 실제 실행 상태입니다. 새 판본은 준비가 확인된 뒤에만 전환되며,
-          준비에 실패하면 현재 판본이 계속 요청을 처리합니다. 배포와 새 판본 전환은 모델 공급 과정에서 요청합니다.</p>
+          준비에 실패하면 현재 판본이 계속 요청을 처리합니다. 최초 배포는 모델 상세에서, 새 판본 전환은 공급 API에서 요청합니다.</p>
       </div>
       <button type="button" className="secondary" onClick={() => void load()}>다시 조회</button>
     </div>

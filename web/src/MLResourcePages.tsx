@@ -18,6 +18,7 @@ import {
   algorithmLabel, explanationMethodLabel, formatRecordedAt, jobStatusLabel, policyModeLabel,
   scoreDirectionLabel,
 } from "./display-format";
+import { ModelServingPanel } from "./ModelServingPanel";
 import { ModelCreationEvidence } from "./ModelCreationEvidence";
 import { ModelEvaluationEvidence } from "./ModelEvaluationEvidence";
 import { canApplyModel, ModelOfferingPanel, useModelOffering } from "./ModelOffering";
@@ -110,13 +111,14 @@ export function ExplanationEvidence({ result }: { result: ExplanationResult }) {
 
 /** 불변 ID로 직접 조회하므로 목록 첫 페이지나 이전 학습 화면을 요구하지 않는다. */
 export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyModel, canRun, canCancel,
-  canManageModel = false, isAdministrator = false, onOpenModelCatalog }: {
+  canManageModel = false, isAdministrator = false, onOpenModelCatalog, onOpenServing }: {
   kind: MLResourceKind; id: string; onOpenResource: OpenResource;
   onScoring: (modelId: string) => void;
   onApplyModel: (model: ModelRevision) => void;
   canRun: boolean; canCancel: boolean;
   canManageModel?: boolean; isAdministrator?: boolean;
   onOpenModelCatalog: () => void;
+  onOpenServing: () => void;
 }) {
   const endpoints: Record<MLResourceKind, string> = {
     model: "/api/ml/models", scoring: "/api/ml/scoring/results",
@@ -142,8 +144,9 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyM
   const loaded = current?.data as Partial<ModelRevision> | null | undefined;
   const modelOffering = useModelOffering(kind === "model" ? id : null);
   const modelOwned = modelOffering.offering?.owned ?? false;
+  const canReadCreation = modelOwned || isAdministrator;
   // 제공받은 모델의 학습 Dataset은 소유자 전용이므로 조회하지 않는다.
-  const datasetName = useDatasetName(kind === "scoring" || (kind === "model" && modelOwned)
+  const datasetName = useDatasetName(kind === "scoring" || (kind === "model" && canReadCreation)
     ? loaded?.dataset_id : null);
   if (current?.error) return <section className="panel">
     <h2>결과 열기 실패</h2>
@@ -188,22 +191,25 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyM
         </section>
         <ModelEvaluationEvidence key={`evaluation:${m.id}`} modelId={m.id} onOpenResource={onOpenResource}
           supplierEvidenceVisible={isAdministrator ? true : modelOffering.offering ? modelOwned : null} />
-        {modelOwned && <dl className="ml-resource-fields">
+        {canReadCreation && <dl className="ml-resource-fields">
           <Field label="학습 Dataset">{datasetName}</Field>
         </dl>}
         <ModelCreationEvidence key={m.id} model={m}
-          datasetName={modelOwned ? datasetName : "제공 모델의 학습 Dataset"} />
+          datasetName={canReadCreation ? datasetName : "제공 모델의 학습 Dataset"} />
         <ModelOfferingPanel model={m} offering={modelOffering.offering} error={modelOffering.error}
           loading={modelOffering.loading} canManage={canManageModel && (modelOwned || isAdministrator)}
           onRetry={modelOffering.reload} onSaved={state => { modelOffering.accept(state); modelOffering.reload(); }}
           onOpenCatalog={onOpenModelCatalog} />
+        <ModelServingPanel key={`serving:${m.id}`} model={m}
+          canManage={canManageModel && Boolean(modelOffering.offering) && !modelOffering.error && !modelOffering.loading && (modelOwned || isAdministrator)}
+          onOpenServing={onOpenServing} />
         <details className="ml-resource-evidence">
-          <summary>{modelOwned ? "판본·학습 Job·Runtime 근거" : "판본·Runtime 근거"}</summary>
+          <summary>{canReadCreation ? "판본·학습 Job·Runtime 근거" : "판본·Runtime 근거"}</summary>
           <dl className="ml-resource-fields">
             <Field label="모델 판본 ID">{m.id}</Field>
-            {modelOwned && <Field label="Dataset ID · 판본">{m.dataset_id} · {m.dataset_version}</Field>}
-            {modelOwned && <Field label="학습 Job">{m.job_id}</Field>}
-            {modelOwned && <Field label="학습 매개변수">{Object.entries(m.params)
+            {canReadCreation && <Field label="Dataset ID · 판본">{m.dataset_id} · {m.dataset_version}</Field>}
+            {canReadCreation && <Field label="학습 Job">{m.job_id}</Field>}
+            {canReadCreation && <Field label="학습 매개변수">{Object.entries(m.params)
               .map(([name, value]) => `${name}=${JSON.stringify(value)}`).join(", ") || "기록 없음"}</Field>}
             <Field label="Runtime">{String(m.runtime.scikit_learn ?? "상세 근거 미확인")}</Field>
           </dl>

@@ -628,6 +628,7 @@ class DatasetOut(BaseModel):
 
     id: str
     name: str
+    source_job_id: str | None = Field(default=None, description="이 Dataset을 게시한 SOS Job. 직접 등록한 데이터는 null이다.")
     kind: Literal["file", "iceberg"]
     location: str
     version: str

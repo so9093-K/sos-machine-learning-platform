@@ -1187,3 +1187,16 @@ main details > summary { cursor:pointer; font-size:13px; font-weight:600; color:
   .feature-profile-editor { width:100%; }
   .feature-profile-editor input { flex:1; min-width:0; }
 }
+
+/* 실행 근거는 실제 행 수·판본을 먼저 요약하고, 기술 상세는 펼쳐 확인한다. */
+.execution-facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr)); gap:12px; }
+.execution-facts > div { display:grid; gap:4px; }
+.execution-facts dt { color:var(--sos-muted); font-size:12px; }
+.execution-facts dd { margin:0; font-weight:600; font-variant-numeric:tabular-nums; }
+.execution-origin,.model-serving { border-top:1px solid var(--sos-border); padding-top:14px; margin-top:14px; min-width:0; }
+.model-serving-list { list-style:none; padding:0; display:grid; gap:10px; }
+.model-serving-list li { display:grid; gap:4px; overflow-wrap:anywhere; }
+.model-deployment-form { margin-top:14px; }
+.model-deployment-form form { display:grid; justify-items:start; gap:10px; }
+.model-deployment-form label { display:grid; gap:6px; max-width:100%; }
+.execution-origin pre,.pipeline-results details p { overflow-wrap:anywhere; }

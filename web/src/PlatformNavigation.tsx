@@ -50,6 +50,7 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
         dataJobKind: params.get("type") === "exploration" ? "exploration" as const : "data" as const,
       } : {}) };
   }
+  if (tab === "serving") return pipelineContext(params);
   if (tab === "scoring") return { modelId: params.get("model") ?? "", ...inputDatasetContext(params), ...pipelineContext(params) };
   if (isDecisionTab(tab)) return { scoringId: params.get("scoring") ?? "", ...pipelineContext(params) };
   return {};
@@ -65,7 +66,7 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
   if ((tab === "scoring" || tab === "topic") && context.modelId) params.set("model", context.modelId);
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
   if (context.datasetId && MODEL_INPUT_TABS.includes(tab)) params.set("dataset", context.datasetId);
-  if ((DATA_TABS.includes(tab) || tab === "scoring" || isDecisionTab(tab)) && context.pipelineRunId) params.set("pipelineRun", context.pipelineRunId);
+  if ((DATA_TABS.includes(tab) || tab === "scoring" || isDecisionTab(tab) || tab === "serving") && context.pipelineRunId) params.set("pipelineRun", context.pipelineRunId);
   const base = tab === "pipelines" && context.pipelineRunId
     ? `${paths.pipelines}/runs/${encodeURIComponent(context.pipelineRunId)}`
     : TAXONOMY_TABS.includes(tab) && context.taxonomyId

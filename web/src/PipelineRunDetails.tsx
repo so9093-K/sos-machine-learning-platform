@@ -4,13 +4,15 @@ import { ErrorNotice } from "./ErrorNotice";
 import { DataChart } from "./DataChart";
 import { verifiedScoreHistogram } from "./ModelScoreContext";
 import { EvaluationSummary } from "./EvaluationSummary";
+import { ModelTrainingInput } from "./ModelCreationEvidence";
+import { ModelServingPanel } from "./ModelServingPanel";
 import { useModelOffering } from "./ModelOffering";
 import { ObservationInvestigation } from "./ObservationInvestigation";
 import { formatRecordedAt, jobStatusLabel } from "./display-format";
 import { isLocalOperatorHost, mlflowRunUrl } from "./operator-tools";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { DecisionPolicyRevision, EvaluationRevision, MLflowExportStatus,
-  ModelRevision, PipelineCandidates, PipelineRun, ScoringResult } from "./types";
+  Dataset, DatasetOverview, Job, ModelRevision, PipelineCandidates, PipelineRun, ScoringResult } from "./types";
 
 export const PIPELINE_STAGES = [
   ["preflight", "입력·분할"], ["training", "학습"], ["calibration", "보정 점수"],
@@ -123,10 +125,11 @@ function CandidateInvestigation({ runId, modelId, canRun, canCancel, onOpenResou
 }
 
 /** SOS의 확정 결과를 요약하고 전문 조사는 기존 판본 화면과 MLflow로 연결한다. */
-export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflow, onOpenResource, onOpenDataset }: {
+export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflow, onOpenResource, onOpenDataset, onOpenJob }: {
   run: PipelineRun; revision: number; canRun: boolean; canCancel: boolean; canOpenMLflow: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onOpenDataset: (id: string) => void;
+  onOpenJob: (id: string, datasetId: string) => void;
 }) {
   const modelId = pipelineResultId(run, "training", "model_revision_id");
   const calibrationId = pipelineResultId(run, "calibration", "scoring_result_id");
@@ -134,6 +137,10 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
   const testId = pipelineResultId(run, "test", "scoring_result_id");
   const evaluationId = pipelineResultId(run, "evaluation", "evaluation_revision_id");
   const path = (base: string, id: string | null) => id ? `/api/ml/${base}/${encodeURIComponent(id)}` : null;
+  const dataset = useAsset<Dataset>(`/api/datasets/${encodeURIComponent(run.dataset_id)}`, revision);
+  const overview = useAsset<DatasetOverview>(`/api/datasets/${encodeURIComponent(run.dataset_id)}/overview`, revision);
+  const origin = useAsset<Job>(dataset.data && dataset.data.version === run.dataset_version && dataset.data.source_job_id
+    ? `/api/jobs/${encodeURIComponent(dataset.data.source_job_id)}` : null, revision);
   const model = useAsset<ModelRevision>(path("models", modelId), revision);
   const offering = useModelOffering(modelId, revision);
   const calibration = useAsset<ScoringResult>(path("scoring/results", calibrationId), revision);
@@ -160,7 +167,29 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
     {run.status === "Succeeded" && testId && policyId && evaluationId && <CandidateInvestigation
       runId={run.id} modelId={modelId} canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource} />}
     <section className="panel">
-      <h3>입력·시간 분할</h3>
+      <h3>입력 데이터·학습 근거</h3>
+      <AssetState error={dataset.error} onRetry={dataset.retry}>{dataset.data && <>
+        <p><strong>{dataset.data.name}</strong> · 고정 판본 {run.dataset_version}</p>
+        {dataset.data.version !== run.dataset_version && <p role="alert">현재 Dataset 판본과 실행의 고정 판본이 다릅니다. 현재 데이터의 규모·출처는 실행 근거로 표시하지 않습니다.</p>}
+        {dataset.data.version === run.dataset_version && <>
+          <AssetState error={overview.error} onRetry={overview.retry}>{overview.data &&
+            (overview.data.version === run.dataset_version ? <p>입력 Dataset {amount(overview.data.row_count)}행 · {overview.data.column_count}컬럼</p>
+              : <p role="alert">규모 조회의 판본이 실행 입력과 달라 표시하지 않습니다.</p>)}</AssetState>
+          {!dataset.data.source_job_id && <p className="hint">입력 준비 Job 기록 없음 · 등록 방식 미확인</p>}
+          {dataset.data.source_job_id && <AssetState error={origin.error} onRetry={origin.retry}>{origin.data &&
+            (origin.data.status === "Succeeded" && origin.data.result?.dataset_id === run.dataset_id
+              ? <div className="execution-origin"><p>입력 준비 · {origin.data.kind === "feature_retrieve" ? "Feast 시점 조회" : origin.data.kind === "transform" ? "데이터 변환" : origin.data.kind === "iceberg_import" ? "Iceberg 적재" : "Dataset 게시 작업"}</p>
+                {origin.data.kind === "feature_retrieve" && <p>Feature Service · {String(origin.data.result.feature_service ?? "기록 없음")}</p>}
+                <details><summary>입력 준비 작업 근거</summary><p>Job {origin.data.id} · {jobStatusLabel(origin.data.status)}</p>
+                  <p>원본 판본 {String(origin.data.spec.dataset_version ?? origin.data.spec.feature_dataset_version ?? "기록 없음")}</p>
+                  {origin.data.kind === "transform" && <pre>{JSON.stringify(origin.data.spec.transform, null, 2)}</pre>}
+                  {origin.data.kind === "feature_retrieve" && <p>Feature 등록 Job {String(origin.data.result.registration_job_id ?? "기록 없음")}</p>}
+                </details>
+                <button className="secondary" onClick={() => onOpenJob(origin.data!.id, origin.data!.dataset_id ?? run.dataset_id)}>입력 준비 Job →</button>
+                {origin.data.dataset_id && <button className="secondary" onClick={() => onOpenDataset(origin.data!.dataset_id!)}>준비 전 원본 Dataset →</button>}
+              </div> : <p role="alert">입력 Dataset과 게시 작업의 확정 결과가 일치하지 않아 출처를 표시하지 않습니다.</p>)}</AssetState>}
+        </>}
+      </>}</AssetState>
       {plan ? <>
         <div className="pipeline-partitions">
           <div><strong>Train</strong><span>{amount(plan.partition_sizes.train)}건</span></div>
@@ -174,6 +203,8 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
           <p>Test: Calibration 종료 이상</p>
         </details>
       </> : <p className="hint">입력 검증이 확정한 시간 분할 근거가 아직 없습니다.</p>}
+      <p className="hint">시간 분할은 사용자·호스트별 독립성이나 탐지 정확도를 보장하지 않습니다.</p>
+      {model.data && <ModelTrainingInput model={model.data} />}
       <button className="secondary" onClick={() => onOpenDataset(run.dataset_id)}>입력 Dataset →</button>
     </section>
     {modelId && <section className="panel">
@@ -181,14 +212,18 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
       <AssetState error={model.error} onRetry={model.retry}>{model.data && <>
         <p>Isolation Forest · 학습 점수 {amount(model.data.training_score_summary.score_count)}건
           · Feature {model.data.features.length}개</p>
-        <p>{model.data.registry_version ? `Registry v${model.data.registry_version} · 등록 확인` : "학습 완료 · Registry 등록 미확인"}</p>
+        <p>모델 아티팩트 게시 완료 · 학습 Job의 확정 판본</p>
+        <p>{model.data.registry_version ? `Registry v${model.data.registry_version} · 등록 기록` : "학습 완료 · Registry 등록 미확인"}</p>
         <p className="hint">학습 점수는 Train 내부 진단이며 독립 평가 성능이 아닙니다.</p>
         {offering.error ? <div role="alert"><p>모델 제공 상태 조회 실패 · {offering.error}</p>
           <button className="secondary" onClick={offering.reload}>제공 상태 다시 조회</button></div>
           : <p>{offering.loading ? "모델 제공 상태 확인 중…" : offering.offering?.offered
             ? "사용자 제공 중 · 모델 목록에서 활용 가능"
             : "사용자 미제공 · 권한이 있는 계정은 모델 상세에서 제공 등록"}</p>}
-        {open("model", modelId, "모델 상세·제공 상태")}
+        {open("model", modelId, "모델 상세·제공·배포")}
+        <ModelServingPanel key={modelId} model={model.data} revision={revision} />
+        <details><summary>저장·무결성 근거</summary><p>아티팩트 {model.data.location}</p><p>SHA-256 {model.data.sha256}</p>
+          <p className="hint">판본에 보존된 저장 근거이며 현재 객체를 다시 읽은 무결성 검사 결과는 아닙니다.</p></details>
         <details><summary>학습 설정</summary><pre>{JSON.stringify(model.data.params, null, 2)}</pre></details>
       </>}</AssetState>
       {tracking("training")}
@@ -227,10 +262,11 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
   </div>;
 }
 
-export function PipelineRunDetails({ runId, canRun, canCancel, canOpenMLflow, onOpenResource, onOpenDataset }: {
+export function PipelineRunDetails({ runId, canRun, canCancel, canOpenMLflow, onOpenResource, onOpenDataset, onOpenJob }: {
   runId: string; canRun: boolean; canCancel: boolean; canOpenMLflow: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onOpenDataset: (id: string) => void;
+  onOpenJob: (id: string, datasetId: string) => void;
 }) {
   const [run, setRun] = useState<PipelineRun | null>(null);
   const [error, setError] = useState<Notice | null>(null);
@@ -323,6 +359,6 @@ export function PipelineRunDetails({ runId, canRun, canCancel, canOpenMLflow, on
       </>}
     </div>
     {run && <PipelineResults run={run} revision={resultRevision} canRun={canRun} canCancel={canCancel} canOpenMLflow={canOpenMLflow}
-      onOpenResource={onOpenResource} onOpenDataset={onOpenDataset} />}
+      onOpenResource={onOpenResource} onOpenDataset={onOpenDataset} onOpenJob={onOpenJob} />}
   </section>;
 }

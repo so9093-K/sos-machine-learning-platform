@@ -86,13 +86,14 @@ function PipelineStart({ datasets, datasetId, onSelectDataset, hasMoreDatasets,
  *  작업 조회 권한만 있으면 기존 실행 결과를 열람하고 새 실행은 하지 않는다.
  */
 export function PipelineWorkspace({ runId, datasetId, datasets, canTrain, canRun, canCancel, canOpenMLflow,
-  hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onOpenResource, onOpenDataset }: {
+  hasMoreDatasets, onLoadMoreDatasets, onSelectDataset, onSelectRun, onOpenResource, onOpenDataset, onOpenJob }: {
   runId: string; datasetId: string; datasets: Dataset[];
   canTrain: boolean; canRun: boolean; canCancel: boolean; canOpenMLflow: boolean;
   hasMoreDatasets: boolean; onLoadMoreDatasets: () => Promise<void>;
   onSelectDataset: (id: string) => void; onSelectRun: (id: string, datasetId: string) => void;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onOpenDataset: (id: string) => void;
+  onOpenJob: (id: string, datasetId: string) => void;
 }) {
   const [history, setHistory] = useState<PipelineRun[]>([]);
   const [historyError, setHistoryError] = useState("");
@@ -148,7 +149,7 @@ export function PipelineWorkspace({ runId, datasetId, datasets, canTrain, canRun
       </details> : <p className="hint">결과 조회 · 새 실행에는 모델 학습 권한이 필요합니다.</p>}
     </section>
     {runId ? <PipelineRunDetails key={runId} runId={runId} canRun={canRun} canCancel={canCancel} canOpenMLflow={canOpenMLflow}
-      onOpenResource={onOpenResource} onOpenDataset={onOpenDataset} />
+      onOpenResource={onOpenResource} onOpenDataset={onOpenDataset} onOpenJob={onOpenJob} />
       : <section className="panel"><h2>실행 결과 탐색</h2><p>이력에서 실행을 선택하면 데이터 분할·모델·점수·판정·평가 근거를 확인할 수 있습니다.</p></section>}
   </div>;
 }
