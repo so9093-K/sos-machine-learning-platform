@@ -368,7 +368,7 @@ export function PipelineRunDetails({ runId, canRun, canCancel, canOpenMLflow, on
           <p role="status">학습 완료 · MLflow Registry 등록 확인 대기</p>}
         {(run.status === "Failed" || failed) && <div role="alert" className="notice-blocked">
           <strong>{failed ? `${PIPELINE_STAGES.find(([name]) => name === failed.name)?.[1] ?? failed.name} 단계 실패` : "Workflow 실패 · 단계 실패 지점 미확인"}</strong>
-          <p>{failed?.job.error ?? "실행 상태를 다시 조회하고 확인된 단계별 결과를 살펴보세요."}</p>
+          <p>{failed?.job.error ?? "실행 상태를 다시 조회해 단계별 결과를 확인하세요."}</p>
           <p className="hint">{failed?.job.error_code ?? run.error_code}
             {failed?.job.retry_policy ? ` · 재시도 정책 ${failed.job.retry_policy}` : ""}</p>
         </div>}

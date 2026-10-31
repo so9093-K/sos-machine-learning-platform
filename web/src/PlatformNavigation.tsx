@@ -299,7 +299,7 @@ export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInsp
   const catalogError = Boolean(catalog.error);
   const catalogLoading = catalog.items === null && !catalogError;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  // 화면에서 체험할 수 있는 주제만 연결한다. 미구현 주제 링크를 생성하지 않는다.
+  // 화면에서 모델을 적용할 수 있는 주제만 연결한다. 미구현 주제 링크를 생성하지 않는다.
   const topics = catalog.tree;
   const taxonomyLink = (tab: "learning" | "task", id: string, label: string, kind: string) => <a
     href={contextPath(tab, { taxonomyId: id })} className="workspace-link model-lab-tree-link"

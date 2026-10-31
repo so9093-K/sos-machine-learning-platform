@@ -87,8 +87,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     onOpenTopic: () => setTab("topic"),
   };
   const topicCatalog = useTopicCatalog(actor.capabilities.includes("job.read"));
-  // 체험 주제가 있는 모델은 그 Playground에서, 그 밖의 모델은 공통 모델 적용 화면에서 적용한다.
-  // 체험 주제 판단에는 카탈로그가 필요하다. 조회 전이면 기다리고, 실패하면 다른 화면으로 보내지 않는다.
+  // Playground 주제가 있는 모델은 그 Playground에서, 그 밖의 모델은 공통 모델 적용 화면에서 적용한다.
+  // 주제 판단에는 카탈로그가 필요하다. 조회 전이면 기다리고, 실패하면 다른 화면으로 보내지 않는다.
   async function applyModel(model: ModelRevision) {
     let topics = topicCatalog.items;
     if (!topics) {
