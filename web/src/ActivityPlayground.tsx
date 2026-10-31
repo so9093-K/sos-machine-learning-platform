@@ -21,7 +21,6 @@ type Selection =
   | { state: "none" };
 
 const TOPIC = "activity_anomaly";
-const EXAMPLE_ID = "activity-anomaly-if";
 const SERVING_RECHECK_MS = 5000;
 
 /** 이 판본을 서빙하거나 이 판본으로 전환 중인 Endpoint. 이미 요청을 처리하는 쪽을 먼저 고른다.
@@ -69,7 +68,6 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   const [readyDatasetId, setReadyDatasetId] = useState("");
   // 단일 입력 예시는 Playground에서 실제로 계산한 마지막 입력을 그대로 재현한다.
   const [lastRun, setLastRun] = useState<PlaygroundRun | null>(null);
-  const [example, setExample] = useState({ busy: false, error: "", datasetId: "", analysisRequest: 0 });
   useEffect(() => {
     let active = true;
     setOfferedError("");
@@ -146,27 +144,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   }, [preparing, serving]);
   const guide = topicGuides[TOPIC];
 
-  async function useExample() {
-    setExample(state => ({ ...state, busy: true, error: "" }));
-    try {
-      const dataset = await request<Dataset>(`/api/examples/${EXAMPLE_ID}/use`, { method: "POST" });
-      onDatasetRegistered(dataset);
-      onSelectDataset(dataset.id);
-      setExample(state => ({ busy: false, error: "", datasetId: dataset.id,
-        analysisRequest: state.analysisRequest + 1 }));
-    } catch (cause) {
-      setExample(state => ({ ...state, busy: false, error: formatError(cause) }));
-    }
-  }
-
   return <div className="playground-page">
     {trail && <TaxonomyTrail learningType={trail.learningType} task={trail.task} topic={TOPIC} links={links} />}
-    <section className="guide-section" aria-labelledby="playground-uses">
-      <h2 id="playground-uses">활용 방법</h2>
-      <div className="guide-cards">{guide.uses.map(item => <article key={item.title} className="guide-card">
-        <h3>{item.title}</h3><p>{item.text}</p>
-      </article>)}</div>
-    </section>
 
     {/* 적용 화면이 자체 카드이므로 바깥은 카드로 감싸지 않는다. */}
     <section className="guide-section playground-try" aria-labelledby="playground-try-heading">
@@ -189,7 +168,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
       {selection.state === "none" && offered !== null && topic && <div className="playground-notice">
         <p className="muted">
         {nextCursor ? "현재 조회한 목록에 호환 모델이 없습니다. 다음 제공 모델을 조회할 수 있습니다."
-          : "이상 점수 계산에는 활동 이상 탐지 제공 모델이 필요합니다. 개발·배포 담당자가 합성 예제 모델을 공급할 수 있습니다."}</p>
+          : "활동 이상 탐지용 제공 모델이 없습니다. 개발·배포 담당자의 모델 제공 후 Dataset을 적용할 수 있습니다."}</p>
         {!nextCursor && <button type="button" className="secondary" disabled={loadingModels}
           onClick={() => { setRequestCursor(null); setRetry(value => value + 1); }}>제공 모델 다시 조회</button>}
       </div>}
@@ -220,15 +199,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
           <strong>조회 전용 계정</strong>
           <p>점수 계산은 작업 실행 권한이 있는 계정에서 할 수 있습니다. 이 화면의 활용 방법·결과 해석·서비스 연동 방법은 그대로 확인할 수 있습니다.</p>
         </div>}
-        {canRun && canUpload && example.datasetId !== selectedDatasetId && <div className="playground-example">
-          <button type="button" className="secondary" disabled={example.busy} onClick={() => void useExample()}>
-            {example.busy ? "예제 준비 중…" : "예제 데이터로 시작"}</button>
-          <span className="hint">합성 예제를 내 Dataset으로 등록해 선택합니다. 이미 등록했다면 그대로 다시 씁니다.</span>
-          {example.error && <p role="alert">예제를 준비하지 못했습니다. {example.error}</p>}
-        </div>}
         {canRun && <ModelApplicationWorkspace key={chosen.model.id} model={chosen.model} datasets={datasets}
           selectedDatasetId={selectedDatasetId} onSelectDataset={onSelectDataset}
-          datasetAnalysisRequest={example.analysisRequest}
           hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
           canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
           canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
@@ -247,6 +219,13 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
       onRecheckEndpoint={() => setServingCheck(value => value + 1)} canInfer={canInfer}
       lastRun={lastRun?.modelRevisionId === chosen.model.id ? lastRun : undefined}
       datasetId={selectedDatasetId && readyDatasetId === selectedDatasetId ? selectedDatasetId : undefined} />}
+
+    <details className="panel playground-details">
+      <summary>활용 방법</summary>
+      <div className="guide-cards">{guide.uses.map(item => <article key={item.title} className="guide-card">
+        <h3>{item.title}</h3><p>{item.text}</p>
+      </article>)}</div>
+    </details>
 
     {topic && <details className="panel playground-details">
       <summary>입력 조건 · 모델 정보</summary>

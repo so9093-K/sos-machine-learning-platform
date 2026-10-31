@@ -9,7 +9,7 @@ import type { Dataset, ModelRevision } from "./types";
 /** 진입 위치와 관계없이 같은 모델 적용·관측값 실험·결과 복귀 경험을 사용한다. */
 export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, model, datasets, canRun, canCancel, onOpenResource,
   hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered, onResultViewChange,
-  onInputReadyChange, onPlaygroundRun, datasetAnalysisRequest = 0 }: {
+  onInputReadyChange, onPlaygroundRun }: {
   selectedDatasetId?: string;
   onSelectDataset?: (id: string) => void;
   model: ModelRevision; datasets: Dataset[]; canRun: boolean; canCancel: boolean;
@@ -19,11 +19,9 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
   onResultViewChange?: (visible: boolean) => void;
   onInputReadyChange?: (datasetId: string, ready: boolean) => void;
   onPlaygroundRun?: (run: PlaygroundRun) => void;
-  /** 동일 Dataset 재선택도 분석 화면을 여는 명시적 요청으로 처리한다. */
-  datasetAnalysisRequest?: number;
 }) {
-  const [usage, setUsage] = useState<"dataset" | "playground">(selectedDatasetId ? "dataset" : "playground");
-  useEffect(() => { if (selectedDatasetId) setUsage("dataset"); }, [selectedDatasetId, datasetAnalysisRequest]);
+  const [usage, setUsage] = useState<"dataset" | "playground">("dataset");
+  useEffect(() => { if (selectedDatasetId) setUsage("dataset"); }, [selectedDatasetId]);
   const [observationInput, setObservationInput] = useState<ObservationExperiment | null>(null);
   const [resultVisible, setResultVisible] = useState(false);
   const requestNumber = useRef(0);
@@ -64,12 +62,12 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
   return <div className={`model-application${focused ? " result-focused" : ""}`}>
     <div className="model-lab-start-choice">
       <div className="model-lab-usage-tabs" role="group" aria-label="분석할 데이터">
-        <button type="button" className="secondary" aria-pressed={usage === "playground"}
-          onClick={() => setUsage("playground")}>입력 실험</button>
         <button type="button" className="secondary" aria-pressed={usage === "dataset"}
           onClick={() => setUsage("dataset")}>Dataset 분석</button>
+        <button type="button" className="secondary" aria-pressed={usage === "playground"}
+          onClick={() => setUsage("playground")}>값 직접 입력</button>
       </div>
-      <p className="hint">{usage === "playground" ? "한 관측값의 특징을 바꾸고, 계산 전후 점수를 비교합니다." : "Dataset 전체를 점수화하고, 관심 관측값을 입력 실험으로 가져옵니다."}</p>
+      <p className="hint">{usage === "playground" ? "한 관측값의 특징을 바꾸고, 계산 전후 점수를 비교합니다." : "Dataset 전체를 점수화하고, 관심 관측값을 값 직접 입력으로 가져옵니다."}</p>
     </div>
     <div hidden={usage !== "playground"} ref={playgroundPanel}>
       <ModelLabPlayground model={model} canRun={canRun} canCancel={canCancel}

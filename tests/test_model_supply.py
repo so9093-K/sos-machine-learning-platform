@@ -11,15 +11,13 @@ import pytest
 supply_model = runpy.run_path(str(Path(__file__).parents[1] / "scripts/supply_model.py"))
 
 
-@pytest.mark.parametrize("lost_at", ["example", "training", "registry", "offering"])
+@pytest.mark.parametrize("lost_at", ["training", "registry", "offering"])
 def test_supply_resumes_the_same_dataset_and_training_request(tmp_path, lost_at):
     args = argparse.Namespace(state_file=tmp_path / "supply.json", dataset_id=None,
-        dataset_file=tmp_path / "input.parquet", example=None, sample_rows=None, seed=None, timeout=1,
+        dataset_file=tmp_path / "input.parquet", sample_rows=None, seed=None, timeout=1,
         endpoint=None)
     args.dataset_file.write_bytes(b"controlled-upload")
-    if lost_at == "example":
-        args.dataset_file, args.example = None, "activity-anomaly-if"
-    counts = {"upload": 0, "example": 0, "training": 0, "offer": 0}
+    counts = {"upload": 0, "training": 0, "offer": 0}
     submissions = {}
     outage = [True]
     offered = [False]
@@ -30,13 +28,6 @@ def test_supply_resumes_the_same_dataset_and_training_request(tmp_path, lost_at)
             body = {"actor_id": "supplier", "capabilities": ["model.train", "model.manage"]}
         elif path == "/api/datasets/files":
             counts["upload"] += 1
-            body = {"id": "dataset-1"}
-        elif path == "/api/examples/activity-anomaly-if/use":
-            counts["example"] += 1
-            if outage[0]:
-                outage[0] = False
-                raise httpx.ReadError("example registered but response lost", request=request)
-            # 예제 API는 동일 Actor·내용 판본을 재사용한다.
             body = {"id": "dataset-1"}
         elif path == "/api/pipelines":
             body = [{"id": "activity-anomaly-if", "required_features": ["a"]}]
@@ -76,8 +67,7 @@ def test_supply_resumes_the_same_dataset_and_training_request(tmp_path, lost_at)
         supply_model["supply"](client, args, "목적·입력·한계")
         supply_model["supply"](client, args, "목적·입력·한계")
     assert counts["offer"] == 1
-    assert counts["upload"] == (0 if lost_at == "example" else 1)
-    assert counts["example"] == (2 if lost_at == "example" else 0)
+    assert counts["upload"] == 1
     assert len(submissions) == 1
     assert counts["training"] == (2 if lost_at == "training" else 1)
     state = json.loads(args.state_file.read_text())
@@ -87,7 +77,7 @@ def test_supply_resumes_the_same_dataset_and_training_request(tmp_path, lost_at)
 
 def test_uncertain_upload_is_not_repeated_and_can_resume_with_dataset_id(tmp_path, capsys):
     args = argparse.Namespace(state_file=tmp_path / "supply.json", dataset_id=None,
-        dataset_file=tmp_path / "input.parquet", example=None, sample_rows=None, seed=None, timeout=1,
+        dataset_file=tmp_path / "input.parquet", sample_rows=None, seed=None, timeout=1,
         endpoint=None)
     args.dataset_file.write_bytes(b"controlled-upload")
     uploads = []
