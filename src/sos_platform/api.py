@@ -62,7 +62,6 @@ curl -H "Authorization: Bearer <TOKEN>" http://localhost:9602/api/v2/auth/me
 - Token 모드의 Job 제출에는 일반적으로 `Idempotency-Key`가 필요합니다. 같은 의도의 중복 제출을 방지합니다.
 - 취소 **요청**과 실제 중단·결과 확정은 다릅니다. 모델 학습 성공과 MLflow Registry 등록도 별도 상태입니다.
 - 데이터 미리보기·표본 분석·전체 분석의 범위와, 모델 점수·정책·평가의 의미를 구별해야 합니다.
-- 예제 확인은 등록·학습을 자동 실행하지 않습니다. 합성 예제의 이상 점수는 실제 사건이나 탐지 정확도의 근거가 아닙니다.
 
 현재 지원되는 등록형 모델 실험 주제는 활동 이상 탐지(Isolation Forest)입니다.
 등록된 모델의 온라인 Serving Endpoint 관리와 동기 추론을 지원합니다.
@@ -74,7 +73,7 @@ curl -H "Authorization: Bearer <TOKEN>" http://localhost:9602/api/v2/auth/me
 OPENAPI_TAGS = [
     {"name": "System", "description": "프로세스 생존 여부 및 필수 서비스의 준비 상태"},
     {"name": "Identity", "description": "인증 신원, 권한 및 인스턴스 표시 설정"},
-    {"name": "Datasets", "description": "데이터 파일·합성 예제·Dataset 판본 등록과 조회"},
+    {"name": "Datasets", "description": "데이터 파일·Iceberg 연결·Dataset 판본 등록과 조회"},
     {"name": "Data Exploration", "description": "Dataset 구조·프로파일·데이터 조회 및 탐색 실행"},
     {"name": "Data Preparation", "description": "Feature 변환과 분석용 입력 데이터 준비"},
     {"name": "Features", "description": "Feast 등록 Feature와 Point-in-Time Historical Retrieval"},
