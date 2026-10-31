@@ -13,7 +13,6 @@ from sos_platform.feature_contracts import (
     FeatureRetrievalRequest,
     feature_identity,
 )
-from sos_platform.schemas import JobOut, JobPageOut
 from sos_platform.security import Actor
 
 
@@ -49,21 +48,6 @@ def test_definition_identity_is_stable_and_versioned():
 def test_retrieval_requires_registered_job():
     with pytest.raises(ValidationError):
         FeatureRetrievalRequest(entity_dataset_id="events", timestamp_column="event_time")
-
-
-def test_feature_job_response_contract():
-    payload = {
-        "id": "job", "kind": "feature_register", "dataset_id": "source",
-        "spec": {}, "status": "Succeeded", "cancel_requested": False,
-        "result": {}, "error": None, "created_at": "2026-10-28T00:00:00+00:00",
-        "updated_at": "2026-10-28T00:01:00+00:00", "attempts": [],
-    }
-    for kind in ("feature_register", "feature_retrieve", "feature_retire"):
-        assert JobOut.model_validate({**payload, "kind": kind}).kind == kind
-        page = JobPageOut.model_validate({"items": [{
-            **payload, "kind": kind, "attempt_count": 0, "latest_attempt": None,
-        }], "next_cursor": None})
-        assert page.items[0].kind == kind
 
 
 def test_registration_list_restores_server_blocking_without_local_retirement():

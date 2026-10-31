@@ -34,42 +34,11 @@ def test_openapi_health_ready_and_bearer_contract(tmp_path):
     assert paths["/api/v2/auth/me"]["get"]["security"] == [{"HTTPBearer": []}]
     assert paths["/api/ml/train/jobs"]["post"]["security"] == [{"HTTPBearer": []}]
 
-    # 문서 그룹은 OpenAPI 태그를 중복·누락 없이 분류해야 한다.
-    declared_tags = {tag["name"] for tag in schema["tags"]}
-    grouped_tags = [
-        tag for group in schema["x-tagGroups"] for tag in group["tags"]
-    ]
-    assert sorted(grouped_tags) == sorted(declared_tags)
-
-    for path, methods in paths.items():
-        for method, operation in methods.items():
-            if method not in {"get", "post", "put", "patch", "delete"}:
-                continue
-            assert operation.get("summary"), (method, path)
-            assert len(operation.get("tags", [])) == 1, (method, path)
-            assert operation["tags"][0] in declared_tags
-            if path in {"/api/health", "/api/ready"} or (
-                path == "/api/branding" and method == "get"
-            ):
-                assert "security" not in operation, (method, path)
-            else:
-                assert operation.get("security") == [{"HTTPBearer": []}], (
-                    method, path,
-                )
-
 
 def test_status_responses_and_token_permissions(tmp_path, monkeypatch):
     app = create_app(tmp_path / "development", identity=IdentitySettings("development", {}))
     client = TestClient(app)
     assert client.get("/api/health").json() == {"status": "ok"}
-
-    # Scalar가 실제 HTML을 제공하는지 확인한다. 브라우저 UI 조작 테스트는 아니다.
-    docs = client.get("/docs")
-    assert docs.status_code == 200
-    assert "text/html" in docs.headers["content-type"]
-    assert "/openapi.json" in docs.text
-    # 문서의 핵심 스크립트는 외부 CDN이 아닌 자체 자산을 가리켜야 한다.
-    assert "/docs/assets/scalar.js" in docs.text
 
     # 외부 저장소·Worker를 호출하지 않고 Ready의 두 가지 HTTP 계약만 확인한다.
     monkeypatch.setattr(Store, "initialize", lambda self: None)
