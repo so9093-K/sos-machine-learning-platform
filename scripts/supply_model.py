@@ -15,10 +15,16 @@ import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
+from urllib.parse import urlencode
 
 import httpx
 
 DEFINITION_ID = "activity-anomaly-if"
+EXAMPLE_DESCRIPTION = (
+    "활동 이상 탐지의 입력·점수·결과 조사 흐름을 체험하는 합성 예제 모델입니다. "
+    "44개 숫자형 활동 Feature를 사용하며 예제의 인위적인 활동 변화와 점수 반응을 살펴볼 수 있습니다. "
+    "실제 보안 사건으로 학습·검증한 모델이 아니며, 탐지 정확도·사고 확률·업무 적합성을 보장하지 않습니다."
+)
 TERMINAL = {"Succeeded", "Failed", "Cancelled"}
 PARAMS = {
     "n_estimators": 100,
@@ -77,11 +83,12 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> 
     """고정된 Dataset·학습 요청을 재개하고 실제 등록 판본만 제공한다."""
     identity = checked(client.get("/api/v2/auth/me"))
     if not {"model.train", "model.manage"}.issubset(identity["capabilities"]):
-        fail("학습·모델 제공 권한이 있는 automation 서비스 계정이 필요합니다.")
+        fail("학습·모델 제공 권한이 있는 관리자 또는 automation 서비스 계정이 필요합니다.")
     path = args.state_file
     api = str(client.base_url).rstrip("/")
     source = ({"file": str(args.dataset_file.resolve())} if args.dataset_file else
-              {"id": args.dataset_id} if args.dataset_id else None)
+              {"id": args.dataset_id} if args.dataset_id else
+              {"example": args.example} if args.example else None)
     if path.exists():
         state = json.loads(path.read_text(encoding="utf-8"))
         if (not isinstance(state, dict) or state.get("version") != 1
@@ -100,7 +107,7 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> 
             fail("상태 파일의 Seed와 다릅니다.")
     else:
         if source is None:
-            fail("새 공급에는 --dataset-file 또는 --dataset-id가 필요합니다.")
+            fail("새 공급에는 --dataset-file, --dataset-id 또는 --example이 필요합니다.")
         state = {
             "version": 1, "api": api, "actor_id": identity["actor_id"], "source": source,
             "submission_key": str(uuid.uuid4()),
@@ -111,7 +118,10 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> 
         save_state(path, state)
 
     if not state.get("dataset_id"):
-        if "file" in state["source"]:
+        if "example" in state["source"]:
+            # 서버가 같은 Actor·예제 판본을 재사용하므로 응답 유실 후에도 재요청할 수 있다.
+            dataset = checked(client.post(f"/api/examples/{state['source']['example']}/use"))
+        elif "file" in state["source"]:
             if state.get("upload_started"):
                 fail("파일 등록 응답이 확인되지 않았습니다. GET /api/datasets로 등록 상태를 확인한 뒤 "
                      "같은 --state-file과 --dataset-id로 재개하세요. 파일은 다시 전송하지 않습니다.")
@@ -172,6 +182,9 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> 
     print(f"제공 완료 · {model_id}")
     if args.endpoint:
         serve(client, args, state, path, model_id)
+    web = os.getenv("SOS_WEB_URL", "http://localhost:9601").rstrip("/")
+    print(f"활동 이상 탐지 Playground · {web}/topics/activity-anomaly?{urlencode({'model': model_id})}")
+    print("입력 실험의 '이상 점수 계산'으로 실제 모델 점수를 확인하거나, '예제 데이터로 시작'으로 Dataset을 분석하세요.")
 
 
 def serve(client: httpx.Client, args: argparse.Namespace, state: dict, path: Path,
@@ -224,7 +237,8 @@ def main() -> None:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--dataset-file", type=Path, help="새로 등록할 CSV·Parquet 파일")
     source.add_argument("--dataset-id", help="기존 Dataset ID 또는 등록 응답 유실 후 확인한 ID")
-    description = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--example", choices=[DEFINITION_ID], help="서버의 합성 예제로 체험용 모델을 명시적으로 공급")
+    description = parser.add_mutually_exclusive_group()
     description.add_argument("--description", help="목적·적용 대상·한계 설명")
     description.add_argument("--description-file", type=Path, help="설명 텍스트 파일")
     parser.add_argument("--api", default=os.getenv("SOS_API_URL", "http://127.0.0.1:9602"))
@@ -233,6 +247,11 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=3600, help="학습·등록 대기 초")
     parser.add_argument("--endpoint", help="공급한 판본을 배포하거나 전환할 온라인 서빙 Endpoint 이름")
     args = parser.parse_args()
+    if args.description is None and args.description_file is None:
+        if args.example:
+            args.description = EXAMPLE_DESCRIPTION
+        else:
+            parser.error("--description 또는 --description-file이 필요합니다.")
     args.state_file = args.state_file.resolve()
     if args.sample_rows is not None and args.sample_rows < 2:
         parser.error("--sample-rows는 2 이상이어야 합니다.")
@@ -246,7 +265,7 @@ def main() -> None:
         parser.error("--endpoint는 영문 소문자·숫자·하이픈으로 된 2~63자 이름이어야 합니다.")
     token = os.getenv("SOS_SUPPLY_TOKEN")
     if not token:
-        fail("SOS_SUPPLY_TOKEN 환경변수에 automation 서비스 계정 토큰이 필요합니다.")
+        fail("SOS_SUPPLY_TOKEN 환경변수에 관리자 또는 automation 서비스 계정 토큰이 필요합니다.")
     try:
         text = (args.description if args.description is not None else
                 args.description_file.read_text(encoding="utf-8")).strip()

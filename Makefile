@@ -1,6 +1,6 @@
 # 로컬 개발 서비스는 compose.yaml의 app 프로필로 실행한다.
 .DEFAULT_GOAL := help
-.PHONY: up down restart status logs doctor doctor-dagster validate help
+.PHONY: up down restart status logs doctor doctor-dagster supply-example validate help
 
 COMPOSE := docker compose --profile app
 
@@ -30,6 +30,9 @@ doctor:
 doctor-dagster:
 	@$(COMPOSE) exec -T api python -c "from sos_platform.dagster_client import DagsterClient; result = DagsterClient().find_by_submission('00000000-0000-4000-8000-000000000000'); print('Dagster Run 검색 계약: 정상, 결과:', result)"
 
+supply-example:
+	@uv run --locked --group dev python scripts/supply_model.py --state-file .sos/supply/example-activity.json --example activity-anomaly-if
+
 validate:
 	@uv run --locked pytest -q tests
 
@@ -43,4 +46,5 @@ help:
 		'  make logs       API·Worker·서빙·Web·Dagster 로그' \
 		'  make doctor     Compose 설정 및 상태 확인' \
 		'  make doctor-dagster  Dagster GraphQL Run 검색 계약(읽기 전용) 확인' \
+		'  make supply-example  합성 예제 모델 공급·재개 (SOS_SUPPLY_TOKEN 필요)' \
 		'  make validate   현재 구성된 제품 검증 실행'
