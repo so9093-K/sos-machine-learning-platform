@@ -215,6 +215,13 @@ class ServingStoreMixin:
                         action="serving.endpoint_deleted", resource_type="serving_endpoint",
                         resource_id=endpoint_id, request_id=request_id)
 
+    def serving_intended(self) -> bool:
+        """서빙 의도인 Endpoint가 하나라도 있다. 준비 상태 확인처럼 자주 부르는 곳에 쓴다."""
+        with self.connection() as db:
+            return bool(db.execute(text(
+                "SELECT EXISTS(SELECT 1 FROM serving_endpoints WHERE desired_state='serving')"
+            )).scalar_one())
+
     def serving_applications(self) -> list[dict]:
         """Ray Serve에 있어야 할 애플리케이션: 서빙 의도의 활성·전환 대상 판본과 그 불변 기록."""
         with self.connection() as db:

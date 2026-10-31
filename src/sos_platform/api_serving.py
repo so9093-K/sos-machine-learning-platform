@@ -8,6 +8,7 @@
 import math
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -30,8 +31,8 @@ from .serving_client import (
     application_config,
     application_name,
     application_status,
-    replica_matches,
     replica_capacity,
+    replica_matches,
 )
 from .store import Store
 from .store_serving import ServingChangeRejected
@@ -42,6 +43,9 @@ INFER = Depends(require("model.infer"))
 MAX_INPUTS = 100
 # 확인에 성공한 Registry 상태를 재사용하는 시간. 보관·등록 무효화는 이 시간 안에 추론에 반영된다.
 REGISTRY_CHECK_SECONDS = 30.0
+# 실행 상태 조회와 복제본 준비 확인을 동시에 실행하는 수. Runtime이 응답하지 않아도 목록 응답이
+# Endpoint 수만큼 늘지 않게 하되, 한 요청이 Runtime에 보내는 동시 요청은 이 수로 제한한다.
+RUNTIME_CHECK_CONCURRENCY = 8
 
 
 class ServingEndpointCreate(BaseModel):
@@ -164,8 +168,26 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         registry_checked[model["id"]] = time.monotonic()
 
+    def runtime_snapshot(endpoints: list[dict], desired: dict[str, dict]
+                         ) -> tuple[dict[str, dict] | None, dict[str, bool]]:
+        """실행 상태와 서빙 의도인 Endpoint의 활성 판본 준비 여부를 함께 조회한다.
+
+        준비 여부는 Dashboard 상태가 아니라 실제 복제본의 응답으로 판정하며, 조회는 동시에 실행한다.
+        """
+        targets = [(item["id"], item["active_model_revision_id"]) for item in endpoints
+                   if item["desired_state"] == "serving" and item["active_model_revision_id"]]
+        if client is None:
+            return None, {}
+        with ThreadPoolExecutor(max_workers=min(RUNTIME_CHECK_CONCURRENCY, len(targets) + 1)) as pool:
+            applications = pool.submit(runtime_applications)
+            checks = {endpoint_id: pool.submit(client.is_ready, endpoint_id, revision_id,
+                                               desired.get(application_name(endpoint_id, revision_id)))
+                      for endpoint_id, revision_id in targets}
+            return applications.result(), {key: check.result() for key, check in checks.items()}
+
     def endpoint_view(endpoint: dict, actor: Actor, manageable: bool,
-                      applications: dict[str, dict] | None, desired: dict[str, dict]) -> dict:
+                      applications: dict[str, dict] | None, desired: dict[str, dict],
+                      ready: bool) -> dict:
         def application(revision_id: str | None) -> dict | None:
             if not revision_id:
                 return None
@@ -175,10 +197,6 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             return {"model_revision_id": revision_id, "runtime_application": name, "status": status,
                     "status_reason": _status_reason(app, status) if manageable and app else None}
         active = application(endpoint["active_model_revision_id"])
-        active_id = endpoint["active_model_revision_id"]
-        ready = bool(endpoint["desired_state"] == "serving" and active_id and client
-                     and client.is_ready(endpoint["id"], active_id,
-                                         desired.get(application_name(endpoint["id"], active_id))))
         return {
             **{key: endpoint[key] for key in ("id", "name", "desired_state", "created_at",
                                              "updated_at", "active_model_revision_id")},
@@ -193,6 +211,12 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
                         "pending": application(endpoint["pending_model_revision_id"])
                         if manageable else None},
         }
+
+    def single_view(endpoint: dict, actor: Actor, manageable: bool) -> dict:
+        desired = desired_applications()
+        applications, ready = runtime_snapshot([endpoint], desired)
+        return endpoint_view(endpoint, actor, manageable, applications, desired,
+                             ready.get(endpoint["id"], False))
 
     def visible_endpoint(endpoint_id: str, actor: Actor) -> tuple[dict, bool]:
         """소유자·관리자가 아니면 활성 판본이 지금 제공 중일 때만 보인다."""
@@ -239,10 +263,10 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         shared = [] if actor.privileged or model_revision_id is None else [
             item for item in store.list_offered_serving_endpoints(model_revision_id)
             if item["owner_actor"] != actor.id]
-        applications = runtime_applications()
         desired = desired_applications()
-        return [endpoint_view(item, actor, True, applications, desired) for item in managed] + [
-            endpoint_view(item, actor, False, applications, desired) for item in shared]
+        applications, ready = runtime_snapshot(managed + shared, desired)
+        return [endpoint_view(item, actor, manageable, applications, desired, ready.get(item["id"], False))
+                for items, manageable in ((managed, True), (shared, False)) for item in items]
 
     @router.post(
         "/api/serving/endpoints",
@@ -260,7 +284,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             name=body.name, model_revision_id=body.model_revision_id, owner_actor=actor.id,
             owner_actor_type=actor.kind, privileged=actor.privileged, replica_capacity=capacity(),
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
+        return single_view(endpoint, actor, True)
 
     @router.get(
         "/api/serving/endpoints/{endpoint_id}",
@@ -270,7 +294,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
     )
     def get_endpoint(endpoint_id: str, actor: Actor = READ_JOB):
         endpoint, manageable = visible_endpoint(endpoint_id, actor)
-        return endpoint_view(endpoint, actor, manageable, runtime_applications(), desired_applications())
+        return single_view(endpoint, actor, manageable)
 
     @router.put(
         "/api/serving/endpoints/{endpoint_id}/revision",
@@ -288,7 +312,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             endpoint_id, body.model_revision_id, actor_id=actor.id, actor_type=actor.kind,
             privileged=actor.privileged, replica_capacity=capacity(),
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
+        return single_view(endpoint, actor, True)
 
     @router.post(
         "/api/serving/endpoints/{endpoint_id}/rollback",
@@ -304,7 +328,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         endpoint = change(lambda: store.rollback_serving_endpoint(
             endpoint_id, actor_id=actor.id, actor_type=actor.kind, privileged=actor.privileged,
             replica_capacity=capacity(), request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
+        return single_view(endpoint, actor, True)
 
     @router.delete(
         "/api/serving/endpoints/{endpoint_id}/revision-request",
@@ -317,7 +341,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         endpoint = change(lambda: store.cancel_serving_revision(
             endpoint_id, actor_id=actor.id, actor_type=actor.kind,
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
+        return single_view(endpoint, actor, True)
 
     @router.put(
         "/api/serving/endpoints/{endpoint_id}/state",
@@ -333,7 +357,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             endpoint_id, body.desired_state, actor_id=actor.id, actor_type=actor.kind,
             replica_capacity=capacity() if body.desired_state == "serving" else None,
             request_id=request.state.request_id))
-        return endpoint_view(endpoint, actor, True, runtime_applications(), desired_applications())
+        return single_view(endpoint, actor, True)
 
     @router.delete(
         "/api/serving/endpoints/{endpoint_id}",

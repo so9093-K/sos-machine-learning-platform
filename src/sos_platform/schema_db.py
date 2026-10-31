@@ -80,6 +80,8 @@ jobs = Table(
     Index("ix_jobs_request_id", "request_id"),
 )
 
+# Worker의 대기 Job 조회. 완료된 실행 기록이 쌓여도 Queued Job만 읽는다.
+Index("ix_jobs_queued_created", jobs.c.created_at, postgresql_where=text("status = 'Queued'"))
 Index(
     "ix_jobs_playground_model_actor_created",
     text("((spec::jsonb ->> 'model_revision_id'))"),

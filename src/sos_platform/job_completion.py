@@ -62,7 +62,8 @@ def complete_job(
                 value = publisher(store, db, row, job_id, attempt_id, value, payload, write_id)
             elif publication is not None or write_id is not None:
                 raise ValueError("Job type does not publish artifacts")
-            store.enqueue_tracking_export(db, job_id, kind)
+        # 실패·취소한 ML Job도 연구 이력이다. 최종 상태와 같은 트랜잭션에 전송 의도를 남긴다.
+        store.enqueue_tracking_export(db, job_id, row["kind"])
         publish_profile(db, row, job_id, value)
         return value
 

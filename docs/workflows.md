@@ -25,7 +25,7 @@ Workflow Definition은 작업 사이의 재사용 가능한 관계, Workflow Run
 
 학습의 완료와 모델 평가의 신뢰성은 다르다. Model Revision·Scoring Result·정책·Evaluation·Explanation은 각자의 판본을 가지며 같은 점수에 다른 정책을 적용하더라도 재학습을 강제하지 않는다. 의미의 정본은 [Contracts](contracts.md)다.
 
-성공·실패·취소한 ML Job은 각기 FINISHED·FAILED·KILLED MLflow Run 상태로 기록한다. 모델 Registry 판본은 성공한 학습에서만 생성한다. MLflow Run과 Registry 등록은 ML Job과 별도로 `Pending → Sending → Succeeded / Retry` 상태를 가진다. 외부 등록 실패는 완료한 학습 성공을 뒤집지 않지만 새 모델 Scoring은 Registry 버전이 확인될 때까지 차단하고 Pipeline은 다음 단계로 넘어가지 않는다. 외부 시스템과 원자적 트랜잭션을 공유하지 않으므로 재시도에서 중복 Run/Model Version을 검사한다. MLflow에 연결하지 못하면 Worker는 잠시 전송을 멈추고 Job 실행을 계속하며, 이후 남은 전송을 다시 시도한다. 연결 구현은 [Runtimes](runtimes.md)를 따른다.
+성공·실패·취소한 ML Job은 각기 FINISHED·FAILED·KILLED MLflow Run 상태로 기록한다. 전송 의도는 Worker 종료·실행 전 취소·Worker 중단 뒤 복구 중 어느 경로로 끝나든 Job의 최종 상태와 같은 트랜잭션에 남긴다. Dataset 없는 Job(Playground 단일 입력 설명)은 Dataset 참조 없이 출처 Job을 기록하고, 원본 학습의 Experiment에 묶는다. 모델 Registry 판본은 성공한 학습에서만 생성한다. MLflow Run과 Registry 등록은 ML Job과 별도로 `Pending → Sending → Succeeded / Retry` 상태를 가진다. 외부 등록 실패는 완료한 학습 성공을 뒤집지 않지만 새 모델 Scoring은 Registry 버전이 확인될 때까지 차단하고 Pipeline은 다음 단계로 넘어가지 않는다. 외부 시스템과 원자적 트랜잭션을 공유하지 않으므로 재시도에서 중복 Run/Model Version을 검사한다. MLflow에 연결하지 못하면 Worker는 잠시 전송을 멈추고 Job 실행을 계속하며, 이후 남은 전송을 다시 시도한다. 연결 구현은 [Runtimes](runtimes.md)를 따른다.
 
 ## 데이터·결과 게시와 복구
 

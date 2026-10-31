@@ -445,6 +445,8 @@ class JobStoreMixin:
                     text("UPDATE jobs SET status='Cancelled',updated_at=:at WHERE id=:id"),
                     {"at": now(), "id": job_id},
                 )
+                # 실행 전에 취소된 ML Job도 KILLED Run으로 남긴다.
+                self.enqueue_tracking_export(db, job_id, row["kind"])
             elif row and row["status"] == "Running":
                 if row["kind"] == "feature_retire":
                     raise FeatureRetirementCancellationConflict(
@@ -686,6 +688,9 @@ class JobStoreMixin:
                     .all()
                 )
                 recovered.extend((row["id"], item) for item in interrupted)
+                if status != "Queued":
+                    # 중단 뒤 취소·실패로 끝난 ML Job도 최종 상태 그대로 전송한다.
+                    self.enqueue_tracking_export(db, row["id"], row["kind"])
                 attempt_id = interrupted[-1] if interrupted else "unknown"
                 if unsafe:
                     # 자동 재시도 대신 Catalog 속성으로 커밋 여부를 추적할 근거를 남긴다.

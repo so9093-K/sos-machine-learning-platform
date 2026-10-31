@@ -168,6 +168,10 @@ def _job_experiment_title(store, job: dict) -> str:
         score_id = spec.get("scoring_result_id")
         score = store.get_scoring_result(score_id) if score_id else None
         model_id = score.get("model_revision_id") if score else None
+    if job["kind"] == "ml_explain" and spec.get("playground_job_id"):
+        # Dataset 없는 단일 입력 설명은 Playground 계산의 모델로 학습 묶음을 찾는다.
+        source = store.get_job(spec["playground_job_id"])
+        model_id = (source.get("spec") or {}).get("model_revision_id") if source else None
     if not model_id:
         return DEFAULT_EXPERIMENT
     model = store.get_model_revision(model_id)
@@ -226,6 +230,10 @@ def send_to_mlflow(
     """
     if job["status"] not in ("Succeeded", "Failed", "Cancelled") or not job["kind"].startswith("ml_"):
         raise ValueError("Only terminal ML jobs can be tracked")
+    # Playground 단일 입력 설명처럼 Dataset 없는 Job은 Dataset 참조를 보내지 않는다(MLflow 값은 문자열).
+    dataset_id = job.get("dataset_id")
+    dataset_reference = ([{"key": "sos.dataset_id", "value": dataset_id}]
+                         if isinstance(dataset_id, str) and dataset_id else [])
     run_id = known_run_id
     if run_id is None:
         experiment = ensure_experiment(
@@ -260,7 +268,7 @@ def send_to_mlflow(
                 "tags": [
                     {"key": "sos.job_id", "value": job["id"]},
                     {"key": "sos.job_kind", "value": job["kind"]},
-                    {"key": "sos.dataset_id", "value": job["dataset_id"]},
+                    *dataset_reference,
                 ],
             }
             if started_ms is not None:
@@ -272,10 +280,7 @@ def send_to_mlflow(
         remember_run(run_id)
     # Run 비교에는 모델 설정뿐 아니라 사용한 Dataset 판본이 필요하다.
     # 값은 SOS가 이미 확정한 실행 메타데이터에서만 가져온다.
-    params = [
-        {"key": "sos.dataset_id", "value": job["dataset_id"]},
-        {"key": "sos.job_kind", "value": job["kind"]},
-    ]
+    params = [*dataset_reference, {"key": "sos.job_kind", "value": job["kind"]}]
     dataset_version = job["spec"].get("dataset_version")
     if isinstance(dataset_version, str) and dataset_version:
         params.append({"key": "sos.dataset_version", "value": dataset_version})
@@ -293,6 +298,11 @@ def send_to_mlflow(
             params.append({"key": "sos.explanation_method", "value": method})
         if type(job["spec"].get("row_index")) is int:
             params.append({"key": "sos.row_index", "value": str(job["spec"]["row_index"])})
+        # 설명의 출처는 Scoring Result의 행 또는 Playground 단일 입력 계산 중 하나다.
+        for key in ("scoring_result_id", "playground_job_id"):
+            source = job["spec"].get(key)
+            if isinstance(source, str) and source:
+                params.append({"key": f"sos.{key}", "value": source})
     tags = [{"key": "sos.source", "value": "sos-platform"}]
     if workflow:
         tags += [
