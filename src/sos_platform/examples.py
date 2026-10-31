@@ -91,6 +91,7 @@ def _activity_anomaly_if() -> bytes:
 # 샘플은 서버 시작 시 DB에 등록하지 않는다. 사용자가 선택할 때 같은 Dataset API를 사용한다.
 _EXAMPLES = {
     "activity-anomaly-if": {
+        "show_in_catalog": False,
         "name": "example-activity-anomaly-if.csv",
         "title": "활동 Feature 구조 예제",
         "description": "44개 활동 Feature·UTC 시각·재현 가능한 비식별 관측치 ID를 포함한 합성 예제입니다.",
@@ -118,7 +119,7 @@ _EXAMPLES = {
 
 
 def list_examples() -> list[dict]:
-    """예제의 구조와 내용 버전을 읽기 전용으로 제공한다."""
+    """탐색용 예제만 제공한다. 개발용 활동 입력은 명시적 사용 경로로 남긴다."""
     return [
         {
             "id": key,
@@ -130,6 +131,7 @@ def list_examples() -> list[dict]:
             "version": hashlib.sha256(value["content"]).hexdigest(),
         }
         for key, value in _EXAMPLES.items()
+        if value.get("show_in_catalog", True)
     ]
 
 

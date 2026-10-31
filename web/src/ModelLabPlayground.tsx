@@ -371,7 +371,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   </label>;
   return <section className="panel model-lab-playground" tabIndex={-1} aria-label="직접 모델 점수 계산">
     <div className="model-lab-playground-head">
-      <div><h3>입력 실험</h3>
+      <div><h3>값 직접 입력</h3>
         <p>입력 특성을 수정한 뒤 점수를 계산해 모델의 반응을 비교합니다.</p></div>
     </div>
     {observationInput && appliedObservation.current !== observationInput.id && running &&

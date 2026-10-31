@@ -31,12 +31,12 @@ function exampleInput(model: ModelRevision, lastRun?: PlaygroundRun) {
   const reference = exampleValues(model);
   if (reference) return {
     features: Object.fromEntries(model.features.map(name => [name, Number(reference[name])])),
-    source: "아래 값은 학습 중앙값으로 만든 합성 입력입니다(정수 항목 반올림). Playground의 입력 실험에서 계산하면 그 입력으로 바뀝니다.",
+    source: "아래 값은 학습 중앙값으로 만든 합성 입력입니다(정수 항목 반올림). 값 직접 입력에서 계산하면 그 입력으로 바뀝니다.",
   };
   return {
     features: null,
     source: "이 모델에는 학습 기준값 기록이 없어 값을 채우지 않았습니다. <값>을 실제 숫자로 바꾸거나, " +
-      "Playground의 입력 실험에서 계산하면 그 입력으로 채워집니다.",
+      "값 직접 입력에서 계산하면 그 입력으로 채워집니다.",
   };
 }
 

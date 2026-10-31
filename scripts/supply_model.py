@@ -21,7 +21,7 @@ import httpx
 
 DEFINITION_ID = "activity-anomaly-if"
 EXAMPLE_DESCRIPTION = (
-    "활동 이상 탐지의 입력·점수·결과 조사 흐름을 확인하기 위한 합성 예제 모델입니다. "
+    "개발 환경의 등록·학습·모델 적용 경로를 점검하기 위한 합성 예제 모델입니다. "
     "44개 숫자형 활동 Feature를 사용하며 예제의 인위적인 활동 변화에 대한 점수 반응을 확인할 수 있습니다. "
     "실제 보안 사건으로 학습·검증한 모델이 아니며, 탐지 정확도·사고 확률·업무 적합성을 보장하지 않습니다."
 )
@@ -183,8 +183,8 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> 
     if args.endpoint:
         serve(client, args, state, path, model_id)
     web = os.getenv("SOS_WEB_URL", "http://localhost:9601").rstrip("/")
-    print(f"활동 이상 탐지 Playground · {web}/topics/activity-anomaly?{urlencode({'model': model_id})}")
-    print("입력 실험의 '이상 점수 계산'으로 실제 모델 점수를 확인하거나, '예제 데이터로 시작'으로 Dataset을 분석하세요.")
+    print(f"활동 이상 탐지 · {web}/topics/activity-anomaly?{urlencode({'model': model_id})}")
+    print("Dataset을 선택·등록해 모델을 적용하거나, '값 직접 입력'으로 개별 관측값을 계산하세요.")
 
 
 def serve(client: httpx.Client, args: argparse.Namespace, state: dict, path: Path,
@@ -237,7 +237,7 @@ def main() -> None:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--dataset-file", type=Path, help="새로 등록할 CSV·Parquet 파일")
     source.add_argument("--dataset-id", help="기존 Dataset ID 또는 등록 응답 유실 후 확인한 ID")
-    source.add_argument("--example", choices=[DEFINITION_ID], help="서버의 합성 예제 Dataset으로 예제 모델을 명시적으로 공급")
+    source.add_argument("--example", choices=[DEFINITION_ID], help="개발용 합성 입력으로 실행 경로 점검용 모델을 명시적으로 공급")
     description = parser.add_mutually_exclusive_group()
     description.add_argument("--description", help="목적·적용 대상·한계 설명")
     description.add_argument("--description-file", type=Path, help="설명 텍스트 파일")

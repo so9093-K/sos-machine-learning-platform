@@ -1065,8 +1065,6 @@ button.surface-button.guide-choice:hover { background:var(--sos-raised); }
 .playground-model strong { font-size:15px; }
 .playground-model .muted { flex-basis:100%; margin:0; }
 .playground-model select { min-width:260px; max-width:100%; }
-.playground-example { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:16px; }
-.playground-example .hint { margin:0; }
 .playground-details summary { cursor:pointer; font-weight:650; }
 .playground-details[open] summary { margin-bottom:12px; }
 .playground-details p { font-size:13px; line-height:1.65; }
