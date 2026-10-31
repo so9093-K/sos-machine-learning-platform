@@ -532,22 +532,14 @@ class MLTrainRequest(BaseModel):
         return self
 
 
-class ModelRevisionOut(BaseModel):
-    creation_evidence_visible: bool = Field(
-        description="학습 규모·내부 선택·결측 정책·학습 점수 집계의 조회 권한. 소유자·관리자만 참이다.")
+class ModelRevisionBaseOut(BaseModel):
+    """소비자와 공급자가 공유하는 모델 사용 계약."""
 
     registry_version: str | None = None
     lifecycle_state: Literal["Active", "Deleting", "Deleted"] = "Active"
     id: str
-    job_id: str
-    attempt_id: str
-    dataset_id: str
-    dataset_version: str
     algorithm: str
-    location: str
-    sha256: str
     features: list[str]
-    params: dict[str, object]
     training_score_summary: dict[str, object]
     runtime: dict[str, object]
     created_at: str
@@ -555,9 +547,29 @@ class ModelRevisionOut(BaseModel):
     @computed_field
     @property
     def output_type(self) -> str | None:
-        """판본이 학습 때 기록한 출력 계약의 종류. 분석 주제·소비자가 출력의 의미를 구별한다."""
+        """학습 때 기록한 출력 계약. 응답의 공개 범위와 무관하게 같은 의미를 유지한다."""
         contract = revision_output_contract({"algorithm": self.algorithm, "runtime": self.runtime})
         return contract.output_type if contract else None
+
+
+class ModelRevisionOut(ModelRevisionBaseOut):
+    """소유자·관리자의 전체 불변 실행 근거."""
+
+    creation_evidence_visible: Literal[True] = Field(description="학습 출처·저장 근거·설정·규모의 열람 허용")
+    job_id: str
+    attempt_id: str
+    dataset_id: str
+    dataset_version: str
+    location: str
+    sha256: str
+    params: dict[str, object]
+
+
+class PublicModelRevisionOut(ModelRevisionBaseOut):
+    """제공 모델 소비자의 사용 정보. 내부 출처·저장 근거·학습 설정을 포함하지 않는다."""
+
+    creation_evidence_visible: Literal[False] = Field(description="학습 출처·저장 근거·설정·규모의 열람 제한")
+    training_score_summary: dict[str, object] = Field(max_length=0, description="공급자 전용 집계이므로 빈 객체")
 
 
 class ModelOfferingRequest(BaseModel):
@@ -585,7 +597,7 @@ class ModelOfferingStateOut(BaseModel):
 
 
 class ModelOfferingOut(BaseModel):
-    model: ModelRevisionOut
+    model: ModelRevisionOut | PublicModelRevisionOut
     description: str
     offered_by: str
     offered_at: str

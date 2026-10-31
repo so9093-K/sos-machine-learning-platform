@@ -13,7 +13,7 @@ from .schemas import (
     MLflowExportStatusOut,
     MLflowModelVersionPageOut,
     MLflowRunPageOut,
-    ModelRevisionOut,
+    ModelRevisionOut, PublicModelRevisionOut,
 )
 from .security import Actor, require
 from .store import Store
@@ -111,9 +111,9 @@ def ml_model_router(store: Store, access: ResourceAccess) -> APIRouter:
         "/api/ml/models/{revision_id}",
         tags=["Models"],
         summary="모델 실행 판본 조회",
-        description="Dataset·Job·Runtime·Feature·아티팩트 근거가 고정된 SOS 모델 실행 참조를 조회합니다. "
+        description="고정된 모델 판본의 사용 정보를 조회합니다. 학습 출처·아티팩트 저장 근거·매개변수·"
         "학습 규모·선택·결측 정책과 학습 점수 집계는 소유자·관리자만 조회합니다.",
-        response_model=ModelRevisionOut,
+        response_model=ModelRevisionOut | PublicModelRevisionOut,
     )
     def get_model_revision(revision_id: str, actor: Actor = READ_JOB_DEP):
         return access.model_response(access.readable_model(revision_id, actor), actor)

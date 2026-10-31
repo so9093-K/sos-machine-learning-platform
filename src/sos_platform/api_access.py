@@ -89,9 +89,13 @@ class ResourceAccess:
     def model_response(self, model: dict, actor: Actor) -> dict:
         """조회 응답만 Actor에 맞게 투영한다. Worker·추론의 원본 판본은 변경하지 않는다."""
         visible = actor.privileged or model.get("owner_actor") == actor.id
-        response = {**model, "creation_evidence_visible": visible}
         if visible:
-            return response
+            return {**model, "creation_evidence_visible": True}
+        # 최상위도 허용한 사용 정보만 반환한다. 새 내부 필드를 자동 공개하지 않는다.
+        response = {key: model[key] for key in (
+            "id", "algorithm", "features", "created_at", "registry_version", "lifecycle_state",
+        ) if key in model}
+        response["creation_evidence_visible"] = False
         runtime = model["runtime"]
         # 소비자에게 필요한 입력·출력·실행 호환 정보만 허용한다. 내부 선택 정책은 포함하지 않는다.
         public_runtime = {key: runtime[key] for key in (

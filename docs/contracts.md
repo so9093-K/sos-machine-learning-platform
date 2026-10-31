@@ -46,7 +46,7 @@ Feast는 등록 Entity·Feature View·Feature Service와 Historical Retrieval의
 - **단계 재사용:** 이미 계산된 모델 점수를 다른 Threshold Policy에 적용하거나 설명을 별도로 생성할 때 불필요하게 다시 학습하지 않는다. 실제 재사용 가능 범위는 입력·모델·방법·Runtime 계약으로 판단한다.
 - **MLflow 관리 정본:** Experiment·Run·Registered Model·Model Version의 관리 정본은 MLflow다. SOS의 Model Revision은 Job/Attempt·Dataset·아티팩트 SHA·Feature·Runtime의 불변 실행 참조이며 MLflow 고정 버전을 연결한다. 등록되지 않은 신규 모델은 Scoring에 사용할 수 없다. Job/Attempt와 Evaluation의 결과 의미는 MLflow가 대체하지 않는다.
 
-모델의 원본 학습 규모·내부 입력 선택·결측 처리 정책과 학습 점수 집계는 소유자·관리자만 조회한다. 제공 모델의 상세·목록 응답에서도 같은 제한을 적용한다. 소비자에게는 Feature·자료형·입력 기준값·출력 계약과 입력 비교용 분위값을 제공하되, 행 수·표본 수·내부 출처·학습 점수 Histogram 건수는 포함하지 않는다. 권한별 응답 투영은 불변 모델 원본이나 Worker·추론의 실행 계약을 변경하지 않는다.
+모델의 원본 학습 규모·내부 입력 선택·결측 처리 정책과 학습 점수 집계는 소유자·관리자만 조회한다. 제공 모델의 상세·목록 응답에서도 같은 제한을 적용한다. 소비자에게는 Feature·자료형·입력 기준값·출력 계약과 입력 비교용 분위값을 제공하되, 행 수·표본 수·학습 Dataset·Job·Attempt 식별자와 판본·아티팩트 위치·해시·학습 매개변수·내부 Feature 출처·학습 점수 Histogram 건수는 포함하지 않는다. 권한별 응답 투영은 불변 모델 원본이나 Worker·추론의 실행 계약을 변경하지 않는다.
 
 Dataset 없는 단일 관측치 Playground Job은 입력 Feature와 실제 모델 점수를 Job 명세·결과로 보존한다. Explanation의 출처는 Scoring Result의 특정 행 또는 성공한 Playground Job 중 정확히 하나이며, 출처·모델 판본·방법을 결과에 보존하고 Dataset에 존재하지 않는 관측치 번호를 만들지 않는다. Playground는 배치 Scoring Result나 독립 평가를 만들지 않으며 모델 판본·Actor 권한·Registry·입력 서명·Runtime을 Scoring과 같이 검증한다.
 

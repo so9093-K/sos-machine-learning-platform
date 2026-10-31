@@ -195,7 +195,7 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
         {dataset.data.version !== run.dataset_version && <p role="alert">현재 Dataset 판본과 실행의 고정 판본이 다릅니다. 현재 데이터의 규모·출처는 실행 근거로 표시하지 않습니다.</p>}
         {dataset.data.version === run.dataset_version && <>
           <AssetState error={overview.error} onRetry={overview.retry}>{overview.data &&
-            (overview.data.version === run.dataset_version ? <p>입력 Dataset {amount(overview.data.row_count)}행 · {overview.data.column_count}컬럼</p>
+            (overview.data.version === run.dataset_version ? <p>입력 Dataset {overview.data.row_count === null ? "행 수 미계산" : `${amount(overview.data.row_count)}행`} · {overview.data.column_count}컬럼</p>
               : <p role="alert">규모 조회의 판본이 실행 입력과 달라 표시하지 않습니다.</p>)}</AssetState>
           {!dataset.data.source_job_id && <p className="hint">입력 준비 Job 기록 없음 · 등록 방식 미확인</p>}
           {dataset.data.source_job_id && <AssetState error={origin.error} onRetry={origin.retry}>{origin.data &&
@@ -232,7 +232,7 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
     </section>
     {modelId && <section className="panel">
       <h3>학습 결과</h3>
-      <AssetState error={model.error} onRetry={model.retry}>{model.data && <>
+      <AssetState error={model.error} onRetry={model.retry}>{model.data && (model.data.creation_evidence_visible ? <>
         <p>Isolation Forest · 학습 점수 {amount(model.data.training_score_summary.score_count)}건
           · Feature {model.data.features.length}개</p>
         <p>모델 아티팩트 게시 완료 · 학습 Job의 확정 판본</p>
@@ -248,7 +248,7 @@ export function PipelineResults({ run, revision, canRun, canCancel, canOpenMLflo
         <details><summary>저장·무결성 근거</summary><p>아티팩트 {model.data.location}</p><p>SHA-256 {model.data.sha256}</p>
           <p className="hint">판본에 보존된 저장 근거이며 현재 객체를 다시 읽은 무결성 검사 결과는 아닙니다.</p></details>
         <details><summary>학습 설정</summary><pre>{JSON.stringify(model.data.params, null, 2)}</pre></details>
-      </>}</AssetState>
+      </> : <p>이 모델의 학습·저장 근거는 공급자·관리자 전용입니다.</p>)}</AssetState>
       {tracking("training")}
     </section>}
     {(calibrationId || policyId) && <section className="panel">

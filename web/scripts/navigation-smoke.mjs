@@ -168,9 +168,10 @@ try {
   assert.equal(modelServingPollMs([failedTransition]), 30000);
   assert.equal(modelServingPollMs([{ ...failedTransition, runtime: { reachable: true, pending: { status: "UNHEALTHY" } } }]), 30000);
   assert.equal(modelServingPollMs([failedTransition, serving]), 5000);
-  assert.equal(modelServingPollMs([{ ...serving, pending_model_revision_id: null }]), null);
-  assert.equal(modelServingPollMs([{ ...serving, desired_state: "stopped" }]), null);
+  assert.equal(modelServingPollMs([{ ...serving, pending_model_revision_id: null }]), 30000);
+  assert.equal(modelServingPollMs([{ ...serving, desired_state: "stopped" }]), 30000);
   assert.equal(modelServingPollMs([{ ...serving, runtime: { reachable: false } }]), 10000);
+  assert.equal(modelServingPollMs([]), 30000);
   const { FeastInputSources } = await vite.ssrLoadModule("/src/PipelineRunDetails.tsx");
   const feastInputs = renderToStaticMarkup(React.createElement(FeastInputSources, {
     job: { dataset_id: "features", spec: {}, result: { feature_dataset_id: "features", feature_dataset_version: "source-v1",
