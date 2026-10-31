@@ -31,7 +31,7 @@ doctor-dagster:
 	@$(COMPOSE) exec -T api python -c "from sos_platform.dagster_client import DagsterClient; result = DagsterClient().find_by_submission('00000000-0000-4000-8000-000000000000'); print('Dagster Run 검색 계약: 정상, 결과:', result)"
 
 validate:
-	@python scripts/validate.py run all
+	@uv run --locked pytest -q tests
 
 help:
 	@printf '%s\n' \
