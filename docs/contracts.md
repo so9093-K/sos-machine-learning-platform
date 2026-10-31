@@ -101,7 +101,7 @@ Dataset 없는 단일 관측치 Playground Job은 입력 Feature와 실제 모�
 
 ## 데이터·실행에 적용하는 계약
 
-- **Dataset:** 파일은 검증된 내용 무결성으로, Iceberg Dataset은 고정 Snapshot으로 입력 판본을 식별한다. 합성 예제도 실제 Dataset 참조를 사용하며 조용히 등록하지 않는다.
+- **Dataset:** 파일은 검증된 내용 무결성으로, Iceberg Dataset은 고정 Snapshot으로 입력 판본을 식별한다.
 - **Discovery:** 미리보기와 전체 Job 분석의 입력 범위·반환 한계를 구별한다. NaN·Infinity와 실제 NULL, 큰 정수·DECIMAL의 정밀도, 바이너리·시간 값은 의미를 잃지 않도록 표현한다. 비유한 집계는 그룹 정렬·제한 이전에 정규화한다.
 - **Feature:** Lag·Rolling의 시간 정렬·그룹 경계와 계산 범위를 보존한다. 동기 미리보기에서 전역 연산을 잘린 입력으로 대체하지 않으며, 위험한 임의 SQL·파일 경로를 쿼리 입력으로 받지 않는다.
 - **Job 제출:** 외부 중복 요청이 위험한 작업은 Actor·명세·멱등성 키의 범위를 지킨다. 실행 중 외부 커밋이 불명확한 Iceberg 적재는 자동 재시도하지 않는다. [Workflows](workflows.md)가 실행 상태를 정의한다.
