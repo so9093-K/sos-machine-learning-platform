@@ -21,6 +21,8 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
   onPlaygroundRun?: (run: PlaygroundRun) => void;
 }) {
   const [usage, setUsage] = useState<"dataset" | "playground">(selectedDatasetId ? "dataset" : "playground");
+  // 바깥의 예제 선택·Dataset 이동도 선택한 데이터의 분석 화면으로 이어진다.
+  useEffect(() => { if (selectedDatasetId) setUsage("dataset"); }, [selectedDatasetId]);
   const [observationInput, setObservationInput] = useState<ObservationExperiment | null>(null);
   const [resultVisible, setResultVisible] = useState(false);
   const requestNumber = useRef(0);

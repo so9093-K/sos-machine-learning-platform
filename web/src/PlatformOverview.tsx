@@ -53,7 +53,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenLearni
           {!canViewModels ? <p>모델 조회 권한 없음</p> : <>
             <p role="status">{modelState === "loading" ? "모델 제공 상태 확인 중…"
               : modelState === "ready" ? "제공 모델 있음 · 목적·입력 조건 확인 후 선택"
-              : modelState === "empty" ? "제공 모델 없음 · 데이터 탐색은 독립적으로 이용 가능합니다."
+              : modelState === "empty" ? "제공 모델 없음 · 개발·배포 담당자의 체험용 예제 모델 준비가 필요합니다."
               : "모델 제공 상태 확인 실패"}</p>
             {modelState === "error" && <p role="alert">{modelError}</p>}
             {(modelState === "empty" || modelState === "error") &&

@@ -186,9 +186,13 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
         {models.length > 0 && <button type="button" className="secondary" onClick={() => onSelectModel("")}>
           제공 모델 중에서 다시 선택</button>}
       </div>}
-      {selection.state === "none" && offered !== null && topic && <p className="muted">
+      {selection.state === "none" && offered !== null && topic && <div className="playground-notice">
+        <p className="muted">
         {nextCursor ? "현재 조회한 목록에 호환 모델이 없습니다. 다음 제공 모델을 조회할 수 있습니다."
-          : "아직 사용할 수 있는 활동 이상 탐지 모델이 없습니다. 모델이 준비되면 이곳에서 바로 적용할 수 있습니다."}</p>}
+          : "첫 점수 계산에는 활동 이상 탐지용 제공 모델이 필요합니다. 개발·배포 담당자가 체험용 합성 예제 모델을 준비할 수 있습니다."}</p>
+        {!nextCursor && <button type="button" className="secondary" disabled={loadingModels}
+          onClick={() => { setRequestCursor(null); setRetry(value => value + 1); }}>제공 모델 다시 조회</button>}
+      </div>}
       {nextCursor && <button type="button" className="secondary" disabled={loadingModels}
         onClick={() => {
           if (requestCursor === nextCursor) setRetry(value => value + 1);
