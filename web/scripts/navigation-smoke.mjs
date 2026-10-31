@@ -32,6 +32,8 @@ try {
   const pipelineData = routeAt("/data", "?dataset=data-one&pipelineRun=run-one");
   assert.equal(contextPath("preview", nextNavigationContext(pipelineData, "preview")),
     "/data/query?dataset=data-one&pipelineRun=run-one");
+  const servingContext = contextPath("serving", { pipelineRunId: "run-source" });
+  assert.equal(routeAt("/operations/serving", servingContext.slice(servingContext.indexOf("?"))).context.pipelineRunId, "run-source");
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
   assert.equal(first.tab, "evaluations");

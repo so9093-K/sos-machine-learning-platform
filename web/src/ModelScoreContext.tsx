@@ -31,7 +31,8 @@ export function ModelScoreContext({ model, score, comparisonScore }: {
   const high = summary.score_max;
   const rangeReady = typeof low === "number" && Number.isFinite(low) &&
     typeof high === "number" && Number.isFinite(high) && low <= high;
-  const position = !rangeReady || count <= 0 || !Number.isFinite(score) ? null : score > high ? "학습 입력에서 나온 최대 점수보다 높습니다."
+  const restricted = model.creation_evidence_visible === false;
+  const position = restricted || !rangeReady || count <= 0 || !Number.isFinite(score) ? null : score > high ? "학습 입력에서 나온 최대 점수보다 높습니다."
     : score < low ? "학습 입력에서 나온 최소 점수보다 낮습니다."
     : "학습 입력에서 관측된 점수 범위 안에 있습니다.";
   const option = useMemo(() => {
@@ -56,7 +57,7 @@ export function ModelScoreContext({ model, score, comparisonScore }: {
   return <section className="model-score-context" aria-label="학습 점수와 현재 입력 비교">
     <h5>학습 점수 분포 비교</h5>
     {position && <p>{position}</p>}
-    {option ? <>
+    {restricted ? <p className="hint">학습 점수의 건수·분포 집계는 공급자·관리자 전용입니다.</p> : option ? <>
       <DataChart option={option} ariaLabel="이 모델의 실제 학습 점수 분포와 계산한 입력의 점수 위치" />
       <p className="hint">학습에 사용한 {count.toLocaleString("ko-KR")}건과 비교 · 점선은 이번 점수 {score.toFixed(6)}
         {comparisonScore != null && comparisonScore !== score ? ` · 촘촘한 점선은 비교 점수 ${comparisonScore.toFixed(6)}` : ""}</p>

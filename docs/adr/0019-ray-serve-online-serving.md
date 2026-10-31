@@ -1,6 +1,6 @@
 # 0019 — Ray Serve 기반 온라인 서빙
 
-- 상태: **Accepted** · Dashboard를 내부망에만 여는 조항은 [0020](0020-serving-operator-visibility.md)이 대체
+- 상태: **Accepted** · 웹 배포 진입 범위는 [ADR 0023](0023-explicit-model-deployment-entry.md)으로 대체 · Dashboard를 내부망에만 여는 조항은 [0020](0020-serving-operator-visibility.md)이 대체
 - 관련: [Architecture](../architecture.md), [Contracts](../contracts.md#온라인-서빙-endpoint), [Runtimes](../runtimes.md#온라인-서빙-runtime), [ADR 0015](0015-mlflow-management-ownership.md), [ADR 0017](0017-model-lifecycle.md)
 - 범위: 모델 판본의 동기 온라인 추론, Endpoint 의도·실제 실행 상태, 판본 전환·되돌리기·중단
 
