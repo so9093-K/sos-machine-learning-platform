@@ -23,20 +23,20 @@ function endpointStatus(endpoint: ServingEndpoint): { label: string; tone: "read
   const { runtime } = endpoint;
   if (endpoint.desired_state === "stopped") return { label: "중단됨", tone: "idle" };
   if (!runtime.reachable) return { label: endpoint.ready
-    ? "추론 가능 · 운영 상태 조회 실패" : "추론 불가 · 운영 상태 조회 실패", tone: "failed" };
+    ? "Runtime 준비됨 · 운영 상태 조회 실패" : "Runtime 미준비 · 운영 상태 조회 실패", tone: "failed" };
   const pendingFailed = FAILED.has(runtime.pending?.status ?? "");
   if (!endpoint.active_model_revision_id) return pendingFailed
     ? { label: "첫 배포 실패", tone: "failed" } : { label: "첫 배포 준비 중", tone: "pending" };
   if (!endpoint.ready) return { label: "활성 판본 복구 중", tone: "pending" };
-  if (runtime.active?.status === "OUT_OF_SYNC") return { label: "추론 가능 · 배포 설정 불일치", tone: "pending" };
+  if (runtime.active?.status === "OUT_OF_SYNC") return { label: "Runtime 준비됨 · 배포 설정 불일치", tone: "pending" };
   if (endpoint.pending_model_revision_id) return pendingFailed
     ? { label: "전환 실패 · 현재 판본 유지", tone: "failed" } : { label: "판본 전환 중", tone: "pending" };
-  return { label: "요청 처리 중", tone: "ready" };
+  return { label: "Runtime 준비됨", tone: "ready" };
 }
 
 /** 온라인 서빙 Endpoint의 실제 상태와 운영 조작.
  *
- *  배포와 새 판본 전환은 모델 공급 과정(scripts/supply_model.py --endpoint)이 맡는다.
+ *  최초 배포는 모델 상세 또는 공급 자동화에서 요청한다. 새 판본 전환은 공급 API가 맡는다.
  *  이 화면은 지금 어떤 판본이 요청을 처리하는지 확인하고 되돌리기·중단 같은 안전 조작을 제공한다.
  */
 export function ServingOperations({ onOpenResource, canOpenOperatorTools }: {
@@ -115,17 +115,18 @@ export function ServingOperations({ onOpenResource, canOpenOperatorTools }: {
   return <section className="panel serving-operations" aria-labelledby="serving-heading">
     <div className="panel-head">
       <div><h2 id="serving-heading">온라인 서빙 Endpoint</h2>
-        <p>Endpoint마다 지금 요청을 처리하는 판본과 실제 실행 상태입니다. 새 판본은 준비가 확인된 뒤에만 전환되며,
-          준비에 실패하면 현재 판본이 계속 요청을 처리합니다. 배포와 새 판본 전환은 모델 공급 과정에서 요청합니다.</p>
+        <p>Endpoint마다 활성 판본과 서빙 Runtime 준비 상태입니다. 새 판본은 준비가 확인된 뒤에만 전환되며,
+          준비에 실패하면 기존 활성 판본을 유지합니다. 최초 배포는 모델 상세에서, 새 판본 전환은 공급 API에서 요청합니다.</p>
       </div>
       <button type="button" className="secondary" onClick={() => void load()}>다시 조회</button>
     </div>
+    <p className="hint">Runtime 준비 상태와 별개로, 실제 API 요청은 Registry 유효성·호출 권한·입력 검증을 통과해야 합니다.</p>
     {loadError && <p className="job-error" role="alert">상태 조회 실패 · {loadError}{endpoints
       ? " · 아래는 마지막으로 확인한 상태이며, 10초마다 다시 확인합니다." : " · 10초마다 다시 확인합니다."}</p>}
     {actionError && <p className="job-error" role="alert">요청 실패 · {actionError}</p>}
     {notice && <p className="hint" role="status">{notice}</p>}
     {endpoints === null && !loadError && <p role="status" className="muted">Endpoint를 불러오는 중입니다.</p>}
-    {endpoints?.length === 0 && <p className="muted">아직 Endpoint가 없습니다. 모델 공급 과정에서 Endpoint를 지정하면 이곳에 표시됩니다.</p>}
+    {endpoints?.length === 0 && <p className="muted">아직 Endpoint가 없습니다. 모델 상세에서 배포하거나 공급 API로 생성하면 이곳에 표시됩니다.</p>}
     <div className="serving-list">{endpoints?.map(endpoint => {
       const status = endpointStatus(endpoint);
       const pending = (action: Action) => busy === `${endpoint.id}:${action}`;

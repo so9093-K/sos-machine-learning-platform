@@ -358,6 +358,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
           onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
           onSelectRun={(pipelineRunId, datasetId) => navigateWithContext("pipelines", { pipelineRunId, datasetId })}
+          onOpenJob={(id, datasetId) => navigateWithContext("jobs", { datasetId, dataJobId: id, dataJobKind: "data", pipelineRunId: context.pipelineRunId })}
           onOpenResource={openResource} onOpenDataset={id => navigateWithContext("understanding", {
             datasetId: id, pipelineRunId: context.pipelineRunId,
           })} />
@@ -493,6 +494,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         canRun={canRun} canCancel={canCancel}
         canManageModel={actor.capabilities.includes("model.manage")} isAdministrator={actor.roles.includes("administrator")}
+        onOpenServing={() => navigateWithContext("serving", { pipelineRunId: context.pipelineRunId })}
         onOpenModelCatalog={() => navigateWithContext("ml", { datasetId: context.datasetId })}
         onScoring={startScoring} onApplyModel={model => void applyModel(model)} />}
       {tab === "scoring" && !resource && <ScoringWorkspace

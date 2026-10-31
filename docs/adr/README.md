@@ -32,3 +32,5 @@
 - [0020 — 온라인 서빙 운영 가시성과 실제 상태 정합성](0020-serving-operator-visibility.md) · Accepted (0019의 Dashboard 비공개 조항 대체 · API 준비 판정은 0022가 대체)
 - [0021 — 분석 주제와 등록 Pipeline의 분리](0021-analysis-topic-contract.md) · Accepted
 - [0022 — 배포 관측과 실제 추론 준비의 분리](0022-serving-inference-readiness.md) · Accepted
+
+- [0023 — 모델 상세의 명시적 최초 배포 진입](0023-explicit-model-deployment-entry.md) · Accepted (0019의 웹 조작 범위 대체)

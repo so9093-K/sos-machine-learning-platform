@@ -781,7 +781,7 @@ export interface paths {
         };
         /**
          * 모델 실행 판본 조회
-         * @description Dataset·Job·Runtime·Feature·아티팩트 근거가 고정된 SOS 모델 실행 참조를 조회합니다.
+         * @description 고정된 모델 판본의 사용 정보를 조회합니다. 학습 출처·아티팩트 저장 근거·매개변수·학습 규모·선택·결측 정책과 학습 점수 집계는 소유자·관리자만 조회합니다.
          */
         get: operations["get_model_revision_api_ml_models__revision_id__get"];
         put?: never;
@@ -1897,6 +1897,11 @@ export interface components {
             location: string;
             /** Name */
             name: string;
+            /**
+             * Source Job Id
+             * @description 이 Dataset을 게시한 SOS Job. 직접 등록한 데이터는 null이다.
+             */
+            source_job_id?: string | null;
             /** Version */
             version: string;
         };
@@ -3388,7 +3393,8 @@ export interface components {
         ModelOfferingOut: {
             /** Description */
             description: string;
-            model: components["schemas"]["ModelRevisionOut"];
+            /** Model */
+            model: components["schemas"]["ModelRevisionOut"] | components["schemas"]["PublicModelRevisionOut"];
             /** Offered At */
             offered_at: string;
             /** Offered By */
@@ -3427,7 +3433,10 @@ export interface components {
             /** Withdrawn At */
             withdrawn_at?: string | null;
         };
-        /** ModelRevisionOut */
+        /**
+         * ModelRevisionOut
+         * @description 소유자·관리자의 전체 불변 실행 근거.
+         */
         ModelRevisionOut: {
             /** Algorithm */
             algorithm: string;
@@ -3435,6 +3444,12 @@ export interface components {
             attempt_id: string;
             /** Created At */
             created_at: string;
+            /**
+             * Creation Evidence Visible
+             * @description 학습 출처·저장 근거·설정·규모의 열람 허용
+             * @constant
+             */
+            creation_evidence_visible: true;
             /** Dataset Id */
             dataset_id: string;
             /** Dataset Version */
@@ -3455,7 +3470,7 @@ export interface components {
             location: string;
             /**
              * Output Type
-             * @description 판본이 학습 때 기록한 출력 계약의 종류. 분석 주제·소비자가 출력의 의미를 구별한다.
+             * @description 학습 때 기록한 출력 계약. 응답의 공개 범위와 무관하게 같은 의미를 유지한다.
              */
             readonly output_type: string | null;
             /** Params */
@@ -3724,6 +3739,50 @@ export interface components {
             sample_limit: number | null;
             /** Sampled */
             sampled: boolean;
+        };
+        /**
+         * PublicModelRevisionOut
+         * @description 제공 모델 소비자의 사용 정보. 내부 출처·저장 근거·학습 설정을 포함하지 않는다.
+         */
+        PublicModelRevisionOut: {
+            /** Algorithm */
+            algorithm: string;
+            /** Created At */
+            created_at: string;
+            /**
+             * Creation Evidence Visible
+             * @description 학습 출처·저장 근거·설정·규모의 열람 제한
+             * @constant
+             */
+            creation_evidence_visible: false;
+            /** Features */
+            features: string[];
+            /** Id */
+            id: string;
+            /**
+             * Lifecycle State
+             * @default Active
+             * @enum {string}
+             */
+            lifecycle_state: "Active" | "Deleting" | "Deleted";
+            /**
+             * Output Type
+             * @description 학습 때 기록한 출력 계약. 응답의 공개 범위와 무관하게 같은 의미를 유지한다.
+             */
+            readonly output_type: string | null;
+            /** Registry Version */
+            registry_version?: string | null;
+            /** Runtime */
+            runtime: {
+                [key: string]: unknown;
+            };
+            /**
+             * Training Score Summary
+             * @description 공급자 전용 집계이므로 빈 객체
+             */
+            training_score_summary: {
+                [key: string]: unknown;
+            };
         };
         /**
          * ReadyFeaturesOut
@@ -5728,7 +5787,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ModelRevisionOut"];
+                    "application/json": components["schemas"]["ModelRevisionOut"] | components["schemas"]["PublicModelRevisionOut"];
                 };
             };
             /** @description Structured API error */

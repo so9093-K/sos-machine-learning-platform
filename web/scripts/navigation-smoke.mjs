@@ -145,6 +145,45 @@ try {
   }));
   assert.match(partialResults, /학습 결과/);
   assert.doesNotMatch(partialResults, /Test 결과·평가|이상 후보 조사/);
+  const { ModelTrainingInput } = await vite.ssrLoadModule("/src/ModelCreationEvidence.tsx");
+  const trainingEvidence = renderToStaticMarkup(React.createElement(ModelTrainingInput, { model: {
+    features: ["a", "b"], runtime: { training_selection: { source_rows: 6000, selected_rows: 6000,
+      method: "all_rows", temporal_split: { input_total_rows: 10000 } },
+      training_missing_policy: "train_median", feature_training_profile: { sample_rows: 4096 } },
+  } }));
+  assert.match(trainingEvidence, /시간 분할 전 입력<\/dt><dd>10,000행/);
+  assert.match(trainingEvidence, /실제 학습 입력<\/dt><dd>6,000행 × 2 Feature/);
+  assert.match(trainingEvidence, /참고 분포 분석 4,096행/);
+  assert.match(trainingEvidence, /Train 중앙값 대체/);
+  const { modelServingStatus, modelServingPollMs } = await vite.ssrLoadModule("/src/ModelServingPanel.tsx");
+  const serving = { desired_state: "serving", ready: true, active_model_revision_id: "old",
+    pending_model_revision_id: "new", runtime: { reachable: true, pending: { status: "DEPLOYING" } } };
+  assert.match(modelServingStatus(serving, "new"), /준비 중 · 활성 전환 전/);
+  assert.match(modelServingStatus({ ...serving, active_model_revision_id: "new", runtime: { reachable: false } }, "new"), /서빙 Runtime 준비됨 · 운영 상태 조회 실패/);
+  assert.match(modelServingStatus({ ...serving, runtime: { reachable: true, pending: { status: "DEPLOY_FAILED" } } }, "new"), /배포 실패/);
+  assert.equal(modelServingStatus({ ...serving, desired_state: "stopped" }, "old"), "중단됨");
+  assert.equal(modelServingStatus({ ...serving, active_model_revision_id: "new" }, "new"), "서빙 Runtime 준비됨");
+  const failedTransition = { ...serving, runtime: { reachable: true, pending: { status: "DEPLOY_FAILED" } } };
+  assert.equal(modelServingPollMs([serving]), 5000);
+  assert.equal(modelServingPollMs([failedTransition]), 30000);
+  assert.equal(modelServingPollMs([{ ...failedTransition, runtime: { reachable: true, pending: { status: "UNHEALTHY" } } }]), 30000);
+  assert.equal(modelServingPollMs([failedTransition, serving]), 5000);
+  assert.equal(modelServingPollMs([{ ...serving, pending_model_revision_id: null }]), 30000);
+  assert.equal(modelServingPollMs([{ ...serving, desired_state: "stopped" }]), 30000);
+  assert.equal(modelServingPollMs([{ ...serving, runtime: { reachable: false } }]), 10000);
+  assert.equal(modelServingPollMs([]), 30000);
+  const { FeastInputSources } = await vite.ssrLoadModule("/src/PipelineRunDetails.tsx");
+  const feastInputs = renderToStaticMarkup(React.createElement(FeastInputSources, {
+    job: { dataset_id: "features", spec: {}, result: { feature_dataset_id: "features", feature_dataset_version: "source-v1",
+      entity_dataset_id: "entities", entity_dataset_version: "entity-v2", entity_column: "host", timestamp_column: "event_at" } },
+    onOpenDataset: () => {},
+  }));
+  assert.match(feastInputs, /Feature Source Dataset · 고정 판본 source-v1/);
+  assert.match(feastInputs, /Entity 시점 Dataset · 고정 판본 entity-v2/);
+  assert.match(feastInputs, /Entity 시점 Dataset →/);
+  assert.match(feastInputs, /Entity host.*시각.*event_at/);
+  const servingContext = contextPath("serving", { pipelineRunId: "run-source" });
+  assert.equal(routeAt("/operations/serving", servingContext.slice(servingContext.indexOf("?"))).context.pipelineRunId, "run-source");
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
   assert.equal(first.tab, "evaluations");
@@ -622,6 +661,20 @@ try {
   assert.match(missingReference, /학습 기준값 기록 없음/);
   assert.match(missingReference, /비교 불가/);
   assert.doesNotMatch(missingReference, /학습 기준값과 동일/);
+  const consumerModel = { ...sampledModel, creation_evidence_visible: false,
+    training_score_summary: {}, runtime: { feature_reference_medians: [0, 0.5], feature_training_profile: {
+      method: "sampled_linear_quantiles_v1", input_space: "model_input_after_preprocessing",
+      features: sampledModel.runtime.feature_training_profile.features } } };
+  assert.notEqual(trainingFeatureRanges(consumerModel), null);
+  const consumerProfile = renderToStaticMarkup(React.createElement(FeatureProfile, {
+    model: consumerModel, values: { cnt_file_create: 1000, ratio_outbound_traffic: 0.7 },
+  }));
+  assert.match(consumerProfile, /표본으로 만든 근사 분포/);
+  assert.match(consumerProfile, /표본 중앙값/);
+  assert.doesNotMatch(consumerProfile, /10,000건|4,096건|undefined|NaN/);
+  const restrictedTraining = renderToStaticMarkup(React.createElement(ModelTrainingInput, { model: consumerModel }));
+  assert.match(restrictedTraining, /공급자·관리자 전용/);
+  assert.doesNotMatch(restrictedTraining, /실제 학습 입력|학습 선택 대상|Train 중앙값 대체/);
   const outlierProfile = value => renderToStaticMarkup(React.createElement(FeatureProfile, {
     model: profileModel, values: { cnt_file_create: 0, ratio_outbound_traffic: value },
   }));

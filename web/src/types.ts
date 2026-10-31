@@ -26,7 +26,7 @@ export type ExplorationJob = components["schemas"]["ExplorationJobOut"];
 export type ExplorationJobSummary = components["schemas"]["ExplorationJobSummaryOut"];
 export type ExplorationJobPage = components["schemas"]["ExplorationJobPageOut"];
 
-export type ModelRevision = components["schemas"]["ModelRevisionOut"];
+export type ModelRevision = components["schemas"]["ModelRevisionOut"] | components["schemas"]["PublicModelRevisionOut"];
 export type ModelOffering = components["schemas"]["ModelOfferingOut"];
 export type ModelOfferingPage = components["schemas"]["ModelOfferingPageOut"];
 export type ModelOfferingState = components["schemas"]["ModelOfferingStateOut"];

@@ -293,7 +293,7 @@ export function MLScoringPanel({
         !visibleResult && !resultError &&
         <p role="status">완료된 분석의 결과 판본을 조회하는 중입니다.</p>}
       {visibleResult && <div className="scoring-result-complete">
-        {visibleResult.dataset_id === model.dataset_id && visibleResult.dataset_version === model.dataset_version &&
+        {model.creation_evidence_visible && visibleResult.dataset_id === model.dataset_id && visibleResult.dataset_version === model.dataset_version &&
           <p className="hint">학습에 사용한 동일 Dataset 판본의 결과입니다.
             독립된 Test 데이터에서 얻은 성능으로 해석하지 마세요.</p>}
         <ScoringObservationExplorer key={visibleResult.id} result={visibleResult} canRun={canRun}
@@ -385,7 +385,7 @@ export function MLScoringPanel({
     {columnStatus === "error" && <div role="alert"><p>입력 컬럼을 조회하지 못했습니다: {columnError}</p>
       <button type="button" className="secondary" onClick={() => setColumnsRetry(value => value + 1)}>입력 구조 재조회</button></div>}
     {checkedColumns && <ModelDatasetCompatibility model={model} columns={columns} />}
-    {datasetId === model.dataset_id && <p className="hint">
+    {model.creation_evidence_visible && datasetId === model.dataset_id && <p className="hint">
       모델 학습에 사용한 Dataset과 같은 ID입니다. 판본이 같다면 해당 점수는 독립 Test 성능이 아닙니다.
     </p>}
     {!datasetId && <p className="scoring-action-hint">분석할 Dataset을 먼저 선택하세요.</p>}

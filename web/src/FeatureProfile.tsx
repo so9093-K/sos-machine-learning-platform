@@ -13,10 +13,11 @@ export function trainingFeatureRanges(model: ModelRevision): Record<string, Rang
   const profile = model.runtime.feature_training_profile as {
     method?: unknown; input_space?: unknown; row_count?: unknown; sample_rows?: unknown; features?: Record<string, Range>;
   } | undefined;
-  if (!profile || !["linear_quantiles_v1", "sampled_linear_quantiles_v1"].includes(String(profile.method)) || profile.input_space !== "model_input_after_preprocessing" ||
-      !finite(profile.row_count) || !Number.isInteger(profile.row_count) || profile.row_count < 1 || !profile.features) return null;
-  if (profile.method === "sampled_linear_quantiles_v1" &&
-      (!finite(profile.sample_rows) || !Number.isInteger(profile.sample_rows) ||
+  const quantitiesVisible = model.creation_evidence_visible !== false;
+  if (!profile || !["linear_quantiles_v1", "sampled_linear_quantiles_v1"].includes(String(profile.method)) || profile.input_space !== "model_input_after_preprocessing" || !profile.features) return null;
+  if (quantitiesVisible && (!finite(profile.row_count) || !Number.isInteger(profile.row_count) || profile.row_count < 1)) return null;
+  if (quantitiesVisible && profile.method === "sampled_linear_quantiles_v1" &&
+      (!finite(profile.row_count) || !finite(profile.sample_rows) || !Number.isInteger(profile.sample_rows) ||
        profile.sample_rows < 1 || profile.sample_rows >= profile.row_count)) return null;
   if (!model.features.every(name => {
     const row = profile.features?.[name];
@@ -132,7 +133,9 @@ export function FeatureProfile({ model, values, names, editing = false, control,
       <span className="chip">{editing ? "편집 중인 입력" : "관측값"}</span></div>
     <p className="hint">{ranges ? "항목별 학습 중간 80% 구간과 현재 값을 비교합니다. 정상 범위나 모델 기여도가 아닙니다."
       : "이 판본에는 학습 분포 기록이 없어 중앙값과 수치만 비교합니다."}</p>
-    {sampled && <p className="hint feature-profile-scope">학습 입력 {profile?.row_count?.toLocaleString("ko-KR")}건 중 {profile?.sample_rows?.toLocaleString("ko-KR")}건 표본의 근사 분포입니다. 최솟값·최댓값도 표본 기준입니다.</p>}
+    {sampled && <p className="hint feature-profile-scope">{model.creation_evidence_visible === false
+      ? "학습 입력의 표본으로 만든 근사 분포입니다. 학습 규모와 표본 수는 공급자·관리자 전용입니다."
+      : `학습 입력 ${profile?.row_count?.toLocaleString("ko-KR")}건 중 ${profile?.sample_rows?.toLocaleString("ko-KR")}건 표본의 근사 분포입니다.`} 최솟값·최댓값도 표본 기준입니다.</p>}
     {ranges && <div className="feature-profile-legend"><span>━ 학습 P10–P90 구간</span><span>│ {sampled ? "표본 중앙값" : "중앙값"}</span>
       <span>● 현재 값 · ◀ ▶ 구간 밖</span></div>}
     <div className="feature-profile-rows">{selected.map(name => row(name, true))}</div>
