@@ -42,7 +42,6 @@ def test_permutation_shap_reconstructs_actual_sos_score():
     assert first["additive_attribution"] is True
 
 
-
 def test_permutation_shap_reconstructs_real_isolation_forest_score():
     """설명 모델이 선형 함수가 아니라 실제 SOS IF 점수인 경우도 검증한다."""
     from sos_platform.ml_if_config import IsolationForestConfig
@@ -105,8 +104,8 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
         home=tmp_path,
     )
     base = {"scoring_result_id": "s", "source_owner_actor": "owner", "row_index": 0}
-    original = explain_scored_row(store, base)
-    shap = explain_scored_row(store, {**base, "method": "permutation_shap_median_v1"})
+    original = explain_scored_row(store, base, _stage_owner(store))
+    shap = explain_scored_row(store, {**base, "method": "permutation_shap_median_v1"}, _stage_owner(store))
     assert original["method"] == "median_reference_feature_replacement"
     assert original["additive_attribution"] is False
     assert shap["method"] == "permutation_shap_median_v1"
@@ -119,7 +118,7 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
         "source_column": "sos_observation_id",
     }}
     row["observation_id"] = "18c4be49-18c4-4f32-9894-8c3bfabbd008"
-    linked = explain_scored_row(store, {**base, "method": "permutation_shap_median_v1"})
+    linked = explain_scored_row(store, {**base, "method": "permutation_shap_median_v1"}, _stage_owner(store))
     assert linked["source_observation"] == {
         "dataset_id": "dataset", "dataset_version": "v1",
         "id_column": "sos_observation_id",
@@ -178,9 +177,9 @@ def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_p
     monkeypatch.setattr(ml_explanation, "load_model_revision", lambda *_: runtime)
     spec = {"playground_job_id": "pg-job", "source_owner_actor": "actor-1"}
     shap = ml_explanation.explain_scored_row(
-        store, {**spec, "method": "permutation_shap_median_v1"})
+        store, {**spec, "method": "permutation_shap_median_v1"}, _stage_owner(store))
     sensitivity = ml_explanation.explain_scored_row(
-        store, {**spec, "method": "median_reference_feature_replacement"})
+        store, {**spec, "method": "median_reference_feature_replacement"}, _stage_owner(store))
     assert shap["playground_job_id"] == sensitivity["playground_job_id"] == "pg-job"
     assert shap["scoring_result_id"] is None and shap["row_index"] is None
     assert shap["reconstructed_score"] == pytest.approx(expected, abs=1e-7)
@@ -204,7 +203,7 @@ def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_p
         store.get_job = lambda _, item=invalid: item
         with pytest.raises(ValueError):
             ml_explanation.explain_scored_row(
-                store, {**spec, "method": "permutation_shap_median_v1"})
+                store, {**spec, "method": "permutation_shap_median_v1"}, _stage_owner(store))
 
 
 def test_playground_explanation_api_checks_source_authority_and_status(tmp_path, monkeypatch):
@@ -285,3 +284,10 @@ def test_playground_explanation_api_checks_source_authority_and_status(tmp_path,
         json={**payload, "scoring_result_id": "invalid", "row_index": 0},
         headers=headers,
     ).status_code == 422
+
+
+def _stage_owner(store):
+    """Worker가 정책·평가·설명 Attempt에 넘기는 Stage 소유 경로(Attempt 결과 경로)."""
+    results = Path(store.home) / "results"
+    results.mkdir(exist_ok=True)
+    return results / "job.attempt.pending.parquet"

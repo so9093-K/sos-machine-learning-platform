@@ -336,6 +336,7 @@ def dataset_router(store: Store, access: ResourceAccess, upload_policy: UploadPo
             with pinned_scan_dataset(store, access.dataset(body.dataset_id, actor)) as lf:
                 return {"sampled": False, **bounded_feature_preview(
                     lf, body.transform, max_seconds=budget.max_seconds,
+                    memory_mib=budget.memory_mib,
                 )}
 
     return router

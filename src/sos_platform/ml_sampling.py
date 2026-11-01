@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 import polars as pl
 
-from .duckdb_spill import SpillBudget, quoted, spill_connection, stage_exhausted
+from .duckdb_spill import SpillBudget, directory_bytes, quoted, spill_connection, stage_exhausted
 from .errors import PlatformError
 from .execution_budget import ExecutionBudget
 
@@ -82,6 +82,8 @@ def canonical_sorted_batches(
         budget = SpillBudget(
             stage=stage, memory_mib=budget_mib, max_stage_bytes=limit_bytes,
             stage_error="SOS-ML-TRAIN-STAGE-LIMIT", capacity_error="SOS-ML-TRAIN-CAPACITY",
+            # Attempt의 학습 Stage 전체를 센다. Worker의 Stage 한도 검사와 같은 범위다.
+            used_bytes=(lambda: directory_bytes(root)) if root is not None else None,
         )
         with spill_connection(budget) as conn:
             result_reader = conn.execute(

@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -25,6 +26,7 @@ class RecordingScorer:
 
 
 @pytest.fixture
+
 def scoring_env(monkeypatch, tmp_path):
     model = {
         "id": "model-v1",
@@ -380,7 +382,7 @@ def test_policy_reads_verified_scoring_file_with_in_memory_semantics(scoring_env
         "location": f"mock://{key}", "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
         "row_count": result["row_count"], "owner_actor": "researcher",
     }
-    with ml_decision._verified_scoring(store, scoring) as (path, budget):
+    with ml_decision._verified_scoring(store, scoring, _stage_owner(store)) as (path, budget):
         scores = pl.read_parquet(path)["anomaly_score"].to_list()
         threshold = quantile_threshold_file(path, 0.01, budget)
         assert threshold == quantile_threshold(scores, 0.01)
@@ -388,12 +390,12 @@ def test_policy_reads_verified_scoring_file_with_in_memory_semantics(scoring_env
             scores, threshold=threshold
         )
     assert len(scores) == 20_021
-    row = ml_decision._verified_scoring_row(store, scoring, 20_011)
+    row = ml_decision._verified_scoring_row(store, scoring, 20_011, _stage_owner(store))
     assert row["row_index"] == 20_011
     assert row["features"]["count"] == pytest.approx(20_011.0)
     assert row["anomaly_score"] == pytest.approx(20.011)
     with pytest.raises(ValueError, match="out of bounds"):
-        ml_decision._verified_scoring_row(store, scoring, 20_021)
+        ml_decision._verified_scoring_row(store, scoring, 20_021, _stage_owner(store))
 
     # 특정 행을 읽을 때 전체 Scoring 파일의 pl.read_parquet를 호출하면 회귀다.
     monkeypatch.setattr(
@@ -402,11 +404,11 @@ def test_policy_reads_verified_scoring_file_with_in_memory_semantics(scoring_env
             AssertionError("Explanation loaded entire Scoring DataFrame")
         ),
     )
-    target = ml_decision._verified_scoring_row(store, scoring, 20_000)
+    target = ml_decision._verified_scoring_row(store, scoring, 20_000, _stage_owner(store))
     assert target["row_index"] == 20_000
     scoring["row_count"] += 1
     with pytest.raises(ValueError, match="row count"):
-        ml_decision._verified_scoring_row(store, scoring, 20_000)
+        ml_decision._verified_scoring_row(store, scoring, 20_000, _stage_owner(store))
 
 
 def test_scoring_stage_is_attempt_scoped_counted_and_cleaned(tmp_path):
@@ -503,3 +505,10 @@ def test_worker_stops_scoring_stage_overflow_with_distinct_failure_code(
     assert kwargs["error_code"] == "SOS-ML-SCORE-STAGE-LIMIT"
     assert kwargs["failure_category"] == "storage"
     process.terminate.assert_called_once()
+
+
+def _stage_owner(store):
+    """Worker가 정책·평가·설명 Attempt에 넘기는 Stage 소유 경로(Attempt 결과 경로)."""
+    results = Path(store.home) / "results"
+    results.mkdir(exist_ok=True)
+    return results / "job.attempt.pending.parquet"

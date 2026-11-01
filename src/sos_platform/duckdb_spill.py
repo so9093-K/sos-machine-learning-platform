@@ -7,14 +7,12 @@ Stage 공간이나 메모리로도 수용할 수 없을 때만 호출자가 정�
 
 import errno
 import os
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
 
 import duckdb
-import pyarrow.parquet as pq
 
 from .errors import PlatformError
 from .execution_budget import ExecutionBudget
@@ -27,11 +25,13 @@ class SpillBudget:
     """한 계산이 쓸 수 있는 Stage와 자원 한도.
 
     Attributes:
-        stage: 계산을 소유한 Attempt(또는 생산 Run)의 임시 디렉터리.
+        stage: 계산을 소유한 Attempt(또는 생산 Run)의 임시 디렉터리. DuckDB Spill도 여기에 쓴다.
         memory_mib: 프로세스 전체 RSS 예산. DuckDB에는 그중 일부만 준다.
-        max_stage_bytes: Stage 디렉터리 전체에 허용하는 디스크 크기.
+        max_stage_bytes: Attempt가 쓸 수 있는 임시 디스크 전체 크기.
         stage_error: Stage 공간을 넘었을 때의 오류 코드.
         capacity_error: 메모리로 수용할 수 없을 때의 오류 코드.
+        used_bytes: Attempt가 지금 쓰고 있는 임시 디스크 전체(이 디렉터리 밖의 결과 파일 포함).
+            Worker가 Stage 한도를 검사하는 측정과 같아야 한다. 없으면 stage 디렉터리 크기다.
     """
 
     stage: Path
@@ -39,12 +39,17 @@ class SpillBudget:
     max_stage_bytes: int
     stage_error: str
     capacity_error: str
+    used_bytes: Callable[[], int] | None = None
 
     @classmethod
-    def for_worker(cls, stage: Path, *, stage_error: str, capacity_error: str) -> "SpillBudget":
+    def for_worker(
+        cls, stage: Path, *, stage_error: str, capacity_error: str,
+        used_bytes: Callable[[], int] | None = None,
+    ) -> "SpillBudget":
         """Worker 실행 예산(RSS·Stage)을 쓰는 Attempt 계산."""
         budget = ExecutionBudget.from_env()
-        return cls(stage, budget.max_rss_mib, budget.max_stage_mib * _MIB, stage_error, capacity_error)
+        return cls(stage, budget.max_rss_mib, budget.max_stage_mib * _MIB, stage_error,
+                   capacity_error, used_bytes)
 
 
 def quoted(name: str) -> str:
@@ -71,7 +76,8 @@ def stage_exhausted(exc: BaseException) -> bool:
     ))
 
 
-def _stage_bytes(stage: Path) -> int:
+def directory_bytes(stage: Path) -> int:
+    """디렉터리 아래 파일 크기 합. 측정 중 사라진 임시 파일은 건너뛴다."""
     total = 0
     for root, _, files in os.walk(stage):
         for name in files:
@@ -97,7 +103,10 @@ def spill_connection(
     """
     if budget.memory_mib <= 0 or budget.stage.is_symlink() or not budget.stage.is_dir():
         raise ValueError("Spill stage is unavailable")
-    remaining = budget.max_stage_bytes - _stage_bytes(budget.stage)
+    # DuckDB는 결과를 Stage에 쓰지 않고 Spill만 쓴다. Spill 한도를 남은 Attempt 예산으로 두어
+    # 기존 임시 파일·결과 파일과 Spill의 합이 Stage 예산을 넘지 않게 한다.
+    used = budget.used_bytes() if budget.used_bytes is not None else directory_bytes(budget.stage)
+    remaining = budget.max_stage_bytes - used
     if remaining < _MIB:
         raise PlatformError(budget.stage_error)
     # 작은 실행에서는 현재 특성을 보존하고, 큰 예산에서는 정렬 Buffer와 병렬성을 늘리되
@@ -134,30 +143,32 @@ def spill_connection(
 def order_statistics(
     path: Path, column: str, ranks: Sequence[int], budget: SpillBudget,
 ) -> list:
-    """오름차순 정렬했을 때 지정한 순위(0부터)의 값. 전체를 외부 정렬하고 필요한 Row Group만 읽는다.
+    """오름차순 정렬했을 때 지정한 순위(0부터)의 값.
 
-    정렬은 Stage에 Spill하며 결과 파일은 계산 뒤 지운다. 결측(null)은 마지막 순위다.
+    DuckDB가 Stage에 Spill하며 외부 정렬하고, 정렬 결과는 파일로 쓰지 않고 배치로 읽어 필요한 순위에
+    이르면 멈춘다. 결측(null)은 마지막 순위다.
     """
     readable = [] if path.resolve().is_relative_to(budget.stage.resolve()) else [path]
-    ordered = budget.stage / f"ordered-{uuid4().hex}.parquet"
+    wanted = sorted(set(ranks))
     found = {}
-    try:
-        with spill_connection(budget, readable=readable) as conn:
-            conn.execute(
-                f"COPY (SELECT {quoted(column)} FROM read_parquet({literal(str(path))}) "
-                f"ORDER BY {quoted(column)}) TO {literal(str(ordered))} (FORMAT parquet)"
-            )
-        with pq.ParquetFile(ordered) as reader:
+    with spill_connection(budget, readable=readable) as conn:
+        reader = conn.execute(
+            f"SELECT {quoted(column)} FROM read_parquet({literal(str(path))}) "
+            f"ORDER BY {quoted(column)}"
+        ).to_arrow_reader(batch_size=65_536)
+        try:
             offset = 0
-            for group in range(reader.num_row_groups):
-                length = reader.metadata.row_group(group).num_rows
-                wanted = [rank for rank in ranks if offset <= rank < offset + length]
-                if wanted:
-                    values = reader.read_row_group(group, columns=[column]).column(0)
-                    found.update((rank, values[rank - offset].as_py()) for rank in wanted)
-                offset += length
-    finally:
-        ordered.unlink(missing_ok=True)
+            for batch in reader:
+                values = batch.column(0)
+                found.update(
+                    (rank, values[rank - offset].as_py())
+                    for rank in wanted if offset <= rank < offset + batch.num_rows
+                )
+                offset += batch.num_rows
+                if wanted and offset > wanted[-1]:
+                    break
+        finally:
+            reader.close()
     if set(found) != set(ranks):
         raise ValueError("Order statistic rank is outside the data")
     return [found[rank] for rank in ranks]

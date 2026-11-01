@@ -29,6 +29,7 @@ class LocalScoringObjects:
 
 
 @pytest.fixture
+
 def scoring_context(monkeypatch, tmp_path):
     """서로 다른 Dataset으로부터 생성된 보정·평가 점수 판본."""
     (tmp_path / "cache").mkdir()
@@ -79,7 +80,7 @@ def create_policy(store, calibration):
         "source_owner_actor": "owner-a",
         "mode": "quantile",
         "alert_fraction": 0.25,
-    })
+    }, _stage_owner(store))
     return {
         **result,
         "id": "policy-1",
@@ -97,7 +98,7 @@ def test_calibration_quantile_applied_unchanged_to_distinct_test(scoring_context
         "policy_revision_id": "policy-1",
         "policy_owner_actor": "owner-a",
         "reference_owner_actor": "owner-a",
-    })
+    }, _stage_owner(store))
     metrics = result["decision_metrics"]
     assert policy["threshold"] == pytest.approx(0.525)
     assert metrics["threshold"] == policy["threshold"]
@@ -147,7 +148,7 @@ def test_invalid_cross_scoring_policy_rejected(scoring_context, changed):
             "policy_revision_id": "policy-1",
             "policy_owner_actor": "owner-a",
             "reference_owner_actor": "owner-a",
-        })
+        }, _stage_owner(store))
 
 
 def test_same_scoring_policy_marks_reference_relation_not_independent(scoring_context):
@@ -157,7 +158,7 @@ def test_same_scoring_policy_marks_reference_relation_not_independent(scoring_co
         "scoring_result_id": calibration["id"],
         "source_owner_actor": "owner-a",
         "policy_revision_id": "policy-1",
-    })
+    }, _stage_owner(store))
     metrics = result["decision_metrics"]
     assert metrics["policy_reference_relation"] == "same_scoring_result"
     assert metrics["independent_validation_confirmed"] is False
@@ -169,7 +170,7 @@ def test_policy_is_optional_for_unlabeled_evaluation(scoring_context):
         "scoring_result_id": test["id"],
         "source_owner_actor": "owner-a",
         "policy_revision_id": None,
-    })
+    }, _stage_owner(store))
     assert result["decision_metrics"]["threshold"] is None
     assert "policy_reference_relation" not in result["decision_metrics"]
 
@@ -264,7 +265,7 @@ def test_pinned_temporal_calibration_and_test_are_disjoint_not_statistically_ind
         "scoring_result_id": test["id"],
         "source_owner_actor": "owner-a",
         "policy_revision_id": "policy-1",
-    })
+    }, _stage_owner(store))
     metrics = applied["decision_metrics"]
     assert metrics["policy_reference_relation"] == "distinct_calibration_test_time_ranges"
     assert metrics["temporal_nonoverlap_confirmed"] is True
@@ -277,5 +278,12 @@ def test_pinned_temporal_calibration_and_test_are_disjoint_not_statistically_ind
         "scoring_result_id": test["id"],
         "source_owner_actor": "owner-a",
         "policy_revision_id": "policy-1",
-    })
+    }, _stage_owner(store))
     assert changed["decision_metrics"]["temporal_nonoverlap_confirmed"] is False
+
+
+def _stage_owner(store):
+    """Worker가 정책·평가·설명 Attempt에 넘기는 Stage 소유 경로(Attempt 결과 경로)."""
+    results = Path(store.home) / "results"
+    results.mkdir(exist_ok=True)
+    return results / "job.attempt.pending.parquet"

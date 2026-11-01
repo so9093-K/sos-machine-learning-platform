@@ -18,48 +18,63 @@ ALLOWED_CASTS = {
     "Datetime": pl.Datetime,
 }
 
-# Lag·Rolling 미리보기가 Window 계산에 쓰는 정렬 키 순서의 앞부분 행 수.
+# Lag·Rolling 미리보기가 처음 Window 계산에 쓰는 정렬 키 순서의 앞부분 행 수.
 PREVIEW_WINDOW_ROWS = 10_000
 _PREVIEW_BATCH_ROWS = 65_536
+_PREVIEW_TOO_COSTLY = "Lag·Rolling 미리보기 계산이 즉시 계산 {}를 넘었습니다. 전체 변환 Job으로 실행하세요."
 
 
-@dataclass(frozen=True)
+@dataclass
 class PreviewScope:
     """동기 미리보기의 계산 범위.
 
     Window 단계는 정렬 키 순서의 앞 `rows`행만 계산한다. 그룹 안의 이전 행은 전체 정렬에서도 앞에
-    있으므로 결과 앞부분은 전체 변환과 같다. 입력을 한 번 순회하는 비용이 `deadline`(monotonic 시각)을
-    넘으면 중단한다. 키 유일성처럼 전체 데이터가 필요한 검증은 변환 Job이 확정한다.
+    있으므로, 이 앞부분으로 만든 결과는 전체 변환 결과의 앞부분과 같다. 앞부분이 입력 전체를 덮지
+    못했으면 `truncated`가 참이다. 입력 순회가 `deadline`(monotonic 시각)이나 메모리 범위를 넘으면
+    중단한다. 키 유일성처럼 전체 데이터가 필요한 검증은 변환 Job이 확정한다.
     """
 
     rows: int
     deadline: float
+    memory_bytes: int
+    truncated: bool = False
 
 
-def bounded_feature_preview(lf: pl.LazyFrame, spec: Transform, *, max_seconds: float) -> dict:
-    """변환 결과의 앞부분을 입력 크기와 관계없이 같은 의미로 계산한다.
+def bounded_feature_preview(
+    lf: pl.LazyFrame, spec: Transform, *, max_seconds: float, memory_mib: int, limit: int = 30,
+) -> dict:
+    """변환 결과의 앞 `limit`행을 입력 크기와 관계없이 전체 변환과 같은 값으로 계산한다.
 
-    계산 비용은 입력 행 수가 아니라 한 요청의 계산 시간으로 제한한다. 넘으면 같은 변환을 Job으로
-    실행하도록 안내한다.
+    Window 뒤의 필터가 앞부분 행을 걸러 표시할 행이 모자라면, 읽지 않은 입력이 남은 경우 앞부분을
+    넓혀 다시 계산한다. 일부 입력만 계산한 결과를 전체 결과의 앞부분처럼 반환하지 않는다. 계산 비용은
+    입력 행 수가 아니라 한 요청의 계산 시간·메모리로 제한하고, 넘으면 같은 변환을 Job으로 안내한다.
     """
-    scope = PreviewScope(rows=PREVIEW_WINDOW_ROWS, deadline=time.monotonic() + max_seconds)
-    return safe_preview(transform(lf, spec, preview=scope), limit=30)
+    deadline = time.monotonic() + max_seconds
+    rows = PREVIEW_WINDOW_ROWS
+    while True:
+        scope = PreviewScope(rows=rows, deadline=deadline, memory_bytes=memory_mib * 1024 * 1024)
+        result = safe_preview(transform(lf, spec, preview=scope), limit=limit)
+        if result["returned_rows"] >= limit or not scope.truncated:
+            return result
+        rows *= 4
 
 
-def _leading_rows(
-    lf: pl.LazyFrame, keys: list[str], order_by: str, rows: int, deadline: float,
-) -> pl.DataFrame:
-    """정렬 키 순서의 앞 rows행. 배치마다 지금까지의 앞부분과 합쳐 다시 자르므로 메모리는 배치·rows에 비례한다."""
+def _leading_rows(lf: pl.LazyFrame, keys: list[str], order_by: str, scope: PreviewScope) -> pl.DataFrame:
+    """정렬 키 순서의 앞 rows+1행(경계의 키 중복 확인용 한 행 포함).
+
+    배치마다 지금까지의 앞부분과 합쳐 다시 자르므로 메모리는 배치·rows에 비례한다.
+    """
     leading = None
     for batch in lf.collect_batches(chunk_size=_PREVIEW_BATCH_ROWS, maintain_order=False):
-        if time.monotonic() > deadline:
-            raise InvalidRequestError(
-                "Lag·Rolling 미리보기 계산이 즉시 계산 시간 한도를 넘었습니다. 전체 변환 Job으로 실행하세요."
-            )
+        if time.monotonic() > scope.deadline:
+            raise InvalidRequestError(_PREVIEW_TOO_COSTLY.format("시간 한도"))
         if batch[order_by].null_count():
             raise InvalidRequestError("시간·정렬 컬럼에 빈 값이 있습니다.")
         combined = batch if leading is None else pl.concat([leading, batch])
-        leading = combined.sort(keys).head(rows)
+        # 합친 배치·정렬 사본을 함께 고려해 예약한 메모리의 일부만 앞부분에 쓴다.
+        if combined.estimated_size() * 4 > scope.memory_bytes:
+            raise InvalidRequestError(_PREVIEW_TOO_COSTLY.format("메모리 범위"))
+        leading = combined.sort(keys).head(scope.rows + 1)
     return leading if leading is not None else lf.head(0).collect()
 
 
@@ -127,9 +142,8 @@ def transform(lf: pl.LazyFrame, spec: Transform, *, preview: PreviewScope | None
                             "정렬 키를 바꾼 뒤 다시 정렬하는 변환은 전체 변환 Job으로 확인하세요."
                         )
                     # 경계의 키 중복도 드러나도록 한 행 더 읽고 확인한 뒤 자른다.
-                    leading = _leading_rows(
-                        lf, keys, spec.order_by, preview.rows + 1, preview.deadline,
-                    )
+                    leading = _leading_rows(lf, keys, spec.order_by, preview)
+                    preview.truncated = leading.height > preview.rows
                     checked = leading.lazy()
                 else:
                     if lf.select(pl.col(spec.order_by).is_null().any()).collect().item():

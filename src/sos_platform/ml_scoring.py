@@ -19,7 +19,7 @@ from .ml_input import INTEGER_DTYPES, model_input_issues
 from .ml_observation_identity import validate_observation_identity
 from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
 from .ml_runtime import load_model_revision
-from .ml_scoring_staging import scoring_stage_prefix
+from .ml_scoring_staging import scoring_stage_bytes, scoring_stage_prefix
 from .ml_temporal_split import select_temporal_partition, utc_observation_time
 from .schemas import MLScoringTemporalScope
 from .score_files import ranking_metrics_file, score_histogram_file
@@ -272,6 +272,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                 pending, SpillBudget.for_worker(
                     Path(directory), stage_error="SOS-ML-SCORE-STAGE-LIMIT",
                     capacity_error="SOS-ML-SCORE-CAPACITY",
+                    used_bytes=lambda: scoring_stage_bytes(store.home, pending),
                 ),
                 positives=positives, negatives=count - positives,
             )

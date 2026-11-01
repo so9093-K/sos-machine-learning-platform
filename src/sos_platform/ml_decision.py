@@ -11,23 +11,34 @@ import pyarrow.parquet as pq
 
 from .duckdb_spill import SpillBudget
 from .ml_policy_contract import validate_policy_for_scoring
+from .ml_scoring_staging import scoring_stage_bytes, scoring_stage_prefix
 from .object_store import ObjectStore
 from .score_files import quantile_threshold_file, summarize_scores
 
 
 @contextmanager
-def _verified_scoring(store, scoring: dict) -> Iterator[tuple[Path, SpillBudget]]:
-    """해시를 검증한 Scoring Parquet과 같은 Attempt 임시 디렉터리의 Spill 예산을 제공한다.
+def _attempt_stage(store, stage_owner: Path) -> Iterator[Path]:
+    """Worker가 크기를 감시하고 종료·복구 때 회수하는 이 Attempt 소유 임시 디렉터리."""
+    with TemporaryDirectory(
+        prefix=scoring_stage_prefix(stage_owner), dir=stage_owner.parent,
+    ) as directory:
+        yield Path(directory)
+
+
+@contextmanager
+def _verified_scoring(store, scoring: dict, stage_owner: Path) -> Iterator[tuple[Path, SpillBudget]]:
+    """해시를 검증한 Scoring Parquet과 이 Attempt Stage의 Spill 예산을 제공한다.
 
     행 수·필수 컬럼·행 순서는 배치로 순회하며 확인한다. 점수를 메모리에 모으지 않으며, Policy·Evaluation은
-    파일 계산(`score_files`)으로 같은 결과를 만든다.
+    파일 계산(`score_files`)으로 같은 결과를 만든다. 내려받은 결과와 외부 정렬 Spill은 Attempt Stage에
+    두어 Worker의 Stage 한도 검사와 회수 대상이 된다.
     """
     storage = ObjectStore()
     expected = f"results/{scoring['job_id']}/{scoring['attempt_id']}.scores.parquet"
     if scoring["location"] != storage.location(expected):
         raise ValueError("Scoring artifact is outside its immutable Attempt location")
-    with TemporaryDirectory(prefix="ml-scoring-", dir=store.home / "cache") as directory:
-        path = Path(directory) / "scores.parquet"
+    with _attempt_stage(store, stage_owner) as directory:
+        path = directory / "scores.parquet"
         storage.get(expected, path, expected_sha256=scoring["sha256"])
         with pq.ParquetFile(path) as parquet:
             if parquet.metadata.num_rows != scoring["row_count"]:
@@ -41,8 +52,9 @@ def _verified_scoring(store, scoring: dict) -> Iterator[tuple[Path, SpillBudget]
                     raise ValueError("Scoring artifact row order does not match its revision")
                 position += len(indices)
         yield path, SpillBudget.for_worker(
-            Path(directory), stage_error="SOS-ML-SCORE-STAGE-LIMIT",
+            directory, stage_error="SOS-ML-SCORE-STAGE-LIMIT",
             capacity_error="SOS-ML-SCORE-CAPACITY",
+            used_bytes=lambda: scoring_stage_bytes(store.home, stage_owner),
         )
 
 
@@ -51,13 +63,14 @@ def _labeled(path: Path) -> bool:
         return "label" in parquet.schema_arrow.names
 
 
-def _verified_scoring_row(store, scoring: dict, row_index: int) -> dict:
+def _verified_scoring_row(store, scoring: dict, row_index: int, stage_owner: Path) -> dict:
     """해시 검증된 Scoring Parquet에서 설명 대상 Row Group만 불러온다.
 
     Args:
         store: 조회에 사용할 SOS Store와 Attempt별 캐시.
         scoring: 원본 Scoring Result의 불변 위치·SHA-256·행 수.
         row_index: 결과 Parquet에서 생성한 전역 순번.
+        stage_owner: 내려받은 결과를 둘 Attempt Stage의 소유 경로.
 
     Returns:
         dict: 선택한 한 행의 점수, 원본 Feature struct, 선택적 관측치 UUID.
@@ -71,8 +84,8 @@ def _verified_scoring_row(store, scoring: dict, row_index: int) -> dict:
     expected = f"results/{scoring['job_id']}/{scoring['attempt_id']}.scores.parquet"
     if scoring["location"] != storage.location(expected):
         raise ValueError("Scoring artifact is outside its immutable Attempt location")
-    with TemporaryDirectory(prefix="ml-scoring-", dir=store.home / "cache") as directory:
-        path = Path(directory) / "scores.parquet"
+    with _attempt_stage(store, stage_owner) as directory:
+        path = directory / "scores.parquet"
         storage.get(expected, path, expected_sha256=scoring["sha256"])
         with pq.ParquetFile(path) as parquet:
             if parquet.metadata.num_rows != scoring["row_count"]:
@@ -101,7 +114,7 @@ def _verified_scoring_row(store, scoring: dict, row_index: int) -> dict:
     raise ValueError("Explanation row_index is out of bounds")
 
 
-def apply_scoring_policy(store, spec: dict) -> dict:
+def apply_scoring_policy(store, spec: dict, stage_owner: Path) -> dict:
     """고정 또는 참조 분위수 임계값을 기존 점수에만 적용한다."""
     source = store.get_scoring_result(spec["scoring_result_id"])
     if source is None or source["owner_actor"] != spec["source_owner_actor"]:
@@ -109,7 +122,7 @@ def apply_scoring_policy(store, spec: dict) -> dict:
     mode = spec["mode"]
     if mode not in ("fixed", "quantile"):
         raise ValueError("Unsupported Decision Policy")
-    with _verified_scoring(store, source) as (path, budget):
+    with _verified_scoring(store, source, stage_owner) as (path, budget):
         threshold = (
             spec["threshold"] if mode == "fixed"
             else quantile_threshold_file(path, spec["alert_fraction"], budget)
@@ -154,7 +167,7 @@ def _verified_temporal_nonoverlap(reference: dict, target: dict) -> bool:
     )
 
 
-def evaluate_scoring_policy(store, spec: dict) -> dict:
+def evaluate_scoring_policy(store, spec: dict, stage_owner: Path) -> dict:
     """정책 산정 Scoring과 적용 Scoring을 구분해 평가 근거를 남긴다."""
     source = store.get_scoring_result(spec["scoring_result_id"])
     if source is None or source["owner_actor"] != spec["source_owner_actor"]:
@@ -172,7 +185,7 @@ def evaluate_scoring_policy(store, spec: dict) -> dict:
         if policy is not None else None
     )
     threshold = policy["threshold"] if policy else None
-    with _verified_scoring(store, source) as (path, _):
+    with _verified_scoring(store, source, stage_owner) as (path, _):
         labeled = _labeled(path)
         if labeled and threshold is None:
             # 랭킹 지표는 정책 없이 측정할 수 있지만 이진 판정 지표는 정의하지 않는다.

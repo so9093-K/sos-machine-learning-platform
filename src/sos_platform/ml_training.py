@@ -14,7 +14,7 @@ import polars as pl
 import sklearn
 
 from .datasets import pinned_scan_dataset
-from .duckdb_spill import SpillBudget
+from .duckdb_spill import SpillBudget, directory_bytes
 from .errors import PlatformError
 from .execution_budget import ExecutionBudget
 from .ml_if_config import IsolationForestConfig
@@ -339,6 +339,7 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
             evidence_budget = SpillBudget.for_worker(
                 stage, stage_error="SOS-ML-TRAIN-STAGE-LIMIT",
                 capacity_error="SOS-ML-TRAIN-CAPACITY",
+                used_bytes=(lambda: directory_bytes(Path(scratch_root))) if scratch_root else None,
             )
             if input_policy.mode == "all":
                 preprocessing = fit_staged_medians(matrix, features)
