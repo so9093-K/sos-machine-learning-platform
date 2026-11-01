@@ -258,46 +258,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/examples": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 선택 가능한 합성 예제 조회
-         * @description 미리 보기 가능한 합성 데이터 예제의 정의를 조회한다.
-         */
-        get: operations["available_examples_api_examples_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/examples/{example_id}/use": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 합성 예제 Dataset 등록 또는 재사용
-         * @description 사용자가 명시적으로 요청한 경우에만 합성 예제를 Dataset으로 등록하거나 동일 판본을 재사용합니다.
-         */
-        post: operations["start_example_api_examples__example_id__use_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/explorations/jobs": {
         parameters: {
             query?: never;
@@ -2026,26 +1986,6 @@ export interface components {
             } | null;
             /** Scoring Result Id */
             scoring_result_id: string;
-        };
-        /**
-         * ExampleOut
-         * @description 예제는 별도 가짜 결과가 아니라 Dataset 등록 안내를 제공한다.
-         */
-        ExampleOut: {
-            /** Columns */
-            columns: string[];
-            /** Description */
-            description: string;
-            /** Guide */
-            guide: string;
-            /** Id */
-            id: string;
-            /** Row Count */
-            row_count: number;
-            /** Title */
-            title: string;
-            /** Version */
-            version: string;
         };
         /** ExplanationResultOut */
         ExplanationResultOut: {
@@ -4702,66 +4642,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    available_examples_api_examples_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExampleOut"][];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    start_example_api_examples__example_id__use_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                example_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DatasetOut"];
                 };
             };
             /** @description Structured API error */

@@ -5,7 +5,6 @@ import { FeaturePanel } from "./FeaturePanel";
 import { useIcebergConnector } from "./useIcebergConnector";
 import { request, jsonPost, submitJob, describeError, type ErrorNotice } from "./api";
 import { ErrorNotice as ErrorNoticeView } from "./ErrorNotice";
-import { AvailableExamples } from "./ExampleGallery";
 import { DelimitedImport } from "./DelimitedImport";
 import { JobsPanel } from "./JobsPanel";
 import { StoragePanel } from "./StoragePanel";
@@ -268,14 +267,6 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       await showSubmittedJob(job, "작업을 접수했습니다. 실행 상태와 결과를 확인할 수 있습니다.");
     });
   }
-  async function selectExample(exampleId: string) {
-    await withFeedback(async () => {
-      const data = await jsonPost<Dataset>(`/api/examples/${exampleId}/use`, {});
-      await showRegisteredDataset(data,
-        "예제가 일반 데이터셋으로 등록됐습니다. EDA와 피처 변환을 시작할 수 있습니다.",
-        "예제는 정상 등록됐습니다. 목록 갱신 결과를 확인하지 못했지만 다시 등록할 필요는 없습니다.");
-    });
-  }
   async function openJobDataset(datasetId: string) {
     await withFeedback(async () => {
       // 완료 Job의 출력은 최신 Dataset 첫 페이지 밖에 있을 수 있다.
@@ -379,10 +370,6 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onFile={file => {
             if (uploads.choose(file) === "confirm") { setError(""); setNotice(""); }
           }}
-          onExample={() => {
-            setSelected("");
-            navigateWithContext(tab === "preparation" ? "preparation" : "preview", {});
-          }}
           onChoose={id => {
             chooseDataset(id, ["preparation", "preview", "profile"].includes(tab)
               ? tab as "preparation" | "preview" | "profile" : "understanding");
@@ -407,15 +394,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           ? "조회 전용 계정입니다. 이 계정 소유의 Dataset이 있으면 위의 Dataset 선택에서 골라 살펴볼 수 있습니다."
           : tab === "preparation"
           ? "데이터 준비는 탐색 분석 없이도 시작할 수 있습니다. 파일을 가져오거나 기존 Dataset을 선택하세요."
-          : "CSV·Parquet·탭 구분 TSV/TXT, Iceberg 테이블 또는 합성 예제로 시작하세요."}</p>
+          : "기존 Dataset을 선택하거나 CSV·Parquet·탭 구분 TSV/TXT 파일을 등록하세요. Iceberg 테이블도 연결할 수 있습니다."}</p>
         {canWrite && <button className="secondary" onClick={() => uploadRef.current?.click()}>
           파일 선택 (CSV·Parquet·TSV·TXT)
         </button>}
-        {/* 예제는 Dataset으로 등록되므로 등록 권한이 있는 계정에만 보인다. */}
-        {canWrite && <AvailableExamples busy={busy}
-          startLabel={tab === "preparation"
-            ? "이 예제로 데이터 준비 시작 →" : undefined}
-          onUse={id => void selectExample(id)} />}
       </div>}
       {dataset && isDataArea && <>
         <div className="dataset-hero">

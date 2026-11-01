@@ -20,7 +20,6 @@ from .discovery import preview as discovery_preview
 from .discovery import profile as discovery_profile
 from .discovery import query_dataset
 from .errors import PlatformError
-from .examples import list_examples, use_example
 from .file_formats import upload_options_from_mime
 from .ingestion import UploadPolicy
 from .pagination import decode_cursor, page_from_rows
@@ -32,7 +31,6 @@ from .schemas import (
     DatasetOverviewOut,
     DatasetPageOut,
     DatasetQuery,
-    ExampleOut,
     ExplorationOut,
     ExplorationRequest,
     FeaturePreview,
@@ -60,31 +58,6 @@ SNAPSHOT_READ_DEP = Depends(require("snapshot.read"))
 def dataset_router(store: Store, access: ResourceAccess, upload_policy: UploadPolicy) -> APIRouter:
     """Dataset 원본과 동기 탐색·변환 미리보기 경로. 긴 계산은 Job으로 제출한다."""
     router = APIRouter()
-
-    @router.get(
-        "/api/examples",
-        tags=["Datasets"],
-        summary="선택 가능한 합성 예제 조회",
-        response_model=list[ExampleOut],
-    )
-    def available_examples(actor: Actor = READ_DATASET_DEP):
-        """미리 보기 가능한 합성 데이터 예제의 정의를 조회한다."""
-        return list_examples()
-
-    @router.post(
-        "/api/examples/{example_id}/use",
-        tags=["Datasets"],
-        summary="합성 예제 Dataset 등록 또는 재사용",
-        description="사용자가 명시적으로 요청한 경우에만 합성 예제를 Dataset으로 등록하거나 동일 판본을 재사용합니다.",
-        status_code=201,
-        response_model=DatasetOut,
-    )
-    def start_example(example_id: str, actor: Actor = CREATE_DATASET_DEP):
-        """예제를 명시적으로 선택했을 때만 일반 Dataset으로 등록한다."""
-        try:
-            return use_example(store, example_id, owner_actor=actor.id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="예제를 찾을 수 없습니다.") from exc
 
     @router.get(
         "/api/datasets",

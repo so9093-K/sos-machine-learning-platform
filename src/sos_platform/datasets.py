@@ -6,7 +6,6 @@ import shutil
 import stat
 from collections.abc import Iterator
 from contextlib import contextmanager
-from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import BinaryIO
@@ -23,11 +22,6 @@ from .file_formats import reader_for_suffix, scan_file
 from .ingestion import UploadPolicy, staged_upload
 from .object_store import ObjectStore
 from .store import Store
-
-
-def save_upload(store: Store, name: str, content: bytes, *, owner_actor: str | None = None) -> dict:
-    """합성 예제 등 기존 바이트 입력도 동일한 파일 등록 계약으로 처리한다."""
-    return save_upload_file(store, name, BytesIO(content), owner_actor=owner_actor)
 
 
 def save_upload_file(

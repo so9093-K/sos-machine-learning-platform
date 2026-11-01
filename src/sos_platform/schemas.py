@@ -994,18 +994,6 @@ class JobPageOut(BaseModel):
     next_cursor: str | None = None
 
 
-class ExampleOut(BaseModel):
-    """예제는 별도 가짜 결과가 아니라 Dataset 등록 안내를 제공한다."""
-
-    id: str
-    title: str
-    description: str
-    columns: list[str]
-    guide: str
-    row_count: int
-    version: str
-
-
 class SnapshotOut(BaseModel):
     snapshot_id: str
     timestamp_ms: int

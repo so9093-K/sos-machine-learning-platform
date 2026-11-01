@@ -70,7 +70,7 @@ export function PlatformOverview({ brandName, datasets, onNavigate, onOpenLearni
       </div>{canPrepare && <button className="secondary" type="button"
         onClick={() => onNavigate("preparation")}>데이터 준비 →</button>}</div>
       {datasets.length === 0 ? <p className="muted">{canWrite
-        ? "현재 조회한 Dataset이 없습니다. 데이터 탐색에서 파일을 등록하거나 예제를 선택하세요."
+        ? "현재 조회한 Dataset이 없습니다. 데이터 탐색에서 파일을 등록하거나 Iceberg 테이블을 연결하세요."
         : "이 계정에서 조회할 수 있는 Dataset이 없습니다. 조회 전용 계정은 이 계정 소유의 Dataset만 볼 수 있으며 새 Dataset은 등록할 수 없습니다."}</p> :
         <div className="platform-compact-list">
           {datasets.slice(0, 5).map(dataset => <button key={dataset.id} type="button"
