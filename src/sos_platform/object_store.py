@@ -9,6 +9,7 @@ from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
 
 from .config import Settings
+from .model_artifacts import is_model_artifact_key
 
 
 class ObjectStore:
@@ -100,7 +101,7 @@ class ObjectStore:
 
     def permanently_delete(self, key: str) -> None:
         """SOS 전용 모델 객체의 모든 저장 버전을 제거하고 재조회로 확인한다."""
-        if not key.startswith("results/") or not key.endswith(".model.joblib"):
+        if not is_model_artifact_key(key):
             raise ValueError("Only SOS model artifacts can be deleted")
         bucket = self.config.s3_bucket
         while True:

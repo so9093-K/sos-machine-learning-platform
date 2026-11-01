@@ -11,7 +11,7 @@ import numpy as np
 from .ml_decision import _verified_scoring_row
 from .ml_input import ordered_playground_input
 from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
-from .ml_runtime import load_trusted_isolation_forest
+from .ml_runtime import load_model_revision
 
 
 def explain_scored_row(store, spec: dict) -> dict:
@@ -48,7 +48,7 @@ def explain_scored_row(store, spec: dict) -> dict:
     item = _verified_scoring_row(store, scoring, selected)
     struct = item["features"]
     original = np.asarray([struct[name] for name in names], dtype=np.float64)
-    model_runtime = load_trusted_isolation_forest(model, store.home / "cache")
+    model_runtime = load_model_revision(model, store.home / "cache")
     saved_score = float(item["anomaly_score"])
     recomputed = model_runtime.score_anomalies(original.reshape(1, -1))[0]
     if not math.isclose(saved_score, recomputed, rel_tol=1e-9, abs_tol=1e-10):
@@ -153,7 +153,7 @@ def explain_playground_job(store, spec: dict) -> dict:
     score = saved_result.get("anomaly_score")
     if type(score) not in (int, float) or not math.isfinite(score):
         raise ValueError("Playground stored model score is unavailable")
-    model_runtime = load_trusted_isolation_forest(model, store.home / "cache")
+    model_runtime = load_model_revision(model, store.home / "cache")
     recalculated = float(model_runtime.score_anomalies(original.reshape(1, -1))[0])
     if not math.isclose(float(score), recalculated, rel_tol=1e-9, abs_tol=1e-10):
         raise ValueError("Playground result and model output disagree")

@@ -7,21 +7,24 @@
 | 개념 | 의미와 경계 |
 | --- | --- |
 | **Experiment** | 연구 목적에 따라 관련 설정·실행·평가를 비교하는 논리적 묶음 |
-| **Workflow Definition** | 재사용 가능한 작업 단계, 입력·출력·의존관계의 정의 |
-| **Workflow Run** | 특정 Workflow Definition을 실행한 개별 기록. 하나 이상의 Job을 포함할 수 있다 |
 | **Job** | 플랫폼에 제출된 단일 실행 요청과 그 수명주기를 추적하는 논리적 단위 |
 | **Execution Attempt** | Job을 수행한 실제 시도. 재시도는 이전 시도와 구분된다 |
 | **Dataset Reference** | 사용된 데이터의 소스·버전 또는 재식별 가능한 범위와 스키마 |
-| **Model Revision** | 식별 가능한 한 모델 결과의 불변 판본. 가변적인 배포 별칭과 구분한다 |
+| **Model Revision** | 식별 가능한 한 모델 결과의 불변 판본. 출처(SOS 학습 또는 MLflow 연결)를 가지며 가변적인 배포 별칭과 구분한다 |
 | **Artifact** | 모델·전처리·평가·로그 등 생성·참조되는 결과물과 무결성 정보 |
 | **Evaluation** | 특정 모델·데이터·지표·평가 조건의 조합으로 얻은 결과 |
 | **Runtime Specification** | 작업을 실행하는 데 필요한 환경 및 호환성 요구 |
 
 데이터·모델·결과의 소유와 접근 범위는 Actor 단위다. [Platform Identity](vision/PLATFORM_IDENTITY.md)의 Project는 장기 개념이며 현재 영속 리소스나 권한 범위로 구현돼 있지 않다.
 
-등록형 Pipeline의 Workflow 정의·단계 의존성·Run 상태·운영 Lineage는 Dagster OSS가 관리한다. SOS의 Workflow 제출 식별·Actor 권한과 개별 Job/Attempt·불변 결과는 SOS 정본이며, MLflow는 Experiment·Model Registry의 관리 정본이다. 이 세 시스템의 ID·책임을 동일한 상태나 자산으로 취급하지 않는다.
+모델 생산 Pipeline(Dagster)의 Run 상태·운영 Lineage는 Dagster, 생산한 모델의 Experiment·Run·Model Version은 MLflow, 연결한 판본의 Actor 권한·Job/Attempt·불변 결과는 SOS가 관리한다. 이 세 시스템의 ID·책임을 동일한 상태나 자산으로 취급하지 않는다. 실험은 실행 자체가 아니며, Job과 실행 시도도 동일하지 않다. 모델 판본·아티팩트·배포 대상은 서로 다른 생명주기를 가진다.
 
-등록형 Pipeline은 개발 환경에서 정의해 배포한 신뢰된 Workflow Definition이다. 각 실행은 Dataset 판본에 고정된 별도 Workflow Run이며 기존 Job/Attempt·권한·불변 결과를 재사용한다. Pipeline을 이용하지 않는 독립 ML API 실행도 유지한다. 단순한 Job은 Workflow Definition에 속할 필요가 없다. 실험은 실행 자체가 아니며, Job과 실행 시도도 동일하지 않다. 모델 판본·아티팩트·배포 대상은 서로 다른 생명주기를 가진다.
+## 모델 출처와 연결
+
+- **출처:** Model Revision의 `source_kind`는 `sos_training`(SOS가 Dataset 판본으로 학습) 또는 `mlflow_registry`(외부 생산 Pipeline이 MLflow에 등록한 고정 버전을 연결)다. SOS 학습 판본은 학습 Dataset·판본을, 연결한 판본은 `source`(MLflow 모델·버전·Run, 생산 측 학습 근거)를 갖는다. `job_id`·`attempt_id`는 판본을 게시한 SOS Job(학습 또는 연결)이다.
+- **모델 패키지:** 연결 대상 버전의 아티팩트 위치에는 `sos_model.json`과 `estimator.skops`가 있어야 한다(`ml_model_package.py`). `sos_model.json`은 입력 Feature·자료형, 학습 중앙값 전처리, 매개변수, 학습 점수 요약·입력 분포, 생산 Runtime(Python·numpy·scikit-learn·skops), 생산 측 학습 근거, 검증 표본(입력·점수)을 담는다.
+- **연결 검증:** 연결 Job은 버전이 READY인지, 패키지 구조·값 범위, 생산 Runtime 호환성, 허용 타입만 있는 skops 복원, 서명·매개변수 일치, 검증 표본 점수의 SOS Runtime 재현을 확인한 뒤에만 게시한다. 전처리는 역직렬화하지 않고 기록한 중앙값으로 다시 구성한다. 버전은 번호로 고정하며 SOS 모델 그룹(`sos-if-*`)의 버전은 연결하지 않는다.
+- **연결 후:** 아티팩트는 게시 Attempt의 SOS 저장 위치로 옮기고 소유자의 SOS 모델 그룹에 버전으로 등록한다(원본 모델·버전·Run은 `sos.source_*` 태그). 제공·Scoring·Playground·온라인 서빙·삭제는 SOS 학습 판본과 같다. 연결한 판본은 SOS 학습 Dataset이 없으므로 학습 시간 경계를 재사용하는 시간 구간 Scoring은 쓸 수 없다.
 
 모델 그룹은 목적별 논리적 Registered Model이며 그룹의 표시 이름·설명·보관과 모델 버전은 MLflow가 관리한다. 그룹을 지정하지 않은 모델은 `default` 그룹에 속한다. 새 학습으로 기존 고정 모델 결과를 덮어쓰지 않는다. Registry 그룹/버전 보관은 신규 모델 사용을 제한하지만 물리 삭제가 아니다. 모델 파일의 영구 삭제는 SOS가 실제 S3 객체와 MLflow 버전 제거를 확인하고 `Deleting`/`Deleted` 상태를 기록한다. 과거 Scoring·정책·평가·설명은 독립 실행 근거로 남고 삭제된 Model Revision은 접근 불가 모델 파일의 참조 tombstone이 된다. 결정 배경은 [ADR 0017](adr/0017-model-lifecycle.md)에 있다.
 
@@ -44,7 +47,7 @@ Feast는 등록 Entity·Feature View·Feature Service와 Historical Retrieval의
 - **학습 입력과 실행 자원:** `all`은 선택한 Train 범위의 모든 행, `sample`은 명시적으로 선택한 행 수를 의미하며 실제 데이터 저장 방식이나 Worker의 RSS/임시 디스크 예산과 혼동하지 않는다. 물리적으로 수용할 수 없을 때는 실행 실패를 정확히 보고하지만, 임의의 사전 행 수 상한에 맞추려고 입력을 조용히 줄이지 않는다.
 - **Explanation 출력 경계:** Feature 치환 민감도와 Permutation SHAP 기여도는 서로 다른 설명 방법이다. SHAP은 모델의 실제 SOS 점수 함수(전처리 포함)·기준 출력을 설명하며, 기준값·선택된 배경·Seed·평가량·라이브러리 판본·가법 재구성 오차를 결과에 남긴다. 단일 Train 중앙값 합성 배경은 Train 관측 분포를 대표하지 않으며, 기여도는 사고 원인·확률·정답을 의미하지 않는다.
 - **단계 재사용:** 이미 계산된 모델 점수를 다른 Threshold Policy에 적용하거나 설명을 별도로 생성할 때 불필요하게 다시 학습하지 않는다. 실제 재사용 가능 범위는 입력·모델·방법·Runtime 계약으로 판단한다.
-- **MLflow 관리 정본:** Experiment·Run·Registered Model·Model Version의 관리 정본은 MLflow다. SOS의 Model Revision은 Job/Attempt·Dataset·아티팩트 SHA·Feature·Runtime의 불변 실행 참조이며 MLflow 고정 버전을 연결한다. 등록되지 않은 신규 모델은 Scoring에 사용할 수 없다. Job/Attempt와 Evaluation의 결과 의미는 MLflow가 대체하지 않는다.
+- **MLflow 관리 정본:** Experiment·Run·Registered Model·Model Version의 관리 정본은 MLflow다. SOS의 Model Revision은 게시 Job/Attempt·출처·아티팩트 SHA·Feature·Runtime의 불변 실행 참조이며 MLflow 고정 버전을 연결한다. 등록되지 않은 신규 모델은 Scoring에 사용할 수 없다. Job/Attempt와 Evaluation의 결과 의미는 MLflow가 대체하지 않는다.
 
 모델의 원본 학습 규모·내부 입력 선택·결측 처리 정책과 학습 점수 집계는 소유자·관리자만 조회한다. 제공 모델의 상세·목록 응답에서도 같은 제한을 적용한다. 소비자에게는 Feature·자료형·입력 기준값·출력 계약과 입력 비교용 분위값을 제공하되, 행 수·표본 수·학습 Dataset·Job·Attempt 식별자와 판본·아티팩트 위치·해시·학습 매개변수·내부 Feature 출처·학습 점수 Histogram 건수는 포함하지 않는다. 권한별 응답 투영은 불변 모델 원본이나 Worker·추론의 실행 계약을 변경하지 않는다.
 
@@ -65,8 +68,8 @@ Dataset 없는 단일 관측치 Playground Job은 입력 Feature와 실제 모�
 
 ## 분석 주제
 
-- **주제 계약:** 분석 주제는 식별자, 학습 유형·분석 과제 분류, 입력 Feature, 출력 계약(`output_type`)을 가진다(`GET /api/topics`). 등록 Pipeline은 주제에 모델을 공급하는 선택적 Workflow이며 정의의 `topic`으로 주제를 가리킨다.
-- **적합성:** 모델은 입력 Feature 이름 집합과 `output_type`이 주제와 같으면 그 주제에 맞는다. 알고리즘과 공급 Pipeline은 판정에 쓰지 않으며 입력 순서도 비교하지 않는다. 같은 `output_type`이라도 점수 척도는 알고리즘마다 다를 수 있으므로 점수는 같은 판본끼리 비교한다.
+- **주제 계약:** 분석 주제는 식별자, 학습 유형·분석 과제 분류, 입력 Feature, 출력 계약(`output_type`)을 가진다(`GET /api/topics`). 모델은 SOS 학습 또는 외부 생산 Pipeline의 연결로 주제에 공급된다.
+- **적합성:** 모델은 입력 Feature 이름 집합과 `output_type`이 주제와 같으면 그 주제에 맞는다. 알고리즘과 모델 출처는 판정에 쓰지 않으며 입력 순서도 비교하지 않는다. 같은 `output_type`이라도 점수 척도는 알고리즘마다 다를 수 있으므로 점수는 같은 판본끼리 비교한다.
 - **출력 계약:** 판본은 학습할 때 출력 계약(`output_type`·점수 방향·척도)을 Runtime 기록에 남기고, 모델 응답과 Scoring·Playground·온라인 추론·설명은 그 기록을 따른다. 같은 알고리즘의 출력이 나중에 바뀌어도 기존 판본의 의미는 바뀌지 않는다. 기록 이전에 학습된 판본은 당시 알고리즘의 출력을 따른다. 현재 `isolation_forest`는 관측마다 이상 점수 하나(`anomaly_score_v1`, 높을수록 이상)를 낸다.
 
 ## ML 기능별 책임과 공통화 경계

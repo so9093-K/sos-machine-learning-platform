@@ -22,7 +22,6 @@ import { ActivityWorkspace } from "./ActivityWorkspace";
 import { ActivityPlayground } from "./ActivityPlayground";
 import { AnalysisTaskPage, LearningTypePage, learningTypeGuides, playgroundTopicFor, taskGuides,
   useTopicCatalog, type TaxonomyLinks } from "./ModelLabGuide";
-import { PipelineWorkspace } from "./PipelineWorkspace";
 import { DataSourceBar } from "./DataSourceBar";
 import { ModelCatalog } from "./ModelCatalog";
 import { MLResourceDetail, ScoringWorkspace, DecisionWorkspace } from "./MLResourcePages";
@@ -61,10 +60,6 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const canInspectStorage = actor.capabilities.includes("storage.inspect");
   const canViewAudit = actor.capabilities.includes("audit.read");
   const canConfigure = actor.capabilities.includes("instance.configure");
-  // 등록 파이프라인은 학습 권한 계정이 모델을 공급하는 운영 도구다. 메뉴·새 실행은 학습 권한,
-  // 기존 실행 결과의 직접 링크 열람은 API와 같이 작업 조회 권한을 따른다.
-  const canOperatePipelines = actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read");
-  const canViewPipelineRuns = actor.capabilities.includes("job.read");
   const { tab, resource, context, navigate: setTab, navigateWithContext,
     selectContext, openResource } = useWorkspaceNavigation();
   const isDataArea = DATA_TABS.includes(tab);
@@ -74,7 +69,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const selected = isDataArea ? context.datasetId ?? "" : context.datasetId || rememberedDataset;
   const dataJobs = useDataJobs(tab === "jobs");
   const [reloadRevision, setReloadRevision] = useState(0);
-  const selectionActive = isDataArea || tab === "pipelines";
+  const selectionActive = isDataArea;
   const requested = useRequestedDataset(context.datasetId ?? "",
     datasets.some(item => item.id === context.datasetId), selectionActive,
     `${tab}:${reloadRevision}`, catalog.upsert);
@@ -106,7 +101,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
     } else startScoring(model.id);
   }
   function startScoring(modelId: string) {
-    navigateWithContext("scoring", { modelId, datasetId: context.datasetId, pipelineRunId: context.pipelineRunId });
+    navigateWithContext("scoring", { modelId, datasetId: context.datasetId });
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -305,7 +300,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           {error.reference && <small className="alert-reference">{error.reference}</small>}
         </div>
         <button onClick={() => setError(null)} aria-label="오류 닫기">×</button></div>}
-      {catalog.readError && ["overview", "understanding", "preview", "profile", "preparation", "topic", "pipelines"].includes(tab) &&
+      {catalog.readError && ["overview", "understanding", "preview", "profile", "preparation", "topic"].includes(tab) &&
         <div role="alert" className="alert error">
           Dataset 목록을 확인하지 못했습니다. 현재 화면의 데이터 선택이 제한될 수 있습니다.
           <details><summary>문제 정보</summary>{catalog.readError}</details>
@@ -346,25 +341,6 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         canWrite={canWrite} canPrepare={canRun}
         onNavigate={setTab} onOpenLearningType={taxonomyLinks.onOpenLearningType}
         onOpenDataset={id => chooseDataset(id, "understanding")} />}
-      {context.pipelineRunId && tab !== "pipelines" && <div className="pipeline-return">
-        <button className="secondary" onClick={() => navigateWithContext("pipelines", {
-          pipelineRunId: context.pipelineRunId,
-        })}>파이프라인 실행 결과로 복귀 →</button>
-        <span className="hint">원래 실행의 결과는 유지되며 추가 계산은 별도 결과로 남습니다.</span>
-      </div>}
-      {tab === "pipelines" && (canViewPipelineRuns
-        ? <PipelineWorkspace runId={context.pipelineRunId ?? ""} datasetId={context.datasetId ?? ""} datasets={datasets}
-          canTrain={canOperatePipelines} canRun={canRun} canCancel={canCancel} canOpenMLflow={canInspectStorage || canViewAudit}
-          hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
-          onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
-          onSelectRun={(pipelineRunId, datasetId) => navigateWithContext("pipelines", { pipelineRunId, datasetId })}
-          onOpenJob={(id, datasetId) => navigateWithContext("jobs", { datasetId, dataJobId: id, dataJobKind: "data", pipelineRunId: context.pipelineRunId })}
-          onOpenResource={openResource} onOpenDataset={id => navigateWithContext("understanding", {
-            datasetId: id, pipelineRunId: context.pipelineRunId,
-          })} />
-        : <section className="panel"><h2>파이프라인 조회 권한 없음</h2>
-          <p>실행 결과 조회에는 작업 조회 권한이 필요합니다. 준비된 모델은 모델 활용에서 선택해 데이터에 적용할 수 있습니다.</p>
-          <button type="button" onClick={() => setTab("ml")}>모델 활용 →</button></section>)}
       {tab === "learning" && <LearningTypePage id={context.taxonomyId ?? ""} links={taxonomyLinks} />}
       {tab === "task" && <AnalysisTaskPage id={context.taxonomyId ?? ""} links={taxonomyLinks} />}
       {tab === "topic" && <ActivityPlayground datasets={datasets} selectedDatasetId={context.datasetId}
@@ -494,7 +470,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         kind={resource.kind} id={resource.id} onOpenResource={openResource}
         canRun={canRun} canCancel={canCancel}
         canManageModel={actor.capabilities.includes("model.manage")} isAdministrator={actor.roles.includes("administrator")}
-        onOpenServing={() => navigateWithContext("serving", { pipelineRunId: context.pipelineRunId })}
+        onOpenServing={() => navigateWithContext("serving", {})}
         onOpenModelCatalog={() => navigateWithContext("ml", { datasetId: context.datasetId })}
         onScoring={startScoring} onApplyModel={model => void applyModel(model)} />}
       {tab === "scoring" && !resource && <ScoringWorkspace

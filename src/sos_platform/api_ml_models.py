@@ -47,7 +47,9 @@ def ml_model_router(store: Store, access: ResourceAccess) -> APIRouter:
     )
     def get_mlflow_tracking_status(job_id: str, actor: Actor = READ_JOB_DEP):
         item = access.job(job_id, actor)
-        if item["kind"] not in ("ml_train", "ml_score", "ml_policy", "ml_evaluate", "ml_explain"):
+        if item["kind"] not in (
+            "ml_train", "ml_import", "ml_score", "ml_policy", "ml_evaluate", "ml_explain",
+        ):
             raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
         status = store.tracking_status(job_id)
         return status or {"job_id": job_id, "state": "Disabled"}

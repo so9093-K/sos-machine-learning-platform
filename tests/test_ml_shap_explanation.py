@@ -94,7 +94,7 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
     from sos_platform import ml_explanation
     row = {"anomaly_score": 3.0, "features": {"a": 2.0, "b": 1.0, "c": 1.5}}
     monkeypatch.setattr(ml_explanation, "_verified_scoring_row", lambda *_: row)
-    monkeypatch.setattr(ml_explanation, "load_trusted_isolation_forest",
+    monkeypatch.setattr(ml_explanation, "load_model_revision",
                         lambda *_: _LinearRuntime())
     scoring = {"id": "s", "owner_actor": "owner", "model_revision_id": "m",
                "score_summary": {}}
@@ -175,7 +175,7 @@ def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_p
         get_model_revision=lambda _: model,
         home=tmp_path,
     )
-    monkeypatch.setattr(ml_explanation, "load_trusted_isolation_forest", lambda *_: runtime)
+    monkeypatch.setattr(ml_explanation, "load_model_revision", lambda *_: runtime)
     spec = {"playground_job_id": "pg-job", "source_owner_actor": "actor-1"}
     shap = ml_explanation.explain_scored_row(
         store, {**spec, "method": "permutation_shap_median_v1"})

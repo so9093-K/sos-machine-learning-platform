@@ -1,9 +1,12 @@
 """모델 파일 영구 삭제. Model Revision은 결과 계보의 tombstone으로 보존한다."""
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy import text
 
 from .mlflow_errors import MLflowDeliveryError
+from .model_artifacts import revision_artifact_key
 from .mlflow_tracking import MLflowClient
 from .mlflow_registry import registered_model_name
 from .mlflow_config import MLflowSettings
@@ -164,10 +167,8 @@ def model_deletion_router(store: Store) -> APIRouter:
             # 대상 객체와 게시 Attempt가 일치하는지 외부 Registry 변경보다 먼저 검증한다.
             storage=ObjectStore()
             key=storage.key(row["location"])
-            expected_key = (
-                f"results/{row['job_id']}/{row['attempt_id']}.model.joblib"
-            )
-            if key != expected_key:
+            # 아티팩트 형식은 판본 Runtime 기록이 정한다(SOS 학습 joblib·MLflow 연결 skops).
+            if key != revision_artifact_key({**row, "runtime": json.loads(row["runtime"])}):
                 raise ValueError("Model artifact does not match its publishing Attempt")
             client=MLflowClient(settings)
             try:

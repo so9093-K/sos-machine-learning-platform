@@ -19,3 +19,5 @@ build
 tests
 docs
 *.egg-info
+# 모델 생산 Pipeline의 학습 입력은 이미지에 넣지 않는다(실행 시 마운트).
+dagster/inputs

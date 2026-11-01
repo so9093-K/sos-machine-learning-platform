@@ -17,6 +17,8 @@ def _model_item(row) -> dict:
     item = dict(row)
     for field in MODEL_JSON_FIELDS:
         item[field] = json.loads(item[field])
+    # SOS가 학습한 판본은 출처 기록이 없다. 출처는 학습 Job·Dataset이다.
+    item["source"] = json.loads(item["source"]) if item.get("source") else None
     return item
 
 

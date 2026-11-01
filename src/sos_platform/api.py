@@ -22,13 +22,12 @@ from .api_jobs import job_router
 from .api_ml_models import ml_model_router
 from .api_ml_results import ml_results_router
 from .api_ml_training import training_router
+from .api_model_import import model_import_router
 from .api_model_management import model_management_router
 from .api_model_offering import model_offering_router
 from .api_serving import serving_router
 from .api_topics import topic_router
-from .api_pipelines import pipeline_router
 from .api_storage import storage_router
-from .dagster_client import DagsterUnavailable
 from .errors import ERRORS
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .model_deletion import model_deletion_router
@@ -41,14 +40,14 @@ from .store import Store
 # OpenAPI는 API 계약의 표현이며 Scalar는 이를 읽는 문서 UI일 뿐이다.
 # 현재 지원하는 기능만 설명하고, 문서 분류가 Runtime이나 Router 경계를 결정하지 않는다.
 API_DESCRIPTION = """\
-SOS는 데이터 이해·준비, 독립 ML 작업, 등록형 Pipeline과 결과 조사를 연결하는
+SOS는 데이터 이해·준비, 모델 학습·연결, 점수 계산·서빙과 결과 조사를 연결하는
 **API-first 머신러닝 플랫폼**입니다. Web UI와 외부 클라이언트는 같은 API 계약을 사용합니다.
 
 ### 시작하기
 
 1. `GET /api/health`로 API 프로세스 응답을 확인하고, `GET /api/ready`로 저장소 준비 상태와 Job 실행·온라인 서빙 기능의 상태를 확인합니다.
 2. Token 모드에서는 `Authorization: Bearer <TOKEN>`을 전달하고 `GET /api/v2/auth/me`로 권한을 확인합니다.
-3. `GET /api/datasets` 또는 `GET /api/pipelines`로 현재 이용 가능한 데이터와 분석 방법을 살펴봅니다.
+3. `GET /api/datasets`와 `GET /api/topics`로 현재 이용 가능한 데이터와 분석 주제를 살펴봅니다.
 4. 데이터를 등록하거나 Job을 제출하려면 해당 Actor 권한이 필요합니다. 변경·실행 API는 **실제 데이터를 생성하거나 계산을 시작**할 수 있습니다.
 
 ```bash
@@ -58,13 +57,14 @@ curl -H "Authorization: Bearer <TOKEN>" http://localhost:9602/api/v2/auth/me
 
 ### 실행과 결과
 
-- Job·Pipeline 제출의 **202 Accepted는 완료가 아니라 접수**입니다. 조회 API로 실제 상태와 결과를 확인하세요.
+- Job 제출의 **202 Accepted는 완료가 아니라 접수**입니다. 조회 API로 실제 상태와 결과를 확인하세요.
 - Token 모드의 Job 제출에는 일반적으로 `Idempotency-Key`가 필요합니다. 같은 의도의 중복 제출을 방지합니다.
 - 취소 **요청**과 실제 중단·결과 확정은 다릅니다. 모델 학습 성공과 MLflow Registry 등록도 별도 상태입니다.
 - 데이터 미리보기·표본 분석·전체 분석의 범위와, 모델 점수·정책·평가의 의미를 구별해야 합니다.
 - 예제 확인은 등록·학습을 자동 실행하지 않습니다. 합성 예제의 이상 점수는 실제 사건이나 탐지 정확도의 근거가 아닙니다.
 
-현재 지원되는 등록형 모델 실험 주제는 활동 이상 탐지(Isolation Forest)입니다.
+현재 지원되는 모델은 Isolation Forest 이상 탐지입니다. SOS에서 Dataset으로 학습하거나, 외부 Pipeline이
+생산해 MLflow에 등록한 고정 모델 버전을 `POST /api/ml/models/imports`로 연결합니다.
 등록된 모델의 온라인 Serving Endpoint 관리와 동기 추론을 지원합니다.
 임의 사용자 코드 실행 및 범용 모델 플러그인은 현재 지원 범위가 아닙니다.
 
@@ -81,15 +81,13 @@ OPENAPI_TAGS = [
     {"name": "Iceberg", "description": "Iceberg 데이터 적재·연결 및 Snapshot 조회"},
     {"name": "Experiments", "description": "MLflow Experiment·Run 조회 및 외부 기록 상태"},
     {"name": "Training", "description": "독립 ML 학습·복제·취소 및 작업 이력"},
-    {"name": "Models", "description": "MLflow Registry와 SOS의 불변 모델 실행 참조"},
+    {"name": "Models", "description": "MLflow 모델 버전 연결, MLflow Registry와 SOS의 불변 모델 실행 참조"},
     {"name": "Analysis Topics", "description": "분석 주제의 분류·입력 의미·출력 계약"},
     {"name": "Scoring", "description": "학습된 모델을 이용한 독립 배치 점수화와 결과 조회"},
     {"name": "Serving", "description": "온라인 서빙 Endpoint의 배포·판본 전환과 동기 추론"},
     {"name": "Decision Policies", "description": "점수에 적용할 판정 기준의 생성·적용·조회"},
     {"name": "Evaluations", "description": "모델 점수와 정책에 대한 평가 실행·결과 조회"},
     {"name": "Explanations", "description": "선택한 점수 결과에 대한 설명 계산과 판본 조회"},
-    {"name": "Pipeline Catalog", "description": "등록된 Pipeline의 방법·입력 적합성 조회"},
-    {"name": "Pipeline Runs", "description": "Pipeline 실행·진행 상태·결과 후보 조회"},
     {"name": "Jobs", "description": "공통 비동기 작업의 제출·조회·취소"},
     {"name": "Storage", "description": "스토리지 보존 정책과 객체 상태 점검"},
     {"name": "Audit & Diagnostics", "description": "감사 이벤트와 운영자용 작업 진단"},
@@ -110,7 +108,6 @@ OPENAPI_TAG_GROUPS = [
         ],
     },
     {"name": "Serving", "tags": ["Serving"]},
-    {"name": "Pipelines", "tags": ["Pipeline Catalog", "Pipeline Runs"]},
     {"name": "Operations", "tags": ["Jobs", "Storage", "Audit & Diagnostics"]},
 ]
 
@@ -142,22 +139,6 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     )
     app.state.identity = identity
     register_error_handlers(app)
-
-    @app.exception_handler(DagsterUnavailable)
-    async def dagster_unavailable(request: Request, exc: DagsterUnavailable):
-        # 실제 실패 종류만 기록한다. GraphQL 응답·사용자 데이터·자격 증명은 남기지 않는다.
-        emit(
-            "dagster.request.failed",
-            service="sos-api",
-            level=logging.ERROR,
-            request_id=request.state.request_id,
-            error_code="SOS-API-DEPENDENCY",
-            operation=exc.operation,
-            failure_type=exc.failure_type,
-            status=str(exc.http_status) if exc.http_status is not None else None,
-        )
-        return problem_response(request, "SOS-API-DEPENDENCY", 503,
-                                ERRORS["SOS-API-DEPENDENCY"].message)
 
     @app.middleware("http")
     async def security_audit(request: Request, call_next):
@@ -269,12 +250,12 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
         )
 
     app.include_router(control_router(store, identity))
-    app.include_router(pipeline_router(store, access, identity_mode=identity.mode))
     app.include_router(scoring_observations_router(store, access))
     app.include_router(storage_router(store))
     app.include_router(dataset_router(store, access, upload_policy))
     app.include_router(job_router(store, access))
     app.include_router(model_management_router(store))
+    app.include_router(model_import_router(store, access))
     app.include_router(model_offering_router(store, access))
     app.include_router(model_deletion_router(store))
     app.include_router(serving_router(store, access))

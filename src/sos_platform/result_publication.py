@@ -71,13 +71,18 @@ def publish_model(
     publication: dict,
     write_id: str | None,
 ) -> dict:
-    """Model Revision과 고정 Feature 출처·객체 참조를 확정한다."""
+    """Model Revision과 출처·고정 Feature 출처·객체 참조를 확정한다.
+
+    판본은 SOS 학습(`ml_train`) 또는 MLflow 모델 버전 연결(`ml_import`)이 게시한다. 연결한 판본은
+    SOS Dataset이 아니라 MLflow 출처(`source`)를 갖는다.
+    """
     if not write_id:
         raise ValueError("Missing artifact write intent")
     runtime = dict(publication["runtime"])
+    imported = row["kind"] == "ml_import"
     # 조회 결과 Dataset의 원본 등록·조회 Job은 SOS가 이미 보존한다.
     # MLflow/Feast Registry를 복제하지 않고 Model Revision에 불변 출처만 연결한다.
-    origin_id = db.execute(
+    origin_id = None if imported else db.execute(
         text("SELECT source_job_id FROM datasets WHERE id=:id"),
         {"id": row["dataset_id"]},
     ).scalar_one_or_none()
@@ -112,6 +117,8 @@ def publish_model(
         "dataset_id": row["dataset_id"],
         "dataset_version": publication["dataset_version"],
         "algorithm": publication["algorithm"],
+        "source_kind": "mlflow_registry" if imported else "sos_training",
+        "source": json.dumps(publication["source"], allow_nan=False) if imported else None,
         "registry_key": (json.loads(row["spec"]) or {}).get("registry_key", "default"),
         "location": publication["location"],
         "sha256": publication["sha256"],
@@ -127,11 +134,11 @@ def publish_model(
     db.execute(
         text(
             "INSERT INTO model_revisions "
-            "(id,job_id,attempt_id,dataset_id,dataset_version,algorithm,"
+            "(id,job_id,attempt_id,dataset_id,dataset_version,algorithm,source_kind,source,"
             "location,sha256,features,params,training_score_summary,runtime,"
             "registry_key,owner_actor,created_at) "
             "VALUES (:id,:job_id,:attempt_id,:dataset_id,:dataset_version,"
-            ":algorithm,:location,:sha256,:features,:params,"
+            ":algorithm,:source_kind,:source,:location,:sha256,:features,:params,"
             ":training_score_summary,:runtime,:registry_key,:owner_actor,:created_at)"
         ),
         item,

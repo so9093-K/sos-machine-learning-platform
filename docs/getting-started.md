@@ -71,20 +71,43 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 ## 모델 공급 (개발·배포)
 
-모델 개발·학습 설정·실험은 프로젝트 코드와 MLflow 등 개발 환경에서 수행하고, 준비된 모델은 배포 과정에서 SOS에 공급한다. 공급에는 `kind: service` Actor에만 부여할 수 있는 `automation` 역할의 토큰을 사용한다. 이 역할은 학습(`model.train`)·모델 관리와 제공(`model.manage`)·Feature 정의 변경(`feature.manage`) 권한을 가진다.
+모델 개발·학습 설정·실험은 프로젝트 코드와 MLflow 등 개발 환경에서 수행하고, 준비된 모델은 배포 과정에서 SOS에 공급한다. 공급에는 `kind: service` Actor에만 부여할 수 있는 `automation` 역할의 토큰을 사용한다. 이 역할은 학습(`model.train`)·모델 연결·관리와 제공(`model.manage`)·Feature 정의 변경(`feature.manage`) 권한을 가진다.
+
+### 생산 Pipeline으로 공급 (Dagster → MLflow → SOS)
+
+Dagster의 `activity_anomaly_production` Job이 학습 데이터를 시간순 Train·Calibration·Test로 나누어 학습·평가하고, 모델 패키지(`sos_model.json`·`estimator.skops`)를 MLflow 모델 버전으로 등록한 뒤 SOS에 연결을 요청한다. 학습 파일은 `dagster/inputs`(또는 `SOS_PIPELINE_INPUT_DIR`)에 두고 Run 설정의 `data_path`에 `/data/inputs/<파일>`로 지정한다. 파일에는 UTC 오프셋이 있는 `ts`와 활동 Feature가 필요하다. SOS 연결에는 Compose 실행 시 `SOS_SUPPLY_TOKEN`(automation 토큰)을 전달한다. 연결 없이 MLflow 등록까지만 하려면 `connect_to_sos: false`로 실행한다.
+
+```yaml
+ops:
+  train_and_evaluate:
+    config:
+      data_path: /data/inputs/activity.parquet
+      registered_model: activity-anomaly-if
+```
+
+다른 생산 Pipeline도 `ml_model_package.package_isolation_forest`로 같은 패키지를 만들어 MLflow 버전의 아티팩트 위치에 두면 연결할 수 있다. 생산 환경의 Python minor·numpy·scikit-learn 버전은 SOS와 같아야 한다.
+
+### 공급 스크립트
 
 ```bash
+# MLflow에 등록된 고정 버전을 연결
+SOS_SUPPLY_TOKEN=<automation 토큰> .venv/bin/python scripts/supply_model.py \
+  --state-file .sos/supply/activity-v3.json \
+  --mlflow-model activity-anomaly-if --mlflow-version 3 --description-file <제공 설명.txt> \
+  [--endpoint activity-anomaly]
+
+# Dataset으로 SOS에서 학습
 SOS_SUPPLY_TOKEN=<automation 토큰> .venv/bin/python scripts/supply_model.py \
   --state-file .sos/supply/activity.json \
   --dataset-file <학습 데이터.parquet> --description-file <제공 설명.txt> [--sample-rows 200000] \
   [--endpoint activity-anomaly]
 ```
 
-스크립트는 학습 데이터를 등록하고 활동 이상 탐지의 필수 Feature로 SOS Worker 학습을 실행한 뒤, Registry 등록을 확인하고 설명과 함께 판본을 제공한다. `--state-file`은 하나의 공급 실행을 식별하며, 같은 파일로 재실행하면 기존 등록·학습에서 이어 간다. 새로운 입력·학습에는 새 상태 파일을 쓴다. 파일 등록 응답이 유실되면 자동 재업로드하지 않으므로, `GET /api/datasets`에서 등록 상태를 확인하고 같은 `--state-file`과 확인한 `--dataset-id`로 재개한다.
+스크립트는 MLflow 고정 버전을 다시 학습하지 않고 연결하거나, 학습 데이터를 등록해 활동 이상 탐지의 필수 Feature로 SOS Worker 학습을 실행한다. 이후 Registry 등록을 확인하고 설명과 함께 판본을 제공한다. `--state-file`은 하나의 공급 실행을 식별하며, 같은 파일로 재실행하면 기존 등록·학습에서 이어 간다. 새로운 입력·학습에는 새 상태 파일을 쓴다. 파일 등록 응답이 유실되면 자동 재업로드하지 않으므로, `GET /api/datasets`에서 등록 상태를 확인하고 같은 `--state-file`과 확인한 `--dataset-id`로 재개한다.
 
 학습 원본은 접근 권한이 통제된 연구 환경에서 관리하며 공개 저장소나 기본 다운로드 데이터에 포함하지 않는다. 모델 공급 전에는 Feature별 결측의 의미와 사용할 입력, 정상 기준·학습 기간, 레이블 정의와 평가 조건을 연구에서 정한다. 필수 Feature가 모두 존재하거나 중앙값 대체가 가능하다는 사실은 연구적 유효성이나 탐지 성능을 입증하지 않는다.
 
-이 스크립트는 선택한 Dataset 전체(또는 명시적 표본)와 Train 중앙값 결측 대체로 새 모델을 학습하며 별도 Calibration/Test 평가를 실행하지 않는다. 연구에서 정한 학습 범위를 Dataset으로 확정해 공급하거나, 시간 분할·평가가 필요한 경우 기존 학습 API·등록 Pipeline을 사용한 뒤 결과를 검토하고 모델 상세 또는 제공 API에서 해당 판본을 명시적으로 제공한다.
+Dataset 학습 경로는 선택한 Dataset 전체(또는 명시적 표본)와 Train 중앙값 결측 대체로 새 모델을 학습하며 별도 Calibration/Test 평가를 실행하지 않는다. 시간 분할·평가가 필요하면 생산 Pipeline으로 학습·평가한 버전을 연결한다.
 
 제공 설명에는 모델의 목적·적용할 데이터·결과 해석 시 주의할 한계를 적는다. 제공·재제공은 `PUT`, 중단은 `DELETE /api/ml/models/{id}/offering`이며 중단은 새 적용만 막고 이미 만든 결과는 유지한다. 웹에서는 관리자 또는 모델을 소유한 자동화 계정이 **모델 상세**에서 제공·설명 수정·중단을 실행한다. 학습 데이터를 조용히 줄이지 않으므로 큰 데이터는 `--sample-rows`로 행 수를 명시한다.
 
@@ -107,13 +130,12 @@ Feast Feature Service의 등록·시점 조회·폐기는 `automation` 계정이
 
 아래 도구는 SOS Actor 권한을 적용하지 않는 로컬 운영자 도구이므로 **localhost 외부로 공개하거나 일반 사용자에게 전달하지 않는다.**
 
-- **등록 파이프라인 (SOS 웹):** 학습 권한 계정의 **작업·운영 → 등록 파이프라인**에서 실행 이력과 단계별 결과를 확인하고 새 실행을 제출한다. 자동화는 `POST /api/pipelines/activity-anomaly-if/runs`에 새 멱등성 키로 제출한다. 새 실행에는 Feature와 함께 시간 분할용 UTC 시각 `ts`가 필요하다. `/pipelines/runs/<SOS 제출 ID>` 링크의 결과 열람은 작업 조회 권한을 따른다.
 - **온라인 서빙 (SOS 웹):** 모델 관리 권한 계정의 **작업·운영 → 온라인 서빙**에서 Endpoint별 활성·전환 대상·직전 판본과 실제 실행 상태·배포 실패 사유를 확인하고 되돌리기·전환 취소·중단·재개·삭제를 실행한다. 같은 PC에서 접속한 운영 계정에는 판본마다 Ray Dashboard의 해당 애플리케이션 화면으로 가는 **복제본·로그** 링크가 보인다.
 - **Ray Dashboard** (`http://localhost:9609`): 온라인 서빙 복제본 상태, 배포 실패 메시지 전체, 복제본 로그와 자원 사용량을 확인한다. 애플리케이션 이름은 `<Endpoint ID>--<모델 판본 ID>`다. 보는 용도로 쓰며, 배포·전환은 SOS로 요청한다. Ray에 직접 적용한 Serve Config는 컨트롤러가 다음 조정에서 SOS 의도로 되돌린다.
-- **Dagster** (`http://localhost:9607`): Code Location `sos`, Job `activity_anomaly_workflow`의 Run·단계·이벤트를 확인한다. SOS 제출 ID는 Run 태그 `sos/submission_id`로 검색한다. Dagster의 Re-execute는 같은 SOS 단계 Job을 재사용하므로 새 분석이 아니다. `make doctor-dagster`는 SOS가 사용하는 Run 검색 계약을 읽기 전용으로 확인한다.
-- **MLflow** (`http://localhost:9606`): 한 분석의 Run은 태그 `sos.workflow_submission_id`로 묶인다. 모델 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 수정하거나 삭제하지 않는다. 외부 서버는 `SOS_MLFLOW_TRACKING_URI`·`SOS_MLFLOW_TOKEN`으로 연결한다.
+- **Dagster** (`http://localhost:9607`): 모델 생산 Job `activity_anomaly_production`을 실행하고 Run·단계·이벤트를 확인한다. Run마다 새 MLflow Run·모델 버전을 만든다.
+- **MLflow** (`http://localhost:9606`): 생산 Pipeline의 Run은 Experiment `activity-anomaly-production`에 남는다. SOS 모델 그룹(`sos-if-*`) 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 수정하거나 삭제하지 않는다. 연결한 버전은 `sos.source_model`·`sos.source_version`으로 원본을 가리킨다. 외부 서버는 `SOS_MLFLOW_TRACKING_URI`·`SOS_MLFLOW_TOKEN`으로 연결한다.
 - **Feast UI** (`http://localhost:9608`): `sos_features` SQL Registry를 읽기 전용 DB 계정으로 탐색한다. 등록된 Feature가 없으면 빈 Catalog가 정상이다.
 
-학습 성공과 MLflow Registry 등록 성공은 구별한다. 등록 대기 중에는 SOS의 MLflow 전송 상태를 확인하며, Dagster `Loaded`나 MLflow Run `Finished`만으로 전체 Pipeline 완료를 판단하지 않는다. 복구는 [Diagnostics](diagnostics.md)를 따른다.
+학습·연결 성공과 MLflow Registry 등록 성공은 구별한다. 등록 대기 중에는 SOS의 MLflow 전송 상태를 확인하며, Dagster Run 성공이나 MLflow Run `Finished`만으로 SOS에서 모델을 쓸 수 있다고 판단하지 않는다. 복구는 [Diagnostics](diagnostics.md)를 따른다.
 
 API Reference의 Scalar JavaScript는 Docker 이미지에 포함된다. 호스트에서 Python API를 직접 실행하면 Node.js 24로 `bash scripts/build_scalar_assets.sh`를 먼저 실행한다.

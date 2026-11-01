@@ -9,7 +9,7 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**의 
 - **공통 API:** 사람·웹·외부 시스템·AI 에이전트에 동일한 신원·권한·요청·결과 계약을 제공한다.
 - **Application / Control Plane:** SOS는 Dataset·Job/Attempt·정책·평가·모델의 불변 실행 참조 및 접근 권한을 관리한다. MLflow는 Experiment·Run·Registered Model/Version·Alias 관리 정본이다.
 - **Feature Store:** 등록 Feature의 Entity·Feature View·Feature Service와 Point-in-Time Historical Retrieval은 Feast가 관리한다. SOS는 원본 Dataset·Snapshot·조회 Job·불변 결과·Actor 권한을 소유한다. Data Preparation과 직접 모델 입력은 독립 기능이다. [ADR 0018](adr/0018-feast-feature-ownership.md)을 따른다.
-- **Workflow Orchestration:** Dagster OSS는 등록형 Workflow 정의·의존성·Run 상태·운영 Lineage의 정본이다. 독립 SOS Job은 Workflow 없이 실행할 수 있다. Dagster 운영 메타데이터는 별도 DB에 기록하며 Dataset·Model·Result의 불변 실행 참조 및 Actor 권한은 SOS가 소유한다.
+- **모델 생산:** 데이터 준비·학습·평가·MLflow 등록은 Dagster OSS의 생산 Pipeline이 직접 실행한다. 생산 Pipeline은 SOS DB·저장소에 접근하지 않고, 등록한 고정 모델 버전의 연결을 SOS API에 요청한다. SOS는 모델 패키지를 검증해 Model Revision으로 게시하고 이후 제공·적용·서빙·설명을 맡는다. SOS 안의 Dataset 학습은 독립 기능이다. [ADR 0024](adr/0024-model-production-realignment.md)를 따른다.
 - **Online Serving:** Endpoint의 의도(서빙·중단, 활성·전환 대상·직전 판본)는 SOS가, 복제본 실행·라우팅은 Ray Serve가 맡는다. 독립 `serving-controller`가 실제 상태를 의도에 맞추고 준비가 확인된 판본으로만 전환한다. 외부 요청은 SOS API의 인증·권한·입력 검증을 거친다. [ADR 0019](adr/0019-ray-serve-online-serving.md)를 따른다.
 - **Execution Boundary:** Job 요청과 Runtime 요구를 실행기에 전달하고 시도·취소·결과·오류를 연결한다.
 - **Training / Evaluation / Serving Runtime:** 실제 계산을 수행하며 프레임워크나 배치 엔진의 내부 형식이 공통 계약을 바꾸지 않도록 분리한다.
@@ -24,15 +24,13 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**의 
 ## 변하지 않아야 할 경계
 
 1. **API-first:** 클라이언트 종류에 따라 핵심 기능이나 권한 판정이 달라지지 않는다.
-2. **제어와 실행 분리:** 오래 걸리는 계산을 API 요청 처리와 분리하고, 필요에 따라 단독 Job 또는 Workflow로 조합한다.
+2. **제어와 실행 분리:** 오래 걸리는 계산을 API 요청 처리와 분리해 Job으로 실행한다.
 3. **도메인과 인프라 분리:** 모델·실험·Job의 의미를 특정 Worker·저장소·MLflow 객체에 종속시키지 않는다.
 4. **실행 근거 추적:** 데이터·모델·설정·Runtime·Job/Attempt·평가·아티팩트의 참조 관계를 남긴다.
 5. **권한과 신뢰 분리:** Actor의 데이터 권한과 외부 코드 실행·모델 복원·비밀정보 접근 권한을 혼동하지 않는다.
 6. **점진적인 배치:** 로컬에서 시작하더라도 독립 Worker·Serving으로 확장할 때 공통 계약을 유지한다.
 
 구체적인 판본과 호환성은 [Contracts](contracts.md), 사용자 행동은 [Experience](experience.md), 실행 상태는 [Workflows](workflows.md), 환경 격리는 [Runtimes](runtimes.md)가 정본이다.
-
-Job의 Workflow 출처는 신뢰된 실행이 Job 생성 트랜잭션에 기록한 연결에서 조회한다. 내부 생성 시 제출의 Actor·Dataset 판본·Dagster root Run을 대조하며 일반 멱등성 키로 출처를 추정하지 않는다. Tracking 어댑터는 이 조회 결과를 기록하며 오케스트레이터 구현이나 등록 Pipeline의 단계 목록을 참조하지 않는다.
 
 ## 현재 구현과 논리적 책임
 

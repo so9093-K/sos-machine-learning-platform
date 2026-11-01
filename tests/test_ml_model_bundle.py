@@ -93,13 +93,13 @@ def test_train_artifact_keeps_fitted_preprocessing_and_revision_evidence(trained
     assert bundle["preprocessing"].feature_names == ("volume", "count")
     assert list(bundle["preprocessing"].medians) == revision["runtime"]["feature_reference_medians"]
     assert revision["runtime"]["preprocessing_mode"] == "train_median_v1"
-    restored = ml_runtime.load_trusted_isolation_forest(revision, store.home)
+    restored = ml_runtime.load_model_revision(revision, store.home)
     assert restored.preprocessing == bundle["preprocessing"]
 
 
 def test_restored_bundle_applies_same_training_medians_to_unseen_nulls(trained_bundle):
     store, revision, _, _, _ = trained_bundle
-    restored = ml_runtime.load_trusted_isolation_forest(revision, store.home)
+    restored = ml_runtime.load_model_revision(revision, store.home)
     median = revision["runtime"]["feature_reference_medians"][0]
     with_null = restored.score_anomalies([[np.nan, 17.0]])
     with_median = restored.score_anomalies([[median, 17.0]])
@@ -135,7 +135,7 @@ def test_scoring_and_explanation_use_same_bundle_without_refitting(
     )
     assert summary["row_count"] == 3
     scores = pl.read_parquet(pending)
-    restored = ml_runtime.load_trusted_isolation_forest(revision, store.home)
+    restored = ml_runtime.load_model_revision(revision, store.home)
     median = revision["runtime"]["feature_reference_medians"][0]
     expected = restored.score_anomalies([[median, 16.0], [3.0, 20.0], [50.0, 1.0]])
     np.testing.assert_allclose(scores["anomaly_score"].to_numpy(), expected)
@@ -194,7 +194,7 @@ def test_corrupted_revision_contract_rejected(trained_bundle, field, changed):
     else:
         tampered["runtime"]["preprocessing_mode"] = changed
     with pytest.raises(ValueError):
-        ml_runtime.load_trusted_isolation_forest(tampered, store.home)
+        ml_runtime.load_model_revision(tampered, store.home)
 
 
 def test_legacy_estimator_only_revision_can_still_be_loaded(trained_bundle, tmp_path):
@@ -209,7 +209,7 @@ def test_legacy_estimator_only_revision_can_still_be_loaded(trained_bundle, tmp_
               "runtime": {**revision["runtime"]}}
     legacy["runtime"].pop("artifact_schema")
     legacy["runtime"].pop("preprocessing_mode")
-    restored = ml_runtime.load_trusted_isolation_forest(legacy, store.home)
+    restored = ml_runtime.load_model_revision(legacy, store.home)
     assert restored.preprocessing is None
     assert len(restored.score_anomalies([[1.0, 10.0]])) == 1
     with pytest.raises(ValueError, match="finite"):

@@ -17,11 +17,16 @@ def execute_job(store: Store, job: dict, pending: Path, set_stage: Callable[[str
 
     dataset = store.get_dataset(job["dataset_id"]) if job["dataset_id"] else None
     if dataset is None and not (
-        job["kind"] == "ml_playground"
+        job["kind"] in ("ml_playground", "ml_import")
         or (job["kind"] == "ml_explain" and job["spec"].get("playground_job_id"))
     ):
         raise ValueError("Input dataset is missing")
-    if job["kind"] == "ml_playground":
+    if job["kind"] == "ml_import":
+        from .ml_import import import_registered_model
+
+        set_stage("processing")
+        result = import_registered_model(job["spec"], pending.with_suffix(".skops"))
+    elif job["kind"] == "ml_playground":
         from .ml_playground import run_playground_scoring
 
         set_stage("processing")
@@ -110,16 +115,6 @@ def execute_job(store: Store, job: dict, pending: Path, set_stage: Callable[[str
         result = retrieve_features(
             store, dataset, entity, registered_job["result"], job["spec"], pending
         )
-    elif job["kind"] == "ml_pipeline_preflight":
-        from .pipeline_reference import inspect_dataset as inspect_pipeline_dataset
-
-        set_stage("processing")
-        if job["spec"]["dataset_version"] != dataset["version"]:
-            raise ValueError("Pipeline Dataset 판본이 변경됐습니다.")
-        inspection = inspect_pipeline_dataset(store, dataset, full=True)
-        if not inspection["ready"] or not inspection["plan"]:
-            raise ValueError("Pipeline 입력 데이터의 시간/Feature 적합성 검사에 실패했습니다.")
-        result = {"plan": inspection["plan"], "feature_count": inspection["feature_count"]}
     elif job["kind"] == "ml_train":
         from .ml_training import train_dataset
         from .ml_training_staging import training_stage_path
@@ -184,7 +179,6 @@ def execution_failure_code(job: dict, exc: Exception, stage: str) -> str:
         else "SOS-ML-INPUT-INVALID"
         if job["kind"]
         in (
-            "ml_pipeline_preflight",
             "ml_train",
             "ml_score",
             "ml_playground",

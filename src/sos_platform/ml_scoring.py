@@ -19,7 +19,7 @@ from .ml_anomaly import histogram_edges
 from .ml_input import INTEGER_DTYPES, model_input_issues
 from .ml_observation_identity import validate_observation_identity
 from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
-from .ml_runtime import load_trusted_isolation_forest
+from .ml_runtime import load_model_revision
 from .ml_scoring_staging import scoring_stage_prefix
 from .ml_temporal_split import select_temporal_partition, utc_observation_time
 from .schemas import MLScoringTemporalScope
@@ -194,10 +194,8 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
             )
             if identity_column is not None else None
         )
-        model_adapter = load_trusted_isolation_forest(model, store.home / "cache")
-        supports_missing = (
-            model["runtime"].get("artifact_schema") == "if_model_with_preprocessing_v1"
-        )
+        model_adapter = load_model_revision(model, store.home / "cache")
+        supports_missing = model["runtime"].get("preprocessing_mode") == "train_median_v1"
         count = 0
         score_sums: list[float] = []
         low = math.inf

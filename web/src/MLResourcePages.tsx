@@ -19,7 +19,7 @@ import {
   scoreDirectionLabel,
 } from "./display-format";
 import { ModelServingPanel } from "./ModelServingPanel";
-import { ModelCreationEvidence } from "./ModelCreationEvidence";
+import { ModelCreationEvidence, modelImportSource } from "./ModelCreationEvidence";
 import { ModelEvaluationEvidence } from "./ModelEvaluationEvidence";
 import { canApplyModel, ModelOfferingPanel, useModelOffering } from "./ModelOffering";
 import { EvaluationSummary } from "./EvaluationSummary";
@@ -164,13 +164,14 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyM
     {kind === "model" && (() => {
       const m = data as ModelRevision;
       const creation = canReadCreation && m.creation_evidence_visible ? m : null;
+      const imported = creation ? modelImportSource(creation) : null;
       return <>
         <div className="ml-resource-summary">
           <h3>제공 설명</h3>
           {modelOffering.offering?.description
             ? <p className="model-offering-description model-offering-purpose">{modelOffering.offering.description}</p>
             : modelOffering.offering && <p className="muted">아직 작성된 제공 설명이 없습니다.</p>}
-          <p className="model-card-meta">{algorithmLabel(m.algorithm)} · 학습 {formatRecordedAt(m.created_at)}</p>
+          <p className="model-card-meta">{algorithmLabel(m.algorithm)} · {imported ? "연결" : "학습"} {formatRecordedAt(m.created_at)}</p>
           {m.lifecycle_state !== "Active" && <p>{m.lifecycle_state === "Deleting"
             ? "모델 파일을 삭제 중입니다. 현재 새 점수화에 사용할 수 없습니다."
             : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>}
@@ -194,7 +195,9 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyM
         <ModelEvaluationEvidence key={`evaluation:${m.id}`} modelId={m.id} onOpenResource={onOpenResource}
           supplierEvidenceVisible={isAdministrator ? true : modelOffering.offering ? modelOwned : null} />
         {creation && <dl className="ml-resource-fields">
-          <Field label="학습 Dataset">{datasetName}</Field>
+          {imported
+            ? <Field label="MLflow 모델 버전">{imported.mlflow_model} v{imported.mlflow_version}</Field>
+            : <Field label="학습 Dataset">{datasetName}</Field>}
         </dl>}
         <ModelCreationEvidence key={m.id} model={m}
           datasetName={canReadCreation ? datasetName : "제공 모델의 학습 Dataset"} />
@@ -206,11 +209,14 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyM
           canManage={canManageModel && Boolean(modelOffering.offering) && !modelOffering.error && !modelOffering.loading && (modelOwned || isAdministrator)}
           onOpenServing={onOpenServing} />
         <details className="ml-resource-evidence">
-          <summary>{creation ? "판본·학습 Job·Runtime 근거" : "판본·Runtime 근거"}</summary>
+          <summary>{creation ? `판본·${imported ? "연결" : "학습"} Job·Runtime 근거` : "판본·Runtime 근거"}</summary>
           <dl className="ml-resource-fields">
             <Field label="모델 판본 ID">{m.id}</Field>
-            {creation && <Field label="Dataset ID · 판본">{creation.dataset_id} · {creation.dataset_version}</Field>}
-            {creation && <Field label="학습 Job">{creation.job_id}</Field>}
+            {creation && (imported
+              ? <Field label="MLflow 출처">{imported.mlflow_model} v{imported.mlflow_version}
+                  {imported.run_id ? ` · Run ${imported.run_id}` : ""}</Field>
+              : <Field label="Dataset ID · 판본">{creation.dataset_id} · {creation.dataset_version}</Field>)}
+            {creation && <Field label={imported ? "연결 Job" : "학습 Job"}>{creation.job_id}</Field>}
             {creation && <Field label="학습 매개변수">{Object.entries(creation.params)
               .map(([name, value]) => `${name}=${JSON.stringify(value)}`).join(", ") || "기록 없음"}</Field>}
             <Field label="Runtime">{String(m.runtime.scikit_learn ?? "상세 근거 미확인")}</Field>

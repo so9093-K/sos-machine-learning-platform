@@ -15,7 +15,7 @@ from starlette.requests import Request
 
 from .ml_inference import score_observations
 from .ml_outputs import ANOMALY_SCORE_V1, output_records, require_output_contract
-from .ml_runtime import load_trusted_isolation_forest
+from .ml_runtime import load_model_revision
 
 MAX_ROWS = 100
 
@@ -34,7 +34,7 @@ class ModelServer:
         self._contract = require_output_contract(revision, produces=ANOMALY_SCORE_V1)
         # 내려받은 아티팩트는 복원 뒤 필요 없다. 복제본이 재시작·교체돼도 임시 파일이 쌓이지 않는다.
         with tempfile.TemporaryDirectory(prefix="sos-serving-") as scratch:
-            self._adapter = load_trusted_isolation_forest(revision, Path(scratch))
+            self._adapter = load_model_revision(revision, Path(scratch))
         self._runtime = {"python": platform.python_version(), "numpy": np.__version__,
                          "scikit_learn": sklearn.__version__}
 

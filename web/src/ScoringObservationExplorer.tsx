@@ -252,7 +252,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
               candidate={selected} scoreOrder={scoreOrder} scoringResultId={result.id}
               isDefaultObservation={!userSelected}
               modelRevisionId={result.model_revision_id}
-              observationMode canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
+              canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
               onTryObservation={onTryObservation ? (features, rowIndex, score) =>
                 onTryObservation(features, rowIndex, score, result.id, result.model_revision_id) : undefined} />
           : <p className="hint">{loading ? "관측값 상세를 준비하고 있습니다."

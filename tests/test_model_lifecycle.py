@@ -76,7 +76,7 @@ def test_model_delete_does_not_mark_completed_when_s3_fails(monkeypatch):
         "id": "model-id", "job_id": "job", "attempt_id": "attempt",
         "registry_model": "sos-if-test", "registry_version": "2",
         "location": "s3://bucket/results/job/attempt.model.joblib",
-        "lifecycle_state": "Active",
+        "lifecycle_state": "Active", "runtime": '{"model_format": "joblib"}',
     }
     calls = []
     monkeypatch.setattr(model_deletion, "begin_delete",
@@ -137,12 +137,12 @@ def test_mlflow_management_uses_patch_and_delete_http_methods():
 
 
 def test_deleted_model_cannot_be_reloaded_into_runtime(tmp_path):
-    from sos_platform.ml_runtime import load_trusted_isolation_forest
+    from sos_platform.ml_runtime import load_model_revision
 
     with pytest.raises(ValueError, match="Deleted or deleting"):
-        load_trusted_isolation_forest({"lifecycle_state": "Deleted"}, tmp_path)
+        load_model_revision({"lifecycle_state": "Deleted"}, tmp_path)
     with pytest.raises(ValueError, match="Deleted or deleting"):
-        load_trusted_isolation_forest({"lifecycle_state": "Deleting"}, tmp_path)
+        load_model_revision({"lifecycle_state": "Deleting"}, tmp_path)
 
 
 def test_unconfigured_mlflow_does_not_begin_model_deletion(monkeypatch):
@@ -167,7 +167,7 @@ def test_invalid_model_object_key_never_deletes_registry_version(monkeypatch):
         "id": "model-id", "job_id": "job", "attempt_id": "attempt",
         "registry_model": "sos-if-test", "registry_version": "2",
         "location": "s3://bucket/results/unrelated.model.joblib",
-        "lifecycle_state": "Active",
+        "lifecycle_state": "Active", "runtime": '{"model_format": "joblib"}',
     }
     monkeypatch.setattr(model_deletion, "begin_delete", lambda *_: model)
     monkeypatch.setattr(model_deletion, "finish_delete", lambda *_: pytest.fail(

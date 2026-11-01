@@ -23,9 +23,9 @@ Worker는 자식 실행의 시간·메모리·스테이징 사용량을 감시�
 
 Dataset 캐시는 재사용 가능한 로컬 복사본이며 원본 S3 객체·모델·Iceberg Snapshot의 보존 정책과 다르다. 사용 중인 캐시를 임의 축출하지 않으며 데이터 손상 시 원본으로부터 무결성을 확인한다.
 
-API·초기화·Dagster는 기본 의존성을 사용하고 ML 계산용 numpy·joblib·scikit-learn·SHAP은 `ml` dependency group으로 설치한다. 학습 제출·Fork의 매개변수 검증은 SDK를 로딩하지 않는다. 개발 검사는 실제 ML 계산을 포함하므로 `dev` 그룹에 `ml`을 포함한다. 호스트 Worker 실행에는 `uv sync --locked --group ml`을 사용하고, 등록 Feature 실행에는 `--group feast`를 함께 선택한다. `serving` 그룹은 `ml`에 Ray Serve를 더한 서빙 이미지용이다. 컨테이너 이미지는 Dockerfile의 `SOS_UV_GROUPS` 인자로 그룹을 고른다.
+API·초기화는 기본 의존성을 사용하고 ML 계산용 numpy·joblib·scikit-learn·SHAP·skops는 `ml` dependency group으로 설치한다. 모델 생산 Pipeline(Dagster)은 `dagster`와 `ml` 그룹을 함께 설치해 SOS와 같은 ML 판본으로 학습한다. 학습 제출·Fork의 매개변수 검증은 SDK를 로딩하지 않는다. 개발 검사는 실제 ML 계산을 포함하므로 `dev` 그룹에 `ml`을 포함한다. 호스트 Worker 실행에는 `uv sync --locked --group ml`을 사용하고, 등록 Feature 실행에는 `--group feast`를 함께 선택한다. `serving` 그룹은 `ml`에 Ray Serve를 더한 서빙 이미지용이다. 컨테이너 이미지는 Dockerfile의 `SOS_UV_GROUPS` 인자로 그룹을 고른다.
 
-MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·Alias의 정본은 MLflow이지만 SOS는 신뢰된 Worker가 발급한 모델 위치·SHA-256·Feature·Runtime·권한을 검증한 뒤 실행한다. 외부 Registry 등록만으로 임의 직렬화 파일을 신뢰하지 않는다. 인증정보는 서버 측에만 제공한다. 연결 상태의 의미는 [Workflows](workflows.md)를 따른다.
+MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·Alias의 정본은 MLflow이지만 SOS는 Worker가 게시한 모델 위치·SHA-256·Feature·Runtime·권한을 검증한 뒤 실행한다. 외부 Registry 등록만으로 임의 직렬화 파일을 신뢰하지 않는다. SOS가 학습한 판본은 신뢰된 SOS 실행 환경만 쓴 joblib으로, MLflow에서 연결한 판본은 허용 타입만 복원하는 skops와 판본 기록의 전처리로 복원한다. 인증정보는 서버 측에만 제공한다. 연결 상태의 의미는 [Workflows](workflows.md)를 따른다.
 
 ## Feast 전문 Runtime
 
@@ -69,6 +69,6 @@ API의 `/api/ready`는 DB·객체 저장소를 API의 필수 의존성으로, Jo
 
 ## 현재 구현의 범위
 
-등록형 Workflow 정의·스케줄·상태의 Dagster OSS Runtime은 별도 Python 이미지와 Code Location·Daemon·Webserver·메타데이터 DB를 사용하되 SOS와 동일한 uv.lock의 Dagster dependency group에서 설치한다. PostgreSQL 드라이버는 현재 dagster-postgres의 upstream psycopg2 의존성과 맞추어 유지한다. Dagster가 독립 SOS Worker의 자원 격리·ML 계산·결과 게시 책임을 대신하지 않는다. Dagster Run 실패·취소 후 진행 중인 SOS Job 취소는 Dagster 상태 센서가 요청하며, 실제 중단 확정은 SOS Job/Attempt의 계약이다.
+모델 생산 Pipeline의 Dagster OSS Runtime은 별도 Python 이미지와 Code Location·Daemon·Webserver·메타데이터 DB를 사용하되 SOS와 동일한 uv.lock에서 설치한다. Run은 Code Location 컨테이너에서 실행되며 MLflow와 SOS API 자격(`SOS_SUPPLY_TOKEN`)만 받고 SOS DB·저장소 자격은 받지 않는다. 학습 입력 파일은 읽기 전용 마운트(`/data/inputs`)로 전달한다. PostgreSQL 드라이버는 현재 dagster-postgres의 upstream psycopg2 의존성과 맞추어 유지한다.
 
 현재 프로젝트의 Python 3.12·잠금 의존성과 Compose 실행 형태는 **개발·배치 환경의 선택**이지 모든 모델 Runtime의 고정 명세가 아니다. 정확한 환경변수·예산 기본값 및 구현 세부사항은 `src/sos_platform/execution_budget.py`, `resource_admission.py`, `cgroup.py`, `worker.py`와 실행 설정이 정본이다. 설치와 설정 방법은 [Getting Started](getting-started.md)를 따른다. 실행 상태·복구는 [Workflows](workflows.md), 저장 결과의 의미는 [Contracts](contracts.md)를 따른다.

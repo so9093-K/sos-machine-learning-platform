@@ -156,8 +156,21 @@ DEFINITIONS = (
     spec(
         "SOS-ML-MODEL-RUNTIME-INCOMPATIBLE",
         "모델 실행 환경 불일치",
-        "이 모델을 학습한 실행 환경(Python minor·numpy·scikit-learn 버전)이 현재 실행 Runtime과 달라 모델을 불러올 수 없습니다. 현재 환경에서 다시 학습하세요.",
+        "이 모델을 만든 실행 환경(Python minor·numpy·scikit-learn 버전)이 현재 SOS Runtime과 달라 모델을 불러올 수 없습니다. 같은 버전의 환경에서 다시 학습하세요.",
         "precondition",
+    ),
+    spec(
+        "SOS-ML-IMPORT-INVALID",
+        "모델 패키지 검증 실패",
+        "MLflow 모델 버전의 sos_model.json·estimator.skops가 SOS 연결 계약과 다르거나, SOS Runtime에서 기록된 검증 점수를 재현하지 못했습니다. 생산 Pipeline의 모델 패키지를 확인하세요.",
+        "validation",
+    ),
+    spec(
+        "SOS-ML-IMPORT-SOURCE-UNAVAILABLE",
+        "MLflow 모델 버전 확인 실패",
+        "MLflow에 연결할 수 없거나 지정한 모델 버전이 없거나 READY 상태가 아닙니다. 모델 이름·버전과 MLflow 상태를 확인하세요.",
+        "dependency",
+        "after_refresh",
     ),
     spec(
         "SOS-ML-TRAIN-STAGE-LIMIT",

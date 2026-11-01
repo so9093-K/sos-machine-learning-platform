@@ -35,7 +35,7 @@ def job_router(store: Store, access: ResourceAccess) -> APIRouter:
             actor_id=None if actor.privileged else actor.id,
             kind="exploration" if discovery_only else None,
             exclude_kind=None if discovery_only else "exploration",
-            exclude_ml_train=not discovery_only,
+            exclude_ml=not discovery_only,
         )
         return page_from_rows(rows, limit)
 
@@ -157,6 +157,7 @@ def job_router(store: Store, access: ResourceAccess) -> APIRouter:
         if item["kind"] in (
             "exploration",
             "ml_train",
+            "ml_import",
             "ml_score",
             "ml_policy",
             "ml_evaluate",
@@ -177,6 +178,7 @@ def job_router(store: Store, access: ResourceAccess) -> APIRouter:
         if item["kind"] in (
             "exploration",
             "ml_train",
+            "ml_import",
             "ml_score",
             "ml_policy",
             "ml_evaluate",

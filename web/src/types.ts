@@ -54,10 +54,6 @@ export type MLEvaluationJobSummary = components["schemas"]["MLEvaluationJobSumma
 export type MLExplanationJobSummary = components["schemas"]["MLExplanationJobSummaryOut"];
 
 // 분석 주제 정의는 FastAPI OpenAPI에서 생성한 타입을 사용한다.
-export type PipelineDefinition = components["schemas"]["PipelineDefinitionOut"];
-export type PipelineCandidates = components["schemas"]["PipelineCandidatesOut"];
-export type PipelineRun = components["schemas"]["PipelineRunOut"];
-export type PipelineCheck = components["schemas"]["PipelineCheckOut"];
 export type MLflowExportStatus = components["schemas"]["MLflowExportStatusOut"];
 export type ServingEndpoint = components["schemas"]["ServingEndpointOut"];
 export type ServingApplication = components["schemas"]["ServingApplicationOut"];

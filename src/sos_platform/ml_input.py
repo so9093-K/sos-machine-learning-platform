@@ -71,7 +71,8 @@ def ordered_playground_input(model: dict, values: dict) -> list[float]:
     features = model["features"]
     if not 1 <= len(features) <= MAX_PLAYGROUND_FEATURES or set(values) != set(features):
         raise ValueError("Playground input must exactly match model features")
-    allows_missing = model["runtime"].get("artifact_schema") == "if_model_with_preprocessing_v1"
+    # 학습 중앙값 전처리를 기록한 판본(SOS 학습·MLflow 연결)만 결측을 받는다.
+    allows_missing = model["runtime"].get("preprocessing_mode") == "train_median_v1"
     ordered = []
     expected_dtypes = model["runtime"].get("feature_dtypes")
     if not isinstance(expected_dtypes, list) or len(expected_dtypes) != len(features):

@@ -33,6 +33,7 @@ def scoring_env(monkeypatch, tmp_path):
         "features": ["count"],
         "runtime": {
             "artifact_schema": "if_model_with_preprocessing_v1",
+            "preprocessing_mode": "train_median_v1",
             "feature_dtypes": ["Float64"],
             "training_selection": {
                 "temporal_split": {
@@ -59,7 +60,7 @@ def scoring_env(monkeypatch, tmp_path):
     monkeypatch.setattr(ml_scoring, "pinned_scan_dataset", scan)
     scorer = RecordingScorer()
     monkeypatch.setattr(
-        ml_scoring, "load_trusted_isolation_forest",
+        ml_scoring, "load_model_revision",
         lambda _model, _cache: scorer,
     )
     store = SimpleNamespace(home=tmp_path, get_model_revision=lambda _: model)
@@ -340,7 +341,7 @@ def test_all_missing_nullable_integer_scoring_chunk_is_valid(scoring_env, monkey
             return tuple(float(x) for x in np.nan_to_num(features[:, 0], nan=0.0))
 
     monkeypatch.setattr(
-        ml_scoring, "load_trusted_isolation_forest",
+        ml_scoring, "load_model_revision",
         lambda _model, _cache: NullSafeScorer(),
     )
     result = ml_scoring.run_dataset_scoring(store, dataset, spec(), tmp_path / "emptyints.parquet")

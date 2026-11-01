@@ -1,6 +1,6 @@
 # 0016 — Dagster OSS를 Workflow 정본으로 채택
 
-- 상태: **Accepted**
+- 상태: **Accepted** · 결정 3·5·6의 SOS 제출·단계 Job 조합은 [ADR 0024](0024-model-production-realignment.md)가 대체
 - 관련 문서: [Architecture](../architecture.md), [Contracts](../contracts.md), [Workflows](../workflows.md), [Runtimes](../runtimes.md)
 - 대체 범위: SOS 자체 등록형 Pipeline 단계 전이와 Pipeline Run 상태 머신
 

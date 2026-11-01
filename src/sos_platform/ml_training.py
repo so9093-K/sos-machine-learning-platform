@@ -3,7 +3,6 @@
 import hashlib
 import os
 import platform
-import random
 from contextlib import contextmanager, nullcontext
 from dataclasses import asdict
 from pathlib import Path
@@ -17,7 +16,6 @@ import sklearn
 from .datasets import pinned_scan_dataset
 from .errors import PlatformError
 from .execution_budget import ExecutionBudget
-from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold, score_histogram
 from .ml_if_config import IsolationForestConfig
 from .ml_if_preprocessing import FittedIFMedianImputer, _train_median, fit_if_median_imputer
 from .ml_input import (
@@ -31,6 +29,7 @@ from .ml_outputs import output_contract_for_training
 from .ml_runtime import IF_BUNDLE_SCHEMA, TRUSTED_LOADING
 from .ml_sampling import canonical_sorted_batches
 from .ml_temporal_split import split_training_source
+from .ml_training_evidence import feature_training_profile, training_score_summary
 from .schemas import MLTemporalSplitSpec, MLTrainingInputPolicy
 
 
@@ -363,49 +362,6 @@ def _staged_model_input(
     return output
 
 
-def _training_score_summary(model, matrix: np.ndarray) -> tuple[dict, int]:
-    """점수 계산을 배치로 제한하고 임계값 의미는 기존 Train-only 그대로 둔다."""
-    scores = []
-    for start in range(0, matrix.shape[0], 8192):
-        end = min(start + 8192, matrix.shape[0])
-        scores.extend(model.score_anomalies(matrix[start:end]))
-    threshold = quantile_threshold(scores, 0.05)
-    summary = evaluate_anomaly_scores(scores, threshold=threshold)
-    summary["scope"] = "training_data_only"
-    summary["histogram"] = score_histogram(scores)
-    summary["threshold_source"] = "training_score_quantile_0.95"
-    return summary, len(scores)
-
-
-def _feature_training_profile(matrix: np.ndarray, features: list[str]) -> dict:
-    """적합 입력의 참고 분포. 행 수와 표본 행렬 크기를 제한한다.
-
-    큰 입력은 고정 시드의 비복원 균등 표본만 읽는다. 학습 입력 자체는 바꾸지 않으며,
-    분위수·최솟값·최댓값 모두 분석한 표본의 값임을 기록한다.
-    """
-    count = matrix.shape[0]
-    limit = max(1, min(4096, 262144 // len(features)))
-    sampled = count > limit
-    if sampled:
-        indices = random.Random(42).sample(range(count), limit)
-        values = matrix[indices]
-    else:
-        values = matrix
-    return {
-        "method": "sampled_linear_quantiles_v1" if sampled else "linear_quantiles_v1",
-        "input_space": "model_input_after_preprocessing",
-        "row_count": int(count),
-        "sample_rows": int(values.shape[0]),
-        "sampling_seed": 42 if sampled else None,
-        "features": {
-            name: dict(zip(("min", "p10", "p50", "p90", "max"),
-                           np.quantile(values[:, index], [0, .1, .5, .9, 1],
-                                       method="linear").tolist(), strict=True))
-            for index, name in enumerate(features)
-        },
-    }
-
-
 def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
     """자식 Worker에서 학습 입력을 확정하고 모델과 실행 근거를 기록한다."""
     if dataset["version"] != spec["dataset_version"]:
@@ -448,14 +404,14 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
                     matrix, preprocessing, stage=Path(directory)
                 )
                 model = train_isolation_forest(transformed, config)
-                summary, count = _training_score_summary(model, transformed)
-                profile = _feature_training_profile(transformed, features)
+                summary, count = training_score_summary(model, transformed)
+                profile = feature_training_profile(transformed, features)
         else:
             preprocessing = fit_if_median_imputer(matrix, feature_names=features)
             transformed = preprocessing.transform(matrix, feature_names=features)
             model = train_isolation_forest(transformed, config)
-            summary, count = _training_score_summary(model, transformed)
-            profile = _feature_training_profile(transformed, features)
+            summary, count = training_score_summary(model, transformed)
+            profile = feature_training_profile(transformed, features)
     joblib.dump(
         {
             "schema": "if_model_with_preprocessing_v1",

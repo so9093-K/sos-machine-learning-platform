@@ -1,7 +1,7 @@
 /** 학습 유형 → 분석 과제 → 주제로 이어지는 ML 기능 소개 화면.
  *
  *  어떤 분류·주제가 실제로 제공되는지와 주제의 입력·출력 계약은 분석 주제 카탈로그(/api/topics)가
- *  정본이고, 사용자에게 보여 줄 가치·활용 설명은 이 파일이 소유한다. 주제는 등록 Pipeline에 묶이지 않는다.
+ *  정본이고, 사용자에게 보여 줄 가치·활용 설명은 이 파일이 소유한다. 주제는 모델 출처에 묶이지 않는다.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { formatError, request } from "./api";

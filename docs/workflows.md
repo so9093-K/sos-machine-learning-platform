@@ -2,11 +2,11 @@
 
 SOS는 데이터 이해·가공·학습·평가·추론·관측을 필요한 만큼 독립 실행하거나 조합한다. 모두에게 하나의 선형 파이프라인을 요구하지 않는다.
 
-등록형 Workflow의 정의·단계 의존성·전체 Run 상태는 Dagster OSS가 소유한다. 각 단계는 SOS의 독립 Job을 제출하고 확정 결과를 확인한다. 입력 전체에 대한 Preflight는 별도 Worker Job이며 API의 사전 구조 검사는 실제 학습 성공을 보장하지 않는다. SOS API는 사용자·Dataset·Idempotency-Key와 Dagster Run ID를 연결하되 별도 Pipeline 단계 전이 상태를 관리하지 않는다. 취소 요청은 Dagster Run과 현재 SOS Job에 전달하며 실제 중단 완료와 구별한다. Dagster UI에서 직접 Run을 종료하거나 Run이 실패한 경우에도 Dagster Run 상태 센서가 남아 있는 SOS Job의 취소를 요청한다. 센서 처리에는 지연이 있을 수 있으며 이미 확정된 결과를 되돌리지 않는다.
+모델 생산 Pipeline(Dagster)의 Run은 SOS Job을 만들지 않는다. 학습·평가·MLflow 등록이 끝난 뒤 생산 Pipeline이 고정 모델 버전의 연결을 요청하면, SOS는 연결 Job(`ml_import`) 하나로 패키지를 검증·게시한다. 생산 Run 성공, MLflow 등록, SOS 연결 성공, SOS Registry 등록은 각각 다른 상태다. 연결 요청도 Idempotency-Key로 중복 제출을 막는다.
 
 ## 실행 단위와 Job 상태
 
-Workflow Definition은 작업 사이의 재사용 가능한 관계, Workflow Run은 그 실행 기록이다. **Job은 개별 실행 요청**, **Execution Attempt는 실제 수행 시도**이며 Workflow가 없는 Job도 가능하다. 식별자와 자산 판본의 의미는 [Contracts](contracts.md)가 정본이다.
+**Job은 개별 실행 요청**, **Execution Attempt는 실제 수행 시도**다. 식별자와 자산 판본의 의미는 [Contracts](contracts.md)가 정본이다.
 
 | 상태 | 의미 |
 | --- | --- |
@@ -25,7 +25,7 @@ Workflow Definition은 작업 사이의 재사용 가능한 관계, Workflow Run
 
 학습의 완료와 모델 평가의 신뢰성은 다르다. Model Revision·Scoring Result·정책·Evaluation·Explanation은 각자의 판본을 가지며 같은 점수에 다른 정책을 적용하더라도 재학습을 강제하지 않는다. 의미의 정본은 [Contracts](contracts.md)다.
 
-성공·실패·취소한 ML Job은 각기 FINISHED·FAILED·KILLED MLflow Run 상태로 기록한다. 전송 의도는 Worker 종료·실행 전 취소·Worker 중단 뒤 복구 중 어느 경로로 끝나든 Job의 최종 상태와 같은 트랜잭션에 남긴다. Dataset 없는 Job(Playground 단일 입력 설명)은 Dataset 참조 없이 출처 Job을 기록하고, 원본 학습의 Experiment에 묶는다. 모델 Registry 판본은 성공한 학습에서만 생성한다. MLflow Run과 Registry 등록은 ML Job과 별도로 `Pending → Sending → Succeeded / Retry` 상태를 가진다. 외부 등록 실패는 완료한 학습 성공을 뒤집지 않지만 새 모델 Scoring은 Registry 버전이 확인될 때까지 차단하고 Pipeline은 다음 단계로 넘어가지 않는다. 외부 시스템과 원자적 트랜잭션을 공유하지 않으므로 재시도에서 중복 Run/Model Version을 검사한다. MLflow에 연결하지 못하면 Worker는 잠시 전송을 멈추고 Job 실행을 계속하며, 이후 남은 전송을 다시 시도한다. 연결 구현은 [Runtimes](runtimes.md)를 따른다.
+성공·실패·취소한 ML Job은 각기 FINISHED·FAILED·KILLED MLflow Run 상태로 기록한다. 전송 의도는 Worker 종료·실행 전 취소·Worker 중단 뒤 복구 중 어느 경로로 끝나든 Job의 최종 상태와 같은 트랜잭션에 남긴다. Dataset 없는 Job(Playground 단일 입력 설명)은 Dataset 참조 없이 출처 Job을 기록하고, 원본 학습의 Experiment에 묶는다. 모델 Registry 판본은 성공한 학습·연결에서만 생성한다. MLflow Run과 Registry 등록은 ML Job과 별도로 `Pending → Sending → Succeeded / Retry` 상태를 가진다. 외부 등록 실패는 완료한 학습·연결 성공을 뒤집지 않지만 새 모델 Scoring·제공은 Registry 버전이 확인될 때까지 차단한다. 외부 시스템과 원자적 트랜잭션을 공유하지 않으므로 재시도에서 중복 Run/Model Version을 검사한다. MLflow에 연결하지 못하면 Worker는 잠시 전송을 멈추고 Job 실행을 계속하며, 이후 남은 전송을 다시 시도한다. 연결 구현은 [Runtimes](runtimes.md)를 따른다.
 
 ## 데이터·결과 게시와 복구
 
@@ -41,4 +41,4 @@ Dataset 등록과 Understanding Profile 계산 역시 독립적인 사건이다.
 
 ![원본 데이터에서 모델 배포까지 이어질 수 있는 대표적인 ML 자산 관계](references/dataset-to-deployment-lifecycle.png)
 
-그림은 자산 간 가능한 참조 관계이지 필수 작업 순서나 현재 구현 완료를 뜻하지 않는다. 모델 등록은 배포와 다르며, 연구자는 저장된 데이터·모델·환경·평가 근거로 실험을 비교하고 재실행할 수 있어야 한다. 등록형 Workflow의 오케스트레이터는 Dagster OSS이며, 개별 SOS Job은 독립적으로 유지된다. 사용자의 행동과 오류 안내는 [Experience](experience.md)를 따른다.
+그림은 자산 간 가능한 참조 관계이지 필수 작업 순서나 현재 구현 완료를 뜻하지 않는다. 모델 등록은 배포와 다르며, 연구자는 저장된 데이터·모델·환경·평가 근거로 실험을 비교하고 재실행할 수 있어야 한다. 모델 생산은 Dagster의 생산 Pipeline이, 연결한 판본의 적용·서빙은 SOS가 맡는다. 사용자의 행동과 오류 안내는 [Experience](experience.md)를 따른다.

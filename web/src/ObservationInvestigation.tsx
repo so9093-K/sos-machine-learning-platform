@@ -1,14 +1,14 @@
-/** Pipeline 후보 한 건의 관측값과 명시적으로 계산한 설명 결과를 분석한다. */
+/** Scoring Result의 관측값 한 건과 명시적으로 계산한 설명 결과를 분석한다. */
 import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { FeatureResultDetails } from "./FeatureResultDetails";
 import type { MLResourceKind } from "./PlatformNavigation";
-import type { PipelineCandidates, ModelRevision } from "./types";
+import type { ModelRevision, ScoringObservations } from "./types";
 import { ShapExplanation } from "./ShapExplanation";
 import { FeatureProfile } from "./FeatureProfile";
 import { formatObservedAt } from "./display-format";
 
-type Candidate = PipelineCandidates["items"][number];
+type Observation = ScoringObservations["items"][number];
 
 function numeric(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -21,13 +21,12 @@ function format(value: unknown): string {
 
 export function ObservationInvestigation({
   candidate, scoringResultId, modelRevisionId, canRun, canCancel, onOpenResource,
-  observationMode = false, scoreOrder, isDefaultObservation = false, onTryObservation,
+  scoreOrder, isDefaultObservation = false, onTryObservation,
 }: {
-  candidate: Candidate; scoringResultId: string; modelRevisionId: string | null;
+  candidate: Observation; scoringResultId: string; modelRevisionId: string | null;
   scoreOrder?: number;
   canRun: boolean; canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
-  observationMode?: boolean;
   isDefaultObservation?: boolean;
   onTryObservation?: (
     features: Record<string, number | null>, rowIndex: number, score: number,
@@ -76,11 +75,9 @@ export function ObservationInvestigation({
     return `학습 중앙값 대비 ${difference > 0 ? "+" : "−"}${amount}`;
   }
   return <section className="observation-inspection"
-    aria-label={observationMode
-      ? isDefaultObservation ? "기본 표시 관측값 분석" : "선택한 관측값 분석"
-      : "선택한 후보 분석"}>
+    aria-label={isDefaultObservation ? "기본 표시 관측값 분석" : "선택한 관측값 분석"}>
     <div className="observation-title">
-      <h5 id="observation-detail-heading" tabIndex={-1}>{observationMode ? isDefaultObservation ? "첫 번째 관측값" : "선택한 관측값" : "선택한 검토 대상"}</h5>
+      <h5 id="observation-detail-heading" tabIndex={-1}>{isDefaultObservation ? "첫 번째 관측값" : "선택한 관측값"}</h5>
       {typeof scoreOrder === "number" && <span>점수순 {scoreOrder.toLocaleString("ko-KR")}번째</span>}
     </div>
     <div className="observation-score"><span>모델 이상 점수</span><strong>{format(candidate.anomaly_score)}</strong></div>
@@ -96,7 +93,7 @@ export function ObservationInvestigation({
             <span>결과 행 #{candidate.row_index.toLocaleString("ko-KR")}</span>
             {!candidate.observation_id && <span>원본 관측치 ID 없음</span>}
           </p>}
-    {observationMode && onTryObservation && canRun && <div className="observation-try-experiment">
+    {onTryObservation && canRun && <div className="observation-try-experiment">
       <button type="button" className="secondary" onClick={() => {
         setExperimentError(onTryObservation(candidate.features, candidate.row_index,
           candidate.anomaly_score) ?? "");
