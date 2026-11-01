@@ -12,7 +12,6 @@ type Props = {
   uploadRef: RefObject<HTMLInputElement | null>;
   uploadPolicy: UploadPolicy | null;
   onFile: (file: File) => void;
-  onExample: () => void;
   onChoose: (id: string) => void;
   existingTableName: string;
   onChangeExistingName: (value: string) => void;
@@ -34,7 +33,7 @@ const mebibytes = (size: number) => (size / (1024 * 1024)).toFixed(2);
 export function DataSourceBar(props: Props) {
   const {
     datasets, selected, canWrite, busy, loading = false, readError = false, uploadRef, uploadPolicy,
-    onFile, onExample, onChoose, existingTableName, onChangeExistingName,
+    onFile, onChoose, existingTableName, onChangeExistingName,
     snapshots, snapshotId, onSnapshotId, snapshotsLoading,
     onLoadSnapshots, onConnectExisting, hasMore, onLoadMore, pendingLabel,
   } = props;
@@ -50,7 +49,6 @@ export function DataSourceBar(props: Props) {
       </select>
     </label>}
     {hasMore && <button type="button" className="secondary" disabled={busy} onClick={onLoadMore}>Dataset 더 보기</button>}
-    {canWrite && <button type="button" className="secondary" onClick={onExample}>예제 데이터</button>}
     {canWrite && <details className="data-import-controls">
       <summary>데이터 추가·연결</summary>
       <div className="data-import-actions">

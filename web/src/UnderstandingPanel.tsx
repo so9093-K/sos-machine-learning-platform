@@ -232,8 +232,8 @@ export function UnderstandingPanel({
       <h4>실행 가능한 분석 예시</h4>
       <p className="hint">데이터 특성과 지원 연산을 기준으로 구성된 항목입니다. 분석 적합성이나 업무적 의미를 확정하지 않습니다.</p>
       {profile.insights.length === 0 && <p className="muted">현재 확인된 컬럼으로 구성할 기본 분석 예시가 없습니다. 탐색 탭에서 직접 조건을 정할 수 있습니다.</p>}
-      <div className="example-grid">{profile.insights.map((item, i) => <article
-        className="example-card" key={item.kind + i}>
+      <div className="understanding-insight-grid">{profile.insights.map((item, i) => <article
+        className="understanding-insight-card" key={item.kind + i}>
         <h4>{item.title}</h4><p>{item.reason}</p>
         <p className="hint">구성 근거: {scopeLabel}
           {" · "}실행 범위: 별도로 제한 조회한 부분 데이터</p>

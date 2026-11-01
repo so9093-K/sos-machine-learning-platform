@@ -86,9 +86,9 @@ export function ModelApiUsage({ model, datasetId, lastRun, endpoint, endpointErr
   const datasetSteps: Step[] = [
     { title: "데이터 등록", result: "응답의 id가 Dataset ID입니다. 이미 등록한 Dataset이면 건너뜁니다.",
       command: `curl -X POST "$SOS_API/api/datasets/files" ${auth} \\\n  -F "file=@activity.parquet"` },
-    { title: "점수 계산 요청", result: "응답의 id로 진행 상태를 확인합니다. Idempotency-Key는 요청마다 새 값을 쓰고, 응답을 받지 못해 같은 요청을 다시 보낼 때만 같은 값을 씁니다.",
-      command: `curl -X POST "$SOS_API/api/ml/scoring/jobs" ${auth} \\\n  -H "Idempotency-Key: activity-score-001" -H "Content-Type: application/json" \\\n` +
-        `  -d '{"model_revision_id": "${model.id}", "dataset_id": "${datasetId || "$DATASET_ID"}"}'`,
+    { title: "점수 계산 요청", result: "첫 줄은 새 요청의 키를 생성합니다(Python 3 필요). 응답을 받지 못했다면 키를 유지한 채 curl 부분만 다시 실행합니다. Dataset이나 요청 조건을 바꾸면 새 키를 생성합니다. 응답의 id로 진행 상태를 확인합니다.",
+      command: `SOS_SCORING_KEY=$(python3 -c 'import uuid; print(uuid.uuid4())')\ncurl -X POST "$SOS_API/api/ml/scoring/jobs" ${auth} \\\n  -H "Idempotency-Key: $SOS_SCORING_KEY" -H "Content-Type: application/json" \\\n` +
+        `  -d "{\\"model_revision_id\\": \\"${model.id}\\", \\"dataset_id\\": \\"${datasetId || "$DATASET_ID"}\\"}"`,
       note: datasetId ? undefined : "$DATASET_ID에는 이 모델의 입력 조건과 맞는 Dataset의 ID를 넣습니다." },
     { title: "완료 확인", result: "status가 Succeeded이면 result.scoring_result_id로 결과를 조회합니다.",
       command: `curl "$SOS_API/api/ml/scoring/jobs/$JOB_ID" ${auth}` },
