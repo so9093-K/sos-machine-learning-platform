@@ -73,9 +73,16 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 모델 개발·학습 설정·실험은 프로젝트 코드와 MLflow 등 개발 환경에서 수행하고, 준비된 모델은 배포 과정에서 SOS에 공급한다. 공급에는 `kind: service` Actor에만 부여할 수 있는 `automation` 역할의 토큰을 사용한다. 이 역할은 학습(`model.train`)·모델 연결·관리와 제공(`model.manage`)·Feature 정의 변경(`feature.manage`) 권한을 가진다.
 
-### 생산 Pipeline으로 공급 (Dagster → MLflow → SOS)
+모델 연결은 다음 두 경로 중 하나를 선택한다. Dagster에서 이미 연결한 MLflow 버전을 공급 스크립트로 다시 연결하면 별도의 연결 Job과 SOS Model Revision이 만들어질 수 있다.
 
-Dagster의 `activity_anomaly_production` Job이 학습 데이터를 시간순 Train·Calibration·Test로 나누어 학습·평가하고, 모델 패키지(`sos_model.json`·`estimator.skops`)를 MLflow 모델 버전으로 등록한 뒤 SOS에 연결을 요청한다. 학습 파일은 `dagster/inputs`(또는 `SOS_PIPELINE_INPUT_DIR`)에 두고 Run 설정의 `data_path`에 `/data/inputs/<파일>`로 지정한다. 파일에는 UTC 오프셋이 있는 `ts`와 활동 Feature가 필요하다. SOS 연결에는 Compose 실행 시 `SOS_SUPPLY_TOKEN`(automation 토큰)을 전달한다. 연결 없이 MLflow 등록까지만 하려면 `connect_to_sos: false`로 실행한다.
+| 연결 경로 | Dagster 설정 | 연결 이후 |
+| --- | --- | --- |
+| Dagster에서 SOS 연결까지 실행 | `connect_to_sos: true` (기본값) | 결과의 SOS 판본을 그대로 제공·배포 |
+| 공급 스크립트로 SOS 연결 | `connect_to_sos: false` | MLflow 이름·고정 버전을 CLI에 전달 |
+
+### Dagster에서 SOS 연결까지 실행
+
+Dagster의 `activity_anomaly_production` Job이 학습 데이터를 시간순 Train·Calibration·Test로 나누어 학습·평가하고, 모델 패키지(`sos_model.json`·`estimator.skops`)를 MLflow 모델 버전으로 등록한 뒤 SOS에 연결을 요청한다. 학습 파일은 `dagster/inputs`(또는 `SOS_PIPELINE_INPUT_DIR`)에 두고 Run 설정의 `data_path`에 `/data/inputs/<파일>`로 지정한다. 파일에는 UTC 오프셋이 있는 `ts`와 활동 Feature가 필요하다. SOS 연결에는 Compose 실행 시 `SOS_SUPPLY_TOKEN`(automation 토큰)을 전달한다.
 
 ```yaml
 ops:
@@ -83,14 +90,19 @@ ops:
     config:
       data_path: /data/inputs/activity.parquet
       registered_model: activity-anomaly-if
+      connect_to_sos: true
 ```
+
+성공한 `connect_to_sos` 단계의 `sos_model_revision` Materialization에서 `model_revision_id`를 확인한다. SOS의 `/models/<model_revision_id>`를 열어 모델 상세에서 제공 설명·모델 제공·선택적 온라인 배포를 진행한다. 이 판본을 제공·배포하려고 `--mlflow-model`로 다시 연결하지 않는다. 연결 성공은 사용자 제공이나 온라인 배포 완료를 의미하지 않는다.
 
 다른 생산 Pipeline도 `ml_model_package.package_isolation_forest`로 같은 패키지를 만들어 MLflow 버전의 아티팩트 위치에 두면 연결할 수 있다. 생산 환경의 Python minor·numpy·scikit-learn 버전은 SOS와 같아야 한다.
 
 ### 공급 스크립트
 
+MLflow 버전을 CLI로 연결할 예정이면 위 Dagster Run 설정을 `connect_to_sos: false`로 바꾸어 MLflow 등록까지만 실행한다. 공급 스크립트는 다른 경로에서 이미 연결한 판본을 찾아 재사용하지 않는다. `--state-file` 재사용은 같은 CLI 제출의 재개만 보장한다.
+
 ```bash
-# MLflow에 등록된 고정 버전을 연결
+# 아직 SOS에 연결하지 않은 MLflow 고정 버전을 연결·제공
 SOS_SUPPLY_TOKEN=<automation 토큰> .venv/bin/python scripts/supply_model.py \
   --state-file .sos/supply/activity-v3.json \
   --mlflow-model activity-anomaly-if --mlflow-version 3 --description-file <제공 설명.txt> \

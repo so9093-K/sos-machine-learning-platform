@@ -55,7 +55,7 @@ class ProductionConfig(Config):
     alert_fraction: float = Field(default=0.005, gt=0, lt=1, description="Calibration 점수로 정하는 판정 비율")
     n_estimators: int = Field(default=100, ge=1, le=2000)
     random_state: int = Field(default=42, ge=0, le=2**32 - 1)
-    connect_to_sos: bool = Field(default=True, description="MLflow 등록 후 SOS에 고정 버전 연결을 요청한다")
+    connect_to_sos: bool = Field(default=True, description="MLflow 등록 후 SOS에 고정 버전을 연결한다. 공급 CLI로 연결할 예정이면 false로 지정한다")
     registry_key: str = Field(default="default", description="연결한 판본을 관리할 SOS 모델 그룹")
 
 

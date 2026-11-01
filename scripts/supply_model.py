@@ -2,6 +2,8 @@
 
 모델은 두 경로로 공급한다. Dataset으로 SOS에서 학습하거나(--dataset-file·--dataset-id), 외부 Pipeline이
 생산해 MLflow에 등록한 고정 모델 버전을 연결한다(--mlflow-model·--mlflow-version).
+CLI로 연결할 생산 Run은 connect_to_sos=false로 실행한다. Dagster에서 이미 SOS에 연결했다면
+새로 연결하지 않고 그 Model Revision의 상세에서 제공·배포한다.
 같은 --state-file로 재실행하면 등록 Dataset·학습 또는 연결 요청·멱등성 키를 재사용한다.
 상태 파일에는 토큰을 저장하지 않는다. 새 공급은 별도의 상태 파일로 명시한다.
 """
@@ -267,7 +269,7 @@ def main() -> None:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--dataset-file", type=Path, help="새로 등록할 CSV·Parquet 파일")
     source.add_argument("--dataset-id", help="기존 Dataset ID 또는 등록 응답 유실 후 확인한 ID")
-    source.add_argument("--mlflow-model", help="연결할 MLflow 모델 이름(외부 Pipeline이 생산·등록한 모델)")
+    source.add_argument("--mlflow-model", help="아직 SOS에 연결하지 않은 MLflow 모델 이름(Dagster connect_to_sos=false)")
     parser.add_argument("--mlflow-version", help="연결할 MLflow 모델 버전 번호(--mlflow-model과 함께)")
     description = parser.add_mutually_exclusive_group(required=True)
     description.add_argument("--description", help="목적·적용 대상·한계 설명")

@@ -100,5 +100,5 @@ Worker의 `worker.staging.cleanup_failed`는 정리를 모두 시도한 뒤 실�
 ### 모델 생산·연결
 
 1. `make status`에서 `dagster-postgres`, `dagster-code`, `dagster-webserver`, `dagster-daemon` 상태를 확인한다. Dagster 장애는 기존 SOS 판본·Scoring·서빙에 영향을 주지 않는다.
-2. 생산 Run이 `register_in_mlflow`까지 성공하고 `connect_to_sos`에서 실패했다면 MLflow 버전은 이미 있다. 다시 생산하지 않고 `scripts/supply_model.py --mlflow-model … --mlflow-version …` 또는 `POST /api/ml/models/imports`로 같은 버전을 연결한다.
+2. 생산 Run이 `register_in_mlflow`까지 성공했다면 MLflow 버전은 이미 있으므로 다시 학습하지 않는다. `connect_to_sos` 단계의 성공 결과(`sos_model_revision`)나 SOS 연결 Job을 먼저 확인한다. 이미 게시된 `model_revision_id`가 있으면 해당 판본을 그대로 제공·배포한다. 연결 Job이 실행 중이면 그 상태를 조회하고, 접수되지 않았거나 실패·취소가 확정되어 판본이 없는 경우에만 공급 스크립트 또는 연결 API로 다시 연결한다. 같은 MLflow 버전이라는 이유만으로 Dagster와 CLI의 서로 다른 제출이 같은 SOS 판본을 재사용하지는 않는다. CLI 공급을 선택하는 새 생산 Run은 `connect_to_sos: false`로 실행한다.
 3. 연결 Job이 `SOS-ML-IMPORT-SOURCE-UNAVAILABLE`이면 MLflow 상태와 모델 이름·버전(READY)을 확인한다. `SOS-ML-IMPORT-INVALID`면 패키지 파일·구조 또는 검증 점수 재현 실패이므로 생산 Pipeline의 패키지를 확인한다. `SOS-ML-MODEL-RUNTIME-INCOMPATIBLE`이면 생산 환경의 Python minor·numpy·scikit-learn을 SOS와 맞춘다.
