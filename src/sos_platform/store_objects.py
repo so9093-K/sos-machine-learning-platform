@@ -102,7 +102,8 @@ class ObjectStoreMixin:
             "SELECT location FROM datasets WHERE location IN :ids "
             "UNION SELECT location FROM model_revisions WHERE location IN :ids "
             "AND lifecycle_state!='Deleted' "
-            "UNION SELECT location FROM scoring_results WHERE location IN :ids"
+            "UNION SELECT location FROM scoring_results WHERE location IN :ids "
+            "UNION SELECT location FROM scoring_observation_parts WHERE location IN :ids"
         ).bindparams(bindparam("ids", expanding=True))
         writes_query = text("SELECT * FROM object_writes WHERE location IN :ids").bindparams(
             bindparam("ids", expanding=True)

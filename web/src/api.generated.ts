@@ -1176,7 +1176,7 @@ export interface paths {
         };
         /**
          * 점수화 결과 관측치 탐색
-         * @description 보존된 점수와 관측 근거를 조회합니다. 결과 행 번호는 원본 이벤트의 고유 식별자가 아닙니다.
+         * @description 보존된 점수와 관측 근거를 점수 내림차순(동점은 결과 행 번호 오름차순)으로 조회합니다. 결과마다 한 번 만든 관측값 색인을 읽으므로 결과 크기와 관계없이 페이지 비용이 같습니다. 이전 결과의 색인이 준비되기 전에는 409를 반환합니다. 결과 행 번호는 원본 이벤트의 고유 식별자가 아닙니다.
          */
         get: operations["list_scoring_observations_api_ml_scoring_results__result_id__observations_get"];
         put?: never;

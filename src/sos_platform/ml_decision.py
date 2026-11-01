@@ -3,7 +3,6 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import numpy as np
 import polars as pl
@@ -11,18 +10,9 @@ import pyarrow.parquet as pq
 
 from .duckdb_spill import SpillBudget
 from .ml_policy_contract import validate_policy_for_scoring
-from .ml_scoring_staging import scoring_stage_bytes, scoring_stage_prefix
 from .object_store import ObjectStore
+from .result_staging import result_stage, result_stage_bytes
 from .score_files import quantile_threshold_file, summarize_scores
-
-
-@contextmanager
-def _attempt_stage(store, stage_owner: Path) -> Iterator[Path]:
-    """Worker가 크기를 감시하고 종료·복구 때 회수하는 이 Attempt 소유 임시 디렉터리."""
-    with TemporaryDirectory(
-        prefix=scoring_stage_prefix(stage_owner), dir=stage_owner.parent,
-    ) as directory:
-        yield Path(directory)
 
 
 @contextmanager
@@ -37,7 +27,7 @@ def _verified_scoring(store, scoring: dict, stage_owner: Path) -> Iterator[tuple
     expected = f"results/{scoring['job_id']}/{scoring['attempt_id']}.scores.parquet"
     if scoring["location"] != storage.location(expected):
         raise ValueError("Scoring artifact is outside its immutable Attempt location")
-    with _attempt_stage(store, stage_owner) as directory:
+    with result_stage(stage_owner) as directory:
         path = directory / "scores.parquet"
         storage.get(expected, path, expected_sha256=scoring["sha256"])
         with pq.ParquetFile(path) as parquet:
@@ -54,7 +44,7 @@ def _verified_scoring(store, scoring: dict, stage_owner: Path) -> Iterator[tuple
         yield path, SpillBudget.for_worker(
             directory, stage_error="SOS-ML-SCORE-STAGE-LIMIT",
             capacity_error="SOS-ML-SCORE-CAPACITY",
-            used_bytes=lambda: scoring_stage_bytes(store.home, stage_owner),
+            used_bytes=lambda: result_stage_bytes(stage_owner),
         )
 
 
@@ -84,7 +74,7 @@ def _verified_scoring_row(store, scoring: dict, row_index: int, stage_owner: Pat
     expected = f"results/{scoring['job_id']}/{scoring['attempt_id']}.scores.parquet"
     if scoring["location"] != storage.location(expected):
         raise ValueError("Scoring artifact is outside its immutable Attempt location")
-    with _attempt_stage(store, stage_owner) as directory:
+    with result_stage(stage_owner) as directory:
         path = directory / "scores.parquet"
         storage.get(expected, path, expected_sha256=scoring["sha256"])
         with pq.ParquetFile(path) as parquet:

@@ -128,6 +128,23 @@ class ModelStoreMixin:
                 )
         return self.get_model_offering(revision_id)
 
+    def scoring_observation_parts(self, result_id: str) -> list[dict]:
+        """Scoring 결과의 관측값 색인 조각(order·position). 색인이 아직 없으면 빈 목록이다."""
+        with self.connection() as db:
+            return [dict(row) for row in db.execute(text(
+                "SELECT * FROM scoring_observation_parts WHERE scoring_result_id=:id "
+                "ORDER BY kind, part"
+            ), {"id": result_id}).mappings()]
+
+    def scoring_index_job(self, result_id: str) -> dict | None:
+        """기존 결과의 관측값 색인을 만드는 가장 최근 Job의 상태."""
+        with self.connection() as db:
+            row = db.execute(text(
+                "SELECT status,error_code FROM jobs WHERE kind='ml_score_index' "
+                "AND (spec::jsonb ->> 'scoring_result_id')=:id ORDER BY created_at DESC LIMIT 1"
+            ), {"id": result_id}).mappings().first()
+        return None if row is None else dict(row)
+
     def get_scoring_result(self, result_id: str) -> dict | None:
         """Scoring Artifact 바이트와 독립된 판본·평가 근거를 반환한다."""
         with self.connection() as db:
