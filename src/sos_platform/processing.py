@@ -1,5 +1,8 @@
 """Polars Feature·Transform 계산을 인프라에 의존하지 않고 처리한다."""
 
+import time
+from dataclasses import dataclass
+
 import polars as pl
 
 from .errors import InvalidRequestError
@@ -15,33 +18,49 @@ ALLOWED_CASTS = {
     "Datetime": pl.Datetime,
 }
 
-MAX_ICEBERG_ROWS = 50_000
-MAX_ICEBERG_MEMORY_BYTES = 64 * 1024 * 1024
-MAX_FEATURE_PREVIEW_INPUT_ROWS = 100_000
+# Lag·Rolling 미리보기가 Window 계산에 쓰는 정렬 키 순서의 앞부분 행 수.
+PREVIEW_WINDOW_ROWS = 10_000
+_PREVIEW_BATCH_ROWS = 65_536
 
 
-def bounded_feature_preview(lf: pl.LazyFrame, spec: Transform) -> dict:
-    """사용자 요청 API가 큰 입력의 정렬·윈도 계산으로 장시간 점유되지 않게 한다."""
-    # Row-local 작업은 결과 행만 제한한다. 앞단 전체 행수를 거부할 필요가 없다.
-    # Lag/Rolling은 임의로 입력을 자르면 그룹·시간 의미가 깨지므로 별도 취급한다.
-    if any(step.op in ("lag", "rolling_mean") for step in spec.steps):
-        count = lf.head(MAX_FEATURE_PREVIEW_INPUT_ROWS + 1).select(pl.len()).collect().item()
-        if count > MAX_FEATURE_PREVIEW_INPUT_ROWS:
+@dataclass(frozen=True)
+class PreviewScope:
+    """동기 미리보기의 계산 범위.
+
+    Window 단계는 정렬 키 순서의 앞 `rows`행만 계산한다. 그룹 안의 이전 행은 전체 정렬에서도 앞에
+    있으므로 결과 앞부분은 전체 변환과 같다. 입력을 한 번 순회하는 비용이 `deadline`(monotonic 시각)을
+    넘으면 중단한다. 키 유일성처럼 전체 데이터가 필요한 검증은 변환 Job이 확정한다.
+    """
+
+    rows: int
+    deadline: float
+
+
+def bounded_feature_preview(lf: pl.LazyFrame, spec: Transform, *, max_seconds: float) -> dict:
+    """변환 결과의 앞부분을 입력 크기와 관계없이 같은 의미로 계산한다.
+
+    계산 비용은 입력 행 수가 아니라 한 요청의 계산 시간으로 제한한다. 넘으면 같은 변환을 Job으로
+    실행하도록 안내한다.
+    """
+    scope = PreviewScope(rows=PREVIEW_WINDOW_ROWS, deadline=time.monotonic() + max_seconds)
+    return safe_preview(transform(lf, spec, preview=scope), limit=30)
+
+
+def _leading_rows(
+    lf: pl.LazyFrame, keys: list[str], order_by: str, rows: int, deadline: float,
+) -> pl.DataFrame:
+    """정렬 키 순서의 앞 rows행. 배치마다 지금까지의 앞부분과 합쳐 다시 자르므로 메모리는 배치·rows에 비례한다."""
+    leading = None
+    for batch in lf.collect_batches(chunk_size=_PREVIEW_BATCH_ROWS, maintain_order=False):
+        if time.monotonic() > deadline:
             raise InvalidRequestError(
-                "Lag·Rolling 미리보기는 입력 행 수가 즉시 계산 한도를 넘습니다. "
-                "전체 변환 Job으로 실행하세요."
+                "Lag·Rolling 미리보기 계산이 즉시 계산 시간 한도를 넘었습니다. 전체 변환 Job으로 실행하세요."
             )
-    return safe_preview(transform(lf, spec), limit=30)
-
-
-def bounded_iceberg_arrow(lf: pl.LazyFrame):
-    """한 번의 Iceberg append에서 처리할 데이터 크기를 제한한다."""
-    frame = lf.head(MAX_ICEBERG_ROWS + 1).collect()
-    if frame.height > MAX_ICEBERG_ROWS:
-        raise InvalidRequestError("Iceberg 적재는 최대 50,000행까지 지원합니다.")
-    if frame.estimated_size() > MAX_ICEBERG_MEMORY_BYTES:
-        raise InvalidRequestError("Iceberg 적재 데이터가 지원 메모리 한도 64 MiB를 초과합니다.")
-    return frame.to_arrow()
+        if batch[order_by].null_count():
+            raise InvalidRequestError("시간·정렬 컬럼에 빈 값이 있습니다.")
+        combined = batch if leading is None else pl.concat([leading, batch])
+        leading = combined.sort(keys).head(rows)
+    return leading if leading is not None else lf.head(0).collect()
 
 
 def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
@@ -55,7 +74,8 @@ def safe_preview(lf: pl.LazyFrame, limit: int = 30) -> dict:
     }
 
 
-def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
+def transform(lf: pl.LazyFrame, spec: Transform, *, preview: PreviewScope | None = None) -> pl.LazyFrame:
+    """변환 계획. `preview`가 있으면 Window 단계를 정렬 키 순서의 앞부분만으로 계산한다."""
     if spec.observation_id_column is not None:
         # Preview는 발급 뒤 게시된 Dataset 판본이 아니므로 임시 UUID를 보여주지 않는다.
         raise InvalidRequestError("관측 식별자를 만들려면 완료된 변환 Job이 필요합니다.")
@@ -67,6 +87,7 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
     # Window 단계가 연속되면 동일 입력의 전역 검증과 정렬을 반복하지 않는다.
     # 시간·그룹 키 값이 바뀌면 기존 검증은 더 이상 유효하지 않다.
     validated_window_keys = False
+    sorted_once = False
     for step in spec.steps:
         current_schema = lf.collect_schema()
         columns = current_schema.names()
@@ -98,11 +119,24 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
             if not validated_window_keys:
                 # 키 값의 변경은 정렬 순서와 유일성을 무효화한다. 행 필터와
                 # 다른 컬럼의 변환은 검증된 키의 유일성을 깨뜨리지 않는다.
-                if lf.select(pl.col(spec.order_by).is_null().any()).collect().item():
-                    raise InvalidRequestError("시간·정렬 컬럼에 빈 값이 있습니다.")
                 keys = [*spec.group_by, spec.order_by]
+                if preview is not None:
+                    # 다시 정렬하면 앞부분이 전체 정렬의 앞부분과 달라진다. 결과를 추정하지 않는다.
+                    if sorted_once:
+                        raise InvalidRequestError(
+                            "정렬 키를 바꾼 뒤 다시 정렬하는 변환은 전체 변환 Job으로 확인하세요."
+                        )
+                    # 경계의 키 중복도 드러나도록 한 행 더 읽고 확인한 뒤 자른다.
+                    leading = _leading_rows(
+                        lf, keys, spec.order_by, preview.rows + 1, preview.deadline,
+                    )
+                    checked = leading.lazy()
+                else:
+                    if lf.select(pl.col(spec.order_by).is_null().any()).collect().item():
+                        raise InvalidRequestError("시간·정렬 컬럼에 빈 값이 있습니다.")
+                    checked = lf
                 duplicates = (
-                    lf.group_by(keys)
+                    checked.group_by(keys)
                     .agg(pl.len().alias("__sos_time_count"))
                     .filter(pl.col("__sos_time_count") > 1)
                     .limit(1)
@@ -112,8 +146,9 @@ def transform(lf: pl.LazyFrame, spec: Transform) -> pl.LazyFrame:
                     raise InvalidRequestError(
                         "시간·정렬 컬럼 값은 그룹 안에서 중복되지 않아야 합니다."
                     )
-                lf = lf.sort(keys)
+                lf = leading.head(preview.rows).lazy() if preview is not None else lf.sort(keys)
                 validated_window_keys = True
+                sorted_once = True
             if step.op == "rolling_mean" and not current_schema[step.column].is_numeric():
                 raise InvalidRequestError("Rolling Mean은 수치형 컬럼에만 적용할 수 있습니다.")
             alias = step.alias or f"{step.column}_{step.op}"

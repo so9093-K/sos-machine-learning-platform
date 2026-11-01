@@ -5,33 +5,52 @@ SOS 밖에서 생산한 모델도 같은 함수로 계산해 SOS의 점수 맥�
 """
 
 import random
+from uuid import uuid4
 
 import numpy as np
 
-from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold, score_histogram
+from .duckdb_spill import SpillBudget
 from .ml_isolation_forest import TrainedIsolationForest
+from .score_files import (
+    ScoreWriter,
+    quantile_threshold_file,
+    score_histogram_file,
+    summarize_scores,
+)
 
 
-def training_score_summary(model: TrainedIsolationForest, matrix: np.ndarray) -> tuple[dict, int]:
-    """학습 입력 점수의 분포와 상위 5% 임계값. 점수 계산은 배치로 나눈다.
+def training_score_summary(
+    model: TrainedIsolationForest, matrix: np.ndarray, budget: SpillBudget,
+) -> tuple[dict, int]:
+    """학습 입력 점수의 분포와 상위 5% 임계값.
+
+    점수는 배치로 계산해 Stage의 점수 파일에 쓰고, 요약·임계값·Histogram은 그 파일에서 계산한다.
+    학습 행 수와 관계없이 점수를 메모리에 모으지 않으며 의미는 `evaluate_anomaly_scores`와 같다.
 
     Args:
         model: 학습한 모델 어댑터.
         matrix: 전처리를 마친 학습 입력(행=관측, 열=Feature). Memmap도 받는다.
+        budget: 점수 파일과 외부 정렬이 쓰는 Stage·자원 한도.
 
     Returns:
         학습 점수 요약과 점수를 계산한 행 수.
     """
-    scores = []
-    for start in range(0, matrix.shape[0], 8192):
-        end = min(start + 8192, matrix.shape[0])
-        scores.extend(model.score_anomalies(matrix[start:end]))
-    threshold = quantile_threshold(scores, 0.05)
-    summary = evaluate_anomaly_scores(scores, threshold=threshold)
-    summary["scope"] = "training_data_only"
-    summary["histogram"] = score_histogram(scores)
-    summary["threshold_source"] = "training_score_quantile_0.95"
-    return summary, len(scores)
+    path = budget.stage / f"training-scores-{uuid4().hex}.parquet"
+    try:
+        with ScoreWriter(path) as writer:
+            for start in range(0, matrix.shape[0], 8192):
+                writer.write(model.score_anomalies(matrix[start:start + 8192]))
+        threshold = quantile_threshold_file(path, 0.05, budget)
+        summary = summarize_scores(path, threshold=threshold)
+        summary["scope"] = "training_data_only"
+        summary["histogram"] = score_histogram_file(
+            path, low=summary["score_min"], high=summary["score_max"],
+            expected_rows=summary["score_count"],
+        )
+        summary["threshold_source"] = "training_score_quantile_0.95"
+    finally:
+        path.unlink(missing_ok=True)
+    return summary, summary["score_count"]
 
 
 def feature_training_profile(matrix: np.ndarray, features: list[str]) -> dict:

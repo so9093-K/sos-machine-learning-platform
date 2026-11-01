@@ -6,7 +6,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from sos_platform.ml_anomaly import histogram_edges, score_histogram
-from sos_platform.ml_scoring import histogram_from_scoring_file
+from sos_platform.score_files import score_histogram_file
 
 
 def test_train_histogram_is_exact_and_right_endpoint_inclusive():
@@ -41,12 +41,12 @@ def test_scoring_histogram_reads_full_parquet_and_matches_train_logic(tmp_path):
     path = tmp_path / "scores.parquet"
     pq.write_table(pa.table({"anomaly_score": values}), path)
     expected = score_histogram(values, bins=2)
-    actual = histogram_from_scoring_file(
+    actual = score_histogram_file(
         path, low=0.0, high=1.0, expected_rows=len(values), bins=2,
     )
     assert actual == expected
     with pytest.raises(ValueError, match="score count"):
-        histogram_from_scoring_file(
+        score_histogram_file(
             path, low=0.0, high=1.0, expected_rows=10, bins=2,
         )
 
@@ -61,7 +61,7 @@ def test_nearly_identical_floating_scores_keep_strict_edges_and_exact_counts(tmp
     assert sum(trained["bin_counts"]) == 20
     path = tmp_path / "close.parquet"
     pq.write_table(pa.table({"anomaly_score": values}), path)
-    scored = histogram_from_scoring_file(path, low=low, high=high, expected_rows=20)
+    scored = score_histogram_file(path, low=low, high=high, expected_rows=20)
     assert trained == scored
 
 
@@ -69,7 +69,7 @@ def test_scoring_histogram_constant_scores(tmp_path):
     values = [0.4] * 17
     path = tmp_path / "scores.parquet"
     pq.write_table(pa.table({"anomaly_score": values}), path)
-    result = histogram_from_scoring_file(
+    result = score_histogram_file(
         path, low=0.4, high=0.4, expected_rows=len(values), bins=8,
     )
     assert result["constant_scores"]

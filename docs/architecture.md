@@ -29,6 +29,7 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**의 
 4. **실행 근거 추적:** 데이터·모델·설정·Runtime·Job/Attempt·평가·아티팩트의 참조 관계를 남긴다.
 5. **권한과 신뢰 분리:** Actor의 데이터 권한과 외부 코드 실행·모델 복원·비밀정보 접근 권한을 혼동하지 않는다.
 6. **점진적인 배치:** 로컬에서 시작하더라도 독립 Worker·Serving으로 확장할 때 공통 계약을 유지한다.
+7. **크기와 무관한 실행:** 데이터 크기에 따라 기능·처리 경로·계산 의미를 나누지 않는다. 데이터는 배치로 읽고, 전체 순서가 필요한 계산(분위수·순위 지표·정렬)은 외부 정렬과 디스크 Spill로 정확하게 계산한다. 실행 자원으로 수용할 수 없을 때만 자원 부족을 보고한다. 모델 적합처럼 알고리즘 자체가 요구하는 자원은 해당 Runtime의 실행 조건으로 다룬다.
 
 구체적인 판본과 호환성은 [Contracts](contracts.md), 사용자 행동은 [Experience](experience.md), 실행 상태는 [Workflows](workflows.md), 환경 격리는 [Runtimes](runtimes.md)가 정본이다.
 

@@ -29,9 +29,13 @@ _POLICY_MAX_SLOTS = 65536 // _QUANTUM_MIB
 
 @dataclass(frozen=True)
 class FeaturePreviewBudget:
-    """동기 Polars Preview를 위한 논리적 메모리 요청량. 물리적 강제 한도가 아니다."""
+    """동기 Polars Preview의 논리적 메모리 요청량과 한 요청의 계산 시간 한도.
+
+    메모리는 물리적 강제 한도가 아니다. 계산 시간은 입력 크기가 아니라 요청 비용으로 미리보기를 제한한다.
+    """
 
     memory_mib: int = 1024
+    max_seconds: int = 20
 
     @classmethod
     def from_env(cls) -> "FeaturePreviewBudget":
@@ -40,7 +44,12 @@ class FeaturePreviewBudget:
             raise RuntimeConfigurationError(
                 "SOS_FEATURE_PREVIEW_MEMORY_MIB must be a multiple of 256 between 256 and 16384"
             )
-        return cls(memory_mib=int(raw))
+        seconds = os.getenv("SOS_FEATURE_PREVIEW_MAX_SECONDS", str(cls().max_seconds))
+        if not seconds.isdecimal() or not 1 <= int(seconds) <= 300:
+            raise RuntimeConfigurationError(
+                "SOS_FEATURE_PREVIEW_MAX_SECONDS must be an integer between 1 and 300"
+            )
+        return cls(memory_mib=int(raw), max_seconds=int(seconds))
 
 
 @dataclass(frozen=True)

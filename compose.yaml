@@ -65,6 +65,7 @@ services:
       SOS_MLFLOW_TOKEN: ${SOS_MLFLOW_TOKEN:-}
       SOS_MAX_UPLOAD_MIB: ${SOS_MAX_UPLOAD_MIB:-256}
       SOS_FEATURE_PREVIEW_MEMORY_MIB: ${SOS_FEATURE_PREVIEW_MEMORY_MIB:-1024}
+      SOS_FEATURE_PREVIEW_MAX_SECONDS: ${SOS_FEATURE_PREVIEW_MAX_SECONDS:-20}
       # 명시한 정책만 전달해 Runtime 기본값과 설정 출처를 보존한다.
       SOS_OBJECT_GRACE_DAYS:
       SOS_OBJECT_OBSERVATION_HOURS:
@@ -386,6 +387,8 @@ services:
       SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
       SOS_API_URL: http://api:9602
       SOS_SUPPLY_TOKEN: ${SOS_SUPPLY_TOKEN:-}
+      # Run 임시 디렉터리(입력 사본·외부 정렬 Spill·학습 행렬). 컨테이너 쓰기 계층이 아닌 볼륨에 둔다.
+      SOS_PIPELINE_STAGE_DIR: /var/lib/dagster/stage
     command: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000", "-m", "sos_dagster.definitions"]
     volumes:
       - dagster_data:/var/lib/dagster

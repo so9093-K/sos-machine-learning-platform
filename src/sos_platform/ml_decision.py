@@ -1,5 +1,7 @@
 """불변 Scoring Result에 여러 정책·평가를 독립 적용한다."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -7,18 +9,18 @@ import numpy as np
 import polars as pl
 import pyarrow.parquet as pq
 
-from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold
+from .duckdb_spill import SpillBudget
 from .ml_policy_contract import validate_policy_for_scoring
 from .object_store import ObjectStore
+from .score_files import quantile_threshold_file, summarize_scores
 
 
-def _verified_scoring(
-    store, scoring: dict, *, include_features: bool = False
-) -> pl.DataFrame:
-    """Scoring 무결성과 행 순서를 검증하며 필요한 컬럼만 메모리에 적재한다.
+@contextmanager
+def _verified_scoring(store, scoring: dict) -> Iterator[tuple[Path, SpillBudget]]:
+    """해시를 검증한 Scoring Parquet과 같은 Attempt 임시 디렉터리의 Spill 예산을 제공한다.
 
-    Policy/Evaluation은 이상 점수·레이블만 조회한다. 설명은 명시적으로
-    include_features=True를 요청해야 원본 Feature 구조를 가져온다.
+    행 수·필수 컬럼·행 순서는 배치로 순회하며 확인한다. 점수를 메모리에 모으지 않으며, Policy·Evaluation은
+    파일 계산(`score_files`)으로 같은 결과를 만든다.
     """
     storage = ObjectStore()
     expected = f"results/{scoring['job_id']}/{scoring['attempt_id']}.scores.parquet"
@@ -27,22 +29,26 @@ def _verified_scoring(
     with TemporaryDirectory(prefix="ml-scoring-", dir=store.home / "cache") as directory:
         path = Path(directory) / "scores.parquet"
         storage.get(expected, path, expected_sha256=scoring["sha256"])
-        if include_features:
-            frame = pl.read_parquet(path)
-        else:
-            with pq.ParquetFile(path) as parquet:
-                columns = ["row_index", "anomaly_score"]
-                if "label" in parquet.schema_arrow.names:
-                    columns.append("label")
-            frame = pl.read_parquet(path, columns=columns)
-    if frame.height != scoring["row_count"]:
-        raise ValueError("Scoring artifact row count does not match the revision")
-    if "anomaly_score" not in frame.columns or "row_index" not in frame.columns:
-        raise ValueError("Invalid Scoring artifact columns")
-    indices = frame["row_index"].to_numpy()
-    if not np.array_equal(indices, np.arange(frame.height, dtype=np.int64)):
-        raise ValueError("Scoring artifact row order does not match its revision")
-    return frame
+        with pq.ParquetFile(path) as parquet:
+            if parquet.metadata.num_rows != scoring["row_count"]:
+                raise ValueError("Scoring artifact row count does not match the revision")
+            if not {"row_index", "anomaly_score"}.issubset(parquet.schema_arrow.names):
+                raise ValueError("Invalid Scoring artifact columns")
+            position = 0
+            for batch in parquet.iter_batches(batch_size=65_536, columns=["row_index"]):
+                indices = batch.column(0).to_numpy(zero_copy_only=False)
+                if not np.array_equal(indices, np.arange(position, position + len(indices))):
+                    raise ValueError("Scoring artifact row order does not match its revision")
+                position += len(indices)
+        yield path, SpillBudget.for_worker(
+            Path(directory), stage_error="SOS-ML-SCORE-STAGE-LIMIT",
+            capacity_error="SOS-ML-SCORE-CAPACITY",
+        )
+
+
+def _labeled(path: Path) -> bool:
+    with pq.ParquetFile(path) as parquet:
+        return "label" in parquet.schema_arrow.names
 
 
 def _verified_scoring_row(store, scoring: dict, row_index: int) -> dict:
@@ -100,17 +106,16 @@ def apply_scoring_policy(store, spec: dict) -> dict:
     source = store.get_scoring_result(spec["scoring_result_id"])
     if source is None or source["owner_actor"] != spec["source_owner_actor"]:
         raise ValueError("Scoring Result is unavailable")
-    frame = _verified_scoring(store, source)
-    scores = frame["anomaly_score"].to_list()
     mode = spec["mode"]
-    if mode == "fixed":
-        threshold = spec["threshold"]
-    elif mode == "quantile":
-        threshold = quantile_threshold(scores, spec["alert_fraction"])
-    else:
+    if mode not in ("fixed", "quantile"):
         raise ValueError("Unsupported Decision Policy")
-    # 임계값 탐색은 정확도가 아니다. 정책 선택과 독립 평가셋 검증을 구별한다.
-    result = evaluate_anomaly_scores(scores, threshold=threshold)
+    with _verified_scoring(store, source) as (path, budget):
+        threshold = (
+            spec["threshold"] if mode == "fixed"
+            else quantile_threshold_file(path, spec["alert_fraction"], budget)
+        )
+        # 임계값 탐색은 정확도가 아니다. 정책 선택과 독립 평가셋 검증을 구별한다.
+        result = summarize_scores(path, threshold=threshold)
     result["evaluation_scope"] = "scoring_dataset_without_ground_truth"
     result["threshold_reference"] = (
         "current_scoring_result" if mode == "quantile" else "explicit_fixed"
@@ -166,19 +171,15 @@ def evaluate_scoring_policy(store, spec: dict) -> dict:
         )
         if policy is not None else None
     )
-    frame = _verified_scoring(store, source)
-    label_values = frame["label"].to_list() if "label" in frame.columns else None
     threshold = policy["threshold"] if policy else None
-    if label_values is not None and threshold is None:
-        # 랭킹 지표는 정책 없이 측정할 수 있지만 이진 판정 지표는 정의하지 않는다.
-        summary = evaluate_anomaly_scores(frame["anomaly_score"].to_list())
-        summary["evaluation_kind"] = "ranking_only"
-    else:
-        summary = evaluate_anomaly_scores(
-            frame["anomaly_score"].to_list(),
-            threshold=threshold,
-            labels=label_values,
-        )
+    with _verified_scoring(store, source) as (path, _):
+        labeled = _labeled(path)
+        if labeled and threshold is None:
+            # 랭킹 지표는 정책 없이 측정할 수 있지만 이진 판정 지표는 정의하지 않는다.
+            summary = summarize_scores(path)
+            summary["evaluation_kind"] = "ranking_only"
+        else:
+            summary = summarize_scores(path, threshold=threshold, labeled=labeled)
     if reference is not None:
         summary["policy_reference_scoring_result_id"] = reference["id"]
         temporal_nonoverlap = _verified_temporal_nonoverlap(reference, source)
@@ -193,7 +194,7 @@ def evaluate_scoring_policy(store, spec: dict) -> dict:
     return {
         "scoring_result_id": source["id"],
         "policy_revision_id": policy_id,
-        "label_coverage": "full" if label_values is not None else "none",
+        "label_coverage": "full" if labeled else "none",
         "decision_metrics": summary,
         "ranking_metrics": source["ranking_metrics"],
     }

@@ -793,7 +793,7 @@ def test_canonical_stage_disk_full_is_storage_capacity_and_cleans_stage(monkeypa
 def test_canonical_duckdb_spill_quota_failure_has_storage_error(monkeypatch, tmp_path):
     import duckdb
 
-    from sos_platform import ml_sampling
+    from sos_platform import duckdb_spill
 
     stage = tmp_path / "attempt-stage"
     stage.mkdir()
@@ -805,7 +805,7 @@ def test_canonical_duckdb_spill_quota_failure_has_storage_error(monkeypatch, tmp
             "Out of Memory Error: failed to offload block: maximum temporary directory size"
         )
 
-    monkeypatch.setattr(ml_sampling.duckdb, "connect", no_spill)
+    monkeypatch.setattr(duckdb_spill.duckdb, "connect", no_spill)
     with pytest.raises(PlatformError) as exc:
         ml_training.training_matrix(
             None, {}, ["x"], input_policy=sample(10, 17), worker_memory_mib=256
@@ -869,13 +869,13 @@ def test_duckdb_sort_execution_failure_classification_and_cleanup(
 ):
     import duckdb
 
-    from sos_platform import ml_sampling
+    from sos_platform import duckdb_spill
 
     stage = tmp_path / "attempt-stage"
     stage.mkdir()
     monkeypatch.setenv("POLARS_TEMP_DIR", str(stage))
     bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(128.0)}))
-    original_connect = ml_sampling.duckdb.connect
+    original_connect = duckdb_spill.duckdb.connect
 
     class FailingConnection:
         def __init__(self, inner):
@@ -890,7 +890,7 @@ def test_duckdb_sort_execution_failure_classification_and_cleanup(
             self.inner.close()
 
     monkeypatch.setattr(
-        ml_sampling.duckdb, "connect",
+        duckdb_spill.duckdb, "connect",
         lambda *args, **kwargs: FailingConnection(original_connect(*args, **kwargs)),
     )
     with pytest.raises(PlatformError) as exc:
@@ -908,7 +908,7 @@ def test_duckdb_sort_execution_failure_classification_and_cleanup(
 def test_canonical_sort_budget_scales_without_changing_v1_result(
     monkeypatch, tmp_path, budget_mib, sort_memory_mib, sort_threads,
 ):
-    from sos_platform import ml_sampling
+    from sos_platform import duckdb_spill
 
     stage = tmp_path / "attempt"
     stage.mkdir()
@@ -920,14 +920,14 @@ def test_canonical_sort_budget_scales_without_changing_v1_result(
         "y": (row_index % 13).astype(np.float32),
     })
     bind_frame(monkeypatch, frame.reverse() if budget_mib == 8192 else frame)
-    original_connect = ml_sampling.duckdb.connect
+    original_connect = duckdb_spill.duckdb.connect
     options = []
 
     def record_connect(*args, **kwargs):
         options.append(kwargs["config"])
         return original_connect(*args, **kwargs)
 
-    monkeypatch.setattr(ml_sampling.duckdb, "connect", record_connect)
+    monkeypatch.setattr(duckdb_spill.duckdb, "connect", record_connect)
     matrix, evidence = ml_training.training_matrix(
         None, {}, ["x", "y"], input_policy=sample(1000, 17),
         worker_memory_mib=budget_mib,
