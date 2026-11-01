@@ -732,6 +732,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/models/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * MLflow 모델 버전 연결
+         * @description MLflow에 등록된 고정 모델 버전을 다시 학습하지 않고 SOS Model Revision으로 연결합니다. Worker가 모델 패키지(sos_model.json·estimator.skops)를 검증하고 SOS Runtime에서 검증 점수를 재현한 뒤 게시합니다. 202 Accepted는 연결 완료를 의미하지 않습니다.
+         */
+        post: operations["create_model_import_api_ml_models_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/models/imports/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * MLflow 모델 버전 연결 상태 조회
+         * @description 연결이 성공하면 `result.model_revision_id`가 게시된 Model Revision입니다.
+         */
+        get: operations["get_model_import_api_ml_models_imports__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ml/models/imports/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * MLflow 모델 버전 연결 취소 요청
+         * @description 취소 요청이며 실제 중단은 조회로 확인합니다. 이미 게시된 Model Revision은 되돌리지 않습니다.
+         */
+        post: operations["cancel_model_import_api_ml_models_imports__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/models/{revision_id}": {
         parameters: {
             query?: never;
@@ -1210,148 +1270,6 @@ export interface paths {
         put?: never;
         /** 기존 학습 설정으로 새 학습 시작 */
         post: operations["fork_training_job_api_ml_train_jobs__source_job_id__fork_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/pipeline-runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Pipeline 실행 이력 조회 */
-        get: operations["pipeline_history_api_pipeline_runs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/pipeline-runs/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Pipeline 실행 상태 조회
-         * @description 진행 상태와 단계별 Job 결과를 조회합니다. 학습 완료와 MLflow 모델 등록 완료는 별도 상태입니다.
-         */
-        get: operations["pipeline_run_detail_api_pipeline_runs__run_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/pipeline-runs/{run_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Pipeline 실행 취소 요청 */
-        post: operations["pipeline_cancel_api_pipeline_runs__run_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/pipeline-runs/{run_id}/candidates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Pipeline 이상 후보 조회 */
-        get: operations["pipeline_candidates_api_pipeline_runs__run_id__candidates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/pipelines": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 등록형 Pipeline 목록 조회 */
-        get: operations["pipelines_api_pipelines_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/pipelines/{definition_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Pipeline 정의 조회 */
-        get: operations["pipeline_detail_api_pipelines__definition_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/pipelines/{definition_id}/check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Pipeline 입력 Dataset 검사 */
-        get: operations["pipeline_check_api_pipelines__definition_id__check_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/pipelines/{definition_id}/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Pipeline 실행 제출
-         * @description 검사된 Dataset으로 등록형 Pipeline 실행을 접수합니다. Token 모드에는 Idempotency-Key가 필요합니다.
-         */
-        post: operations["submit_pipeline_api_pipelines__definition_id__runs_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2715,6 +2633,71 @@ export interface components {
             /** Registry Key */
             registry_key?: string | null;
         };
+        /** MLModelImportJobOut */
+        MLModelImportJobOut: {
+            /** Attempts */
+            attempts: components["schemas"]["AttemptOut"][];
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Created At */
+            created_at: string;
+            /** Dataset Id */
+            dataset_id: string | null;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Failure Stage */
+            failure_stage?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "ml_import";
+            /** Request Id */
+            request_id?: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Policy */
+            retry_policy?: string | null;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
+            /** Updated At */
+            updated_at: string;
+        };
+        /**
+         * MLModelImportRequest
+         * @description 다시 학습하지 않고 연결할 MLflow 모델 버전. 버전은 번호로 고정한다(별칭·최신 버전 불가).
+         */
+        MLModelImportRequest: {
+            /**
+             * Mlflow Model
+             * @description MLflow Registered Model 이름
+             */
+            mlflow_model: string;
+            /**
+             * Mlflow Version
+             * @description 연결할 모델 버전 번호
+             */
+            mlflow_version: string;
+            /**
+             * Registry Key
+             * @description 연결한 판본을 관리할 SOS 모델 그룹
+             * @default default
+             */
+            registry_key: string;
+        };
         /** MLPlaygroundJobOut */
         MLPlaygroundJobOut: {
             /** Attempts */
@@ -3390,15 +3373,21 @@ export interface components {
              * @constant
              */
             creation_evidence_visible: true;
-            /** Dataset Id */
-            dataset_id: string;
+            /**
+             * Dataset Id
+             * @description SOS 학습 판본의 학습 Dataset. 연결한 판본은 null
+             */
+            dataset_id: string | null;
             /** Dataset Version */
-            dataset_version: string;
+            dataset_version: string | null;
             /** Features */
             features: string[];
             /** Id */
             id: string;
-            /** Job Id */
+            /**
+             * Job Id
+             * @description 판본을 게시한 SOS Job(학습 또는 MLflow 모델 버전 연결)
+             */
             job_id: string;
             /**
              * Lifecycle State
@@ -3425,6 +3414,19 @@ export interface components {
             };
             /** Sha256 */
             sha256: string;
+            /**
+             * Source
+             * @description 연결한 판본의 MLflow 출처(모델·버전·Run)와 생산 측 학습 근거. SOS 학습 판본은 null
+             */
+            source: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Source Kind
+             * @description 생산 방식. sos_training: SOS가 Dataset으로 학습. mlflow_registry: 외부 생산 Pipeline이 만들어 MLflow에서 연결. 출처 상세(source·Dataset)는 소유자·관리자 응답에만 있다
+             * @enum {string}
+             */
+            source_kind: "sos_training" | "mlflow_registry";
             /** Training Score Summary */
             training_score_summary: {
                 [key: string]: unknown;
@@ -3441,163 +3443,6 @@ export interface components {
             registry_key: string;
             /** Title */
             title: string;
-        };
-        /** PipelineCandidateOut */
-        PipelineCandidateOut: {
-            /** Anomaly Score */
-            anomaly_score: number;
-            /** Features */
-            features: {
-                [key: string]: number | null;
-            };
-            /** Observation Id */
-            observation_id?: string | null;
-            /** Observed At */
-            observed_at?: string | null;
-            /** Row Index */
-            row_index: number;
-        };
-        /** PipelineCandidatesOut */
-        PipelineCandidatesOut: {
-            /** Items */
-            items: components["schemas"]["PipelineCandidateOut"][];
-            /** Next Cursor */
-            next_cursor: string | null;
-            /** Result Id */
-            result_id: string;
-            /** Threshold */
-            threshold: number;
-        };
-        /** PipelineCheckOut */
-        PipelineCheckOut: {
-            /** Dataset Id */
-            dataset_id: string;
-            /** Dataset Version */
-            dataset_version: string;
-            /** Feature Count */
-            feature_count: number;
-            /** Issues */
-            issues: string[];
-            /** Pipeline Id */
-            pipeline_id: string;
-            /** Pipeline Version */
-            pipeline_version: string;
-            plan: components["schemas"]["PipelinePlanOut"] | null;
-            /** Ready */
-            ready: boolean;
-        };
-        /** PipelineDefinitionOut */
-        PipelineDefinitionOut: {
-            /** Algorithm */
-            algorithm: string;
-            /** Description */
-            description: string;
-            /** Id */
-            id: string;
-            /** Label Requirement */
-            label_requirement: string;
-            /** Limitations */
-            limitations: string[];
-            /** Model Reuse */
-            model_reuse: boolean;
-            /** Name */
-            name: string;
-            /** Required Features */
-            required_features: string[];
-            /** Required Time Column */
-            required_time_column: string;
-            /** Stages */
-            stages: string[];
-            /**
-             * Topic
-             * @description 이 Pipeline이 모델을 공급하는 분석 주제
-             */
-            topic: string;
-            /** Version */
-            version: string;
-        };
-        /** PipelineJobOut */
-        PipelineJobOut: {
-            /** Cancel Requested */
-            cancel_requested: boolean;
-            /** Error */
-            error?: string | null;
-            /** Error Code */
-            error_code?: string | null;
-            /** Id */
-            id: string;
-            /** Kind */
-            kind: string;
-            /** Result */
-            result: {
-                [key: string]: unknown;
-            } | null;
-            /** Retry Policy */
-            retry_policy?: string | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
-        };
-        /** PipelinePartitionSizesOut */
-        PipelinePartitionSizesOut: {
-            /** Calibration */
-            calibration: number;
-            /** Test */
-            test: number;
-            /** Train */
-            train: number;
-        };
-        /** PipelinePlanOut */
-        PipelinePlanOut: {
-            /** Calibration End */
-            calibration_end: string;
-            partition_sizes: components["schemas"]["PipelinePartitionSizesOut"];
-            /** Timestamp Column */
-            timestamp_column: string;
-            /** Train End */
-            train_end: string;
-        };
-        /** PipelineRunOut */
-        PipelineRunOut: {
-            /** Cancel Requested */
-            cancel_requested: boolean;
-            /** Created At */
-            created_at: string;
-            /** Current Stage */
-            current_stage: string | null;
-            /** Dataset Id */
-            dataset_id: string;
-            /** Dataset Version */
-            dataset_version: string;
-            /** Definition Id */
-            definition_id: string;
-            /** Definition Version */
-            definition_version: string;
-            /** Error Code */
-            error_code?: string | null;
-            /** Id */
-            id: string;
-            input_plan: components["schemas"]["PipelinePlanOut"] | null;
-            /** Stages */
-            stages?: components["schemas"]["PipelineStageOut"][];
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled";
-        };
-        /** PipelineStageOut */
-        PipelineStageOut: {
-            job: components["schemas"]["PipelineJobOut"];
-            /** Name */
-            name: string;
-        };
-        /** PipelineStartRequest */
-        PipelineStartRequest: {
-            /** Dataset Id */
-            dataset_id: string;
         };
         /** PredictionOut */
         PredictionOut: {
@@ -3716,6 +3561,12 @@ export interface components {
             runtime: {
                 [key: string]: unknown;
             };
+            /**
+             * Source Kind
+             * @description 생산 방식. sos_training: SOS가 Dataset으로 학습. mlflow_registry: 외부 생산 Pipeline이 만들어 MLflow에서 연결. 출처 상세(source·Dataset)는 소유자·관리자 응답에만 있다
+             * @enum {string}
+             */
+            source_kind: "sos_training" | "mlflow_registry";
             /**
              * Training Score Summary
              * @description 공급자 전용 집계이므로 빈 객체
@@ -5650,6 +5501,103 @@ export interface operations {
             };
         };
     };
+    create_model_import_api_ml_models_imports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MLModelImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLModelImportJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_model_import_api_ml_models_imports__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLModelImportJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_model_import_api_ml_models_imports__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLModelImportJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_model_revision_api_ml_models__revision_id__get: {
         parameters: {
             query?: never;
@@ -6776,262 +6724,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MLTrainingJobOut"];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    pipeline_history_api_pipeline_runs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PipelineRunOut"][];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    pipeline_run_detail_api_pipeline_runs__run_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PipelineRunOut"];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    pipeline_cancel_api_pipeline_runs__run_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PipelineRunOut"];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    pipeline_candidates_api_pipeline_runs__run_id__candidates_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                cursor?: string | null;
-                row_index?: number | null;
-            };
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PipelineCandidatesOut"];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    pipelines_api_pipelines_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PipelineDefinitionOut"][];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    pipeline_detail_api_pipelines__definition_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                definition_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PipelineDefinitionOut"];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    pipeline_check_api_pipelines__definition_id__check_get: {
-        parameters: {
-            query: {
-                dataset_id: string;
-            };
-            header?: never;
-            path: {
-                definition_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PipelineCheckOut"];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    submit_pipeline_api_pipelines__definition_id__runs_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                definition_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PipelineStartRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PipelineRunOut"];
                 };
             };
             /** @description Structured API error */

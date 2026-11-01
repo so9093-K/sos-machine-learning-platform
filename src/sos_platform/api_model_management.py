@@ -208,15 +208,15 @@ def model_management_router(store: Store) -> APIRouter:
             ), {"actor": actor.id, "key": registry_key}).scalar_one()
             if in_use:
                 raise HTTPException(status_code=409, detail="모델 그룹에 관리 중인 모델 버전이 남아 있습니다.")
-            # 학습 Job이 아직 Model Revision을 게시하지 않았더라도 같은 그룹을
+            # 학습·연결 Job이 아직 Model Revision을 게시하지 않았더라도 같은 그룹을
             # 삭제하면 전송 Worker가 그룹을 다시 만들 수 있다.
             pending_training = db.execute(text(
-                "SELECT count(*) FROM jobs WHERE kind='ml_train' "
+                "SELECT count(*) FROM jobs WHERE kind IN ('ml_train','ml_import') "
                 "AND owner_actor=:actor AND status IN ('Queued','Running') "
                 "AND COALESCE(spec::jsonb->>'registry_key','default')=:key"
             ), {"actor": actor.id, "key": registry_key}).scalar_one()
             if pending_training:
-                raise HTTPException(status_code=409, detail="모델 그룹에 실행 중인 학습 작업이 있습니다.")
+                raise HTTPException(status_code=409, detail="모델 그룹에 실행 중인 학습·연결 작업이 있습니다.")
         client = _client()
         try:
             _get_group(client, name)

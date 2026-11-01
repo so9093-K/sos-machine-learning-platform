@@ -92,8 +92,10 @@ class ResourceAccess:
         if visible:
             return {**model, "creation_evidence_visible": True}
         # 최상위도 허용한 사용 정보만 반환한다. 새 내부 필드를 자동 공개하지 않는다.
+        # 생산 방식(source_kind)은 공개하되 출처 상세(source·Dataset·Job)는 공개하지 않는다.
         response = {key: model[key] for key in (
-            "id", "algorithm", "features", "created_at", "registry_version", "lifecycle_state",
+            "id", "algorithm", "source_kind", "features", "created_at", "registry_version",
+            "lifecycle_state",
         ) if key in model}
         response["creation_evidence_visible"] = False
         runtime = model["runtime"]

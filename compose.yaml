@@ -46,7 +46,6 @@ services:
     environment:
       <<: *sos-storage-env
       SOS_AUTH_MODE: token
-      SOS_DAGSTER_GRAPHQL_URL: http://dagster-webserver:3000/graphql
       SOS_AUTH_TOKEN_HASHES: ${SOS_AUTH_TOKEN_HASHES:-}
       SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-http://mlflow:5000}
       SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
@@ -354,16 +353,22 @@ services:
     build:
       context: .
       dockerfile: dagster/Dockerfile
+    # 모델 생산 Pipeline의 실행 환경. SOS DB·저장소 자격 증명은 받지 않는다. 생산한 모델은 MLflow에
+    # 등록하고, SOS_SUPPLY_TOKEN(automation 서비스 계정)이 있으면 SOS API로 고정 버전의 연결을 요청한다.
     environment:
-      <<: *sos-storage-env
       SOS_DAGSTER_DB_PASSWORD: ${SOS_DAGSTER_DB_PASSWORD:-dagster-dev-only}
       PYTHONPATH: /app/dagster
+      SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      SOS_MLFLOW_TOKEN: ${SOS_MLFLOW_TOKEN:-}
+      SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
+      SOS_API_URL: http://api:9602
+      SOS_SUPPLY_TOKEN: ${SOS_SUPPLY_TOKEN:-}
     command: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000", "-m", "sos_dagster.definitions"]
     volumes:
       - dagster_data:/var/lib/dagster
+      # 학습 입력 파일. Run 설정의 data_path에 /data/inputs/<파일>로 지정한다.
+      - ${SOS_PIPELINE_INPUT_DIR:-./dagster/inputs}:/data/inputs:ro
     depends_on:
-      init:
-        condition: service_completed_successfully
       dagster-postgres:
         condition: service_healthy
     healthcheck:
@@ -382,7 +387,6 @@ services:
       context: .
       dockerfile: dagster/Dockerfile
     environment:
-      <<: *sos-storage-env
       SOS_DAGSTER_DB_PASSWORD: ${SOS_DAGSTER_DB_PASSWORD:-dagster-dev-only}
       PYTHONPATH: /app/dagster
     command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "/app/dagster/workspace.yaml"]
@@ -411,7 +415,6 @@ services:
       context: .
       dockerfile: dagster/Dockerfile
     environment:
-      <<: *sos-storage-env
       SOS_DAGSTER_DB_PASSWORD: ${SOS_DAGSTER_DB_PASSWORD:-dagster-dev-only}
       PYTHONPATH: /app/dagster
     command: ["dagster-daemon", "run", "-w", "/app/dagster/workspace.yaml"]

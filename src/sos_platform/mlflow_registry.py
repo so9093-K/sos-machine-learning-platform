@@ -1,7 +1,8 @@
 """MLflow Registry 연결: 모델 자산 관리와 SOS 실행 아티팩트의 경계.
 
-MLflow가 논리적 모델 이름과 버전을 발급한다. SOS는 기존 Worker가 발급한
-불변 아티팩트 URI와 SHA-256, Runtime 계약을 계속 검사한다.
+MLflow가 논리적 모델 이름과 버전을 발급한다. SOS는 Worker가 게시한 불변 아티팩트 URI와
+SHA-256, Runtime 계약을 계속 검사한다. SOS 학습 판본과 MLflow에서 연결한 판본 모두 소유자의
+SOS 모델 그룹에 버전으로 등록되며, 연결한 판본은 원본 모델 버전·Run을 출처 태그로 남긴다.
 """
 
 import hashlib
@@ -89,21 +90,32 @@ def verify_registered_version(client, model: dict) -> None:
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
 
 
+def _source(model: dict) -> dict | None:
+    source = model.get("source")
+    return source if model.get("source_kind") == "mlflow_registry" and isinstance(source, dict) else None
+
+
 def _version_description(model: dict) -> str:
     """MLflow 운영자에게 입력 계약과 SOS 무결성 태그의 의미를 알린다. SOS는 이 설명을 읽지 않는다."""
     features = model.get("features")
     count = f" · 입력 Feature {len(features)}개" if isinstance(features, list) else ""
-    version = model.get("dataset_version")
-    dataset = f" · Dataset 판본 {version[:12]}" if isinstance(version, str) and version else ""
+    source = _source(model)
+    if source is not None:
+        origin = (f"MLflow {source.get('mlflow_model')} v{source.get('mlflow_version')}에서 "
+                  f"SOS 연결 Job {model.get('job_id')}로 연결한 Isolation Forest 모델{count}")
+    else:
+        version = model.get("dataset_version")
+        dataset = f" · Dataset 판본 {version[:12]}" if isinstance(version, str) and version else ""
+        origin = f"SOS 학습 Job {model.get('job_id')}의 Isolation Forest 모델{count}{dataset}"
     return (
-        f"SOS 학습 Job {model.get('job_id')}의 Isolation Forest 모델{count}{dataset}.\n\n"
+        f"{origin}.\n\n"
         "sos.job_id·sos.sha256 태그는 SOS가 모델 파일 무결성을 대조하는 값입니다. "
         "수정하거나 삭제하면 SOS에서 이 버전을 사용할 수 없습니다."
     )
 
 
 def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
-    """한 학습 Job의 단일 Registry 판본을 검색 후 생성한다.
+    """판본을 게시한 한 Job(학습 또는 연결)의 단일 Registry 판본을 검색 후 생성한다.
 
     MLflow의 search/create는 원자적이지 않지만 SOS의 단일 Worker 소유권과
     재시도 시 전체 검색을 조합한다. 중복이 발견되면 임의 판본을 선택하지 않는다.
@@ -166,13 +178,22 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
         ):
             raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
     else:
+        tags = [
+            {"key": "sos.job_id", "value": job_id},
+            {"key": "sos.sha256", "value": digest},
+        ]
+        origin = _source(model)
+        if origin is not None:
+            tags += [
+                {"key": f"sos.source_{key}", "value": str(origin[field])}
+                for key, field in (("model", "mlflow_model"), ("version", "mlflow_version"),
+                                   ("run_id", "run_id"))
+                if origin.get(field)
+            ]
         result = client.post("model-versions/create", {
             "name": name, "source": source, "run_id": run_id,
             "description": _version_description(model),
-            "tags": [
-                {"key": "sos.job_id", "value": job_id},
-                {"key": "sos.sha256", "value": digest},
-            ],
+            "tags": tags,
         })
         item = result.get("model_version")
     if not isinstance(item, dict):

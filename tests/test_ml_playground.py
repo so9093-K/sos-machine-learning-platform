@@ -16,6 +16,7 @@ def _model(*, legacy=False):
         "runtime": {
             "feature_dtypes": ["Float64", "Int64"],
             "artifact_schema": None if legacy else "if_model_with_preprocessing_v1",
+            "preprocessing_mode": None if legacy else "train_median_v1",
         },
     }
 
@@ -56,7 +57,7 @@ def test_playground_actual_adapter_and_no_dataset(monkeypatch, tmp_path):
             seen.append(matrix.tolist())
             return (0.83,)
     monkeypatch.setattr(
-        "sos_platform.ml_playground.load_trusted_isolation_forest",
+        "sos_platform.ml_playground.load_model_revision",
         lambda current, scratch: Adapter(),
     )
     store = SimpleNamespace(
@@ -93,7 +94,7 @@ def test_playground_score_matches_trained_isolation_forest(monkeypatch, tmp_path
         estimator, IsolationForestConfig(n_estimators=12), n_features=2,
     )
     monkeypatch.setattr(
-        "sos_platform.ml_playground.load_trusted_isolation_forest",
+        "sos_platform.ml_playground.load_model_revision",
         lambda model, scratch: adapter,
     )
     model = _model(legacy=True)

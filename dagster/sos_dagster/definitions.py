@@ -1,299 +1,331 @@
-"""SOS의 독립 ML Job을 Dagster Workflow로 조합한다.
+"""활동 이상 탐지 모델 생산 Pipeline. Dagster가 학습·평가·MLflow 등록을 직접 실행한다.
 
-Dagster는 단계 의존성과 Workflow Run을 소유한다. Job/Attempt와 결과 게시의
-정본은 SOS Store이고 모델 관리의 정본은 MLflow다.
+SOS DB·저장소·Job에 접근하지 않는다. 생산한 모델은 MLflow 모델 버전으로 등록하고, 연결 설정이
+있으면 SOS API에 그 고정 버전의 연결을 요청한다. 전처리·학습·학습 근거 계산과 모델 패키지는 SOS와
+같은 라이브러리 함수를 쓰므로, SOS에서 같은 의미로 표시되고 같은 점수를 낸다.
 """
+
+import hashlib
+import json
 import os
 import time
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
-from sqlalchemy import text
+import numpy as np
+import polars as pl
+from pydantic import Field
 
 from dagster import (
     AssetMaterialization,
-    AssetSpec,
-    DagsterRunStatus,
-    DefaultSensorStatus,
+    Config,
     Definitions,
     Failure,
+    MetadataValue,
     OpExecutionContext,
-    RunStatusSensorContext,
     in_process_executor,
     job,
     op,
-    run_status_sensor,
 )
 from sos_platform.analysis_topics import ACTIVITY_FEATURES
-from sos_platform.dagster_workflows import workflow_job_key
-from sos_platform.pipeline_reference import PIPELINE_ID, PIPELINE_VERSION, STAGES
-from sos_platform.store import Store
+from sos_platform.ml_anomaly import evaluate_anomaly_scores, quantile_threshold
+from sos_platform.ml_if_config import IsolationForestConfig
+from sos_platform.ml_if_preprocessing import fit_if_median_imputer
+from sos_platform.ml_input import NUMERIC
+from sos_platform.ml_isolation_forest import TrainedIsolationForest, train_isolation_forest
+from sos_platform.ml_model_package import ESTIMATOR_FILE, MANIFEST_FILE, package_isolation_forest
+from sos_platform.ml_temporal_split import select_temporal_partition, utc_observation_time
+from sos_platform.ml_training_evidence import feature_training_profile, training_score_summary
+from sos_platform.mlflow_config import MLflowSettings
+from sos_platform.mlflow_errors import MLflowDeliveryError
+from sos_platform.mlflow_tracking import MLflowClient
+
+PRODUCER = "dagster:activity_anomaly_production"
+TIMESTAMP = "ts"
+EXPERIMENT = "activity-anomaly-production"
 
 
-def _submission(context: OpExecutionContext, store: Store) -> dict:
-    submission_id = context.run.tags.get("sos/submission_id")
-    if not submission_id:
-        raise Failure("SOS에서 인증·승인된 제출 ID가 없는 실행은 허용하지 않습니다.")
-    with store.connection() as conn:
-        row = conn.execute(
-            text("SELECT * FROM workflow_submissions WHERE id=:id"),
-            {"id": submission_id},
-        ).mappings().one_or_none()
-    if row is None or row["definition_id"] != PIPELINE_ID:
-        raise Failure("유효한 SOS 분석 제출 기록이 없습니다.")
-    if row["cancel_requested"]:
-        raise Failure("사용자가 취소한 SOS Workflow 제출은 실행할 수 없습니다.")
-    dataset = store.get_dataset(row["dataset_id"])
-    if dataset is None or dataset["version"] != row["dataset_version"]:
-        raise Failure("고정된 입력 Dataset 판본을 확인할 수 없습니다.")
-    return dict(row)
+class ProductionConfig(Config):
+    data_path: str = Field(description="CSV·Parquet 경로. ts(UTC 오프셋 포함)와 활동 Feature 44개가 필요하다.")
+    registered_model: str = Field(default="activity-anomaly-if", description="등록할 MLflow 모델 이름")
+    train_fraction: float = Field(default=0.6, gt=0, lt=1, description="시간순 Train 구간 비율")
+    calibration_fraction: float = Field(default=0.2, gt=0, lt=1, description="Train 다음 Calibration 구간 비율")
+    alert_fraction: float = Field(default=0.005, gt=0, lt=1, description="Calibration 점수로 정하는 판정 비율")
+    n_estimators: int = Field(default=100, ge=1, le=2000)
+    random_state: int = Field(default=42, ge=0, le=2**32 - 1)
+    connect_to_sos: bool = Field(default=True, description="MLflow 등록 후 SOS에 고정 버전을 연결한다. 공급 CLI로 연결할 예정이면 false로 지정한다")
+    registry_key: str = Field(default="default", description="연결한 판본을 관리할 SOS 모델 그룹")
 
 
-def _job(context: OpExecutionContext, row: dict, stage: str, spec: dict, kind: str) -> dict:
-    store = Store(os.environ.get("SOS_HOME", "/var/lib/sos"))
-    key = workflow_job_key(row["id"], stage)
-    job = store.create_job(
-        kind=kind,
-        dataset_id=row["dataset_id"],
-        spec=spec,
-        owner_actor=row["owner_actor"],
-        actor_type=row["owner_actor_type"],
-        idempotency_key=key,
-        workflow_source=(row["id"], stage, context.dagster_run.root_run_id or context.run_id),
+def _source(path: str) -> pl.LazyFrame:
+    suffix = Path(path).suffix.lower()
+    if suffix == ".parquet":
+        return pl.scan_parquet(path)
+    if suffix == ".csv":
+        return pl.scan_csv(path)
+    raise Failure("data_path는 .csv 또는 .parquet이어야 합니다.")
+
+
+def _file_sha256(path: str) -> str | None:
+    file = Path(path)
+    if not file.is_file():
+        return None
+    digest = hashlib.sha256()
+    with file.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1_048_576), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _partition(source: pl.LazyFrame, bounds: dict, partition: str) -> tuple[np.ndarray, dict]:
+    frame, evidence = select_temporal_partition(
+        source, timestamp_column=TIMESTAMP, train_end=bounds["train_end"],
+        calibration_end=bounds["calibration_end"], partition=partition,
     )
-    context.log.info("%s SOS Job: %s", stage, job["id"])
-    try:
-        while job["status"] in ("Queued", "Running"):
-            time.sleep(1)
-            job = store.get_job(job["id"])
-            if job is None:
-                raise Failure("SOS Job 기록이 사라졌습니다.")
-        if job["status"] != "Succeeded":
-            raise Failure(f"SOS {stage} 실패: {job.get('error_code') or job['status']}")
-        return job
-    finally:
-        # Dagster 취소·강제 종료 시 미완료 SOS Job을 방치하지 않도록 요청한다.
-        # 강제 SIGKILL 이후 누락된 취소는 SOS API의 취소·복구 경로에서 처리한다.
-        if job is not None and job["status"] in ("Queued", "Running"):
-            store.request_cancel(
-                job["id"], actor_id=row["owner_actor"], actor_type=row["owner_actor_type"]
-            )
+    values = frame.select(ACTIVITY_FEATURES).collect().to_numpy().astype(np.float64)
+    if np.isinf(values).any():
+        raise Failure("활동 Feature에 무한값이 있습니다.")
+    return values, evidence
 
 
-def _base_state(context: OpExecutionContext) -> tuple[Store, dict]:
-    store = Store(os.environ.get("SOS_HOME", "/var/lib/sos"))
-    store.initialize()
-    return store, _submission(context, store)
-
-
-@op(description="고정된 Dataset 판본의 입력 조건을 검사하고 Train·Calibration·Test 시간 분할을 확정하는 SOS Job을 실행합니다.")
-def preflight(context: OpExecutionContext) -> dict:
-    store, row = _base_state(context)
-    result = _job(context, row, "preflight", {
-        "dataset_version": row["dataset_version"],
-        "definition_id": PIPELINE_ID,
-        "definition_version": PIPELINE_VERSION,
-    }, "ml_pipeline_preflight")
-    plan = (result["result"] or {}).get("plan")
-    if not isinstance(plan, dict) or not all(
-        key in plan for key in ("timestamp_column", "train_end", "calibration_end")
-    ):
-        raise Failure("Preflight가 유효한 시간 분할 계획을 반환하지 않았습니다.")
-    return {"plan": plan}
-
-
-@op(description="Train 구간으로 Isolation Forest를 학습하는 SOS Job을 실행하고, MLflow Registry 등록이 확인될 때까지 기다립니다.")
-def training(context: OpExecutionContext, state: dict) -> dict:
-    store, row = _base_state(context)
-    plan = state["plan"]
-    scope = {
-        "timestamp_column": plan["timestamp_column"],
-        "train_end": plan["train_end"],
-        "calibration_end": plan["calibration_end"],
+@op(description="시간순 Train·Calibration·Test로 나누어 Isolation Forest를 학습하고, Calibration 점수로 판정 기준을 정해 Test 구간을 평가합니다. 결과를 SOS 모델 패키지로 만듭니다.")
+def train_and_evaluate(context: OpExecutionContext, config: ProductionConfig) -> dict:
+    if config.train_fraction + config.calibration_fraction >= 1:
+        raise Failure("train_fraction + calibration_fraction은 1보다 작아야 합니다.")
+    source = _source(config.data_path)
+    schema = source.collect_schema()
+    missing = [name for name in (TIMESTAMP, *ACTIVITY_FEATURES) if name not in schema]
+    if missing:
+        raise Failure("필수 컬럼 없음: " + ", ".join(missing[:12]))
+    if any(schema[name] not in NUMERIC for name in ACTIVITY_FEATURES):
+        raise Failure("활동 Feature는 숫자형이어야 합니다.")
+    event = utc_observation_time(source, TIMESTAMP).dt.epoch("ms")
+    stats = source.select(
+        event.quantile(config.train_fraction, interpolation="nearest").alias("train"),
+        event.quantile(config.train_fraction + config.calibration_fraction,
+                       interpolation="nearest").alias("calibration"),
+    ).collect().row(0, named=True)
+    if stats["train"] is None or stats["calibration"] is None:
+        raise Failure("ts에서 시간 분할 경계를 정할 수 없습니다.")
+    # 경계 시각의 행은 앞 구간에 둔다(경계는 다음 구간의 시작 시각).
+    bounds = {
+        "train_end": datetime.fromtimestamp(stats["train"] / 1000, tz=UTC) + timedelta(milliseconds=1),
+        "calibration_end": datetime.fromtimestamp(stats["calibration"] / 1000, tz=UTC)
+        + timedelta(milliseconds=1),
     }
-    result = _job(context, row, "training", {
-        "algorithm": "isolation_forest",
-        "dataset_version": row["dataset_version"],
-        "features": list(ACTIVITY_FEATURES),
+    try:
+        train, split = _partition(source, bounds, "train")
+        calibration, _ = _partition(source, bounds, "calibration")
+        test, _ = _partition(source, bounds, "test")
+    except ValueError as exc:
+        raise Failure(f"시간 분할 실패: {exc}") from exc
+
+    features = list(ACTIVITY_FEATURES)
+    config_params = IsolationForestConfig(
+        n_estimators=config.n_estimators, random_state=config.random_state,
+    )
+    preprocessing = fit_if_median_imputer(train, feature_names=features)
+    transformed = preprocessing.transform(train, feature_names=features)
+    trained = train_isolation_forest(transformed, config_params)
+    summary, _ = training_score_summary(trained, transformed)
+    profile = feature_training_profile(transformed, features)
+    model = TrainedIsolationForest(
+        trained.estimator, config_params, len(features), preprocessing=preprocessing,
+    )
+    threshold = quantile_threshold(model.score_anomalies(calibration), config.alert_fraction)
+    test_evaluation = evaluate_anomaly_scores(model.score_anomalies(test), threshold=threshold)
+    rows = {key: split[f"{key}_rows"] for key in ("train", "calibration", "test")}
+    files = package_isolation_forest(
+        model,
+        feature_dtypes=[str(schema[name]) for name in features],
+        training_score_summary=summary,
+        feature_training_profile=profile,
+        training={
+            "producer": PRODUCER,
+            "data_reference": config.data_path,
+            "data_sha256": _file_sha256(config.data_path),
+            "rows": rows,
+            "evaluation": {
+                "temporal_split": {
+                    "timestamp_column": TIMESTAMP,
+                    "train_end": split["train_end"],
+                    "calibration_end": split["calibration_end"],
+                },
+                "alert_fraction": config.alert_fraction,
+                "calibration_threshold": threshold,
+                "test": test_evaluation,
+            },
+        },
+    )
+    context.log.info(
+        "학습 %d행 · Calibration %d행 · Test %d행 · Test 판정 비율 %.4f",
+        rows["train"], rows["calibration"], rows["test"], test_evaluation["alert_rate"],
+    )
+    return {
+        "registered_model": config.registered_model,
+        "connect_to_sos": config.connect_to_sos,
+        "registry_key": config.registry_key,
+        "files": files,
         "params": {
-            "n_estimators": 100, "max_samples": "auto",
-            "max_features": 1.0, "bootstrap": False, "random_state": 42,
+            "n_estimators": config.n_estimators, "random_state": config.random_state,
+            "train_fraction": config.train_fraction,
+            "calibration_fraction": config.calibration_fraction,
+            "alert_fraction": config.alert_fraction,
         },
-        "training_input": {"mode": "all"},
-        "missing_policy": "train_median",
-        "temporal_split": scope,
-    }, "ml_train")
-    model_id = (result["result"] or {}).get("model_revision_id")
-    if not model_id:
-        raise Failure("Training Job이 Model Revision을 생성하지 않았습니다.")
-    # Registry 확인 전 모델을 Scoring에 사용하지 않는다.
-    while True:
-        model = store.get_model_revision(model_id)
-        if model is None:
-            raise Failure("학습한 Model Revision의 게시 근거가 없습니다.")
-        if model.get("registry_version"):
+        "metrics": {
+            "training_score_mean": summary["score_mean"],
+            "calibration_threshold": threshold,
+            "test_alert_rate": test_evaluation["alert_rate"],
+            "test_predicted_anomalies": test_evaluation["predicted_anomalies"],
+        },
+        "rows": rows,
+    }
+
+
+def _mlflow() -> MLflowClient:
+    settings = MLflowSettings.from_env()
+    if settings is None:
+        raise Failure("SOS_MLFLOW_TRACKING_URI가 필요합니다.")
+    return MLflowClient(settings)
+
+
+def _experiment(client: MLflowClient) -> str:
+    try:
+        found = client.get("experiments/get-by-name", {"experiment_name": EXPERIMENT})
+        return found["experiment"]["experiment_id"]
+    except MLflowDeliveryError as exc:
+        if not str(exc).startswith("SOS-MLFLOW-HTTP-404"):
+            raise
+    return client.post("experiments/create", {"name": EXPERIMENT})["experiment_id"]
+
+
+def _ensure_registered_model(client: MLflowClient, name: str) -> None:
+    try:
+        client.get("registered-models/get", {"name": name})
+    except MLflowDeliveryError as exc:
+        if not str(exc).startswith("SOS-MLFLOW-HTTP-404"):
+            raise
+        client.post("registered-models/create", {"name": name})
+
+
+@op(description="학습·평가 기록과 모델 패키지를 MLflow Run에 남기고, 그 패키지를 MLflow 모델 버전으로 등록합니다.")
+def register_in_mlflow(context: OpExecutionContext, produced: dict) -> dict:
+    client = _mlflow()
+    started = int(time.time() * 1000)
+    run = client.post("runs/create", {
+        "experiment_id": _experiment(client),
+        "run_name": f"activity-anomaly-{context.run_id[:8]}",
+        "start_time": started,
+        "tags": [
+            {"key": "sos.producer", "value": PRODUCER},
+            {"key": "dagster.run_id", "value": context.run_id},
+        ],
+    })["run"]["info"]
+    run_id, artifact_uri = run["run_id"], run["artifact_uri"]
+    prefix = "mlflow-artifacts:/"
+    if not artifact_uri.startswith(prefix):
+        raise Failure("MLflow 서버가 아티팩트를 프록시하도록(--artifacts-destination) 설정해야 합니다.")
+    client.post("runs/log-batch", {
+        "run_id": run_id,
+        "params": [{"key": key, "value": str(value)} for key, value in produced["params"].items()],
+        "metrics": [
+            {"key": key, "value": float(value), "timestamp": started, "step": 0}
+            for key, value in produced["metrics"].items()
+        ],
+    })
+    for name in (MANIFEST_FILE, ESTIMATOR_FILE):
+        client.put_artifact(f"{artifact_uri[len(prefix):]}/sos_model/{name}", produced["files"][name])
+    client.post("runs/update", {"run_id": run_id, "status": "FINISHED",
+                                "end_time": int(time.time() * 1000)})
+    name = produced["registered_model"]
+    _ensure_registered_model(client, name)
+    version = client.post("model-versions/create", {
+        "name": name, "source": artifact_uri + "/sos_model", "run_id": run_id,
+        "description": "활동 이상 탐지 Isolation Forest. sos_model/ 아래 SOS 모델 패키지(sos_model.json·estimator.skops).",
+    })["model_version"]["version"]
+    for _ in range(60):
+        entry = client.get("model-versions/get", {"name": name, "version": version})["model_version"]
+        if entry.get("status") == "READY":
             break
-        if store.tracking_status(result["id"]) is None:
-            raise Failure("MLflow Registry 등록이 설정되어 있지 않습니다.")
-        time.sleep(2)
+        time.sleep(1)
+    else:
+        raise Failure("MLflow 모델 버전이 READY 상태가 되지 않았습니다.")
     context.log_event(AssetMaterialization(
-        asset_key="sos_activity_model",
+        asset_key="activity_anomaly_model",
         metadata={
-            "model_revision_id": model_id,
-            "dataset_id": row["dataset_id"],
-            "dataset_version": row["dataset_version"],
-            "registry_version": str(model["registry_version"]),
+            "registered_model": name,
+            "version": version,
+            "run_id": run_id,
+            "test_alert_rate": MetadataValue.float(float(produced["metrics"]["test_alert_rate"])),
         },
     ))
-    return {**state, "model_id": model_id}
+    return {
+        "registered_model": name, "version": version, "run_id": run_id,
+        "connect_to_sos": produced["connect_to_sos"], "registry_key": produced["registry_key"],
+    }
 
 
-@op(description="학습한 모델로 Calibration 구간을 점수화하는 SOS Job을 실행합니다.")
-def calibration(context: OpExecutionContext, state: dict) -> dict:
-    _, row = _base_state(context)
-    scope = {name: state["plan"][name] for name in
-             ("timestamp_column", "train_end", "calibration_end")}
-    result = _job(context, row, "calibration", {
-        "model_revision_id": state["model_id"],
-        "model_owner_actor": row["owner_actor"],
-        "dataset_version": row["dataset_version"],
-        "label_column": None,
-        "observation_id_column": state["plan"].get("observation_id_column"),
-        "temporal_scope": {**scope, "partition": "calibration"},
-    }, "ml_score")
-    return {**state, "calibration_id": result["result"]["scoring_result_id"]}
+def _sos(method: str, path: str, token: str, body: dict | None = None,
+         key: str | None = None) -> dict:
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    if key:
+        headers["Idempotency-Key"] = key
+    request = Request(
+        os.environ["SOS_API_URL"].rstrip("/") + path, method=method, headers=headers,
+        data=json.dumps(body).encode() if body is not None else None,
+    )
+    try:
+        with urlopen(request, timeout=30) as response:
+            return json.loads(response.read())
+    except HTTPError as exc:
+        raise Failure(f"SOS API {path} 실패: HTTP {exc.code} {exc.read()[:300].decode(errors='replace')}") from exc
 
 
-@op(description="Calibration 점수의 분위수로 판정 기준(Decision Policy)을 만드는 SOS Job을 실행합니다.")
-def policy(context: OpExecutionContext, state: dict) -> dict:
-    _, row = _base_state(context)
-    result = _job(context, row, "policy", {
-        "scoring_result_id": state["calibration_id"],
-        "mode": "quantile", "alert_fraction": 0.005,
-        "threshold": None, "source_owner_actor": row["owner_actor"],
-    }, "ml_policy")
-    return {**state, "policy_id": result["result"]["policy_revision_id"]}
-
-
-@op(description="학습한 모델로 Test 구간을 점수화하는 SOS Job을 실행합니다.")
-def test(context: OpExecutionContext, state: dict) -> dict:
-    _, row = _base_state(context)
-    scope = {name: state["plan"][name] for name in
-             ("timestamp_column", "train_end", "calibration_end")}
-    result = _job(context, row, "test", {
-        "model_revision_id": state["model_id"],
-        "model_owner_actor": row["owner_actor"],
-        "dataset_version": row["dataset_version"],
-        "label_column": None,
-        "observation_id_column": state["plan"].get("observation_id_column"),
-        "temporal_scope": {**scope, "partition": "test"},
-    }, "ml_score")
-    score_id = result["result"]["scoring_result_id"]
+@op(description="등록한 MLflow 모델 버전을 SOS에 연결하도록 요청하고, SOS가 패키지를 검증해 Model Revision을 게시할 때까지 기다립니다.")
+def connect_to_sos(context: OpExecutionContext, registered: dict) -> None:
+    label = f"{registered['registered_model']} v{registered['version']}"
+    if not registered["connect_to_sos"]:
+        context.log.info("SOS 연결을 요청하지 않았습니다. MLflow 모델 버전 %s", label)
+        return
+    token = os.getenv("SOS_SUPPLY_TOKEN")
+    if not os.getenv("SOS_API_URL") or not token:
+        raise Failure(
+            "SOS 연결에는 SOS_API_URL과 SOS_SUPPLY_TOKEN(automation 서비스 계정)이 필요합니다. "
+            f"MLflow 등록은 완료됐습니다: {label}"
+        )
+    item = _sos("POST", "/api/ml/models/imports", token, {
+        "mlflow_model": registered["registered_model"],
+        "mlflow_version": registered["version"],
+        "registry_key": registered["registry_key"],
+    }, key=f"dagster-{registered['run_id']}")
+    try:
+        while item["status"] in ("Queued", "Running"):
+            time.sleep(2)
+            item = _sos("GET", f"/api/ml/models/imports/{item['id']}", token)
+    finally:
+        # Dagster Run을 종료하면 대기 중인 SOS 연결도 취소를 요청한다. 실제 중단은 SOS가 확정한다.
+        if item["status"] in ("Queued", "Running"):
+            _sos("POST", f"/api/ml/models/imports/{item['id']}/cancel", token)
+    if item["status"] != "Succeeded":
+        raise Failure(f"SOS 모델 연결 {item['status']}: {item.get('error_code')} {item.get('error')}")
     context.log_event(AssetMaterialization(
-        asset_key="sos_activity_scores",
-        metadata={"scoring_result_id": score_id,
-                  "model_revision_id": state["model_id"]},
+        asset_key="sos_model_revision",
+        metadata={"model_revision_id": item["result"]["model_revision_id"],
+                  "import_job_id": item["id"], "mlflow_version": registered["version"]},
     ))
-    return {**state, "test_id": score_id}
-
-
-@op(description="Test 점수에 판정 기준을 적용해 이상 후보를 확정하는 SOS Job을 실행합니다.")
-def evaluation(context: OpExecutionContext, state: dict) -> None:
-    _, row = _base_state(context)
-    result = _job(context, row, "evaluation", {
-        "scoring_result_id": state["test_id"],
-        "policy_revision_id": state["policy_id"],
-        "source_owner_actor": row["owner_actor"],
-        "policy_owner_actor": row["owner_actor"],
-        "reference_owner_actor": row["owner_actor"],
-    }, "ml_evaluate")
-    context.log_event(AssetMaterialization(
-        asset_key="sos_activity_evaluation",
-        metadata={
-            "evaluation_revision_id": result["result"]["evaluation_revision_id"],
-            "scoring_result_id": state["test_id"],
-        },
-    ))
-    return None
 
 
 @job(
     executor_def=in_process_executor,
-    tags={"sos/workflow": PIPELINE_ID},
     description=(
-        "SOS 활동 이상 탐지 분석. 실행은 SOS API로만 제출하며 태그 sos/submission_id가 SOS 분석 ID입니다. "
-        "각 단계는 같은 SOS Job을 멱등 키로 재사용하므로 여기서 Re-execute하면 완료된 단계 결과를 그대로 쓰고 "
-        "실패한 단계는 같은 이유로 다시 실패합니다. 다시 실행하려면 SOS에서 새 분석을 시작하세요."
+        "활동 이상 탐지 모델 생산. 입력 파일로 학습·평가하고 MLflow 모델 버전으로 등록한 뒤 SOS에 연결한다. "
+        "Run마다 새 MLflow Run·모델 버전을 만든다."
     ),
 )
-def activity_anomaly_workflow():
-    evaluation(test(policy(calibration(training(preflight())))))
+def activity_anomaly_production():
+    connect_to_sos(register_in_mlflow(train_and_evaluate()))
 
 
-
-def _cancel_orphaned_sos_jobs(context: RunStatusSensorContext) -> None:
-    """Dagster UI의 종료·실패 후에도 독립 SOS Job이 남지 않도록 Dagster가 정리한다.
-
-    성공한 Job·완료된 결과는 수정하지 않는다. Dagster 자체 Run 상태를
-    SOS DB에 복제하지 않고, 정해진 Run 이벤트에만 반응한다.
-    """
-    submission_id = context.dagster_run.tags.get("sos/submission_id")
-    if not submission_id:
-        return
-    store = Store(os.environ.get("SOS_HOME", "/var/lib/sos"))
-    with store.connection() as conn:
-        row = conn.execute(
-            text("SELECT owner_actor,owner_actor_type FROM workflow_submissions WHERE id=:id"),
-            {"id": submission_id},
-        ).mappings().one_or_none()
-    if row is None:
-        return
-    for stage in STAGES:
-        with store.connection() as conn:
-            job_id = conn.execute(text(
-                "SELECT job_id FROM job_submissions "
-                "WHERE actor_id=:actor AND submission_key=:key"
-            ), {
-                "actor": row["owner_actor"],
-                "key": workflow_job_key(submission_id, stage),
-            }).scalar_one_or_none()
-        if not job_id:
-            continue
-        job = store.get_job(job_id)
-        if job and job["status"] in ("Queued", "Running"):
-            # 취소와 Worker의 완료가 경합할 수 있다. 이미 종료된 Job을 덮어쓰지 않는다.
-            store.request_cancel(
-                job_id, actor_id=row["owner_actor"],
-                actor_type=row["owner_actor_type"],
-            )
-
-
-@run_status_sensor(
-    run_status=DagsterRunStatus.CANCELED,
-    monitored_jobs=[activity_anomaly_workflow],
-    default_status=DefaultSensorStatus.RUNNING,
-)
-def cancel_sos_jobs_after_run_cancel(context: RunStatusSensorContext) -> None:
-    _cancel_orphaned_sos_jobs(context)
-
-
-@run_status_sensor(
-    run_status=DagsterRunStatus.FAILURE,
-    monitored_jobs=[activity_anomaly_workflow],
-    default_status=DefaultSensorStatus.RUNNING,
-)
-def cancel_sos_jobs_after_run_failure(context: RunStatusSensorContext) -> None:
-    _cancel_orphaned_sos_jobs(context)
-
-
-raw = AssetSpec("sos_activity_dataset", description="SOS가 관리하는 고정 Dataset 판본")
-model = AssetSpec("sos_activity_model", deps=[raw],
-                  description="SOS Model Revision / MLflow Registry의 외부 게시 근거")
-scores = AssetSpec("sos_activity_scores", deps=[raw, model],
-                   description="고정된 모델과 Dataset의 Test Scoring Result")
-evaluation_asset = AssetSpec("sos_activity_evaluation", deps=[scores],
-                             description="SOS Evaluation Revision 결과")
-
-defs = Definitions(
-    jobs=[activity_anomaly_workflow],
-    sensors=[cancel_sos_jobs_after_run_cancel, cancel_sos_jobs_after_run_failure],
-    assets=[raw, model, scores, evaluation_asset],
-)
+defs = Definitions(jobs=[activity_anomaly_production])

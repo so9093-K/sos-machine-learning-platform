@@ -68,13 +68,6 @@ jobs = Table(
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
     Column("owner_actor", Text),
-    Column("workflow_submission_id", String(36), ForeignKey("workflow_submissions.id")),
-    Column("workflow_stage", String(128)),
-    CheckConstraint(
-        "(workflow_submission_id IS NULL AND workflow_stage IS NULL) OR "
-        "(workflow_submission_id IS NOT NULL AND workflow_stage IS NOT NULL)",
-        name="ck_jobs_workflow_source",
-    ),
     Index("ix_jobs_created_at_id", "created_at", "id"),
     Index("ix_jobs_dataset_created_id", "dataset_id", "created_at", "id"),
     Index("ix_jobs_request_id", "request_id"),
@@ -193,9 +186,12 @@ model_revisions = Table(
     Column("id", String(36), primary_key=True),
     Column("job_id", String(36), ForeignKey("jobs.id"), nullable=False, unique=True),
     Column("attempt_id", String(36), ForeignKey("attempts.id"), nullable=False, unique=True),
-    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
-    Column("dataset_version", Text, nullable=False),
+    # SOS 학습 판본은 학습 Dataset을, MLflow에서 연결한 판본은 출처 기록(source)을 갖는다.
+    Column("dataset_id", String(36), ForeignKey("datasets.id")),
+    Column("dataset_version", Text),
     Column("algorithm", String(64), nullable=False),
+    Column("source_kind", String(32), nullable=False),
+    Column("source", Text),
     Column("location", Text, nullable=False),
     Column("sha256", String(64), nullable=False),
     Column("features", Text, nullable=False),
@@ -208,6 +204,13 @@ model_revisions = Table(
     Column("lifecycle_state", String(16), nullable=False, default="Active"),
     Column("registry_model", Text),
     Column("registry_version", String(32)),
+    CheckConstraint(
+        "(source_kind = 'sos_training' AND dataset_id IS NOT NULL AND dataset_version IS NOT NULL "
+        "AND source IS NULL) OR "
+        "(source_kind = 'mlflow_registry' AND dataset_id IS NULL AND dataset_version IS NULL "
+        "AND source IS NOT NULL)",
+        name="ck_model_revisions_source",
+    ),
     Index("ix_model_revisions_owner_created", "owner_actor", "created_at"),
 )
 
@@ -345,26 +348,6 @@ mlflow_exports = Table(
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
     Index("ix_mlflow_exports_due", "state", "retry_after"),
-)
-
-workflow_submissions = Table(
-    "workflow_submissions",
-    metadata,
-    Column("id", String(36), primary_key=True),
-    Column("actor_id", Text, nullable=False),
-    Column("submission_key", String(128), nullable=False),
-    Column("fingerprint", String(64), nullable=False),
-    Column("definition_id", String(96), nullable=False),
-    Column("definition_version", String(32), nullable=False),
-    Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=False),
-    Column("dataset_version", Text, nullable=False),
-    Column("owner_actor", Text, nullable=False),
-    Column("owner_actor_type", String(16), nullable=False),
-    Column("dagster_run_id", String(36), unique=True),
-    Column("cancel_requested", Boolean, nullable=False, default=False),
-    Column("created_at", Text, nullable=False),
-    UniqueConstraint("actor_id", "submission_key", name="uq_workflow_submission_key"),
-    Index("ix_workflow_owner_created", "owner_actor", "created_at"),
 )
 
 audit_events = Table(

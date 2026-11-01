@@ -3,7 +3,7 @@
 from .ml_inference import score_observations
 from .ml_input import ordered_playground_input
 from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
-from .ml_runtime import load_trusted_isolation_forest
+from .ml_runtime import load_model_revision
 
 
 def run_playground_scoring(store, spec: dict) -> dict:
@@ -12,7 +12,7 @@ def run_playground_scoring(store, spec: dict) -> dict:
     if not model or model["owner_actor"] != spec["model_owner_actor"]:
         raise ValueError("Playground model is unavailable or ownership changed")
     values = ordered_playground_input(model, spec["features"])
-    adapter = load_trusted_isolation_forest(model, store.home / "cache")
+    adapter = load_model_revision(model, store.home / "cache")
     contract = require_output_contract(model, produces=ANOMALY_SCORE_V1)
     return {
         "model_revision_id": model["id"],

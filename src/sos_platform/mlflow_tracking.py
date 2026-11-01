@@ -11,9 +11,9 @@ import math
 import time
 from collections.abc import Callable
 from datetime import datetime
-from typing import Literal
+from typing import BinaryIO, Literal
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .errors import WorkerOwnershipLost
@@ -96,6 +96,49 @@ class MLflowClient:
             raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID") from exc
 
 
+    def put_artifact(self, artifact_path: str, data: bytes) -> None:
+        """MLflow 서버가 프록시하는 아티팩트 저장소에 파일 하나를 올린다(`mlflow-artifacts:` 경로)."""
+        headers = {"Content-Type": "application/octet-stream"}
+        if self.settings.token:
+            headers["Authorization"] = f"Bearer {self.settings.token}"
+        req = Request(
+            self.settings.endpoint + "/api/2.0/mlflow-artifacts/artifacts/" + quote(artifact_path),
+            data=data, headers=headers, method="PUT",
+        )
+        try:
+            with self._opener.open(req, timeout=max(self.settings.timeout_seconds, 60)) as response:
+                response.read(1_048_577)
+        except HTTPError as exc:
+            raise MLflowDeliveryError(f"SOS-MLFLOW-HTTP-{exc.code}-artifacts") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            raise MLflowDeliveryError("SOS-MLFLOW-UNAVAILABLE") from exc
+
+    def model_version_artifact(
+        self, name: str, version: str, path: str, out: BinaryIO, *, limit: int
+    ) -> None:
+        """고정한 모델 버전의 아티팩트 파일 하나를 크기 제한 안에서 `out`에 기록한다.
+
+        경로는 모델 버전의 `source` 기준 상대 경로다. 제한을 넘으면 기록을 멈추고 실패한다.
+        """
+        headers = {"Authorization": f"Bearer {self.settings.token}"} if self.settings.token else {}
+        req = Request(
+            self.settings.endpoint + "/model-versions/get-artifact?"
+            + urlencode({"name": name, "version": version, "path": path}),
+            headers=headers, method="GET",
+        )
+        written = 0
+        try:
+            with self._opener.open(req, timeout=max(self.settings.timeout_seconds, 60)) as response:
+                while chunk := response.read(1_048_576):
+                    written += len(chunk)
+                    if written > limit:
+                        raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
+                    out.write(chunk)
+        except HTTPError as exc:
+            raise MLflowDeliveryError(f"SOS-MLFLOW-HTTP-{exc.code}-model-version-artifact") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            raise MLflowDeliveryError("SOS-MLFLOW-UNAVAILABLE") from exc
+
     def patch(self, endpoint: str, payload: dict) -> dict:
         """MLflow REST PATCH 계약의 JSON 요청."""
         return self.post(endpoint, payload, method="PATCH")
@@ -142,6 +185,7 @@ def _numeric_metrics(job: dict) -> list[dict]:
     result = job.get("result") or {}
     keys = {
         "ml_train": "training_score_summary",
+        "ml_import": "training_score_summary",
         "ml_score": "score_summary",
         "ml_policy": "decision_summary",
         "ml_evaluate": "decision_metrics",
@@ -160,7 +204,7 @@ def _numeric_metrics(job: dict) -> list[dict]:
 
 def _job_experiment_title(store, job: dict) -> str:
     """같은 Actor의 원본 학습으로 거슬러 올라가 연구 묶음을 연결한다."""
-    if job["kind"] == "ml_train":
+    if job["kind"] in ("ml_train", "ml_import"):
         return job["spec"].get("experiment_title") or DEFAULT_EXPERIMENT
     spec = job.get("spec") or {}
     model_id = spec.get("model_revision_id")
@@ -177,7 +221,7 @@ def _job_experiment_title(store, job: dict) -> str:
     model = store.get_model_revision(model_id)
     training_job = store.get_job(model["job_id"]) if model else None
     if (
-        not training_job or training_job.get("kind") != "ml_train"
+        not training_job or training_job.get("kind") not in ("ml_train", "ml_import")
         or training_job.get("owner_actor") != job.get("owner_actor")
     ):
         return DEFAULT_EXPERIMENT
@@ -220,13 +264,11 @@ def send_to_mlflow(
     known_run_id: str | None,
     remember_run: Callable[[str], None],
     experiment_title: str | None = None,
-    workflow: dict | None = None,
 ) -> str:
     """Sos Job ID를 외부 Run 검색 키로 사용해 중단 후 재전송한다.
 
     응답이 소실된 신규 Run 생성은 전송 전 검색으로 최대한 복구하나,
     MLflow 서버의 비원자적 search/create 때문에 완전한 exactly-once는 보장하지 않는다.
-    등록형 Workflow 단계 Job은 분석·단계 태그와 Dagster 단계명을 쓴 Run 이름으로 묶는다.
     """
     if job["status"] not in ("Succeeded", "Failed", "Cancelled") or not job["kind"].startswith("ml_"):
         raise ValueError("Only terminal ML jobs can be tracked")
@@ -260,11 +302,7 @@ def send_to_mlflow(
             started_ms, _ = _job_event_times(job)
             create_payload = {
                 "experiment_id": experiment,
-                # Workflow 단계는 Dagster op 이름과 같은 단계명으로 두 운영 UI를 대조할 수 있게 한다.
-                "run_name": (
-                    f"sos-workflow-{workflow['submission_id'][:8]}-{workflow['stage']}"
-                    if workflow else f"sos-{job['kind']}-{job['id'][:8]}"
-                ),
+                "run_name": f"sos-{job['kind']}-{job['id'][:8]}",
                 "tags": [
                     {"key": "sos.job_id", "value": job["id"]},
                     {"key": "sos.job_kind", "value": job["kind"]},
@@ -292,6 +330,12 @@ def send_to_mlflow(
             if key in supported and type(value) in (str, int, float, bool):
                 params.append({"key": f"sos.{key}", "value": str(value)})
         params += _training_params(job["spec"])
+    if job["kind"] == "ml_import":
+        # 연결한 판본의 생산 출처. 학습 Run은 원본 MLflow Run이고 이 Run은 SOS 연결 기록이다.
+        params += [
+            {"key": "sos.source_model", "value": job["spec"]["mlflow_model"]},
+            {"key": "sos.source_version", "value": job["spec"]["mlflow_version"]},
+        ]
     if job["kind"] == "ml_explain":
         method = job["spec"].get("method")
         if isinstance(method, str) and method:
@@ -304,12 +348,6 @@ def send_to_mlflow(
             if isinstance(source, str) and source:
                 params.append({"key": f"sos.{key}", "value": source})
     tags = [{"key": "sos.source", "value": "sos-platform"}]
-    if workflow:
-        tags += [
-            {"key": "sos.workflow_id", "value": workflow["definition_id"]},
-            {"key": "sos.workflow_submission_id", "value": workflow["submission_id"]},
-            {"key": "sos.workflow_stage", "value": workflow["stage"]},
-        ]
     client.post(
         "runs/log-batch",
         {
@@ -361,9 +399,8 @@ def run_tracking_once(store, client: MLflowClient) -> TrackingOutcome:
             known_run_id=export["run_id"],
             remember_run=lambda value: store.save_tracking_run_id(job_id, value),
             experiment_title=_job_experiment_title(store, job),
-            workflow=store.job_workflow_source(job),
         )
-        if job["kind"] == "ml_train" and job["status"] == "Succeeded":
+        if job["kind"] in ("ml_train", "ml_import") and job["status"] == "Succeeded":
             model_id = (job.get("result") or {}).get("model_revision_id")
             model = store.get_model_revision(model_id) if model_id else None
             if model is None:

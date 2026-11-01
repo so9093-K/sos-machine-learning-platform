@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from sos_platform import ml_training
+from sos_platform import ml_training, ml_training_evidence
 from sos_platform.errors import PlatformError
 from sos_platform.ml_input import TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
 from sos_platform.schemas import MLTrainingInputPolicy, MLTrainRequest
@@ -1238,8 +1238,8 @@ def test_feature_profile_reads_only_bounded_reproducible_rows(width):
             return np.broadcast_to(np.asarray(indices, dtype=float)[:, None], (len(indices), width))
 
     names = [f"f{i}" for i in range(width)]
-    first = ml_training._feature_training_profile(LargeMatrix(), names)
-    second = ml_training._feature_training_profile(LargeMatrix(), names)
+    first = ml_training_evidence.feature_training_profile(LargeMatrix(), names)
+    second = ml_training_evidence.feature_training_profile(LargeMatrix(), names)
     assert reads[0] == reads[1]
     assert first == second
     assert first["row_count"] == 1_000_000_000

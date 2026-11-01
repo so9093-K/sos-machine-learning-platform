@@ -8,7 +8,7 @@
 - **권한·중요 변경 결정:** PostgreSQL `audit_events`가 트랜잭션과 연결되는 정본이다. 이 기록은 외부 변경 불가능한 감사 저장소를 대체하지 않는다.
 - **기술적 원인·시각:** 구조화된 JSON 로그는 진단 증거다. 로그나 Trace가 없더라도 Job/Attempt 상태는 유지되어야 한다.
 
-- **Workflow 실행·단계 이력:** Dagster OSS Run과 이벤트가 정본이다. SOS는 Actor·Idempotency-Key·Dagster Run ID와 신뢰된 실행이 생성한 Job 연결을 유지하며 SOS Job/Attempt의 실제 계산 완료와 구분한다. 일반 제출 키만으로 Job의 Workflow 출처를 확정하지 않는다.
+- **모델 생산 이력:** Dagster Run과 이벤트, MLflow Run·모델 버전이 정본이다. SOS에는 연결 Job(`ml_import`)과 그 결과 판본만 남는다.
 
 ## 오류 응답과 호환성
 
@@ -84,7 +84,7 @@ Worker의 `worker.staging.cleanup_failed`는 정리를 모두 시도한 뒤 실�
 
 ### MLflow 기록·모델 등록 재시도
 
-1. Training Job이 `Succeeded`지만 `MLflow 기록·모델 등록 실패`로 대기한다면 학습을 다시 제출하지 않는다. 성공한 모델 아티팩트는 SOS가 유지하며, Registry 등록 완료 전 후속 Pipeline 단계는 진행하지 않는다.
+1. 학습·연결 Job이 `Succeeded`지만 `MLflow 기록·모델 등록 실패`로 대기한다면 다시 제출하지 않는다. 성공한 모델 아티팩트는 SOS가 유지하며, Registry 등록 완료 전에는 제공·Scoring을 진행하지 않는다.
 2. `GET /api/ml/tracking/jobs/{job_id}`의 `state`, `attempts`, `last_error_code`를 조회하고, 필요하면 로컬 운영 UI(`http://localhost:9606`)에서 해당 Registered Model·Version을 확인한다.
 3. 코드나 연결 문제를 수정한 뒤 기존 전송 Outbox의 `Retry`가 다시 시도하는지 확인한다. 중복 Model Version 등록을 막는 Job ID·SHA 검증은 유지한다.
 
@@ -97,11 +97,8 @@ Worker의 `worker.staging.cleanup_failed`는 정리를 모두 시도한 뒤 실�
 5. 컨트롤러 구조화 로그(`make logs`의 `serving-controller`)로 흐름을 따라간다. `serving.config.applied`는 Config 적용, `serving.application.failed`(`endpoint_id`·`model_revision_id`·`status`)는 애플리케이션 실패(상태가 바뀔 때 한 번), `serving.revision.activated`는 전환 시점이다. `serving.reconcile.unavailable`(`failure_type`·`status`)로 Ray 연결 장애와 Config 거절을 구분한다.
 6. 서빙 의도와 판본은 SOS DB가 정본이다. Ray에 적용된 Config가 의도와 다르거나 애플리케이션이 사라지면 컨트롤러가 다음 조정에서 의도한 Config를 다시 적용하므로, 변경은 SOS로 요청한다.
 
-### Dagster OSS 장애·복구
+### 모델 생산·연결
 
-1. `make status`에서 `dagster-postgres`, `dagster-code`, `dagster-webserver`, `dagster-daemon` 상태를 확인한다.
-2. Dagster Run ID와 SOS Workflow 제출 ID를 대조한다. GraphQL 장애 시 기존 SOS Job·Model·Scoring 결과의 성공을 실패로 변경하지 않는다.
-3. Dagster 실행 접수 응답이 유실되었다면 동일 Actor와 Idempotency-Key로 재요청하고, Dagster Run 태그를 조회한 뒤 중복 실행 여부를 확인한다.
-4. 취소 시 현재 SOS Job의 실제 중단 여부를 조회한다. Dagster 취소 신호만으로 외부 저장소 커밋이 취소됐다고 판단하지 않는다.
-5. 로컬 운영 UI(`http://localhost:9607`)와 `make doctor-dagster`로 Workflow 및 실제 Run 검색 GraphQL 계약을 구별해 확인한다. 기본 GraphQL `__typename`의 200 응답만으로 조회·제출 성공을 가정하지 않는다.
-6. API 구조화 로그 `dagster.request.failed`의 `request_id`, `operation`, `failure_type`, `status`로 HTTP 스키마 오류·연결 장애·응답 시간 초과를 구분한다. 원문 쿼리·데이터·토큰은 기록하지 않는다.
+1. `make status`에서 `dagster-postgres`, `dagster-code`, `dagster-webserver`, `dagster-daemon` 상태를 확인한다. Dagster 장애는 기존 SOS 판본·Scoring·서빙에 영향을 주지 않는다.
+2. 생산 Run이 `register_in_mlflow`까지 성공했다면 MLflow 버전은 이미 있으므로 다시 학습하지 않는다. `connect_to_sos` 단계의 성공 결과(`sos_model_revision`)나 SOS 연결 Job을 먼저 확인한다. 이미 게시된 `model_revision_id`가 있으면 해당 판본을 그대로 제공·배포한다. 연결 Job이 실행 중이면 그 상태를 조회하고, 접수되지 않았거나 실패·취소가 확정되어 판본이 없는 경우에만 공급 스크립트 또는 연결 API로 다시 연결한다. 같은 MLflow 버전이라는 이유만으로 Dagster와 CLI의 서로 다른 제출이 같은 SOS 판본을 재사용하지는 않는다. CLI 공급을 선택하는 새 생산 Run은 `connect_to_sos: false`로 실행한다.
+3. 연결 Job이 `SOS-ML-IMPORT-SOURCE-UNAVAILABLE`이면 MLflow 상태와 모델 이름·버전(READY)을 확인한다. `SOS-ML-IMPORT-INVALID`면 패키지 파일·구조 또는 검증 점수 재현 실패이므로 생산 Pipeline의 패키지를 확인한다. `SOS-ML-MODEL-RUNTIME-INCOMPATIBLE`이면 생산 환경의 Python minor·numpy·scikit-learn을 SOS와 맞춘다.

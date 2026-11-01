@@ -29,6 +29,8 @@ ml = [
   "joblib>=1.5,<2",
   "scikit-learn>=1.7,<2",
   "shap>=0.50,<0.51",
+  # MLflow에서 연결한 모델은 허용 타입만 복원하는 형식으로 받는다.
+  "skops>=0.16,<0.17",
 ]
 feast = [
   "feast[duckdb,grpcio]==0.67.0",

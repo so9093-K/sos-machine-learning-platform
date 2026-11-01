@@ -14,7 +14,6 @@ const pageLabels: Record<WorkspaceTab, { title: string; description: string }> =
   learning: { title: "학습 유형", description: "개요 · 활용 상황 · 분석 과제" },
   task: { title: "분석 과제", description: "원리 · 활용 방법 · 결과 해석 · 주제" },
   topic: { title: "활동 이상 탐지", description: "활용 방법 · 모델 적용 · 결과 해석 · 서비스 연동" },
-  pipelines: { title: "등록 파이프라인", description: "모델 공급 운영 · 단계별 결과 · 실행 근거" },
   ml: { title: "모델 활용", description: "모델 선택 · 입력 확인 · 적용 · 결과 이해" },
   scoring: { title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
   policies: { title: "판정 정책", description: "점수 결과 선택 · 판정 기준 · 작업 이력" },
@@ -53,7 +52,7 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
   const [localOperatorHost, setLocalOperatorHost] = useState(false);
   // 좁은 화면에서는 메뉴가 업무 화면을 밀어내지 않도록 접어 두고, 화면 이동 후 다시 접는다.
   const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => { setMenuOpen(false); }, [section, modelContext.datasetId, modelContext.modelId, modelContext.dataJobId, modelContext.pipelineRunId, modelResource?.id]);
+  useEffect(() => { setMenuOpen(false); }, [section, modelContext.datasetId, modelContext.modelId, modelContext.dataJobId, modelResource?.id]);
   useEffect(() => {
     setLocalOperatorHost(isLocalOperatorHost());
   }, []);
@@ -79,12 +78,11 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
         canViewDataset={actor.capabilities.includes("dataset.read")}
         canPrepareData={actor.capabilities.includes("job.create")}
-        canOperatePipelines={actor.capabilities.includes("model.train") && actor.capabilities.includes("dataset.read")}
         canManageServing={actor.capabilities.includes("model.manage")} />
       {localOperatorHost && (canInspectStorage || canViewAudit) && <div className="operator-tools">
         <span className="eyebrow">로컬 운영 도구</span>
         <a href={dagsterUrl()} target="_blank" rel="noopener noreferrer">
-          Dagster · Workflow Run/실행 로그 ↗
+          Dagster · 모델 생산 Run/실행 로그 ↗
         </a>
         <a href={mlflowUrl()} target="_blank" rel="noopener noreferrer">
           MLflow · 연구 Run/모델 Registry ↗

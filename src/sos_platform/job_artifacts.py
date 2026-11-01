@@ -8,6 +8,7 @@ from .datasets import cleanup_iceberg_staging, iceberg_staging_bytes
 from .execution_budget import ExecutionLimitExceeded
 from .ml_scoring_staging import cleanup_scoring_stage, scoring_stage_bytes
 from .ml_training_staging import cleanup_training_stage, training_stage_bytes
+from .model_artifacts import JOBLIB, SKOPS, model_artifact_key
 from .object_store import ObjectStore
 from .observability import emit
 from .store import Store
@@ -36,13 +37,19 @@ class ResultPublication:
         """연산별 결과를 게시 입력으로 바꾸고 필요한 객체만 업로드한다."""
         self.result = {key: item for key, item in value.items() if key != "iceberg_publish"}
         self.payload = value.get("iceberg_publish")
-        stem = f"results/{job['id']}/{job['attempts'][-1]['id']}"
-        if job["kind"] in ("ml_train", "ml_score"):
-            training = job["kind"] == "ml_train"
-            artifact = pending.with_suffix(".joblib" if training else ".scores.parquet")
+        attempt_id = job["attempts"][-1]["id"]
+        stem = f"results/{job['id']}/{attempt_id}"
+        # 모델 판본의 아티팩트 위치는 형식별 규칙(model_artifacts)을 게시·복원·삭제가 함께 쓴다.
+        outputs = {
+            "ml_train": (".joblib", model_artifact_key(job["id"], attempt_id, JOBLIB)),
+            "ml_import": (".skops", model_artifact_key(job["id"], attempt_id, SKOPS)),
+            "ml_score": (".scores.parquet", stem + ".scores.parquet"),
+        }
+        if job["kind"] in outputs:
+            suffix, key = outputs[job["kind"]]
+            artifact = pending.with_suffix(suffix)
             if not artifact.is_file():
                 raise RuntimeError("Execution completed without its model or score artifact")
-            key = stem + (".model.joblib" if training else ".scores.parquet")
             self.payload = {**value, **self._upload(store, job, key, artifact)}
         elif pending.exists():
             pending.replace(output)
@@ -107,6 +114,7 @@ def _remove_result_files(
         ("result.pending", pending),
         ("result.completed", completed),
         ("result.model", pending.with_suffix(".joblib")),
+        ("result.imported_model", pending.with_suffix(".skops")),
         ("result.scores", pending.with_suffix(".scores.parquet")),
     ):
         try:

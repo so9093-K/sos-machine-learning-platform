@@ -19,17 +19,17 @@
 - 값 직접 입력은 소수 활동 특징의 시각적 비교·수정과 명시적 재계산을 중심으로 입력·점수를 Job에 보존한다. 전체 입력은 상세에서 편집하며 수정한 활동은 프로필에서 확인한다. 학습 P10·P90 수치와 구간 밖 차이를 표시하고, Dataset 관측값을 가져와 원래 점수와 비교하거나 복원할 수 있다. 제공 모델은 다음 페이지까지 탐색한다.
 - 판정 정책은 보정 결과와 별도로 판본 관리해 호환되는 다른 Scoring Result에 적용하고, 평가는 레이블 유무에 따라 지표를 구별한다.
 - 비지도 학습 → 이상 탐지 → 활동 이상 탐지로 이어지는 소개 화면과 주제 Playground에서 활용 방법을 보고, 같은 화면에서 자신의 Dataset·직접 입력에 모델을 적용해 결과 해석과 API 연동 방법까지 확인한다. Dataset Scoring 명령은 새 요청 키를 생성하고 재시도에는 같은 키를 사용하도록 안내한다.
-- 분석 주제는 입력 Feature와 출력 계약으로 정의되며(`GET /api/topics`), 알고리즘이나 공급 Pipeline과 관계없이 계약이 맞는 모델을 적용·호출한다.
+- 분석 주제는 입력 Feature와 출력 계약으로 정의되며(`GET /api/topics`), 알고리즘이나 모델 출처와 관계없이 계약이 맞는 모델을 적용·호출한다.
 - 서빙 중인 모델은 `POST /api/serving/endpoints/{id}/predict`로 관측값을 바로 점수화한다. Playground는 온라인 API 사용 가능 여부를 보이고, 계산한 입력을 그대로 보내 같은 점수를 확인한다.
 
 ### 모델 공급과 운영
 
-- 학습·모델 관리·Feature 정의 변경은 `kind: service` 전용 `automation` 역할과 관리자만 할 수 있다. `scripts/supply_model.py`는 실제 Dataset 파일 또는 ID로 학습·Registry 등록·제공·선택적 온라인 서빙을 연결하고 상태 파일로 중단 후 재개한다. 모델 적용은 Dataset 선택·등록을 기본으로 하고 값 직접 입력을 선택적으로 제공한다.
+- 모델 생산(학습·평가·MLflow 등록)은 Dagster의 생산 Pipeline이 SOS DB 접근 없이 직접 실행하고, SOS는 MLflow 고정 모델 버전을 다시 학습하지 않고 Model Revision으로 연결한다(`/api/ml/models/imports` 제출·조회·취소). 연결은 모델 패키지(`sos_model.json`·`estimator.skops`)의 허용 타입 복원과 검증 점수 재현을 확인한 뒤 게시하며, Model Revision은 출처(`source_kind`·`source`)를 가진다. SOS Pipeline 제출 API·화면과 Workflow 제출 기록은 제거했다.
+- 학습·모델 관리·Feature 정의 변경은 `kind: service` 전용 `automation` 역할과 관리자만 할 수 있다. `scripts/supply_model.py`는 MLflow 고정 버전 연결 또는 실제 Dataset 학습으로 Registry 등록·제공·선택적 온라인 서빙을 연결하고 상태 파일로 중단 후 재개한다. 모델 적용은 Dataset 선택·등록을 기본으로 하고 값 직접 입력을 선택적으로 제공한다.
 - 모델 제공·설명 수정·중단을 명시적으로 관리하며, 제공 중단은 새 적용만 막고 기존 결과를 유지한다. 제공 중인 판본은 중단 후 삭제할 수 있다.
 - Isolation Forest 학습은 전체·명시적 표본 입력, UTC 시간 분할, Train 중앙값 결측 정책을 지원하고 불변 Model Revision을 남긴다.
 - MLflow가 Experiment·Run·Registered Model/Version의 관리 정본이다. SOS는 Outbox로 기록·등록을 재시도하며, Registry 등록이 확인된 모델만 Scoring에 사용한다. 모델 그룹·보관과 영향 확인 후 영구 삭제를 지원한다.
 - Ray Serve 기반 온라인 서빙 Endpoint를 제공한다. 모델 상세에서 권한 있는 사용자가 최초 배포를 명시적으로 요청하거나 공급 자동화가 배포·판본 전환을 요청하고, 독립 컨트롤러가 새 판본의 준비를 확인한 뒤에만 전환하며 실패 시 기존 판본을 유지한다. 서빙 Runtime 자원을 넘는 배포·전환은 접수 단계에서 이유와 함께 거절하고, 실제 Config가 의도와 다르면 되돌린다. Dashboard의 배포 관측과 실제 추론 준비를 구별하고 관리 경로 장애가 정상 추론을 차단하지 않으며, 추론 응답의 판본·설정 지문·출력 계약이 일치할 때만 전달한다. 운영 화면에서 상태 확인·되돌리기·중단·삭제를 하고, 복제본 상태·로그는 로컬 운영 도구인 Ray Dashboard로 확인한다. `/api/ready`는 API 전체 장애와 Job 실행·온라인 서빙 기능의 장애를 구별한다.
-- 등록형 활동 이상 탐지 Pipeline은 Dagster OSS로 실행하고, 학습 권한 계정이 SOS 웹에서 단계별 결과를 조사한다. 입력 Dataset의 규모·준비 Job·실제 학습 행 수와 생성 모델의 Registry·제공·서빙 Runtime 준비 상태를 실행 상세에서 연결한다. Feast 입력은 Feature Source와 Entity 시점 Dataset을 구별하고, 명시적 배포 실패의 조회 주기를 늦추고 안정 상태도 주기적으로 확인하며 마지막 확인 시각을 표시한다. 각 단계 Job은 신뢰된 Workflow 출처를 기록한다.
 - Feast가 등록 Feature 정의·Feature Service·시점 조회의 정본이다. 등록·조회·폐기는 별개 Job이며 로컬 운영자는 읽기 전용 Feast UI로 Registry를 탐색한다.
 
 ### 플랫폼

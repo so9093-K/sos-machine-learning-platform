@@ -539,6 +539,10 @@ class ModelRevisionBaseOut(BaseModel):
     lifecycle_state: Literal["Active", "Deleting", "Deleted"] = "Active"
     id: str
     algorithm: str
+    source_kind: Literal["sos_training", "mlflow_registry"] = Field(
+        description="생산 방식. sos_training: SOS가 Dataset으로 학습. mlflow_registry: 외부 생산 Pipeline이 "
+        "만들어 MLflow에서 연결. 출처 상세(source·Dataset)는 소유자·관리자 응답에만 있다"
+    )
     features: list[str]
     training_score_summary: dict[str, object]
     runtime: dict[str, object]
@@ -556,10 +560,13 @@ class ModelRevisionOut(ModelRevisionBaseOut):
     """소유자·관리자의 전체 불변 실행 근거."""
 
     creation_evidence_visible: Literal[True] = Field(description="학습 출처·저장 근거·설정·규모의 열람 허용")
-    job_id: str
+    job_id: str = Field(description="판본을 게시한 SOS Job(학습 또는 MLflow 모델 버전 연결)")
     attempt_id: str
-    dataset_id: str
-    dataset_version: str
+    dataset_id: str | None = Field(description="SOS 학습 판본의 학습 Dataset. 연결한 판본은 null")
+    dataset_version: str | None
+    source: dict[str, object] | None = Field(
+        description="연결한 판본의 MLflow 출처(모델·버전·Run)와 생산 측 학습 근거. SOS 학습 판본은 null"
+    )
     location: str
     sha256: str
     params: dict[str, object]
@@ -879,6 +886,28 @@ class MLTrainingJobOut(JobOut):
     """기존 Job 응답의 enum 확장 없이 ML 실행 상태를 제공한다."""
 
     kind: Literal["ml_train"]
+
+
+class MLModelImportRequest(BaseModel):
+    """다시 학습하지 않고 연결할 MLflow 모델 버전. 버전은 번호로 고정한다(별칭·최신 버전 불가)."""
+
+    mlflow_model: str = Field(min_length=1, max_length=256, description="MLflow Registered Model 이름")
+    mlflow_version: str = Field(pattern=r"^[1-9][0-9]{0,9}$", description="연결할 모델 버전 번호")
+    registry_key: str = Field(
+        default="default", pattern=r"^[a-z][a-z0-9-]{0,39}$",
+        description="연결한 판본을 관리할 SOS 모델 그룹",
+    )
+
+    @model_validator(mode="after")
+    def reject_sos_group(self):
+        # SOS 모델 그룹의 버전은 이미 SOS 판본이다. 같은 모델을 두 판본으로 만들지 않는다.
+        if self.mlflow_model.startswith("sos-if-"):
+            raise ValueError("SOS 모델 그룹의 버전은 연결 대상이 아닙니다.")
+        return self
+
+
+class MLModelImportJobOut(JobOut):
+    kind: Literal["ml_import"]
 
 
 class ExplorationJobOut(JobOut):

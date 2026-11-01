@@ -41,7 +41,7 @@ def complete_job(
     def on_finish(db: Connection, row: Mapping, final_status: str, value: dict | None):
         if final_status == "Succeeded":
             kind = row["kind"]
-            if kind == "ml_train":
+            if kind in ("ml_train", "ml_import"):
                 publisher = publish_model
             elif kind == "ml_score":
                 publisher = publish_scoring

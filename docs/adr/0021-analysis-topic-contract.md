@@ -1,6 +1,6 @@
 # 0021 — 분석 주제와 등록 Pipeline의 분리
 
-- 상태: **Accepted**
+- 상태: **Accepted** · 결정 2의 등록 Pipeline은 [ADR 0024](0024-model-production-realignment.md)가 대체
 - 관련: [Contracts](../contracts.md#분석-주제), [Experience](../experience.md#분석-주제), [ADR 0016](0016-dagster-orchestration.md), [ADR 0019](0019-ray-serve-online-serving.md)
 - 범위: 분석 주제의 식별·분류·입력·출력 계약, 모델의 주제 적합성 판정, 알고리즘별 출력 계약의 위치
 

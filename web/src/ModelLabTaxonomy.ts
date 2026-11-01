@@ -1,7 +1,7 @@
 /** 분석 주제 카탈로그의 독립 분류 차원을 사용자에게 읽을 수 있게 표시한다. */
 import type { AnalysisTopic, ModelRevision } from "./types";
 
-/** 모델이 주제의 입력·출력 계약을 따른다. 알고리즘과 등록 Pipeline은 보지 않는다.
+/** 모델이 주제의 입력·출력 계약을 따른다. 알고리즘과 모델 출처는 보지 않는다.
  *  입력은 Feature 이름으로 대응하므로 순서는 비교하지 않는다. */
 export function isTopicCompatible(model: Pick<ModelRevision, "features" | "output_type">,
   topic: Pick<AnalysisTopic, "required_features" | "output_type">): boolean {

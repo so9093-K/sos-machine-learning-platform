@@ -57,7 +57,8 @@ def test_cleanup_attempts_all_files_and_staging_before_reporting(
     (tmp_path / "results").mkdir()
     output, pending, completed = job_artifacts.attempt_result_paths(store, "job", "attempt")
     model, scores = pending.with_suffix(".joblib"), pending.with_suffix(".scores.parquet")
-    files = (output, pending, completed, model, scores)
+    imported = pending.with_suffix(".skops")
+    files = (output, pending, completed, model, imported, scores)
     for path in files:
         path.write_bytes(b"staged")
     attempted = []

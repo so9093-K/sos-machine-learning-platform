@@ -1,7 +1,9 @@
-"""불변 Model Revision의 신뢰된 복원 계약.
+"""불변 Model Revision의 복원 계약.
 
-joblib은 코드 실행이 가능한 직렬화 형식이다. API·사용자 제공 파일에서는 호출하지 않고,
-SOS가 게시한 모델만 신뢰된 SOS 실행 환경(Worker 자식 프로세스·온라인 서빙 복제본)에서 복원한다.
+판본의 출처에 따라 복원 방식이 다르다. SOS Worker가 학습해 직접 쓴 joblib 묶음은 신뢰된 SOS 실행
+환경(Worker 자식 프로세스·온라인 서빙 복제본)에서만 복원한다. joblib은 코드 실행이 가능한 형식이기
+때문이다. MLflow에서 연결한 판본은 허용한 타입만 복원하는 skops 파일로만 받아, 모델 관리 권한이
+SOS 실행 환경에서의 코드 실행 권한이 되지 않게 한다.
 """
 
 import platform
@@ -17,12 +19,19 @@ from .errors import PlatformError
 from .ml_if_config import IsolationForestConfig
 from .ml_if_preprocessing import FittedIFMedianImputer
 from .ml_isolation_forest import TrainedIsolationForest
+from .model_artifacts import JOBLIB, SKOPS, revision_artifact_key
 from .object_store import ObjectStore
 
 IF_BUNDLE_SCHEMA = "if_model_with_preprocessing_v1"
+# MLflow에서 연결한 판본: skops IsolationForest와 판본 기록의 학습 중앙값 전처리.
+IF_SKOPS_SCHEMA = "if_estimator_skops_v1"
 # 판본에 기록되는 복원 계약 식별자. 이름과 달리 Worker만이 아니라 신뢰된 SOS 실행 환경 전체를 뜻한다.
 # 기존 판본의 복원 호환을 위해 값을 바꾸지 않는다.
 TRUSTED_LOADING = "trusted_worker_only"
+SAFE_LOADING = "skops_allowlist"
+# IsolationForest 복원에 필요한 skops 비기본 타입. 이 밖의 타입이 있으면 복원하지 않는다.
+SKOPS_TRUSTED_TYPES = ("sklearn.tree._tree.Tree",)
+PREPROCESSING_MODE = "train_median_v1"
 
 
 def _python_minor(version: object) -> tuple[str, str] | None:
@@ -45,13 +54,19 @@ def assert_model_runtime_compatible(revision: dict) -> None:
     runtime = revision["runtime"]
     if revision["algorithm"] != "isolation_forest":
         raise ValueError("Unsupported model algorithm")
-    if runtime.get("model_format") != "joblib" or runtime.get("loading") != TRUSTED_LOADING:
-        raise ValueError("Unsupported model serialization contract")
-    if runtime.get("artifact_schema") not in (None, IF_BUNDLE_SCHEMA):
-        raise ValueError("Unknown model artifact schema")
-    if runtime.get("artifact_schema") == IF_BUNDLE_SCHEMA:
-        if runtime.get("preprocessing_mode") != "train_median_v1":
+    contract = (runtime.get("model_format"), runtime.get("loading"))
+    if contract == (JOBLIB, TRUSTED_LOADING):
+        if runtime.get("artifact_schema") not in (None, IF_BUNDLE_SCHEMA):
+            raise ValueError("Unknown model artifact schema")
+        if (runtime.get("artifact_schema") == IF_BUNDLE_SCHEMA
+                and runtime.get("preprocessing_mode") != PREPROCESSING_MODE):
             raise ValueError("Unknown model preprocessing contract")
+    elif contract == (SKOPS, SAFE_LOADING):
+        if (runtime.get("artifact_schema") != IF_SKOPS_SCHEMA
+                or runtime.get("preprocessing_mode") != PREPROCESSING_MODE):
+            raise ValueError("Unknown model artifact schema")
+    else:
+        raise ValueError("Unsupported model serialization contract")
     if (
         _python_minor(runtime.get("python")) != tuple(platform.python_version_tuple()[:2])
         or runtime.get("numpy") != np.__version__
@@ -64,7 +79,23 @@ def assert_model_runtime_compatible(revision: dict) -> None:
         raise ValueError("Model feature signature is invalid")
 
 
-def load_trusted_isolation_forest(revision: dict, scratch: Path) -> TrainedIsolationForest:
+def load_skops_estimator(path: Path) -> IsolationForest:
+    """허용한 타입만 있는 skops 파일에서 IsolationForest를 복원한다.
+
+    Raises:
+        ValueError: 허용하지 않은 타입이 있거나 최상위 객체가 IsolationForest가 아니다.
+    """
+    import skops.io as sio
+
+    if set(sio.get_untrusted_types(file=path)) - set(SKOPS_TRUSTED_TYPES):
+        raise ValueError("Model artifact contains types outside the allowed list")
+    estimator = sio.load(path, trusted=list(SKOPS_TRUSTED_TYPES))
+    if type(estimator) is not IsolationForest:
+        raise ValueError("Model artifact has an unsupported estimator type")
+    return estimator
+
+
+def load_model_revision(revision: dict, scratch: Path) -> TrainedIsolationForest:
     """SOS 모델 게시 기록이 가리키는 아티팩트만 검증해 복원한다.
 
     Args:
@@ -81,7 +112,7 @@ def load_trusted_isolation_forest(revision: dict, scratch: Path) -> TrainedIsola
         raise ValueError("Deleted or deleting model artifact cannot be loaded")
     assert_model_runtime_compatible(revision)
     storage = ObjectStore()
-    expected_key = f"results/{revision['job_id']}/{revision['attempt_id']}.model.joblib"
+    expected_key = revision_artifact_key(revision)
     if revision["location"] != storage.location(expected_key):
         raise ValueError("Model artifact is outside its immutable Attempt location")
     digest = revision["sha256"]
@@ -91,13 +122,23 @@ def load_trusted_isolation_forest(revision: dict, scratch: Path) -> TrainedIsola
         int(digest, 16)
     except ValueError as exc:
         raise ValueError("Model artifact digest is invalid") from exc
+    runtime = revision["runtime"]
     with TemporaryDirectory(prefix="ml-model-", dir=scratch) as directory:
-        path = Path(directory) / "model.joblib"
+        path = Path(directory) / Path(expected_key).name
         storage.get(expected_key, path, expected_sha256=digest)
-        # 바이트 검증 뒤에도 joblib은 신뢰된 내부 결과에 대해서만 허용한다.
-        artifact = joblib.load(path)
+        if runtime["model_format"] == SKOPS:
+            estimator = load_skops_estimator(path)
+        else:
+            # 바이트 검증 뒤에도 joblib은 SOS Worker가 쓴 내부 결과에 대해서만 허용한다.
+            artifact = joblib.load(path)
     preprocessing = None
-    if runtime := revision["runtime"]:
+    if runtime["model_format"] == SKOPS:
+        # 전처리는 역직렬화하지 않고 판본 기록의 Feature 순서·학습 중앙값으로 다시 구성한다.
+        reference = runtime.get("feature_reference_medians")
+        if not isinstance(reference, list):
+            raise ValueError("Model preprocessing reference is unavailable")
+        preprocessing = FittedIFMedianImputer(tuple(revision["features"]), tuple(reference))
+    else:
         if runtime.get("artifact_schema") == IF_BUNDLE_SCHEMA:
             if (
                 type(artifact) is not dict

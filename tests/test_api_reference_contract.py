@@ -147,17 +147,13 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
     client = TestClient(create_app(tmp_path, identity=identity))
     analyst, automation = [{"Authorization": "Bearer " + token, "Idempotency-Key": "authoring-test-01"}
                         for token in actors]
-    train = {
-        "dataset_id": "source", "features": ["f1"],
-        "workflow_source": ["submission", "training", "run"],
-        "workflow_submission_id": "submission", "workflow_stage": "training",
-    }
+    train = {"dataset_id": "source", "features": ["f1"]}
     definition = {"feature_dataset_id": "source", "entity_column": "host",
                   "timestamp_column": "event_time", "features": ["f1"]}
     for path, body in [
         ("/api/ml/train/jobs", train),
         ("/api/ml/train/jobs/missing/fork", {}),
-        ("/api/pipelines/activity-anomaly-if/runs", {"dataset_id": "source"}),
+        ("/api/ml/models/imports", {"mlflow_model": "producer-model", "mlflow_version": "1"}),
         ("/api/features/services/jobs", definition),
         ("/api/features/services/missing/retirement/jobs", {}),
         ("/api/ml/registry/groups", {"registry_key": "test", "title": "test"}),
@@ -171,12 +167,6 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
     }, headers=analyst).status_code == 404
     assert client.post("/api/ml/train/jobs", json=train, headers=automation).status_code == 202
     assert submitted[-1]["kind"] == "ml_train"
-    assert "workflow_source" not in submitted[-1]
-    assert "workflow_submission_id" not in submitted[-1]
-    assert "workflow_stage" not in submitted[-1]
-    assert not {"workflow_source", "workflow_submission_id", "workflow_stage"}.intersection(
-        submitted[-1]["spec"]
-    )
     assert client.post("/api/features/services/jobs", json=definition, headers=automation).status_code == 202
     assert submitted[-1]["kind"] == "feature_register"
     capabilities = client.get("/api/v2/auth/me", headers=analyst).json()["capabilities"]
@@ -200,6 +190,7 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
                                 "Idempotency-Key": "offering-contract-01"} for token in actors]
     model = {"id": "model", "owner_actor": "supplier", "job_id": "training",
         "attempt_id": "attempt", "dataset_id": "training-data", "dataset_version": "v1",
+        "source_kind": "sos_training", "source": None,
         "algorithm": "isolation_forest", "location": "s3://test/model", "sha256": "abc",
         "features": ["a"], "params": {}, "training_score_summary": {},
         "runtime": {"feature_dtypes": ["Float64"]},
@@ -312,6 +303,7 @@ def test_model_training_evidence_is_private_in_detail_and_offering_list(tmp_path
     identity = IdentitySettings("token", {hashlib.sha256(key.encode()).hexdigest(): actor for key, actor in actors.items()})
     model = {"id": "model", "owner_actor": "supplier", "job_id": "training", "attempt_id": "attempt",
              "dataset_id": "private-data", "dataset_version": "v1", "algorithm": "isolation_forest",
+             "source_kind": "sos_training", "source": None,
              "location": "s3://models/artifact", "sha256": "abc", "features": ["a"], "params": {},
              "training_score_summary": {"score_count": 10000, "histogram": {"bin_counts": [6000, 4000]}},
              "runtime": {"feature_dtypes": ["Float64"], "feature_reference_medians": [5.0],
@@ -348,9 +340,11 @@ def test_model_training_evidence_is_private_in_detail_and_offering_list(tmp_path
                 assert result["runtime"] == original["runtime"]
                 assert result["training_score_summary"] == original["training_score_summary"]
             else:
-                assert set(result) == {"id", "algorithm", "features", "created_at", "registry_version", "lifecycle_state",
-                                       "creation_evidence_visible", "output_type", "training_score_summary", "runtime"}
-                assert not {"dataset_id", "dataset_version", "job_id", "attempt_id", "location", "sha256", "params"}.intersection(result)
+                assert set(result) == {"id", "algorithm", "source_kind", "features", "created_at", "registry_version",
+                                       "lifecycle_state", "creation_evidence_visible", "output_type",
+                                       "training_score_summary", "runtime"}
+                assert not {"dataset_id", "dataset_version", "job_id", "attempt_id", "location", "sha256", "params",
+                            "source"}.intersection(result)
                 assert result["training_score_summary"] == {}
                 assert set(result["runtime"]) == {"feature_dtypes", "feature_reference_medians", "feature_training_profile"}
                 assert set(result["runtime"]["feature_training_profile"]) == {"method", "input_space", "features"}

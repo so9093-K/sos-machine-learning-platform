@@ -17,23 +17,9 @@ try {
 
   assert.equal(routeAt("/training", "").tab, "overview");
   assert.equal(routeAt("/research", "").tab, "overview");
-  assert.equal(routeAt("/pipelines", "").tab, "pipelines");
-  const pipelinePath = contextPath("pipelines", { pipelineRunId: "run/one", datasetId: "data one" });
-  assert.equal(pipelinePath, "/pipelines/runs/run%2Fone?dataset=data+one");
-  const pipelineRoute = routeAt("/pipelines/runs/run%2Fone", "?dataset=data+one");
-  assert.deepEqual(pipelineRoute.context, { pipelineRunId: "run/one", datasetId: "data one" });
-  const pipelineScorePath = resourcePath("scoring", "test-score", { pipelineRunId: "run/one" });
-  assert.equal(pipelineScorePath, "/scoring/results/test-score?pipelineRun=run%2Fone");
-  const pipelineScore = routeAt("/scoring/results/test-score", "?pipelineRun=run%2Fone");
-  const pipelinePolicy = nextNavigationContext(pipelineScore, "policies");
-  assert.deepEqual(pipelinePolicy, { scoringId: "test-score", pipelineRunId: "run/one" });
-  assert.equal(contextPath("policies", pipelinePolicy), "/policies?scoring=test-score&pipelineRun=run%2Fone");
-  assert.deepEqual(nextNavigationContext(pipelineScore, "pipelines"), { pipelineRunId: "run/one" });
-  const pipelineData = routeAt("/data", "?dataset=data-one&pipelineRun=run-one");
-  assert.equal(contextPath("preview", nextNavigationContext(pipelineData, "preview")),
-    "/data/query?dataset=data-one&pipelineRun=run-one");
-  const servingContext = contextPath("serving", { pipelineRunId: "run-source" });
-  assert.equal(routeAt("/operations/serving", servingContext.slice(servingContext.indexOf("?"))).context.pipelineRunId, "run-source");
+  // 제거한 SOS Pipeline 화면의 이전 주소는 홈으로 돌아간다.
+  assert.equal(routeAt("/pipelines", "").tab, "overview");
+  assert.equal(routeAt("/pipelines/runs/run-one", "").tab, "overview");
   const scoringId = "score-v1";
   const first = routeAt("/evaluations", "?scoring=" + scoringId);
   assert.equal(first.tab, "evaluations");
