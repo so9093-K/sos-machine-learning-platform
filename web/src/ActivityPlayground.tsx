@@ -6,6 +6,7 @@ import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { ModelApiUsage, servesModel } from "./ModelApiUsage";
 import type { PlaygroundRun } from "./ModelLabPlayground";
 import { canApplyModel, useModelOffering } from "./ModelOffering";
+import { modelCreatedLabel } from "./ModelCreationEvidence";
 import { isTopicCompatible } from "./ModelLabTaxonomy";
 import { taskGuides, topicGuides, topicTree, TaxonomyTrail, useTopicCatalog,
   type TaxonomyLinks } from "./ModelLabGuide";
@@ -240,7 +241,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
           <p>{group.names.map(activityFeatureLabel).join(" · ")}</p>
         </div>)}
       {chosen && <p className="hint">{algorithmLabel(chosen.model.algorithm)} · Registry v{chosen.model.registry_version ?? "?"}
-        · 학습 {formatRecordedAt(chosen.model.created_at)} · 판본 {chosen.model.id}</p>}
+        · {modelCreatedLabel(chosen.model)} {formatRecordedAt(chosen.model.created_at)} · 판본 {chosen.model.id}</p>}
     </details>}
   </div>;
 }

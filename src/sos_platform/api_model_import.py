@@ -9,6 +9,7 @@ from .store import Store
 
 MANAGE_MODEL_DEP = Depends(require("model.manage"))
 READ_JOB_DEP = Depends(require("job.read"))
+CANCEL_JOB_DEP = Depends(require("job.cancel"))
 
 
 def model_import_router(store: Store, access: ResourceAccess) -> APIRouter:
@@ -62,6 +63,23 @@ def model_import_router(store: Store, access: ResourceAccess) -> APIRouter:
         response_model=MLModelImportJobOut,
     )
     def get_model_import(job_id: str, actor: Actor = READ_JOB_DEP):
+        return existing_model_import(job_id, actor)
+
+    @router.post(
+        "/api/ml/models/imports/{job_id}/cancel",
+        tags=["Models"],
+        summary="MLflow 모델 버전 연결 취소 요청",
+        description="취소 요청이며 실제 중단은 조회로 확인합니다. 이미 게시된 Model Revision은 되돌리지 않습니다.",
+        response_model=MLModelImportJobOut,
+    )
+    def cancel_model_import(job_id: str, actor: Actor = CANCEL_JOB_DEP):
+        existing_model_import(job_id, actor)
+        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
+        if item is None:
+            raise HTTPException(status_code=404, detail="모델 연결 작업을 찾을 수 없습니다.")
+        return item
+
+    def existing_model_import(job_id: str, actor: Actor) -> dict:
         item = access.job(job_id, actor)
         if item["kind"] != "ml_import":
             raise HTTPException(status_code=404, detail="모델 연결 작업을 찾을 수 없습니다.")

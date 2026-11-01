@@ -300,9 +300,14 @@ def connect_to_sos(context: OpExecutionContext, registered: dict) -> None:
         "mlflow_version": registered["version"],
         "registry_key": registered["registry_key"],
     }, key=f"dagster-{registered['run_id']}")
-    while item["status"] in ("Queued", "Running"):
-        time.sleep(2)
-        item = _sos("GET", f"/api/ml/models/imports/{item['id']}", token)
+    try:
+        while item["status"] in ("Queued", "Running"):
+            time.sleep(2)
+            item = _sos("GET", f"/api/ml/models/imports/{item['id']}", token)
+    finally:
+        # Dagster Run을 종료하면 대기 중인 SOS 연결도 취소를 요청한다. 실제 중단은 SOS가 확정한다.
+        if item["status"] in ("Queued", "Running"):
+            _sos("POST", f"/api/ml/models/imports/{item['id']}/cancel", token)
     if item["status"] != "Succeeded":
         raise Failure(f"SOS 모델 연결 {item['status']}: {item.get('error_code')} {item.get('error')}")
     context.log_event(AssetMaterialization(

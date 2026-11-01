@@ -49,7 +49,7 @@ Feast는 등록 Entity·Feature View·Feature Service와 Historical Retrieval의
 - **단계 재사용:** 이미 계산된 모델 점수를 다른 Threshold Policy에 적용하거나 설명을 별도로 생성할 때 불필요하게 다시 학습하지 않는다. 실제 재사용 가능 범위는 입력·모델·방법·Runtime 계약으로 판단한다.
 - **MLflow 관리 정본:** Experiment·Run·Registered Model·Model Version의 관리 정본은 MLflow다. SOS의 Model Revision은 게시 Job/Attempt·출처·아티팩트 SHA·Feature·Runtime의 불변 실행 참조이며 MLflow 고정 버전을 연결한다. 등록되지 않은 신규 모델은 Scoring에 사용할 수 없다. Job/Attempt와 Evaluation의 결과 의미는 MLflow가 대체하지 않는다.
 
-모델의 원본 학습 규모·내부 입력 선택·결측 처리 정책과 학습 점수 집계는 소유자·관리자만 조회한다. 제공 모델의 상세·목록 응답에서도 같은 제한을 적용한다. 소비자에게는 Feature·자료형·입력 기준값·출력 계약과 입력 비교용 분위값을 제공하되, 행 수·표본 수·학습 Dataset·Job·Attempt 식별자와 판본·아티팩트 위치·해시·학습 매개변수·내부 Feature 출처·학습 점수 Histogram 건수는 포함하지 않는다. 권한별 응답 투영은 불변 모델 원본이나 Worker·추론의 실행 계약을 변경하지 않는다.
+모델의 원본 학습 규모·내부 입력 선택·결측 처리 정책과 학습 점수 집계는 소유자·관리자만 조회한다. 제공 모델의 상세·목록 응답에서도 같은 제한을 적용한다. 소비자에게는 생산 방식(`source_kind`)·Feature·자료형·입력 기준값·출력 계약과 입력 비교용 분위값을 제공하되, MLflow 출처(`source`)와 행 수·표본 수·학습 Dataset·Job·Attempt 식별자와 판본·아티팩트 위치·해시·학습 매개변수·내부 Feature 출처·학습 점수 Histogram 건수는 포함하지 않는다. 권한별 응답 투영은 불변 모델 원본이나 Worker·추론의 실행 계약을 변경하지 않는다.
 
 모델 조회 클라이언트는 OpenAPI의 공개·전체 응답을 `creation_evidence_visible`로 구분한다. 공개 응답에서 내부 필드는 `null`이 아니라 제외되므로, 모든 응답을 전체 모델 판본으로 파싱하거나 비공개 필드를 필수로 요구하면 안 된다. 기존 클라이언트의 전환 범위와 배포 전 대응은 [Changelog의 API 호환성 변경](../CHANGELOG.md#플랫폼)을 따른다.
 

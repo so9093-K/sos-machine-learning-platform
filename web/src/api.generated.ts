@@ -812,6 +812,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/models/imports/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * MLflow 모델 버전 연결 취소 요청
+         * @description 취소 요청이며 실제 중단은 조회로 확인합니다. 이미 게시된 Model Revision은 되돌리지 않습니다.
+         */
+        post: operations["cancel_model_import_api_ml_models_imports__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/models/{revision_id}": {
         parameters: {
             query?: never;
@@ -3463,7 +3483,7 @@ export interface components {
             } | null;
             /**
              * Source Kind
-             * @description sos_training: SOS가 Dataset으로 학습. mlflow_registry: 외부 Pipeline이 생산해 MLflow에서 연결
+             * @description 생산 방식. sos_training: SOS가 Dataset으로 학습. mlflow_registry: 외부 생산 Pipeline이 만들어 MLflow에서 연결. 출처 상세(source·Dataset)는 소유자·관리자 응답에만 있다
              * @enum {string}
              */
             source_kind: "sos_training" | "mlflow_registry";
@@ -3601,6 +3621,12 @@ export interface components {
             runtime: {
                 [key: string]: unknown;
             };
+            /**
+             * Source Kind
+             * @description 생산 방식. sos_training: SOS가 Dataset으로 학습. mlflow_registry: 외부 생산 Pipeline이 만들어 MLflow에서 연결. 출처 상세(source·Dataset)는 소유자·관리자 응답에만 있다
+             * @enum {string}
+             */
+            source_kind: "sos_training" | "mlflow_registry";
             /**
              * Training Score Summary
              * @description 공급자 전용 집계이므로 빈 객체
@@ -5631,6 +5657,37 @@ export interface operations {
         };
     };
     get_model_import_api_ml_models_imports__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLModelImportJobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    cancel_model_import_api_ml_models_imports__job_id__cancel_post: {
         parameters: {
             query?: never;
             header?: never;

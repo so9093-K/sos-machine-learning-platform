@@ -340,9 +340,11 @@ def test_model_training_evidence_is_private_in_detail_and_offering_list(tmp_path
                 assert result["runtime"] == original["runtime"]
                 assert result["training_score_summary"] == original["training_score_summary"]
             else:
-                assert set(result) == {"id", "algorithm", "features", "created_at", "registry_version", "lifecycle_state",
-                                       "creation_evidence_visible", "output_type", "training_score_summary", "runtime"}
-                assert not {"dataset_id", "dataset_version", "job_id", "attempt_id", "location", "sha256", "params"}.intersection(result)
+                assert set(result) == {"id", "algorithm", "source_kind", "features", "created_at", "registry_version",
+                                       "lifecycle_state", "creation_evidence_visible", "output_type",
+                                       "training_score_summary", "runtime"}
+                assert not {"dataset_id", "dataset_version", "job_id", "attempt_id", "location", "sha256", "params",
+                            "source"}.intersection(result)
                 assert result["training_score_summary"] == {}
                 assert set(result["runtime"]) == {"feature_dtypes", "feature_reference_medians", "feature_training_profile"}
                 assert set(result["runtime"]["feature_training_profile"]) == {"method", "input_space", "features"}

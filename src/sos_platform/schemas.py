@@ -539,6 +539,10 @@ class ModelRevisionBaseOut(BaseModel):
     lifecycle_state: Literal["Active", "Deleting", "Deleted"] = "Active"
     id: str
     algorithm: str
+    source_kind: Literal["sos_training", "mlflow_registry"] = Field(
+        description="생산 방식. sos_training: SOS가 Dataset으로 학습. mlflow_registry: 외부 생산 Pipeline이 "
+        "만들어 MLflow에서 연결. 출처 상세(source·Dataset)는 소유자·관리자 응답에만 있다"
+    )
     features: list[str]
     training_score_summary: dict[str, object]
     runtime: dict[str, object]
@@ -558,9 +562,6 @@ class ModelRevisionOut(ModelRevisionBaseOut):
     creation_evidence_visible: Literal[True] = Field(description="학습 출처·저장 근거·설정·규모의 열람 허용")
     job_id: str = Field(description="판본을 게시한 SOS Job(학습 또는 MLflow 모델 버전 연결)")
     attempt_id: str
-    source_kind: Literal["sos_training", "mlflow_registry"] = Field(
-        description="sos_training: SOS가 Dataset으로 학습. mlflow_registry: 외부 Pipeline이 생산해 MLflow에서 연결"
-    )
     dataset_id: str | None = Field(description="SOS 학습 판본의 학습 Dataset. 연결한 판본은 null")
     dataset_version: str | None
     source: dict[str, object] | None = Field(

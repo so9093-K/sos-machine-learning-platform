@@ -16,8 +16,13 @@ export type ModelImportSource = {
 
 /** 외부 Pipeline이 생산해 MLflow에서 연결한 판본이면 그 출처, SOS가 학습한 판본이면 null이다. */
 export function modelImportSource(model: ModelRevision): ModelImportSource | null {
-  return "source_kind" in model && model.source_kind === "mlflow_registry" && model.source
+  return "source" in model && model.source_kind === "mlflow_registry" && model.source
     ? model.source as ModelImportSource : null;
+}
+
+/** 판본이 만들어진 방식의 짧은 표기. 생산 방식은 소비자 응답에도 공개된다. */
+export function modelCreatedLabel(model: Pick<ModelRevision, "source_kind">): string {
+  return model.source_kind === "mlflow_registry" ? "연결" : "학습";
 }
 
 function rate(value: unknown): string {
@@ -64,14 +69,22 @@ export function ModelTrainingInput({ model }: { model: ModelRevision }) {
   </div>;
 }
 
-/** 모델 판본의 고정된 생성 근거. 새 학습·설명 계산을 제출하지 않는다. */
-export function ModelCreationEvidence({ model, datasetName }: { model: ModelRevision; datasetName: string }) {
+/** 모델 판본의 고정된 생성 근거. 새 학습·설명 계산을 제출하지 않는다.
+ *  출처 상세를 볼 수 없는 계정에는 공개된 생산 방식만 보이고 학습 데이터의 존재를 추정해 표시하지 않는다. */
+export function ModelCreationEvidence({ model, datasetName }: {
+  model: ModelRevision;
+  /** 열람 가능한 SOS 학습 Dataset 이름. 출처를 볼 수 없거나 연결한 판본이면 null. */
+  datasetName: string | null;
+}) {
   const imported = modelImportSource(model);
+  const origin = imported
+    ? `MLflow ${imported.mlflow_model} v${imported.mlflow_version}에서 연결 · 외부 Pipeline 생산`
+    : model.source_kind === "mlflow_registry"
+      ? "외부 생산 Pipeline에서 연결한 모델 · 생산 기록은 공급자·관리자 전용"
+      : datasetName ?? "SOS에서 학습한 모델 · 학습 Dataset은 공급자·관리자 전용";
   return <section className="model-creation-evidence" aria-label="모델 생성 근거">
     <h3>모델 생성 과정</h3>
-    <p>{imported
-      ? `MLflow ${imported.mlflow_model} v${imported.mlflow_version}에서 연결 · 외부 Pipeline 생산`
-      : datasetName} · {algorithmLabel(model.algorithm)}</p>
+    <p>{origin} · {algorithmLabel(model.algorithm)}</p>
     <ModelTrainingInput model={model} />
     {model.creation_evidence_visible !== false && <p>학습 점수 계산 {recordedRows(model.training_score_summary.score_count)}</p>}
     <p>{model.registry_version ? `Registry v${model.registry_version}` : "Registry 등록 미확인"}</p>

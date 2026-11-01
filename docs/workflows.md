@@ -2,7 +2,7 @@
 
 SOS는 데이터 이해·가공·학습·평가·추론·관측을 필요한 만큼 독립 실행하거나 조합한다. 모두에게 하나의 선형 파이프라인을 요구하지 않는다.
 
-모델 생산 Pipeline(Dagster)의 Run은 SOS Job을 만들지 않는다. 학습·평가·MLflow 등록이 끝난 뒤 생산 Pipeline이 고정 모델 버전의 연결을 요청하면, SOS는 연결 Job(`ml_import`) 하나로 패키지를 검증·게시한다. 생산 Run 성공, MLflow 등록, SOS 연결 성공, SOS Registry 등록은 각각 다른 상태다. 연결 요청도 Idempotency-Key로 중복 제출을 막는다.
+모델 생산 Pipeline(Dagster)의 Run은 SOS Job을 만들지 않는다. 학습·평가·MLflow 등록이 끝난 뒤 생산 Pipeline이 고정 모델 버전의 연결을 요청하면, SOS는 연결 Job(`ml_import`) 하나로 패키지를 검증·게시한다. 생산 Run 성공, MLflow 등록, SOS 연결 성공, SOS Registry 등록은 각각 다른 상태다. 연결 Job은 다른 ML Job과 같은 소유권·멱등성·취소 계약을 따르며, 생산 Pipeline의 Run을 종료하면 대기 중인 연결에도 취소를 요청한다.
 
 ## 실행 단위와 Job 상태
 

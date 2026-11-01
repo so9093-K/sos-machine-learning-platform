@@ -25,7 +25,7 @@
 
 ### 모델 공급과 운영
 
-- 모델 생산(학습·평가·MLflow 등록)은 Dagster의 생산 Pipeline이 SOS DB 접근 없이 직접 실행하고, SOS는 MLflow 고정 모델 버전을 다시 학습하지 않고 Model Revision으로 연결한다(`POST /api/ml/models/imports`). 연결은 모델 패키지(`sos_model.json`·`estimator.skops`)의 허용 타입 복원과 검증 점수 재현을 확인한 뒤 게시하며, Model Revision은 출처(`source_kind`·`source`)를 가진다. SOS Pipeline 제출 API·화면과 Workflow 제출 기록은 제거했다.
+- 모델 생산(학습·평가·MLflow 등록)은 Dagster의 생산 Pipeline이 SOS DB 접근 없이 직접 실행하고, SOS는 MLflow 고정 모델 버전을 다시 학습하지 않고 Model Revision으로 연결한다(`/api/ml/models/imports` 제출·조회·취소). 연결은 모델 패키지(`sos_model.json`·`estimator.skops`)의 허용 타입 복원과 검증 점수 재현을 확인한 뒤 게시하며, Model Revision은 출처(`source_kind`·`source`)를 가진다. SOS Pipeline 제출 API·화면과 Workflow 제출 기록은 제거했다.
 - 학습·모델 관리·Feature 정의 변경은 `kind: service` 전용 `automation` 역할과 관리자만 할 수 있다. `scripts/supply_model.py`는 MLflow 고정 버전 연결 또는 실제 Dataset 학습으로 Registry 등록·제공·선택적 온라인 서빙을 연결하고 상태 파일로 중단 후 재개한다. 모델 적용은 Dataset 선택·등록을 기본으로 하고 값 직접 입력을 선택적으로 제공한다.
 - 모델 제공·설명 수정·중단을 명시적으로 관리하며, 제공 중단은 새 적용만 막고 기존 결과를 유지한다. 제공 중인 판본은 중단 후 삭제할 수 있다.
 - Isolation Forest 학습은 전체·명시적 표본 입력, UTC 시간 분할, Train 중앙값 결측 정책을 지원하고 불변 Model Revision을 남긴다.

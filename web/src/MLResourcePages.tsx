@@ -19,7 +19,7 @@ import {
   scoreDirectionLabel,
 } from "./display-format";
 import { ModelServingPanel } from "./ModelServingPanel";
-import { ModelCreationEvidence, modelImportSource } from "./ModelCreationEvidence";
+import { ModelCreationEvidence, modelCreatedLabel, modelImportSource } from "./ModelCreationEvidence";
 import { ModelEvaluationEvidence } from "./ModelEvaluationEvidence";
 import { canApplyModel, ModelOfferingPanel, useModelOffering } from "./ModelOffering";
 import { EvaluationSummary } from "./EvaluationSummary";
@@ -171,7 +171,7 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyM
           {modelOffering.offering?.description
             ? <p className="model-offering-description model-offering-purpose">{modelOffering.offering.description}</p>
             : modelOffering.offering && <p className="muted">아직 작성된 제공 설명이 없습니다.</p>}
-          <p className="model-card-meta">{algorithmLabel(m.algorithm)} · {imported ? "연결" : "학습"} {formatRecordedAt(m.created_at)}</p>
+          <p className="model-card-meta">{algorithmLabel(m.algorithm)} · {modelCreatedLabel(m)} {formatRecordedAt(m.created_at)}</p>
           {m.lifecycle_state !== "Active" && <p>{m.lifecycle_state === "Deleting"
             ? "모델 파일을 삭제 중입니다. 현재 새 점수화에 사용할 수 없습니다."
             : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>}
@@ -200,7 +200,7 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyM
             : <Field label="학습 Dataset">{datasetName}</Field>}
         </dl>}
         <ModelCreationEvidence key={m.id} model={m}
-          datasetName={canReadCreation ? datasetName : "제공 모델의 학습 Dataset"} />
+          datasetName={creation && !imported ? datasetName : null} />
         <ModelOfferingPanel model={m} offering={modelOffering.offering} error={modelOffering.error}
           loading={modelOffering.loading} canManage={canManageModel && (modelOwned || isAdministrator)}
           onRetry={modelOffering.reload} onSaved={state => { modelOffering.accept(state); modelOffering.reload(); }}
@@ -394,7 +394,7 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
       {offeredCursor && <button type="button" className="secondary" onClick={() => void loadMoreOffered()}>
         모델 더 보기</button>}
       {current && <div className="model-choice-summary">
-        <p>{algorithmLabel(current.algorithm)} · v{current.registry_version ?? "?"} · 학습 {formatRecordedAt(current.created_at)}
+        <p>{algorithmLabel(current.algorithm)} · v{current.registry_version ?? "?"} · {modelCreatedLabel(current)} {formatRecordedAt(current.created_at)}
           · 입력 Feature {current.features.length}개
           {" "}<button type="button" className="ghost" onClick={() => onOpenResource("model", current.id)}>모델 상세 →</button></p>
         {description && <p className="model-offering-description">{description}</p>}
