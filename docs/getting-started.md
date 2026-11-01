@@ -38,6 +38,8 @@ make doctor   # 설정·준비 상태 진단
 
 Web UI의 인증 화면에 보관한 Bearer Token을 입력한다. 토큰은 브라우저 메모리에만 보관되므로 다시 접속하면 재인증이 필요하다. 포트와 실행 구성은 [Compose](../compose.yaml)와 [Makefile](../Makefile)을 따른다.
 
+저장소 루트 `.env`의 포트·자원 설정은 Compose가 해당 서비스에 전달한다. Web을 호스트에서 실행할 때도 루트 `.env`를 읽는다. Python API·CLI를 호스트에서 직접 실행하면 `.env`를 자동으로 읽지 않으므로 필요한 연결 설정을 실행 환경에 전달한다. 설정 변경은 해당 컨테이너를 재생성한 뒤 적용된다.
+
 ## 첫 Dataset 탐색
 
 1. 홈의 **데이터 탐색 시작** 또는 메뉴의 **데이터 → 데이터 탐색**을 연다. **데이터 추가·연결 → 파일 가져오기**로 CSV·Parquet·TSV/TXT를 등록한다. CSV는 UTF-8·쉼표 구분·첫 행 헤더 형식이어야 하며, Excel에서는 'CSV UTF-8(쉼표로 분리)'로 저장한다. TSV/TXT는 UTF-8 탭 구분 데이터이며 등록 시 헤더 유무를 지정한다.
@@ -82,7 +84,7 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 ### Dagster에서 SOS 연결까지 실행
 
-Dagster의 `activity_anomaly_production` Job이 학습 데이터를 시간순 Train·Calibration·Test로 나누어 학습·평가하고, 모델 패키지(`sos_model.json`·`estimator.skops`)를 MLflow 모델 버전으로 등록한 뒤 SOS에 연결을 요청한다. 학습 파일은 `dagster/inputs`(또는 `SOS_PIPELINE_INPUT_DIR`)에 두고 Run 설정의 `data_path`에 `/data/inputs/<파일>`로 지정한다. 파일에는 UTC 오프셋이 있는 `ts`와 활동 Feature가 필요하다. SOS 연결에는 Compose 실행 시 `SOS_SUPPLY_TOKEN`(automation 토큰)을 전달한다.
+Dagster의 `activity_anomaly_production` Job이 학습 데이터를 시간순 Train·Calibration·Test로 나누어 학습·평가하고, 모델 패키지(`sos_model.json`·`estimator.skops`)를 MLflow 모델 버전으로 등록한 뒤 SOS에 연결을 요청한다. 학습 파일은 `dagster/inputs`(또는 `SOS_PIPELINE_INPUT_DIR`)에 두고 Run 설정의 `data_path`에 `/data/inputs/<파일>`로 지정한다. 파일에는 UTC 오프셋이 있는 `ts`와 활동 Feature가 필요하다. SOS 연결에는 공급 계정 토큰의 해시를 `SOS_AUTH_TOKEN_HASHES`에 `kind: service`, `roles: [automation]`으로 등록하고, 원문은 `SOS_SUPPLY_TOKEN`으로 실행 환경에 주입한 뒤 Compose를 기동한다. 공급 토큰은 Dagster Code Location에만 전달되며 API·Web 컨테이너에는 전달되지 않는다.
 
 ```yaml
 ops:

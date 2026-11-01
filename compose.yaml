@@ -12,6 +12,19 @@ x-sos-storage-env: &sos-storage-env
   SOS_S3_BUCKET: ${SOS_S3_BUCKET:-sos-data}
   SOS_S3_REGION: ${SOS_S3_REGION:-us-east-1}
 
+# API와 Worker가 같은 논리 수용량·탐색 정책을 사용한다. .env는 컨테이너로 자동 전달되지 않는다.
+x-sos-execution-env: &sos-execution-env
+  SOS_EXECUTION_POOL_MIB: ${SOS_EXECUTION_POOL_MIB:-3072}
+  SOS_EXECUTION_POOL_WAIT_SECONDS: ${SOS_EXECUTION_POOL_WAIT_SECONDS:-5}
+  SOS_DATASET_CACHE_MIB: ${SOS_DATASET_CACHE_MIB:-2048}
+  SOS_DISCOVERY_MEMORY_MIB: ${SOS_DISCOVERY_MEMORY_MIB:-1024}
+  SOS_DISCOVERY_THREADS: ${SOS_DISCOVERY_THREADS:-2}
+  SOS_DISCOVERY_TEMP_MIB: ${SOS_DISCOVERY_TEMP_MIB:-2048}
+  SOS_DISCOVERY_MAX_GROUPS: ${SOS_DISCOVERY_MAX_GROUPS:-100}
+  SOS_DISCOVERY_MAX_SAMPLE: ${SOS_DISCOVERY_MAX_SAMPLE:-10000}
+  SOS_DISCOVERY_MAX_ACTIVE: ${SOS_DISCOVERY_MAX_ACTIVE:-1}
+  SOS_DISCOVERY_WAIT_SECONDS: ${SOS_DISCOVERY_WAIT_SECONDS:-15}
+
 x-sos-python-build: &sos-python-build
   context: .
   dockerfile: Dockerfile
@@ -44,12 +57,18 @@ services:
     image: ${SOS_PYTHON_IMAGE:-sos-platform-python:local}
     build: *sos-python-build
     environment:
-      <<: *sos-storage-env
+      <<: [*sos-storage-env, *sos-execution-env]
       SOS_AUTH_MODE: token
       SOS_AUTH_TOKEN_HASHES: ${SOS_AUTH_TOKEN_HASHES:-}
       SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-http://mlflow:5000}
       SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
       SOS_MLFLOW_TOKEN: ${SOS_MLFLOW_TOKEN:-}
+      SOS_MAX_UPLOAD_MIB: ${SOS_MAX_UPLOAD_MIB:-256}
+      SOS_FEATURE_PREVIEW_MEMORY_MIB: ${SOS_FEATURE_PREVIEW_MEMORY_MIB:-1024}
+      SOS_OBJECT_GRACE_DAYS: ${SOS_OBJECT_GRACE_DAYS:-7}
+      SOS_OBJECT_OBSERVATION_HOURS: ${SOS_OBJECT_OBSERVATION_HOURS:-24}
+      SOS_OBJECT_MIN_OBSERVATIONS: ${SOS_OBJECT_MIN_OBSERVATIONS:-2}
+      SOS_OBJECT_PAGE_SIZE: ${SOS_OBJECT_PAGE_SIZE:-100}
       # 온라인 추론 요청은 SOS가 인증·모델 접근을 판정한 뒤 내부 Serve 경로로 중계한다.
       SOS_SERVING_DASHBOARD_URL: http://serving:8265
       SOS_SERVING_INFERENCE_URL: http://serving:8000
@@ -87,13 +106,16 @@ services:
       args:
         SOS_UV_GROUPS: "ml feast"
     environment:
-      <<: *sos-storage-env
-      # MLflow는 설정되지 않으면 연결하지 않는다. 자격 증명은 Worker에만 전달한다.
+      <<: [*sos-storage-env, *sos-execution-env]
+      # 모델 등록·연결에 사용하는 MLflow 자격은 API·Worker·생산 Runtime에만 전달한다.
       SOS_MLFLOW_TRACKING_URI: ${SOS_MLFLOW_TRACKING_URI:-http://mlflow:5000}
       SOS_MLFLOW_TOKEN: ${SOS_MLFLOW_TOKEN:-}
       SOS_MLFLOW_ALLOW_INSECURE_HTTP: ${SOS_MLFLOW_ALLOW_INSECURE_HTTP:-true}
       SOS_FEAST_REGISTRY_URL: postgresql+psycopg2://feast:${SOS_FEAST_DB_PASSWORD:-feast-dev-only}@feast-postgres:5432/sos_feast
       SOS_FEAST_MAX_ENTITY_ROWS: ${SOS_FEAST_MAX_ENTITY_ROWS:-100000}
+      SOS_WORKER_MAX_SECONDS: ${SOS_WORKER_MAX_SECONDS:-1800}
+      SOS_WORKER_MAX_RSS_MIB: ${SOS_WORKER_MAX_RSS_MIB:-2048}
+      SOS_WORKER_MAX_STAGE_MIB: ${SOS_WORKER_MAX_STAGE_MIB:-2048}
     command: ["python", "-m", "sos_platform.worker_service"]
     volumes:
       - worker_state:/var/lib/sos
@@ -354,7 +376,7 @@ services:
       context: .
       dockerfile: dagster/Dockerfile
     # 모델 생산 Pipeline의 실행 환경. SOS DB·저장소 자격 증명은 받지 않는다. 생산한 모델은 MLflow에
-    # 등록하고, SOS_SUPPLY_TOKEN(automation 서비스 계정)이 있으면 SOS API로 고정 버전의 연결을 요청한다.
+    # 등록한다. connect_to_sos=true인 Run은 SOS_SUPPLY_TOKEN(automation 서비스 계정)이 필요하다.
     environment:
       SOS_DAGSTER_DB_PASSWORD: ${SOS_DAGSTER_DB_PASSWORD:-dagster-dev-only}
       PYTHONPATH: /app/dagster
