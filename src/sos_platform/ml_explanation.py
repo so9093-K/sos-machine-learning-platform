@@ -5,6 +5,7 @@
 
 import math
 from importlib.metadata import version
+from pathlib import Path
 
 import numpy as np
 
@@ -14,7 +15,7 @@ from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
 from .ml_runtime import load_model_revision
 
 
-def explain_scored_row(store, spec: dict) -> dict:
+def explain_scored_row(store, spec: dict, stage_owner: Path) -> dict:
     """보존된 점수 결과의 한 행을 명시적으로 선택한 방법으로 설명한다.
 
     Args:
@@ -45,7 +46,7 @@ def explain_scored_row(store, spec: dict) -> dict:
     if any(not isinstance(x, (int, float)) or not math.isfinite(x) for x in reference):
         raise ValueError("Model reference values are invalid")
     selected = spec["row_index"]
-    item = _verified_scoring_row(store, scoring, selected)
+    item = _verified_scoring_row(store, scoring, selected, stage_owner)
     struct = item["features"]
     original = np.asarray([struct[name] for name in names], dtype=np.float64)
     model_runtime = load_model_revision(model, store.home / "cache")

@@ -1,4 +1,7 @@
-"""Scoring Attempt의 스테이징 소유권·용량·회수. 추론 Runtime을 참조하지 않는다."""
+"""Scoring 결과를 만들거나 읽는 Attempt(Scoring·정책·평가·설명)의 스테이징 소유권·용량·회수.
+
+Stage는 소유 경로(Scoring은 결과 파일, 그 밖은 Attempt 경로) 이름으로 식별한다. 추론 Runtime을 참조하지 않는다.
+"""
 
 import shutil
 from pathlib import Path

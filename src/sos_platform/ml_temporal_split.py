@@ -84,7 +84,7 @@ def select_temporal_partition(
         (event < start_calibration).sum().alias("train_rows"),
         ((event >= start_calibration) & (event < start_test)).sum().alias("calibration_rows"),
         (event >= start_test).sum().alias("test_rows"),
-    ).collect().row(0, named=True)
+    ).collect(engine="streaming").row(0, named=True)
     if summary["invalid_timestamp_rows"]:
         raise ValueError("Temporal split contains missing, unzoned or malformed timestamps")
     if min(summary["train_rows"], summary["calibration_rows"], summary["test_rows"]) < 1:

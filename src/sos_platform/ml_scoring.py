@@ -12,17 +12,17 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import polars as pl
 import pyarrow.parquet as pq
-from sklearn.metrics import average_precision_score, roc_auc_score
 
 from .datasets import pinned_scan_dataset
-from .ml_anomaly import histogram_edges
+from .duckdb_spill import SpillBudget
 from .ml_input import INTEGER_DTYPES, model_input_issues
 from .ml_observation_identity import validate_observation_identity
 from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
 from .ml_runtime import load_model_revision
-from .ml_scoring_staging import scoring_stage_prefix
+from .ml_scoring_staging import scoring_stage_bytes, scoring_stage_prefix
 from .ml_temporal_split import select_temporal_partition, utc_observation_time
 from .schemas import MLScoringTemporalScope
+from .score_files import ranking_metrics_file, score_histogram_file
 
 SCORING_BATCH_ROWS = 10_000
 
@@ -77,35 +77,6 @@ def _score_summary(score_sums: list[float], count: int, low: float, high: float,
         "predicted_anomalies": None,
         "alert_rate": None,
         "evaluation_kind": "unlabeled",
-    }
-
-
-def histogram_from_scoring_file(
-    path: Path, *, low: float, high: float, expected_rows: int, bins: int = 32,
-) -> dict:
-    """불변 게시 전 Parquet의 실제 점수만 일정 배치로 재조회해 정확한 구간 빈도 기록.
-
-    Scoring 요약의 min/max는 이미 전체 Batch에서 계산됐으므로 구간 폭 결정에는
-    별도 데이터 스캔이 필요하지 않다. 추가 조회도 메모리에 모든 행을 적재하지 않는다.
-    """
-    edges = histogram_edges(low, high, bins=bins)
-    counts = np.zeros(bins, dtype=np.int64)
-    inspected = 0
-    with pq.ParquetFile(path) as reader:
-        for batch in reader.iter_batches(batch_size=8192, columns=["anomaly_score"]):
-            values = batch.column(0).to_numpy(zero_copy_only=False)
-            if not np.isfinite(values).all():
-                raise ValueError("Histogram encountered non-finite anomaly scores")
-            counts += np.histogram(values, bins=edges)[0]
-            inspected += len(values)
-    if inspected != expected_rows or int(counts.sum()) != expected_rows:
-        raise ValueError("Histogram score count differs from scoring artifact")
-    return {
-        "method": "equal_width_exact_v1",
-        "bin_edges": edges,
-        "bin_counts": counts.tolist(),
-        "score_count": inspected,
-        "constant_scores": low == high,
     }
 
 
@@ -197,11 +168,10 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
         model_adapter = load_model_revision(model, store.home / "cache")
         supports_missing = model["runtime"].get("preprocessing_mode") == "train_median_v1"
         count = 0
+        positives = 0
         score_sums: list[float] = []
         low = math.inf
         high = -math.inf
-        all_scores: list[float] = []
-        all_labels: list[int] = []
         writer = None
         try:
             with pq.ParquetFile(staged) as reader:
@@ -252,8 +222,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                         ):
                             raise ValueError("Scoring labels must be binary 0/1")
                         labels = [int(x) for x in labels]
-                        all_labels.extend(labels)
-                        all_scores.extend(scores)
+                        positives += sum(labels)
                         result = result.with_columns(
                             pl.Series(name="label", values=labels, dtype=pl.Int8)
                         )
@@ -270,7 +239,7 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
         if scope_evidence is not None and count != scope_evidence[f"{scope_evidence['partition']}_rows"]:
             raise ValueError("Scoring partition row count differs from pinned temporal evidence")
         score_summary = _score_summary(score_sums, count, low, high, contract.score_direction)
-        score_summary["histogram"] = histogram_from_scoring_file(
+        score_summary["histogram"] = score_histogram_file(
             pending, low=low, high=high, expected_rows=count,
         )
         score_summary["scope"] = "scoring_dataset"
@@ -298,20 +267,23 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
 
         ranked_metrics = None
         if label is not None:
-            positives = sum(all_labels)
+            # 순위 지표는 게시할 결과 파일을 외부 정렬해 계산한다. 점수·레이블을 메모리에 모으지 않는다.
+            average_precision, roc_auc = ranking_metrics_file(
+                pending, SpillBudget.for_worker(
+                    Path(directory), stage_error="SOS-ML-SCORE-STAGE-LIMIT",
+                    capacity_error="SOS-ML-SCORE-CAPACITY",
+                    used_bytes=lambda: scoring_stage_bytes(store.home, pending),
+                ),
+                positives=positives, negatives=count - positives,
+            )
             ranked_metrics = {
                 "scope": "fully_labeled_scoring_dataset",
                 "label_column": label,
                 "positive_count": positives,
                 "negative_count": count - positives,
-                "average_precision": None,
-                "roc_auc": None,
+                "average_precision": average_precision,
+                "roc_auc": roc_auc,
             }
-            if 0 < positives < count:
-                ranked_metrics["average_precision"] = float(
-                    average_precision_score(all_labels, all_scores)
-                )
-                ranked_metrics["roc_auc"] = float(roc_auc_score(all_labels, all_scores))
         return {
             "model_revision_id": model["id"],
             "dataset_version": dataset["version"],

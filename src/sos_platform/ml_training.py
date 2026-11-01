@@ -14,10 +14,11 @@ import polars as pl
 import sklearn
 
 from .datasets import pinned_scan_dataset
+from .duckdb_spill import SpillBudget, directory_bytes
 from .errors import PlatformError
 from .execution_budget import ExecutionBudget
 from .ml_if_config import IsolationForestConfig
-from .ml_if_preprocessing import FittedIFMedianImputer, _train_median, fit_if_median_imputer
+from .ml_if_preprocessing import fit_if_median_imputer
 from .ml_input import (
     INTEGER_DTYPES,
     NUMERIC,
@@ -28,6 +29,7 @@ from .ml_isolation_forest import train_isolation_forest
 from .ml_outputs import output_contract_for_training
 from .ml_runtime import IF_BUNDLE_SCHEMA, TRUSTED_LOADING
 from .ml_sampling import canonical_sorted_batches
+from .ml_staged_matrix import fit_staged_medians, staged_model_input, write_feature_matrix
 from .ml_temporal_split import split_training_source
 from .ml_training_evidence import feature_training_profile, training_score_summary
 from .schemas import MLTemporalSplitSpec, MLTrainingInputPolicy
@@ -262,44 +264,11 @@ def staged_all_training_matrix(
                 raise ValueError("Unknown training feature")
             if any(schema[name] not in NUMERIC for name in features):
                 raise ValueError("Only numeric training features are supported")
-            scan = source.select(features)
-            count = scan.select(pl.len()).collect().item()
-            if count < 2:
-                raise ValueError("Training requires at least two rows")
             raw_path = stage / "input.float64"
-            raw = np.memmap(raw_path, mode="w+", dtype=np.float64, shape=(count, len(features)))
-            at = 0
-            frames = scan.collect_batches(chunk_size=8192, maintain_order=True)
-            try:
-                for frame in frames:
-                    n = frame.height
-                    if at + n > count:
-                        raise ValueError("Dataset changed during pinned training read")
-                    if missing_policy == "reject" and any(frame.null_count().row(0)):
-                        raise ValueError("Training features contain null values")
-                    for name in features:
-                        if schema[name] in INTEGER_DTYPES:
-                            values = frame[name]
-                            maximum, minimum = values.max(), values.min()
-                            if (
-                                (maximum is not None and maximum > 2**53)
-                                or (minimum is not None and minimum < -(2**53))
-                            ):
-                                raise ValueError("Integer feature exceeds the exact float64 range")
-                    values = np.asarray(frame.to_numpy(), dtype=np.float64)
-                    if missing_policy == "reject" and not np.isfinite(values).all():
-                        raise ValueError("Training features must be finite numeric values")
-                    if missing_policy == "train_median" and np.isinf(values).any():
-                        raise ValueError("Training features contain infinity")
-                    raw[at:at + n] = values
-                    at += n
-            finally:
-                close = getattr(frames, "close", None)
-                if close is not None:
-                    close()
-            if at != count:
-                raise ValueError("Dataset changed during pinned training read")
-        raw.flush()
+            raw = write_feature_matrix(
+                source, features, schema, raw_path, missing_policy=missing_policy,
+            )
+            count = raw.shape[0]
         # 기존 all_rows_v1은 전체 행렬을 Feature 순서로 정렬한 뒤 학습한다.
         # NumPy 인덱스만 메모리에 보관하고 결과 행렬은 디스크에서 청크별 재배치한다.
         order = np.lexsort(raw.T[::-1])
@@ -328,38 +297,6 @@ def staged_all_training_matrix(
         if evidence is not None:
             selection["temporal_split"] = evidence
         yield selected, selection
-
-
-def _fit_staged_medians(
-    matrix: np.ndarray, features: list[str]
-) -> FittedIFMedianImputer:
-    """열마다 독립 중앙값을 Fit하고 전체 2D 배열 사본 생성을 피한다."""
-    medians = []
-    for col in range(matrix.shape[1]):
-        column = matrix[:, col]
-        if np.isnan(column).all():
-            raise ValueError("Entirely missing training features require explicit exclusion")
-        medians.append(_train_median(column))
-    return FittedIFMedianImputer(tuple(features), tuple(medians))
-
-
-def _staged_model_input(
-    matrix: np.ndarray,
-    preprocessing: FittedIFMedianImputer,
-    *,
-    stage: Path,
-) -> np.memmap:
-    """Fit 상태를 고정하고 Chunk마다 결측을 치환한 Model 입력을 디스크에 기록한다."""
-    output = np.memmap(
-        stage / "transformed.float64", mode="w+", dtype=np.float64, shape=matrix.shape
-    )
-    for start in range(0, matrix.shape[0], 8192):
-        end = min(start + 8192, matrix.shape[0])
-        output[start:end] = preprocessing.transform(
-            matrix[start:end], feature_names=preprocessing.feature_names
-        )
-    output.flush()
-    return output
 
 
 def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
@@ -395,22 +332,23 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
         with pinned_scan_dataset(store, dataset) as source:
             schema = source.collect_schema()
             feature_dtypes = [str(schema[name]) for name in features]
-        if input_policy.mode == "all":
-            preprocessing = _fit_staged_medians(matrix, features)
-            # Parent Training Stage가 지정돼 있으면 같은 Attempt 아래에 생성한다.
-            scratch_root = os.environ.get("POLARS_TEMP_DIR")
-            with TemporaryDirectory(prefix="all-prepared-", dir=scratch_root) as directory:
-                transformed = _staged_model_input(
-                    matrix, preprocessing, stage=Path(directory)
-                )
-                model = train_isolation_forest(transformed, config)
-                summary, count = training_score_summary(model, transformed)
-                profile = feature_training_profile(transformed, features)
-        else:
-            preprocessing = fit_if_median_imputer(matrix, feature_names=features)
-            transformed = preprocessing.transform(matrix, feature_names=features)
+        # Parent Training Stage가 지정돼 있으면 같은 Attempt 아래에 생성한다.
+        scratch_root = os.environ.get("POLARS_TEMP_DIR")
+        with TemporaryDirectory(prefix="training-prepared-", dir=scratch_root) as directory:
+            stage = Path(directory)
+            evidence_budget = SpillBudget.for_worker(
+                stage, stage_error="SOS-ML-TRAIN-STAGE-LIMIT",
+                capacity_error="SOS-ML-TRAIN-CAPACITY",
+                used_bytes=(lambda: directory_bytes(Path(scratch_root))) if scratch_root else None,
+            )
+            if input_policy.mode == "all":
+                preprocessing = fit_staged_medians(matrix, features)
+                transformed = staged_model_input(matrix, preprocessing, stage=stage)
+            else:
+                preprocessing = fit_if_median_imputer(matrix, feature_names=features)
+                transformed = preprocessing.transform(matrix, feature_names=features)
             model = train_isolation_forest(transformed, config)
-            summary, count = training_score_summary(model, transformed)
+            summary, count = training_score_summary(model, transformed, evidence_budget)
             profile = feature_training_profile(transformed, features)
     joblib.dump(
         {

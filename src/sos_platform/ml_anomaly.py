@@ -80,72 +80,85 @@ def score_histogram(values: Sequence[float], *, bins: int = 32) -> dict:
     }
 
 
+def checked_alert_fraction(alert_fraction: object) -> float:
+    if isinstance(alert_fraction, bool) or not isinstance(alert_fraction, (int, float)):
+        raise ValueError("Alert fraction must be numeric")
+    if not math.isfinite(alert_fraction) or not 0 < alert_fraction < 1:
+        raise ValueError("Alert fraction must be between 0 and 1")
+    return float(alert_fraction)
+
+
+def quantile_position(count: int, alert_fraction: float) -> tuple[int, int, float]:
+    """오름차순 점수에서 임계값을 보간할 두 순위와 보간 위치. 파일·메모리 계산이 같이 쓴다."""
+    position = (count - 1) * (1 - checked_alert_fraction(alert_fraction))
+    return math.floor(position), math.ceil(position), position
+
+
+def interpolate_threshold(lower_value: float, upper_value: float, lower: int, position: float) -> float:
+    return lower_value + (upper_value - lower_value) * (position - lower)
+
+
 def quantile_threshold(reference_scores: Sequence[float], alert_fraction: float) -> float:
     """독립 참조 집합의 상위 점수 비율에 대응하는 보간 임계값을 산출한다.
 
     동점과 보간 때문에 실제 판정 비율이 alert_fraction과 같다는 보장은 없다.
     운영 시 참조 집합의 판본·선정 기준을 정책과 함께 보존해야 한다.
     """
-    if isinstance(alert_fraction, bool) or not isinstance(alert_fraction, (int, float)):
-        raise ValueError("Alert fraction must be numeric")
-    if not math.isfinite(alert_fraction) or not 0 < alert_fraction < 1:
-        raise ValueError("Alert fraction must be between 0 and 1")
+    checked_alert_fraction(alert_fraction)
     ordered = sorted(_finite_scores(reference_scores))
-    position = (len(ordered) - 1) * (1 - alert_fraction)
-    lower = math.floor(position)
-    upper = math.ceil(position)
-    return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
+    lower, upper, position = quantile_position(len(ordered), alert_fraction)
+    return interpolate_threshold(ordered[lower], ordered[upper], lower, position)
 
 
-def evaluate_anomaly_scores(
-    scores: Sequence[float],
+def checked_threshold(threshold: object) -> float | None:
+    if threshold is None:
+        return None
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+        raise ValueError("Threshold must be numeric")
+    if not math.isfinite(threshold):
+        raise ValueError("Threshold must be finite")
+    return float(threshold)
+
+
+def anomaly_score_summary(
     *,
+    count: int,
+    score_min: float,
+    score_max: float,
+    score_mean: float,
     threshold: float | None = None,
-    labels: Sequence[int] | None = None,
+    predicted: int | None = None,
+    confusion: tuple[int, int, int, int] | None = None,
 ) -> dict:
-    """높을수록 이상인 점수의 판정 결과와 가능한 범위의 근거만 반환한다.
+    """점수 집계에서 판정·평가 결과를 만든다. 메모리 내 점수와 파일 순회가 같은 의미를 쓴다.
 
-    레이블이 없는 결과에 Precision·Recall 등 감독 지표를 만들지 않는다.
-    레이블이 있는 경우에도 양성 또는 예측 양성이 없으면 미정의 지표는 None이다.
+    Args:
+        count: 점수 수.
+        score_min / score_max / score_mean: 점수 분포. 평균은 정확 합(fsum)으로 계산한다.
+        threshold: 판정 임계값(점수 >= 임계값이면 이상). 없으면 판정하지 않는다.
+        predicted: 임계값 이상인 점수 수.
+        confusion: 레이블이 있을 때 (tp, fp, tn, fn).
     """
-    checked = _finite_scores(scores)
     result: dict = {
         "score_direction": ISOLATION_FOREST_OUTPUT.score_direction,
-        "score_count": len(checked),
-        "score_min": min(checked),
-        "score_max": max(checked),
-        "score_mean": math.fsum(checked) / len(checked),
+        "score_count": count,
+        "score_min": score_min,
+        "score_max": score_max,
+        "score_mean": score_mean,
         "threshold": None,
         "predicted_anomalies": None,
         "alert_rate": None,
         "evaluation_kind": "unlabeled",
     }
     if threshold is not None:
-        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
-            raise ValueError("Threshold must be numeric")
-        if not math.isfinite(threshold):
-            raise ValueError("Threshold must be finite")
-        predicted = tuple(score >= threshold for score in checked)
-        alarms = sum(predicted)
         result.update(
             threshold=float(threshold),
-            predicted_anomalies=alarms,
-            alert_rate=alarms / len(checked),
+            predicted_anomalies=predicted,
+            alert_rate=predicted / count,
         )
-    if labels is None:
+    if confusion is None:
         return result
-    if threshold is None:
-        raise ValueError("Labeled decision evaluation requires a threshold")
-    if len(labels) != len(checked) or any(label not in (0, 1) for label in labels):
-        raise ValueError("Labels must be binary and match the score count")
-    tp = sum(
-        score >= threshold and label == 1 for score, label in zip(checked, labels, strict=True)
-    )
-    fp = sum(
-        score >= threshold and label == 0 for score, label in zip(checked, labels, strict=True)
-    )
-    fn = sum(score < threshold and label == 1 for score, label in zip(checked, labels, strict=True))
-    tn = len(checked) - tp - fp - fn
+    tp, fp, tn, fn = confusion
     precision = tp / (tp + fp) if tp + fp else None
     recall = tp / (tp + fn) if tp + fn else None
     if precision is None or recall is None:
@@ -163,3 +176,37 @@ def evaluate_anomaly_scores(
         f1=f1,
     )
     return result
+
+
+def evaluate_anomaly_scores(
+    scores: Sequence[float],
+    *,
+    threshold: float | None = None,
+    labels: Sequence[int] | None = None,
+) -> dict:
+    """높을수록 이상인 점수의 판정 결과와 가능한 범위의 근거만 반환한다.
+
+    레이블이 없는 결과에 Precision·Recall 등 감독 지표를 만들지 않는다.
+    레이블이 있는 경우에도 양성 또는 예측 양성이 없으면 미정의 지표는 None이다.
+    """
+    checked = _finite_scores(scores)
+    threshold = checked_threshold(threshold)
+    predicted = (
+        sum(score >= threshold for score in checked) if threshold is not None else None
+    )
+    confusion = None
+    if labels is not None:
+        if threshold is None:
+            raise ValueError("Labeled decision evaluation requires a threshold")
+        if len(labels) != len(checked) or any(label not in (0, 1) for label in labels):
+            raise ValueError("Labels must be binary and match the score count")
+        pairs = tuple(zip(checked, labels, strict=True))
+        tp = sum(score >= threshold and label == 1 for score, label in pairs)
+        fp = sum(score >= threshold and label == 0 for score, label in pairs)
+        fn = sum(score < threshold and label == 1 for score, label in pairs)
+        confusion = (tp, fp, len(checked) - tp - fp - fn, fn)
+    return anomaly_score_summary(
+        count=len(checked), score_min=min(checked), score_max=max(checked),
+        score_mean=math.fsum(checked) / len(checked),
+        threshold=threshold, predicted=predicted, confusion=confusion,
+    )

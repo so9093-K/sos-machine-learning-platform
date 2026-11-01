@@ -95,6 +95,8 @@ ops:
       connect_to_sos: true
 ```
 
+입력 크기와 관계없이 같은 경로로 실행한다. 입력은 Run 임시 디렉터리(`SOS_PIPELINE_STAGE_DIR`, Compose는 Dagster 볼륨)에 옮겨 배치로 읽고, 시간 경계·임계값은 외부 정렬로, Calibration·Test 평가는 배치 점수 파일로 계산한다. 외부 정렬의 메모리·디스크 예산은 Run 설정 `memory_mib`·`stage_mib`로 조정한다. 모델 적합은 학습 구간 행렬을 메모리에 올리는 알고리즘의 실행 조건이다.
+
 성공한 `connect_to_sos` 단계의 `sos_model_revision` Materialization에서 `model_revision_id`를 확인한다. SOS의 `/models/<model_revision_id>`를 열어 모델 상세에서 제공 설명·모델 제공·선택적 온라인 배포를 진행한다. 이 판본을 제공·배포하려고 `--mlflow-model`로 다시 연결하지 않는다. 연결 성공은 사용자 제공이나 온라인 배포 완료를 의미하지 않는다.
 
 다른 생산 Pipeline도 `ml_model_package.package_isolation_forest`로 같은 패키지를 만들어 MLflow 버전의 아티팩트 위치에 두면 연결할 수 있다. 생산 환경의 Python minor·numpy·scikit-learn 버전은 SOS와 같아야 한다.

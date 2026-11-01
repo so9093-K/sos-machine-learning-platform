@@ -1,5 +1,6 @@
 """불변 Dataset의 등록·조회와 Iceberg 적재를 연결한다."""
 
+import itertools
 import os
 import re
 import shutil
@@ -208,6 +209,57 @@ def reserve_iceberg_write_target(
     return table, claim
 
 
+_ICEBERG_CHUNK_BYTES = 128 * 1024 * 1024
+
+
+def _append_partitioned(table, parquet: pq.ParquetFile, properties: dict[str, str]) -> None:
+    """파티션 테이블에 배치마다 데이터 파일을 쓰고 전체를 한 Snapshot으로 커밋한다.
+
+    pyiceberg는 파티션 테이블의 Reader 스트리밍 append를 아직 지원하지 않는다
+    (apache/iceberg-python#2152). 공개 append와 같은 단계(스키마 호환 검사 → 파티션별 데이터 파일 →
+    한 append Snapshot)를 일정 크기의 배치마다 반복해 입력 크기와 관계없이 메모리를 배치 크기로
+    제한한다. 데이터 파일 이름이 겹치지 않도록 한 counter를 공유한다.
+    """
+    from pyiceberg.io.pyarrow import _check_pyarrow_schema_compatible, _dataframe_to_data_files
+    from pyiceberg.table import DOWNCAST_NS_TIMESTAMP_TO_US_ON_WRITE, TableProperties
+    from pyiceberg.utils.config import Config
+    from pyiceberg.utils.properties import property_as_bool
+
+    transaction = table.transaction()
+    metadata = transaction.table_metadata
+    _check_pyarrow_schema_compatible(
+        metadata.schema(), provided_schema=parquet.schema_arrow,
+        downcast_ns_timestamp_to_us=Config().get_bool(DOWNCAST_NS_TIMESTAMP_TO_US_ON_WRITE) or False,
+        format_version=metadata.format_version,
+    )
+    update = transaction.update_snapshot(snapshot_properties=properties)
+    merge = property_as_bool(
+        metadata.properties, TableProperties.MANIFEST_MERGE_ENABLED,
+        TableProperties.MANIFEST_MERGE_ENABLED_DEFAULT,
+    )
+    counter = itertools.count(0)
+
+    def chunks():
+        batches, size = [], 0
+        for batch in parquet.iter_batches(batch_size=65_536):
+            batches.append(batch)
+            size += batch.nbytes
+            if size >= _ICEBERG_CHUNK_BYTES:
+                yield pa.Table.from_batches(batches, schema=parquet.schema_arrow)
+                batches, size = [], 0
+        if batches:
+            yield pa.Table.from_batches(batches, schema=parquet.schema_arrow)
+
+    with (update.merge_append() if merge else update.fast_append()) as append_files:
+        for chunk in chunks():
+            for data_file in _dataframe_to_data_files(
+                table_metadata=metadata, df=chunk, io=table.io,
+                write_uuid=append_files.commit_uuid, counter=counter,
+            ):
+                append_files.append_data_file(data_file)
+    transaction.commit_transaction()
+
+
 def import_to_iceberg(
     store: Store,
     dataset: dict,
@@ -222,41 +274,34 @@ def import_to_iceberg(
     catalog.create_namespace_if_not_exists("default")
     ident = f"default.{table_name}"
     table, claim = reserve_iceberg_write_target(store, table_name, owner_actor, catalog=catalog)
-    # Partitioned append는 Reader 기반 쓰기가 지원되지 않으므로
-    # 이전 호환 경로의 제한을 먼저 검증해 불필요한 대형 스테이징을 피한다.
-    if table is not None and table.spec().fields:
-        from .processing import bounded_iceberg_arrow
-
+    # Attempt 식별자를 경로에 포함해 강제 종료 후 부모가 자기 임시 파일만 제거한다.
+    scratch = store.home / "cache" / "iceberg-staging"
+    scratch.mkdir(parents=True, exist_ok=True)
+    properties = {"sos.attempt-id": attempt_id}
+    with TemporaryDirectory(prefix=_stage_prefix(attempt_id), dir=scratch) as directory:
+        staged = Path(directory) / "input.parquet"
         with pinned_scan_dataset(store, dataset) as source:
-            data = bounded_iceberg_arrow(source)
-        if on_commit_start is not None:
-            on_commit_start()
-        table.append(data, snapshot_properties={"sos.attempt-id": attempt_id})
-    else:
-        # Attempt 식별자를 경로에 포함해 강제 종료 후 부모가 자기 임시 파일만 제거한다.
-        scratch = store.home / "cache" / "iceberg-staging"
-        scratch.mkdir(parents=True, exist_ok=True)
-        with TemporaryDirectory(prefix=_stage_prefix(attempt_id), dir=scratch) as directory:
-            staged = Path(directory) / "input.parquet"
-            with pinned_scan_dataset(store, dataset) as source:
-                source.sink_parquet(staged)
-            with pq.ParquetFile(staged) as parquet:
-                if table is None:
-                    table = catalog.create_table(
-                        ident,
-                        schema=parquet.schema_arrow,
-                        properties={"sos.write-token": claim["token"]},
-                    )
-                    store.activate_iceberg_table(
-                        table_name, owner_actor, claim["token"], str(table.metadata.table_uuid)
-                    )
+            source.sink_parquet(staged)
+        with pq.ParquetFile(staged) as parquet:
+            if table is None:
+                table = catalog.create_table(
+                    ident,
+                    schema=parquet.schema_arrow,
+                    properties={"sos.write-token": claim["token"]},
+                )
+                store.activate_iceberg_table(
+                    table_name, owner_actor, claim["token"], str(table.metadata.table_uuid)
+                )
+            if on_commit_start is not None:
+                on_commit_start()
+            if table.spec().fields:
+                _append_partitioned(table, parquet, properties)
+            else:
                 reader = pa.RecordBatchReader.from_batches(
                     parquet.schema_arrow, parquet.iter_batches(batch_size=65_536)
                 )
                 try:
-                    if on_commit_start is not None:
-                        on_commit_start()
-                    table.append(reader, snapshot_properties={"sos.attempt-id": attempt_id})
+                    table.append(reader, snapshot_properties=properties)
                 finally:
                     reader.close()
     snapshots = [

@@ -153,7 +153,7 @@ def test_prepare_train_calibrate_test_evaluate_explain_journey(monkeypatch, tmp_
             "source_owner_actor": "analyst",
             "mode": "quantile",
             "alert_fraction": 0.3,
-        },
+        }, _stage_owner(store),
     )
     policy = {
         "id": "decision-v1",
@@ -171,7 +171,7 @@ def test_prepare_train_calibrate_test_evaluate_explain_journey(monkeypatch, tmp_
             "policy_revision_id": policy["id"],
             "policy_owner_actor": "analyst",
             "reference_owner_actor": "analyst",
-        },
+        }, _stage_owner(store),
     )
     metrics = evaluation["decision_metrics"]
     assert metrics["threshold"] == pytest.approx(policy["threshold"])
@@ -187,7 +187,7 @@ def test_prepare_train_calibrate_test_evaluate_explain_journey(monkeypatch, tmp_
             "scoring_result_id": "test",
             "source_owner_actor": "analyst",
             "row_index": 0,
-        },
+        }, _stage_owner(store),
     )
     assert explanation["source_observation"] == {
         "dataset_id": dataset["id"],
@@ -197,3 +197,10 @@ def test_prepare_train_calibrate_test_evaluate_explain_journey(monkeypatch, tmp_
     }
     assert explanation["model_revision_id"] == model["id"]
     assert explanation["score"] >= 0
+
+
+def _stage_owner(store):
+    """Worker가 정책·평가·설명 Attempt에 넘기는 Stage 소유 경로(Attempt 결과 경로)."""
+    results = Path(store.home) / "results"
+    results.mkdir(exist_ok=True)
+    return results / "job.attempt.pending.parquet"

@@ -327,12 +327,16 @@ def dataset_router(store: Store, access: ResourceAccess, upload_policy: UploadPo
         response_model=FeaturePreviewOut,
     )
     def feature_preview(body: FeaturePreview, actor: Actor = READ_DATASET_DEP):
-        # 입력의 앞 1,000행을 먼저 자르면 정렬·Lag·Rolling 경계가 실제 Job과 달라진다.
-        # 전체 입력에서 같은 연산을 수행하고 출력 행 수만 제한한다.
+        # 원본의 앞부분을 임의로 자르지 않는다. Lag·Rolling은 입력 전체를 순회해 정렬 키 순서의
+        # 앞부분을 고르므로 결과 앞부분이 전체 변환과 같다. 비용은 요청의 계산 시간으로 제한한다.
         # 동기 Polars 계산도 Worker·DuckDB와 동일한 논리적 수용 풀을 공유한다.
         # 예약은 원본 캐시 Lease/입력 스캔 이전에 확보해 경합 시 파일·CPU를 잡지 않는다.
-        with reserve_execution_memory(store, FeaturePreviewBudget.from_env().memory_mib):
+        budget = FeaturePreviewBudget.from_env()
+        with reserve_execution_memory(store, budget.memory_mib):
             with pinned_scan_dataset(store, access.dataset(body.dataset_id, actor)) as lf:
-                return {"sampled": False, **bounded_feature_preview(lf, body.transform)}
+                return {"sampled": False, **bounded_feature_preview(
+                    lf, body.transform, max_seconds=budget.max_seconds,
+                    memory_mib=budget.memory_mib,
+                )}
 
     return router

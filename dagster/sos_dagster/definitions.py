@@ -7,10 +7,12 @@ SOS DB·저장소·Job에 접근하지 않는다. 생산한 모델은 MLflow 모
 
 import hashlib
 import json
+import math
 import os
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -30,17 +32,22 @@ from dagster import (
     op,
 )
 from sos_platform.analysis_topics import ACTIVITY_FEATURES
-from sos_platform.ml_anomaly import evaluate_anomaly_scores, quantile_threshold
+from sos_platform.duckdb_spill import SpillBudget, order_statistics
 from sos_platform.ml_if_config import IsolationForestConfig
-from sos_platform.ml_if_preprocessing import fit_if_median_imputer
 from sos_platform.ml_input import NUMERIC
 from sos_platform.ml_isolation_forest import TrainedIsolationForest, train_isolation_forest
 from sos_platform.ml_model_package import ESTIMATOR_FILE, MANIFEST_FILE, package_isolation_forest
+from sos_platform.ml_staged_matrix import (
+    fit_staged_medians,
+    staged_model_input,
+    write_feature_matrix,
+)
 from sos_platform.ml_temporal_split import select_temporal_partition, utc_observation_time
 from sos_platform.ml_training_evidence import feature_training_profile, training_score_summary
 from sos_platform.mlflow_config import MLflowSettings
 from sos_platform.mlflow_errors import MLflowDeliveryError
 from sos_platform.mlflow_tracking import MLflowClient
+from sos_platform.score_files import ScoreWriter, quantile_threshold_file, summarize_scores
 
 PRODUCER = "dagster:activity_anomaly_production"
 TIMESTAMP = "ts"
@@ -55,6 +62,14 @@ class ProductionConfig(Config):
     alert_fraction: float = Field(default=0.005, gt=0, lt=1, description="Calibration 점수로 정하는 판정 비율")
     n_estimators: int = Field(default=100, ge=1, le=2000)
     random_state: int = Field(default=42, ge=0, le=2**32 - 1)
+    memory_mib: int = Field(
+        default=2048, ge=256,
+        description="외부 정렬·집계의 메모리 예산(MiB). 이 중 일부만 DuckDB에 주고 넘치면 디스크로 Spill한다",
+    )
+    stage_mib: int = Field(
+        default=51200, ge=64,
+        description="Run 임시 디렉터리에서 외부 정렬이 쓸 수 있는 디스크 크기(MiB)",
+    )
     connect_to_sos: bool = Field(default=True, description="MLflow 등록 후 SOS에 고정 버전을 연결한다. 공급 CLI로 연결할 예정이면 false로 지정한다")
     registry_key: str = Field(default="default", description="연결한 판본을 관리할 SOS 모델 그룹")
 
@@ -79,19 +94,32 @@ def _file_sha256(path: str) -> str | None:
     return digest.hexdigest()
 
 
-def _partition(source: pl.LazyFrame, bounds: dict, partition: str) -> tuple[np.ndarray, dict]:
-    frame, evidence = select_temporal_partition(
-        source, timestamp_column=TIMESTAMP, train_end=bounds["train_end"],
-        calibration_end=bounds["calibration_end"], partition=partition,
-    )
-    values = frame.select(ACTIVITY_FEATURES).collect().to_numpy().astype(np.float64)
-    if np.isinf(values).any():
-        raise Failure("활동 Feature에 무한값이 있습니다.")
-    return values, evidence
+def _nearest_rank(count: int, fraction: float) -> int:
+    """오름차순 순위 중 분위 위치에 가장 가까운 순위(반올림)."""
+    return math.floor((count - 1) * fraction + 0.5)
+
+
+def _score_partition(model: TrainedIsolationForest, scan: pl.LazyFrame, path: Path) -> int:
+    """구간을 배치로 읽어 이상 점수를 파일에 쓴다. 결측은 학습 중앙값으로 대체하고 무한값은 거부한다."""
+    with ScoreWriter(path) as writer:
+        for frame in scan.select(ACTIVITY_FEATURES).collect_batches(
+            chunk_size=8192, maintain_order=True,
+        ):
+            values = np.asarray(frame.to_numpy(), dtype=np.float64)
+            if np.isinf(values).any():
+                raise Failure("활동 Feature에 무한값이 있습니다.")
+            writer.write(model.score_anomalies(values))
+    return writer.count
 
 
 @op(description="시간순 Train·Calibration·Test로 나누어 Isolation Forest를 학습하고, Calibration 점수로 판정 기준을 정해 Test 구간을 평가합니다. 결과를 SOS 모델 패키지로 만듭니다.")
 def train_and_evaluate(context: OpExecutionContext, config: ProductionConfig) -> dict:
+    """입력 크기와 관계없이 같은 경로로 생산한다.
+
+    입력은 Run 임시 디렉터리에 한 번 옮겨 배치로 읽는다. 시간 경계는 외부 정렬로 정하고, 학습 행렬은
+    디스크 Memmap에 기록하며, Calibration·Test 점수는 배치로 계산해 파일에서 임계값·평가를 구한다.
+    모델 적합(fit)이 요구하는 메모리만 알고리즘의 실행 조건으로 남는다.
+    """
     if config.train_fraction + config.calibration_fraction >= 1:
         raise Failure("train_fraction + calibration_fraction은 1보다 작아야 합니다.")
     source = _source(config.data_path)
@@ -101,41 +129,69 @@ def train_and_evaluate(context: OpExecutionContext, config: ProductionConfig) ->
         raise Failure("필수 컬럼 없음: " + ", ".join(missing[:12]))
     if any(schema[name] not in NUMERIC for name in ACTIVITY_FEATURES):
         raise Failure("활동 Feature는 숫자형이어야 합니다.")
-    event = utc_observation_time(source, TIMESTAMP).dt.epoch("ms")
-    stats = source.select(
-        event.quantile(config.train_fraction, interpolation="nearest").alias("train"),
-        event.quantile(config.train_fraction + config.calibration_fraction,
-                       interpolation="nearest").alias("calibration"),
-    ).collect().row(0, named=True)
-    if stats["train"] is None or stats["calibration"] is None:
-        raise Failure("ts에서 시간 분할 경계를 정할 수 없습니다.")
-    # 경계 시각의 행은 앞 구간에 둔다(경계는 다음 구간의 시작 시각).
-    bounds = {
-        "train_end": datetime.fromtimestamp(stats["train"] / 1000, tz=UTC) + timedelta(milliseconds=1),
-        "calibration_end": datetime.fromtimestamp(stats["calibration"] / 1000, tz=UTC)
-        + timedelta(milliseconds=1),
-    }
-    try:
-        train, split = _partition(source, bounds, "train")
-        calibration, _ = _partition(source, bounds, "calibration")
-        test, _ = _partition(source, bounds, "test")
-    except ValueError as exc:
-        raise Failure(f"시간 분할 실패: {exc}") from exc
-
     features = list(ACTIVITY_FEATURES)
-    config_params = IsolationForestConfig(
-        n_estimators=config.n_estimators, random_state=config.random_state,
-    )
-    preprocessing = fit_if_median_imputer(train, feature_names=features)
-    transformed = preprocessing.transform(train, feature_names=features)
-    trained = train_isolation_forest(transformed, config_params)
-    summary, _ = training_score_summary(trained, transformed)
-    profile = feature_training_profile(transformed, features)
-    model = TrainedIsolationForest(
-        trained.estimator, config_params, len(features), preprocessing=preprocessing,
-    )
-    threshold = quantile_threshold(model.score_anomalies(calibration), config.alert_fraction)
-    test_evaluation = evaluate_anomaly_scores(model.score_anomalies(test), threshold=threshold)
+    stage_root = os.getenv("SOS_PIPELINE_STAGE_DIR")
+    if stage_root:
+        Path(stage_root).mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix="activity-production-", dir=stage_root) as directory:
+        stage = Path(directory)
+        budget = SpillBudget(
+            stage=stage, memory_mib=config.memory_mib, max_stage_bytes=config.stage_mib * 1024 * 1024,
+            stage_error="SOS-ML-TRAIN-STAGE-LIMIT", capacity_error="SOS-ML-TRAIN-CAPACITY",
+        )
+        staged_path = stage / "input.parquet"
+        source.select(TIMESTAMP, *features).sink_parquet(staged_path)
+        staged = pl.scan_parquet(staged_path)
+        events_path = stage / "events.parquet"
+        staged.select(
+            utc_observation_time(staged, TIMESTAMP).dt.epoch("ms").alias("event_ms")
+        ).sink_parquet(events_path)
+        count, invalid = pl.scan_parquet(events_path).select(
+            pl.len(), pl.col("event_ms").null_count(),
+        ).collect(engine="streaming").row(0)
+        if invalid or count < 3:
+            raise Failure("ts의 UTC 오프셋·유효값·행 수를 확인하세요.")
+        train_ms, calibration_ms = order_statistics(
+            events_path, "event_ms",
+            [_nearest_rank(count, config.train_fraction),
+             _nearest_rank(count, config.train_fraction + config.calibration_fraction)],
+            budget,
+        )
+        # 경계 시각의 행은 앞 구간에 둔다(경계는 다음 구간의 시작 시각).
+        bounds = {
+            "timestamp_column": TIMESTAMP,
+            "train_end": datetime.fromtimestamp(train_ms / 1000, tz=UTC) + timedelta(milliseconds=1),
+            "calibration_end": datetime.fromtimestamp(calibration_ms / 1000, tz=UTC)
+            + timedelta(milliseconds=1),
+        }
+        try:
+            train_scan, split = select_temporal_partition(staged, partition="train", **bounds)
+            calibration_scan, _ = select_temporal_partition(staged, partition="calibration", **bounds)
+            test_scan, _ = select_temporal_partition(staged, partition="test", **bounds)
+            train = write_feature_matrix(
+                train_scan, features, schema, stage / "train.float64", missing_policy="train_median",
+            )
+        except ValueError as exc:
+            raise Failure(f"시간 분할 실패: {exc}") from exc
+
+        config_params = IsolationForestConfig(
+            n_estimators=config.n_estimators, random_state=config.random_state,
+        )
+        preprocessing = fit_staged_medians(train, features)
+        transformed = staged_model_input(train, preprocessing, stage=stage)
+        trained = train_isolation_forest(transformed, config_params)
+        summary, _ = training_score_summary(trained, transformed, budget)
+        profile = feature_training_profile(transformed, features)
+        model = TrainedIsolationForest(
+            trained.estimator, config_params, len(features), preprocessing=preprocessing,
+        )
+        _score_partition(model, calibration_scan, stage / "calibration-scores.parquet")
+        threshold = quantile_threshold_file(
+            stage / "calibration-scores.parquet", config.alert_fraction, budget,
+        )
+        _score_partition(model, test_scan, stage / "test-scores.parquet")
+        test_evaluation = summarize_scores(stage / "test-scores.parquet", threshold=threshold)
+        del train, transformed
     rows = {key: split[f"{key}_rows"] for key in ("train", "calibration", "test")}
     files = package_isolation_forest(
         model,

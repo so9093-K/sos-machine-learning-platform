@@ -33,6 +33,7 @@ class LocalObjects:
 
 
 @pytest.fixture
+
 def trained_bundle(monkeypatch, tmp_path):
     """완전 입력으로 새 모델을 학습하고 객체 게시된 모델 판본을 구성한다."""
     (tmp_path / "cache").mkdir()
@@ -160,7 +161,7 @@ def test_scoring_and_explanation_use_same_bundle_without_refitting(
 
     explanation = explain_scored_row(
         store, {"scoring_result_id": scoring["id"], "source_owner_actor": "owner-1",
-                "row_index": 0}
+                "row_index": 0}, _stage_owner(store)
     )
     assert explanation["score"] == pytest.approx(expected[0])
     assert explanation["source_observation"] == {
@@ -214,3 +215,10 @@ def test_legacy_estimator_only_revision_can_still_be_loaded(trained_bundle, tmp_
     assert len(restored.score_anomalies([[1.0, 10.0]])) == 1
     with pytest.raises(ValueError, match="finite"):
         restored.score_anomalies([[np.nan, 10.0]])
+
+
+def _stage_owner(store):
+    """Worker가 정책·평가·설명 Attempt에 넘기는 Stage 소유 경로(Attempt 결과 경로)."""
+    results = Path(store.home) / "results"
+    results.mkdir(exist_ok=True)
+    return results / "job.attempt.pending.parquet"

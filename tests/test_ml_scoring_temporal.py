@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -10,7 +11,9 @@ import pytest
 from pydantic import ValidationError
 
 from sos_platform import ml_scoring
+from sos_platform.ml_anomaly import evaluate_anomaly_scores, quantile_threshold
 from sos_platform.schemas import MLScoringRequest
+from sos_platform.score_files import quantile_threshold_file, summarize_scores
 
 
 class RecordingScorer:
@@ -23,6 +26,7 @@ class RecordingScorer:
 
 
 @pytest.fixture
+
 def scoring_env(monkeypatch, tmp_path):
     model = {
         "id": "model-v1",
@@ -349,8 +353,8 @@ def test_all_missing_nullable_integer_scoring_chunk_is_valid(scoring_env, monkey
     assert pl.read_parquet(tmp_path / "emptyints.parquet")["anomaly_score"].to_list() == [0.0, 0.0]
 
 
-def test_policy_only_loads_scores_not_full_feature_vectors(scoring_env, monkeypatch, tmp_path):
-    """대용량 결과의 Policy/Evaluation은 Feature 구조를 메모리에 적재하지 않는다."""
+def test_policy_reads_verified_scoring_file_with_in_memory_semantics(scoring_env, monkeypatch, tmp_path):
+    """Policy/Evaluation은 검증한 결과 파일을 순회·외부 정렬하며 메모리 계산과 같은 값을 낸다."""
     import hashlib
     import shutil
 
@@ -378,18 +382,20 @@ def test_policy_only_loads_scores_not_full_feature_vectors(scoring_env, monkeypa
         "location": f"mock://{key}", "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
         "row_count": result["row_count"], "owner_actor": "researcher",
     }
-    narrow = ml_decision._verified_scoring(store, scoring)
-    assert narrow.columns == ["row_index", "anomaly_score"]
-    assert narrow.height == 20_021
-    full = ml_decision._verified_scoring(store, scoring, include_features=True)
-    assert "features" in full.columns
-    assert full.height == narrow.height
-    row = ml_decision._verified_scoring_row(store, scoring, 20_011)
+    with ml_decision._verified_scoring(store, scoring, _stage_owner(store)) as (path, budget):
+        scores = pl.read_parquet(path)["anomaly_score"].to_list()
+        threshold = quantile_threshold_file(path, 0.01, budget)
+        assert threshold == quantile_threshold(scores, 0.01)
+        assert summarize_scores(path, threshold=threshold) == evaluate_anomaly_scores(
+            scores, threshold=threshold
+        )
+    assert len(scores) == 20_021
+    row = ml_decision._verified_scoring_row(store, scoring, 20_011, _stage_owner(store))
     assert row["row_index"] == 20_011
     assert row["features"]["count"] == pytest.approx(20_011.0)
     assert row["anomaly_score"] == pytest.approx(20.011)
     with pytest.raises(ValueError, match="out of bounds"):
-        ml_decision._verified_scoring_row(store, scoring, 20_021)
+        ml_decision._verified_scoring_row(store, scoring, 20_021, _stage_owner(store))
 
     # 특정 행을 읽을 때 전체 Scoring 파일의 pl.read_parquet를 호출하면 회귀다.
     monkeypatch.setattr(
@@ -398,11 +404,11 @@ def test_policy_only_loads_scores_not_full_feature_vectors(scoring_env, monkeypa
             AssertionError("Explanation loaded entire Scoring DataFrame")
         ),
     )
-    target = ml_decision._verified_scoring_row(store, scoring, 20_000)
+    target = ml_decision._verified_scoring_row(store, scoring, 20_000, _stage_owner(store))
     assert target["row_index"] == 20_000
     scoring["row_count"] += 1
     with pytest.raises(ValueError, match="row count"):
-        ml_decision._verified_scoring_row(store, scoring, 20_000)
+        ml_decision._verified_scoring_row(store, scoring, 20_000, _stage_owner(store))
 
 
 def test_scoring_stage_is_attempt_scoped_counted_and_cleaned(tmp_path):
@@ -499,3 +505,10 @@ def test_worker_stops_scoring_stage_overflow_with_distinct_failure_code(
     assert kwargs["error_code"] == "SOS-ML-SCORE-STAGE-LIMIT"
     assert kwargs["failure_category"] == "storage"
     process.terminate.assert_called_once()
+
+
+def _stage_owner(store):
+    """Worker가 정책·평가·설명 Attempt에 넘기는 Stage 소유 경로(Attempt 결과 경로)."""
+    results = Path(store.home) / "results"
+    results.mkdir(exist_ok=True)
+    return results / "job.attempt.pending.parquet"

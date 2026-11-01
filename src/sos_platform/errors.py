@@ -180,9 +180,15 @@ DEFINITIONS = (
     ),
     spec(
         "SOS-ML-SCORE-STAGE-LIMIT",
-        "점수화 임시 저장 공간 초과",
-        "Scoring의 중간 파일이 실행 저장 공간 예산을 초과했습니다. 입력 범위나 실행 자원을 확인하세요.",
+        "점수 계산 임시 저장 공간 초과",
+        "Scoring·판정 정책·평가·설명의 중간 파일이 실행 저장 공간 예산을 초과했습니다. 실행 자원을 확인하세요.",
         "storage_capacity",
+    ),
+    spec(
+        "SOS-ML-SCORE-CAPACITY",
+        "점수 집계 실행 예산 초과",
+        "점수의 정렬·집계가 Worker 메모리 예산으로 수용되지 않았습니다. 실행 환경의 메모리 예산을 확인하세요.",
+        "capacity",
     ),
     spec(
         "SOS-ML-TRAIN-CAPACITY",

@@ -73,6 +73,15 @@ class ResultPublication:
         return {"location": location, "sha256": storage.put(key, path)}
 
 
+# Scoring 결과를 만들거나 내려받아 읽는 연산의 Attempt Stage 소유 경로.
+_SCORE_STAGE_KINDS = ("ml_score", "ml_policy", "ml_evaluate", "ml_explain")
+
+
+def score_stage_owner(kind: str, pending: Path) -> Path:
+    """Scoring은 결과 파일, 정책·평가·설명은 Attempt 경로로 Stage를 소유한다."""
+    return pending.with_suffix(".scores.parquet") if kind == "ml_score" else pending
+
+
 def enforce_stage_limit(store: Store, job: dict, pending: Path, max_stage_mib: int) -> None:
     """연산별 임시 파일을 합산하고 외부 커밋 위험에 맞는 실패 코드를 사용한다."""
     kind, attempt_id = job["kind"], job["attempts"][-1]["id"]
@@ -82,8 +91,8 @@ def enforce_stage_limit(store: Store, job: dict, pending: Path, max_stage_mib: i
     elif kind == "ml_train":
         size = training_stage_bytes(store.home, attempt_id)
         code = "SOS-ML-TRAIN-STAGE-LIMIT"
-    elif kind == "ml_score":
-        size = scoring_stage_bytes(store.home, pending.with_suffix(".scores.parquet"))
+    elif kind in _SCORE_STAGE_KINDS:
+        size = scoring_stage_bytes(store.home, score_stage_owner(kind, pending))
         code = "SOS-ML-SCORE-STAGE-LIMIT"
     else:
         return
@@ -96,10 +105,12 @@ def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) 
     for job_id, attempt_id in interrupted:
         output, pending, completed = attempt_result_paths(store, job_id, attempt_id)
         failures = _remove_result_files(output, pending, completed)
-        try:
-            cleanup_scoring_stage(store.home, pending.with_suffix(".scores.parquet"))
-        except (OSError, ValueError) as exc:
-            failures.append(("scoring_stage", exc))
+        # 복구 시점에는 Job 종류를 묻지 않는다. 두 소유 경로의 Stage를 모두 회수한다.
+        for owner in (pending.with_suffix(".scores.parquet"), pending):
+            try:
+                cleanup_scoring_stage(store.home, owner)
+            except (OSError, ValueError) as exc:
+                failures.append(("scoring_stage", exc))
         _report_cleanup_failures(failures, job_id=job_id, attempt_id=attempt_id)
 
 
@@ -150,9 +161,9 @@ def cleanup_attempt_files(store: Store, job: dict) -> None:
     failures = _remove_result_files(output, pending, completed)
     operation = "staging"
     try:
-        if job["kind"] == "ml_score":
+        if job["kind"] in _SCORE_STAGE_KINDS:
             operation = "scoring_stage"
-            cleanup_scoring_stage(store.home, pending.with_suffix(".scores.parquet"))
+            cleanup_scoring_stage(store.home, score_stage_owner(job["kind"], pending))
         elif job["kind"] == "ml_train":
             operation = "training_stage"
             cleanup_training_stage(store.home, attempt_id)

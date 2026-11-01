@@ -116,12 +116,13 @@ def test_recovery_continues_to_next_attempt_after_file_and_stage_failure(tmp_pat
         return unlink(path, **kwargs)
 
     monkeypatch.setattr(Path, "unlink", failing_unlink)
-    cleanup = Mock(side_effect=[OSError("cannot remove stage"), None])
+    # Attempt마다 Scoring 결과 소유 Stage와 정책·평가·설명 소유 Stage를 모두 회수한다.
+    cleanup = Mock(side_effect=[OSError("cannot remove stage"), None, None, None])
     monkeypatch.setattr(job_artifacts, "cleanup_scoring_stage", cleanup)
     reports = Mock()
     monkeypatch.setattr(job_artifacts, "emit", reports)
     job_artifacts.cleanup_recovered_results(store, [("job", "first"), ("job", "second")])
-    assert cleanup.call_count == 2
+    assert cleanup.call_count == 4
     assert first[1].exists() and not first[0].exists() and not first[2].exists()
     assert not any(path.exists() for path in second)
     assert untouched.exists()

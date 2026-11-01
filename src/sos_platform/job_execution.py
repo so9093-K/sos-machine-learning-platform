@@ -140,17 +140,17 @@ def execute_job(store: Store, job: dict, pending: Path, set_stage: Callable[[str
         from .ml_decision import apply_scoring_policy
 
         set_stage("processing")
-        result = apply_scoring_policy(store, job["spec"])
+        result = apply_scoring_policy(store, job["spec"], pending)
     elif job["kind"] == "ml_evaluate":
         from .ml_decision import evaluate_scoring_policy
 
         set_stage("processing")
-        result = evaluate_scoring_policy(store, job["spec"])
+        result = evaluate_scoring_policy(store, job["spec"], pending)
     elif job["kind"] == "ml_explain":
         from .ml_explanation import explain_scored_row
 
         set_stage("processing")
-        result = explain_scored_row(store, job["spec"])
+        result = explain_scored_row(store, job["spec"], pending)
     elif job["kind"] == "iceberg_import":
         from .datasets import import_to_iceberg
 

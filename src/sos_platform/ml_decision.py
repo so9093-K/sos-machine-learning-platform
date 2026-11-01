@@ -1,5 +1,7 @@
 """불변 Scoring Result에 여러 정책·평가를 독립 적용한다."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -7,51 +9,68 @@ import numpy as np
 import polars as pl
 import pyarrow.parquet as pq
 
-from .ml_anomaly import evaluate_anomaly_scores, quantile_threshold
+from .duckdb_spill import SpillBudget
 from .ml_policy_contract import validate_policy_for_scoring
+from .ml_scoring_staging import scoring_stage_bytes, scoring_stage_prefix
 from .object_store import ObjectStore
+from .score_files import quantile_threshold_file, summarize_scores
 
 
-def _verified_scoring(
-    store, scoring: dict, *, include_features: bool = False
-) -> pl.DataFrame:
-    """Scoring 무결성과 행 순서를 검증하며 필요한 컬럼만 메모리에 적재한다.
+@contextmanager
+def _attempt_stage(store, stage_owner: Path) -> Iterator[Path]:
+    """Worker가 크기를 감시하고 종료·복구 때 회수하는 이 Attempt 소유 임시 디렉터리."""
+    with TemporaryDirectory(
+        prefix=scoring_stage_prefix(stage_owner), dir=stage_owner.parent,
+    ) as directory:
+        yield Path(directory)
 
-    Policy/Evaluation은 이상 점수·레이블만 조회한다. 설명은 명시적으로
-    include_features=True를 요청해야 원본 Feature 구조를 가져온다.
+
+@contextmanager
+def _verified_scoring(store, scoring: dict, stage_owner: Path) -> Iterator[tuple[Path, SpillBudget]]:
+    """해시를 검증한 Scoring Parquet과 이 Attempt Stage의 Spill 예산을 제공한다.
+
+    행 수·필수 컬럼·행 순서는 배치로 순회하며 확인한다. 점수를 메모리에 모으지 않으며, Policy·Evaluation은
+    파일 계산(`score_files`)으로 같은 결과를 만든다. 내려받은 결과와 외부 정렬 Spill은 Attempt Stage에
+    두어 Worker의 Stage 한도 검사와 회수 대상이 된다.
     """
     storage = ObjectStore()
     expected = f"results/{scoring['job_id']}/{scoring['attempt_id']}.scores.parquet"
     if scoring["location"] != storage.location(expected):
         raise ValueError("Scoring artifact is outside its immutable Attempt location")
-    with TemporaryDirectory(prefix="ml-scoring-", dir=store.home / "cache") as directory:
-        path = Path(directory) / "scores.parquet"
+    with _attempt_stage(store, stage_owner) as directory:
+        path = directory / "scores.parquet"
         storage.get(expected, path, expected_sha256=scoring["sha256"])
-        if include_features:
-            frame = pl.read_parquet(path)
-        else:
-            with pq.ParquetFile(path) as parquet:
-                columns = ["row_index", "anomaly_score"]
-                if "label" in parquet.schema_arrow.names:
-                    columns.append("label")
-            frame = pl.read_parquet(path, columns=columns)
-    if frame.height != scoring["row_count"]:
-        raise ValueError("Scoring artifact row count does not match the revision")
-    if "anomaly_score" not in frame.columns or "row_index" not in frame.columns:
-        raise ValueError("Invalid Scoring artifact columns")
-    indices = frame["row_index"].to_numpy()
-    if not np.array_equal(indices, np.arange(frame.height, dtype=np.int64)):
-        raise ValueError("Scoring artifact row order does not match its revision")
-    return frame
+        with pq.ParquetFile(path) as parquet:
+            if parquet.metadata.num_rows != scoring["row_count"]:
+                raise ValueError("Scoring artifact row count does not match the revision")
+            if not {"row_index", "anomaly_score"}.issubset(parquet.schema_arrow.names):
+                raise ValueError("Invalid Scoring artifact columns")
+            position = 0
+            for batch in parquet.iter_batches(batch_size=65_536, columns=["row_index"]):
+                indices = batch.column(0).to_numpy(zero_copy_only=False)
+                if not np.array_equal(indices, np.arange(position, position + len(indices))):
+                    raise ValueError("Scoring artifact row order does not match its revision")
+                position += len(indices)
+        yield path, SpillBudget.for_worker(
+            directory, stage_error="SOS-ML-SCORE-STAGE-LIMIT",
+            capacity_error="SOS-ML-SCORE-CAPACITY",
+            used_bytes=lambda: scoring_stage_bytes(store.home, stage_owner),
+        )
 
 
-def _verified_scoring_row(store, scoring: dict, row_index: int) -> dict:
+def _labeled(path: Path) -> bool:
+    with pq.ParquetFile(path) as parquet:
+        return "label" in parquet.schema_arrow.names
+
+
+def _verified_scoring_row(store, scoring: dict, row_index: int, stage_owner: Path) -> dict:
     """해시 검증된 Scoring Parquet에서 설명 대상 Row Group만 불러온다.
 
     Args:
         store: 조회에 사용할 SOS Store와 Attempt별 캐시.
         scoring: 원본 Scoring Result의 불변 위치·SHA-256·행 수.
         row_index: 결과 Parquet에서 생성한 전역 순번.
+        stage_owner: 내려받은 결과를 둘 Attempt Stage의 소유 경로.
 
     Returns:
         dict: 선택한 한 행의 점수, 원본 Feature struct, 선택적 관측치 UUID.
@@ -65,8 +84,8 @@ def _verified_scoring_row(store, scoring: dict, row_index: int) -> dict:
     expected = f"results/{scoring['job_id']}/{scoring['attempt_id']}.scores.parquet"
     if scoring["location"] != storage.location(expected):
         raise ValueError("Scoring artifact is outside its immutable Attempt location")
-    with TemporaryDirectory(prefix="ml-scoring-", dir=store.home / "cache") as directory:
-        path = Path(directory) / "scores.parquet"
+    with _attempt_stage(store, stage_owner) as directory:
+        path = directory / "scores.parquet"
         storage.get(expected, path, expected_sha256=scoring["sha256"])
         with pq.ParquetFile(path) as parquet:
             if parquet.metadata.num_rows != scoring["row_count"]:
@@ -95,22 +114,21 @@ def _verified_scoring_row(store, scoring: dict, row_index: int) -> dict:
     raise ValueError("Explanation row_index is out of bounds")
 
 
-def apply_scoring_policy(store, spec: dict) -> dict:
+def apply_scoring_policy(store, spec: dict, stage_owner: Path) -> dict:
     """고정 또는 참조 분위수 임계값을 기존 점수에만 적용한다."""
     source = store.get_scoring_result(spec["scoring_result_id"])
     if source is None or source["owner_actor"] != spec["source_owner_actor"]:
         raise ValueError("Scoring Result is unavailable")
-    frame = _verified_scoring(store, source)
-    scores = frame["anomaly_score"].to_list()
     mode = spec["mode"]
-    if mode == "fixed":
-        threshold = spec["threshold"]
-    elif mode == "quantile":
-        threshold = quantile_threshold(scores, spec["alert_fraction"])
-    else:
+    if mode not in ("fixed", "quantile"):
         raise ValueError("Unsupported Decision Policy")
-    # 임계값 탐색은 정확도가 아니다. 정책 선택과 독립 평가셋 검증을 구별한다.
-    result = evaluate_anomaly_scores(scores, threshold=threshold)
+    with _verified_scoring(store, source, stage_owner) as (path, budget):
+        threshold = (
+            spec["threshold"] if mode == "fixed"
+            else quantile_threshold_file(path, spec["alert_fraction"], budget)
+        )
+        # 임계값 탐색은 정확도가 아니다. 정책 선택과 독립 평가셋 검증을 구별한다.
+        result = summarize_scores(path, threshold=threshold)
     result["evaluation_scope"] = "scoring_dataset_without_ground_truth"
     result["threshold_reference"] = (
         "current_scoring_result" if mode == "quantile" else "explicit_fixed"
@@ -149,7 +167,7 @@ def _verified_temporal_nonoverlap(reference: dict, target: dict) -> bool:
     )
 
 
-def evaluate_scoring_policy(store, spec: dict) -> dict:
+def evaluate_scoring_policy(store, spec: dict, stage_owner: Path) -> dict:
     """정책 산정 Scoring과 적용 Scoring을 구분해 평가 근거를 남긴다."""
     source = store.get_scoring_result(spec["scoring_result_id"])
     if source is None or source["owner_actor"] != spec["source_owner_actor"]:
@@ -166,19 +184,15 @@ def evaluate_scoring_policy(store, spec: dict) -> dict:
         )
         if policy is not None else None
     )
-    frame = _verified_scoring(store, source)
-    label_values = frame["label"].to_list() if "label" in frame.columns else None
     threshold = policy["threshold"] if policy else None
-    if label_values is not None and threshold is None:
-        # 랭킹 지표는 정책 없이 측정할 수 있지만 이진 판정 지표는 정의하지 않는다.
-        summary = evaluate_anomaly_scores(frame["anomaly_score"].to_list())
-        summary["evaluation_kind"] = "ranking_only"
-    else:
-        summary = evaluate_anomaly_scores(
-            frame["anomaly_score"].to_list(),
-            threshold=threshold,
-            labels=label_values,
-        )
+    with _verified_scoring(store, source, stage_owner) as (path, _):
+        labeled = _labeled(path)
+        if labeled and threshold is None:
+            # 랭킹 지표는 정책 없이 측정할 수 있지만 이진 판정 지표는 정의하지 않는다.
+            summary = summarize_scores(path)
+            summary["evaluation_kind"] = "ranking_only"
+        else:
+            summary = summarize_scores(path, threshold=threshold, labeled=labeled)
     if reference is not None:
         summary["policy_reference_scoring_result_id"] = reference["id"]
         temporal_nonoverlap = _verified_temporal_nonoverlap(reference, source)
@@ -193,7 +207,7 @@ def evaluate_scoring_policy(store, spec: dict) -> dict:
     return {
         "scoring_result_id": source["id"],
         "policy_revision_id": policy_id,
-        "label_coverage": "full" if label_values is not None else "none",
+        "label_coverage": "full" if labeled else "none",
         "decision_metrics": summary,
         "ranking_metrics": source["ranking_metrics"],
     }
