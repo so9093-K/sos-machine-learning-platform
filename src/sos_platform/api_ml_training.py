@@ -1,23 +1,19 @@
 """ML Training HTTP 계약. 앱의 인증·소유권·멱등성 검사를 그대로 사용한다."""
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from .api_access import ResourceAccess
 from .ml_input import TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
-from .pagination import decode_cursor, page_from_rows
 from .schemas import (
+    JobOut,
     MLForkRequest,
     MLTrainingInputPolicy,
-    MLTrainingJobOut,
-    MLTrainingJobPageOut,
     MLTrainRequest,
 )
 from .security import Actor, require
 from .store import Store
 
 TRAIN_MODEL_DEP = Depends(require("model.train"))
-READ_JOB_DEP = Depends(require("job.read"))
-CANCEL_JOB_DEP = Depends(require("job.cancel"))
 
 
 def training_router(store: Store, access: ResourceAccess) -> APIRouter:
@@ -30,7 +26,7 @@ def training_router(store: Store, access: ResourceAccess) -> APIRouter:
         summary="Isolation Forest 학습 작업 제출",
         description="Dataset 판본과 모델 설정을 고정해 비동기 학습을 접수합니다. 202 Accepted는 학습 완료를 의미하지 않습니다.",
         status_code=202,
-        response_model=MLTrainingJobOut,
+        response_model=JobOut,
     )
     def create_training_job(
         body: MLTrainRequest,
@@ -87,7 +83,7 @@ def training_router(store: Store, access: ResourceAccess) -> APIRouter:
         tags=["Training"],
         summary="기존 학습 설정으로 새 학습 시작",
         status_code=202,
-        response_model=MLTrainingJobOut,
+        response_model=JobOut,
     )
     def fork_training_job(
         source_job_id: str,
@@ -141,46 +137,5 @@ def training_router(store: Store, access: ResourceAccess) -> APIRouter:
             actor_type=actor.kind,
             idempotency_key=idempotency_key,
         )
-
-    @router.get(
-        "/api/ml/train/jobs",
-        tags=["Training"],
-        summary="학습 작업 목록 조회",
-        response_model=MLTrainingJobPageOut,
-    )
-    def list_ml_training_jobs(
-        limit: int = Query(default=20, ge=1, le=100),
-        cursor: str | None = Query(default=None, max_length=512),
-        actor: Actor = READ_JOB_DEP,
-    ):
-        rows = store.jobs(
-            limit=limit + 1,
-            before=decode_cursor(cursor, "Job"),
-            actor_id=None if actor.privileged else actor.id,
-            kind="ml_train",
-        )
-        return page_from_rows(rows, limit)
-
-    @router.get(
-        "/api/ml/train/jobs/{job_id}",
-        tags=["Training"],
-        summary="학습 작업 상세 조회",
-        response_model=MLTrainingJobOut,
-    )
-    def get_ml_training_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        return existing_ml_training_job(job_id, actor)
-
-    @router.post(
-        "/api/ml/train/jobs/{job_id}/cancel",
-        tags=["Training"],
-        summary="학습 작업 취소 요청",
-        response_model=MLTrainingJobOut,
-    )
-    def cancel_ml_training_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        existing_ml_training_job(job_id, actor)
-        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
-        if item is None:
-            raise HTTPException(status_code=404, detail="학습 작업을 찾을 수 없습니다.")
-        return item
 
     return router

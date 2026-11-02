@@ -161,7 +161,7 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
         assert client.post(path, json=body, headers=analyst).status_code == 403, path
     assert submitted == []
     # 일반 실행·기록 조회는 제작 권한 변경의 영향을 받지 않는다.
-    assert client.get("/api/ml/train/jobs/missing", headers=analyst).status_code == 404
+    assert client.get("/api/jobs/missing", headers=analyst).status_code == 404
     assert client.post("/api/ml/scoring/jobs", json={
         "dataset_id": "source", "model_revision_id": "missing",
     }, headers=analyst).status_code == 404
@@ -252,7 +252,7 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
     assert client.get("/api/ml/offered-models", headers=consumer).json()["items"][0]["model"]["id"] == "model"
     assert client.get("/api/ml/models/model", headers=consumer).status_code == 200
     assert client.get("/api/datasets/training-data", headers=consumer).status_code == 404
-    assert client.get("/api/ml/train/jobs/training", headers=consumer).status_code == 404
+    assert client.get("/api/jobs/training", headers=consumer).status_code == 404
     assert client.post("/api/ml/scoring/jobs", json=body, headers=consumer).status_code == 202
     assert client.delete(path, headers=consumer).status_code == 403
     assert client.delete(path, headers=supplier).json()["offered"] is False

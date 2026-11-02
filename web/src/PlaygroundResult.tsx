@@ -2,7 +2,7 @@ import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { formatFeatureValue } from "./feature-format";
 import { FeatureResultDetails } from "./FeatureResultDetails";
 import { ModelScoreContext } from "./ModelScoreContext";
-import type { MLPlaygroundJob, ModelRevision } from "./types";
+import type { Job, ModelRevision } from "./types";
 
 export type PlaygroundComparison = {
   modelId: string;
@@ -22,7 +22,7 @@ export function playgroundScoreChange(before: number, after: number): string {
 }
 
 export function PlaygroundResult({ model, job, comparison, matchesInput, onEdit, onRestore }: {
-  model: ModelRevision; job: MLPlaygroundJob;
+  model: ModelRevision; job: Job;
   comparison: PlaygroundComparison | null;
   matchesInput: boolean;
   onEdit: (feature?: string) => void;

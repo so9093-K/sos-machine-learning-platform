@@ -192,7 +192,7 @@ def train_from_dataset(client: httpx.Client, args: argparse.Namespace, state: di
         state["job_id"] = job["id"]
         save_state(path, state)
     print(f"학습 Job · {state['job_id']}", flush=True)
-    job = wait(client, f"/api/ml/train/jobs/{state['job_id']}",
+    job = wait(client, f"/api/jobs/{state['job_id']}",
                lambda item: item["status"] in TERMINAL, interval=5,
                timeout=args.timeout, label="학습")
     if job["status"] != "Succeeded":
@@ -210,7 +210,7 @@ def connect_mlflow_version(client: httpx.Client, args: argparse.Namespace, state
         save_state(path, state)
     print(f"연결 Job · {state['job_id']} · MLflow {state['source']['mlflow_model']} "
           f"v{state['source']['mlflow_version']}", flush=True)
-    job = wait(client, f"/api/ml/models/imports/{state['job_id']}",
+    job = wait(client, f"/api/jobs/{state['job_id']}",
                lambda item: item["status"] in TERMINAL, interval=3,
                timeout=args.timeout, label="모델 연결")
     if job["status"] != "Succeeded":

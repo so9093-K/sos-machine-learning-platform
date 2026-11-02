@@ -142,12 +142,12 @@ def test_model_filtered_history_runs_filter_before_pagination():
             return EmptyResult()
 
     fake = SimpleNamespace(connection=lambda: nullcontext(FakeConnection()))
-    assert Store.jobs(fake, kind="ml_playground", actor_id="actor-1",
+    assert Store.jobs(fake, kinds=["ml_playground"], actor_id="actor-1",
                       model_revision_id="model-1", limit=10) == []
     statement, params = executed[0]
     assert "spec::jsonb ->> 'model_revision_id'" in statement
     assert "owner_actor=:actor_id" in statement
-    assert "kind=:kind" in statement
+    assert "kind = ANY(:kinds)" in statement
     assert statement.index("model_revision_id") < statement.index("LIMIT")
     assert params["model_revision_id"] == "model-1"
     assert params["actor_id"] == "actor-1"

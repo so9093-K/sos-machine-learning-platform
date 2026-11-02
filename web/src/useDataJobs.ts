@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { formatError } from "./api";
-import type { ExplorationJobSummary, JobSummary } from "./types";
 import { usePagedJobs } from "./usePagedJobs";
 
 const FINAL = ["Succeeded", "Failed", "Cancelled"];
 
 /** 데이터 작업(일반·탐색) 이력. 조회 실패는 실행 실패와 구분하고 진행 중인 작업만 다시 조회한다. */
 export function useDataJobs(historyOpen: boolean) {
-  const jobs = usePagedJobs<JobSummary>("/api/jobs");
-  const explorations = usePagedJobs<ExplorationJobSummary>("/api/explorations/jobs");
+  const jobs = usePagedJobs(
+    "profile", "transform", "iceberg_import", "feature_register", "feature_retrieve", "feature_retire");
+  const explorations = usePagedJobs("exploration");
   const [loading, setLoading] = useState(true);
   const [jobsError, setJobsError] = useState("");
   const [explorationsError, setExplorationsError] = useState("");

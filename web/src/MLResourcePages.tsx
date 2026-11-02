@@ -10,9 +10,8 @@ import { SensitivityChart } from "./FeatureSensitivity";
 import { MLDecisionPanel, type DecisionView } from "./MLDecisionPanel";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type {
-  Dataset, MLScoringJobSummary, MLPolicyJobSummary,
-  MLEvaluationJobSummary, MLExplanationJobSummary, ModelRevision, ScoringResult,
-  DecisionPolicyRevision, EvaluationRevision, ExplanationResult, ModelOffering, ModelOfferingPage,
+  Dataset, ModelRevision, ScoringResult, DecisionPolicyRevision, EvaluationRevision,
+  ExplanationResult, ModelOffering, ModelOfferingPage,
 } from "./types";
 import {
   algorithmLabel, explanationMethodLabel, formatRecordedAt, jobStatusLabel, modelVersionLabel,
@@ -26,9 +25,9 @@ import { EvaluationSummary } from "./EvaluationSummary";
 
 type OpenResource = (kind: MLResourceKind, id: string) => void;
 const resultConfig = {
-  policy: { title: "판정 정책", api: "/api/ml/policies", jobs: "/api/ml/policies/jobs", field: "policy_revision_id" },
-  evaluation: { title: "평가", api: "/api/ml/evaluations", jobs: "/api/ml/evaluations/jobs", field: "evaluation_revision_id" },
-  explanation: { title: "설명", api: "/api/ml/explanations", jobs: "/api/ml/explanations/jobs", field: "explanation_result_id" },
+  policy: { title: "판정 정책", api: "/api/ml/policies", field: "policy_revision_id" },
+  evaluation: { title: "평가", api: "/api/ml/evaluations", field: "evaluation_revision_id" },
+  explanation: { title: "설명", api: "/api/ml/explanations", field: "explanation_result_id" },
 } as const;
 
 function amount(n: unknown): string {
@@ -327,7 +326,7 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
 }) {
   const [offered, setOffered] = useState<ModelOffering[]>([]);
   const [offeredCursor, setOfferedCursor] = useState<string | null>(null);
-  const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
+  const scores = usePagedJobs("ml_score");
   const [model, setModel] = useState<ModelRevision | null>(null);
   const [error, setError] = useState("");
   const [resultFocused, setResultFocused] = useState(false);
@@ -455,10 +454,10 @@ export function DecisionWorkspace({ view, preferredScoringId, canRun, canCancel,
   onScoringSelected: (id: string) => void;
   onNavigate: (tab: "scoring") => void;
 }) {
-  const scores = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
-  const policies = usePagedJobs<MLPolicyJobSummary>("/api/ml/policies/jobs");
-  const evaluations = usePagedJobs<MLEvaluationJobSummary>("/api/ml/evaluations/jobs");
-  const explanations = usePagedJobs<MLExplanationJobSummary>("/api/ml/explanations/jobs");
+  const scores = usePagedJobs("ml_score");
+  const policies = usePagedJobs("ml_policy");
+  const evaluations = usePagedJobs("ml_evaluate");
+  const explanations = usePagedJobs("ml_explain");
   const histories = { policy: policies, evaluation: evaluations, explanation: explanations };
   const history = histories[view];
   const [scoringId, setScoringId] = useState(preferredScoringId);

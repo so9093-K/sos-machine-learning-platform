@@ -1,18 +1,15 @@
-"""일반 데이터 Job과 데이터 탐색 Job의 제출·조회·취소 API."""
+"""모든 Job의 공통 수명주기(목록·상세·Attempt·취소) API와 데이터 Job·데이터 탐색 Job의 제출 API.
+
+종류별 기능 API는 제출 명세와 입력 검증만 소유한다. 취소 가능 여부처럼 종류에 따라 다른 규칙은
+`Store.request_cancel`이 정한다.
+"""
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from .api_access import ResourceAccess
 from .errors import PlatformError
 from .pagination import decode_cursor, page_from_rows
-from .schemas import (
-    ExplorationJobOut,
-    ExplorationJobPageOut,
-    ExplorationJobRequest,
-    JobOut,
-    JobPageOut,
-    WorkRequest,
-)
+from .schemas import ExplorationJobRequest, JobKind, JobOut, JobPageOut, WorkRequest
 from .security import Actor, require
 from .store import Store
 from .store_jobs import FeatureRetirementCancellationConflict, IcebergCancellationConflict
@@ -21,44 +18,36 @@ from .store_jobs import FeatureRetirementCancellationConflict, IcebergCancellati
 READ_JOB_DEP = Depends(require("job.read"))
 CREATE_JOB_DEP = Depends(require("job.create"))
 CANCEL_JOB_DEP = Depends(require("job.cancel"))
+KIND_FILTER = Query(default=None)
 
 
 def job_router(store: Store, access: ResourceAccess) -> APIRouter:
-    """ML·Workflow 전용 Job은 각 도메인 경로에서만 조회·취소한다."""
     router = APIRouter()
 
-    def job_page(limit: int, cursor: str | None, actor: Actor, *, discovery_only: bool) -> dict:
-        before = decode_cursor(cursor, "Job")
-        rows = store.jobs(
-            limit=limit + 1,
-            before=before,
-            actor_id=None if actor.privileged else actor.id,
-            kind="exploration" if discovery_only else None,
-            exclude_kind=None if discovery_only else "exploration",
-            exclude_ml=not discovery_only,
-        )
-        return page_from_rows(rows, limit)
-
-    @router.get("/api/jobs", tags=["Jobs"], summary="작업 목록 조회", response_model=JobPageOut)
+    @router.get(
+        "/api/jobs",
+        tags=["Jobs"],
+        summary="작업 목록 조회",
+        description="모든 종류의 Job을 최신순으로 조회합니다. `kind`를 반복 지정하면 그 종류만, "
+        "`model_revision_id`를 지정하면 제출 명세에 그 모델 판본 ID를 직접 지정한 Job(Scoring·단일 입력 "
+        "점수 계산)만 조회합니다. 다른 결과를 거쳐 모델을 간접 참조하는 Job은 포함하지 않습니다.",
+        response_model=JobPageOut,
+    )
     def list_jobs(
         limit: int = Query(default=20, ge=1, le=100),
         cursor: str | None = Query(default=None, max_length=512),
+        kind: list[JobKind] | None = KIND_FILTER,
+        model_revision_id: str | None = Query(default=None, min_length=36, max_length=36),
         actor: Actor = READ_JOB_DEP,
     ):
-        return job_page(limit, cursor, actor, discovery_only=False)
-
-    @router.get(
-        "/api/explorations/jobs",
-        tags=["Data Exploration"],
-        summary="데이터 탐색 작업 목록 조회",
-        response_model=ExplorationJobPageOut,
-    )
-    def list_exploration_jobs(
-        limit: int = Query(default=20, ge=1, le=100),
-        cursor: str | None = Query(default=None, max_length=512),
-        actor: Actor = READ_JOB_DEP,
-    ):
-        return job_page(limit, cursor, actor, discovery_only=True)
+        rows = store.jobs(
+            limit=limit + 1,
+            before=decode_cursor(cursor, "Job"),
+            actor_id=None if actor.privileged else actor.id,
+            kinds=kind,
+            model_revision_id=model_revision_id,
+        )
+        return page_from_rows(rows, limit)
 
     @router.post(
         "/api/jobs",
@@ -97,7 +86,7 @@ def job_router(store: Store, access: ResourceAccess) -> APIRouter:
         tags=["Data Exploration"],
         summary="데이터 탐색 작업 제출",
         status_code=202,
-        response_model=ExplorationJobOut,
+        response_model=JobOut,
     )
     def create_exploration_job(
         body: ExplorationJobRequest,
@@ -123,70 +112,27 @@ def job_router(store: Store, access: ResourceAccess) -> APIRouter:
             actor_type=actor.kind,
         )
 
-    def exploration_job(job_id: str, actor: Actor) -> dict:
-        item = access.job(job_id, actor)
-        if item["kind"] != "exploration":
-            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
-        return item
-
     @router.get(
-        "/api/explorations/jobs/{job_id}",
-        tags=["Data Exploration"],
-        summary="데이터 탐색 작업 상세 조회",
-        response_model=ExplorationJobOut,
+        "/api/jobs/{job_id}",
+        tags=["Jobs"],
+        summary="작업 상세 조회",
+        description="Job의 상태·결과·오류와 모든 Attempt를 조회합니다.",
+        response_model=JobOut,
     )
-    def get_exploration_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        return exploration_job(job_id, actor)
-
-    @router.post(
-        "/api/explorations/jobs/{job_id}/cancel",
-        tags=["Data Exploration"],
-        summary="데이터 탐색 작업 취소 요청",
-        response_model=ExplorationJobOut,
-    )
-    def cancel_exploration_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        exploration_job(job_id, actor)
-        result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
-        if result is None:
-            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
-        return result
-
-    @router.get("/api/jobs/{job_id}", tags=["Jobs"], summary="작업 상세 조회", response_model=JobOut)
     def get_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        item = access.job(job_id, actor)
-        if item["kind"] in (
-            "exploration",
-            "ml_train",
-            "ml_import",
-            "ml_score",
-            "ml_score_index",
-            "ml_policy",
-            "ml_evaluate",
-            "ml_explain",
-        ):
-            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
-        return item
+        return access.job(job_id, actor)
 
     @router.post(
         "/api/jobs/{job_id}/cancel",
         tags=["Jobs"],
         summary="작업 취소 요청",
-        description="취소를 요청하며 실제 작업 중단이나 외부 저장소 변경의 롤백을 보장하지 않습니다.",
+        description="취소를 요청하며 실제 작업 중단이나 외부 저장소 변경의 롤백을 보장하지 않습니다. "
+        "외부 커밋이 진행 중인 Iceberg 적재와 Feature Service 폐기는 취소할 수 없습니다. 이미 게시된 "
+        "결과는 되돌리지 않습니다.",
         response_model=JobOut,
     )
     def cancel(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        item = access.job(job_id, actor)
-        if item["kind"] in (
-            "exploration",
-            "ml_train",
-            "ml_import",
-            "ml_score",
-            "ml_score_index",
-            "ml_policy",
-            "ml_evaluate",
-            "ml_explain",
-        ):
-            raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
+        access.job(job_id, actor)
         try:
             result = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
         except IcebergCancellationConflict as exc:
