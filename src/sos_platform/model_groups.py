@@ -81,7 +81,7 @@ def model_groups_router(store: Store) -> APIRouter:
                 "INSERT INTO model_groups(owner_actor,registry_key,title,description,archived_at,"
                 "created_at,updated_at) VALUES(:owner,:key,:title,:description,NULL,:at,:at) "
                 "ON CONFLICT DO NOTHING RETURNING *"
-            ), {"owner": actor.id, "key": body.registry_key, "title": body.title.strip(),
+            ), {"owner": actor.id, "key": body.registry_key, "title": body.title,
                 "description": body.description, "at": at}).mappings().first()
             if created is None:
                 raise HTTPException(status_code=409, detail="이미 존재하는 모델 그룹입니다.")
@@ -110,7 +110,7 @@ def model_groups_router(store: Store) -> APIRouter:
                 "UPDATE model_groups SET title=:title,description=:description,"
                 "archived_at=:archived_at,updated_at=:at "
                 "WHERE owner_actor=:owner AND registry_key=:key RETURNING *"
-            ), {"title": body.title.strip() if body.title is not None else group["title"],
+            ), {"title": body.title if body.title is not None else group["title"],
                 "description": body.description if body.description is not None
                 else group["description"],
                 "archived_at": archived_at, "at": now(), "owner": actor.id,

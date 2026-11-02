@@ -1,8 +1,9 @@
 """모델 파일 영구 삭제. Model Revision은 결과 계보의 tombstone으로 보존한다.
 
 MLflow 등록은 SOS 판본의 외부 기록이다(ADR 0025). 등록 전송을 한 번도 시도하지 않은 판본은 SOS
-자산만 삭제한다. 등록했거나 등록 결과가 불확실한 판본은 MLflow의 실제 버전을 확인해 함께 삭제한다.
-전송 중인 판본은 등록과 삭제가 엇갈리지 않도록 전송이 끝난 뒤 삭제한다.
+자산만 삭제한다. 등록했거나 등록 결과가 불확실한 판본은 전송이 고정한 MLflow 서버와 현재 연결이 같을
+때만 그 서버의 실제 버전을 확인해 함께 삭제한다. 전송 중인 판본은 등록과 삭제가 엇갈리지 않도록 전송이
+끝난 뒤 삭제한다.
 """
 import json
 
@@ -12,7 +13,7 @@ from sqlalchemy import text
 
 from .mlflow_errors import MLflowDeliveryError
 from .model_artifacts import revision_artifact_key
-from .mlflow_tracking import MLflowClient
+from .mlflow_tracking import MLflowClient, destination_fingerprint
 from .mlflow_registry import delete_registered_versions
 from .mlflow_config import MLflowSettings
 from .errors import RuntimeConfigurationError
@@ -42,11 +43,19 @@ def deletion_impact(store: Store, model_id: str) -> dict:
                 **deletion_impact_transaction(db, model_id)}
 
 
-def begin_delete(store: Store, model_id: str, actor: Actor) -> tuple[dict, bool]:
+def begin_delete(store: Store, model_id: str, actor: Actor,
+                 destination: str | None) -> tuple[dict, bool]:
     """새 모델 사용을 차단하고, 외부 삭제 재시도가 가능한 상태를 확정한다.
+
+    Args:
+        destination: 현재 MLflow 연결의 지문. 구성하지 않았거나 설정이 잘못됐으면 None.
 
     Returns:
         판본 행과 MLflow 등록 전송을 시도한 적이 있는지 여부.
+
+    Raises:
+        HTTPException: 등록 전송 이력이 있는데 현재 연결이 전송이 고정한 서버가 아니다(409).
+            다른 서버의 같은 이름·버전을 지우거나 원래 서버의 등록본을 남기지 않도록 상태를 바꾸기 전에 거부한다.
     """
     with store.connection() as db:
         row = db.execute(
@@ -58,11 +67,16 @@ def begin_delete(store: Store, model_id: str, actor: Actor) -> tuple[dict, bool]
             raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다.")
         # 전송 행을 잠가 Worker가 이 판본의 등록 전송을 동시에 차지하지 못하게 한다.
         export = db.execute(text(
-            "SELECT state,attempts FROM mlflow_exports WHERE job_id=:job FOR UPDATE"
+            "SELECT state,attempts,destination_fingerprint FROM mlflow_exports "
+            "WHERE job_id=:job FOR UPDATE"
         ), {"job": row["job_id"]}).mappings().first()
         attempted = bool(row["registry_version"]) or bool(export and export["attempts"])
         if row["lifecycle_state"] == "Deleted":
             return dict(row), attempted
+        saved = export["destination_fingerprint"] if export else None
+        if attempted and (saved is None or saved != destination):
+            raise HTTPException(status_code=409, detail="MLflow 등록 기록이 있는 판본입니다. 등록한 MLflow "
+                                "서버에 연결된 상태에서 다시 요청하세요.")
         # 제공·중단도 같은 모델 행을 잠근다. 제공 확인과 삭제 전환 사이에
         # 새 제공이 끼어들지 못하며, 외부 삭제 재시도 전에도 중단을 요구한다.
         offered = db.execute(text(
@@ -162,7 +176,13 @@ def model_deletion_router(store: Store) -> APIRouter:
     ):
         if not confirm:
             raise HTTPException(status_code=422,detail="모델 삭제에는 명시적 확인이 필요합니다.")
-        row, attempted = begin_delete(store,revision_id,actor)
+        # 설정 오류는 등록 이력이 있는 판본에서만 삭제를 막는다(현재 연결을 확인할 수 없음).
+        try:
+            settings = MLflowSettings.from_env()
+        except RuntimeConfigurationError:
+            settings = None
+        destination = destination_fingerprint(settings) if settings is not None else None
+        row, attempted = begin_delete(store,revision_id,actor,destination)
         if row["lifecycle_state"]=="Deleted":
             return {"model_id":revision_id,"state":"Deleted"}
         # SOS는 실제 Registry와 S3 객체가 삭제되기 전까지 Deleting을 유지한다.
@@ -174,14 +194,7 @@ def model_deletion_router(store: Store) -> APIRouter:
             if key != revision_artifact_key({**row, "runtime": json.loads(row["runtime"])}):
                 raise ValueError("Model artifact does not match its publishing Attempt")
             if attempted:
-                # 등록했거나 등록 결과가 불확실한 판본만 MLflow 설정을 읽고 실제 버전을 확인해 지운다.
-                # 설정을 고칠 때까지 판본은 Deleting으로 남아 같은 요청으로 재개한다.
-                try:
-                    settings = MLflowSettings.from_env()
-                except RuntimeConfigurationError as exc:
-                    raise HTTPException(status_code=503, detail="MLflow 연결 설정을 확인하세요.") from exc
-                if settings is None:
-                    raise RuntimeError("MLflow registration exists but MLflow is not configured")
+                # 등록했거나 등록 결과가 불확실한 판본은 begin_delete가 확인한 같은 서버에서 실제 버전을 지운다.
                 delete_registered_versions(MLflowClient(settings), row)
             storage.permanently_delete(key)
         except (MLflowDeliveryError, ValueError, OSError, RuntimeError, BotoCoreError, ClientError) as exc:

@@ -643,7 +643,7 @@ export interface paths {
         post?: never;
         /**
          * 모델 그룹 삭제
-         * @description 삭제되지 않은 판본이나 진행 중인 학습·연결이 없는 그룹만 삭제합니다. MLflow에 남은 빈 Registered Model도 함께 정리합니다.
+         * @description 삭제되지 않은 판본이나 진행 중인 학습·연결이 없는 그룹만 삭제합니다. MLflow의 같은 그룹에 모델 버전이 남아 있으면 409로 거부하고, 비어 있으면 함께 정리합니다.
          */
         delete: operations["delete_group_api_ml_model_groups__registry_key__delete"];
         options?: never;

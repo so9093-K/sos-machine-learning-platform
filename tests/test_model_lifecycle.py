@@ -81,7 +81,7 @@ def test_model_delete_does_not_mark_completed_when_s3_fails(monkeypatch):
     }
     calls = []
     monkeypatch.setattr(model_deletion, "begin_delete",
-                        lambda store, model_id, user: (calls.append("begin") or (item, True)))
+                        lambda store, model_id, user, destination: (calls.append("begin") or (item, True)))
     monkeypatch.setattr(model_deletion, "finish_delete",
                         lambda store, model_id, user: calls.append("finish"))
     class Registry:
@@ -99,7 +99,7 @@ def test_model_delete_does_not_mark_completed_when_s3_fails(monkeypatch):
     monkeypatch.setattr(model_deletion, "MLflowClient", Registry)
     monkeypatch.setattr(model_deletion, "ObjectStore", Storage)
     monkeypatch.setattr(model_deletion, "MLflowSettings",
-                        SimpleNamespace(from_env=lambda: object()))
+                        SimpleNamespace(from_env=lambda: SimpleNamespace(endpoint="http://mlflow:5000")))
     router = model_deletion.model_deletion_router(object())
     endpoint = next(route.endpoint for route in router.routes
                     if getattr(route, "path", "") == "/api/ml/models/{revision_id}")
@@ -194,7 +194,8 @@ def test_invalid_model_object_key_never_deletes_registry_version(monkeypatch):
     monkeypatch.setattr(model_deletion, "begin_delete", lambda *_: (model, True))
     monkeypatch.setattr(model_deletion, "finish_delete", lambda *_: pytest.fail(
         "Mismatched artifact must not be marked deleted"))
-    monkeypatch.setattr(model_deletion.MLflowSettings, "from_env", lambda: object())
+    monkeypatch.setattr(model_deletion.MLflowSettings, "from_env",
+                        lambda: SimpleNamespace(endpoint="http://mlflow:5000"))
     class Storage:
         def key(self, location):
             return location.split("s3://bucket/", 1)[1]
@@ -228,7 +229,7 @@ def test_offered_model_requires_withdrawal_before_deletion(state):
     ]
     store = SimpleNamespace(connection=lambda: nullcontext(db))
     with pytest.raises(HTTPException) as error:
-        model_deletion.begin_delete(store, "model", actor)
+        model_deletion.begin_delete(store, "model", actor, None)
     assert error.value.status_code == 409
     assert "먼저 모델 제공을 중단" in error.value.detail
     assert db.execute.call_count == 3  # 외부 삭제나 상태 전환 전에 거부한다.

@@ -9,6 +9,7 @@ from pydantic import (
     Field,
     StrictFloat,
     StrictInt,
+    StringConstraints,
     computed_field,
     field_validator,
     model_validator,
@@ -311,14 +312,18 @@ class MLflowRunPageOut(BaseModel):
     next_page_token: str | None = None
 
 
+# 그룹 이름은 앞뒤 공백을 제거한 뒤 길이를 검사한다. 공백만 있는 이름은 받지 않는다.
+ModelGroupTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
 class ModelGroupCreate(BaseModel):
     registry_key: str = Field(pattern=r"^[a-z][a-z0-9-]{0,39}$")
-    title: str = Field(min_length=1, max_length=80)
+    title: ModelGroupTitle
     description: str = Field(default="", max_length=1000)
 
 
 class ModelGroupUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=80)
+    title: ModelGroupTitle | None = None
     description: str | None = Field(default=None, max_length=1000)
     archived: bool | None = Field(default=None, description="참이면 보관, 거짓이면 복원")
 

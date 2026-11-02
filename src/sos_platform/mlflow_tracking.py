@@ -369,8 +369,8 @@ def send_to_mlflow(
     return run_id
 
 
-def _destination_fingerprint(settings: MLflowSettings) -> str:
-    """인증정보를 제외한 Tracking 서버·Experiment 정책의 연결 지문."""
+def destination_fingerprint(settings: MLflowSettings) -> str:
+    """인증정보를 제외한 Tracking 서버·Experiment 정책의 연결 지문. 전송과 외부 삭제가 같은 대상을 확인한다."""
     identity = f"{settings.endpoint}\0owner-experiment-v1".encode()
     return hashlib.sha256(identity).hexdigest()
 
@@ -387,7 +387,7 @@ def run_tracking_once(store, client: MLflowClient) -> TrackingOutcome:
         return "idle"
     job_id = export["job_id"]
     try:
-        if not store.bind_tracking_destination(job_id, _destination_fingerprint(client.settings)):
+        if not store.bind_tracking_destination(job_id, destination_fingerprint(client.settings)):
             raise MLflowDeliveryError("SOS-MLFLOW-TARGET-CHANGED")
         job = store.get_job(job_id)
         if job is None:
