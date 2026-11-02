@@ -392,8 +392,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         # 복제본의 응답이 판본에 기록된 출력 계약(종류·방향·척도)과 결과 구조를 모두 따를 때만 전달한다.
         # Dashboard 관측 상태 대신 실제 계산한 복제본을 검증한다. 배포 설정 조정은 컨트롤러가 맡는다.
         expected = revision_output_contract(model)
-        if expected is None or not replica_matches(result, desired) \
-                or not response_matches(expected, result, len(rows)):
+        if not replica_matches(result, desired) or not response_matches(expected, result, len(rows)):
             raise PlatformError("SOS-SERVING-UNAVAILABLE")
         return {"endpoint_id": endpoint_id, "model_revision_id": revision_id,
                 **expected.record(), "outputs": result["outputs"]}

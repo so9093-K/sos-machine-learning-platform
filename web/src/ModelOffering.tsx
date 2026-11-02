@@ -102,7 +102,7 @@ function OfferingEditor({ model, offering, disabled, statusError, onSaved, onRet
       disabled={disabled || Boolean(operation)} onChange={event => setDescription(event.target.value)} />
     <span id={`${fieldId}-length`} className="hint">{length.toLocaleString("ko-KR")} / 1,000자
       {length > 1000 ? " · 1,000자 이하로 줄여야 합니다" : ""}</span>
-    {!eligible && <p className="hint">Registry 등록이 확인된 활성 모델만 제공할 수 있습니다.</p>}
+    {!eligible && <p className="hint">삭제됐거나 삭제 중인 판본, 보관된 판본 또는 보관된 모델 그룹의 판본은 제공할 수 없습니다.</p>}
     <div className="model-offering-submit">
       <button type="submit" disabled={disabled || Boolean(operation) || !eligible || length < 1 || length > 1000}>
         {operation === "save" ? "제공 상태 저장 중…" : offering.offered ? "제공 설명 저장"

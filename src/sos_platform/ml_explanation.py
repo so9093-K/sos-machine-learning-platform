@@ -28,7 +28,7 @@ def explain_scored_row(store, spec: dict, stage_owner: Path) -> dict:
     Raises:
         ValueError: 입력·판본·결과 불일치 또는 SHAP 설명 검증 실패.
     """
-    method = spec.get("method", "median_reference_feature_replacement")
+    method = spec["method"]
     if method not in ("median_reference_feature_replacement", "permutation_shap_median_v1"):
         raise ValueError("Unsupported explanation method")
     if spec.get("playground_job_id"):
@@ -159,7 +159,7 @@ def explain_playground_job(store, spec: dict) -> dict:
     if not math.isclose(float(score), recalculated, rel_tol=1e-9, abs_tol=1e-10):
         raise ValueError("Playground result and model output disagree")
 
-    method = spec.get("method", "median_reference_feature_replacement")
+    method = spec["method"]
     if method == "permutation_shap_median_v1":
         result = _permutation_shap_result(
             None, model, None, original, reference, float(score), model_runtime

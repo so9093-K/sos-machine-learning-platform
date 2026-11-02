@@ -5,7 +5,7 @@ import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
 
 export type ActivityView = "data" | "ml";
 
-/** Job API는 종류별로 분리되어 있다. 화면도 조회 범위를 숨기지 않고 작업 유형을 전환한다. */
+/** 데이터 작업과 모델 적용 작업을 작업 맥락별로 나눠 보인다. 조회·취소는 모두 공통 Job API를 쓴다. */
 export function ActivityWorkspace({ active, onChange, onNavigate, onOpenResource, datasets, canCancel, children }: {
   active: ActivityView;
   onChange: (view: ActivityView) => void;

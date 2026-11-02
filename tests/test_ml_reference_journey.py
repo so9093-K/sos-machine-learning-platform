@@ -187,6 +187,7 @@ def test_prepare_train_calibrate_test_evaluate_explain_journey(monkeypatch, tmp_
             "scoring_result_id": "test",
             "source_owner_actor": "analyst",
             "row_index": 0,
+            "method": "median_reference_feature_replacement",
         }, _stage_owner(store),
     )
     assert explanation["source_observation"] == {

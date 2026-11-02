@@ -575,10 +575,9 @@ class ModelRevisionBaseOut(BaseModel):
 
     @computed_field
     @property
-    def output_type(self) -> str | None:
+    def output_type(self) -> str:
         """학습 때 기록한 출력 계약. 응답의 공개 범위와 무관하게 같은 의미를 유지한다."""
-        contract = revision_output_contract({"algorithm": self.algorithm, "runtime": self.runtime})
-        return contract.output_type if contract else None
+        return revision_output_contract({"algorithm": self.algorithm, "runtime": self.runtime}).output_type
 
 
 class ModelRevisionOut(ModelRevisionBaseOut):

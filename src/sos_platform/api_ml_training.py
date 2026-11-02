@@ -3,7 +3,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from .api_access import ResourceAccess
-from .ml_input import TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
 from .schemas import (
     JobOut,
     MLForkRequest,
@@ -17,7 +16,7 @@ TRAIN_MODEL_DEP = Depends(require("model.train"))
 
 
 def training_router(store: Store, access: ResourceAccess) -> APIRouter:
-    """Training·Fork·조회·취소를 앱의 기존 공통 검증 규칙에 연결한다."""
+    """학습·Fork 제출을 앱의 공통 검증 규칙에 연결한다. 진행 조회·취소는 공통 Job API가 맡는다."""
     router = APIRouter()
 
     @router.post(
@@ -64,7 +63,6 @@ def training_router(store: Store, access: ResourceAccess) -> APIRouter:
                     body.temporal_split.model_dump(mode="json")
                     if body.temporal_split is not None else None
                 ),
-                "selection_algorithm_version": TRAINING_SELECTION_CURRENT,
             },
             owner_actor=actor.id,
             actor_type=actor.kind,
@@ -117,19 +115,16 @@ def training_router(store: Store, access: ResourceAccess) -> APIRouter:
             dataset_id=dataset["id"],
             spec={
                 "algorithm": source["spec"]["algorithm"],
-                "registry_key": body.registry_key or source["spec"].get("registry_key", "default"),
-                "experiment_title": source["spec"].get("experiment_title", "기본 실험"),
+                "registry_key": body.registry_key or source["spec"]["registry_key"],
+                "experiment_title": source["spec"]["experiment_title"],
                 "dataset_version": source["spec"]["dataset_version"],
                 "features": source["spec"]["features"],
                 "params": params,
                 "training_input": MLTrainingInputPolicy.model_validate(
-                    source["spec"].get("training_input", {})
+                    source["spec"]["training_input"]
                 ).model_dump(),
-                "selection_algorithm_version": source["spec"].get(
-                    "selection_algorithm_version", TRAINING_SELECTION_LEGACY
-                ),
-                "missing_policy": source["spec"].get("missing_policy", "reject"),
-                "temporal_split": source["spec"].get("temporal_split"),
+                "missing_policy": source["spec"]["missing_policy"],
+                "temporal_split": source["spec"]["temporal_split"],
                 "forked_from_job_id": source_job_id,
             },
             request_id=request.state.request_id,

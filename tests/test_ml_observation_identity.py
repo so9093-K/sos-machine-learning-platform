@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from sos_platform import ml_scoring
 from sos_platform.ml_observation_identity import validate_observation_identity
+from sos_platform.ml_outputs import ISOLATION_FOREST_OUTPUT
 from sos_platform.schemas import MLScoringRequest
 from test_ml_scoring_temporal import scoring_env, scope, spec  # noqa: F401
 
@@ -103,11 +104,11 @@ def test_selected_scope_duplicate_is_rejected_even_across_batches(scoring_env, t
     assert not (tmp_path / "dupes.parquet").exists()
 
 
-def test_legacy_scoring_keeps_previous_columns(scoring_env, tmp_path):
+def test_scoring_without_identity_has_no_observation_columns(scoring_env, tmp_path):
     store, _, dataset, _, _ = scoring_env
-    summary = ml_scoring.run_dataset_scoring(store, dataset, spec(), tmp_path / "legacy.parquet")
+    summary = ml_scoring.run_dataset_scoring(store, dataset, spec(), tmp_path / "unidentified.parquet")
     assert "observation_identity" not in summary["score_summary"]
-    assert "observation_id" not in pl.read_parquet(tmp_path / "legacy.parquet").columns
+    assert "observation_id" not in pl.read_parquet(tmp_path / "unidentified.parquet").columns
 
 
 def test_scoring_contract_rejects_identity_as_model_feature_or_label(scoring_env, tmp_path):
@@ -162,7 +163,7 @@ def test_http_scoring_identity_option_respects_dataset_and_model_ownership(
 
     dataset = {"id": "dataset-a", "version": "v1", "owner_actor": "alice"}
     model = {"id": "model-a", "owner_actor": "alice", "registry_version": "1", "algorithm": "isolation_forest",
-             "features": ["f1"], "runtime": {"feature_dtypes": ["Float64"]}}
+             "features": ["f1"], "runtime": {"feature_dtypes": ["Float64"], "output": ISOLATION_FOREST_OUTPUT.record()}}
     fake_store = Mock()
     fake_store.get_dataset.return_value = dataset
     fake_store.get_model_revision.return_value = model

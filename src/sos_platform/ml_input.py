@@ -16,7 +16,7 @@ NUMERIC_DTYPE_NAMES = frozenset(str(dtype) for dtype in NUMERIC)
 
 
 def model_input_issues(
-    features: list[str], recorded_dtypes: object, columns: Mapping[str, str]
+    features: list[str], recorded_dtypes: list[str], columns: Mapping[str, str]
 ) -> list[str]:
     """Dataset 컬럼이 모델 입력 Feature 계약과 맞지 않는 이유를 사용자 문장으로 반환한다.
 
@@ -31,13 +31,6 @@ def model_input_issues(
     Returns:
         list[str]: 문제가 없으면 빈 목록.
     """
-    known = (
-        isinstance(recorded_dtypes, list)
-        and len(recorded_dtypes) == len(features)
-        and all(isinstance(dtype, str) for dtype in recorded_dtypes)
-    )
-    if not known:
-        return ["모델의 입력 자료형 기록이 없어 Dataset 호환 여부를 확인할 수 없습니다."]
     missing = [name for name in features if name not in columns]
     mismatched = [
         f"{name}(실제 {columns[name]}, 요구 {expected})"
@@ -56,9 +49,8 @@ def model_input_issues(
         issues.append(f"자료형이 모델과 다른 Feature {len(mismatched)}개: {listed(mismatched)}")
     return issues
 
-# Job 제출 시 확정하며, 기존 Job에 버전 필드가 없으면 이전 선택 의미를 보존한다.
-TRAINING_SELECTION_LEGACY = "row_priority_bottom_k_v1"
-TRAINING_SELECTION_CURRENT = "canonical_multiset_v1"
+# 부분집합(sample) 학습 입력의 선택 알고리즘. 학습 입력 근거에 기록한다.
+TRAINING_SELECTION = "canonical_multiset_v1"
 
 
 # IEEE 754 binary32의 최대 유한값.
@@ -71,8 +63,6 @@ def ordered_playground_input(model: dict, values: dict) -> list[float]:
     features = model["features"]
     if not 1 <= len(features) <= MAX_PLAYGROUND_FEATURES or set(values) != set(features):
         raise ValueError("Playground input must exactly match model features")
-    # 학습 중앙값 전처리를 기록한 판본(SOS 학습·MLflow 연결)만 결측을 받는다.
-    allows_missing = model["runtime"].get("preprocessing_mode") == "train_median_v1"
     ordered = []
     expected_dtypes = model["runtime"].get("feature_dtypes")
     if not isinstance(expected_dtypes, list) or len(expected_dtypes) != len(features):
@@ -87,8 +77,7 @@ def ordered_playground_input(model: dict, values: dict) -> list[float]:
         ):
             raise ValueError("Unsupported Playground Feature dtype")
         if value is None:
-            if not allows_missing:
-                raise ValueError("This model does not support missing values")
+            # 결측은 판본의 학습 중앙값 전처리가 채운다.
             ordered.append(float("nan"))
         elif isinstance(value, bool) or not isinstance(value, (float, int)):
             raise ValueError("Playground Features must be numeric or explicit missing")

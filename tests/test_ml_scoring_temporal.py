@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from sos_platform import ml_scoring
 from sos_platform.ml_anomaly import evaluate_anomaly_scores, quantile_threshold
+from sos_platform.ml_outputs import ISOLATION_FOREST_OUTPUT
 from sos_platform.schemas import MLScoringRequest
 from sos_platform.score_files import quantile_threshold_file, summarize_scores
 
@@ -39,6 +40,7 @@ def scoring_env(monkeypatch, tmp_path):
             "artifact_schema": "if_model_with_preprocessing_v1",
             "preprocessing_mode": "train_median_v1",
             "feature_dtypes": ["Float64"],
+            "output": ISOLATION_FOREST_OUTPUT.record(),
             "training_selection": {
                 "temporal_split": {
                     "timestamp_column": "ts",
@@ -281,9 +283,9 @@ def test_unscoped_time_rejects_invalid_or_missing_values(
         ml_scoring.run_dataset_scoring(store, dataset, request, tmp_path / "invalid-time.parquet")
 
 
-def test_unscoped_scoring_keeps_legacy_result_without_selected_time(scoring_env, tmp_path):
+def test_unscoped_scoring_has_no_observation_time(scoring_env, tmp_path):
     store, _, dataset, _, _ = scoring_env
-    path = tmp_path / "unscoped-legacy.parquet"
+    path = tmp_path / "unscoped.parquet"
     ml_scoring.run_dataset_scoring(store, dataset, spec(), path)
     assert "observed_at" not in pl.read_parquet(path).columns
 

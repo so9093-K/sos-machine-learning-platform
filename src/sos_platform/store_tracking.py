@@ -84,11 +84,7 @@ class TrackingStoreMixin:
             return {**dict(row), "attempts": row["attempts"] + 1}
 
     def bind_tracking_destination(self, job_id: str, fingerprint: str) -> bool:
-        """외부 호출 전에 최초 서버·Experiment 지문을 고정하고 변경을 거부한다.
-
-        이전 코드에서 만든 Run ID에 지문이 없으면 소속을 검증할 수 없으므로
-        새 전송 대상에 암묵적으로 재사용하지 않는다.
-        """
+        """외부 호출 전에 최초 서버·Experiment 지문을 고정하고 변경을 거부한다."""
         with self.worker_ownership_connection() as db:
             row = (
                 db.execute(
@@ -106,8 +102,6 @@ class TrackingStoreMixin:
             saved = row["destination_fingerprint"]
             if saved is not None:
                 return saved == fingerprint
-            if row["run_id"] is not None:
-                return False
             db.execute(
                 text(
                     "UPDATE mlflow_exports SET destination_fingerprint=:fingerprint,"

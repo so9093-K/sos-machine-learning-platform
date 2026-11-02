@@ -115,19 +115,6 @@ def summarize_scores(path: Path, *, threshold: float | None = None, labeled: boo
     )
 
 
-def label_counts(path: Path) -> tuple[int, int]:
-    """(양성 수, 음성 수). 레이블은 0/1만 허용한다."""
-    positives = negatives = 0
-    for batch in _batches(path, [LABEL]):
-        labels = batch.column(0).to_numpy(zero_copy_only=False)
-        if not np.isin(labels, (0, 1)).all():
-            raise ValueError("Labels must be binary 0/1")
-        ones = int((labels == 1).sum())
-        positives += ones
-        negatives += len(labels) - ones
-    return positives, negatives
-
-
 def score_histogram_file(
     path: Path, *, low: float, high: float, expected_rows: int, bins: int = 32,
 ) -> dict:

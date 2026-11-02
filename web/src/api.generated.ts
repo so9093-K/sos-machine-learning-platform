@@ -650,7 +650,7 @@ export interface paths {
         head?: never;
         /**
          * 모델 그룹 이름·설명 변경과 보관·복원
-         * @description 보관한 그룹의 판본은 새 Scoring·Playground·추론·서빙·제공에 쓰지 않고, 그룹에 새 학습·연결 판본을 만들지 않습니다. 제공·서빙 중인 판본이 있으면 보관할 수 없습니다.
+         * @description 보관한 그룹의 판본은 새 Scoring·Playground·추론·서빙·제공에 쓰지 않고, 그룹에 새 학습·연결 판본을 만들지 않습니다. 제공·서빙 중인 판본이나 진행 중인 학습·연결이 있으면 보관할 수 없습니다.
          */
         patch: operations["update_group_api_ml_model_groups__registry_key__patch"];
         trace?: never;
@@ -2453,7 +2453,7 @@ export interface components {
              * Output Type
              * @description 학습 때 기록한 출력 계약. 응답의 공개 범위와 무관하게 같은 의미를 유지한다.
              */
-            readonly output_type: string | null;
+            readonly output_type: string;
             /** Params */
             params: {
                 [key: string]: unknown;
@@ -2607,7 +2607,7 @@ export interface components {
              * Output Type
              * @description 학습 때 기록한 출력 계약. 응답의 공개 범위와 무관하게 같은 의미를 유지한다.
              */
-            readonly output_type: string | null;
+            readonly output_type: string;
             /**
              * Registry Version
              * @description SOS 모델 그룹의 MLflow 등록 버전(외부 기록). 사용 가능 여부와 무관하다

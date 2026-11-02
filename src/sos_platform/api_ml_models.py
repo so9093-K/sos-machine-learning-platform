@@ -1,4 +1,4 @@
-"""모델 판본·MLflow 실험 기록·Registry 조회와 MLflow 전송 상태 API."""
+"""SOS 모델 판본 조회와 MLflow Experiment·Run 기록·전송 상태 조회 API."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -36,7 +36,7 @@ def management_client() -> MLflowClient:
 
 
 def ml_model_router(store: Store, access: ResourceAccess) -> APIRouter:
-    """모델 판본은 SOS, 실험·Registry는 MLflow가 정본이며 이 경로는 조회만 한다."""
+    """모델 판본은 SOS, Experiment·Run은 MLflow가 정본이며 이 경로는 조회만 한다."""
     router = APIRouter()
 
     @router.get(

@@ -107,13 +107,6 @@ DEFINITIONS = (
         "after_refresh",
     ),
     spec(
-        "SOS-STORAGE-INSPECTION",
-        "저장소 진단 장애",
-        "저장소 상태를 확인할 수 없습니다.",
-        "dependency",
-        "after_refresh",
-    ),
-    spec(
         "SOS-ICEBERG-CANCEL-409",
         "Iceberg 취소 불가",
         "외부 커밋 여부를 보장할 수 없어 실행 중 취소할 수 없습니다.",

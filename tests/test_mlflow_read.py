@@ -113,20 +113,3 @@ def test_missing_experiment_returns_not_found_instead_of_management_outage():
                   experiment_id="999")
 
 
-def test_run_search_with_archived_tag_does_not_crash():
-    client = ResearchClient()
-    ensure_experiment(client, "alice")
-    client.runs = [
-        {"info": {"run_id": "archived-run"}, "data": {
-            "tags": [
-                {"key": "sos.job_id", "value": "j1"},
-                {"key": "sos.archived", "value": "true"},
-            ],
-        }}
-    ]
-    store = SimpleNamespace(
-        get_job=lambda job_id: {"owner_actor": "alice", "kind": "ml_train"}
-        if job_id == "j1" else None,
-    )
-    assert [x["id"] for x in read_runs(client, store, "alice")["items"]] == ["archived-run"]
-
