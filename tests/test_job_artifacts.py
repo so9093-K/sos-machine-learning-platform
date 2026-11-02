@@ -39,7 +39,7 @@ def test_upload_failure_keeps_write_intent_for_parent_cleanup(tmp_path, monkeypa
     "kind,cleanup_name,operation",
     [
         ("ml_train", "cleanup_training_stage", "training_stage"),
-        ("ml_score", "cleanup_scoring_stage", "scoring_stage"),
+        ("ml_score", "cleanup_result_stage", "result_stage"),
         ("iceberg_import", "cleanup_iceberg_staging", "iceberg_stage"),
     ],
 )
@@ -118,7 +118,7 @@ def test_recovery_continues_to_next_attempt_after_file_and_stage_failure(tmp_pat
     monkeypatch.setattr(Path, "unlink", failing_unlink)
     # Attempt마다 Scoring 결과 소유 Stage와 정책·평가·설명 소유 Stage를 모두 회수한다.
     cleanup = Mock(side_effect=[OSError("cannot remove stage"), None, None, None])
-    monkeypatch.setattr(job_artifacts, "cleanup_scoring_stage", cleanup)
+    monkeypatch.setattr(job_artifacts, "cleanup_result_stage", cleanup)
     reports = Mock()
     monkeypatch.setattr(job_artifacts, "emit", reports)
     job_artifacts.cleanup_recovered_results(store, [("job", "first"), ("job", "second")])
@@ -128,7 +128,7 @@ def test_recovery_continues_to_next_attempt_after_file_and_stage_failure(tmp_pat
     assert untouched.exists()
     assert [call.kwargs["operation"] for call in reports.call_args_list] == [
         "result.pending",
-        "scoring_stage",
+        "result_stage",
     ]
 
 

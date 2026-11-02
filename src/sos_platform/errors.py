@@ -185,10 +185,35 @@ DEFINITIONS = (
         "storage_capacity",
     ),
     spec(
+        "SOS-FEATURE-STAGE-LIMIT",
+        "Feature 조회 임시 저장 공간 초과",
+        "Historical Feature Retrieval의 중간 파일이 실행 저장 공간 예산을 초과했습니다. 실행 자원을 확인하세요.",
+        "storage_capacity",
+    ),
+    spec(
+        "SOS-FEATURE-CAPACITY",
+        "Feature 조회 실행 예산 초과",
+        "Point-in-Time Join이 Worker 메모리 예산으로 수용되지 않았습니다. 실행 환경의 메모리 예산이나 Entity 배치 크기를 확인하세요.",
+        "capacity",
+    ),
+    spec(
         "SOS-ML-SCORE-CAPACITY",
         "점수 집계 실행 예산 초과",
         "점수의 정렬·집계가 Worker 메모리 예산으로 수용되지 않았습니다. 실행 환경의 메모리 예산을 확인하세요.",
         "capacity",
+    ),
+    spec(
+        "SOS-ML-SCORE-INDEX-PENDING",
+        "관측값 색인 준비 중",
+        "이 점수 결과의 관측값 색인을 만들고 있습니다. 잠시 후 다시 조회하세요.",
+        "conflict",
+        "after_delay",
+    ),
+    spec(
+        "SOS-ML-SCORE-INDEX-UNAVAILABLE",
+        "관측값 색인 없음",
+        "이 점수 결과의 관측값 색인을 만들지 못했습니다. 같은 점수 결과로 관측값 색인 생성을 다시 요청하세요.",
+        "conflict",
     ),
     spec(
         "SOS-ML-TRAIN-CAPACITY",

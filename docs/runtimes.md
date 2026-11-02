@@ -38,10 +38,12 @@ Worker는 등록·조회·명시적 폐기 작업에서만 Feast SDK를 호출�
 SOS 불변 Dataset으로 게시한다. 등록과 폐기는 같은 Registry 이름의 SOS DB
 advisory lock을 사용해 외부 변경을 직렬화한다. Feast Registry가 불가용해도 일반 SOS Data·ML Job의 Worker 시작을
 대기시키지 않는다.
-현재 Offline 실행 모듈은 `feast_offline.py`의 DuckDB/Ibis 물질화·S3 호환
-연결 방식이다. Entity 조회 상한은 `SOS_FEAST_MAX_ENTITY_ROWS` 실행 정책으로
-조정하며, 초과 입력은 잘라내지 않는다. 새 Offline Store 구현은 이 경계에서만
-교체하고 SOS의 Job·Dataset·모델 API를 재정의하지 않는다.
+현재 Offline 실행 모듈은 `feast_offline.py`의 DuckDB/Ibis·S3 호환 연결 방식이다.
+Point-in-Time Join은 Entity 행마다 독립적으로 정해지므로 Entity Dataset을 Attempt Stage에
+옮겨 `SOS_FEAST_ENTITY_BATCH_ROWS`행씩 조회하고 결과를 하나의 Parquet으로 잇는다. 배치 크기는
+물리 설정이며 Entity 행 수로 조회를 거절하거나 입력을 자르지 않는다. DuckDB는 Stage로 Spill한다.
+같은 Entity·시각에 Feature Source 행이 둘 이상이면 Feast가 어느 행을 고를지 정하지 않는다.
+새 Offline Store 구현은 이 경계에서만 교체하고 SOS의 Job·Dataset·모델 API를 재정의하지 않는다.
 현재는 게시 Parquet Feature Source, UTC Event Timestamp, Entity 시점 Dataset만
 지원한다. Online Serving과 Iceberg SQL Catalog 직접 Feature Source 조회는 지원하지
 않는다. Feast 전문 Worker는 API와 동일한 uv.lock의 별도 `feast` dependency group으로

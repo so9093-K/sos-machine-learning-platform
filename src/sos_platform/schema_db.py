@@ -280,6 +280,20 @@ scoring_results = Table(
     Index("ix_scoring_results_model_created", "model_revision_id", "created_at"),
 )
 
+# Scoring 결과의 점수순 관측값 색인 조각. order는 점수 순위, position은 결과 행 번호 기준이다.
+scoring_observation_parts = Table(
+    "scoring_observation_parts",
+    metadata,
+    Column("scoring_result_id", String(36), ForeignKey("scoring_results.id"), primary_key=True),
+    Column("kind", String(16), primary_key=True),
+    Column("part", Integer, primary_key=True),
+    Column("first_position", BigInteger, nullable=False),
+    Column("row_count", Integer, nullable=False),
+    Column("location", Text, nullable=False),
+    Column("sha256", String(64), nullable=False),
+    CheckConstraint("kind IN ('order','position')", name="ck_scoring_observation_parts_kind"),
+)
+
 decision_policy_revisions = Table(
     "decision_policy_revisions",
     metadata,

@@ -1,16 +1,17 @@
 """Job 연산의 Attempt 파일·객체 업로드·스테이징 수명주기."""
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .datasets import cleanup_iceberg_staging, iceberg_staging_bytes
 from .execution_budget import ExecutionLimitExceeded
-from .ml_scoring_staging import cleanup_scoring_stage, scoring_stage_bytes
 from .ml_training_staging import cleanup_training_stage, training_stage_bytes
 from .model_artifacts import JOBLIB, SKOPS, model_artifact_key
 from .object_store import ObjectStore
 from .observability import emit
+from .result_staging import cleanup_result_stage, result_parts_dir, result_stage_bytes
+from .scoring_index import part_files
 from .store import Store
 
 
@@ -32,6 +33,11 @@ class ResultPublication:
     result: dict | None = None
     payload: dict | None = None
     write_id: str | None = None
+    part_write_ids: list[str] = field(default_factory=list)
+
+    def write_ids(self) -> list[str]:
+        """이 게시가 만든 모든 객체 게시 의도(주 결과와 관측값 색인 조각)."""
+        return ([self.write_id] if self.write_id else []) + self.part_write_ids
 
     def prepare(self, store: Store, job: dict, value: dict, pending: Path, output: Path) -> None:
         """연산별 결과를 게시 입력으로 바꾸고 필요한 객체만 업로드한다."""
@@ -60,6 +66,25 @@ class ResultPublication:
                 "location": uploaded["location"],
                 "version": uploaded["sha256"],
             }
+        if job["kind"] in ("ml_score", "ml_score_index"):
+            # 관측값 색인 조각은 결과마다 한 번 만든 불변 객체로 게시한다.
+            directory = result_parts_dir(result_stage_owner(job["kind"], pending))
+            parts = []
+            for part in part_files(directory) if directory.is_dir() else []:
+                key = f"{stem}.observations/{part['path'].name}"
+                uploaded = self._upload_part(store, job, key, part["path"])
+                parts.append({key: value for key, value in part.items() if key != "path"} | uploaded)
+            self.payload = {**(self.payload or value), "observation_parts": parts}
+
+    def _upload_part(self, store: Store, job: dict, key: str, path: Path) -> dict:
+        storage = ObjectStore()
+        location = storage.location(key)
+        write_id = store.begin_object_write(
+            location=location, owner_kind="attempt", owner_id=job["attempts"][-1]["id"],
+        )
+        # 업로드가 실패해도 게시 의도는 남겨 부모가 실패로 기록한다.
+        self.part_write_ids.append(write_id)
+        return {"location": location, "sha256": storage.put(key, path), "write_id": write_id}
 
     def _upload(self, store: Store, job: dict, key: str, path: Path) -> dict:
         storage = ObjectStore()
@@ -73,12 +98,19 @@ class ResultPublication:
         return {"location": location, "sha256": storage.put(key, path)}
 
 
-# Scoring 결과를 만들거나 내려받아 읽는 연산의 Attempt Stage 소유 경로.
-_SCORE_STAGE_KINDS = ("ml_score", "ml_policy", "ml_evaluate", "ml_explain")
+# 결과 Stage(`result_staging`)를 쓰는 연산과 Stage 한도를 넘었을 때의 오류.
+_RESULT_STAGE_LIMITS = {
+    "ml_score": "SOS-ML-SCORE-STAGE-LIMIT",
+    "ml_score_index": "SOS-ML-SCORE-STAGE-LIMIT",
+    "ml_policy": "SOS-ML-SCORE-STAGE-LIMIT",
+    "ml_evaluate": "SOS-ML-SCORE-STAGE-LIMIT",
+    "ml_explain": "SOS-ML-SCORE-STAGE-LIMIT",
+    "feature_retrieve": "SOS-FEATURE-STAGE-LIMIT",
+}
 
 
-def score_stage_owner(kind: str, pending: Path) -> Path:
-    """Scoring은 결과 파일, 정책·평가·설명은 Attempt 경로로 Stage를 소유한다."""
+def result_stage_owner(kind: str, pending: Path) -> Path:
+    """Scoring은 결과 파일, 그 밖의 연산은 Attempt 결과 경로가 Stage를 소유한다."""
     return pending.with_suffix(".scores.parquet") if kind == "ml_score" else pending
 
 
@@ -91,9 +123,9 @@ def enforce_stage_limit(store: Store, job: dict, pending: Path, max_stage_mib: i
     elif kind == "ml_train":
         size = training_stage_bytes(store.home, attempt_id)
         code = "SOS-ML-TRAIN-STAGE-LIMIT"
-    elif kind in _SCORE_STAGE_KINDS:
-        size = scoring_stage_bytes(store.home, score_stage_owner(kind, pending))
-        code = "SOS-ML-SCORE-STAGE-LIMIT"
+    elif kind in _RESULT_STAGE_LIMITS:
+        size = result_stage_bytes(result_stage_owner(kind, pending))
+        code = _RESULT_STAGE_LIMITS[kind]
     else:
         return
     if size > max_stage_mib * 1024 * 1024:
@@ -108,9 +140,9 @@ def cleanup_recovered_results(store: Store, interrupted: list[tuple[str, str]]) 
         # 복구 시점에는 Job 종류를 묻지 않는다. 두 소유 경로의 Stage를 모두 회수한다.
         for owner in (pending.with_suffix(".scores.parquet"), pending):
             try:
-                cleanup_scoring_stage(store.home, owner)
+                cleanup_result_stage(owner)
             except (OSError, ValueError) as exc:
-                failures.append(("scoring_stage", exc))
+                failures.append(("result_stage", exc))
         _report_cleanup_failures(failures, job_id=job_id, attempt_id=attempt_id)
 
 
@@ -161,9 +193,9 @@ def cleanup_attempt_files(store: Store, job: dict) -> None:
     failures = _remove_result_files(output, pending, completed)
     operation = "staging"
     try:
-        if job["kind"] in _SCORE_STAGE_KINDS:
-            operation = "scoring_stage"
-            cleanup_scoring_stage(store.home, score_stage_owner(job["kind"], pending))
+        if job["kind"] in _RESULT_STAGE_LIMITS:
+            operation = "result_stage"
+            cleanup_result_stage(result_stage_owner(job["kind"], pending))
         elif job["kind"] == "ml_train":
             operation = "training_stage"
             cleanup_training_stage(store.home, attempt_id)

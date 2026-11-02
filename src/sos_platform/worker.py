@@ -227,8 +227,9 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
             publication=publication.payload,
             write_id=publication.write_id,
         )
-        if final_status != "Succeeded" and publication.write_id:
-            store.fail_object_write(publication.write_id, "Job cancelled during publication")
+        if final_status != "Succeeded":
+            for write_id in publication.write_ids():
+                store.fail_object_write(write_id, "Job cancelled during publication")
         emit(
             "worker.attempt.finished",
             service="sos-worker",
@@ -257,9 +258,10 @@ def _run_once_reserved(store: Store, budget: ExecutionBudget, cgroup: CgroupIsol
         # 잠금이 사라진 Worker는 실패 확정이나 게시 의도 변경도 수행하지 않는다.
         # DB가 살아 있으면 새 소유자가 Running Attempt의 복구를 맡는다.
         store._assert_worker_ownership()
-        if publication.write_id:
+        if publication.write_ids():
             try:
-                store.fail_object_write(publication.write_id, ERRORS["SOS-JOB-FAILED"].message)
+                for write_id in publication.write_ids():
+                    store.fail_object_write(write_id, ERRORS["SOS-JOB-FAILED"].message)
             except Exception:
                 emit(
                     "worker.write_intent.record_failed",

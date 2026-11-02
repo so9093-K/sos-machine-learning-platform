@@ -7,7 +7,6 @@ Scoring Result의 row_index는 결과 파일의 행 번호이지 원본 Dataset�
 import math
 from datetime import UTC
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import numpy as np
 import polars as pl
@@ -19,10 +18,11 @@ from .ml_input import INTEGER_DTYPES, model_input_issues
 from .ml_observation_identity import validate_observation_identity
 from .ml_outputs import ANOMALY_SCORE_V1, require_output_contract
 from .ml_runtime import load_model_revision
-from .ml_scoring_staging import scoring_stage_bytes, scoring_stage_prefix
 from .ml_temporal_split import select_temporal_partition, utc_observation_time
+from .result_staging import result_parts_dir, result_stage, result_stage_bytes
 from .schemas import MLScoringTemporalScope
 from .score_files import ranking_metrics_file, score_histogram_file
+from .scoring_index import build_observation_index
 
 SCORING_BATCH_ROWS = 10_000
 
@@ -133,8 +133,8 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
     scope_evidence = None
     pending.parent.mkdir(parents=True, exist_ok=True)
     # 중간 파일의 수명은 Job Attempt에 한정한다. 데이터 전체는 메모리에 올리지 않는다.
-    with TemporaryDirectory(prefix=scoring_stage_prefix(pending), dir=pending.parent) as directory:
-        staged = Path(directory) / "selected.parquet"
+    with result_stage(pending) as directory:
+        staged = directory / "selected.parquet"
         with pinned_scan_dataset(store, dataset) as source:
             if spec.get("temporal_scope") is not None:
                 source, scope_evidence = _scoring_scope(
@@ -265,16 +265,18 @@ def run_dataset_scoring(store, dataset: dict, spec: dict, pending: Path) -> dict
                 "dataset_version": dataset["version"],
             }
 
+        budget = SpillBudget.for_worker(
+            directory, stage_error="SOS-ML-SCORE-STAGE-LIMIT",
+            capacity_error="SOS-ML-SCORE-CAPACITY",
+            used_bytes=lambda: result_stage_bytes(pending),
+        )
+        # 점수순 관측값 탐색이 페이지마다 결과 전체를 다시 정렬하지 않도록 색인을 한 번 만든다.
+        build_observation_index(pending, result_parts_dir(pending), budget)
         ranked_metrics = None
         if label is not None:
             # 순위 지표는 게시할 결과 파일을 외부 정렬해 계산한다. 점수·레이블을 메모리에 모으지 않는다.
             average_precision, roc_auc = ranking_metrics_file(
-                pending, SpillBudget.for_worker(
-                    Path(directory), stage_error="SOS-ML-SCORE-STAGE-LIMIT",
-                    capacity_error="SOS-ML-SCORE-CAPACITY",
-                    used_bytes=lambda: scoring_stage_bytes(store.home, pending),
-                ),
-                positives=positives, negatives=count - positives,
+                pending, budget, positives=positives, negatives=count - positives,
             )
             ranked_metrics = {
                 "scope": "fully_labeled_scoring_dataset",

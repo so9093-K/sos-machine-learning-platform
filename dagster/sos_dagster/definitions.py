@@ -74,24 +74,29 @@ class ProductionConfig(Config):
     registry_key: str = Field(default="default", description="연결한 판본을 관리할 SOS 모델 그룹")
 
 
-def _source(path: str) -> pl.LazyFrame:
-    suffix = Path(path).suffix.lower()
-    if suffix == ".parquet":
-        return pl.scan_parquet(path)
-    if suffix == ".csv":
-        return pl.scan_csv(path)
-    raise Failure("data_path는 .csv 또는 .parquet이어야 합니다.")
+def _pin_input(path: str, stage: Path) -> tuple[Path, str]:
+    """입력 파일을 Run 임시 디렉터리로 복사하며 해시한다. Run은 이 사본만 읽는다.
 
-
-def _file_sha256(path: str) -> str | None:
-    file = Path(path)
-    if not file.is_file():
-        return None
+    원본 경로의 파일이 Run 도중 바뀌어도 학습·평가는 고정한 사본을 쓰고, 기록하는 SHA-256은 그 사본의
+    값이다. 읽기 전용 마운트는 호스트 쪽 변경까지 막지 않는다.
+    """
+    source = Path(path)
+    suffix = source.suffix.lower()
+    if suffix not in (".csv", ".parquet"):
+        raise Failure("data_path는 .csv 또는 .parquet이어야 합니다.")
+    if not source.is_file():
+        raise Failure("data_path는 Run 환경에서 읽을 수 있는 파일이어야 합니다.")
+    pinned = stage / f"source{suffix}"
     digest = hashlib.sha256()
-    with file.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1_048_576), b""):
+    with source.open("rb") as reader, pinned.open("wb") as writer:
+        for chunk in iter(lambda: reader.read(1_048_576), b""):
             digest.update(chunk)
-    return digest.hexdigest()
+            writer.write(chunk)
+    return pinned, digest.hexdigest()
+
+
+def _scan(path: Path) -> pl.LazyFrame:
+    return pl.scan_parquet(path) if path.suffix == ".parquet" else pl.scan_csv(path)
 
 
 def _nearest_rank(count: int, fraction: float) -> int:
@@ -116,25 +121,26 @@ def _score_partition(model: TrainedIsolationForest, scan: pl.LazyFrame, path: Pa
 def train_and_evaluate(context: OpExecutionContext, config: ProductionConfig) -> dict:
     """입력 크기와 관계없이 같은 경로로 생산한다.
 
-    입력은 Run 임시 디렉터리에 한 번 옮겨 배치로 읽는다. 시간 경계는 외부 정렬로 정하고, 학습 행렬은
+    입력 파일은 Run 임시 디렉터리에 복사·해시해 고정하고 그 사본만 배치로 읽는다. 시간 경계는 외부 정렬로 정하고, 학습 행렬은
     디스크 Memmap에 기록하며, Calibration·Test 점수는 배치로 계산해 파일에서 임계값·평가를 구한다.
     모델 적합(fit)이 요구하는 메모리만 알고리즘의 실행 조건으로 남는다.
     """
     if config.train_fraction + config.calibration_fraction >= 1:
         raise Failure("train_fraction + calibration_fraction은 1보다 작아야 합니다.")
-    source = _source(config.data_path)
-    schema = source.collect_schema()
-    missing = [name for name in (TIMESTAMP, *ACTIVITY_FEATURES) if name not in schema]
-    if missing:
-        raise Failure("필수 컬럼 없음: " + ", ".join(missing[:12]))
-    if any(schema[name] not in NUMERIC for name in ACTIVITY_FEATURES):
-        raise Failure("활동 Feature는 숫자형이어야 합니다.")
     features = list(ACTIVITY_FEATURES)
     stage_root = os.getenv("SOS_PIPELINE_STAGE_DIR")
     if stage_root:
         Path(stage_root).mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix="activity-production-", dir=stage_root) as directory:
         stage = Path(directory)
+        pinned, data_sha256 = _pin_input(config.data_path, stage)
+        source = _scan(pinned)
+        schema = source.collect_schema()
+        missing = [name for name in (TIMESTAMP, *ACTIVITY_FEATURES) if name not in schema]
+        if missing:
+            raise Failure("필수 컬럼 없음: " + ", ".join(missing[:12]))
+        if any(schema[name] not in NUMERIC for name in ACTIVITY_FEATURES):
+            raise Failure("활동 Feature는 숫자형이어야 합니다.")
         budget = SpillBudget(
             stage=stage, memory_mib=config.memory_mib, max_stage_bytes=config.stage_mib * 1024 * 1024,
             stage_error="SOS-ML-TRAIN-STAGE-LIMIT", capacity_error="SOS-ML-TRAIN-CAPACITY",
@@ -201,7 +207,7 @@ def train_and_evaluate(context: OpExecutionContext, config: ProductionConfig) ->
         training={
             "producer": PRODUCER,
             "data_reference": config.data_path,
-            "data_sha256": _file_sha256(config.data_path),
+            "data_sha256": data_sha256,
             "rows": rows,
             "evaluation": {
                 "temporal_split": {

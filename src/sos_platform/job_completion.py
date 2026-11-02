@@ -9,6 +9,7 @@ from .result_publication import (
     publish_evaluation,
     publish_explanation,
     publish_model,
+    publish_observation_index,
     publish_policy,
     publish_profile,
     publish_scoring,
@@ -45,6 +46,8 @@ def complete_job(
                 publisher = publish_model
             elif kind == "ml_score":
                 publisher = publish_scoring
+            elif kind == "ml_score_index":
+                publisher = publish_observation_index
             elif kind == "ml_policy":
                 publisher = publish_policy
             elif kind == "ml_evaluate":

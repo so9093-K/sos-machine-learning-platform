@@ -13,11 +13,14 @@ from datetime import timedelta
 from pathlib import Path
 
 import polars as pl
+import pyarrow.parquet as pq
 
 from .config import Settings
 from .feature_contracts import FeatureDefinitionRequest, FeatureRetrievalRequest, feature_identity
 from .datasets import pinned_scan_dataset
-from .feast_offline import entity_execution_limit, retrieve_to_parquet
+from .duckdb_spill import SpillBudget
+from .result_staging import result_stage, result_stage_bytes
+from .feast_offline import entity_batch_rows, retrieve_to_parquet
 
 
 def _feature_schema(source: pl.LazyFrame, spec: FeatureDefinitionRequest):
@@ -360,9 +363,11 @@ def retrieve_features(
     raw_spec: dict,
     pending: Path,
 ) -> dict:
-    """등록 서비스의 PIT Join 결과를 부모 Worker가 게시할 Parquet로 출력한다."""
-    import pandas as pd
+    """등록 서비스의 PIT Join 결과를 부모 Worker가 게시할 Parquet로 출력한다.
 
+    Entity Dataset의 키·시각(·관측 식별자)은 Attempt Stage에 그대로 옮기고 배치로 조회한다. 행 수로 입력을
+    거절하거나 자르지 않는다.
+    """
     request = FeatureRetrievalRequest.model_validate(raw_spec)
     if feature_dataset["id"] != registered["feature_dataset_id"]:
         raise ValueError("Registered Feature Source identity changed")
@@ -374,6 +379,17 @@ def retrieve_features(
         raise ValueError("Entity Dataset revision changed")
 
     key = registered["entity_column"]
+    with result_stage(pending) as stage:
+        return _retrieve_in_stage(
+            store, feature_dataset, entity_dataset, registered, request, key, pending, stage,
+        )
+
+
+def _retrieve_in_stage(
+    store, feature_dataset: dict, entity_dataset: dict, registered: dict,
+    request: FeatureRetrievalRequest, key: str, pending: Path, stage: Path,
+) -> dict:
+    entities = stage / "entities.parquet"
     with pinned_scan_dataset(store, entity_dataset) as source:
         schema = source.collect_schema()
         if key not in schema:
@@ -386,21 +402,14 @@ def retrieve_features(
             source_schema = feature_source.collect_schema()
         if schema[key] != source_schema[key]:
             raise ValueError("Entity key dtype differs from registered Feature Source")
-        # 조회 정책은 현행 Offline Runtime에 속하며 SOS API 자체의 상한이 아니다.
-        limit = entity_execution_limit()
         selected_columns = [key, request.timestamp_column]
         # 관측 식별자가 Entity 키 자체일 때 같은 컬럼을 두 번 선택하지 않는다.
         if "sos_observation_id" in schema and key != "sos_observation_id":
             selected_columns.append("sos_observation_id")
-        rows = source.select(selected_columns).head(limit + 1).collect()
-        if rows.height == 0:
+        source.select(selected_columns).sink_parquet(entities)
+    with pq.ParquetFile(entities) as staged:
+        if staged.metadata.num_rows == 0:
             raise ValueError("Entity Dataset is empty")
-        if rows.height > limit:
-            raise ValueError(f"Historical Feature Retrieval exceeds the Runtime limit of {limit} Entity rows")
-        entity_rows = rows.to_pandas().rename(
-            columns={request.timestamp_column: "event_timestamp"}
-        )
-        entity_rows["event_timestamp"] = pd.to_datetime(entity_rows["event_timestamp"], utc=True)
 
     # 조회 중에는 apply()를 호출하지 않는다. Registry가 없거나 정의가 달라졌다면
     # 과거 결과를 새 정의로 조용히 재생성하지 않고 명확히 실패한다.
@@ -427,11 +436,16 @@ def retrieve_features(
     validate_registry_definition(feast, names, expected)
     service = feast.get_feature_service(registered["feature_service"])
     required = [key, "event_timestamp", *registered["feature_names"]]
-    if "sos_observation_id" in entity_rows.columns and key != "sos_observation_id":
+    if "sos_observation_id" in selected_columns and key != "sos_observation_id":
         required.append("sos_observation_id")
     rows_written = retrieve_to_parquet(
-        feast, service, entity_rows=entity_rows, expected_columns=required,
+        feast, service, entities=entities, expected_columns=required,
         timestamp_column=request.timestamp_column, output=pending,
+        budget=SpillBudget.for_worker(
+            stage, stage_error="SOS-FEATURE-STAGE-LIMIT", capacity_error="SOS-FEATURE-CAPACITY",
+            used_bytes=lambda: result_stage_bytes(pending),
+        ),
+        batch_rows=entity_batch_rows(),
     )
 
     return {

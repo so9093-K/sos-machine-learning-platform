@@ -414,10 +414,10 @@ def test_policy_reads_verified_scoring_file_with_in_memory_semantics(scoring_env
 def test_scoring_stage_is_attempt_scoped_counted_and_cleaned(tmp_path):
     from uuid import uuid4
 
-    from sos_platform.ml_scoring_staging import (
-        cleanup_scoring_stage,
-        scoring_stage_bytes,
-        scoring_stage_prefix,
+    from sos_platform.result_staging import (
+        cleanup_result_stage,
+        result_stage_bytes,
+        result_stage_prefix,
     )
     from sos_platform.job_artifacts import attempt_result_paths, cleanup_recovered_results
 
@@ -432,27 +432,27 @@ def test_scoring_stage_is_attempt_scoped_counted_and_cleaned(tmp_path):
     )
     target = pending.with_suffix(".scores.parquet")
     foreign = foreign_pending.with_suffix(".scores.parquet")
-    stage = root / f"{scoring_stage_prefix(target)}a"
-    foreign_stage = root / f"{scoring_stage_prefix(foreign)}b"
+    stage = root / f"{result_stage_prefix(target)}a"
+    foreign_stage = root / f"{result_stage_prefix(foreign)}b"
     stage.mkdir()
     foreign_stage.mkdir()
     (stage / "selected.parquet").write_bytes(b"a" * 29)
     (foreign_stage / "selected.parquet").write_bytes(b"b" * 31)
     target.write_bytes(b"c" * 17)
-    assert scoring_stage_bytes(tmp_path, target) == 46
+    assert result_stage_bytes(target) == 46
     cleanup_recovered_results(
         type("Local", (), {"home": tmp_path})(), [(job_id, attempt_id)]
     )
     assert not stage.exists()
     assert not target.exists()
     assert foreign_stage.is_dir()
-    assert scoring_stage_bytes(tmp_path, foreign) == 31
-    cleanup_scoring_stage(tmp_path, foreign)
+    assert result_stage_bytes(foreign) == 31
+    cleanup_result_stage(foreign)
     assert not foreign_stage.exists()
 
 
 def test_scoring_stage_never_follows_symlinks(tmp_path):
-    from sos_platform.ml_scoring_staging import scoring_stage_bytes, scoring_stage_prefix
+    from sos_platform.result_staging import result_stage_bytes, result_stage_prefix
 
     root = tmp_path / "results"
     root.mkdir()
@@ -460,11 +460,11 @@ def test_scoring_stage_never_follows_symlinks(tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "private.txt").write_text("preserve")
-    (root / f"{scoring_stage_prefix(output)}evil").symlink_to(
+    (root / f"{result_stage_prefix(output)}evil").symlink_to(
         outside, target_is_directory=True
     )
     with pytest.raises(ValueError, match="owned directory"):
-        scoring_stage_bytes(tmp_path, output)
+        result_stage_bytes(output)
     assert (outside / "private.txt").read_text() == "preserve"
 
 
@@ -494,7 +494,7 @@ def test_worker_stops_scoring_stage_overflow_with_distinct_failure_code(
     monkeypatch.setattr(worker.multiprocessing, "get_context", lambda _method: context)
     monkeypatch.setattr(worker, "process_rss_bytes", lambda _pid: None)
     from sos_platform import job_artifacts
-    monkeypatch.setattr(job_artifacts, "scoring_stage_bytes", lambda _home, _output: 2 * 1024 * 1024)
+    monkeypatch.setattr(job_artifacts, "result_stage_bytes", lambda _output: 2 * 1024 * 1024)
     monkeypatch.setattr(worker, "emit", lambda *_args, **_kwargs: None)
     cgroup = Mock()
     assert worker._run_once_reserved(

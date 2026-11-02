@@ -205,6 +205,7 @@ def publish_scoring(
         item,
     )
     store._publish_object(db, write_id, publication["location"], publication["sha256"])
+    _publish_observation_parts(store, db, item["id"], publication.get("observation_parts") or [])
     result = {**(result or {}), "scoring_result_id": item["id"]}
     store._audit(
         db,
@@ -217,6 +218,50 @@ def publish_scoring(
         request_id=row["request_id"],
     )
     return result
+
+
+def _publish_observation_parts(store: "Store", db: Connection, scoring_id: str, parts: list[dict]) -> None:
+    for part in parts:
+        db.execute(text(
+            "INSERT INTO scoring_observation_parts"
+            "(scoring_result_id,kind,part,first_position,row_count,location,sha256) "
+            "VALUES (:scoring,:kind,:part,:first,:rows,:location,:sha256)"
+        ), {"scoring": scoring_id, "kind": part["kind"], "part": part["part"],
+            "first": part["first_position"], "rows": part["row_count"],
+            "location": part["location"], "sha256": part["sha256"]})
+        store._publish_object(db, part["write_id"], part["location"], part["sha256"])
+
+
+def publish_observation_index(
+    store: "Store",
+    db: Connection,
+    row: Mapping,
+    job_id: str,
+    attempt_id: str,
+    result: dict | None,
+    publication: dict,
+    write_id: str | None,
+) -> dict:
+    """기존 Scoring 결과에 관측값 색인 조각을 게시한다. 이미 색인이 있으면 새로 게시하지 않는다."""
+    scoring_id = publication["scoring_result_id"]
+    exists = db.execute(text(
+        "SELECT 1 FROM scoring_observation_parts WHERE scoring_result_id=:id LIMIT 1"
+    ), {"id": scoring_id}).first()
+    parts = publication.get("observation_parts") or []
+    if exists and parts:
+        raise ValueError("Scoring result is already indexed")
+    _publish_observation_parts(store, db, scoring_id, parts)
+    store._audit(
+        db,
+        actor_id="sos-worker",
+        actor_type="service",
+        action="scoring.index",
+        resource_type="scoring_result",
+        resource_id=scoring_id,
+        reason=f"job={job_id};attempt={attempt_id}",
+        request_id=row["request_id"],
+    )
+    return {**(result or {}), "observation_parts": len(parts)}
 
 
 def publish_policy(
