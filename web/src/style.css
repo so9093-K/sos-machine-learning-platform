@@ -716,7 +716,6 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 }
 
 /* 대안 설명 방법은 주요 행동보다 낮은 위계로 둔다. */
-.sensitivity-start { justify-self:start; }
 
 /* 관리자 표시 이름 설정은 하나의 접힌 항목으로 둔다. */
 .brand-settings summary { cursor:pointer; color:var(--sos-muted); font-size:11px; }
@@ -805,12 +804,10 @@ button.scoring-observation-choice { display:flex; gap:10px; justify-content:spac
 .observation-meta strong { color:var(--sos-text); font-weight:600; }
 
 /* 설명 방법은 사용자의 질문을 제목으로 두고 방법 이름은 보조로 표시한다. */
-.shap-explanation > h6,.sensitivity-panel > h6 { margin:0; font-size:16px; line-height:1.4; }
-.shap-explanation > h6 small,.sensitivity-panel > h6 small { margin-left:6px; font-size:12px;
+.shap-explanation > h6 { margin:0; font-size:16px; line-height:1.4; }
+.shap-explanation > h6 small { margin-left:6px; font-size:12px;
   font-weight:500; color:var(--sos-muted); }
 .shap-result > :is(h3,h4,h5,h6) { margin:0; font-size:14px; }
-.sensitivity-panel { display:grid; gap:12px; min-width:0; padding-top:14px; border-top:1px solid var(--sos-border); }
-.sensitivity-panel > button { justify-self:start; }
 .ml-scoring-panel > .scoring-next-analysis-body { margin-top:0; }
 .scoring-input-ready { margin:0; font-size:13px; color:var(--sos-success); }
 

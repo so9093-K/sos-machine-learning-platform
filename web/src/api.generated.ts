@@ -650,7 +650,7 @@ export interface paths {
         head?: never;
         /**
          * 모델 그룹 이름·설명 변경과 보관·복원
-         * @description 보관한 그룹의 판본은 새 Scoring·Playground·추론·서빙·제공에 쓰지 않고, 그룹에 새 학습·연결 판본을 만들지 않습니다. 제공·서빙 중인 판본이 있으면 보관할 수 없습니다.
+         * @description 보관한 그룹의 판본은 새 Scoring·Playground·추론·서빙·제공에 쓰지 않고, 그룹에 새 학습·연결 판본을 만들지 않습니다. 제공·서빙 중인 판본이나 진행 중인 학습·연결이 있으면 보관할 수 없습니다.
          */
         patch: operations["update_group_api_ml_model_groups__registry_key__patch"];
         trace?: never;

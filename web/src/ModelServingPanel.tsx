@@ -90,7 +90,7 @@ export function ModelServingPanel({ model, canManage = false, onOpenServing, rev
       <button type="button" className="secondary" disabled={state.loading || submitting}
         onClick={() => setRetry(value => value + 1)}>배포 상태 다시 조회</button></div>
     <p className="hint">모델 제공과 별개로, 이 판본을 메모리에 적재해 온라인 추론을 준비합니다.</p>
-    <p className="hint">Runtime 준비는 복제본의 판본·시작 지문 확인입니다. 실제 API 요청은 Registry 유효성·호출 권한·입력 검증도 통과해야 합니다.</p>
+    <p className="hint">Runtime 준비는 복제본의 판본·시작 지문 확인입니다. 실제 API 요청은 판본 사용 가능 여부(보관·삭제)·호출 권한·입력 검증도 통과해야 합니다.</p>
     {state.checkedAt && <p className="hint">마지막 확인 <time dateTime={state.checkedAt}>{formatRecordedAt(state.checkedAt)}</time> · 정상·중단 상태도 30초마다 갱신</p>}
     {state.loading && <p role="status">배포 상태 조회 중…</p>}
     {state.error && <p role="alert">배포 상태 조회 실패 · {state.error}{state.items ? " · 표시는 마지막 확인 기록입니다." : ""}</p>}
@@ -112,7 +112,7 @@ export function ModelServingPanel({ model, canManage = false, onOpenServing, rev
     {canManage && <details className="model-deployment-form"><summary>이 판본의 새 Endpoint 배포</summary>
       <p>대상 · {model.id}</p>
       <p className="hint">복제본이 Runtime 자원을 사용합니다. 다른 사용자 대상 제공 상태는 바뀌지 않습니다.</p>
-      {!eligible && <p>활성 모델의 Registry 등록 확인 후 배포할 수 있습니다.</p>}
+      {!eligible && <p>삭제 중이거나 보관된 판본, 보관된 모델 그룹의 판본은 배포할 수 없습니다.</p>}
       <form onSubmit={event => void deploy(event)}>
         <label>Endpoint 이름<input required minLength={2} maxLength={63} pattern="[a-z0-9][a-z0-9-]*[a-z0-9]"
           value={name} disabled={submitting} onChange={event => setName(event.target.value)}

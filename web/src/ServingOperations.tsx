@@ -120,7 +120,7 @@ export function ServingOperations({ onOpenResource, canOpenOperatorTools }: {
       </div>
       <button type="button" className="secondary" onClick={() => void load()}>다시 조회</button>
     </div>
-    <p className="hint">Runtime 준비 상태와 별개로, 실제 API 요청은 Registry 유효성·호출 권한·입력 검증을 통과해야 합니다.</p>
+    <p className="hint">Runtime 준비 상태와 별개로, 실제 API 요청은 판본 사용 가능 여부(보관·삭제)·호출 권한·입력 검증을 통과해야 합니다.</p>
     {loadError && <p className="job-error" role="alert">상태 조회 실패 · {loadError}{endpoints
       ? " · 아래는 마지막으로 확인한 상태이며, 10초마다 다시 확인합니다." : " · 10초마다 다시 확인합니다."}</p>}
     {actionError && <p className="job-error" role="alert">요청 실패 · {actionError}</p>}

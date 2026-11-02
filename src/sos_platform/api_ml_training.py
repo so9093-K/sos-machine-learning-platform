@@ -17,7 +17,7 @@ TRAIN_MODEL_DEP = Depends(require("model.train"))
 
 
 def training_router(store: Store, access: ResourceAccess) -> APIRouter:
-    """Training·Fork·조회·취소를 앱의 기존 공통 검증 규칙에 연결한다."""
+    """학습·Fork 제출을 앱의 공통 검증 규칙에 연결한다. 진행 조회·취소는 공통 Job API가 맡는다."""
     router = APIRouter()
 
     @router.post(

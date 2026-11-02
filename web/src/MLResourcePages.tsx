@@ -173,7 +173,7 @@ export function MLResourceDetail({ kind, id, onOpenResource, onScoring, onApplyM
           <p className="model-card-meta">{algorithmLabel(m.algorithm)} · {modelCreatedLabel(m)} {formatRecordedAt(m.created_at)}</p>
           {m.lifecycle_state !== "Active" && <p>{m.lifecycle_state === "Deleting"
             ? "모델 파일을 삭제 중입니다. 현재 새 점수화에 사용할 수 없습니다."
-            : "모델 파일과 Registry 버전이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>}
+            : "모델 파일이 삭제됐습니다. 과거 실행 근거만 남아 있습니다."}</p>}
           <div className="ml-resource-actions">
             <button disabled={!canRun || modelOffering.offering === null || modelOffering.loading ||
               Boolean(modelOffering.error) || !canApplyModel(m, modelOffering.offering, isAdministrator)}
