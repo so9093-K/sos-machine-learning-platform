@@ -114,25 +114,6 @@ def build_observation_index(scores: Path, out: Path, budget: SpillBudget) -> Non
         raise ValueError("Observation index row count differs from the Scoring result")
 
 
-def index_scoring_result(store, spec: dict, pending: Path) -> dict:
-    """색인이 없는 기존 Scoring 결과의 관측값 색인을 만든다(Worker `ml_score_index` Job).
-
-    결과는 이 Attempt의 Stage에 내려받아 해시를 검증한 뒤 같은 방식으로 색인한다. 이미 색인이 있으면
-    다시 만들지 않는다.
-    """
-    from .ml_decision import _verified_scoring
-    from .result_staging import result_parts_dir
-
-    scoring = store.get_scoring_result(spec["scoring_result_id"])
-    if scoring is None or scoring["owner_actor"] != spec["source_owner_actor"]:
-        raise ValueError("Scoring Result is unavailable")
-    if store.scoring_observation_parts(scoring["id"]):
-        return {"scoring_result_id": scoring["id"], "already_indexed": True}
-    with _verified_scoring(store, scoring, pending) as (path, budget):
-        build_observation_index(path, result_parts_dir(pending), budget)
-    return {"scoring_result_id": scoring["id"], "already_indexed": False}
-
-
 def part_files(directory: Path) -> list[dict]:
     """조각 디렉터리의 조각 목록. 순위(또는 행 번호)의 시작과 행 수를 파일 순서로 정한다."""
     parts = []

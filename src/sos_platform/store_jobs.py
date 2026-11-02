@@ -20,10 +20,6 @@ class FeatureRetirementCancellationConflict(Exception):
     """진행 중인 Feast Registry 객체 삭제는 부분 커밋을 남길 수 있어 취소할 수 없다."""
 
 
-class ScoringIndexExists(Exception):
-    """점수 결과에 관측값 색인이 이미 있어 색인 Job을 다시 만들지 않는다."""
-
-
 class JobStoreMixin:
     """Store의 공통 트랜잭션 경계를 통해 작업 생명주기를 관리한다."""
 
@@ -42,12 +38,11 @@ class JobStoreMixin:
     ) -> dict:
         """중복 제출 판정과 Job 생성을 같은 트랜잭션으로 확정한다."""
         if dataset_id is None and not (
-            kind in ("ml_playground", "ml_import", "ml_score_index")
+            kind in ("ml_playground", "ml_import")
             or (kind == "ml_explain" and spec.get("playground_job_id"))
         ):
             raise ValueError(
-                "Only Playground, model import, observation index or Playground Explanation Jobs "
-                "may omit a Dataset"
+                "Only Playground, model import or Playground Explanation Jobs may omit a Dataset"
             )
         if idempotency_key is not None and owner_actor is None:
             raise ValueError("Idempotent Job requires an actor")
@@ -156,24 +151,6 @@ class JobStoreMixin:
                     "AND registry_key=:key FOR SHARE"
                 ), {"owner": owner_actor, "key": registry_key}).scalar_one():
                     raise PlatformError("SOS-ML-MODEL-ARCHIVED")
-            if kind == "ml_score_index":
-                # 같은 결과의 색인 요청을 결과 행 잠금으로 직렬화한다. 대기·실행 중인 Job을 색인 조각보다
-                # 먼저 확인하므로 게시 확정과 겹쳐도 색인 Job이 중복되지 않는다. 보존된 점수 결과만 읽으므로
-                # 모델 상태는 확인하지 않는다.
-                result_id = spec["scoring_result_id"]
-                db.execute(
-                    text("SELECT id FROM scoring_results WHERE id=:id FOR UPDATE"), {"id": result_id},
-                ).scalar_one()
-                active = db.execute(text(
-                    "SELECT id FROM jobs WHERE kind='ml_score_index' AND status IN ('Queued','Running') "
-                    "AND (spec::jsonb ->> 'scoring_result_id')=:id ORDER BY created_at DESC LIMIT 1"
-                ), {"id": result_id}).scalar_one_or_none()
-                if active is not None:
-                    return self.get_job(active)
-                if db.execute(text(
-                    "SELECT 1 FROM scoring_observation_parts WHERE scoring_result_id=:id LIMIT 1"
-                ), {"id": result_id}).first():
-                    raise ScoringIndexExists
             is_understanding = (
                 kind == "profile"
                 and spec.get("mode") == "understanding"

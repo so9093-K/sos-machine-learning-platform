@@ -1,7 +1,7 @@
 /** 독립 Scoring 결과는 점수 분포와 실제 관측값을 한 문맥에서 탐구한다. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EChartsCoreOption } from "echarts";
-import { ApiError, formatError, request } from "./api";
+import { formatError, request } from "./api";
 import { DataChart } from "./DataChart";
 import { verifiedScoreHistogram } from "./ModelScoreContext";
 import { EvidenceFacts } from "./EvidenceFacts";
@@ -76,8 +76,6 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   const [loadingMore, setLoadingMore] = useState(false);
   const [rowLimit, setRowLimit] = useState(25);
   const [error, setError] = useState("");
-  const [errorCode, setErrorCode] = useState<string | null>(null);
-  const [requestingIndex, setRequestingIndex] = useState(false);
   const [retry, setRetry] = useState(0);
   const pendingMore = useRef(false);
   const pageRequest = useRef(0);
@@ -106,18 +104,15 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
   useEffect(() => {
     pageRequest.current += 1;
     let active = true;
-    setLoaded(null); setSelectedRow(null); setLoading(true); setError(""); setErrorCode(null);
+    setLoaded(null); setSelectedRow(null); setLoading(true); setError("");
     void request<ScoringObservations>(
       "/api/ml/scoring/results/" + encodeURIComponent(result.id) + "/observations?limit=" + rowLimit,
     ).then(page => {
       if (!active) return;
       if (page.result_id !== result.id) throw new Error("조회 결과 판본이 일치하지 않습니다.");
       setLoaded(page);
-    }).catch(cause => {
-      if (!active) return;
-      setError(formatError(cause));
-      setErrorCode(cause instanceof ApiError ? cause.code : null);
-    }).finally(() => { if (active) setLoading(false); });
+    }).catch(cause => { if (active) setError(formatError(cause)); })
+      .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [result.id, retry, rowLimit]);
 
@@ -138,21 +133,6 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
         block: "start",
       });
     });
-  }
-
-  /** 색인을 만들지 못한 결과는 같은 결과로 색인 Job을 다시 접수하고 목록을 새로 조회한다. */
-  async function requestIndex() {
-    setRequestingIndex(true);
-    try {
-      await request(
-        "/api/ml/scoring/results/" + encodeURIComponent(result.id) + "/observation-index",
-        { method: "POST" },
-      );
-      setRetry(n => n + 1);
-    } catch (cause) {
-      setError(formatError(cause));
-      setErrorCode(cause instanceof ApiError ? cause.code : null);
-    } finally { setRequestingIndex(false); }
   }
 
   async function more() {
@@ -231,20 +211,7 @@ export function ScoringObservationExplorer({ result, canRun, canCancel, onOpenRe
           </p>}
         </div>
         {loading && <p role="status">점수가 높은 관측값을 불러오는 중입니다.</p>}
-        {error && errorCode === "SOS-ML-SCORE-INDEX-PENDING" && <div role="status">
-          <strong>관측값 색인 준비 중</strong>
-          <p>이 점수 결과의 관측값 색인을 만들고 있습니다. 완료 후 점수순 관측값을 조회할 수 있습니다.</p>
-          <button type="button" className="secondary" onClick={() => setRetry(n => n + 1)}>관측값 다시 조회</button>
-        </div>}
-        {error && errorCode === "SOS-ML-SCORE-INDEX-UNAVAILABLE" && <div role="alert" className="notice-blocked">
-          <strong>관측값 색인 없음</strong>
-          <p>이 점수 결과의 관측값 색인을 만들지 못했습니다. 보존된 점수 결과로 색인을 다시 만들 수 있습니다.</p>
-          <details><summary>오류 진단 정보</summary><p>{error}</p></details>
-          {canRun && <button type="button" className="secondary" disabled={requestingIndex}
-            onClick={() => void requestIndex()}>{requestingIndex ? "관측값 색인 요청 중…" : "관측값 색인 다시 생성"}</button>}
-        </div>}
-        {error && errorCode !== "SOS-ML-SCORE-INDEX-PENDING" && errorCode !== "SOS-ML-SCORE-INDEX-UNAVAILABLE" &&
-          <div role="alert" className="notice-blocked">
+        {error && <div role="alert" className="notice-blocked">
           <strong>관측값 조회를 완료하지 못했습니다.</strong>
           <details><summary>오류 진단 정보</summary><p>{error}</p></details>
           {!loaded && <button type="button" className="secondary"

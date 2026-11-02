@@ -13,7 +13,7 @@ const actionLabels: Record<string, string> = {
   "model.offer_withdrawn": "모델 제공 중단", "model.archive": "모델 판본 보관", "model.restore": "모델 판본 복원",
   "model_group.create": "모델 그룹 생성", "model_group.update": "모델 그룹 변경",
   "model_group.archive": "모델 그룹 보관", "model_group.restore": "모델 그룹 복원", "model_group.delete": "모델 그룹 삭제",
-  "scoring.publish": "점수 결과 게시", "scoring.index": "관측값 색인 게시",
+  "scoring.publish": "점수 결과 게시",
   "serving.endpoint_created": "서빙 Endpoint 생성", "serving.endpoint_stopped": "서빙 중단",
   "serving.endpoint_resumed": "서빙 재개", "serving.endpoint_deleted": "서빙 Endpoint 삭제",
   "serving.revision_requested": "서빙 판본 전환 요청", "serving.revision_activated": "서빙 판본 전환 완료",

@@ -17,7 +17,7 @@ def execute_job(store: Store, job: dict, pending: Path, set_stage: Callable[[str
 
     dataset = store.get_dataset(job["dataset_id"]) if job["dataset_id"] else None
     if dataset is None and not (
-        job["kind"] in ("ml_playground", "ml_import", "ml_score_index")
+        job["kind"] in ("ml_playground", "ml_import")
         or (job["kind"] == "ml_explain" and job["spec"].get("playground_job_id"))
     ):
         raise ValueError("Input dataset is missing")
@@ -136,11 +136,6 @@ def execute_job(store: Store, job: dict, pending: Path, set_stage: Callable[[str
         result = run_dataset_scoring(
             store, dataset, job["spec"], pending.with_suffix(".scores.parquet")
         )
-    elif job["kind"] == "ml_score_index":
-        from .scoring_index import index_scoring_result
-
-        set_stage("processing")
-        result = index_scoring_result(store, job["spec"], pending)
     elif job["kind"] == "ml_policy":
         from .ml_decision import apply_scoring_policy
 
@@ -186,7 +181,6 @@ def execution_failure_code(job: dict, exc: Exception, stage: str) -> str:
         in (
             "ml_train",
             "ml_score",
-            "ml_score_index",
             "ml_playground",
             "ml_policy",
             "ml_evaluate",
