@@ -1,7 +1,7 @@
 """API와 실행기가 공유하는 Data Workspace 입력 계약."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 from unicodedata import category
 
 from pydantic import (
@@ -845,6 +845,8 @@ class AttemptOut(BaseModel):
 
 
 # 모든 Job 종류는 같은 수명주기 API(`/api/jobs`)로 조회·취소한다. 종류별 API는 제출 명세만 소유한다.
+# 현재 실행할 수 있는 종류. 목록 필터의 입력 계약이며, 저장된 Job 응답의 종류는 폐기된 기능이 남긴
+# 이력도 표현해야 하므로 문자열로 반환한다.
 JobKind = Literal[
     "profile", "transform", "iceberg_import", "exploration",
     "feature_register", "feature_retrieve", "feature_retire",
@@ -853,9 +855,12 @@ JobKind = Literal[
 ]
 
 
+StoredJobKind = Annotated[str, Field(description="Job 종류. 폐기된 기능이 남긴 이력의 종류도 그대로 반환한다")]
+
+
 class JobOut(BaseModel):
     id: str
-    kind: JobKind
+    kind: StoredJobKind
     dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -893,7 +898,7 @@ class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: JobKind
+    kind: StoredJobKind
     dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]

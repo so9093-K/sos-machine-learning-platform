@@ -1813,9 +1813,9 @@ export interface components {
             id: string;
             /**
              * Kind
-             * @enum {string}
+             * @description Job 종류. 폐기된 기능이 남긴 이력의 종류도 그대로 반환한다
              */
-            kind: "profile" | "transform" | "iceberg_import" | "exploration" | "feature_register" | "feature_retrieve" | "feature_retire" | "ml_train" | "ml_import" | "ml_score" | "ml_score_index" | "ml_playground" | "ml_policy" | "ml_evaluate" | "ml_explain";
+            kind: string;
             latest_attempt: components["schemas"]["AttemptOut"] | null;
             /** Request Id */
             request_id?: string | null;
@@ -1981,9 +1981,9 @@ export interface components {
             id: string;
             /**
              * Kind
-             * @enum {string}
+             * @description Job 종류. 폐기된 기능이 남긴 이력의 종류도 그대로 반환한다
              */
-            kind: "profile" | "transform" | "iceberg_import" | "exploration" | "feature_register" | "feature_retrieve" | "feature_retire" | "ml_train" | "ml_import" | "ml_score" | "ml_score_index" | "ml_playground" | "ml_policy" | "ml_evaluate" | "ml_explain";
+            kind: string;
             /** Request Id */
             request_id?: string | null;
             /** Result */
@@ -2037,9 +2037,9 @@ export interface components {
             id: string;
             /**
              * Kind
-             * @enum {string}
+             * @description Job 종류. 폐기된 기능이 남긴 이력의 종류도 그대로 반환한다
              */
-            kind: "profile" | "transform" | "iceberg_import" | "exploration" | "feature_register" | "feature_retrieve" | "feature_retire" | "ml_train" | "ml_import" | "ml_score" | "ml_score_index" | "ml_playground" | "ml_policy" | "ml_evaluate" | "ml_explain";
+            kind: string;
             latest_attempt: components["schemas"]["AttemptOut"] | null;
             /** Request Id */
             request_id?: string | null;

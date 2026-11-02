@@ -1,5 +1,5 @@
 /** Pydantic/OpenAPI에서 생성한 API 응답 타입. 직접 필드 중복 정의 금지. */
-import type { components } from "./api.generated";
+import type { components, operations } from "./api.generated";
 
 export type Identity = components["schemas"]["AuthMeOut"];
 export type AuditEvent = components["schemas"]["AuditEventOut"];
@@ -12,7 +12,8 @@ export type Profile = components["schemas"]["ProfileOut"];
 export type Job = components["schemas"]["JobOut"];
 export type JobSummary = components["schemas"]["JobSummaryOut"];
 export type JobPage = components["schemas"]["JobPageOut"];
-export type JobKind = Job["kind"];
+/** 목록 필터에 쓸 수 있는 현재 Job 종류. 저장된 Job의 `kind`는 폐기된 기능의 이력도 담는 문자열이다. */
+export type JobKind = NonNullable<NonNullable<operations["list_jobs_api_jobs_get"]["parameters"]["query"]>["kind"]>[number];
 export type StorageInspection = components["schemas"]["StorageInspectionOut"];
 export type StoragePolicy = components["schemas"]["StoragePolicyOut"];
 export type IcebergReference = components["schemas"]["IcebergReferenceOut"];
