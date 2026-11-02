@@ -162,11 +162,6 @@ def model_deletion_router(store: Store) -> APIRouter:
     ):
         if not confirm:
             raise HTTPException(status_code=422,detail="모델 삭제에는 명시적 확인이 필요합니다.")
-        # 설정 오류로 삭제 의도만 Deleting에 남기지 않도록 먼저 확인한다.
-        try:
-            settings = MLflowSettings.from_env()
-        except RuntimeConfigurationError as exc:
-            raise HTTPException(status_code=503, detail="MLflow 연결 설정을 확인하세요.") from exc
         row, attempted = begin_delete(store,revision_id,actor)
         if row["lifecycle_state"]=="Deleted":
             return {"model_id":revision_id,"state":"Deleted"}
@@ -179,7 +174,12 @@ def model_deletion_router(store: Store) -> APIRouter:
             if key != revision_artifact_key({**row, "runtime": json.loads(row["runtime"])}):
                 raise ValueError("Model artifact does not match its publishing Attempt")
             if attempted:
-                # 등록했거나 등록 결과가 불확실하면 MLflow의 실제 버전을 확인해 지운다.
+                # 등록했거나 등록 결과가 불확실한 판본만 MLflow 설정을 읽고 실제 버전을 확인해 지운다.
+                # 설정을 고칠 때까지 판본은 Deleting으로 남아 같은 요청으로 재개한다.
+                try:
+                    settings = MLflowSettings.from_env()
+                except RuntimeConfigurationError as exc:
+                    raise HTTPException(status_code=503, detail="MLflow 연결 설정을 확인하세요.") from exc
                 if settings is None:
                     raise RuntimeError("MLflow registration exists but MLflow is not configured")
                 delete_registered_versions(MLflowClient(settings), row)

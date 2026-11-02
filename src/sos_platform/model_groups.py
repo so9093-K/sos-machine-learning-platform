@@ -2,7 +2,8 @@
 
 그룹의 이름·설명·보관과 판본 보관은 SOS가 정본이며 MLflow에 반영하지 않는다. 보관은 새 사용만
 막고 아티팩트·기존 결과를 지우지 않는다. 제공 중이거나 서빙 중인 판본은 먼저 제공·서빙을 중단해야
-보관할 수 있다. 그룹 삭제만 MLflow에 남은 빈 Registered Model을 함께 정리한다.
+보관할 수 있다. 그룹 삭제는 MLflow의 같은 이름 Registered Model에 버전이 하나도 없을 때만 그 빈
+Registered Model을 함께 정리한다. SOS가 만들지 않은 버전이 있으면 삭제하지 않는다.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -122,7 +123,8 @@ def model_groups_router(store: Store) -> APIRouter:
 
     @router.delete("/api/ml/model-groups/{registry_key}", tags=["Models"], summary="모델 그룹 삭제",
                    description="삭제되지 않은 판본이나 진행 중인 학습·연결이 없는 그룹만 삭제합니다. "
-                   "MLflow에 남은 빈 Registered Model도 함께 정리합니다.")
+                   "MLflow의 같은 그룹에 모델 버전이 남아 있으면 409로 거부하고, 비어 있으면 함께 "
+                   "정리합니다.")
     def delete_group(registry_key: str, actor: Actor = MANAGE):
         if registry_key == "default":
             raise HTTPException(status_code=409, detail="기본 모델 그룹은 삭제할 수 없습니다.")
@@ -149,6 +151,12 @@ def model_groups_router(store: Store) -> APIRouter:
                 "owner_actor": actor.id, "algorithm": "isolation_forest", "registry_key": registry_key,
             })
             try:
+                remaining = client.get("model-versions/search", {
+                    "filter": f"name = '{name}'", "max_results": 1,
+                }).get("model_versions") or []
+                if remaining:
+                    raise HTTPException(status_code=409, detail="MLflow의 모델 그룹에 모델 버전이 남아 "
+                                        "있습니다. 버전을 정리한 뒤 다시 요청하세요.")
                 client.delete("registered-models/delete", {"name": name})
             except MLflowDeliveryError as exc:
                 if not str(exc).startswith("SOS-MLFLOW-HTTP-404"):

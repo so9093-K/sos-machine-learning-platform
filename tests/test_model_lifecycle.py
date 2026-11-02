@@ -147,8 +147,9 @@ def test_deleted_model_cannot_be_reloaded_into_runtime(tmp_path):
 
 
 def test_model_never_sent_to_mlflow_is_deleted_without_mlflow(monkeypatch):
-    """등록 전송을 시도하지 않은 판본은 MLflow 구성·가용성과 무관하게 SOS 자산만 삭제한다."""
+    """등록 전송을 시도하지 않은 판본은 MLflow 설정이 잘못돼 있어도 SOS 자산만 삭제한다."""
     from sos_platform import model_deletion
+    from sos_platform.errors import RuntimeConfigurationError
     from sos_platform.model_deletion import model_deletion_router
 
     actor = Actor("researcher-one", "human", frozenset({"researcher"}))
@@ -158,7 +159,10 @@ def test_model_never_sent_to_mlflow_is_deleted_without_mlflow(monkeypatch):
         "lifecycle_state": "Active", "runtime": '{"model_format": "joblib"}',
     }
     calls = []
-    monkeypatch.setattr(model_deletion.MLflowSettings, "from_env", lambda: None)
+    def invalid_settings():
+        raise RuntimeConfigurationError("Invalid MLflow Tracking endpoint")
+
+    monkeypatch.setattr(model_deletion.MLflowSettings, "from_env", invalid_settings)
     monkeypatch.setattr(model_deletion, "begin_delete", lambda *args: (item, False))
     monkeypatch.setattr(model_deletion, "finish_delete", lambda *args: calls.append("finish"))
     monkeypatch.setattr(model_deletion, "MLflowClient", lambda *args: pytest.fail(
