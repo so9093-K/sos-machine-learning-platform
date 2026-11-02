@@ -91,7 +91,7 @@ export function ModelApiUsage({ model, datasetId, lastRun, endpoint, endpointErr
         `  -d "{\\"model_revision_id\\": \\"${model.id}\\", \\"dataset_id\\": \\"${datasetId || "$DATASET_ID"}\\"}"`,
       note: datasetId ? undefined : "$DATASET_ID에는 이 모델의 입력 조건과 맞는 Dataset의 ID를 넣습니다." },
     { title: "완료 확인", result: "status가 Succeeded이면 result.scoring_result_id로 결과를 조회합니다.",
-      command: `curl "$SOS_API/api/ml/scoring/jobs/$JOB_ID" ${auth}` },
+      command: `curl "$SOS_API/api/jobs/$JOB_ID" ${auth}` },
     { title: "점수 상위 관측 조회", result: "items는 anomaly_score가 높은 순서이며 관측의 입력값과 관측 시각을 함께 줍니다. next_cursor로 다음 페이지를 받습니다.",
       command: `curl "$SOS_API/api/ml/scoring/results/$RESULT_ID/observations?limit=25" ${auth}` },
   ];

@@ -4,9 +4,7 @@ import { checkModelDatasetInput, ModelDatasetCompatibility } from "./ModelDatase
 import { usePagedJobs } from "./usePagedJobs";
 import { ScoringObservationExplorer } from "./ScoringObservationExplorer";
 import type { MLResourceKind } from "./PlatformNavigation";
-import type {
-  Dataset, DatasetColumns, MLScoringJob, MLScoringJobSummary, ModelRevision, ScoringResult,
-} from "./types";
+import type { Dataset, DatasetColumns, Job, ModelRevision, ScoringResult } from "./types";
 import { formatDtype, jobStatusLabel } from "./display-format";
 
 type Props = {
@@ -57,7 +55,7 @@ export function MLScoringPanel({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number; phase: "transferring" | "registering" } | null>(null);
-  const [selectedJob, setSelectedJob] = useState<MLScoringJob | null>(null);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [previousJobNotice, setPreviousJobNotice] = useState(false);
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [resultError, setResultError] = useState("");
@@ -69,7 +67,7 @@ export function MLScoringPanel({
   const historySelectionRequest = useRef(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const { items: history, nextCursor, refresh, loadMore } =
-    usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
+    usePagedJobs("ml_score");
 
   useEffect(() => {
     let alive = true;
@@ -99,8 +97,8 @@ export function MLScoringPanel({
     let timer: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
       try {
-        const next = await request<MLScoringJob>(
-          `/api/ml/scoring/jobs/${encodeURIComponent(selectedJob.id)}`,
+        const next = await request<Job>(
+          `/api/jobs/${encodeURIComponent(selectedJob.id)}`,
         );
         if (alive) {
           setSelectedJob(next);
@@ -189,7 +187,7 @@ export function MLScoringPanel({
     setSubmitted(true);
     setError("");
     try {
-      const job = await submitJob<MLScoringJob>("/api/ml/scoring/jobs", {
+      const job = await submitJob<Job>("/api/ml/scoring/jobs", {
         model_revision_id: model.id,
         dataset_id: datasetId,
         label_column: labelColumn || null,
@@ -211,8 +209,8 @@ export function MLScoringPanel({
     setLoadingHistoryId(id);
     setHistoryError("");
     try {
-      const restored = await request<MLScoringJob>(
-        `/api/ml/scoring/jobs/${encodeURIComponent(id)}`,
+      const restored = await request<Job>(
+        `/api/jobs/${encodeURIComponent(id)}`,
       );
       if (requestNumber !== historySelectionRequest.current) return;
       if (restored.id !== id || restored.spec.model_revision_id !== model.id)
@@ -229,8 +227,8 @@ export function MLScoringPanel({
   async function cancel() {
     if (!selectedJob || !canCancel) return;
     try {
-      const updated = await request<MLScoringJob>(
-        `/api/ml/scoring/jobs/${encodeURIComponent(selectedJob.id)}/cancel`,
+      const updated = await request<Job>(
+        `/api/jobs/${encodeURIComponent(selectedJob.id)}/cancel`,
         { method: "POST" },
       );
       setSelectedJob(current => current?.id === updated.id ? updated : current);

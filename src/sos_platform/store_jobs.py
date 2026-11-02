@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from uuid import uuid4
 
 from sqlalchemy import Connection, bindparam, text
@@ -332,34 +332,24 @@ class JobStoreMixin:
         limit: int = 20,
         before: dict | None = None,
         actor_id: str | None = None,
-        kind: str | None = None,
+        kinds: Sequence[str] | None = None,
         model_revision_id: str | None = None,
-        exclude_kind: str | None = None,
-        exclude_ml: bool = False,
     ) -> list[dict]:
-        """목록은 종류별 Job 페이지와 각 Job의 마지막 Attempt 요약만 반환한다."""
+        """Job 페이지와 각 Job의 마지막 Attempt 요약. `kinds`가 있으면 그 종류만 반환한다."""
         if not 1 <= limit <= 101:
             raise InvalidRequestError("Job 조회 개수가 허용 범위를 벗어났습니다.")
-        if model_revision_id is not None and kind != "ml_playground":
-            raise InvalidRequestError(
-                "모델별 Job 이력은 단일 입력 점수 계산에서만 조회할 수 있습니다."
-            )
         filters = []
         if before:
             filters.append("(created_at, id) < (:created_at, :id)")
         if actor_id is not None:
             filters.append("owner_actor=:actor_id")
-        if kind is not None:
-            filters.append("kind=:kind")
+        if kinds:
+            filters.append("kind = ANY(:kinds)")
         if model_revision_id is not None:
             # 모델 필터를 DB 페이지네이션 이전에 적용한다. 후처리 필터는
             # 다른 모델 실행에 밀려 있는 이력을 '없음'으로 잘못 보여준다.
+            # 제출 명세에 모델 판본을 직접 지정한 Job만 찾는다. 결과를 거친 간접 참조는 대상이 아니다.
             filters.append("(spec::jsonb ->> 'model_revision_id')=:model_revision_id")
-        if exclude_kind is not None:
-            filters.append("kind!=:exclude_kind")
-        if exclude_ml:
-            # ML Job은 각 ML API가 소유한다. 일반 Job 목록에는 데이터 Job만 둔다.
-            filters.append("left(kind,3)<>'ml_'")
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(
             f"SELECT * FROM jobs {predicate} ORDER BY created_at DESC, id DESC LIMIT :limit"
@@ -367,9 +357,8 @@ class JobStoreMixin:
         params = {
             "limit": limit,
             "actor_id": actor_id,
-            "kind": kind,
+            "kinds": list(kinds or ()),
             "model_revision_id": model_revision_id,
-            "exclude_kind": exclude_kind,
             **(before or {}),
         }
         with self.connection() as db:

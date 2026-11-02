@@ -42,7 +42,7 @@ def test_supply_resumes_the_same_dataset_and_training_request(tmp_path, lost_at)
             if lost_at == "training" and outage[0]:
                 outage[0] = False
                 raise httpx.ReadError("accepted but response lost", request=request)
-        elif path == "/api/ml/train/jobs/job-1":
+        elif path == "/api/jobs/job-1":
             body = {"status": "Succeeded", "result": {"model_revision_id": "model-1"}}
         elif path == "/api/ml/models/model-1":
             if lost_at == "registry" and outage[0]:

@@ -2,15 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { request, formatError } from "./api";
 import { explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
 import { AnalysisEvidence, analysisScopeLabel, dataSelectionLabel } from "./AnalysisEvidence";
-import type { Dataset, Job, JobSummary, ExplorationJob, ExplorationJobSummary } from "./types";
+import type { Dataset, Job, JobSummary } from "./types";
 import { formatRecordedAt, jobStatusLabel } from "./display-format";
 
-type AnyJobSummary = JobSummary | ExplorationJobSummary;
-type AnyJob = Job | ExplorationJob;
 type JobKind = "data" | "exploration";
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 
-export function dataJobLabel(job: Pick<AnyJobSummary, "kind" | "spec">): string {
+export function dataJobLabel(job: Pick<JobSummary, "kind" | "spec">): string {
   if (job.kind === "profile") return job.spec.mode === "understanding"
     ? job.spec.scope === "full" ? "데이터 이해 · 전체 행" : "데이터 이해 · 표본" : "전체 데이터 프로파일";
   return ({ iceberg_import: "Iceberg 적재", exploration: "전체 집계", transform: "데이터 변환",
@@ -64,7 +62,7 @@ function DiscoveryJobResult({ result }: { result: Record<string, unknown> }) {
   </section>;
 }
 type Props = {
-  jobs: AnyJobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean;
+  jobs: JobSummary[]; datasets: Dataset[]; busy: boolean; canCancel: boolean;
   selectedJobId?: string; selectedJobKind?: JobKind;
   loading?: boolean; readError?: boolean;
   nextCursor: string | null; discoveryNextCursor: string | null;
@@ -81,8 +79,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, selectedJobId, sele
   const [retry, setRetry] = useState(0);
   const [cancelling, setCancelling] = useState(false);
   const key = selectedJobKind + ":" + (selectedJobId ?? "");
-  const endpoint = selectedJobKind === "exploration" ? "/api/explorations/jobs" : "/api/jobs";
-  const [detail, setDetail] = useState<{ key: string; job: AnyJob | null; error: string } | null>(null);
+  const [detail, setDetail] = useState<{ key: string; job: Job | null; error: string } | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const job = detail?.key === key ? detail.job : null;
   const error = detail?.key === key ? detail.error : "";
@@ -93,7 +90,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, selectedJobId, sele
     setDetail(previous => previous?.key === key ? { ...previous, error: "" } : { key, job: null, error: "" });
     async function load() {
       try {
-        const next = await request<AnyJob>(endpoint + "/" + encodeURIComponent(selectedJobId!));
+        const next = await request<Job>("/api/jobs/" + encodeURIComponent(selectedJobId!));
         if (!active) return;
         if (next.id !== selectedJobId || (next.kind === "exploration") !== (selectedJobKind === "exploration"))
           throw new Error("조회한 작업과 선택한 작업의 종류·식별자가 일치하지 않습니다.");
@@ -120,7 +117,7 @@ export function JobsPanel({ jobs, datasets, busy, canCancel, selectedJobId, sele
     if (!job || !canCancel || TERMINAL.has(job.status) || job.cancel_requested || cancelling || job.kind === "feature_retire") return;
     setCancelling(true);
     try {
-      const updated = await request<AnyJob>(endpoint + "/" + encodeURIComponent(job.id) + "/cancel", { method: "POST" });
+      const updated = await request<Job>("/api/jobs/" + encodeURIComponent(job.id) + "/cancel", { method: "POST" });
       setDetail(previous => previous?.key === key ? { key, job: updated, error: "" } : previous);
       setRetry(value => value + 1); onRefresh();
     } catch (cause) { setDetail(previous => previous?.key === key ? { ...previous, error: formatError(cause) } : previous); }

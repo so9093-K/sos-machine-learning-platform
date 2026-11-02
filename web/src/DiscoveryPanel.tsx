@@ -4,7 +4,7 @@ import { DataChart, CHART_COLORS } from "./DataChart";
 import { chartValue, explorationCategory, explorationValue, explorationMetricLabel } from "./exploration-format";
 import { request, jsonPost, submitJob, formatError } from "./api";
 import { AnalysisEvidence, analysisScopeLabel, dataSelectionLabel } from "./AnalysisEvidence";
-import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, ExplorationJob } from "./types";
+import type { DatasetOverview, DatasetColumns, Exploration, ExplorationRequest, Job } from "./types";
 import type { ExplorationDraft } from "./ExplorationDraft";
 
 function analysisLabel(basis: string) {
@@ -94,7 +94,7 @@ export function DiscoveryPanel({
     if (!selectedMeasure || invalidDraft) return;
     setRunning(true); setError(""); setFullJobId(null);
     try {
-      const job = await submitJob<ExplorationJob>("/api/explorations/jobs", {
+      const job = await submitJob<Job>("/api/explorations/jobs", {
         dataset_id: datasetId,
         exploration: selectedRequest,
       });

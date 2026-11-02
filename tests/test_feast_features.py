@@ -59,10 +59,10 @@ def test_registration_list_restores_server_blocking_without_local_retirement():
     checked_pages = []
 
     class RegistrationStore:
-        def jobs(self, *, limit, before, actor_id, kind):
+        def jobs(self, *, limit, before, actor_id, kinds):
             assert limit == 7
             assert actor_id == "owner"
-            assert kind == "feature_register"
+            assert kinds == ["feature_register"]
             if before:
                 assert before["id"] == ids["cancelled"]
             return [{

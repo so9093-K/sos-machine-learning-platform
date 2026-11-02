@@ -2,10 +2,7 @@ import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import type { MLResourceKind, WorkspaceTab } from "./PlatformNavigation";
-import type {
-  Dataset, MLScoringJobSummary, MLPolicyJobSummary,
-  MLEvaluationJobSummary, MLExplanationJobSummary,
-} from "./types";
+import type { Dataset } from "./types";
 import { formatRecordedAt, jobStatusLabel } from "./display-format";
 
 type Kind = "scoring" | "policy" | "evaluation" | "explanation";
@@ -20,12 +17,12 @@ type JobLike = {
   cancel_requested?: boolean;
 };
 const operations: Record<Kind, {
-  label: string; tab: WorkspaceTab; resource: MLResourceKind; field: string; endpoint: string;
+  label: string; tab: WorkspaceTab; resource: MLResourceKind; field: string;
 }> = {
-  scoring: { label: "점수 계산", tab: "scoring", resource: "scoring", field: "scoring_result_id", endpoint: "/api/ml/scoring/jobs" },
-  policy: { label: "판정 정책", tab: "policies", resource: "policy", field: "policy_revision_id", endpoint: "/api/ml/policies/jobs" },
-  evaluation: { label: "평가", tab: "evaluations", resource: "evaluation", field: "evaluation_revision_id", endpoint: "/api/ml/evaluations/jobs" },
-  explanation: { label: "설명", tab: "explanations", resource: "explanation", field: "explanation_result_id", endpoint: "/api/ml/explanations/jobs" },
+  scoring: { label: "점수 계산", tab: "scoring", resource: "scoring", field: "scoring_result_id" },
+  policy: { label: "판정 정책", tab: "policies", resource: "policy", field: "policy_revision_id" },
+  evaluation: { label: "평가", tab: "evaluations", resource: "evaluation", field: "evaluation_revision_id" },
+  explanation: { label: "설명", tab: "explanations", resource: "explanation", field: "explanation_result_id" },
 };
 type Activity = { id: string; kind: Kind; status: string; created: string;
   datasetId: string | null; resultId: string | null; error: string | null; errorCode: string | null;
@@ -64,7 +61,7 @@ function ActivityJobDetails({ job, canCancel, onChanged }: {
     setError("");
     try {
       const result = await request<JobDetail>(
-        `${operations[job.kind].endpoint}/${encodeURIComponent(job.id)}`);
+        `/api/jobs/${encodeURIComponent(job.id)}`);
       setDetail(result);
     } catch (e) { setError(formatError(e)); }
     finally { setLoading(false); }
@@ -76,7 +73,7 @@ function ActivityJobDetails({ job, canCancel, onChanged }: {
     setError("");
     try {
       const updated = await request<JobDetail>(
-        `${operations[job.kind].endpoint}/${encodeURIComponent(job.id)}/cancel`,
+        `/api/jobs/${encodeURIComponent(job.id)}/cancel`,
         { method: "POST" },
       );
       setDetail(updated);
@@ -123,10 +120,10 @@ export function MLActivityPanel({ compact = false, canCancel = false, datasets =
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   onViewAll?: () => void;
 }) {
-  const scoring = usePagedJobs<MLScoringJobSummary>("/api/ml/scoring/jobs");
-  const policy = usePagedJobs<MLPolicyJobSummary>("/api/ml/policies/jobs");
-  const evaluation = usePagedJobs<MLEvaluationJobSummary>("/api/ml/evaluations/jobs");
-  const explanation = usePagedJobs<MLExplanationJobSummary>("/api/ml/explanations/jobs");
+  const scoring = usePagedJobs("ml_score");
+  const policy = usePagedJobs("ml_policy");
+  const evaluation = usePagedJobs("ml_evaluate");
+  const explanation = usePagedJobs("ml_explain");
   const [filter, setFilter] = useState<Kind | "all">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
