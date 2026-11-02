@@ -75,6 +75,40 @@ class JobStoreMixin:
             updated_at=now(),
         )
         with self.connection() as db:
+            if idempotency_key is not None:
+                # 같은 Actor·키·명세의 재요청은 그 뒤 모델·그룹이 보관·삭제·제공 중단됐더라도 원래 Job을
+                # 반환한다(ADR 0005). 아래 상태 검사는 새 Job을 만들 때만 한다. PostgreSQL 유일성 충돌은
+                # 동시 트랜잭션을 직렬화하며, 새 Job 접수가 실패하면 같은 트랜잭션의 키 예약도 되돌린다.
+                inserted = db.execute(
+                    text(
+                        "INSERT INTO job_submissions(actor_id,submission_key,fingerprint,"
+                        "job_id,created_at) VALUES(:actor,:key,:fingerprint,NULL,:at) "
+                        "ON CONFLICT(actor_id,submission_key) DO NOTHING RETURNING actor_id"
+                    ),
+                    {
+                        "actor": owner_actor,
+                        "key": idempotency_key,
+                        "fingerprint": fingerprint,
+                        "at": now(),
+                    },
+                ).scalar_one_or_none()
+                if inserted is None:
+                    previous = (
+                        db.execute(
+                            text(
+                                "SELECT fingerprint,job_id FROM job_submissions "
+                                "WHERE actor_id=:actor AND submission_key=:key"
+                            ),
+                            {"actor": owner_actor, "key": idempotency_key},
+                        )
+                        .mappings()
+                        .one()
+                    )
+                    if previous["fingerprint"] != fingerprint:
+                        raise PlatformError("SOS-JOB-IDEMPOTENCY-CONFLICT")
+                    previous_id = previous["job_id"]
+                    # get_job은 새 트랜잭션으로 기존 확정 Job을 조회한다.
+                    return self.get_job(previous_id)
             if kind in ("ml_score", "ml_playground"):
                 model_id = spec.get("model_revision_id")
                 # 삭제·보관과 같은 판본·그룹 행 잠금 아래에서 SOS 상태만으로 새 사용을 판정한다.
@@ -150,38 +184,6 @@ class JobStoreMixin:
                     text("SELECT id FROM datasets WHERE id=:id FOR UPDATE"),
                     {"id": dataset_id},
                 ).scalar_one()
-            if idempotency_key is not None:
-                # PostgreSQL 유일성 충돌은 동시 트랜잭션을 직렬화한다.
-                inserted = db.execute(
-                    text(
-                        "INSERT INTO job_submissions(actor_id,submission_key,fingerprint,"
-                        "job_id,created_at) VALUES(:actor,:key,:fingerprint,NULL,:at) "
-                        "ON CONFLICT(actor_id,submission_key) DO NOTHING RETURNING actor_id"
-                    ),
-                    {
-                        "actor": owner_actor,
-                        "key": idempotency_key,
-                        "fingerprint": fingerprint,
-                        "at": now(),
-                    },
-                ).scalar_one_or_none()
-                if inserted is None:
-                    previous = (
-                        db.execute(
-                            text(
-                                "SELECT fingerprint,job_id FROM job_submissions "
-                                "WHERE actor_id=:actor AND submission_key=:key"
-                            ),
-                            {"actor": owner_actor, "key": idempotency_key},
-                        )
-                        .mappings()
-                        .one()
-                    )
-                    if previous["fingerprint"] != fingerprint:
-                        raise PlatformError("SOS-JOB-IDEMPOTENCY-CONFLICT")
-                    previous_id = previous["job_id"]
-                    # get_job은 새 트랜잭션으로 기존 확정 Job을 조회한다.
-                    return self.get_job(previous_id)
             # Feature 조회·폐기의 접수는 같은 등록 Job 행 잠금으로 직렬화한다.
             # 폐기가 Queued인 순간부터 신규 조회를 차단하므로 Registry 삭제가
             # 이미 접수된 조회를 놓치거나 삭제 중 새 조회가 유입되는 경합을 없앤다.
