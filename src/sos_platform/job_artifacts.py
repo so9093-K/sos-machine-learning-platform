@@ -66,11 +66,13 @@ class ResultPublication:
                 "location": uploaded["location"],
                 "version": uploaded["sha256"],
             }
-        if job["kind"] in ("ml_score", "ml_score_index"):
-            # 관측값 색인 조각은 결과마다 한 번 만든 불변 객체로 게시한다.
+        if job["kind"] == "ml_score":
+            # 관측값 색인 조각은 결과마다 한 번 만든 불변 객체로 게시한다. Scoring은 항상 색인을 만든다.
             directory = result_parts_dir(result_stage_owner(job["kind"], pending))
+            if not directory.is_dir():
+                raise ValueError("Scoring result has no observation index")
             parts = []
-            for part in part_files(directory) if directory.is_dir() else []:
+            for part in part_files(directory):
                 key = f"{stem}.observations/{part['path'].name}"
                 uploaded = self._upload_part(store, job, key, part["path"])
                 parts.append({key: value for key, value in part.items() if key != "path"} | uploaded)
@@ -101,7 +103,6 @@ class ResultPublication:
 # 결과 Stage(`result_staging`)를 쓰는 연산과 Stage 한도를 넘었을 때의 오류.
 _RESULT_STAGE_LIMITS = {
     "ml_score": "SOS-ML-SCORE-STAGE-LIMIT",
-    "ml_score_index": "SOS-ML-SCORE-STAGE-LIMIT",
     "ml_policy": "SOS-ML-SCORE-STAGE-LIMIT",
     "ml_evaluate": "SOS-ML-SCORE-STAGE-LIMIT",
     "ml_explain": "SOS-ML-SCORE-STAGE-LIMIT",

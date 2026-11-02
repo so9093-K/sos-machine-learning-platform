@@ -913,26 +913,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ml/scoring/results/{result_id}/observation-index": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 점수화 결과 관측값 색인 생성 요청
-         * @description 관측값 색인이 없는 점수 결과의 색인 Job을 같은 결과로 접수합니다. 보존된 점수 결과만 읽으므로 모델 상태와 관계없이 요청할 수 있습니다. 같은 결과의 색인 Job이 대기·실행 중이면 그 Job을 반환하고, 색인이 이미 있으면 409를 반환합니다.
-         */
-        post: operations["request_observation_index_api_ml_scoring_results__result_id__observation_index_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ml/scoring/results/{result_id}/observations": {
         parameters: {
             query?: never;
@@ -942,7 +922,7 @@ export interface paths {
         };
         /**
          * 점수화 결과 관측치 탐색
-         * @description 보존된 점수와 관측 근거를 점수 내림차순(동점은 결과 행 번호 오름차순)으로 조회합니다. 결과마다 한 번 만든 관측값 색인을 읽으므로 결과 크기와 관계없이 페이지 비용이 같습니다. 색인이 준비되기 전이나 색인을 만들지 못한 결과는 409를 반환합니다. 결과 행 번호는 원본 이벤트의 고유 식별자가 아닙니다.
+         * @description 보존된 점수와 관측 근거를 점수 내림차순(동점은 결과 행 번호 오름차순)으로 조회합니다. 결과마다 한 번 만든 관측값 색인을 읽으므로 결과 크기와 관계없이 페이지 비용이 같습니다. 결과 행 번호는 원본 이벤트의 고유 식별자가 아닙니다.
          */
         get: operations["list_scoring_observations_api_ml_scoring_results__result_id__observations_get"];
         put?: never;
@@ -2680,15 +2660,6 @@ export interface components {
              */
             storage: "ready" | "unavailable";
         };
-        /** ScoringObservationIndexOut */
-        ScoringObservationIndexOut: {
-            /** Job Id */
-            job_id: string;
-            /** Result Id */
-            result_id: string;
-            /** Status */
-            status: string;
-        };
         /** ScoringObservationOut */
         ScoringObservationOut: {
             /** Anomaly Score */
@@ -3931,7 +3902,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string | null;
-                kind?: ("profile" | "transform" | "iceberg_import" | "exploration" | "feature_register" | "feature_retrieve" | "feature_retire" | "ml_train" | "ml_import" | "ml_score" | "ml_score_index" | "ml_playground" | "ml_policy" | "ml_evaluate" | "ml_explain")[] | null;
+                kind?: ("profile" | "transform" | "iceberg_import" | "exploration" | "feature_register" | "feature_retrieve" | "feature_retire" | "ml_train" | "ml_import" | "ml_score" | "ml_playground" | "ml_policy" | "ml_evaluate" | "ml_explain")[] | null;
                 model_revision_id?: string | null;
             };
             header?: never;
@@ -4918,37 +4889,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScoringResultOut"];
-                };
-            };
-            /** @description Structured API error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    request_observation_index_api_ml_scoring_results__result_id__observation_index_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                result_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScoringObservationIndexOut"];
                 };
             };
             /** @description Structured API error */

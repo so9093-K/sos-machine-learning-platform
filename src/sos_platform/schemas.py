@@ -874,7 +874,7 @@ class AttemptOut(BaseModel):
 JobKind = Literal[
     "profile", "transform", "iceberg_import", "exploration",
     "feature_register", "feature_retrieve", "feature_retire",
-    "ml_train", "ml_import", "ml_score", "ml_score_index", "ml_playground",
+    "ml_train", "ml_import", "ml_score", "ml_playground",
     "ml_policy", "ml_evaluate", "ml_explain",
 ]
 
