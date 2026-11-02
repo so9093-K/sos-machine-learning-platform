@@ -348,6 +348,7 @@ class JobStoreMixin:
         if model_revision_id is not None:
             # 모델 필터를 DB 페이지네이션 이전에 적용한다. 후처리 필터는
             # 다른 모델 실행에 밀려 있는 이력을 '없음'으로 잘못 보여준다.
+            # 제출 명세에 모델 판본을 직접 지정한 Job만 찾는다. 결과를 거친 간접 참조는 대상이 아니다.
             filters.append("(spec::jsonb ->> 'model_revision_id')=:model_revision_id")
         predicate = ("WHERE " + " AND ".join(filters)) if filters else ""
         query = text(

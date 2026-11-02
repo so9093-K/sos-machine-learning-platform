@@ -450,7 +450,7 @@ export interface paths {
         };
         /**
          * 작업 목록 조회
-         * @description 모든 종류의 Job을 최신순으로 조회합니다. `kind`를 반복 지정하면 그 종류만, `model_revision_id`를 지정하면 그 모델 판본을 사용한 Job만 조회합니다.
+         * @description 모든 종류의 Job을 최신순으로 조회합니다. `kind`를 반복 지정하면 그 종류만, `model_revision_id`를 지정하면 제출 명세에 그 모델 판본 ID를 직접 지정한 Job(Scoring·단일 입력 점수 계산)만 조회합니다. 다른 결과를 거쳐 모델을 간접 참조하는 Job은 포함하지 않습니다.
          */
         get: operations["list_jobs_api_jobs_get"];
         put?: never;
