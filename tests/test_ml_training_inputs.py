@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from sos_platform import ml_training, ml_training_evidence
 from sos_platform.errors import PlatformError
-from sos_platform.ml_input import TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
+from sos_platform.ml_input import TRAINING_SELECTION
 from sos_platform.schemas import MLTrainingInputPolicy, MLTrainRequest
 
 
@@ -30,21 +30,6 @@ def bind_frame(monkeypatch, frame: pl.DataFrame | pl.LazyFrame) -> None:
     monkeypatch.setattr(ml_training, "pinned_scan_dataset", scan)
 
 
-def test_all_input_over_50k_rows_and_32_features(monkeypatch):
-    count = 50_017
-    names = [f"f_{i}" for i in range(40)]
-    values = np.arange(count, dtype=np.float64)
-    bind_frame(monkeypatch, pl.DataFrame({name: values + i for i, name in enumerate(names)}))
-    matrix, evidence = ml_training.training_matrix(
-        None, {}, names, input_policy=all_rows(), worker_memory_mib=256
-    )
-    assert matrix.shape == (count, 40)
-    assert evidence["source_rows"] == count
-    assert evidence["method"] == "all_rows"
-    assert evidence["requested_rows"] is None
-    assert evidence["seed"] is None
-
-
 def test_sample_is_independent_of_worker_memory_budget(monkeypatch):
     count = 50_017
     names = [f"f_{i}" for i in range(40)]
@@ -60,16 +45,7 @@ def test_sample_is_independent_of_worker_memory_budget(monkeypatch):
     assert earlier == later
     assert earlier["source_rows"] == count
     assert earlier["selected_rows"] == earlier["requested_rows"] == 900
-    assert earlier["method"] == TRAINING_SELECTION_CURRENT
-
-
-def test_full_input_exceeding_worker_budget_is_not_truncated(monkeypatch):
-    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(20_000, dtype=float)}))
-    with pytest.raises(PlatformError) as exc:
-        ml_training.training_matrix(
-            None, {}, ["x"], input_policy=all_rows(), worker_memory_mib=1
-        )
-    assert exc.value.code == "SOS-ML-TRAIN-CAPACITY"
+    assert earlier["method"] == TRAINING_SELECTION
 
 
 def test_requested_sample_exceeding_budget_is_not_shrunk(monkeypatch):
@@ -159,32 +135,18 @@ def test_canonical_sample_input_fingerprint_ignores_scan_order(monkeypatch):
     assert first["selection_sha256"] == second["selection_sha256"]
 
 
-def test_sample_matches_global_row_priority_reference(monkeypatch):
-    count, requested, seed = 5000, 1000, 23
-    values = np.arange(count, dtype=np.float64)
-    bind_frame(monkeypatch, pl.DataFrame({"x": values}))
-    matrix, evidence = ml_training.training_matrix(
-        None, {}, ["x"], input_policy=sample(requested, seed), worker_memory_mib=4,
-        selection_algorithm_version=TRAINING_SELECTION_LEGACY
-    )
-    priorities = np.random.default_rng(seed).integers(
-        0, np.iinfo(np.uint64).max, size=count, dtype=np.uint64
-    )
-    chosen = np.argpartition(priorities, requested - 1)[:requested]
-    np.testing.assert_array_equal(matrix[:, 0], np.sort(values[chosen]))
-    assert evidence["source_rows"] == count
-
-
 def test_full_dataset_keeps_original_feature_sort(monkeypatch):
     frame = pl.DataFrame({"x": [3., 1., 2., 1.], "y": [5., 2., 4., 1.]})
-    bind_frame(monkeypatch, frame)
-    first, a = ml_training.training_matrix(
-        None, {}, ["x", "y"], input_policy=all_rows(), worker_memory_mib=4
-    )
-    bind_frame(monkeypatch, frame.reverse())
-    second, b = ml_training.training_matrix(
-        None, {}, ["x", "y"], input_policy=all_rows(), worker_memory_mib=4
-    )
+
+    def staged(source):
+        bind_frame(monkeypatch, source)
+        with ml_training.staged_all_training_matrix(
+            None, {}, ["x", "y"], missing_policy="reject", temporal_split=None
+        ) as (matrix, selection):
+            return np.array(matrix), selection
+
+    first, a = staged(frame)
+    second, b = staged(frame.reverse())
     np.testing.assert_array_equal(first, frame.sort(["x", "y"]).to_numpy())
     np.testing.assert_array_equal(first, second)
     assert a["selection_sha256"] == b["selection_sha256"]
@@ -199,7 +161,7 @@ def test_model_random_state_does_not_change_input_selection(monkeypatch, tmp_pat
             {"algorithm": "isolation_forest", "dataset_version": "v1",
              "features": ["x"], "params": {"n_estimators": 8, "random_state": random_state},
              "training_input": sample(400, 9).model_dump(),
-             "selection_algorithm_version": TRAINING_SELECTION_CURRENT},
+             "missing_policy": "reject", "temporal_split": None},
             tmp_path / f"model-{random_state}.joblib",
         )
     first = run(3)
@@ -208,18 +170,6 @@ def test_model_random_state_does_not_change_input_selection(monkeypatch, tmp_pat
     assert first["params"]["random_state"] != second["params"]["random_state"]
     assert first["training_score_summary"]["scope"] == "training_data_only"
     assert first["runtime"]["training_selection"] == first["training_selection"]
-
-
-def test_legacy_job_without_policy_uses_all_input(monkeypatch, tmp_path):
-    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(120, dtype=float)}))
-    result = ml_training.train_dataset(
-        None, {"version": "v1"},
-        {"algorithm": "isolation_forest", "dataset_version": "v1",
-         "features": ["x"], "params": {"n_estimators": 8, "random_state": 42}},
-        tmp_path / "model.joblib",
-    )
-    assert result["source_rows"] == result["training_rows"] == 120
-    assert result["training_selection"]["method"] == "all_rows"
 
 
 def test_lazy_parquet_input_selection(monkeypatch, tmp_path):
@@ -271,7 +221,10 @@ def test_http_training_submission_and_fork_preserve_input_policy():
             "features": ["x"],
             "params": {"random_state": 5},
             "training_input": sample(600, 99).model_dump(),
-            "selection_algorithm_version": TRAINING_SELECTION_CURRENT,
+            "registry_key": "default",
+            "experiment_title": "기본 실험",
+            "missing_policy": "reject",
+            "temporal_split": None,
         },
     }
     def created_job(**kwargs):
@@ -312,7 +265,6 @@ def test_http_training_submission_and_fork_preserve_input_policy():
         })
         assert reply.status_code == 202, reply.text
         assert store.create_job.call_args.kwargs["spec"]["training_input"] == sample(600, 99).model_dump()
-        assert store.create_job.call_args.kwargs["spec"]["selection_algorithm_version"] == TRAINING_SELECTION_CURRENT
 
         invalid = client.post("/api/ml/train/jobs", json={
             "dataset_id": "d1", "features": ["x"],
@@ -324,19 +276,6 @@ def test_http_training_submission_and_fork_preserve_input_policy():
         assert fork.status_code == 202, fork.text
         assert store.create_job.call_args.kwargs["spec"]["training_input"] == sample(600, 99).model_dump()
         assert store.create_job.call_args.kwargs["spec"]["params"]["random_state"] == 5
-        assert store.create_job.call_args.kwargs["spec"]["selection_algorithm_version"] == TRAINING_SELECTION_CURRENT
-
-        # 과거 Job은 정책 필드가 없지만 원본을 전체 사용했다는 의미는 유지한다.
-        source_job["spec"].pop("training_input")
-        old_fork = client.post("/api/ml/train/jobs/original/fork", json={})
-        assert old_fork.status_code == 202, old_fork.text
-        assert store.create_job.call_args.kwargs["spec"]["training_input"] == all_rows().model_dump()
-        # 구 버전 Job의 선택 알고리즘을 현재 것으로 조용히 변경하지 않는다.
-        source_job["spec"].pop("selection_algorithm_version")
-        source_job["spec"]["training_input"] = sample(600, 99).model_dump()
-        legacy_sample_fork = client.post("/api/ml/train/jobs/original/fork", json={})
-        assert legacy_sample_fork.status_code == 202, legacy_sample_fork.text
-        assert store.create_job.call_args.kwargs["spec"]["selection_algorithm_version"] == TRAINING_SELECTION_LEGACY
 
 
 def test_worker_capacity_error_retains_catalog_category():
@@ -344,34 +283,6 @@ def test_worker_capacity_error_retains_catalog_category():
 
     error = PlatformError("SOS-ML-TRAIN-CAPACITY")
     assert classify_failure(error) == ("capacity", "PlatformError")
-
-
-def test_full_parquet_training_above_old_limit_creates_model(monkeypatch, tmp_path):
-    """50,000행 초과 실제 Parquet에서 모델과 입력 근거까지 확정한다."""
-    count = 100_013
-    path = tmp_path / "training.parquet"
-    values = np.arange(count, dtype=np.float64)
-    pl.DataFrame({"x": values, "y": np.sin(values * 0.01)}).write_parquet(path)
-    bind_frame(monkeypatch, pl.scan_parquet(path))
-    artifact = tmp_path / "training.joblib"
-    result = ml_training.train_dataset(
-        None,
-        {"version": "v1"},
-        {
-            "algorithm": "isolation_forest",
-            "dataset_version": "v1",
-            "features": ["x", "y"],
-            "params": {"n_estimators": 8, "random_state": 17},
-            "training_input": all_rows().model_dump(),
-        },
-        artifact,
-    )
-    assert artifact.is_file()
-    assert result["source_rows"] == result["training_rows"] == count
-    assert result["training_selection"]["selected_rows"] == count
-    assert result["training_selection"]["method"] == "all_rows"
-    assert result["training_score_summary"]["score_count"] == count
-    assert result["runtime"]["training_selection"] == result["training_selection"]
 
 
 def test_canonical_sample_ignores_input_order_and_chunk_boundaries(monkeypatch):
@@ -396,7 +307,7 @@ def test_canonical_sample_ignores_input_order_and_chunk_boundaries(monkeypatch):
     for matrix, evidence in outputs[1:]:
         np.testing.assert_array_equal(matrix, outputs[0][0])
         assert evidence == outputs[0][1]
-    assert outputs[0][1]["algorithm_version"] == TRAINING_SELECTION_CURRENT
+    assert outputs[0][1]["algorithm_version"] == TRAINING_SELECTION
 
 
 def test_canonical_sample_normalizes_signed_zero_and_preserves_duplicates(monkeypatch):
@@ -417,31 +328,6 @@ def test_canonical_sample_normalizes_signed_zero_and_preserves_duplicates(monkey
     assert outputs[0][1] == outputs[1][1]
     assert not np.signbit(outputs[0][0][:, 0]).any()
     assert 0 < (outputs[0][0][:, 0] == 3.0).sum() < 600
-
-
-def test_legacy_sample_preserves_previous_row_order_algorithm(monkeypatch):
-    numbers = np.arange(1000, dtype=np.float64)[::-1].copy()
-    bind_frame(monkeypatch, pl.DataFrame({"x": numbers}))
-    matrix, evidence = ml_training.training_matrix(
-        None, {}, ["x"], input_policy=sample(150, 13),
-        selection_algorithm_version=TRAINING_SELECTION_LEGACY,
-        worker_memory_mib=4,
-    )
-    priorities = np.random.default_rng(13).integers(
-        0, np.iinfo(np.uint64).max, size=len(numbers), dtype=np.uint64
-    )
-    indices = np.argpartition(priorities, 149)[:150]
-    np.testing.assert_array_equal(matrix[:, 0], np.sort(numbers[indices]))
-    assert evidence["method"] == TRAINING_SELECTION_LEGACY
-
-
-def test_unknown_selection_algorithm_rejected(monkeypatch):
-    bind_frame(monkeypatch, pl.DataFrame({"x": np.arange(50.0)}))
-    with pytest.raises(ValueError, match="Unsupported training input selection"):
-        ml_training.training_matrix(
-            None, {}, ["x"], input_policy=sample(10, 8),
-            selection_algorithm_version="unrecognized_v99",
-        )
 
 
 def test_canonical_real_parquet_reordered_same_fingerprint(monkeypatch, tmp_path):
@@ -512,28 +398,6 @@ def test_training_stage_cleanup_does_not_follow_unowned_symlinks(tmp_path):
     (root / f"attempt-{uuid4()}").symlink_to(outside, target_is_directory=True)
     cleanup_training_stage(tmp_path)
     assert marker.read_text() == "keep"
-
-
-def test_pending_legacy_sample_job_keeps_old_selection(monkeypatch, tmp_path):
-    # 배포 전에 접수된 Job의 spec에는 새 알고리즘 필드가 없다.
-    data = pl.DataFrame({"x": np.arange(400, dtype=float)[::-1].copy()})
-    bind_frame(monkeypatch, data)
-    _, expected = ml_training.training_matrix(
-        None, {}, ["x"], input_policy=sample(90, 22),
-        selection_algorithm_version=TRAINING_SELECTION_LEGACY,
-        worker_memory_mib=4,
-    )
-    result = ml_training.train_dataset(
-        None, {"version": "v1"},
-        {
-            "algorithm": "isolation_forest", "dataset_version": "v1",
-            "features": ["x"], "params": {"n_estimators": 8, "random_state": 3},
-            "training_input": sample(90, 22).model_dump(),
-        },
-        tmp_path / "legacy.joblib",
-    )
-    assert result["training_selection"] == expected
-    assert result["runtime"]["training_selection"]["method"] == TRAINING_SELECTION_LEGACY
 
 
 def test_training_sort_stage_limit_has_distinct_failure_contract():
@@ -720,7 +584,7 @@ def test_duckdb_v1_matches_original_polars_sort_and_seed(monkeypatch, tmp_path):
     selected = np.ascontiguousarray(selected[np.lexsort(selected.T[::-1])])
     np.testing.assert_array_equal(actual, selected)
     assert evidence["selection_sha256"] == hashlib.sha256(selected.tobytes()).hexdigest()
-    assert evidence["algorithm_version"] == TRAINING_SELECTION_CURRENT
+    assert evidence["algorithm_version"] == TRAINING_SELECTION
 
 
 def test_duckdb_stage_limit_rejects_large_staged_input(monkeypatch, tmp_path):
@@ -853,7 +717,7 @@ def test_canonical_duckdb_v1_equivalence_at_numeric_precision_boundaries(monkeyp
         )
         np.testing.assert_array_equal(actual, expected)
         assert evidence["selection_sha256"] == sha
-        assert evidence["method"] == TRAINING_SELECTION_CURRENT
+        assert evidence["method"] == TRAINING_SELECTION
 
 
 @pytest.mark.parametrize(
@@ -936,7 +800,7 @@ def test_canonical_sort_budget_scales_without_changing_v1_result(
     assert options[0]["memory_limit"] == f"{sort_memory_mib}MiB"
     assert options[0]["threads"] == str(sort_threads)
     assert matrix.shape == (1000, 2)
-    assert evidence["method"] == TRAINING_SELECTION_CURRENT
+    assert evidence["method"] == TRAINING_SELECTION
     assert not list(stage.iterdir())
     # 동일 Dataset/Seed/K는 실행 자원과 물리적 입력 순서와 무관하다.
     bind_frame(monkeypatch, frame)
@@ -1038,7 +902,9 @@ def test_worker_training_child_completes_actual_duckdb_sampling_and_model(
             "features": ["feature", "context"],
             "params": {"n_estimators": 8, "random_state": 7},
             "training_input": sample(80, 19).model_dump(),
-            "selection_algorithm_version": TRAINING_SELECTION_CURRENT,
+            "registry_key": "default",
+            "missing_policy": "reject",
+            "temporal_split": None,
         },
     }
     pending = tmp_path / "result.pending.parquet"
@@ -1048,7 +914,7 @@ def test_worker_training_child_completes_actual_duckdb_sampling_and_model(
     assert "error_code" not in outcome, outcome
     result = outcome["result"]
     assert result["training_rows"] == 80
-    assert result["training_selection"]["algorithm_version"] == TRAINING_SELECTION_CURRENT
+    assert result["training_selection"]["algorithm_version"] == TRAINING_SELECTION
     assert len(result["training_selection"]["selection_sha256"]) == 64
     assert pending.with_suffix(".joblib").stat().st_size > 0
     assert list(training_stage_path(tmp_path, attempt_id).iterdir()) == []
@@ -1119,68 +985,6 @@ def test_canonical_sort_temp_directory_creation_disk_full_is_stage_limit(
     assert exc.value.code == "SOS-ML-TRAIN-STAGE-LIMIT"
 
 
-def test_staged_all_selection_preserves_full_sorted_matrix_and_hash(monkeypatch, tmp_path):
-    """입력 의미는 전과 같고 물리적 저장소만 Memmap으로 바뀐다."""
-    data = pl.DataFrame({
-        "a": [4.0, 2.0, None, 2.0, 10.0, 0.0],
-        "b": [9.0, 3.0, 7.0, 3.0, 8.0, 2.0],
-    })
-    bind_frame(monkeypatch, data)
-    legacy, earlier = ml_training.training_matrix(
-        None, {}, ["a", "b"], input_policy=all_rows(),
-        missing_policy="train_median", worker_memory_mib=64,
-    )
-    scratch = tmp_path / "training-stage"
-    scratch.mkdir()
-    monkeypatch.setenv("POLARS_TEMP_DIR", str(scratch))
-    with ml_training.staged_all_training_matrix(
-        None, {}, ["a", "b"], missing_policy="train_median", temporal_split=None
-    ) as (staged, selection):
-        assert isinstance(staged, np.memmap)
-        np.testing.assert_array_equal(staged, legacy)
-        assert selection == earlier
-        assert selection["selected_rows"] == data.height
-        assert any(scratch.iterdir())
-    assert not list(scratch.iterdir())
-
-
-def test_all_model_training_no_longer_uses_sample_budget_as_row_cap(monkeypatch, tmp_path):
-    """Full 모델 학습은 Sample 배열의 보수적 사전 상한을 사용하지 않는다."""
-    count = 20_001
-    bind_frame(monkeypatch, pl.DataFrame({
-        "value": np.linspace(0.0, 10.0, count),
-        "secondary": np.linspace(4.0, 0.0, count),
-    }))
-    scratch = tmp_path / "worker-attempt-stage"
-    scratch.mkdir()
-    monkeypatch.setenv("POLARS_TEMP_DIR", str(scratch))
-    # 기존 training_matrix의 1 MiB RSS 예산에서는 이 모든 행이 거절된다.
-    with pytest.raises(PlatformError):
-        ml_training.training_matrix(
-            None, {}, ["value", "secondary"],
-            input_policy=all_rows(), worker_memory_mib=1,
-        )
-    # 실질적인 all 모델 학습은 입력을 줄이지 않고 Stage-backed 계약으로 실행한다.
-    artifact = tmp_path / "full.joblib"
-    outcome = ml_training.train_dataset(
-        None, {"version": "v1"},
-        {
-            "algorithm": "isolation_forest",
-            "dataset_version": "v1",
-            "features": ["value", "secondary"],
-            "params": {"n_estimators": 8, "random_state": 7},
-            "training_input": {"mode": "all"},
-            "missing_policy": "reject",
-        },
-        artifact,
-    )
-    assert outcome["training_rows"] == outcome["source_rows"] == count
-    assert outcome["training_selection"]["selected_rows"] == count
-    assert outcome["training_score_summary"]["score_count"] == count
-    assert artifact.is_file()
-    assert not list(scratch.iterdir())
-
-
 def test_all_model_and_sample_training_have_separate_selection_modes(monkeypatch, tmp_path):
     """Full 모드가 의도치 않게 Sample 입력으로 전환되지 않는지 확인한다."""
     count = 8_141
@@ -1194,6 +998,7 @@ def test_all_model_and_sample_training_have_separate_selection_modes(monkeypatch
         "features": ["x", "y"],
         "params": {"n_estimators": 8, "random_state": 7},
         "missing_policy": "train_median",
+        "temporal_split": None,
     }
     full = ml_training.train_dataset(
         None, {"version": "v1"}, {

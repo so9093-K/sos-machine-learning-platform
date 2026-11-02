@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from sos_platform.ml_explanation import _permutation_shap_result, explain_scored_row
+from sos_platform.ml_outputs import ISOLATION_FOREST_OUTPUT
 from sos_platform.schemas import MLExplanationRequest
 
 
@@ -23,7 +24,8 @@ def test_permutation_shap_reconstructs_actual_sos_score():
     score = runtime.score_anomalies(row.reshape(1, -1))[0]
     args = (
         "scoring",
-        {"id": "model", "algorithm": "isolation_forest", "features": ["first", "second", "third"]},
+        {"id": "model", "algorithm": "isolation_forest", "features": ["first", "second", "third"],
+         "runtime": {"output": ISOLATION_FOREST_OUTPUT.record()}},
         4, row, [0.0, 0.0, 0.0], score, runtime,
     )
     first = _permutation_shap_result(*args)
@@ -57,7 +59,8 @@ def test_permutation_shap_reconstructs_real_isolation_forest_score():
     reference = np.median(training, axis=0).tolist()
     score = model.score_anomalies(values.reshape(1, -1))[0]
     result = _permutation_shap_result(
-        "scoring", {"id": "model", "algorithm": "isolation_forest", "features": [f"f{i}" for i in range(44)]},
+        "scoring", {"id": "model", "algorithm": "isolation_forest", "features": [f"f{i}" for i in range(44)],
+         "runtime": {"output": ISOLATION_FOREST_OUTPUT.record()}},
         4, values, reference, score, model,
     )
     assert len(result["feature_contributions"]) == 44
@@ -72,7 +75,8 @@ def test_permutation_shap_includes_missing_value_preprocessing():
     row = np.asarray([float("nan"), 2.0, 2.0])
     score = runtime.score_anomalies(row.reshape(1, -1))[0]
     result = _permutation_shap_result(
-        "s", {"id": "m", "algorithm": "isolation_forest", "features": ["x", "y", "z"]},
+        "s", {"id": "m", "algorithm": "isolation_forest", "features": ["x", "y", "z"],
+              "runtime": {"output": ISOLATION_FOREST_OUTPUT.record()}},
         0, row, [0.0, 0.0, 0.0], score, runtime,
     )
     assert result["feature_contributions"][0]["missing_imputed"] is True
@@ -80,7 +84,7 @@ def test_permutation_shap_includes_missing_value_preprocessing():
     assert result["reconstructed_score"] == pytest.approx(score, abs=1e-7)
 
 
-def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path: Path):
+def test_explanation_method_contract(monkeypatch, tmp_path: Path):
     assert MLExplanationRequest(scoring_result_id="s", row_index=0).method == (
         "median_reference_feature_replacement"
     )
@@ -98,12 +102,13 @@ def test_explanation_method_contract_and_existing_default(monkeypatch, tmp_path:
     scoring = {"id": "s", "owner_actor": "owner", "model_revision_id": "m",
                "score_summary": {}}
     model = {"id": "m", "algorithm": "isolation_forest", "features": ["a", "b", "c"],
-             "runtime": {"feature_reference_medians": [0.0, 0.0, 0.0]}}
+             "runtime": {"feature_reference_medians": [0.0, 0.0, 0.0], "output": ISOLATION_FOREST_OUTPUT.record()}}
     store = SimpleNamespace(
         get_scoring_result=lambda _: scoring, get_model_revision=lambda _: model,
         home=tmp_path,
     )
-    base = {"scoring_result_id": "s", "source_owner_actor": "owner", "row_index": 0}
+    base = {"scoring_result_id": "s", "source_owner_actor": "owner", "row_index": 0,
+            "method": "median_reference_feature_replacement"}
     original = explain_scored_row(store, base, _stage_owner(store))
     shap = explain_scored_row(store, {**base, "method": "permutation_shap_median_v1"}, _stage_owner(store))
     assert original["method"] == "median_reference_feature_replacement"
@@ -150,6 +155,7 @@ def test_playground_explanation_reuses_real_score_and_methods(monkeypatch, tmp_p
             "feature_dtypes": ["Float64", "Float64", "Float64"],
             "feature_reference_medians": [0.0, 0.0, 0.0],
             "artifact_schema": "if_model_with_preprocessing_v1",
+            "output": ISOLATION_FOREST_OUTPUT.record(),
         },
     }
     features = {"third": 1.0, "first": 4.0, "second": 3.0}

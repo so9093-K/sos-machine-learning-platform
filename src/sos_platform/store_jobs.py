@@ -292,15 +292,6 @@ class JobStoreMixin:
         item["cancel_requested"] = bool(item["cancel_requested"])
         code = item.get("error_code")
         item["retry_policy"] = ERRORS[code].retry_policy if code in ERRORS else None
-        if item.get("error") and code not in ERRORS:
-            # 구버전 Job의 원문은 DB에서 보존하지만 API로 재노출하지 않는다.
-            item["error"] = "이전 실행의 오류 기록입니다. 운영 진단에서 확인하세요."
-        return item
-
-    @staticmethod
-    def _decode_attempt(item: dict) -> dict:
-        if item.get("error") and item.get("error_code") not in ERRORS:
-            item["error"] = "이전 실행의 상세 오류는 운영 기록에서 확인하세요."
         return item
 
     def get_job(self, job_id: str) -> dict | None:
@@ -314,7 +305,7 @@ class JobStoreMixin:
                 return None
             item = self._decode_job(dict(row))
             item["attempts"] = [
-                self._decode_attempt(dict(a))
+                dict(a)
                 for a in db.execute(
                     text("SELECT * FROM attempts WHERE job_id=:id ORDER BY number"), {"id": job_id}
                 ).mappings()
@@ -400,7 +391,7 @@ class JobStoreMixin:
                 "FROM attempts a WHERE a.job_id IN :ids) history WHERE rank=1"
             ).bindparams(bindparam("ids", expanding=True))
             summaries = db.execute(query, {"ids": [item["id"] for item in items]}).mappings()
-            latest = {row["job_id"]: self._decode_attempt(dict(row)) for row in summaries}
+            latest = {row["job_id"]: dict(row) for row in summaries}
         for item in items:
             self._decode_job(item)
             summary = latest.get(item["id"])

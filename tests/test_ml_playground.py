@@ -6,17 +6,19 @@ from types import SimpleNamespace
 import pytest
 
 from sos_platform.ml_input import ordered_playground_input
+from sos_platform.ml_outputs import ISOLATION_FOREST_OUTPUT
 from sos_platform.ml_playground import run_playground_scoring
 
 
-def _model(*, legacy=False):
+def _model():
     return {
         "id": "model-one", "owner_actor": "actor-1", "algorithm": "isolation_forest",
         "features": ["a", "b"],
         "runtime": {
             "feature_dtypes": ["Float64", "Int64"],
-            "artifact_schema": None if legacy else "if_model_with_preprocessing_v1",
-            "preprocessing_mode": None if legacy else "train_median_v1",
+            "artifact_schema": "if_model_with_preprocessing_v1",
+            "preprocessing_mode": "train_median_v1",
+            "output": ISOLATION_FOREST_OUTPUT.record(),
         },
     }
 
@@ -45,8 +47,6 @@ def test_playground_feature_order_and_input_validation():
     with pytest.raises(ValueError, match="exact float64"):
         ordered_playground_input(model, {"a": 2**53 + 1, "b": 2})
     assert math.isnan(ordered_playground_input(model, {"a": None, "b": 2})[0])
-    with pytest.raises(ValueError, match="does not support missing"):
-        ordered_playground_input(_model(legacy=True), {"a": None, "b": 2})
 
 
 def test_playground_actual_adapter_and_no_dataset(monkeypatch, tmp_path):
@@ -97,7 +97,7 @@ def test_playground_score_matches_trained_isolation_forest(monkeypatch, tmp_path
         "sos_platform.ml_playground.load_model_revision",
         lambda model, scratch: adapter,
     )
-    model = _model(legacy=True)
+    model = _model()
     store = SimpleNamespace(get_model_revision=lambda _: model, home=tmp_path)
     values = {"b": 5, "a": 2.0}
     result = run_playground_scoring(store, {

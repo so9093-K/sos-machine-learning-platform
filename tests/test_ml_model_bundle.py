@@ -57,6 +57,8 @@ def trained_bundle(monkeypatch, tmp_path):
             "features": ["volume", "count"],
             "params": {"n_estimators": 8, "random_state": 4},
             "training_input": {"mode": "all"},
+            "missing_policy": "reject",
+            "temporal_split": None,
         },
         model_file,
     )
@@ -161,7 +163,7 @@ def test_scoring_and_explanation_use_same_bundle_without_refitting(
 
     explanation = explain_scored_row(
         store, {"scoring_result_id": scoring["id"], "source_owner_actor": "owner-1",
-                "row_index": 0}, _stage_owner(store)
+                "row_index": 0, "method": "median_reference_feature_replacement"}, _stage_owner(store)
     )
     assert explanation["score"] == pytest.approx(expected[0])
     assert explanation["source_observation"] == {
@@ -196,25 +198,6 @@ def test_corrupted_revision_contract_rejected(trained_bundle, field, changed):
         tampered["runtime"]["preprocessing_mode"] = changed
     with pytest.raises(ValueError):
         ml_runtime.load_model_revision(tampered, store.home)
-
-
-def test_legacy_estimator_only_revision_can_still_be_loaded(trained_bundle, tmp_path):
-    store, revision, storage, files, path = trained_bundle
-    earlier = tmp_path / "legacy.joblib"
-    joblib.dump(joblib.load(path)["estimator"], earlier)
-    key = "results/old-job/old-attempt.model.joblib"
-    files[key] = earlier
-    legacy = {**revision, "job_id": "old-job", "attempt_id": "old-attempt",
-              "location": storage.location(key),
-              "sha256": hashlib.sha256(earlier.read_bytes()).hexdigest(),
-              "runtime": {**revision["runtime"]}}
-    legacy["runtime"].pop("artifact_schema")
-    legacy["runtime"].pop("preprocessing_mode")
-    restored = ml_runtime.load_model_revision(legacy, store.home)
-    assert restored.preprocessing is None
-    assert len(restored.score_anomalies([[1.0, 10.0]])) == 1
-    with pytest.raises(ValueError, match="finite"):
-        restored.score_anomalies([[np.nan, 10.0]])
 
 
 def _stage_owner(store):

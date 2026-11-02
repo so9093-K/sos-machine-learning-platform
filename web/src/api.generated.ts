@@ -2453,7 +2453,7 @@ export interface components {
              * Output Type
              * @description 학습 때 기록한 출력 계약. 응답의 공개 범위와 무관하게 같은 의미를 유지한다.
              */
-            readonly output_type: string | null;
+            readonly output_type: string;
             /** Params */
             params: {
                 [key: string]: unknown;
@@ -2607,7 +2607,7 @@ export interface components {
              * Output Type
              * @description 학습 때 기록한 출력 계약. 응답의 공개 범위와 무관하게 같은 의미를 유지한다.
              */
-            readonly output_type: string | null;
+            readonly output_type: string;
             /**
              * Registry Version
              * @description SOS 모델 그룹의 MLflow 등록 버전(외부 기록). 사용 가능 여부와 무관하다

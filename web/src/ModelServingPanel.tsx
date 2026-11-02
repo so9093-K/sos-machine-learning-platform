@@ -112,7 +112,7 @@ export function ModelServingPanel({ model, canManage = false, onOpenServing, rev
     {canManage && <details className="model-deployment-form"><summary>이 판본의 새 Endpoint 배포</summary>
       <p>대상 · {model.id}</p>
       <p className="hint">복제본이 Runtime 자원을 사용합니다. 다른 사용자 대상 제공 상태는 바뀌지 않습니다.</p>
-      {!eligible && <p>삭제 중이거나 보관된 판본, 보관된 모델 그룹의 판본은 배포할 수 없습니다.</p>}
+      {!eligible && <p>삭제됐거나 삭제 중인 판본, 보관된 판본 또는 보관된 모델 그룹의 판본은 배포할 수 없습니다.</p>}
       <form onSubmit={event => void deploy(event)}>
         <label>Endpoint 이름<input required minLength={2} maxLength={63} pattern="[a-z0-9][a-z0-9-]*[a-z0-9]"
           value={name} disabled={submitting} onChange={event => setName(event.target.value)}

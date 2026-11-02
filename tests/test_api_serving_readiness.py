@@ -14,7 +14,7 @@ from sos_platform.store import Store
 
 def test_predict_obeys_runtime_readiness_and_replica_digest(tmp_path, monkeypatch):
     model = {"id": "model-a", "algorithm": "isolation_forest", "features": ["x"],
-             "lifecycle_state": "Active", "runtime": {"feature_dtypes": ["Float64"]}}
+             "lifecycle_state": "Active", "runtime": {"feature_dtypes": ["Float64"], "output": ISOLATION_FOREST_OUTPUT.record()}}
     endpoint = {"id": "endpoint-a", "name": "activity", "desired_state": "serving",
                 "active_model_revision_id": model["id"], "pending_model_revision_id": "model-b",
                 "previous_model_revision_id": None, "owner_actor": "local-admin",

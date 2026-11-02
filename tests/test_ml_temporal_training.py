@@ -23,6 +23,15 @@ def bind_frame(monkeypatch, frame: pl.DataFrame) -> None:
     monkeypatch.setattr(ml_training, "pinned_scan_dataset", scan)
 
 
+def staged_all(features, *, missing_policy="reject", temporal_split=None):
+    """전체 행(all) 학습 입력은 운영과 같은 Stage 경로로 만든다."""
+    with ml_training.staged_all_training_matrix(
+        None, {"version": "d1"}, features,
+        missing_policy=missing_policy, temporal_split=temporal_split,
+    ) as (matrix, selection):
+        return np.array(matrix), selection
+
+
 def temporal_config() -> MLTemporalSplitSpec:
     return MLTemporalSplitSpec(
         timestamp_column="ts",
@@ -40,11 +49,8 @@ def events() -> pl.DataFrame:
 
 def test_time_split_excludes_future_rows_and_records_exact_partition_sizes(monkeypatch):
     bind_frame(monkeypatch, events())
-    frame, evidence = ml_training.training_matrix(
-        None, {"version": "d1"}, ["value"],
-        input_policy=MLTrainingInputPolicy(mode="all"),
-        temporal_split=temporal_config(), missing_policy="train_median",
-        worker_memory_mib=64,
+    frame, evidence = staged_all(
+        ["value"], temporal_split=temporal_config(), missing_policy="train_median",
     )
     assert frame.shape == (4, 1)
     assert np.isnan(frame).sum() == 1
@@ -140,13 +146,10 @@ def test_temporal_column_cannot_be_model_feature():
         )
 
 
-def test_no_time_split_remains_legacy_default_and_rejects_null(monkeypatch):
+def test_reject_policy_without_time_split_rejects_null(monkeypatch):
     bind_frame(monkeypatch, events())
     with pytest.raises(ValueError, match="null"):
-        ml_training.training_matrix(
-            None, {"version": "d1"}, ["value"],
-            input_policy=MLTrainingInputPolicy(mode="all"), worker_memory_mib=64,
-        )
+        staged_all(["value"])
 
 
 def test_explicit_utc_datetime_column_is_supported():
@@ -172,13 +175,10 @@ def test_temporal_split_requires_three_nonempty_periods():
 
 
 def test_time_split_applies_before_sampling_even_when_later_rows_are_extreme(monkeypatch):
-    from sos_platform.ml_input import TRAINING_SELECTION_LEGACY
-
     bind_frame(monkeypatch, events())
     selected, evidence = ml_training.training_matrix(
         None, {"version": "d1"}, ["value"],
         input_policy=MLTrainingInputPolicy(mode="sample", rows=2, seed=11),
-        selection_algorithm_version=TRAINING_SELECTION_LEGACY,
         temporal_split=temporal_config(), missing_policy="train_median",
         worker_memory_mib=64,
     )
@@ -207,6 +207,8 @@ def test_http_submit_and_fork_preserve_temporal_boundaries_and_missing_policy():
         "training_input": {"mode": "all"},
         "missing_policy": "train_median",
         "temporal_split": temporal_config().model_dump(mode="json"),
+        "registry_key": "default",
+        "experiment_title": "기본 실험",
     }
     source_job = {
         "id": "existing", "kind": "ml_train", "status": "Succeeded",
@@ -295,12 +297,7 @@ def test_nullable_integer_feature_with_all_null_first_batch_is_not_typeerror(mon
 
     values = pl.Series("count", [None] * 8192 + [3, 7], dtype=pl.Int64)
     bind_frame(monkeypatch, pl.DataFrame({"count": values}))
-    matrix, evidence = ml_training.training_matrix(
-        None, {"version": "d1"}, ["count"],
-        input_policy=MLTrainingInputPolicy(mode="all"),
-        missing_policy="train_median",
-        worker_memory_mib=256,
-    )
+    matrix, evidence = staged_all(["count"], missing_policy="train_median")
     fitted = fit_if_median_imputer(matrix, feature_names=["count"])
     assert fitted.medians == (5.0,)
     assert evidence["source_rows"] == 8194
@@ -312,10 +309,6 @@ def test_completely_null_integer_training_feature_reports_model_input_error(monk
     bind_frame(monkeypatch, pl.DataFrame({
         "count": pl.Series([None, None, None], dtype=pl.Int64),
     }))
-    matrix, _ = ml_training.training_matrix(
-        None, {"version": "d1"}, ["count"],
-        input_policy=MLTrainingInputPolicy(mode="all"),
-        missing_policy="train_median", worker_memory_mib=256,
-    )
+    matrix, _ = staged_all(["count"], missing_policy="train_median")
     with pytest.raises(ValueError, match="Entirely missing"):
         fit_if_median_imputer(matrix, feature_names=["count"])

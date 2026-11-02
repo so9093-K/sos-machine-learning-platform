@@ -25,9 +25,8 @@ from .object_store import ObjectStore
 IF_BUNDLE_SCHEMA = "if_model_with_preprocessing_v1"
 # MLflow에서 연결한 판본: skops IsolationForest와 판본 기록의 학습 중앙값 전처리.
 IF_SKOPS_SCHEMA = "if_estimator_skops_v1"
-# 판본에 기록되는 복원 계약 식별자. 이름과 달리 Worker만이 아니라 신뢰된 SOS 실행 환경 전체를 뜻한다.
-# 기존 판본의 복원 호환을 위해 값을 바꾸지 않는다.
-TRUSTED_LOADING = "trusted_worker_only"
+# 판본에 기록되는 복원 계약 식별자. 신뢰된 SOS 실행 환경(Worker·서빙 복제본)에서만 복원한다.
+TRUSTED_LOADING = "trusted_sos_runtime"
 SAFE_LOADING = "skops_allowlist"
 # IsolationForest 복원에 필요한 skops 비기본 타입. 이 밖의 타입이 있으면 복원하지 않는다.
 SKOPS_TRUSTED_TYPES = ("sklearn.tree._tree.Tree",)
@@ -56,11 +55,9 @@ def assert_model_runtime_compatible(revision: dict) -> None:
         raise ValueError("Unsupported model algorithm")
     contract = (runtime.get("model_format"), runtime.get("loading"))
     if contract == (JOBLIB, TRUSTED_LOADING):
-        if runtime.get("artifact_schema") not in (None, IF_BUNDLE_SCHEMA):
+        if (runtime.get("artifact_schema") != IF_BUNDLE_SCHEMA
+                or runtime.get("preprocessing_mode") != PREPROCESSING_MODE):
             raise ValueError("Unknown model artifact schema")
-        if (runtime.get("artifact_schema") == IF_BUNDLE_SCHEMA
-                and runtime.get("preprocessing_mode") != PREPROCESSING_MODE):
-            raise ValueError("Unknown model preprocessing contract")
     elif contract == (SKOPS, SAFE_LOADING):
         if (runtime.get("artifact_schema") != IF_SKOPS_SCHEMA
                 or runtime.get("preprocessing_mode") != PREPROCESSING_MODE):
@@ -139,25 +136,22 @@ def load_model_revision(revision: dict, scratch: Path) -> TrainedIsolationForest
             raise ValueError("Model preprocessing reference is unavailable")
         preprocessing = FittedIFMedianImputer(tuple(revision["features"]), tuple(reference))
     else:
-        if runtime.get("artifact_schema") == IF_BUNDLE_SCHEMA:
-            if (
-                type(artifact) is not dict
-                or set(artifact) != {"schema", "estimator", "preprocessing"}
-                or artifact["schema"] != IF_BUNDLE_SCHEMA
-                or type(artifact["preprocessing"]) is not FittedIFMedianImputer
-            ):
-                raise ValueError("Model artifact bundle does not match revision schema")
-            preprocessing = artifact["preprocessing"]
-            # deserialization은 __post_init__을 보장하지 않으므로 복원 후에도 검증한다.
-            preprocessing.__post_init__()
-            if preprocessing.feature_names != tuple(revision["features"]):
-                raise ValueError("Model preprocessing feature signature is invalid")
-            reference = runtime.get("feature_reference_medians")
-            if not isinstance(reference, list) or tuple(reference) != preprocessing.medians:
-                raise ValueError("Model preprocessing reference disagrees with revision")
-            estimator = artifact["estimator"]
-        else:
-            estimator = artifact
+        if (
+            type(artifact) is not dict
+            or set(artifact) != {"schema", "estimator", "preprocessing"}
+            or artifact["schema"] != IF_BUNDLE_SCHEMA
+            or type(artifact["preprocessing"]) is not FittedIFMedianImputer
+        ):
+            raise ValueError("Model artifact bundle does not match revision schema")
+        preprocessing = artifact["preprocessing"]
+        # deserialization은 __post_init__을 보장하지 않으므로 복원 후에도 검증한다.
+        preprocessing.__post_init__()
+        if preprocessing.feature_names != tuple(revision["features"]):
+            raise ValueError("Model preprocessing feature signature is invalid")
+        reference = runtime.get("feature_reference_medians")
+        if not isinstance(reference, list) or tuple(reference) != preprocessing.medians:
+            raise ValueError("Model preprocessing reference disagrees with revision")
+        estimator = artifact["estimator"]
     if type(estimator) is not IsolationForest:
         raise ValueError("Model artifact has an unsupported estimator type")
     n_features = len(revision["features"])

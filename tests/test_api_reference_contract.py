@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sos_platform import api_control
 from sos_platform.api import create_app
 from sos_platform.errors import PlatformError
+from sos_platform.ml_outputs import ISOLATION_FOREST_OUTPUT
 from sos_platform.security import Actor, IdentitySettings
 from sos_platform.store import Store
 
@@ -194,7 +195,7 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
         "source_kind": "sos_training", "source": None,
         "algorithm": "isolation_forest", "location": "s3://test/model", "sha256": "abc",
         "features": ["a"], "params": {}, "training_score_summary": {},
-        "runtime": {"feature_dtypes": ["Float64"]},
+        "runtime": {"feature_dtypes": ["Float64"], "output": ISOLATION_FOREST_OUTPUT.record()},
         "created_at": "2026-10-29T00:00:00Z", "lifecycle_state": "Active", "registry_version": "1"}
     offering = {}
     submitted = []
@@ -317,7 +318,7 @@ def test_model_training_evidence_is_private_in_detail_and_offering_list(tmp_path
              "source_kind": "sos_training", "source": None,
              "location": "s3://models/artifact", "sha256": "abc", "features": ["a"], "params": {},
              "training_score_summary": {"score_count": 10000, "histogram": {"bin_counts": [6000, 4000]}},
-             "runtime": {"feature_dtypes": ["Float64"], "feature_reference_medians": [5.0],
+             "runtime": {"feature_dtypes": ["Float64"], "feature_reference_medians": [5.0], "output": ISOLATION_FOREST_OUTPUT.record(),
                          "training_selection": {"source_rows": 20000, "selected_rows": 10000},
                          "training_missing_policy": "train_median", "preprocessing_mode": "train_median_v1",
                          "feature_retrieval": {"retrieval_job_id": "private-job"},
@@ -358,7 +359,8 @@ def test_model_training_evidence_is_private_in_detail_and_offering_list(tmp_path
                 assert not {"dataset_id", "dataset_version", "job_id", "attempt_id", "location", "sha256", "params",
                             "source"}.intersection(result)
                 assert result["training_score_summary"] == {}
-                assert set(result["runtime"]) == {"feature_dtypes", "feature_reference_medians", "feature_training_profile"}
+                assert set(result["runtime"]) == {"feature_dtypes", "feature_reference_medians",
+                                                  "feature_training_profile", "output"}
                 assert set(result["runtime"]["feature_training_profile"]) == {"method", "input_space", "features"}
                 assert set(result["runtime"]["feature_training_profile"]["features"]["a"]) == {"min", "p10", "p50", "p90", "max"}
     assert model == original  # 응답 투영이 Worker·추론에 전달할 원본을 바꾸지 않는다.

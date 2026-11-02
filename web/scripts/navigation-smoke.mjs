@@ -88,7 +88,6 @@ try {
   assert.equal(checkModelDatasetInput(contract, [
     { name: "count", dtype: "String" }, { name: "ratio", dtype: "Float64" },
   ]).ready, false);
-  assert.equal(checkModelDatasetInput({ ...contract, runtime: {} }, []).ready, false);
   const jobContext = { datasetId: "one", dataJobId: "job / one", dataJobKind: "exploration" };
   const jobPath = contextPath("jobs", jobContext);
   assert.deepEqual(routeAt("/activity/jobs", jobPath.slice(jobPath.indexOf("?"))).context, jobContext);

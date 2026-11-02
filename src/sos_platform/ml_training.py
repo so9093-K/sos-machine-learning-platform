@@ -19,12 +19,7 @@ from .errors import PlatformError
 from .execution_budget import ExecutionBudget
 from .ml_if_config import IsolationForestConfig
 from .ml_if_preprocessing import fit_if_median_imputer
-from .ml_input import (
-    INTEGER_DTYPES,
-    NUMERIC,
-    TRAINING_SELECTION_CURRENT,
-    TRAINING_SELECTION_LEGACY,
-)
+from .ml_input import INTEGER_DTYPES, NUMERIC, TRAINING_SELECTION
 from .ml_isolation_forest import train_isolation_forest
 from .ml_outputs import output_contract_for_training
 from .ml_runtime import IF_BUNDLE_SCHEMA, TRUSTED_LOADING
@@ -42,19 +37,19 @@ def training_matrix(
     *,
     input_policy: MLTrainingInputPolicy,
     worker_memory_mib: int | None = None,
-    selection_algorithm_version: str = TRAINING_SELECTION_CURRENT,
     missing_policy: str = "reject",
     temporal_split: MLTemporalSplitSpec | None = None,
 ) -> tuple[np.ndarray, dict]:
-    """명시된 입력 정책을 Worker 예산에서 처리한다.
+    """행 수·Seed가 지정된 부분집합(sample)을 Worker 예산 안에서 결정적으로 선택한다.
+
+    전체 행(all)은 디스크 기반 `staged_all_training_matrix`가 맡는다.
 
     Args:
         store: 원본 Dataset 저장소.
         dataset: 고정 판본 Dataset 참조.
         features: 순서가 확정된 숫자형 Feature 목록.
-        input_policy: 전체 사용 또는 행 수·Seed가 지정된 부분집합.
+        input_policy: 행 수·Seed가 지정된 부분집합 정책.
         worker_memory_mib: Worker RSS 예산. 없으면 실행 환경에서 읽는다.
-        selection_algorithm_version: Job 제출 시 확정된 표본 선택 알고리즘 판본.
 
     Returns:
         정렬된 float64 학습 행렬과 실제 입력 선택 근거.
@@ -69,10 +64,8 @@ def training_matrix(
         raise ValueError("Unsupported training missing policy")
     if temporal_split is not None and temporal_split.timestamp_column in features:
         raise ValueError("Temporal split timestamp cannot be a training feature")
-    if selection_algorithm_version not in (
-        TRAINING_SELECTION_CURRENT, TRAINING_SELECTION_LEGACY
-    ):
-        raise ValueError("Unsupported training input selection algorithm")
+    if input_policy.mode != "sample" or input_policy.rows is None:
+        raise ValueError("training_matrix selects an explicit sample")
     budget_mib = (
         ExecutionBudget.from_env().max_rss_mib
         if worker_memory_mib is None
@@ -87,18 +80,16 @@ def training_matrix(
     if capacity_rows < 2:
         raise PlatformError("SOS-ML-TRAIN-CAPACITY")
 
-    sampled = input_policy.mode == "sample"
-    target_rows = input_policy.rows if sampled else capacity_rows
-    assert target_rows is not None
+    target_rows = input_policy.rows
     if target_rows > capacity_rows:
         raise PlatformError("SOS-ML-TRAIN-CAPACITY")
     chunk_rows = max(1, min(8192, (matrix_byte_budget // 4) // (len(features) * 8)))
     capacity = min(target_rows, chunk_rows)
     selected = np.empty((capacity, len(features)), dtype=np.float64)
-    selected_priority = np.empty(capacity, dtype=np.uint64) if sampled else None
+    selected_priority = np.empty(capacity, dtype=np.uint64)
     selected_rows = 0
     source_rows = 0
-    rng = np.random.default_rng(input_policy.seed) if sampled else None
+    rng = np.random.default_rng(input_policy.seed)
 
     temporal_evidence = None
     with pinned_scan_dataset(store, dataset) as source:
@@ -115,19 +106,12 @@ def training_matrix(
         if any(schema[name] not in NUMERIC for name in features):
             raise ValueError("Only numeric training features are supported")
         scan = source.select(features)
-        frames = (
-            canonical_sorted_batches(
-                scan, features, schema, chunk_rows=chunk_rows, budget_mib=budget_mib
-            )
-            if sampled and selection_algorithm_version == TRAINING_SELECTION_CURRENT
-            else scan.collect_batches(chunk_size=chunk_rows, maintain_order=True)
+        frames = canonical_sorted_batches(
+            scan, features, schema, chunk_rows=chunk_rows, budget_mib=budget_mib
         )
         try:
             for frame in frames:
                 source_rows += frame.height
-                if not sampled and source_rows > capacity_rows:
-                    # 전체 사용 정책을 메모리 사정에 따라 조용히 부분집합으로 변경하지 않는다.
-                    raise PlatformError("SOS-ML-TRAIN-CAPACITY")
                 if missing_policy == "reject" and any(frame.null_count().row(0)):
                     raise ValueError("Training features contain null values")
                 for name in features:
@@ -146,10 +130,8 @@ def training_matrix(
                     raise ValueError("Training features must be finite numeric values")
                 if missing_policy == "train_median" and np.isinf(matrix).any():
                     raise ValueError("Training features contain infinity")
-                priority = (
-                    rng.integers(0, np.iinfo(np.uint64).max, size=frame.height, dtype=np.uint64)
-                    if rng is not None
-                    else None
+                priority = rng.integers(
+                    0, np.iinfo(np.uint64).max, size=frame.height, dtype=np.uint64
                 )
                 incoming = min(frame.height, target_rows - selected_rows)
                 if incoming:
@@ -159,17 +141,14 @@ def training_matrix(
                         grown = np.empty((capacity, len(features)), dtype=np.float64)
                         grown[:selected_rows] = selected[:selected_rows]
                         selected = grown
-                        if selected_priority is not None:
-                            grown_priority = np.empty(capacity, dtype=np.uint64)
-                            grown_priority[:selected_rows] = selected_priority[:selected_rows]
-                            selected_priority = grown_priority
+                        grown_priority = np.empty(capacity, dtype=np.uint64)
+                        grown_priority[:selected_rows] = selected_priority[:selected_rows]
+                        selected_priority = grown_priority
                     selected[selected_rows:needed] = matrix[:incoming]
-                    if selected_priority is not None and priority is not None:
-                        selected_priority[selected_rows:needed] = priority[:incoming]
+                    selected_priority[selected_rows:needed] = priority[:incoming]
                     selected_rows = needed
-                if not sampled or selected_rows < target_rows or incoming == frame.height:
+                if selected_rows < target_rows or incoming == frame.height:
                     continue
-                assert selected_priority is not None and priority is not None
                 matrix = matrix[incoming:]
                 priority = priority[incoming:]
                 candidates = np.flatnonzero(priority < selected_priority[:selected_rows].max())
@@ -192,17 +171,17 @@ def training_matrix(
                 close_frames()
     if source_rows < 2:
         raise ValueError("Training requires at least two rows")
-    if sampled and source_rows < target_rows:
+    if source_rows < target_rows:
         raise ValueError("Sample rows exceed Dataset row count")
 
-    # 기존 학습의 Feature 순서 정렬 계약을 유지한다.
+    # 학습 행렬은 Feature 순서로 정렬한다(입력 순서와 무관한 결과).
     order = np.lexsort(selected[:selected_rows].T[::-1])
     selected = np.ascontiguousarray(selected[order])
     selection = {
         "source_rows": source_rows,
         "selected_rows": len(selected),
-        "method": selection_algorithm_version if sampled else "all_rows",
-        "algorithm_version": selection_algorithm_version if sampled else "all_rows_v1",
+        "method": TRAINING_SELECTION,
+        "algorithm_version": TRAINING_SELECTION,
         "requested_rows": input_policy.rows,
         "seed": input_policy.seed,
         "selection_sha256": hashlib.sha256(selected.tobytes()).hexdigest(),
@@ -269,7 +248,7 @@ def staged_all_training_matrix(
                 source, features, schema, raw_path, missing_policy=missing_policy,
             )
             count = raw.shape[0]
-        # 기존 all_rows_v1은 전체 행렬을 Feature 순서로 정렬한 뒤 학습한다.
+        # all_rows_v1은 전체 행렬을 Feature 순서로 정렬한 뒤 학습한다.
         # NumPy 인덱스만 메모리에 보관하고 결과 행렬은 디스크에서 청크별 재배치한다.
         order = np.lexsort(raw.T[::-1])
         sorted_path = stage / "sorted.float64"
@@ -307,12 +286,12 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
         raise ValueError("Unsupported model algorithm")
     features = spec["features"]
     config = IsolationForestConfig(**spec["params"])
-    input_policy = MLTrainingInputPolicy.model_validate(spec.get("training_input", {}))
+    input_policy = MLTrainingInputPolicy.model_validate(spec["training_input"])
     temporal_spec = (
         MLTemporalSplitSpec.model_validate(spec["temporal_split"])
-        if spec.get("temporal_split") is not None else None
+        if spec["temporal_split"] is not None else None
     )
-    missing_policy = spec.get("missing_policy", "reject")
+    missing_policy = spec["missing_policy"]
     # Input selection은 모델링 의미이며 물리적인 데이터 적재 방식과 별개다.
     # all은 디스크 기반 전체 입력을, sample은 기존 결정적 선택 계약을 사용한다.
     if input_policy.mode == "all":
@@ -324,9 +303,6 @@ def train_dataset(store, dataset: dict, spec: dict, pending: Path) -> dict:
         selected_context = nullcontext(training_matrix(
             store, dataset, features, input_policy=input_policy,
             missing_policy=missing_policy, temporal_split=temporal_spec,
-            selection_algorithm_version=spec.get(
-                "selection_algorithm_version", TRAINING_SELECTION_LEGACY
-            ),
         ))
     with selected_context as (matrix, selection):
         with pinned_scan_dataset(store, dataset) as source:

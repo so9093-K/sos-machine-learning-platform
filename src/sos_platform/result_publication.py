@@ -119,7 +119,7 @@ def publish_model(
         "algorithm": publication["algorithm"],
         "source_kind": "mlflow_registry" if imported else "sos_training",
         "source": json.dumps(publication["source"], allow_nan=False) if imported else None,
-        "registry_key": (json.loads(row["spec"]) or {}).get("registry_key", "default"),
+        "registry_key": json.loads(row["spec"])["registry_key"],
         "location": publication["location"],
         "sha256": publication["sha256"],
         "features": json.dumps(publication["features"], allow_nan=False),

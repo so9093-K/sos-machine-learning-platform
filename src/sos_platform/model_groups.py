@@ -54,7 +54,7 @@ def _producing(db: Connection, owner: str, key: str) -> bool:
     return db.execute(text(
         "SELECT 1 FROM jobs WHERE kind IN ('ml_train','ml_import') AND owner_actor=:owner "
         "AND status IN ('Queued','Running') "
-        "AND COALESCE(spec::jsonb->>'registry_key','default')=:key LIMIT 1"
+        "AND (spec::jsonb->>'registry_key')=:key LIMIT 1"
     ), {"owner": owner, "key": key}).first() is not None
 
 

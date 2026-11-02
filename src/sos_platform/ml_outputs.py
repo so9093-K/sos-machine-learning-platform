@@ -34,14 +34,6 @@ ISOLATION_FOREST_OUTPUT = OutputContract(
 )
 # 새로 학습하는 판본이 기록할 출력 계약. 알고리즘의 출력을 바꿀 때는 여기만 바꾼다.
 _FOR_NEW_REVISIONS = {"isolation_forest": ISOLATION_FOREST_OUTPUT}
-# 출력 계약을 기록하기 전에 학습된 판본이 실제로 낸 출력. 그 판본들의 의미이므로 바꾸지 않는다.
-_BEFORE_RECORDING = {
-    "isolation_forest": OutputContract(
-        output_type="anomaly_score_v1",
-        score_direction="higher_is_more_anomalous",
-        score_scale="negative_sklearn_score_samples",
-    ),
-}
 
 
 def output_contract_for_training(algorithm: str) -> OutputContract | None:
@@ -49,15 +41,13 @@ def output_contract_for_training(algorithm: str) -> OutputContract | None:
     return _FOR_NEW_REVISIONS.get(algorithm)
 
 
-def revision_output_contract(revision: Mapping) -> OutputContract | None:
-    """판본이 학습 때 기록한 출력 계약. 기록 이전 판본은 당시 알고리즘이 낸 출력을 따른다.
+def revision_output_contract(revision: Mapping) -> OutputContract:
+    """판본이 학습·연결 때 Runtime에 기록한 출력 계약.
 
     Raises:
-        ValueError: 기록된 출력 계약이 손상됐다.
+        ValueError: 출력 계약 기록이 없거나 손상됐다.
     """
     recorded = (revision.get("runtime") or {}).get("output")
-    if recorded is None:
-        return _BEFORE_RECORDING.get(revision.get("algorithm"))
     fields = ("output_type", "score_direction", "score_scale")
     if not isinstance(recorded, Mapping) or not all(isinstance(recorded.get(name), str) for name in fields):
         raise ValueError("Model output contract record is invalid")
@@ -75,8 +65,6 @@ def require_output_contract(revision: Mapping, *, produces: str) -> OutputContra
         ValueError: 지원하지 않는 알고리즘, 손상된 기록 또는 이 경로가 만들지 않는 출력 종류.
     """
     contract = revision_output_contract(revision)
-    if contract is None:
-        raise ValueError("Unsupported model algorithm")
     if contract.output_type != produces:
         raise ValueError(f"Model output type {contract.output_type} is not produced by this path")
     return contract
