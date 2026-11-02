@@ -7,7 +7,6 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from scalar_fastapi import AgentScalarConfig, get_scalar_api_reference
 from starlette.concurrency import run_in_threadpool
@@ -204,17 +203,6 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
             code = "SOS-UPLOAD-TOO-LARGE"
             return problem_response(request, code, 413, ERRORS[code].message)
         return response
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[
-            f"http://localhost:{os.environ.get('SOS_WEB_PORT', '9601')}",
-            f"http://127.0.0.1:{os.environ.get('SOS_WEB_PORT', '9601')}",
-        ],
-        allow_methods=["GET", "POST", "PUT"],
-        allow_headers=["Content-Type", "Authorization", "Idempotency-Key"],
-        expose_headers=["X-Request-ID"],
-    )
 
     # 라우터는 접근 판정을 복제하지 않고 같은 ResourceAccess를 사용한다.
     access = ResourceAccess(store, identity.mode)
