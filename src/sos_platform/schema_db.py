@@ -57,7 +57,7 @@ jobs = Table(
     Column("dataset_id", String(36), ForeignKey("datasets.id"), nullable=True),
     Column("spec", Text, nullable=False),
     Column("status", String(32), nullable=False),
-    Column("cancel_requested", Boolean, nullable=False, default=False),
+    Column("cancel_requested", Boolean, nullable=False, server_default=text("false")),
     Column("result", Text),
     Column("error", Text),
     Column("error_code", String(64)),
@@ -200,8 +200,8 @@ model_revisions = Table(
     Column("runtime", Text, nullable=False),
     Column("owner_actor", Text),
     Column("created_at", Text, nullable=False),
-    Column("registry_key", String(40), nullable=False, default="default"),
-    Column("lifecycle_state", String(16), nullable=False, default="Active"),
+    Column("registry_key", String(40), nullable=False, server_default="default"),
+    Column("lifecycle_state", String(16), nullable=False, server_default="Active"),
     # SOS 모델 그룹에 대한 MLflow 등록 결과(외부 기록). 사용 판정에는 쓰지 않는다.
     Column("registry_model", Text),
     Column("registry_version", String(32)),
@@ -214,6 +214,9 @@ model_revisions = Table(
         "AND source IS NOT NULL)",
         name="ck_model_revisions_source",
     ),
+    CheckConstraint(
+        "lifecycle_state IN ('Active','Deleting','Deleted')", name="ck_model_lifecycle_state"
+    ),
     Index("ix_model_revisions_owner_created", "owner_actor", "created_at"),
 )
 
@@ -224,7 +227,7 @@ model_groups = Table(
     Column("owner_actor", Text, primary_key=True),
     Column("registry_key", String(40), primary_key=True),
     Column("title", Text, nullable=False),
-    Column("description", Text, nullable=False, default=""),
+    Column("description", Text, nullable=False, server_default=""),
     Column("archived_at", Text),
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
