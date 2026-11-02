@@ -51,7 +51,9 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
             pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
         ),
     ):
-        model = access.model_allowed(actor, access.model(body.model_revision_id), for_new_work=True)
+        # 읽기 권한만 확인한다. 현재 제공 여부·판본 상태는 Store가 새 Job을 만들 때 판정하므로, 같은 키
+        # 재요청은 제공 중단 뒤에도 원래 Job을 받는다.
+        model = access.model_allowed(actor, access.model(body.model_revision_id), for_new_work=False)
         try:
             ordered_playground_input(model, body.features)
         except ValueError as exc:
@@ -91,7 +93,8 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
         ),
     ):
         dataset = access.dataset(body.dataset_id, actor)
-        model = access.model_allowed(actor, access.model(body.model_revision_id), for_new_work=True)
+        # 읽기 권한만 확인한다. 현재 제공 여부·판본 상태는 Store가 새 Job을 만들 때 판정한다.
+        model = access.model_allowed(actor, access.model(body.model_revision_id), for_new_work=False)
         access.require_submission_key(idempotency_key)
         # 고정 판본의 입력 구조 불일치는 Worker 실패 전에 원인 컬럼과 함께 거부한다.
         input_issues = model_input_issues(
@@ -263,9 +266,11 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
             if type(score) not in (float, int) or not math.isfinite(score):
                 raise HTTPException(status_code=409, detail="단일 입력 점수를 사용할 수 없습니다.")
             model = store.get_model_revision(source["spec"]["model_revision_id"])
-            if model is None or model["lifecycle_state"] != "Active":
+            if model is None:
                 raise HTTPException(status_code=409, detail="단일 입력 계산에 사용한 모델을 사용할 수 없습니다.")
-            access.model_allowed(actor, model, for_new_work=True)
+            # 읽기 권한만 확인한다. 판본 상태와 다른 Actor의 현재 제공 여부는 Store가 새 Job을 만들 때 판정한다.
+            access.model_allowed(actor, model, for_new_work=False)
+            require_offering = not actor.privileged and model["owner_actor"] != actor.id
             dataset_id = None
             source_spec = {
                 "playground_job_id": source["id"],
@@ -277,6 +282,8 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
             if body.row_index >= score["row_count"]:
                 raise HTTPException(status_code=422, detail="설명할 행 번호가 점수 결과의 범위를 벗어났습니다.")
             dataset_id = score["dataset_id"]
+            # 자신이 접근할 수 있는 점수 결과의 설명은 모델 제공 여부와 무관하다.
+            require_offering = False
             source_spec = {
                 "scoring_result_id": score["id"],
                 "source_owner_actor": score["owner_actor"],
@@ -292,6 +299,7 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
             owner_actor=actor.id,
             actor_type=actor.kind,
             idempotency_key=idempotency_key,
+            require_model_offering=require_offering,
         )
 
     @router.get(

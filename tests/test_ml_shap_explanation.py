@@ -234,6 +234,10 @@ def test_playground_explanation_api_checks_source_authority_and_status(tmp_path,
     monkeypatch.setattr(Store, "get_model_revision", lambda self, _: model)
 
     def create_job(self, **kwargs):
+        # Store 계약: 판본 상태는 새 Job을 만들 때 Store가 판정한다.
+        if model["lifecycle_state"] != "Active":
+            from sos_platform.errors import PlatformError
+            raise PlatformError("SOS-ML-MODEL-INVALID")
         calls.append(kwargs)
         return {
             "id": "explanation-job", "kind": kwargs["kind"],

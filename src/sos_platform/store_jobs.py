@@ -115,22 +115,24 @@ class JobStoreMixin:
                 blocked = use_blocked(locked_model(db, model_id) or {})
                 if blocked:
                     raise PlatformError(blocked)
-                # API에서 제공 상태를 읽은 뒤 중단이 확정될 수 있다. 중단·삭제와
-                # 같은 모델 행 잠금 아래에서 교차 Actor의 신규 사용을 재확인한다.
-                if require_model_offering and db.execute(text(
-                    "SELECT 1 FROM model_offerings WHERE model_revision_id=:id "
-                    "AND withdrawn_at IS NULL"
-                ), {"id": model_id}).scalar_one_or_none() is None:
-                    raise PlatformError("SOS-API-CONFLICT")
+                # 다른 Actor의 새 계산 허용(현재 제공 중)은 API가 아니라 여기서 판정한다. API는 읽기 권한만
+                # 확인하므로 같은 키 재요청은 제공 중단 뒤에도 위에서 원래 Job을 받는다.
+                if require_model_offering and not self._offered(db, model_id):
+                    raise PlatformError("SOS-ML-MODEL-NOT-OFFERED")
             if kind == "ml_explain":
                 # 설명 대상의 모델 파일이 삭제되는 상황과 계산 접수를 직렬화한다.
                 if spec.get("playground_job_id"):
-                    model_state = db.execute(text(
-                        "SELECT m.lifecycle_state FROM model_revisions m "
+                    source_model = db.execute(text(
+                        "SELECT m.id,m.lifecycle_state FROM model_revisions m "
                         "JOIN jobs j ON j.spec::jsonb ->> 'model_revision_id'=m.id "
                         "WHERE j.id=:job_id AND j.kind='ml_playground' "
                         "AND j.status='Succeeded' FOR SHARE OF m"
-                    ), {"job_id": spec["playground_job_id"]}).scalar_one_or_none()
+                    ), {"job_id": spec["playground_job_id"]}).mappings().first()
+                    model_state = source_model["lifecycle_state"] if source_model else None
+                    # 단일 입력 결과의 설명은 그 모델의 새 계산이므로 다른 Actor에게는 현재 제공이 필요하다.
+                    if (model_state == "Active" and require_model_offering
+                            and not self._offered(db, source_model["id"])):
+                        raise PlatformError("SOS-ML-MODEL-NOT-OFFERED")
                 else:
                     model_state = db.execute(text(
                         "SELECT m.lifecycle_state FROM model_revisions m "
@@ -274,6 +276,13 @@ class JobStoreMixin:
                     request_id=request_id,
                 )
         return self.get_job(item["id"])
+
+    @staticmethod
+    def _offered(db: Connection, model_id: str) -> bool:
+        """판본이 지금 다른 Actor에게 제공 중인지. 제공 중단·삭제와 같은 판본 행 잠금 아래에서 읽는다."""
+        return db.execute(text(
+            "SELECT 1 FROM model_offerings WHERE model_revision_id=:id AND withdrawn_at IS NULL"
+        ), {"id": model_id}).scalar_one_or_none() is not None
 
     @staticmethod
     def _decode_job(item: dict) -> dict:

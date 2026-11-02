@@ -280,5 +280,5 @@ def test_withdrawal_is_rechecked_when_the_job_is_committed(kind):
         store.create_job(kind=kind, dataset_id="user-data",
             spec={"model_revision_id": "model"}, owner_actor="consumer",
             require_model_offering=True)
-    assert error.value.code == "SOS-API-CONFLICT"
+    assert error.value.code == "SOS-ML-MODEL-NOT-OFFERED"
     assert db.execute.call_count == 3
