@@ -49,6 +49,15 @@ def _group(db: Connection, owner: str, key: str, *, lock: bool = False) -> dict:
     return dict(row)
 
 
+def _producing(db: Connection, owner: str, key: str) -> bool:
+    """그룹에 판본을 게시할 학습·연결 Job이 대기·실행 중인지."""
+    return db.execute(text(
+        "SELECT 1 FROM jobs WHERE kind IN ('ml_train','ml_import') AND owner_actor=:owner "
+        "AND status IN ('Queued','Running') "
+        "AND COALESCE(spec::jsonb->>'registry_key','default')=:key LIMIT 1"
+    ), {"owner": owner, "key": key}).first() is not None
+
+
 def _mlflow() -> MLflowClient | None:
     """MLflow 연결을 구성하지 않았으면 None. 구성이 잘못됐으면 외부 정리를 시작하지 않는다."""
     try:
@@ -92,8 +101,8 @@ def model_groups_router(store: Store) -> APIRouter:
     @router.patch("/api/ml/model-groups/{registry_key}", tags=["Models"],
                   summary="모델 그룹 이름·설명 변경과 보관·복원",
                   description="보관한 그룹의 판본은 새 Scoring·Playground·추론·서빙·제공에 쓰지 않고, "
-                  "그룹에 새 학습·연결 판본을 만들지 않습니다. 제공·서빙 중인 판본이 있으면 보관할 수 "
-                  "없습니다.",
+                  "그룹에 새 학습·연결 판본을 만들지 않습니다. 제공·서빙 중인 판본이나 진행 중인 학습·연결이 "
+                  "있으면 보관할 수 없습니다.",
                   response_model=ModelGroupOut)
     def update_group(registry_key: str, body: ModelGroupUpdate, actor: Actor = MANAGE):
         with store.connection() as db:
@@ -103,6 +112,10 @@ def model_groups_router(store: Store) -> APIRouter:
                 f"AND m.registry_key=:key AND m.lifecycle_state='Active' AND {_IN_USE} LIMIT 1"
             ), {"owner": actor.id, "key": registry_key}).first():
                 raise HTTPException(status_code=409, detail=_IN_USE_DETAIL)
+            # 접수된 학습·연결은 그룹 행 공유 잠금 아래 접수됐으므로, 배타 잠금 뒤 확인하면 보관 이후 게시를 막는다.
+            if body.archived and not group["archived_at"] and _producing(db, actor.id, registry_key):
+                raise HTTPException(status_code=409, detail="모델 그룹에 진행 중인 학습·연결 작업이 있습니다. "
+                                    "끝나거나 취소한 뒤 보관하세요.")
             archived_at = group["archived_at"]
             if body.archived is not None:
                 archived_at = (archived_at or now()) if body.archived else None
@@ -136,11 +149,7 @@ def model_groups_router(store: Store) -> APIRouter:
                 "AND lifecycle_state!='Deleted' LIMIT 1"
             ), {"owner": actor.id, "key": registry_key}).first():
                 raise HTTPException(status_code=409, detail="모델 그룹에 관리 중인 모델 판본이 남아 있습니다.")
-            if db.execute(text(
-                "SELECT 1 FROM jobs WHERE kind IN ('ml_train','ml_import') AND owner_actor=:owner "
-                "AND status IN ('Queued','Running') "
-                "AND COALESCE(spec::jsonb->>'registry_key','default')=:key LIMIT 1"
-            ), {"owner": actor.id, "key": registry_key}).first():
+            if _producing(db, actor.id, registry_key):
                 raise HTTPException(status_code=409, detail="모델 그룹에 실행 중인 학습·연결 작업이 있습니다.")
 
         with store.connection() as db:

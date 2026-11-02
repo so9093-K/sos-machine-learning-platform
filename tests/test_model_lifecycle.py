@@ -75,7 +75,7 @@ def test_model_delete_does_not_mark_completed_when_s3_fails(monkeypatch):
     item = {
         "id": "model-id", "job_id": "job", "attempt_id": "attempt",
         "owner_actor": "researcher-one", "algorithm": "isolation_forest",
-        "registry_model": "sos-if-test", "registry_version": "2",
+        "registry_model": "sos-if-test", "registry_version": "2", "sha256": "a" * 64,
         "location": "s3://bucket/results/job/attempt.model.joblib",
         "lifecycle_state": "Active", "runtime": '{"model_format": "joblib"}',
     }
@@ -87,6 +87,12 @@ def test_model_delete_does_not_mark_completed_when_s3_fails(monkeypatch):
     class Registry:
         def __init__(self, *args, **kwargs):
             pass
+        def get(self, endpoint, params):
+            # 지우기 전에 읽는 버전은 여전히 이 판본의 기록이다.
+            return {"model_version": {
+                "name": params["name"], "version": params["version"], "source": item["location"],
+                "tags": [{"key": "sos.job_id", "value": "job"}, {"key": "sos.sha256", "value": "a" * 64}],
+            }}
         def delete(self, *args, **kwargs):
             calls.append("registry")
             return {}

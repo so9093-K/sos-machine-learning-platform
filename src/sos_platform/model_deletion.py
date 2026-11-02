@@ -197,7 +197,14 @@ def model_deletion_router(store: Store) -> APIRouter:
                 # 등록했거나 등록 결과가 불확실한 판본은 begin_delete가 확인한 같은 서버에서 실제 버전을 지운다.
                 delete_registered_versions(MLflowClient(settings), row)
             storage.permanently_delete(key)
-        except (MLflowDeliveryError, ValueError, OSError, RuntimeError, BotoCoreError, ClientError) as exc:
+        except MLflowDeliveryError as exc:
+            if str(exc) == "SOS-MLFLOW-MODEL-MISMATCH":
+                # 같은 번호의 버전이 이 판본의 기록이 아니면 다른 모델일 수 있다. 지우지 않고 Deleting을 유지한다.
+                raise HTTPException(status_code=409, detail="MLflow의 등록 버전이 이 판본의 기록과 일치하지 "
+                                    "않아 삭제하지 않았습니다. 운영자가 MLflow 상태를 확인해야 합니다.") from exc
+            raise HTTPException(status_code=503, detail="모델 삭제가 완료되지 않았습니다. 상태를 확인한 뒤 "
+                                "다시 요청하세요.") from exc
+        except (ValueError, OSError, RuntimeError, BotoCoreError, ClientError) as exc:
             # 외부 시스템은 공통 트랜잭션이 아니므로 중단된 상태를 실패로 확정하지 않는다.
             # 같은 요청을 다시 보내 삭제를 재개한다. 비밀 정보는 응답에 노출하지 않는다.
             raise HTTPException(status_code=503, detail="모델 삭제가 완료되지 않았습니다. 상태를 확인한 뒤 다시 요청하세요.") from exc

@@ -64,6 +64,16 @@ def _versions(client, name: str):
         seen.add(token)
 
 
+def _records_model(entry: object, model: dict, name: str) -> bool:
+    """MLflow 버전이 이 SOS 판본의 등록 기록인지: 그룹 이름·아티팩트 URI·게시 Job·SHA가 모두 같다."""
+    return isinstance(entry, dict) and (
+        entry.get("name") == name
+        and entry.get("source") == model.get("location")
+        and _tags(entry).get("sos.job_id") == model.get("job_id")
+        and _tags(entry).get("sos.sha256") == model.get("sha256")
+    )
+
+
 def confirm_registered_version(client, model: dict, name: str, version: str) -> None:
     """방금 등록한 버전이 READY이고 SOS 판본의 위치·SHA·게시 Job과 일치하는지 확인한다.
 
@@ -72,12 +82,9 @@ def confirm_registered_version(client, model: dict, name: str, version: str) -> 
     entry = client.get("model-versions/get", {"name": name, "version": version}).get(
         "model_version"
     )
-    if not isinstance(entry, dict) or (
-        entry.get("version") != version or entry.get("name") != name
-        or entry.get("source") != model.get("location")
-        or _tags(entry).get("sos.job_id") != model.get("job_id")
-        or _tags(entry).get("sos.sha256") != model.get("sha256")
-        or entry.get("status") != "READY"
+    if (
+        not _records_model(entry, model, name)
+        or entry.get("version") != version or entry.get("status") != "READY"
     ):
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
 
@@ -85,19 +92,35 @@ def confirm_registered_version(client, model: dict, name: str, version: str) -> 
 def delete_registered_versions(client, model: dict) -> None:
     """판본의 MLflow 등록 버전을 지운다. 등록 결과를 기록하지 못했으면 게시 Job 태그로 찾아 지운다.
 
-    등록 전송이 시도된 판본만 호출한다. 이미 없는 버전은 삭제된 것으로 본다.
+    등록 전송이 시도된 판본만 호출한다. 지우기 전에 각 버전이 여전히 이 판본의 기록인지(아티팩트
+    URI·게시 Job·SHA) 확인한다. 그룹이 다시 만들어져 버전 번호가 재사용됐다면 다른 모델일 수 있으므로,
+    하나라도 일치하지 않으면 아무것도 지우지 않는다. 등록 상태(READY)는 요구하지 않으며, 이미 없는 버전은
+    삭제된 것으로 본다.
+
+    Raises:
+        MLflowDeliveryError: `SOS-MLFLOW-MODEL-MISMATCH` — 버전이 이 판본의 기록이 아니다.
     """
     name = registered_model_name(model)
     if model.get("registry_version"):
-        versions = [model["registry_version"]]
+        try:
+            entry = client.get("model-versions/get", {
+                "name": name, "version": model["registry_version"],
+            }).get("model_version")
+        except MLflowDeliveryError as exc:
+            if str(exc).startswith("SOS-MLFLOW-HTTP-404"):
+                return
+            raise
+        entries = [entry]
     else:
-        versions = [
-            version["version"] for version in _versions(client, name)
+        entries = [
+            version for version in _versions(client, name)
             if _tags(version).get("sos.job_id") == model.get("job_id")
         ]
-    for version in versions:
+    if not all(_records_model(entry, model, name) for entry in entries):
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
+    for entry in entries:
         try:
-            client.delete("model-versions/delete", {"name": name, "version": version})
+            client.delete("model-versions/delete", {"name": name, "version": entry["version"]})
         except MLflowDeliveryError as exc:
             if not str(exc).startswith("SOS-MLFLOW-HTTP-404"):
                 raise
