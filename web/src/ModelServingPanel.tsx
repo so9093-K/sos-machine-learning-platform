@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatError, jsonPost, request } from "./api";
 import { formatRecordedAt } from "./display-format";
+import { modelAvailableForNewWork } from "./ModelOffering";
 import type { ModelRevision, ServingEndpoint } from "./types";
 
 const FAILED = new Set(["DEPLOY_FAILED", "UNHEALTHY"]);
@@ -67,7 +68,7 @@ export function ModelServingPanel({ model, canManage = false, onOpenServing, rev
   }, [model.id, revision, retry]);
   const pageCount = Math.max(1, Math.ceil((state.items?.length ?? 0) / 5));
   const currentPage = Math.min(page, pageCount - 1);
-  const eligible = model.lifecycle_state === "Active" && Boolean(model.registry_version);
+  const eligible = modelAvailableForNewWork(model);
   async function deploy(event: React.FormEvent) {
     event.preventDefault();
     if (busy.current || !eligible || !canManage || state.loading || state.error) return;
@@ -109,7 +110,7 @@ export function ModelServingPanel({ model, canManage = false, onOpenServing, rev
     </div>}
     {canManage && onOpenServing && <button type="button" className="secondary" onClick={onOpenServing}>온라인 서빙 운영 →</button>}
     {canManage && <details className="model-deployment-form"><summary>이 판본의 새 Endpoint 배포</summary>
-      <p>대상 · {model.id} · {model.registry_version ? `Registry v${model.registry_version}` : "Registry 등록 미확인"}</p>
+      <p>대상 · {model.id}</p>
       <p className="hint">복제본이 Runtime 자원을 사용합니다. 다른 사용자 대상 제공 상태는 바뀌지 않습니다.</p>
       {!eligible && <p>활성 모델의 Registry 등록 확인 후 배포할 수 있습니다.</p>}
       <form onSubmit={event => void deploy(event)}>

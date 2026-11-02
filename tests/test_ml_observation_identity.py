@@ -182,7 +182,6 @@ def test_http_scoring_identity_option_respects_dataset_and_model_ownership(
     monkeypatch.setattr(api_ml_results, "discovery_columns", lambda store, dataset: {
         "columns": [{"name": "f1", "dtype": "Float64"}]})
     monkeypatch.setenv("SOS_MLFLOW_TRACKING_URI", "http://localhost:5000")
-    monkeypatch.setattr(api_ml_results, "verify_registered_version", lambda _client, _model: None)
     app = api.create_app(tmp_path, identity=IdentitySettings("development", {}))
     app.dependency_overrides[api_ml_results.CREATE_JOB_DEP.dependency] = (
         lambda: Actor("alice", "human", frozenset({"researcher"}))

@@ -58,6 +58,11 @@ const scoreDirectionLabels: Record<string, string> = {
   higher_is_more_anomalous: "높을수록 이례적",
 };
 
+/** 모델 판본 표시. MLflow 등록 기록이 있으면 그 버전을, 없으면 SOS 판본 ID 앞부분을 보인다. */
+export function modelVersionLabel(model: { id: string; registry_version?: string | null }): string {
+  return model.registry_version ? "v" + model.registry_version : "판본 " + model.id.slice(0, 8);
+}
+
 export function algorithmLabel(algorithm: string): string {
   return algorithmLabels[algorithm] ?? algorithm;
 }

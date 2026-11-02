@@ -4,7 +4,7 @@ import pytest
 
 from sos_platform.mlflow_errors import MLflowDeliveryError
 from sos_platform.mlflow_registry import (
-    register_model_version, registered_model_name, verify_registered_version,
+    confirm_registered_version, register_model_version, registered_model_name,
 )
 
 
@@ -64,17 +64,16 @@ def test_registry_pins_artifact_source_and_rejects_changed_version(model):
     client = FakeClient()
     name, version = register_model_version(client, model, "run-1")
     client.versions[0]["status"] = "READY"
-    pinned = {**model, "registry_model": name, "registry_version": version}
-    verify_registered_version(client, pinned)
+    confirm_registered_version(client, model, name, version)
     client.versions[0]["status"] = "PENDING_REGISTRATION"
     with pytest.raises(MLflowDeliveryError, match="MISMATCH"):
-        verify_registered_version(client, pinned)
+        confirm_registered_version(client, model, name, version)
     client.versions[0]["status"] = "READY"
     with pytest.raises(MLflowDeliveryError, match="MISMATCH"):
-        verify_registered_version(client, {**pinned, "sha256": "b" * 64})
+        confirm_registered_version(client, {**model, "sha256": "b" * 64}, name, version)
     client.versions[0]["source"] = "s3://sos-data/results/other.model.joblib"
     with pytest.raises(MLflowDeliveryError, match="MISMATCH"):
-        verify_registered_version(client, pinned)
+        confirm_registered_version(client, model, name, version)
 
 
 def test_registry_rejects_mutated_artifact_same_job(model):
@@ -108,14 +107,6 @@ def test_registry_rejects_invalid_model(model, patch):
         register_model_version(FakeClient(), {**model, **patch}, "run-1")
 
 
-def test_archived_model_group_rejects_new_version(model):
-    client = FakeClient()
-    register_model_version(client, model, "run-1")
-    client.models[0]["tags"] = [{"key": "sos.archived", "value": "true"}]
-    with pytest.raises(MLflowDeliveryError, match="ARCHIVED"):
-        register_model_version(client, {**model, "job_id": "job-2"}, "run-2")
-
-
 def test_fresh_registry_model_is_created_without_getting_missing_name(model):
     """실제 MLflow는 존재하지 않는 registered-models/get에 HTTP 404를 응답한다."""
     class StrictClient(FakeClient):
@@ -135,7 +126,7 @@ def test_fresh_registry_model_is_created_without_getting_missing_name(model):
     assert client.created == 1
 
 
-def test_existing_registry_group_is_checked_for_archive_and_reused(model):
+def test_existing_registry_group_is_reused(model):
     client = FakeClient()
     name = registered_model_name(model)
     client.models.append({"name": name})
@@ -156,7 +147,6 @@ def test_registry_does_not_recreate_missing_group_with_existing_version(model):
     with pytest.raises(MLflowDeliveryError, match="MODEL-MISMATCH"):
         register_model_version(client, model, "run-1")
     assert not client.models
-
 
 
 @pytest.mark.parametrize("bad_result", [

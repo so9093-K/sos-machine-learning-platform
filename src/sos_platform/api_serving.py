@@ -7,7 +7,6 @@
 
 import math
 import os
-import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
@@ -15,12 +14,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, StrictFloat, StrictInt
 
 from .api_access import ResourceAccess
-from .api_ml_models import management_client
 from .errors import InvalidRequestError, PlatformError
 from .ml_input import ordered_playground_input
 from .ml_outputs import response_matches, revision_output_contract
-from .mlflow_errors import MLflowDeliveryError
-from .mlflow_registry import verify_registered_version
+from .model_use import use_blocked
 from .security import Actor, require
 from .serving_client import (
     FAILED_STATUSES,
@@ -41,8 +38,6 @@ READ_JOB = Depends(require("job.read"))
 MANAGE_MODEL = Depends(require("model.manage"))
 INFER = Depends(require("model.infer"))
 MAX_INPUTS = 100
-# 확인에 성공한 Registry 상태를 재사용하는 시간. 보관·등록 무효화는 이 시간 안에 추론에 반영된다.
-REGISTRY_CHECK_SECONDS = 30.0
 # 실행 상태 조회와 복제본 준비 확인을 동시에 실행하는 수. Runtime이 응답하지 않아도 목록 응답이
 # Endpoint 수만큼 늘지 않게 하되, 한 요청이 Runtime에 보내는 동시 요청은 이 수로 제한한다.
 RUNTIME_CHECK_CONCURRENCY = 8
@@ -152,21 +147,6 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
             return replica_capacity(client.cpu_capacity())
         except (ServingUnavailable, ServingRequestRejected) as exc:
             raise PlatformError("SOS-SERVING-UNAVAILABLE") from exc
-
-    # 보관·등록 무효화는 Playground·Scoring과 같은 Registry 검증으로 판정한다. 확인에 성공한
-    # 판본만 잠시 재사용하며, MLflow 장애로 확인할 수 없으면 다른 새 사용과 같이 거절한다.
-    registry_checked: dict[str, float] = {}
-
-    def require_registered(model: dict) -> None:
-        checked_at = registry_checked.get(model["id"])
-        if checked_at is not None and time.monotonic() - checked_at < REGISTRY_CHECK_SECONDS:
-            return
-        try:
-            verify_registered_version(management_client(), model)
-        except MLflowDeliveryError as exc:
-            registry_checked.pop(model["id"], None)
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-        registry_checked[model["id"]] = time.monotonic()
 
     def runtime_snapshot(endpoints: list[dict], desired: dict[str, dict]
                          ) -> tuple[dict[str, dict] | None, dict[str, bool]]:
@@ -279,7 +259,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
     )
     def create_endpoint(body: ServingEndpointCreate, request: Request,
                         actor: Actor = MANAGE_MODEL):
-        require_registered(access.owned_model(body.model_revision_id, actor))
+        access.owned_model(body.model_revision_id, actor)
         endpoint = change(lambda: store.create_serving_endpoint(
             name=body.name, model_revision_id=body.model_revision_id, owner_actor=actor.id,
             owner_actor_type=actor.kind, privileged=actor.privileged, replica_capacity=capacity(),
@@ -307,7 +287,6 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
     def request_revision(endpoint_id: str, body: ServingRevisionRequest, request: Request,
                          actor: Actor = MANAGE_MODEL):
         managed_endpoint(endpoint_id, actor)
-        require_registered(access.model(body.model_revision_id))
         endpoint = change(lambda: store.request_serving_revision(
             endpoint_id, body.model_revision_id, actor_id=actor.id, actor_type=actor.kind,
             privileged=actor.privileged, replica_capacity=capacity(),
@@ -322,9 +301,7 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         response_model=ServingEndpointOut,
     )
     def rollback(endpoint_id: str, request: Request, actor: Actor = MANAGE_MODEL):
-        previous = managed_endpoint(endpoint_id, actor)["previous_model_revision_id"]
-        if previous:
-            require_registered(access.model(previous))
+        managed_endpoint(endpoint_id, actor)
         endpoint = change(lambda: store.rollback_serving_endpoint(
             endpoint_id, actor_id=actor.id, actor_type=actor.kind, privileged=actor.privileged,
             replica_capacity=capacity(), request_id=request.state.request_id))
@@ -376,8 +353,8 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         tags=["Serving"],
         summary="온라인 추론",
         description="Endpoint의 활성 판본으로 관측값을 바로 계산합니다. 요청은 Job으로 남지 않습니다. "
-        "다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관됐거나 Registry 상태를 "
-        "확인할 수 없는 판본은 Playground·Scoring과 같이 새 계산에 쓰지 않습니다. "
+        "다른 사용자의 Endpoint는 활성 판본이 제공 중일 때만 호출할 수 있습니다. 보관된 판본은 "
+        "Playground·Scoring과 같이 새 계산에 쓰지 않습니다. "
         "실제로 계산한 복제본의 판본·설정 지문·출력 계약이 일치할 때만 결과를 전달합니다. "
         "배포 운영 상태를 조회하는 Dashboard는 추론 요청의 의존성이 아닙니다.",
         response_model=PredictionOut,
@@ -388,7 +365,9 @@ def serving_router(store: Store, access: ResourceAccess) -> APIRouter:
         if endpoint["desired_state"] != "serving" or not revision_id:
             raise PlatformError("SOS-SERVING-NOT-READY")
         model = access.model_allowed(actor, access.model(revision_id), for_new_work=True)
-        require_registered(model)
+        blocked = use_blocked(model)
+        if blocked:
+            raise PlatformError(blocked)
         rows = []
         for index, values in enumerate(body.inputs, start=1):
             try:

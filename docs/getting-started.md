@@ -119,7 +119,7 @@ SOS_SUPPLY_TOKEN=<automation 토큰> .venv/bin/python scripts/supply_model.py \
   [--endpoint activity-anomaly]
 ```
 
-스크립트는 MLflow 고정 버전을 다시 학습하지 않고 연결하거나, 학습 데이터를 등록해 활동 이상 탐지의 필수 Feature로 SOS Worker 학습을 실행한다. 이후 Registry 등록을 확인하고 설명과 함께 판본을 제공한다. `--state-file`은 하나의 공급 실행을 식별하며, 같은 파일로 재실행하면 기존 등록·학습에서 이어 간다. 새로운 입력·학습에는 새 상태 파일을 쓴다. 파일 등록 응답이 유실되면 자동 재업로드하지 않으므로, `GET /api/datasets`에서 등록 상태를 확인하고 같은 `--state-file`과 확인한 `--dataset-id`로 재개한다.
+스크립트는 MLflow 고정 버전을 다시 학습하지 않고 연결하거나, 학습 데이터를 등록해 활동 이상 탐지의 필수 Feature로 SOS Worker 학습을 실행한다. 이후 게시된 판본을 설명과 함께 제공한다. `--state-file`은 하나의 공급 실행을 식별하며, 같은 파일로 재실행하면 기존 등록·학습에서 이어 간다. 새로운 입력·학습에는 새 상태 파일을 쓴다. 파일 등록 응답이 유실되면 자동 재업로드하지 않으므로, `GET /api/datasets`에서 등록 상태를 확인하고 같은 `--state-file`과 확인한 `--dataset-id`로 재개한다.
 
 학습 원본은 접근 권한이 통제된 연구 환경에서 관리하며 공개 저장소나 기본 다운로드 데이터에 포함하지 않는다. 모델 공급 전에는 Feature별 결측의 의미와 사용할 입력, 정상 기준·학습 기간, 레이블 정의와 평가 조건을 연구에서 정한다. 필수 Feature가 모두 존재하거나 중앙값 대체가 가능하다는 사실은 연구적 유효성이나 탐지 성능을 입증하지 않는다.
 
@@ -152,6 +152,6 @@ Feast Feature Service의 등록·시점 조회·폐기는 `automation` 계정이
 - **MLflow** (`http://localhost:9606`): 생산 Pipeline의 Run은 Experiment `activity-anomaly-production`에 남는다. SOS 모델 그룹(`sos-if-*`) 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 수정하거나 삭제하지 않는다. 연결한 버전은 `sos.source_model`·`sos.source_version`으로 원본을 가리킨다. 외부 서버는 `SOS_MLFLOW_TRACKING_URI`·`SOS_MLFLOW_TOKEN`으로 연결한다.
 - **Feast UI** (`http://localhost:9608`): `sos_features` SQL Registry를 읽기 전용 DB 계정으로 탐색한다. 등록된 Feature가 없으면 빈 Catalog가 정상이다.
 
-학습·연결 성공과 MLflow Registry 등록 성공은 구별한다. 등록 대기 중에는 SOS의 MLflow 전송 상태를 확인하며, Dagster Run 성공이나 MLflow Run `Finished`만으로 SOS에서 모델을 쓸 수 있다고 판단하지 않는다. 복구는 [Diagnostics](diagnostics.md)를 따른다.
+SOS에서 모델을 쓸 수 있는지는 SOS 연결·학습 Job의 성공과 판본 상태로 판단한다. Dagster Run 성공이나 MLflow Run `Finished`만으로 판단하지 않으며, SOS 판본의 MLflow 등록은 사용 조건이 아닌 기록이다. 복구는 [Diagnostics](diagnostics.md)를 따른다.
 
 API Reference의 Scalar JavaScript는 Docker 이미지에 포함된다. 호스트에서 Python API를 직접 실행하면 Node.js 24로 `bash scripts/build_scalar_assets.sh`를 먼저 실행한다.

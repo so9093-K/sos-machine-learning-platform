@@ -31,10 +31,14 @@ export function useModelOffering(modelId: string | null, refreshKey = 0) {
   };
 }
 
-/** 서버의 신규 적용 규칙과 같다. 활성·Registry 등록 판본이어야 하고, 소유자·관리자가 아니면 제공 중이어야 한다. */
+/** 서버의 신규 사용 판정(model_use.use_blocked)과 같다. 활성이고 판본·그룹이 보관되지 않아야 한다. */
+export function modelAvailableForNewWork(model: ModelRevision): boolean {
+  return model.lifecycle_state === "Active" && !model.archived_at && !model.group_archived_at;
+}
+
+/** 서버의 신규 적용 규칙과 같다. 새 사용이 가능해야 하고, 소유자·관리자가 아니면 제공 중이어야 한다. */
 export function canApplyModel(model: ModelRevision, offering: ModelOfferingState, isAdministrator: boolean) {
-  return model.lifecycle_state === "Active" && Boolean(model.registry_version) &&
-    (offering.offered || offering.owned || isAdministrator);
+  return modelAvailableForNewWork(model) && (offering.offered || offering.owned || isAdministrator);
 }
 
 function OfferingEditor({ model, offering, disabled, statusError, onSaved, onRetry }: {
@@ -60,7 +64,7 @@ function OfferingEditor({ model, offering, disabled, statusError, onSaved, onRet
   // 새로 확인한 서버 상태가 있으면 이전 요청의 확인 실패는 더 이상 현재 상황이 아니다.
   useEffect(() => { setError(""); }, [offering]);
   const length = Array.from(description.trim()).length;
-  const eligible = model.lifecycle_state === "Active" && Boolean(model.registry_version);
+  const eligible = modelAvailableForNewWork(model);
   const verb = offering.offered ? "저장" : "제공";
   async function change(action: "save" | "withdraw") {
     if (disabled || busy.current || (action === "save" && (!eligible || length < 1 || length > 1000)) ||
@@ -117,7 +121,7 @@ function OfferingEditor({ model, offering, disabled, statusError, onSaved, onRet
         onClick={() => setConfirmWithdrawal(value => !value)}>모델 제공 중단</button>
       {confirmWithdrawal ? <div id={`${fieldId}-confirmation`} className="notice-blocked" role="group" aria-labelledby={`${fieldId}-withdraw`}>
         <h4 id={`${fieldId}-withdraw`}>모델 제공 중단 확인</h4>
-        <p>대상 판본 · Registry v{model.registry_version} · {model.id}</p>
+        <p>대상 판본 · {model.id}</p>
         <p>다른 사용자의 신규 모델 적용(Scoring)이 차단됩니다. 기존 결과는 유지되며, 모델은 다시 제공할 수 있습니다.</p>
         <button type="button" disabled={disabled || Boolean(operation)} onClick={() => void change("withdraw")}>
           {operation === "withdraw" ? "제공 중단 중…" : "제공 중단 확인"}</button>

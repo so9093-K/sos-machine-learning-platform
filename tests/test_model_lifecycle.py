@@ -74,13 +74,14 @@ def test_model_delete_does_not_mark_completed_when_s3_fails(monkeypatch):
     actor = Actor("researcher-one", "human", frozenset({"researcher"}))
     item = {
         "id": "model-id", "job_id": "job", "attempt_id": "attempt",
+        "owner_actor": "researcher-one", "algorithm": "isolation_forest",
         "registry_model": "sos-if-test", "registry_version": "2",
         "location": "s3://bucket/results/job/attempt.model.joblib",
         "lifecycle_state": "Active", "runtime": '{"model_format": "joblib"}',
     }
     calls = []
     monkeypatch.setattr(model_deletion, "begin_delete",
-                        lambda store, model_id, user: (calls.append("begin") or item))
+                        lambda store, model_id, user: (calls.append("begin") or (item, True)))
     monkeypatch.setattr(model_deletion, "finish_delete",
                         lambda store, model_id, user: calls.append("finish"))
     class Registry:
@@ -145,20 +146,37 @@ def test_deleted_model_cannot_be_reloaded_into_runtime(tmp_path):
         load_model_revision({"lifecycle_state": "Deleting"}, tmp_path)
 
 
-def test_unconfigured_mlflow_does_not_begin_model_deletion(monkeypatch):
+def test_model_never_sent_to_mlflow_is_deleted_without_mlflow(monkeypatch):
+    """등록 전송을 시도하지 않은 판본은 MLflow 구성·가용성과 무관하게 SOS 자산만 삭제한다."""
     from sos_platform import model_deletion
     from sos_platform.model_deletion import model_deletion_router
 
     actor = Actor("researcher-one", "human", frozenset({"researcher"}))
+    item = {
+        "id": "model-id", "job_id": "job", "attempt_id": "attempt", "registry_version": None,
+        "location": "s3://bucket/results/job/attempt.model.joblib",
+        "lifecycle_state": "Active", "runtime": '{"model_format": "joblib"}',
+    }
+    calls = []
     monkeypatch.setattr(model_deletion.MLflowSettings, "from_env", lambda: None)
-    monkeypatch.setattr(model_deletion, "begin_delete",
-                        lambda *args: pytest.fail("Unconfigured MLflow must not mark Deleting"))
+    monkeypatch.setattr(model_deletion, "begin_delete", lambda *args: (item, False))
+    monkeypatch.setattr(model_deletion, "finish_delete", lambda *args: calls.append("finish"))
+    monkeypatch.setattr(model_deletion, "MLflowClient", lambda *args: pytest.fail(
+        "MLflow must not be contacted for a model that was never sent"))
+
+    class Storage:
+        def key(self, location):
+            return "results/job/attempt.model.joblib"
+
+        def permanently_delete(self, key):
+            calls.append("s3")
+
+    monkeypatch.setattr(model_deletion, "ObjectStore", Storage)
     router = model_deletion_router(object())
     endpoint = next(route.endpoint for route in router.routes
                     if getattr(route, "path", "") == "/api/ml/models/{revision_id}")
-    with pytest.raises(HTTPException) as error:
-        endpoint("model-id", confirm=True, actor=actor)
-    assert error.value.status_code == 503
+    assert endpoint("model-id", confirm=True, actor=actor)["state"] == "Deleted"
+    assert calls == ["s3", "finish"]
 
 
 def test_invalid_model_object_key_never_deletes_registry_version(monkeypatch):
@@ -169,7 +187,7 @@ def test_invalid_model_object_key_never_deletes_registry_version(monkeypatch):
         "location": "s3://bucket/results/unrelated.model.joblib",
         "lifecycle_state": "Active", "runtime": '{"model_format": "joblib"}',
     }
-    monkeypatch.setattr(model_deletion, "begin_delete", lambda *_: model)
+    monkeypatch.setattr(model_deletion, "begin_delete", lambda *_: (model, True))
     monkeypatch.setattr(model_deletion, "finish_delete", lambda *_: pytest.fail(
         "Mismatched artifact must not be marked deleted"))
     monkeypatch.setattr(model_deletion.MLflowSettings, "from_env", lambda: object())
@@ -197,9 +215,11 @@ def test_offered_model_requires_withdrawal_before_deletion(state):
 
     actor = Actor("supplier", "service", frozenset({"automation"}))
     db = Mock()
-    row = {"id": "model", "owner_actor": actor.id, "lifecycle_state": state}
+    row = {"id": "model", "owner_actor": actor.id, "lifecycle_state": state,
+           "job_id": "job", "registry_version": None}
     db.execute.side_effect = [
         Mock(**{"mappings.return_value.one_or_none.return_value": row}),
+        Mock(**{"mappings.return_value.first.return_value": None}),
         Mock(**{"scalar_one_or_none.return_value": 1}),
     ]
     store = SimpleNamespace(connection=lambda: nullcontext(db))
@@ -207,7 +227,7 @@ def test_offered_model_requires_withdrawal_before_deletion(state):
         model_deletion.begin_delete(store, "model", actor)
     assert error.value.status_code == 409
     assert "먼저 모델 제공을 중단" in error.value.detail
-    assert db.execute.call_count == 2  # 외부 삭제나 상태 전환 전에 거부한다.
+    assert db.execute.call_count == 3  # 외부 삭제나 상태 전환 전에 거부한다.
 
 
 @pytest.mark.parametrize("state", ["Deleting", "Deleted"])
@@ -218,14 +238,15 @@ def test_deleting_or_deleted_model_cannot_be_offered(state):
 
     db = Mock()
     db.execute.return_value.mappings.return_value.first.return_value = {
-        "owner_actor": "supplier", "lifecycle_state": state, "registry_version": "1",
+        "owner_actor": "supplier", "lifecycle_state": state, "registry_key": "default",
     }
+    db.execute.return_value.scalar_one_or_none.return_value = None
     store = object.__new__(Store)
     store.connection = lambda: nullcontext(db)
     with pytest.raises(ModelOfferingUnavailable):
         store.offer_model("model", description="설명", actor_id="supplier",
                           actor_type="service", owner_actor="supplier")
-    assert db.execute.call_count == 1
+    assert db.execute.call_count == 2
 
 
 @pytest.mark.parametrize("kind", ["ml_score", "ml_playground"])
@@ -236,7 +257,10 @@ def test_withdrawal_is_rechecked_when_the_job_is_committed(kind):
 
     db = Mock()
     db.execute.side_effect = [
-        Mock(**{"scalar_one_or_none.return_value": "Active"}),
+        Mock(**{"mappings.return_value.first.return_value": {
+            "lifecycle_state": "Active", "archived_at": None,
+            "owner_actor": "supplier", "registry_key": "default"}}),
+        Mock(**{"scalar_one_or_none.return_value": None}),
         Mock(**{"scalar_one_or_none.return_value": None}),
     ]
     store = object.__new__(Store)
@@ -246,4 +270,4 @@ def test_withdrawal_is_rechecked_when_the_job_is_committed(kind):
             spec={"model_revision_id": "model"}, owner_actor="consumer",
             require_model_offering=True)
     assert error.value.code == "SOS-API-CONFLICT"
-    assert db.execute.call_count == 2
+    assert db.execute.call_count == 3

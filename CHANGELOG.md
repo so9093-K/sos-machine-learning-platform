@@ -25,10 +25,10 @@
 ### 모델 공급과 운영
 
 - 모델 생산(학습·평가·MLflow 등록)은 Dagster의 생산 Pipeline이 SOS DB 접근 없이 직접 실행하고, SOS는 MLflow 고정 모델 버전을 다시 학습하지 않고 Model Revision으로 연결한다(`/api/ml/models/imports` 제출·조회·취소). 연결은 모델 패키지(`sos_model.json`·`estimator.skops`)의 허용 타입 복원과 검증 점수 재현을 확인한 뒤 게시하며, Model Revision은 출처(`source_kind`·`source`)를 가진다. SOS Pipeline 제출 API·화면과 Workflow 제출 기록은 제거했다.
-- 학습·모델 관리·Feature 정의 변경은 `kind: service` 전용 `automation` 역할과 관리자만 할 수 있다. `scripts/supply_model.py`는 MLflow 고정 버전 연결 또는 실제 Dataset 학습으로 Registry 등록·제공·선택적 온라인 서빙을 연결하고 상태 파일로 중단 후 재개한다. 모델 적용은 Dataset 선택·등록을 기본으로 하고 값 직접 입력을 선택적으로 제공한다.
+- 학습·모델 관리·Feature 정의 변경은 `kind: service` 전용 `automation` 역할과 관리자만 할 수 있다. `scripts/supply_model.py`는 MLflow 고정 버전 연결 또는 실제 Dataset 학습으로 판본 게시·제공·선택적 온라인 서빙을 연결하고 상태 파일로 중단 후 재개한다. 모델 적용은 Dataset 선택·등록을 기본으로 하고 값 직접 입력을 선택적으로 제공한다.
 - 모델 제공·설명 수정·중단을 명시적으로 관리하며, 제공 중단은 새 적용만 막고 기존 결과를 유지한다. 제공 중인 판본은 중단 후 삭제할 수 있다.
 - Isolation Forest 학습은 전체·명시적 표본 입력, UTC 시간 분할, Train 중앙값 결측 정책을 지원하고 불변 Model Revision을 남긴다.
-- MLflow가 Experiment·Run·Registered Model/Version의 관리 정본이다. SOS는 Outbox로 기록·등록을 재시도하며, Registry 등록이 확인된 모델만 Scoring에 사용한다. 모델 그룹·보관과 영향 확인 후 영구 삭제를 지원한다.
+- MLflow가 Experiment·Run과 생산 Pipeline의 원본 Registry 정본이다. SOS는 Outbox로 기록과 SOS 판본 등록을 재시도하되, 판본의 사용 여부(수명주기·보관)와 모델 그룹은 SOS가 정하므로 MLflow 장애가 Scoring·Playground·추론·서빙·제공을 막지 않는다. 판본·그룹 보관과 영향 확인 후 영구 삭제를 지원한다.
 - Ray Serve 기반 온라인 서빙 Endpoint를 제공한다. 모델 상세에서 권한 있는 사용자가 최초 배포를 명시적으로 요청하거나 공급 자동화가 배포·판본 전환을 요청하고, 독립 컨트롤러가 새 판본의 준비를 확인한 뒤에만 전환하며 실패 시 기존 판본을 유지한다. 서빙 Runtime 자원을 넘는 배포·전환은 접수 단계에서 이유와 함께 거절하고, 실제 Config가 의도와 다르면 되돌린다. Dashboard의 배포 관측과 실제 추론 준비를 구별하고 관리 경로 장애가 정상 추론을 차단하지 않으며, 추론 응답의 판본·설정 지문·출력 계약이 일치할 때만 전달한다. 운영 화면에서 상태 확인·되돌리기·중단·삭제를 하고, 복제본 상태·로그는 로컬 운영 도구인 Ray Dashboard로 확인한다. `/api/ready`는 API 전체 장애와 Job 실행·온라인 서빙 기능의 장애를 구별한다.
 - Feast가 등록 Feature 정의·Feature Service·시점 조회의 정본이다. 등록·조회·폐기는 별개 Job이며 로컬 운영자는 읽기 전용 Feast UI로 Registry를 탐색한다. 시점 조회는 Entity 행 수 한도 없이 Entity를 배치로 나누어 조회한다(`SOS_FEAST_ENTITY_BATCH_ROWS`는 물리 배치 크기).
 
@@ -40,5 +40,6 @@
 - 데이터 크기에 따라 처리 경로나 계산 의미를 나누지 않는다. Scoring 순위 지표, 판정 정책·평가, 학습 점수 근거, 생산 Pipeline의 학습·평가는 점수·입력을 메모리에 모으지 않고 배치 순회와 디스크 Spill 외부 정렬로 정확히 계산한다.
 - API 오류는 코드·재시도 정책·요청 ID를 포함한 구조화 응답으로 제공하며 웹 타입은 생성 OpenAPI를 사용한다.
 - **API 호환성 변경 — 모델 조회:** `GET /api/ml/models/{revision_id}`와 `GET /api/ml/offered-models`의 `items[].model`은 소유자·관리자가 아닌 소비자에게 `dataset_id`, `dataset_version`, `job_id`, `attempt_id`, `location`, `sha256`, `params`를 반환하지 않는다. 필드는 `null`이 아니라 응답에서 제거되며, `training_score_summary`는 빈 객체이고 Runtime도 공개 정보로 제한된다. 기존 전체 응답을 전제로 한 필수 필드 검증·직접 접근은 수정이 필요하다. 배포 전에 OpenAPI의 공개·전체 응답을 반영해 클라이언트 타입을 갱신하고, `creation_evidence_visible`로 응답을 구분해 비공개 필드 의존을 제거해야 한다. 필드 부재는 모델 오류나 기록 부재를 뜻하지 않는다. API와 SOS 웹은 함께 갱신하며 소유자·관리자의 전체 응답은 유지한다.
+- **API 호환성 변경 — 모델 그룹·보관:** MLflow 기반 `/api/ml/registry/groups*`와 `/api/ml/registry/models`를 제거했다. 모델 그룹은 `/api/ml/model-groups`, 판본 보관·복원은 `PUT`·`DELETE /api/ml/models/{id}/archive`로 관리하며 모델 응답의 `archived_at`·`group_archived_at`이 보관 상태다. `registry_version`은 MLflow 등록 기록이며 사용 조건이 아니다.
 - 저장소 보존 상태 진단과 감사 조회를 운영 권한에 제공하며 객체를 자동 삭제하지 않는다.
 - `make up`으로 API·Worker·Web·Dagster·MLflow·Feast UI를 Docker Compose로 실행하고, Scalar API Reference를 외부 CDN 없이 제공한다. 루트 `.env`의 실행·탐색·캐시·업로드·객체 점검 설정을 필요한 API·Worker에 전달하며 호스트 Web도 같은 파일에서 포트를 읽는다. 설치별 제품 브랜드명과 인스턴스 표시명을 관리자 권한으로 설정한다.

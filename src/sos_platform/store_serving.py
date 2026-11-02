@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from sqlalchemy import text
 
+from .errors import ERRORS
+from .model_use import locked_model, use_blocked
 from .store_administration import now
 from .store_models import _model_item
 
@@ -25,15 +27,13 @@ _CAPACITY_LOCK = "SELECT pg_advisory_xact_lock(hashtext('sos.serving.capacity'))
 
 class ServingStoreMixin:
     def _servable_model(self, db, revision_id: str, endpoint_owner: str, privileged: bool) -> dict:
-        row = db.execute(text(
-            "SELECT id,owner_actor,lifecycle_state,registry_version FROM model_revisions "
-            "WHERE id=:id FOR SHARE"
-        ), {"id": revision_id}).mappings().first()
+        row = locked_model(db, revision_id)
         if row is None or (not privileged and row["owner_actor"] != endpoint_owner):
             raise ServingChangeRejected("서빙할 모델 판본을 찾을 수 없습니다.")
-        if row["lifecycle_state"] != "Active" or not row["registry_version"]:
-            raise ServingChangeRejected("Registry 등록이 확인된 활성 모델만 서빙할 수 있습니다.")
-        return dict(row)
+        blocked = use_blocked(row)
+        if blocked:
+            raise ServingChangeRejected(ERRORS[blocked].message)
+        return row
 
     def _admit_replicas(self, db, endpoint_id: str, revisions: set[str], capacity: int) -> None:
         """이 Endpoint가 변경 뒤 서빙할 판본까지 더해도 서빙 Runtime이 실행할 수 있는지 확인한다.

@@ -5,12 +5,12 @@ import { activityFeatureGroups } from "./ActivityFeatureGroups";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { ModelApiUsage, servesModel } from "./ModelApiUsage";
 import type { PlaygroundRun } from "./ModelLabPlayground";
-import { canApplyModel, useModelOffering } from "./ModelOffering";
+import { canApplyModel, modelAvailableForNewWork, useModelOffering } from "./ModelOffering";
 import { modelCreatedLabel } from "./ModelCreationEvidence";
 import { isTopicCompatible } from "./ModelLabTaxonomy";
 import { taskGuides, topicGuides, topicTree, TaxonomyTrail, useTopicCatalog,
   type TaxonomyLinks } from "./ModelLabGuide";
-import { algorithmLabel, formatRecordedAt } from "./display-format";
+import { algorithmLabel, formatRecordedAt, modelVersionLabel } from "./display-format";
 import type { MLResourceKind } from "./PlatformNavigation";
 import type { Dataset, ModelOffering, ModelOfferingPage, ModelRevision, ServingEndpoint } from "./types";
 
@@ -115,8 +115,8 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
       reason: `선택한 모델의 제공 상태를 확인하지 못했습니다. ${directOffering.error}` };
     if (!state) return { state: "loading" };
     if (!canApplyModel(direct.model, state, isAdministrator)) return { state: "blocked",
-      reason: direct.model.lifecycle_state !== "Active" || !direct.model.registry_version
-        ? "선택한 모델은 현재 새 계산에 사용할 수 없습니다."
+      reason: !modelAvailableForNewWork(direct.model)
+        ? "선택한 모델은 보관됐거나 삭제 중이라 새 계산에 사용할 수 없습니다."
         : "선택한 모델은 제공이 중단됐습니다. 이미 만든 결과는 확인할 수 있지만 새 적용은 할 수 없습니다." };
     return { state: "ready", choice: { model: direct.model, description: state.description ?? "", offered: state.offered } };
   })();
@@ -240,7 +240,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
           <strong>{group.title} · {group.names.length}개</strong>
           <p>{group.names.map(activityFeatureLabel).join(" · ")}</p>
         </div>)}
-      {chosen && <p className="hint">{algorithmLabel(chosen.model.algorithm)} · Registry v{chosen.model.registry_version ?? "?"}
+      {chosen && <p className="hint">{algorithmLabel(chosen.model.algorithm)} · {modelVersionLabel(chosen.model)}
         · {modelCreatedLabel(chosen.model)} {formatRecordedAt(chosen.model.created_at)} · 판본 {chosen.model.id}</p>}
     </details>}
   </div>;

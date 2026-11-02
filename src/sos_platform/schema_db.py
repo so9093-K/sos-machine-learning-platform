@@ -202,8 +202,11 @@ model_revisions = Table(
     Column("created_at", Text, nullable=False),
     Column("registry_key", String(40), nullable=False, default="default"),
     Column("lifecycle_state", String(16), nullable=False, default="Active"),
+    # SOS 모델 그룹에 대한 MLflow 등록 결과(외부 기록). 사용 판정에는 쓰지 않는다.
     Column("registry_model", Text),
     Column("registry_version", String(32)),
+    # 판본 보관. 신규 사용을 막는 SOS의 결정이며 아티팩트 삭제가 아니다.
+    Column("archived_at", Text),
     CheckConstraint(
         "(source_kind = 'sos_training' AND dataset_id IS NOT NULL AND dataset_version IS NOT NULL "
         "AND source IS NULL) OR "
@@ -212,6 +215,19 @@ model_revisions = Table(
         name="ck_model_revisions_source",
     ),
     Index("ix_model_revisions_owner_created", "owner_actor", "created_at"),
+)
+
+# 소유 Actor별 목적 모델 그룹. 이름·설명·보관은 SOS가 정본이며 MLflow에 반영하지 않는다.
+model_groups = Table(
+    "model_groups",
+    metadata,
+    Column("owner_actor", Text, primary_key=True),
+    Column("registry_key", String(40), primary_key=True),
+    Column("title", Text, nullable=False),
+    Column("description", Text, nullable=False, default=""),
+    Column("archived_at", Text),
+    Column("created_at", Text, nullable=False),
+    Column("updated_at", Text, nullable=False),
 )
 
 # 소유자가 다른 Actor에게 명시적으로 제공한 모델 판본. 학습 데이터 접근 권한은 포함하지 않는다.

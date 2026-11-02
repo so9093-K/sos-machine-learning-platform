@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from sos_platform import api_serving
 from sos_platform.api import create_app
 from sos_platform.ml_outputs import ISOLATION_FOREST_OUTPUT
 from sos_platform.security import IdentitySettings
@@ -15,7 +14,7 @@ from sos_platform.store import Store
 
 def test_predict_obeys_runtime_readiness_and_replica_digest(tmp_path, monkeypatch):
     model = {"id": "model-a", "algorithm": "isolation_forest", "features": ["x"],
-             "runtime": {"feature_dtypes": ["Float64"]}}
+             "lifecycle_state": "Active", "runtime": {"feature_dtypes": ["Float64"]}}
     endpoint = {"id": "endpoint-a", "name": "activity", "desired_state": "serving",
                 "active_model_revision_id": model["id"], "pending_model_revision_id": "model-b",
                 "previous_model_revision_id": None, "owner_actor": "local-admin",
@@ -39,8 +38,6 @@ def test_predict_obeys_runtime_readiness_and_replica_digest(tmp_path, monkeypatc
     client = SimpleNamespace(applications=applications, predict=predict, probe=lambda *_: answer)
     client.is_ready = lambda *args: ServingClient.is_ready(client, *args)
     monkeypatch.setattr(ServingClient, "from_env", lambda: client)
-    monkeypatch.setattr(api_serving, "management_client", lambda: None)
-    monkeypatch.setattr(api_serving, "verify_registered_version", lambda *_: None)
     monkeypatch.setattr(Store, "get_serving_endpoint", lambda *_: endpoint)
     monkeypatch.setattr(Store, "get_model_revision", lambda *_: model)
     monkeypatch.setattr(Store, "serving_applications", lambda *_: [

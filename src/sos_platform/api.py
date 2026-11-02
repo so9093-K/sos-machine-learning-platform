@@ -23,7 +23,6 @@ from .api_ml_models import ml_model_router
 from .api_ml_results import ml_results_router
 from .api_ml_training import training_router
 from .api_model_import import model_import_router
-from .api_model_management import model_management_router
 from .api_model_offering import model_offering_router
 from .api_serving import serving_router
 from .api_topics import topic_router
@@ -31,6 +30,7 @@ from .api_storage import storage_router
 from .errors import ERRORS
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .model_deletion import model_deletion_router
+from .model_groups import model_groups_router
 from .observability import emit
 from .schemas import ProblemOut
 from .scoring_observations import scoring_observations_router
@@ -253,7 +253,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     app.include_router(storage_router(store))
     app.include_router(dataset_router(store, access, upload_policy))
     app.include_router(job_router(store, access))
-    app.include_router(model_management_router(store))
+    app.include_router(model_groups_router(store))
     app.include_router(model_import_router(store, access))
     app.include_router(model_offering_router(store, access))
     app.include_router(model_deletion_router(store))

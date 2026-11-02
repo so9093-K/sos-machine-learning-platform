@@ -8,6 +8,7 @@ from uuid import uuid4
 from sqlalchemy import Connection, bindparam, text
 
 from .errors import ERRORS, InvalidRequestError, PlatformError, WorkerOwnershipLost
+from .model_use import group_title, locked_model, use_blocked
 from .store_administration import now
 
 
@@ -76,11 +77,10 @@ class JobStoreMixin:
         with self.connection() as db:
             if kind in ("ml_score", "ml_playground"):
                 model_id = spec.get("model_revision_id")
-                state = db.execute(text(
-                    "SELECT lifecycle_state FROM model_revisions WHERE id=:id FOR SHARE"
-                ), {"id": model_id}).scalar_one_or_none()
-                if state != "Active":
-                    raise PlatformError("SOS-ML-MODEL-INVALID")
+                # 삭제·보관과 같은 판본·그룹 행 잠금 아래에서 SOS 상태만으로 새 사용을 판정한다.
+                blocked = use_blocked(locked_model(db, model_id) or {})
+                if blocked:
+                    raise PlatformError(blocked)
                 # API에서 제공 상태를 읽은 뒤 중단이 확정될 수 있다. 중단·삭제와
                 # 같은 모델 행 잠금 아래에서 교차 Actor의 신규 사용을 재확인한다.
                 if require_model_offering and db.execute(text(
@@ -105,6 +105,21 @@ class JobStoreMixin:
                     ), {"scoring_id": spec.get("scoring_result_id")}).scalar_one_or_none()
                 if model_state != "Active":
                     raise PlatformError("SOS-ML-MODEL-INVALID")
+            if kind in ("ml_train", "ml_import"):
+                # 새 판본이 들어갈 모델 그룹을 접수와 같은 트랜잭션에서 확정한다. 보관된 그룹에는
+                # 새 판본을 만들지 않는다. 그룹 삭제는 진행 중인 학습·연결이 있으면 거부한다.
+                registry_key = spec.get("registry_key") or "default"
+                db.execute(text(
+                    "INSERT INTO model_groups(owner_actor,registry_key,title,description,archived_at,"
+                    "created_at,updated_at) VALUES(:owner,:key,:title,'',NULL,:at,:at) "
+                    "ON CONFLICT DO NOTHING"
+                ), {"owner": owner_actor, "key": registry_key, "title": group_title(registry_key),
+                    "at": now()})
+                if db.execute(text(
+                    "SELECT archived_at FROM model_groups WHERE owner_actor=:owner "
+                    "AND registry_key=:key FOR SHARE"
+                ), {"owner": owner_actor, "key": registry_key}).scalar_one():
+                    raise PlatformError("SOS-ML-MODEL-ARCHIVED")
             if kind == "ml_score_index":
                 # 같은 결과의 색인 요청을 결과 행 잠금으로 직렬화한다. 대기·실행 중인 Job을 색인 조각보다
                 # 먼저 확인하므로 게시 확정과 겹쳐도 색인 Job이 중복되지 않는다. 보존된 점수 결과만 읽으므로

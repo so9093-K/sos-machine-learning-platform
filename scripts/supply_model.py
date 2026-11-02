@@ -86,7 +86,10 @@ def require_capabilities(identity: dict, source: dict) -> None:
 
 
 def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> None:
-    """고정된 Dataset 학습 또는 MLflow 버전 연결을 재개하고 Registry 등록을 확인한 판본만 제공한다."""
+    """고정된 Dataset 학습 또는 MLflow 버전 연결을 재개하고 게시된 판본을 제공한다.
+
+    판본의 사용 가능 여부는 SOS가 정한다. MLflow 등록 기록을 기다리지 않는다(ADR 0025).
+    """
     identity = checked(client.get("/api/v2/auth/me"))
     path = args.state_file
     api = str(client.base_url).rstrip("/")
@@ -132,14 +135,10 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> 
     state["model_id"] = model_id
     save_state(path, state)
 
-    def registered(item: dict) -> bool:
-        if item["lifecycle_state"] != "Active":
-            fail("삭제 중이거나 삭제된 모델은 제공할 수 없습니다.")
-        return bool(item.get("registry_version"))
-
-    model = wait(client, f"/api/ml/models/{model_id}", registered, interval=3,
-                 timeout=args.timeout, label="Registry 등록")
-    print(f"모델 판본 확인 · {model_id} · Registry v{model['registry_version']}", flush=True)
+    model = checked(client.get(f"/api/ml/models/{model_id}"))
+    if model["lifecycle_state"] != "Active" or model.get("archived_at") or model.get("group_archived_at"):
+        fail("삭제 중이거나 보관된 모델은 제공할 수 없습니다.")
+    print(f"모델 판본 확인 · {model_id}", flush=True)
     offering = checked(client.get(f"/api/ml/models/{model_id}/offering"))
     if offering.get("withdrawn_at") is not None:
         fail("제공이 중단된 판본입니다. 재제공은 제공 API로 명시적으로 요청하세요.")

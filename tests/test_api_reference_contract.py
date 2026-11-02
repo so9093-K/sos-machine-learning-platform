@@ -156,7 +156,7 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
         ("/api/ml/models/imports", {"mlflow_model": "producer-model", "mlflow_version": "1"}),
         ("/api/features/services/jobs", definition),
         ("/api/features/services/missing/retirement/jobs", {}),
-        ("/api/ml/registry/groups", {"registry_key": "test", "title": "test"}),
+        ("/api/ml/model-groups", {"registry_key": "test", "title": "test"}),
     ]:
         assert client.post(path, json=body, headers=analyst).status_code == 403, path
     assert submitted == []
@@ -206,7 +206,6 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
         "id": jid, "kind": "ml_train", "owner_actor": "supplier"})
     monkeypatch.setattr(api_ml_models.MLflowSettings, "from_env", lambda: object())
     monkeypatch.setattr(api_ml_models, "MLflowClient", lambda settings: object())
-    monkeypatch.setattr(api_ml_results, "verify_registered_version", lambda *args: None)
     monkeypatch.setattr(api_ml_results, "discovery_columns", lambda store, dataset: {
         "columns": [{"name": "a", "dtype": "Float64"}]})
 
@@ -341,7 +340,8 @@ def test_model_training_evidence_is_private_in_detail_and_offering_list(tmp_path
                 assert result["training_score_summary"] == original["training_score_summary"]
             else:
                 assert set(result) == {"id", "algorithm", "source_kind", "features", "created_at", "registry_version",
-                                       "lifecycle_state", "creation_evidence_visible", "output_type",
+                                       "lifecycle_state", "archived_at", "group_archived_at",
+                                       "creation_evidence_visible", "output_type",
                                        "training_score_summary", "runtime"}
                 assert not {"dataset_id", "dataset_version", "job_id", "attempt_id", "location", "sha256", "params",
                             "source"}.intersection(result)

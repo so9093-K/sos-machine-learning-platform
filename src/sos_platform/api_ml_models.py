@@ -6,14 +6,14 @@ from .api_access import ResourceAccess
 from .errors import RuntimeConfigurationError
 from .mlflow_config import MLflowSettings
 from .mlflow_errors import MLflowDeliveryError
-from .mlflow_read import read_experiments, read_model_versions, read_runs
+from .mlflow_read import read_experiments, read_runs
 from .mlflow_tracking import MLflowClient
 from .schemas import (
     MLflowExperimentPageOut,
     MLflowExportStatusOut,
-    MLflowModelVersionPageOut,
     MLflowRunPageOut,
-    ModelRevisionOut, PublicModelRevisionOut,
+    ModelRevisionOut,
+    PublicModelRevisionOut,
 )
 from .security import Actor, require
 from .store import Store
@@ -89,24 +89,6 @@ def ml_model_router(store: Store, access: ResourceAccess) -> APIRouter:
         except MLflowDeliveryError as exc:
             if str(exc) == "SOS-MLFLOW-EXPERIMENT-NOT-FOUND":
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    @router.get(
-        "/api/ml/registry/models",
-        tags=["Models"],
-        summary="MLflow 모델 버전 목록 조회",
-        description="MLflow가 관리하는 모델 이름과 Registry 버전을 조회합니다. SOS의 불변 모델 실행 참조와 구분합니다.",
-        response_model=MLflowModelVersionPageOut,
-    )
-    def list_registered_models(
-        page_token: str | None = Query(default=None, max_length=2048),
-        registry_key: str = Query(default="default", pattern=r"^[a-z][a-z0-9-]{0,39}$"),
-        include_archived: bool = Query(default=False),
-        actor: Actor = READ_JOB_DEP,
-    ):
-        try:
-            return read_model_versions(management_client(), store, actor.id, page_token=page_token, registry_key=registry_key, include_archived=include_archived)
-        except MLflowDeliveryError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @router.get(

@@ -5,12 +5,9 @@ import math
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
 from .api_access import ResourceAccess
-from .api_ml_models import management_client
 from .discovery import columns as discovery_columns
 from .ml_input import model_input_issues, ordered_playground_input
 from .ml_policy_contract import validate_policy_for_scoring
-from .mlflow_errors import MLflowDeliveryError
-from .mlflow_registry import verify_registered_version
 from .pagination import decode_cursor, page_from_rows
 from .schemas import (
     DecisionPolicyRevisionOut,
@@ -65,12 +62,6 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
         ),
     ):
         model = access.model_allowed(actor, access.model(body.model_revision_id), for_new_work=True)
-        if not model.get("registry_version"):
-            raise HTTPException(status_code=409, detail="모델 Registry 등록이 진행 중입니다. 잠시 후 다시 조회하세요.")
-        try:
-            verify_registered_version(management_client(), model)
-        except MLflowDeliveryError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
         try:
             ordered_playground_input(model, body.features)
         except ValueError as exc:
@@ -154,12 +145,6 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
     ):
         dataset = access.dataset(body.dataset_id, actor)
         model = access.model_allowed(actor, access.model(body.model_revision_id), for_new_work=True)
-        if not model.get("registry_version"):
-            raise HTTPException(status_code=409, detail="모델 Registry 등록이 진행 중입니다. 잠시 후 다시 조회하세요.")
-        try:
-            verify_registered_version(management_client(), model)
-        except MLflowDeliveryError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
         access.require_submission_key(idempotency_key)
         # 고정 판본의 입력 구조 불일치는 Worker 실패 전에 원인 컬럼과 함께 거부한다.
         input_issues = model_input_issues(

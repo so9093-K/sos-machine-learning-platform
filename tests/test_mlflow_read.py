@@ -3,8 +3,7 @@
 from types import SimpleNamespace
 
 from sos_platform.mlflow_experiments import ensure_experiment, experiment_name
-from sos_platform.mlflow_read import read_experiments, read_model_versions, read_runs
-from sos_platform.mlflow_registry import registered_model_name
+from sos_platform.mlflow_read import read_experiments, read_runs
 
 
 class ResearchClient:
@@ -75,41 +74,6 @@ def test_run_search_rechecks_sos_job_owner():
     assert len(read_runs(client, store, "alice", experiment_id="23")["items"]) == 1
 
 
-def test_model_search_rechecks_owner_and_bound_artifact_digest():
-    client = ResearchClient()
-    name = registered_model_name({"owner_actor": "alice", "algorithm": "isolation_forest"})
-    client.versions = [
-        {"name": name, "version": "1", "status": "READY",
-         "source": "s3://sos-data/results/job/attempt.model.joblib",
-         "tags": [
-             {"key": "sos.job_id", "value": "own"},
-             {"key": "sos.sha256", "value": "a" * 64},
-         ]},
-        {"name": name, "version": "2", "status": "READY",
-         "source": "s3://sos-data/results/foreign/attempt.model.joblib",
-         "tags": [
-             {"key": "sos.job_id", "value": "foreign"},
-             {"key": "sos.sha256", "value": "b" * 64},
-         ]},
-    ]
-    jobs = {
-        "own": {"owner_actor": "alice", "result": {"model_revision_id": "model-a"}},
-        "foreign": {"owner_actor": "bob", "result": {"model_revision_id": "model-b"}},
-    }
-    refs = {"model-a": {"registry_model": name, "registry_version": "1",
-                        "location": "s3://sos-data/results/job/attempt.model.joblib",
-                        "sha256": "a" * 64, "owner_actor": "alice"}}
-    store = SimpleNamespace(get_job=jobs.get, get_model_revision=refs.get)
-    result = read_model_versions(client, store, "alice")
-    assert len(result["items"]) == 1
-    assert result["items"][0]["model_id"] == "model-a"
-    refs["model-a"]["sha256"] = "c" * 64
-    assert read_model_versions(client, store, "alice")["items"] == []
-    refs["model-a"]["sha256"] = "a" * 64
-    refs["model-a"]["location"] = "s3://sos-data/results/different.model.joblib"
-    assert read_model_versions(client, store, "alice")["items"] == []
-
-
 def test_experiment_titles_are_separate_without_sos_management_table():
     assert experiment_name("alice", "baseline") != experiment_name("alice", "ablation")
     assert experiment_name("alice", "baseline") != experiment_name("bob", "baseline")
@@ -166,33 +130,3 @@ def test_run_search_with_archived_tag_does_not_crash():
     )
     assert [x["id"] for x in read_runs(client, store, "alice")["items"]] == ["archived-run"]
 
-
-def test_archived_version_is_hidden_from_use_but_visible_for_management():
-    client = ResearchClient()
-    name = registered_model_name({"owner_actor": "alice", "algorithm": "isolation_forest"})
-    client.versions = [{
-        "name": name, "version": "4", "status": "READY",
-        "source": "s3://sos-data/results/job/attempt.model.joblib",
-        "tags": [
-            {"key": "sos.job_id", "value": "own"},
-            {"key": "sos.sha256", "value": "a" * 64},
-            {"key": "sos.archived", "value": "true"},
-        ],
-    }]
-    model = {
-        "registry_model": name, "registry_version": "4",
-        "location": client.versions[0]["source"], "sha256": "a" * 64,
-        "owner_actor": "alice",
-    }
-    store = SimpleNamespace(
-        get_job=lambda _: {"owner_actor": "alice", "result": {"model_revision_id": "model-a"}},
-        get_model_revision=lambda _: model,
-    )
-    assert read_model_versions(client, store, "alice")["items"] == []
-    assert read_model_versions(client, store, "alice", include_archived=True)["items"][0]["archived"]
-
-    client.versions[0]["tags"] = [tag for tag in client.versions[0]["tags"]
-                                   if tag["key"] != "sos.archived"]
-    client.group_tags = [{"key": "sos.archived", "value": "true"}]
-    assert read_model_versions(client, store, "alice")["items"] == []
-    assert read_model_versions(client, store, "alice", include_archived=True)["items"]

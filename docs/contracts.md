@@ -26,7 +26,7 @@
 - **연결 검증:** 연결 Job은 버전이 READY인지, 패키지 구조·값 범위, 생산 Runtime 호환성, 허용 타입만 있는 skops 복원, 서명·매개변수 일치, 검증 표본 점수의 SOS Runtime 재현을 확인한 뒤에만 게시한다. 전처리는 역직렬화하지 않고 기록한 중앙값으로 다시 구성한다. 버전은 번호로 고정하며 SOS 모델 그룹(`sos-if-*`)의 버전은 연결하지 않는다.
 - **연결 후:** 아티팩트는 게시 Attempt의 SOS 저장 위치로 옮기고 소유자의 SOS 모델 그룹에 버전으로 등록한다(원본 모델·버전·Run은 `sos.source_*` 태그). 제공·Scoring·Playground·온라인 서빙·삭제는 SOS 학습 판본과 같다. 연결한 판본은 SOS 학습 Dataset이 없으므로 학습 시간 경계를 재사용하는 시간 구간 Scoring은 쓸 수 없다.
 
-모델 그룹은 목적별 논리적 Registered Model이며 그룹의 표시 이름·설명·보관과 모델 버전은 MLflow가 관리한다. 그룹을 지정하지 않은 모델은 `default` 그룹에 속한다. 새 학습으로 기존 고정 모델 결과를 덮어쓰지 않는다. Registry 그룹/버전 보관은 신규 모델 사용을 제한하지만 물리 삭제가 아니다. 모델 파일의 영구 삭제는 SOS가 실제 S3 객체와 MLflow 버전 제거를 확인하고 `Deleting`/`Deleted` 상태를 기록한다. 과거 Scoring·정책·평가·설명은 독립 실행 근거로 남고 삭제된 Model Revision은 접근 불가 모델 파일의 참조 tombstone이 된다. 결정 배경은 [ADR 0017](adr/0017-model-lifecycle.md)에 있다.
+모델 그룹은 소유 Actor별 목적 묶음이며 이름·설명·보관은 SOS가 관리한다. 그룹을 지정하지 않은 모델은 `default` 그룹에 속하고, 학습·연결 접수가 그룹을 만든다. 새 학습으로 기존 고정 모델 결과를 덮어쓰지 않는다. 판본의 새 사용(Scoring·단일 입력 계산·추론·서빙·제공)은 SOS가 수명주기·판본 보관·그룹 보관으로 판정하며, MLflow 등록은 SOS 판본의 외부 기록이라 사용 조건이 아니다. 보관은 새 사용만 막는 상태이며 물리 삭제가 아니다. 모델 파일의 영구 삭제는 SOS가 실제 S3 객체 제거와, 등록 전송을 시도한 판본이면 MLflow 버전 제거까지 확인하고 `Deleting`/`Deleted` 상태를 기록한다. 과거 Scoring·정책·평가·설명은 독립 실행 근거로 남고 삭제된 Model Revision은 접근 불가 모델 파일의 참조 tombstone이 된다. 결정 배경은 [ADR 0017](adr/0017-model-lifecycle.md)과 [ADR 0025](adr/0025-sos-owned-model-use-decision.md)에 있다.
 
 ## 등록 Feature
 
@@ -64,7 +64,7 @@ Dataset 없는 단일 관측치 Playground Job은 입력 Feature와 실제 모�
 - **자원 수용:** 판본마다 복제본 하나를 두며, 전환 중에는 전환 대상도 복제본 하나를 차지한다. 생성·전환·되돌리기·재개는 변경 뒤 필요한 복제본 수가 서빙 Runtime의 실제 CPU로 실행할 수 있는 수를 넘으면 필요한 수와 실행 가능한 수를 밝혀 409로 거절한다. 수용량을 확인할 수 없으면 `SOS-SERVING-UNAVAILABLE`로 거절한다. 중단·전환 취소·삭제는 언제나 받는다. 이 판정은 CPU 예약 기준의 접수 제한이며 메모리나 다른 Ray 작업의 점유까지 보장하지 않으므로, 접수된 뒤 자원을 기다리는 판본은 `status_reason`으로 이유를 보인다.
 - **추론 계약:** `POST /api/serving/endpoints/{id}/predict`는 `inputs`에 관측값 1~100건을 Feature 이름별 객체로 받고, 모델 입력 서명(이름·자료형)을 Playground와 같은 규칙으로 검증한다. 결측은 `null`이다. 응답은 `model_revision_id`, 판본에 기록된 `output_type`과 점수 방향·척도, 그 출력 종류의 구조를 따르는 입력 순서대로의 `outputs`를 준다(`anomaly_score_v1`은 `outputs[i].anomaly_score`). 서빙 Runtime이 만들지 않는 출력 종류의 판본은 복제본이 시작되지 않아 배포 실패로 보고되며, SOS API는 판본에 기록된 출력 계약(종류·점수 방향·척도)이나 결과 구조와 맞지 않는 응답을 서빙 장애(`SOS-SERVING-UNAVAILABLE`)로 처리하고 전달하지 않는다. 같은 판본에 같은 입력을 보내면 Playground·Scoring과 같은 점수다. 추론 요청은 Job·결과로 저장하지 않는다.
 - **접근:** 추론은 `model.infer` 권한이 필요하다(viewer 제외). 소유자·관리자가 아니면 활성 판본이 지금 제공 중이고 서빙 의도인 Endpoint만 조회·호출하며, 전환 대상·직전 판본과 실패 사유는 보지 않는다. 전환·되돌리기·취소·중단·재개·삭제는 소유자 또는 관리자(`model.manage`)만 하며 감사 기록에 남는다. 응답의 `owned`는 호출 계정의 소유 여부, `manageable`은 관리 가능 여부이며 소유 계정(`owner_actor`)은 관리할 수 있는 사용자에게만 보인다. Endpoint 이름은 계정 안에서만 고유하므로 자동화는 소유 계정과 Endpoint ID로 대상을 식별한다.
-- **Registry 상태:** 추론과 Endpoint 생성·전환·되돌리기는 Playground·Scoring과 같은 Registry 검증(보관 여부·출처·SHA-256)을 통과한 판본만 쓴다. 확인 성공은 최대 30초 재사용하므로 모델 버전·그룹의 보관은 그 안에 추론에 반영된다. MLflow 장애로 확인할 수 없으면 다른 새 사용과 같이 503으로 거절하며, 서빙 Runtime은 계속 실행되어 MLflow가 복구되면 바로 다시 응답한다.
+- **사용 판정:** 추론과 Endpoint 생성·전환·되돌리기는 Playground·Scoring과 같은 SOS 사용 판정(수명주기·판본 보관·그룹 보관)을 통과한 판본만 쓴다. MLflow 가용성은 추론·서빙에 영향을 주지 않는다.
 - **수명주기:** Endpoint는 중단한 뒤에만 삭제한다. 어떤 Endpoint의 활성·전환 대상·직전 판본으로 참조되는 모델은 영구 삭제할 수 없다. 모델 제공 중단은 다른 Actor의 호출을 즉시 막지만 소유자의 서빙은 유지한다.
 - **오류:** 서빙 의도가 아니거나 활성 판본이 아직 없으면 `SOS-SERVING-NOT-READY`(409), 실제 활성 복제본에 연결할 수 없거나 판본·설정 지문·출력 계약이 다르거나 응답 시간이 초과되면 `SOS-SERVING-UNAVAILABLE`이다. 둘 다 상태를 다시 조회한 뒤 재시도한다.
 
