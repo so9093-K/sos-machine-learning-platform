@@ -1,12 +1,12 @@
 import { useRef, useState } from "react";
 import { request } from "./api";
 import { mergeById } from "./collections";
+import type { JobKind, JobPage, JobSummary } from "./types";
 
-type Page<T> = { items: T[]; next_cursor: string | null };
-
-/** 서로 다른 Job 계약을 유지하면서 페이지 병합·경합·기존 페이지 보존을 공통화한다. */
-export function usePagedJobs<T extends { id: string }>(endpoint: string) {
-  const [items, setItems] = useState<T[]>([]);
+/** 공통 Job 목록을 종류로 거르고 페이지 병합·경합·기존 페이지 보존을 공통화한다. */
+export function usePagedJobs(...kinds: JobKind[]) {
+  const endpoint = "/api/jobs?" + kinds.map(kind => "kind=" + kind).join("&");
+  const [items, setItems] = useState<JobSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const generation = useRef(0);
   const retainedOldPages = useRef(false);
@@ -14,7 +14,7 @@ export function usePagedJobs<T extends { id: string }>(endpoint: string) {
 
   async function refresh(): Promise<void> {
     const current = ++generation.current;
-    const page = await request<Page<T>>(`${endpoint}?limit=20`);
+    const page = await request<JobPage>(`${endpoint}&limit=20`);
     // 수동 갱신과 폴링이 겹치면 이미 시작된 더 최근 요청이 우선이다.
     if (generation.current !== current) return;
     setItems(previous => retainedOldPages.current ? mergeById(page.items, previous) : page.items);
@@ -26,8 +26,8 @@ export function usePagedJobs<T extends { id: string }>(endpoint: string) {
     if (!cursor || inFlightCursor.current === cursor) return;
     inFlightCursor.current = cursor;
     try {
-      const page = await request<Page<T>>(
-        `${endpoint}?limit=20&cursor=${encodeURIComponent(cursor)}`);
+      const page = await request<JobPage>(
+        `${endpoint}&limit=20&cursor=${encodeURIComponent(cursor)}`);
       // 백그라운드 refresh는 같은 목록의 첫 페이지만 바꾼다.
       // 안정적인 키셋 cursor로 조회한 과거 페이지는 버리지 않고 최신 상태 뒤에 합친다.
       setItems(previous => mergeById(previous, page.items));

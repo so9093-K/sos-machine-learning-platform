@@ -62,7 +62,7 @@ def feast_router(store: Store, access: ResourceAccess) -> APIRouter:
             limit=limit + 1,
             before=decode_cursor(cursor, "Feature Registration"),
             actor_id=actor.id,
-            kind="feature_register",
+            kinds=["feature_register"],
         )
         page = page_from_rows(rows, limit)
         registration_ids = [item["id"] for item in page["items"]]

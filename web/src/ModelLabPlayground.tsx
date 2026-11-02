@@ -9,7 +9,7 @@ import { FeatureResultDetails } from "./FeatureResultDetails";
 import { PlaygroundResult, formatPlaygroundScore as formatScore, type PlaygroundComparison } from "./PlaygroundResult";
 import { PlaygroundExplanations } from "./PlaygroundExplanations";
 import { jobStatusLabel } from "./display-format";
-import type { MLPlaygroundJob, MLPlaygroundJobPage, MLPlaygroundJobSummary, ModelRevision } from "./types";
+import type { Job, JobPage, JobSummary, ModelRevision } from "./types";
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 export function exampleValues(model: ModelRevision): Record<string, string> | null {
@@ -127,21 +127,21 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
   const [editBaseline, setEditBaseline] = useState<Record<string, string>>(() =>
     reference ?? Object.fromEntries(model.features.map(name => [name, ""])));
-  const [job, setJob] = useState<MLPlaygroundJob | null>(null);
+  const [job, setJob] = useState<Job | null>(null);
   const [lastScore, setLastScore] = useState<number | null>(null);
-  const [latestSuccessfulJob, setLatestSuccessfulJob] = useState<MLPlaygroundJob | null>(null);
+  const [latestSuccessfulJob, setLatestSuccessfulJob] = useState<Job | null>(null);
   const [comparison, setComparison] = useState<PlaygroundComparison | null>(null);
   const [shapVisited, setShapVisited] = useState(false);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const submitting = useRef(false);
   const historyFetching = useRef(false);
-  const [history, setHistory] = useState<MLPlaygroundJobSummary[]>([]);
+  const [history, setHistory] = useState<JobSummary[]>([]);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
-  const [selectedHistory, setSelectedHistory] = useState<MLPlaygroundJob | null>(null);
+  const [selectedHistory, setSelectedHistory] = useState<Job | null>(null);
   const [historyDetailError, setHistoryDetailError] = useState("");
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [historyDetailLoading, setHistoryDetailLoading] = useState(false);
@@ -154,7 +154,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     try {
       const params = new URLSearchParams({ model_revision_id: model.id });
       if (append && historyCursor) params.set("cursor", historyCursor);
-      const page = await request<MLPlaygroundJobPage>("/api/ml/playground/jobs?" + params);
+      const page = await request<JobPage>("/api/jobs?kind=ml_playground&" + params);
       setHistory(old => append
         ? [...old, ...page.items.filter(item => !old.some(existing => existing.id === item.id))]
         : page.items);
@@ -179,8 +179,8 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     setHistoryDetailLoading(true);
     setHistoryDetailError("");
     try {
-      const restored = await request<MLPlaygroundJob>(
-        "/api/ml/playground/jobs/" + encodeURIComponent(id));
+      const restored = await request<Job>(
+        "/api/jobs/" + encodeURIComponent(id));
       if (requestNumber !== historyRequest.current) return;
       if (restored.id !== id || restored.spec.model_revision_id !== model.id)
         throw new Error("선택한 기록 또는 모델 판본이 조회 결과와 일치하지 않습니다.");
@@ -192,7 +192,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     }
   }
 
-  function useHistoryInput(restored: MLPlaygroundJob) {
+  function useHistoryInput(restored: Job) {
     setFromHistory(true);
     if (running || !restored.spec.features) return;
     const saved = restored.spec.features as Record<string, unknown>;
@@ -214,7 +214,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     let timer: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
       try {
-        const next = await request<MLPlaygroundJob>("/api/ml/playground/jobs/" + encodeURIComponent(job.id));
+        const next = await request<Job>("/api/jobs/" + encodeURIComponent(job.id));
         if (alive) {
           setError("");
           setJob(next);
@@ -312,7 +312,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
       fields: Object.fromEntries(model.features.map(name => [name, Number(reference[name])])),
     } : null;
     try {
-      const created = await submitJob<MLPlaygroundJob>("/api/ml/playground/jobs", {
+      const created = await submitJob<Job>("/api/ml/playground/jobs", {
         model_revision_id: model.id,
         features: Object.fromEntries(input.map(item => [item.name, item.value])),
       });
@@ -335,7 +335,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
   async function cancel() {
     if (!job || TERMINAL.has(job.status) || !canCancel) return;
     try {
-      setJob(await request<MLPlaygroundJob>("/api/ml/playground/jobs/" + encodeURIComponent(job.id) + "/cancel",
+      setJob(await request<Job>("/api/jobs/" + encodeURIComponent(job.id) + "/cancel",
         { method: "POST" }));
     } catch (cause) { setError(formatError(cause)); }
   }

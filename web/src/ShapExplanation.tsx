@@ -6,7 +6,7 @@ import { EvidenceFacts } from "./EvidenceFacts";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { formatError, request, submitJob } from "./api";
 import type { MLResourceKind } from "./PlatformNavigation";
-import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary } from "./types";
+import type { ExplanationResult, Job, JobPage } from "./types";
 
 /** ECharts 기본 HTML 툴팁에 Dataset/모델 Feature 이름을 직접 삽입하지 않는다. */
 export function escapeShapTooltipText(text: string): string {
@@ -18,7 +18,6 @@ export function escapeShapTooltipText(text: string): string {
 
 const METHOD = "permutation_shap_median_v1";
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
-type JobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
 type Contribution = { feature: string; shap_value: number; actual_value: number | null;
   reference_median: number; missing_imputed: boolean };
 
@@ -205,7 +204,7 @@ export function ShapExplanation({
   canRun: boolean; canCancel: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
 }) {
-  const [job, setJob] = useState<MLExplanationJob | null>(null);
+  const [job, setJob] = useState<Job | null>(null);
   const [result, setResult] = useState<ExplanationResult | null>(null);
   const [lookup, setLookup] = useState<"loading" | "ready" | "error">("loading");
   const [lookupRetry, setLookupRetry] = useState(0);
@@ -219,7 +218,7 @@ export function ShapExplanation({
   useEffect(() => {
     let active = true;
     setLookup("loading");
-    void request<JobPage>("/api/ml/explanations/jobs?limit=100")
+    void request<JobPage>("/api/jobs?kind=ml_explain&limit=100")
       .then(page => {
         if (!active || submitted.current) return;
         const prior = page.items.filter(item =>
@@ -229,7 +228,7 @@ export function ShapExplanation({
         ).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
         if (!prior) { setOlderJobsExist(Boolean(page.next_cursor)); setLookup("ready"); return; }
         setOlderJobsExist(false);
-        return request<MLExplanationJob>("/api/ml/explanations/jobs/" + encodeURIComponent(prior.id))
+        return request<Job>("/api/jobs/" + encodeURIComponent(prior.id))
           .then(next => {
             if (!active || submitted.current) return;
             if (next.spec.scoring_result_id !== scoringResultId ||
@@ -247,7 +246,7 @@ export function ShapExplanation({
     if (!job || terminal.has(job.status) || error) return;
     let active = true;
     const interval = setInterval(() => {
-      void request<MLExplanationJob>("/api/ml/explanations/jobs/" + encodeURIComponent(job.id))
+      void request<Job>("/api/jobs/" + encodeURIComponent(job.id))
         .then(next => { if (active) setJob(next); })
         .catch(reason => { if (active) setError(formatError(reason)); });
     }, 2000);
@@ -284,7 +283,7 @@ export function ShapExplanation({
     submitted.current = true;
     setBusy(true); setJob(null); setResult(null); setError("");
     try {
-      setJob(await submitJob<MLExplanationJob>("/api/ml/explanations/jobs", {
+      setJob(await submitJob<Job>("/api/ml/explanations/jobs", {
         scoring_result_id: scoringResultId, row_index: candidate.row_index, method: METHOD,
       }));
     } catch (e) {
@@ -299,8 +298,8 @@ export function ShapExplanation({
     setBusy(true); setError("");
     const id = job.id;
     try {
-      const next = await request<MLExplanationJob>(
-        "/api/ml/explanations/jobs/" + encodeURIComponent(id) + "/cancel", { method: "POST" });
+      const next = await request<Job>(
+        "/api/jobs/" + encodeURIComponent(id) + "/cancel", { method: "POST" });
       setJob(previous => previous?.id === id ? next : previous);
     } catch (e) { setError(formatError(e)); }
     finally { setBusy(false); }

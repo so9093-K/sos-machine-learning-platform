@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { usePagedJobs } from "./usePagedJobs";
 import type {
-  DecisionPolicyRevision, EvaluationRevision, ExplanationResult,
-  MLEvaluationJob, MLEvaluationJobSummary, MLExplanationJob,
-  MLExplanationJobSummary, MLPolicyJob, MLPolicyJobSummary, ScoringResult,
+  DecisionPolicyRevision, EvaluationRevision, ExplanationResult, Job, ScoringResult,
 } from "./types";
 import { jobStatusLabel, policyModeLabel } from "./display-format";
 import { EvaluationSummary } from "./EvaluationSummary";
@@ -26,18 +24,18 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
   const [fixed, setFixed] = useState(0.5);
   const [fraction, setFraction] = useState(0.05);
   const [rowIndex, setRowIndex] = useState(0);
-  const [policyJob, setPolicyJob] = useState<MLPolicyJob | null>(null);
+  const [policyJob, setPolicyJob] = useState<Job | null>(null);
   const [policy, setPolicy] = useState<DecisionPolicyRevision | null>(null);
   const [policyIdDraft, setPolicyIdDraft] = useState("");
   const [loadingPolicy, setLoadingPolicy] = useState(false);
-  const [evaluationJob, setEvaluationJob] = useState<MLEvaluationJob | null>(null);
+  const [evaluationJob, setEvaluationJob] = useState<Job | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationRevision | null>(null);
-  const [explanationJob, setExplanationJob] = useState<MLExplanationJob | null>(null);
+  const [explanationJob, setExplanationJob] = useState<Job | null>(null);
   const [explanation, setExplanation] = useState<ExplanationResult | null>(null);
   const [error, setError] = useState("");
-  const policyHistory = usePagedJobs<MLPolicyJobSummary>("/api/ml/policies/jobs");
-  const evaluationHistory = usePagedJobs<MLEvaluationJobSummary>("/api/ml/evaluations/jobs");
-  const explanationHistory = usePagedJobs<MLExplanationJobSummary>("/api/ml/explanations/jobs");
+  const policyHistory = usePagedJobs("ml_policy");
+  const evaluationHistory = usePagedJobs("ml_evaluate");
+  const explanationHistory = usePagedJobs("ml_explain");
 
   useEffect(() => {
     let alive = true;
@@ -53,7 +51,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     if (!policyJob || DONE.has(policyJob.status)) return;
     let active = true;
     const timer = setInterval(() => {
-      void request<MLPolicyJob>(`/api/ml/policies/jobs/${policyJob.id}`)
+      void request<Job>(`/api/jobs/${policyJob.id}`)
         .then(j => { if (active) setPolicyJob(j); })
         .catch(e => { if (active) setError(formatError(e)); });
     }, 1500);
@@ -75,7 +73,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     if (!evaluationJob || DONE.has(evaluationJob.status)) return;
     let active = true;
     const timer = setInterval(() => {
-      void request<MLEvaluationJob>(`/api/ml/evaluations/jobs/${evaluationJob.id}`)
+      void request<Job>(`/api/jobs/${evaluationJob.id}`)
         .then(j => { if (active) setEvaluationJob(j); })
         .catch(e => { if (active) setError(formatError(e)); });
     }, 1500);
@@ -97,7 +95,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     if (!explanationJob || DONE.has(explanationJob.status)) return;
     let active = true;
     const timer = setInterval(() => {
-      void request<MLExplanationJob>(`/api/ml/explanations/jobs/${explanationJob.id}`)
+      void request<Job>(`/api/jobs/${explanationJob.id}`)
         .then(j => { if (active) setExplanationJob(j); })
         .catch(e => { if (active) setError(formatError(e)); });
     }, 1500);
@@ -138,7 +136,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
       setPolicy(null);
       setEvaluation(null);
       setEvaluationJob(null);
-      setPolicyJob(await request<MLPolicyJob>(`/api/ml/policies/jobs/${encodeURIComponent(id)}`));
+      setPolicyJob(await request<Job>(`/api/jobs/${encodeURIComponent(id)}`));
     } catch (e) { setError(formatError(e)); }
   }
 
@@ -161,8 +159,8 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
   async function restoreEvaluation(id: string) {
     try {
       setEvaluation(null);
-      setEvaluationJob(await request<MLEvaluationJob>(
-        `/api/ml/evaluations/jobs/${encodeURIComponent(id)}`,
+      setEvaluationJob(await request<Job>(
+        `/api/jobs/${encodeURIComponent(id)}`,
       ));
     } catch (e) { setError(formatError(e)); }
   }
@@ -170,8 +168,8 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
   async function restoreExplanation(id: string) {
     try {
       setExplanation(null);
-      setExplanationJob(await request<MLExplanationJob>(
-        `/api/ml/explanations/jobs/${encodeURIComponent(id)}`,
+      setExplanationJob(await request<Job>(
+        `/api/jobs/${encodeURIComponent(id)}`,
       ));
     } catch (e) { setError(formatError(e)); }
   }
@@ -179,8 +177,8 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
   async function cancelPolicy() {
     if (!canCancel || !policyJob || DONE.has(policyJob.status)) return;
     try {
-      const updated = await request<MLPolicyJob>(
-        `/api/ml/policies/jobs/${encodeURIComponent(policyJob.id)}/cancel`,
+      const updated = await request<Job>(
+        `/api/jobs/${encodeURIComponent(policyJob.id)}/cancel`,
         { method: "POST" },
       );
       setPolicyJob(current => current?.id === updated.id ? updated : current);
@@ -190,8 +188,8 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
   async function cancelEvaluation() {
     if (!canCancel || !evaluationJob || DONE.has(evaluationJob.status)) return;
     try {
-      const updated = await request<MLEvaluationJob>(
-        `/api/ml/evaluations/jobs/${encodeURIComponent(evaluationJob.id)}/cancel`,
+      const updated = await request<Job>(
+        `/api/jobs/${encodeURIComponent(evaluationJob.id)}/cancel`,
         { method: "POST" },
       );
       setEvaluationJob(current => current?.id === updated.id ? updated : current);
@@ -201,8 +199,8 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
   async function cancelExplanation() {
     if (!canCancel || !explanationJob || DONE.has(explanationJob.status)) return;
     try {
-      const updated = await request<MLExplanationJob>(
-        `/api/ml/explanations/jobs/${encodeURIComponent(explanationJob.id)}/cancel`,
+      const updated = await request<Job>(
+        `/api/jobs/${encodeURIComponent(explanationJob.id)}/cancel`,
         { method: "POST" },
       );
       setExplanationJob(current => current?.id === updated.id ? updated : current);
@@ -215,7 +213,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     setEvaluation(null);
     setEvaluationJob(null);
     try {
-      const job = await submitJob<MLPolicyJob>("/api/ml/policies/jobs", {
+      const job = await submitJob<Job>("/api/ml/policies/jobs", {
         scoring_result_id: scoring.id,
         mode,
         threshold: mode === "fixed" ? fixed : null,
@@ -229,7 +227,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     setError("");
     setEvaluation(null);
     try {
-      setEvaluationJob(await submitJob<MLEvaluationJob>("/api/ml/evaluations/jobs", {
+      setEvaluationJob(await submitJob<Job>("/api/ml/evaluations/jobs", {
         scoring_result_id: scoring.id,
         policy_revision_id: policy?.id ?? null,
       }));
@@ -240,7 +238,7 @@ export function MLDecisionPanel({ scoring, view, canRun, canCancel, onOpenResult
     setError("");
     setExplanation(null);
     try {
-      setExplanationJob(await submitJob<MLExplanationJob>("/api/ml/explanations/jobs", {
+      setExplanationJob(await submitJob<Job>("/api/ml/explanations/jobs", {
         scoring_result_id: scoring.id, row_index: rowIndex,
       }));
     } catch (e) { setError(formatError(e)); }

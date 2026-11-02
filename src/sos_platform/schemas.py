@@ -844,9 +844,18 @@ class AttemptOut(BaseModel):
     failure_stage: str | None = None
 
 
+# 모든 Job 종류는 같은 수명주기 API(`/api/jobs`)로 조회·취소한다. 종류별 API는 제출 명세만 소유한다.
+JobKind = Literal[
+    "profile", "transform", "iceberg_import", "exploration",
+    "feature_register", "feature_retrieve", "feature_retire",
+    "ml_train", "ml_import", "ml_score", "ml_score_index", "ml_playground",
+    "ml_policy", "ml_evaluate", "ml_explain",
+]
+
+
 class JobOut(BaseModel):
     id: str
-    kind: Literal["profile", "transform", "iceberg_import", "ml_playground", "feature_register", "feature_retrieve", "feature_retire"]
+    kind: JobKind
     dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -860,32 +869,6 @@ class JobOut(BaseModel):
     created_at: str
     updated_at: str
     attempts: list[AttemptOut]
-
-
-class MLPolicyJobOut(JobOut):
-    kind: Literal["ml_policy"]
-
-
-class MLExplanationJobOut(JobOut):
-    kind: Literal["ml_explain"]
-
-
-class MLEvaluationJobOut(JobOut):
-    kind: Literal["ml_evaluate"]
-
-
-class MLScoringJobOut(JobOut):
-    kind: Literal["ml_score"]
-
-
-class MLPlaygroundJobOut(JobOut):
-    kind: Literal["ml_playground"]
-
-
-class MLTrainingJobOut(JobOut):
-    """기존 Job 응답의 enum 확장 없이 ML 실행 상태를 제공한다."""
-
-    kind: Literal["ml_train"]
 
 
 class MLModelImportRequest(BaseModel):
@@ -906,22 +889,11 @@ class MLModelImportRequest(BaseModel):
         return self
 
 
-class MLModelImportJobOut(JobOut):
-    kind: Literal["ml_import"]
-
-
-class ExplorationJobOut(JobOut):
-    """Discovery Job만 반환하는 신규 API 응답 계약."""
-
-    kind: Literal["exploration"]
-    result: ExplorationOut | None
-
-
 class JobSummaryOut(BaseModel):
     """목록에 필요한 값과 마지막 실행 시도만 노출한다."""
 
     id: str
-    kind: Literal["profile", "transform", "iceberg_import", "ml_playground", "feature_register", "feature_retrieve", "feature_retire"]
+    kind: JobKind
     dataset_id: str | None
     spec: dict[str, object]
     status: Literal["Queued", "Running", "Succeeded", "Failed", "Cancelled"]
@@ -949,70 +921,6 @@ class FeatureRegistrationPageOut(BaseModel):
     """Feast Feature Service 등록 Job의 재사용 가능한 키셋 목록."""
 
     items: list[FeatureRegistrationSummaryOut]
-    next_cursor: str | None = None
-
-
-class MLExplanationJobSummaryOut(JobSummaryOut):
-    kind: Literal["ml_explain"]
-
-
-class MLExplanationJobPageOut(BaseModel):
-    items: list[MLExplanationJobSummaryOut]
-    next_cursor: str | None = None
-
-
-class MLPolicyJobSummaryOut(JobSummaryOut):
-    kind: Literal["ml_policy"]
-
-
-class MLPolicyJobPageOut(BaseModel):
-    items: list[MLPolicyJobSummaryOut]
-    next_cursor: str | None = None
-
-
-class MLEvaluationJobSummaryOut(JobSummaryOut):
-    kind: Literal["ml_evaluate"]
-
-
-class MLEvaluationJobPageOut(BaseModel):
-    items: list[MLEvaluationJobSummaryOut]
-    next_cursor: str | None = None
-
-
-class MLPlaygroundJobSummaryOut(JobSummaryOut):
-    kind: Literal["ml_playground"]
-
-
-class MLPlaygroundJobPageOut(BaseModel):
-    items: list[MLPlaygroundJobSummaryOut]
-    next_cursor: str | None = None
-
-
-class MLScoringJobSummaryOut(JobSummaryOut):
-    kind: Literal["ml_score"]
-
-
-class MLScoringJobPageOut(BaseModel):
-    items: list[MLScoringJobSummaryOut]
-    next_cursor: str | None = None
-
-
-class MLTrainingJobSummaryOut(JobSummaryOut):
-    kind: Literal["ml_train"]
-
-
-class MLTrainingJobPageOut(BaseModel):
-    items: list[MLTrainingJobSummaryOut]
-    next_cursor: str | None = None
-
-
-class ExplorationJobSummaryOut(JobSummaryOut):
-    kind: Literal["exploration"]
-    result: ExplorationOut | None
-
-
-class ExplorationJobPageOut(BaseModel):
-    items: list[ExplorationJobSummaryOut]
     next_cursor: str | None = None
 
 

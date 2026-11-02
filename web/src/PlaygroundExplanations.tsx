@@ -3,16 +3,15 @@ import { useEffect, useState } from "react";
 import { formatError, request, submitJob } from "./api";
 import { ShapContributionChart } from "./ShapExplanation";
 import { jobStatusLabel } from "./display-format";
-import type { ExplanationResult, MLExplanationJob, MLExplanationJobSummary, MLPlaygroundJob } from "./types";
+import type { ExplanationResult, Job, JobPage } from "./types";
 
 const method = "permutation_shap_median_v1";
 type PlaygroundResult = ExplanationResult & { playground_job_id?: string | null };
-type JobPage = { items: MLExplanationJobSummary[]; next_cursor: string | null };
 const terminal = new Set(["Succeeded", "Failed", "Cancelled"]);
 function ShapExplanation({ source, canRun, canCancel }: {
-  source: MLPlaygroundJob; canRun: boolean; canCancel: boolean;
+  source: Job; canRun: boolean; canCancel: boolean;
 }) {
-  const [job, setJob] = useState<MLExplanationJob | null>(null);
+  const [job, setJob] = useState<Job | null>(null);
   const [result, setResult] = useState<PlaygroundResult | null>(null);
   const [lookup, setLookup] = useState<"loading" | "ready" | "error">("loading");
   const [busy, setBusy] = useState(false);
@@ -25,14 +24,14 @@ function ShapExplanation({ source, canRun, canCancel }: {
   useEffect(() => {
     let live = true;
     setLookup("loading");
-    void request<JobPage>("/api/ml/explanations/jobs?limit=100")
+    void request<JobPage>("/api/jobs?kind=ml_explain&limit=100")
       .then(async page => {
         const found = page.items.find(item =>
           item.spec.playground_job_id === source.id && item.spec.method === method);
         if (!live) return;
         if (!found) { setLookup("ready"); return; }
-        const existing = await request<MLExplanationJob>(
-          "/api/ml/explanations/jobs/" + encodeURIComponent(found.id));
+        const existing = await request<Job>(
+          "/api/jobs/" + encodeURIComponent(found.id));
         if (live) { setJob(existing); setLookup("ready"); }
       }).catch(() => { if (live) setLookup("error"); });
     return () => { live = false; };
@@ -42,7 +41,7 @@ function ShapExplanation({ source, canRun, canCancel }: {
     if (!job || terminal.has(job.status)) return;
     let live = true;
     const timer = setInterval(() => {
-      void request<MLExplanationJob>("/api/ml/explanations/jobs/" + encodeURIComponent(job.id))
+      void request<Job>("/api/jobs/" + encodeURIComponent(job.id))
         .then(next => { if (live) setJob(next); })
         .catch(cause => { if (live) setError(formatError(cause)); });
     }, 2000);
@@ -79,7 +78,7 @@ function ShapExplanation({ source, canRun, canCancel }: {
     if (!canRun || busy || lookup !== "ready" || (job && !terminal.has(job.status))) return;
     setBusy(true); setError(""); setJob(null); setResult(null);
     try {
-      setJob(await submitJob<MLExplanationJob>("/api/ml/explanations/jobs", {
+      setJob(await submitJob<Job>("/api/ml/explanations/jobs", {
         playground_job_id: source.id, method,
       }));
     } catch (cause) { setError(formatError(cause)); }
@@ -89,8 +88,8 @@ function ShapExplanation({ source, canRun, canCancel }: {
     if (!job || terminal.has(job.status) || !canCancel || busy) return;
     setBusy(true); setError("");
     try {
-      setJob(await request<MLExplanationJob>(
-        "/api/ml/explanations/jobs/" + encodeURIComponent(job.id) + "/cancel",
+      setJob(await request<Job>(
+        "/api/jobs/" + encodeURIComponent(job.id) + "/cancel",
         { method: "POST" }));
     } catch (cause) { setError(formatError(cause)); }
     finally { setBusy(false); }
@@ -124,7 +123,7 @@ function ShapExplanation({ source, canRun, canCancel }: {
 }
 
 export function PlaygroundExplanations({ source, canRun, canCancel, shapSupported = true }: {
-  source: MLPlaygroundJob; canRun: boolean; canCancel: boolean;
+  source: Job; canRun: boolean; canCancel: boolean;
   shapSupported?: boolean;
 }) {
   if (source.status !== "Succeeded" || typeof source.result?.anomaly_score !== "number") return null;

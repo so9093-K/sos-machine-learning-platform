@@ -16,20 +16,11 @@ from .schemas import (
     DecisionPolicyRevisionOut,
     EvaluationRevisionOut,
     ExplanationResultOut,
-    MLEvaluationJobOut,
-    MLEvaluationJobPageOut,
+    JobOut,
     MLEvaluationRequest,
-    MLExplanationJobOut,
-    MLExplanationJobPageOut,
     MLExplanationRequest,
-    MLPlaygroundJobOut,
-    MLPlaygroundJobPageOut,
     MLPlaygroundRequest,
-    MLPolicyJobOut,
-    MLPolicyJobPageOut,
     MLPolicyRequest,
-    MLScoringJobOut,
-    MLScoringJobPageOut,
     MLScoringRequest,
     ModelEvaluationPageOut,
     ScoringResultOut,
@@ -40,7 +31,6 @@ from .store import Store
 # Depends 객체는 요청마다 재생성하지 않고 안정적으로 재사용한다.
 READ_JOB_DEP = Depends(require("job.read"))
 CREATE_JOB_DEP = Depends(require("job.create"))
-CANCEL_JOB_DEP = Depends(require("job.cancel"))
 
 
 def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
@@ -53,7 +43,7 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
         summary="단일 관측치 모델 점수화 작업 제출",
         description="Dataset 등록 없이 입력값을 Worker에서 계산합니다. 입력 Feature는 Job 이력에 보존됩니다.",
         status_code=202,
-        response_model=MLPlaygroundJobOut,
+        response_model=JobOut,
     )
     def create_playground_job(
         body: MLPlaygroundRequest,
@@ -89,56 +79,13 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
             require_model_offering=not actor.privileged and model["owner_actor"] != actor.id,
         )
 
-    @router.get(
-        "/api/ml/playground/jobs",
-        tags=["Scoring"],
-        summary="Playground 실행 이력 조회",
-        response_model=MLPlaygroundJobPageOut,
-    )
-    def list_playground_jobs(
-        limit: int = Query(default=20, ge=1, le=100),
-        cursor: str | None = Query(default=None, max_length=512),
-        model_revision_id: str | None = Query(default=None, min_length=36, max_length=36),
-        actor: Actor = READ_JOB_DEP,
-    ):
-        rows = store.jobs(
-            limit=limit + 1,
-            before=decode_cursor(cursor, "Job"),
-            actor_id=None if actor.privileged else actor.id,
-            kind="ml_playground",
-            model_revision_id=model_revision_id,
-        )
-        return page_from_rows(rows, limit)
-
-    @router.get(
-        "/api/ml/playground/jobs/{job_id}", tags=["Scoring"],
-        summary="단일 관측치 점수화 Job 상태·결과 조회",
-        response_model=MLPlaygroundJobOut,
-    )
-    def get_playground_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        job = access.job(job_id, actor)
-        if job["kind"] != "ml_playground":
-            raise HTTPException(status_code=404, detail="단일 입력 점수 계산 작업을 찾을 수 없습니다.")
-        return job
-
-    @router.post(
-        "/api/ml/playground/jobs/{job_id}/cancel", tags=["Scoring"],
-        summary="Playground 점수화 취소 요청",
-        response_model=MLPlaygroundJobOut,
-    )
-    def cancel_playground_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        job = access.job(job_id, actor)
-        if job["kind"] != "ml_playground":
-            raise HTTPException(status_code=404, detail="단일 입력 점수 계산 작업을 찾을 수 없습니다.")
-        return store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
-
     @router.post(
         "/api/ml/scoring/jobs",
         tags=["Scoring"],
         summary="모델 점수화 작업 제출",
         description="확정된 모델과 Dataset을 사용해 별도의 배치 Scoring Job을 접수합니다. 학습과 독립적인 실행입니다.",
         status_code=202,
-        response_model=MLScoringJobOut,
+        response_model=JobOut,
     )
     def create_scoring_job(
         body: MLScoringRequest,
@@ -196,47 +143,6 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
             raise HTTPException(status_code=404, detail="점수 계산 작업을 찾을 수 없습니다.")
         return item
 
-    @router.get(
-        "/api/ml/scoring/jobs",
-        tags=["Scoring"],
-        summary="점수화 작업 목록 조회",
-        response_model=MLScoringJobPageOut,
-    )
-    def list_scoring_jobs(
-        limit: int = Query(default=20, ge=1, le=100),
-        cursor: str | None = Query(default=None, max_length=512),
-        actor: Actor = READ_JOB_DEP,
-    ):
-        rows = store.jobs(
-            limit=limit + 1,
-            before=decode_cursor(cursor, "Job"),
-            actor_id=None if actor.privileged else actor.id,
-            kind="ml_score",
-        )
-        return page_from_rows(rows, limit)
-
-    @router.get(
-        "/api/ml/scoring/jobs/{job_id}",
-        tags=["Scoring"],
-        summary="점수화 작업 상세 조회",
-        response_model=MLScoringJobOut,
-    )
-    def get_scoring_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        return existing_scoring_job(job_id, actor)
-
-    @router.post(
-        "/api/ml/scoring/jobs/{job_id}/cancel",
-        tags=["Scoring"],
-        summary="점수화 작업 취소 요청",
-        response_model=MLScoringJobOut,
-    )
-    def cancel_scoring_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        existing_scoring_job(job_id, actor)
-        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
-        if item is None:
-            raise HTTPException(status_code=404, detail="점수 계산 작업을 찾을 수 없습니다.")
-        return item
-
     def required_scoring_result(result_id: str, actor: Actor) -> dict:
         scoring = store.get_scoring_result(result_id)
         if scoring is None:
@@ -250,7 +156,7 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
         summary="판정 정책 작업 제출",
         description="Scoring 결과에 별도의 판정 정책을 생성합니다. 임계값을 바꾸기 위해 모델을 재학습할 필요는 없습니다.",
         status_code=202,
-        response_model=MLPolicyJobOut,
+        response_model=JobOut,
     )
     def create_policy_job(
         body: MLPolicyRequest,
@@ -285,7 +191,7 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
         summary="평가 작업 제출",
         description="Scoring·정책·레이블의 실제 근거에 따라 평가를 실행합니다. 레이블 없는 결과에 감독 지표를 만들지 않습니다.",
         status_code=202,
-        response_model=MLEvaluationJobOut,
+        response_model=JobOut,
     )
     def create_evaluation_job(
         body: MLEvaluationRequest,
@@ -328,104 +234,6 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
             idempotency_key=idempotency_key,
         )
 
-    def ml_special_job(job_id: str, actor: Actor, kind: str) -> dict:
-        item = access.job(job_id, actor)
-        if item["kind"] != kind:
-            raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
-        return item
-
-    def list_ml_result_jobs(kind: str, limit: int, cursor: str | None, actor: Actor):
-        rows = store.jobs(
-            limit=limit + 1,
-            before=decode_cursor(cursor, "Job"),
-            actor_id=None if actor.privileged else actor.id,
-            kind=kind,
-        )
-        return page_from_rows(rows, limit)
-
-    @router.get(
-        "/api/ml/policies/jobs",
-        tags=["Decision Policies"],
-        summary="판정 정책 작업 목록 조회",
-        response_model=MLPolicyJobPageOut,
-    )
-    def list_ml_policy_jobs(
-        limit: int = Query(default=20, ge=1, le=100),
-        cursor: str | None = Query(default=None, max_length=512),
-        actor: Actor = READ_JOB_DEP,
-    ):
-        return list_ml_result_jobs("ml_policy", limit, cursor, actor)
-
-    @router.get(
-        "/api/ml/evaluations/jobs",
-        tags=["Evaluations"],
-        summary="평가 작업 목록 조회",
-        response_model=MLEvaluationJobPageOut,
-    )
-    def list_ml_evaluation_jobs(
-        limit: int = Query(default=20, ge=1, le=100),
-        cursor: str | None = Query(default=None, max_length=512),
-        actor: Actor = READ_JOB_DEP,
-    ):
-        return list_ml_result_jobs("ml_evaluate", limit, cursor, actor)
-
-    @router.get(
-        "/api/ml/explanations/jobs",
-        tags=["Explanations"],
-        summary="설명 작업 목록 조회",
-        response_model=MLExplanationJobPageOut,
-    )
-    def list_ml_explanation_jobs(
-        limit: int = Query(default=20, ge=1, le=100),
-        cursor: str | None = Query(default=None, max_length=512),
-        actor: Actor = READ_JOB_DEP,
-    ):
-        return list_ml_result_jobs("ml_explain", limit, cursor, actor)
-
-    @router.get(
-        "/api/ml/policies/jobs/{job_id}",
-        tags=["Decision Policies"],
-        summary="판정 정책 작업 상세 조회",
-        response_model=MLPolicyJobOut,
-    )
-    def get_policy_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        return ml_special_job(job_id, actor, "ml_policy")
-
-    @router.post(
-        "/api/ml/policies/jobs/{job_id}/cancel",
-        tags=["Decision Policies"],
-        summary="판정 정책 작업 취소 요청",
-        response_model=MLPolicyJobOut,
-    )
-    def cancel_policy_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        ml_special_job(job_id, actor, "ml_policy")
-        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
-        if item is None:
-            raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
-        return item
-
-    @router.get(
-        "/api/ml/evaluations/jobs/{job_id}",
-        tags=["Evaluations"],
-        summary="평가 작업 상세 조회",
-        response_model=MLEvaluationJobOut,
-    )
-    def get_evaluation_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        return ml_special_job(job_id, actor, "ml_evaluate")
-
-    @router.post(
-        "/api/ml/evaluations/jobs/{job_id}/cancel",
-        tags=["Evaluations"],
-        summary="평가 작업 취소 요청",
-        response_model=MLEvaluationJobOut,
-    )
-    def cancel_evaluation_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        ml_special_job(job_id, actor, "ml_evaluate")
-        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
-        if item is None:
-            raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
-        return item
-
     @router.get(
         "/api/ml/policies/{revision_id}",
         tags=["Decision Policies"],
@@ -445,7 +253,7 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
         summary="모델 설명 작업 제출",
         description="Scoring 결과 행 또는 성공한 단일 입력 Job을 설명합니다. Feature 민감도와 SHAP은 실제 이상 사건의 인과 원인이 아닙니다.",
         status_code=202,
-        response_model=MLExplanationJobOut,
+        response_model=JobOut,
     )
     def create_explanation_job(
         body: MLExplanationRequest,
@@ -500,28 +308,6 @@ def ml_results_router(store: Store, access: ResourceAccess) -> APIRouter:
             actor_type=actor.kind,
             idempotency_key=idempotency_key,
         )
-
-    @router.get(
-        "/api/ml/explanations/jobs/{job_id}",
-        tags=["Explanations"],
-        summary="모델 설명 작업 상세 조회",
-        response_model=MLExplanationJobOut,
-    )
-    def get_explanation_job(job_id: str, actor: Actor = READ_JOB_DEP):
-        return ml_special_job(job_id, actor, "ml_explain")
-
-    @router.post(
-        "/api/ml/explanations/jobs/{job_id}/cancel",
-        tags=["Explanations"],
-        summary="모델 설명 작업 취소 요청",
-        response_model=MLExplanationJobOut,
-    )
-    def cancel_explanation_job(job_id: str, actor: Actor = CANCEL_JOB_DEP):
-        ml_special_job(job_id, actor, "ml_explain")
-        item = store.request_cancel(job_id, actor_id=actor.id, actor_type=actor.kind)
-        if item is None:
-            raise HTTPException(status_code=404, detail="ML 작업을 찾을 수 없습니다.")
-        return item
 
     @router.get(
         "/api/ml/explanations/{revision_id}",
