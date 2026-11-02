@@ -3,13 +3,15 @@ import base64
 import binascii
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from .api_access import ResourceAccess
+from .errors import PlatformError
 from .scoring_index import rank_of_row, ranked_rows
 from .security import Actor, require
 from .store import Store
+from .store_jobs import ScoringIndexExists
 
 
 class ScoringObservationOut(BaseModel):
@@ -24,6 +26,12 @@ class ScoringObservationsOut(BaseModel):
     items: list[ScoringObservationOut]
     next_cursor: str | None
     result_id: str
+
+
+class ScoringObservationIndexOut(BaseModel):
+    result_id: str
+    job_id: str
+    status: str
 
 
 _CURSOR_ERROR = "페이지 위치가 올바르지 않습니다. 목록을 새로 조회하세요."
@@ -65,15 +73,9 @@ def ranked_scoring_rows(
     if not parts:
         job = store.scoring_index_job(scoring["id"])
         if job is not None and job["status"] in ("Queued", "Running"):
-            raise HTTPException(
-                status_code=409,
-                detail="이 점수 결과의 관측값 색인을 준비하고 있습니다. 잠시 후 다시 조회하세요.",
-            )
-        reason = f" ({job['error_code']})" if job and job.get("error_code") else ""
-        raise HTTPException(
-            status_code=409,
-            detail=f"이 점수 결과의 관측값 색인을 만들지 못했습니다{reason}. 같은 모델로 다시 점수화하세요.",
-        )
+            raise PlatformError("SOS-ML-SCORE-INDEX-PENDING")
+        # 실패한 색인은 같은 결과로 다시 요청한다(`request_observation_index`). 모델 재사용은 필요 없다.
+        raise PlatformError("SOS-ML-SCORE-INDEX-UNAVAILABLE")
     if row_index is not None:
         rank = rank_of_row(store, parts, row_index)
         rows = ranked_rows(store, parts, rank, 1) if rank is not None else []
@@ -96,6 +98,7 @@ def ranked_scoring_rows(
 
 
 READ_JOB = Depends(require("job.read"))
+CREATE_JOB = Depends(require("job.create"))
 
 
 def scoring_observations_router(store: Store, access: ResourceAccess) -> APIRouter:
@@ -107,8 +110,9 @@ def scoring_observations_router(store: Store, access: ResourceAccess) -> APIRout
         summary="점수화 결과 관측치 탐색",
         description=(
             "보존된 점수와 관측 근거를 점수 내림차순(동점은 결과 행 번호 오름차순)으로 조회합니다. 결과마다 "
-            "한 번 만든 관측값 색인을 읽으므로 결과 크기와 관계없이 페이지 비용이 같습니다. 이전 결과의 색인이 "
-            "준비되기 전에는 409를 반환합니다. 결과 행 번호는 원본 이벤트의 고유 식별자가 아닙니다."
+            "한 번 만든 관측값 색인을 읽으므로 결과 크기와 관계없이 페이지 비용이 같습니다. 색인이 준비되기 "
+            "전이나 색인을 만들지 못한 결과는 409를 반환합니다. 결과 행 번호는 원본 이벤트의 고유 식별자가 "
+            "아닙니다."
         ),
         response_model=ScoringObservationsOut,
     )
@@ -124,5 +128,34 @@ def scoring_observations_router(store: Store, access: ResourceAccess) -> APIRout
             raise HTTPException(status_code=404, detail="점수 결과를 찾을 수 없습니다.")
         access.check_ownership(actor, scoring["owner_actor"], "scoring_result", result_id)
         return ranked_scoring_rows(store, scoring, limit, cursor, row_index=row_index)
+
+    @router.post(
+        "/api/ml/scoring/results/{result_id}/observation-index",
+        tags=["Scoring"],
+        summary="점수화 결과 관측값 색인 생성 요청",
+        description=(
+            "관측값 색인이 없는 점수 결과의 색인 Job을 같은 결과로 접수합니다. 보존된 점수 결과만 읽으므로 "
+            "모델 상태와 관계없이 요청할 수 있습니다. 같은 결과의 색인 Job이 대기·실행 중이면 그 Job을 "
+            "반환하고, 색인이 이미 있으면 409를 반환합니다."
+        ),
+        status_code=202,
+        response_model=ScoringObservationIndexOut,
+    )
+    def request_observation_index(result_id: str, request: Request, actor: Actor = CREATE_JOB):
+        scoring = store.get_scoring_result(result_id)
+        if scoring is None:
+            raise HTTPException(status_code=404, detail="점수 결과를 찾을 수 없습니다.")
+        access.check_ownership(actor, scoring["owner_actor"], "scoring_result", result_id)
+        try:
+            job = store.create_job(
+                kind="ml_score_index", dataset_id=None,
+                spec={"scoring_result_id": scoring["id"], "source_owner_actor": scoring["owner_actor"]},
+                request_id=request.state.request_id, owner_actor=actor.id, actor_type=actor.kind,
+            )
+        except ScoringIndexExists:
+            raise HTTPException(
+                status_code=409, detail="이 점수 결과의 관측값 색인이 이미 있습니다.",
+            ) from None
+        return {"result_id": scoring["id"], "job_id": job["id"], "status": job["status"]}
 
     return router

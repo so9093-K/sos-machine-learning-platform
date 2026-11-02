@@ -36,7 +36,7 @@
 
 - Token 인증과 역할(`viewer`·`researcher`·`operator`·`administrator`·`automation`), Dataset·Job·모델 소유권, PostgreSQL 감사 이벤트를 적용한다.
 - Job·Attempt는 멱등성 키, 취소, Worker 복구, 자원 수용 판단과 선택적 cgroup v2 메모리 격리, Attempt별 결과 게시 무결성을 따른다.
-- Scoring 결과의 점수순 관측값 탐색은 결과마다 한 번 만든 불변 색인 조각을 읽어, 결과 크기와 관계없이 페이지마다 같은 비용으로 조회한다. 기존 결과의 색인은 업그레이드 때 Worker Job으로 만든다.
+- Scoring 결과의 점수순 관측값 탐색은 결과마다 한 번 만든 불변 색인 조각을 읽어, 결과 크기와 관계없이 페이지마다 같은 비용으로 조회한다. 기존 결과의 색인은 업그레이드 때 Worker Job으로 만들고, 실패하면 같은 결과로 색인 생성을 다시 요청한다(`POST /api/ml/scoring/results/{id}/observation-index`).
 - 데이터 크기에 따라 처리 경로나 계산 의미를 나누지 않는다. Scoring 순위 지표, 판정 정책·평가, 학습 점수 근거, 생산 Pipeline의 학습·평가는 점수·입력을 메모리에 모으지 않고 배치 순회와 디스크 Spill 외부 정렬로 정확히 계산한다.
 - API 오류는 코드·재시도 정책·요청 ID를 포함한 구조화 응답으로 제공하며 웹 타입은 생성 OpenAPI를 사용한다.
 - **API 호환성 변경 — 모델 조회:** `GET /api/ml/models/{revision_id}`와 `GET /api/ml/offered-models`의 `items[].model`은 소유자·관리자가 아닌 소비자에게 `dataset_id`, `dataset_version`, `job_id`, `attempt_id`, `location`, `sha256`, `params`를 반환하지 않는다. 필드는 `null`이 아니라 응답에서 제거되며, `training_score_summary`는 빈 객체이고 Runtime도 공개 정보로 제한된다. 기존 전체 응답을 전제로 한 필수 필드 검증·직접 접근은 수정이 필요하다. 배포 전에 OpenAPI의 공개·전체 응답을 반영해 클라이언트 타입을 갱신하고, `creation_evidence_visible`로 응답을 구분해 비공개 필드 의존을 제거해야 한다. 필드 부재는 모델 오류나 기록 부재를 뜻하지 않는다. API와 SOS 웹은 함께 갱신하며 소유자·관리자의 전체 응답은 유지한다.

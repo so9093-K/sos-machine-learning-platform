@@ -203,6 +203,19 @@ DEFINITIONS = (
         "capacity",
     ),
     spec(
+        "SOS-ML-SCORE-INDEX-PENDING",
+        "관측값 색인 준비 중",
+        "이 점수 결과의 관측값 색인을 만들고 있습니다. 잠시 후 다시 조회하세요.",
+        "conflict",
+        "after_delay",
+    ),
+    spec(
+        "SOS-ML-SCORE-INDEX-UNAVAILABLE",
+        "관측값 색인 없음",
+        "이 점수 결과의 관측값 색인을 만들지 못했습니다. 같은 점수 결과로 관측값 색인 생성을 다시 요청하세요.",
+        "conflict",
+    ),
+    spec(
         "SOS-ML-TRAIN-CAPACITY",
         "학습 입력 실행 예산 초과",
         "요청한 학습 입력이 Worker 메모리 예산을 초과했습니다. 명시적인 부분집합 행 수를 선택하거나 실행 환경을 조정하세요.",

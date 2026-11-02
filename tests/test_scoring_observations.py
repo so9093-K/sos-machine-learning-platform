@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from sos_platform import scoring_index, scoring_observations
 from sos_platform.duckdb_spill import SpillBudget
+from sos_platform.errors import PlatformError
 
 
 def _indexed(tmp_path, monkeypatch, name, rows, opened=None):
@@ -63,13 +64,13 @@ def test_ranked_scoring_rows_wait_for_the_index_of_an_existing_result():
     job = {"status": "Queued", "error_code": None}
     store = SimpleNamespace(scoring_observation_parts=lambda _id: [],
                             scoring_index_job=lambda _id: job)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(PlatformError) as exc:
         scoring_observations.ranked_scoring_rows(store, {"id": "old", "row_count": 3}, 25, None)
-    assert exc.value.status_code == 409 and "준비" in exc.value.detail
+    assert exc.value.code == "SOS-ML-SCORE-INDEX-PENDING"
     job.update(status="Failed", error_code="SOS-ML-SCORE-STAGE-LIMIT")
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(PlatformError) as exc:
         scoring_observations.ranked_scoring_rows(store, {"id": "old", "row_count": 3}, 25, None)
-    assert "만들지 못했습니다 (SOS-ML-SCORE-STAGE-LIMIT)" in exc.value.detail
+    assert exc.value.code == "SOS-ML-SCORE-INDEX-UNAVAILABLE"
 
 
 
