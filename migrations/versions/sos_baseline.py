@@ -1,16 +1,18 @@
 """SOS 플랫폼 스키마 기준선.
 
 첫 릴리스 전의 migration 0001~0035를 현재 스키마 하나로 합쳤다. 이전 DB를 이 기준선으로 업그레이드하는
-경로는 없다(보존할 운영 데이터가 없음). 새 스키마 변경은 이 기준선 다음 revision으로 추가한다.
+경로는 없다(보존할 운영 데이터가 없음). Alembic은 DB의 revision을 접두사로도 찾으므로, revision ID는 이전
+체인의 어느 ID(0001~0035)로도 시작하지 않게 두어 이전 DB를 현재 head로 받아들이지 않는다.
+새 스키마 변경은 이 기준선을 down_revision으로 두는 revision으로 추가한다.
 
-Revision ID: 0001
+Revision ID: sos_baseline
 Revises:
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0001"
+revision = "sos_baseline"
 down_revision = None
 branch_labels = None
 depends_on = None
