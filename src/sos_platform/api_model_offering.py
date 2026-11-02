@@ -7,6 +7,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .api_access import ResourceAccess
+from .model_use import use_blocked
 from .pagination import decode_cursor, page_from_rows
 from .schemas import ModelOfferingPageOut, ModelOfferingRequest, ModelOfferingStateOut
 from .security import Actor, require
@@ -26,7 +27,7 @@ def model_offering_router(store: Store, access: ResourceAccess) -> APIRouter:
         return {
             "offered": (
                 bool(offering) and offering.get("withdrawn_at") is None
-                and model["lifecycle_state"] == "Active" and bool(model.get("registry_version"))
+                and use_blocked(model) is None
             ),
             "description": offering.get("description"),
             "offered_by": offering.get("offered_by"),

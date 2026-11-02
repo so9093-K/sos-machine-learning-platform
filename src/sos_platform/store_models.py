@@ -4,6 +4,8 @@ import json
 
 from sqlalchemy import text
 
+from .errors import ERRORS
+from .model_use import GROUP_ARCHIVED, GROUP_JOIN, USABLE_SQL, locked_model, use_blocked
 from .store_administration import now
 
 MODEL_JSON_FIELDS = ("features", "params", "training_score_summary", "runtime")
@@ -28,11 +30,9 @@ class ModelStoreMixin:
     def get_model_revision(self, revision_id: str) -> dict | None:
         """실행 파일을 로딩하지 않고 모델 메타데이터만 조회한다."""
         with self.connection() as db:
-            row = (
-                db.execute(text("SELECT * FROM model_revisions WHERE id=:id"), {"id": revision_id})
-                .mappings()
-                .first()
-            )
+            row = db.execute(text(
+                f"SELECT m.*, {GROUP_ARCHIVED} FROM model_revisions m {GROUP_JOIN} WHERE m.id=:id"
+            ), {"id": revision_id}).mappings().first()
         return None if row is None else _model_item(row)
 
     def get_model_offering(self, revision_id: str) -> dict | None:
@@ -46,19 +46,16 @@ class ModelStoreMixin:
 
     def list_model_offerings(self, *, limit: int, before: dict | None = None) -> list[dict]:
         """현재 제공 중이고 새 계산에 쓸 수 있는 판본을 최근 제공 순으로 반환한다."""
-        filters = [
-            "o.withdrawn_at IS NULL",
-            "m.lifecycle_state='Active'",
-            "m.registry_version IS NOT NULL",
-        ]
+        filters = ["o.withdrawn_at IS NULL", USABLE_SQL]
         params: dict = {"limit": limit}
         if before:
             filters.append("(o.offered_at, o.model_revision_id) < (:created_at, :id)")
             params.update(created_at=before["created_at"], id=before["id"])
         with self.connection() as db:
             rows = db.execute(text(
-                "SELECT o.description AS offering_description, o.offered_by, o.offered_at, m.* "
-                "FROM model_offerings o JOIN model_revisions m ON m.id=o.model_revision_id "
+                f"SELECT o.description AS offering_description, o.offered_by, o.offered_at, m.*, "
+                f"{GROUP_ARCHIVED} FROM model_offerings o JOIN model_revisions m "
+                f"ON m.id=o.model_revision_id {GROUP_JOIN} "
                 "WHERE " + " AND ".join(filters) + " "
                 "ORDER BY o.offered_at DESC, o.model_revision_id DESC LIMIT :limit"
             ), params).mappings().all()
@@ -83,15 +80,12 @@ class ModelStoreMixin:
         owner_actor가 주어지면 그 Actor가 소유한 판본만 제공한다. 관리자는 None을 전달한다.
         """
         with self.connection() as db:
-            model = db.execute(
-                text("SELECT * FROM model_revisions WHERE id=:id FOR UPDATE"), {"id": revision_id}
-            ).mappings().first()
+            model = locked_model(db, revision_id, for_update=True)
             if model is None or (owner_actor is not None and model["owner_actor"] != owner_actor):
                 raise LookupError(revision_id)
-            if model["lifecycle_state"] != "Active" or not model["registry_version"]:
-                raise ModelOfferingUnavailable(
-                    "Registry 등록이 끝난 활성 모델 판본만 제공할 수 있습니다."
-                )
+            blocked = use_blocked(model)
+            if blocked:
+                raise ModelOfferingUnavailable(ERRORS[blocked].message)
             at = now()
             db.execute(text(
                 "INSERT INTO model_offerings"

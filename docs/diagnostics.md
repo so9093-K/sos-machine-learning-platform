@@ -84,7 +84,7 @@ Worker의 `worker.staging.cleanup_failed`는 정리를 모두 시도한 뒤 실�
 
 ### MLflow 기록·모델 등록 재시도
 
-1. 학습·연결 Job이 `Succeeded`지만 `MLflow 기록·모델 등록 실패`로 대기한다면 다시 제출하지 않는다. 성공한 모델 아티팩트는 SOS가 유지하며, Registry 등록 완료 전에는 제공·Scoring을 진행하지 않는다.
+1. 학습·연결 Job이 `Succeeded`지만 `MLflow 기록·모델 등록 실패`로 대기한다면 다시 제출하지 않는다. 판본은 등록 기록과 무관하게 제공·Scoring·서빙에 쓸 수 있다. 전송 중인 판본은 삭제가 거부되므로 전송이 끝난 뒤 다시 요청한다.
 2. `GET /api/ml/tracking/jobs/{job_id}`의 `state`, `attempts`, `last_error_code`를 조회하고, 필요하면 로컬 운영 UI(`http://localhost:9606`)에서 해당 Registered Model·Version을 확인한다.
 3. 코드나 연결 문제를 수정한 뒤 기존 전송 Outbox의 `Retry`가 다시 시도하는지 확인한다. 중복 Model Version 등록을 막는 Job ID·SHA 검증은 유지한다.
 
@@ -92,7 +92,7 @@ Worker의 `worker.staging.cleanup_failed`는 정리를 모두 시도한 뒤 실�
 
 1. `GET /api/serving/endpoints/{id}`의 `ready`, `runtime.reachable`, `runtime.active`·`runtime.pending`의 `status`·`status_reason`을 확인한다. 웹에서는 **온라인 서빙** 화면이 같은 값을 보인다. `status_reason`은 실패 원인의 마지막 문장이거나 자원을 기다리는 이유다. `OUT_OF_SYNC`는 서빙 Runtime에 의도와 다른 Config가 적용된 상태이며 컨트롤러가 다음 조정에서 되돌린다. 실패 메시지 전체와 복제본 로그는 Ray Dashboard(`http://localhost:9609`)의 Serve 화면에서 `runtime_application` 이름으로 찾는다. 컨테이너 표준 출력(`make logs`)에는 남지 않는다.
 2. `runtime.reachable`이 거짓이면 `make status`에서 `serving`·`serving-controller` 상태를 확인한다. Ray가 재시작되면 컨트롤러가 다음 조정에서 같은 Config를 다시 적용하며, 그동안 추론은 `SOS-SERVING-UNAVAILABLE` 또는 `SOS-SERVING-NOT-READY`로 응답한다.
-3. `ready`가 참인데 추론이 503이면 Registry 검증 실패다. 응답 `detail`의 코드로 모델 버전·그룹 보관(`SOS-MLFLOW-MODEL-MISMATCH`·`SOS-MLFLOW-MODEL-NOT-REGISTERED`)과 MLflow 장애(`SOS-MLFLOW-UNAVAILABLE`)를 구분한다. 보관한 판본은 다른 판본으로 전환하거나 Endpoint를 중단한다.
+3. `ready`가 참인데 추론이 409(`SOS-ML-MODEL-ARCHIVED`·`SOS-ML-MODEL-INVALID`)이면 활성 판본이나 그 그룹이 보관됐거나 삭제 중이다. 복원하거나 다른 판본으로 전환한다.
 4. 전환 대상이 배포 실패면 기존 활성 판본은 그대로 요청을 처리한다. `status_reason`이 Runtime 불일치면 서빙 이미지의 Python minor·numpy·scikit-learn이 판본의 학습 Runtime과 다른 것이므로 같은 Runtime에서 학습한 판본을 공급한다. 원인을 고치기 전에는 전환을 취소한다.
 5. 컨트롤러 구조화 로그(`make logs`의 `serving-controller`)로 흐름을 따라간다. `serving.config.applied`는 Config 적용, `serving.application.failed`(`endpoint_id`·`model_revision_id`·`status`)는 애플리케이션 실패(상태가 바뀔 때 한 번), `serving.revision.activated`는 전환 시점이다. `serving.reconcile.unavailable`(`failure_type`·`status`)로 Ray 연결 장애와 Config 거절을 구분한다.
 6. 서빙 의도와 판본은 SOS DB가 정본이다. Ray에 적용된 Config가 의도와 다르거나 애플리케이션이 사라지면 컨트롤러가 다음 조정에서 의도한 Config를 다시 적용하므로, 변경은 SOS로 요청한다.

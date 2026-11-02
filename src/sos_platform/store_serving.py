@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from sqlalchemy import text
 
+from .errors import ERRORS
+from .model_use import locked_model, use_blocked
 from .store_administration import now
 from .store_models import _model_item
 
@@ -25,15 +27,17 @@ _CAPACITY_LOCK = "SELECT pg_advisory_xact_lock(hashtext('sos.serving.capacity'))
 
 class ServingStoreMixin:
     def _servable_model(self, db, revision_id: str, endpoint_owner: str, privileged: bool) -> dict:
-        row = db.execute(text(
-            "SELECT id,owner_actor,lifecycle_state,registry_version FROM model_revisions "
-            "WHERE id=:id FOR SHARE"
-        ), {"id": revision_id}).mappings().first()
+        row = locked_model(db, revision_id)
         if row is None or (not privileged and row["owner_actor"] != endpoint_owner):
             raise ServingChangeRejected("서빙할 모델 판본을 찾을 수 없습니다.")
-        if row["lifecycle_state"] != "Active" or not row["registry_version"]:
-            raise ServingChangeRejected("Registry 등록이 확인된 활성 모델만 서빙할 수 있습니다.")
-        return dict(row)
+        self._require_usable(row)
+        return row
+
+    @staticmethod
+    def _require_usable(row: dict) -> None:
+        blocked = use_blocked(row)
+        if blocked:
+            raise ServingChangeRejected(ERRORS[blocked].message)
 
     def _admit_replicas(self, db, endpoint_id: str, revisions: set[str], capacity: int) -> None:
         """이 Endpoint가 변경 뒤 서빙할 판본까지 더해도 서빙 Runtime이 실행할 수 있는지 확인한다.
@@ -181,18 +185,25 @@ class ServingStoreMixin:
     def set_serving_state(self, endpoint_id: str, desired_state: str, *, actor_id: str,
                           actor_type: str, replica_capacity: int | None = None,
                           request_id: str | None = None) -> dict:
-        """재개는 서빙 Runtime이 그 판본들을 실행할 수 있을 때만 받는다. 중단은 언제나 받는다."""
+        """재개는 판본들이 새 사용에 허용되고 서빙 Runtime이 실행할 수 있을 때만 받는다. 중단은 언제나 받는다.
+
+        중단된 동안 판본·그룹이 보관되거나 삭제될 수 있으므로, Endpoint 행을 잠근 뒤 같은 트랜잭션에서
+        활성·전환 대상 판본의 사용 판정을 다시 한다. 소유권은 배포 시 확인했으므로 다시 보지 않는다.
+        """
         if desired_state not in ("serving", "stopped"):
             raise ServingChangeRejected("알 수 없는 서빙 상태입니다.")
         with self.connection() as db:
             endpoint = self._locked_endpoint(db, endpoint_id)
             if desired_state == "serving" and endpoint["desired_state"] != "serving":
-                if replica_capacity is None:
-                    raise ServingChangeRejected("서빙 Runtime의 수용량을 확인하지 못했습니다.")
-                self._admit_replicas(db, endpoint_id, {
+                revisions = {
                     revision for revision in (endpoint["active_model_revision_id"],
                                               endpoint["pending_model_revision_id"]) if revision
-                }, replica_capacity)
+                }
+                for revision in sorted(revisions):
+                    self._require_usable(locked_model(db, revision) or {})
+                if replica_capacity is None:
+                    raise ServingChangeRejected("서빙 Runtime의 수용량을 확인하지 못했습니다.")
+                self._admit_replicas(db, endpoint_id, revisions, replica_capacity)
             db.execute(text(
                 "UPDATE serving_endpoints SET desired_state=:state,updated_at=:at WHERE id=:id"
             ), {"state": desired_state, "at": now(), "id": endpoint_id})

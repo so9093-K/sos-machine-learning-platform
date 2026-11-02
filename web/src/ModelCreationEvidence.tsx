@@ -87,7 +87,7 @@ export function ModelCreationEvidence({ model, datasetName }: {
     <p>{origin} · {algorithmLabel(model.algorithm)}</p>
     <ModelTrainingInput model={model} />
     {model.creation_evidence_visible !== false && <p>학습 점수 계산 {recordedRows(model.training_score_summary.score_count)}</p>}
-    <p>{model.registry_version ? `Registry v${model.registry_version}` : "Registry 등록 미확인"}</p>
+    <p>{model.registry_version ? `MLflow 등록 v${model.registry_version}` : "MLflow 등록 기록 없음"}</p>
     <p className="hint">학습 데이터의 점수는 독립 평가 성능이나 사건 발생 확률이 아니며, 이 기록만으로 다른 데이터에서의 정확도를 확정할 수 없습니다.</p>
   </section>;
 }

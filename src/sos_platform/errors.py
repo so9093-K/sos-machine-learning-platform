@@ -203,6 +203,24 @@ DEFINITIONS = (
         "capacity",
     ),
     spec(
+        "SOS-ML-MODEL-INVALID",
+        "사용할 수 없는 모델",
+        "삭제 중이거나 삭제된 모델 판본은 새 작업에 사용할 수 없습니다.",
+        "conflict",
+    ),
+    spec(
+        "SOS-ML-MODEL-NOT-OFFERED",
+        "제공 중단된 모델",
+        "제공이 중단된 모델 판본은 새 계산에 사용할 수 없습니다. 이미 만든 결과와 작업은 계속 조회할 수 있습니다.",
+        "conflict",
+    ),
+    spec(
+        "SOS-ML-MODEL-ARCHIVED",
+        "보관된 모델",
+        "보관된 모델 판본이나 모델 그룹은 새 계산·서빙·제공·학습에 사용할 수 없습니다. 복원한 뒤 다시 요청하세요.",
+        "conflict",
+    ),
+    spec(
         "SOS-ML-SCORE-INDEX-PENDING",
         "관측값 색인 준비 중",
         "이 점수 결과의 관측값 색인을 만들고 있습니다. 잠시 후 다시 조회하세요.",

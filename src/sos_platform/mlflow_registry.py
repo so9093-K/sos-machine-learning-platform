@@ -1,15 +1,14 @@
-"""MLflow Registry 연결: 모델 자산 관리와 SOS 실행 아티팩트의 경계.
+"""SOS 판본의 MLflow 등록 기록(ADR 0025).
 
-MLflow가 논리적 모델 이름과 버전을 발급한다. SOS는 Worker가 게시한 불변 아티팩트 URI와
-SHA-256, Runtime 계약을 계속 검사한다. SOS 학습 판본과 MLflow에서 연결한 판본 모두 소유자의
-SOS 모델 그룹에 버전으로 등록되며, 연결한 판본은 원본 모델 버전·Run을 출처 태그로 남긴다.
+SOS 학습 판본과 MLflow에서 연결한 판본은 소유자의 SOS 모델 그룹 이름으로 MLflow에 버전을 남긴다.
+연결한 판본은 원본 모델 버전·Run을 출처 태그로 남긴다. 이 등록은 외부 기록이며 SOS의 사용 판정
+(수명주기·보관·제공)에 쓰지 않는다. 그룹 이름·설명·보관도 SOS가 관리하므로 MLflow에 반영하지 않는다.
 """
 
 import hashlib
 import re
-from .mlflow_errors import MLflowDeliveryError
 
-DEFAULT_GROUP_TITLE = "기본 활동 이상 탐지"
+from .mlflow_errors import MLflowDeliveryError
 
 
 def registered_model_name(model: dict) -> str:
@@ -65,29 +64,66 @@ def _versions(client, name: str):
         seen.add(token)
 
 
-def verify_registered_version(client, model: dict) -> None:
-    """실행 제출에서 Registry가 가리키는 판본과 내부 불변 바이트를 대조한다."""
-    name = model.get("registry_model")
-    version = model.get("registry_version")
-    if model.get("lifecycle_state", "Active") != "Active":
-        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
-    if name != registered_model_name(model) or not isinstance(version, str):
-        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
+def _records_model(entry: object, model: dict, name: str) -> bool:
+    """MLflow 버전이 이 SOS 판본의 등록 기록인지: 그룹 이름·아티팩트 URI·게시 Job·SHA가 모두 같다."""
+    return isinstance(entry, dict) and (
+        entry.get("name") == name
+        and entry.get("source") == model.get("location")
+        and _tags(entry).get("sos.job_id") == model.get("job_id")
+        and _tags(entry).get("sos.sha256") == model.get("sha256")
+    )
+
+
+def confirm_registered_version(client, model: dict, name: str, version: str) -> None:
+    """방금 등록한 버전이 READY이고 SOS 판본의 위치·SHA·게시 Job과 일치하는지 확인한다.
+
+    아직 PENDING이면 전송을 재시도로 남긴다. 확인한 결과는 판본에 등록 기록으로만 저장한다.
+    """
     entry = client.get("model-versions/get", {"name": name, "version": version}).get(
         "model_version"
     )
-    if not isinstance(entry, dict) or (
-        entry.get("version") != version or entry.get("name") != name
-        or entry.get("source") != model.get("location")
-        or _tags(entry).get("sos.job_id") != model.get("job_id")
-        or _tags(entry).get("sos.sha256") != model.get("sha256")
-        or entry.get("status") != "READY"
-        or _tags(entry).get("sos.archived") == "true"
+    if (
+        not _records_model(entry, model, name)
+        or entry.get("version") != version or entry.get("status") != "READY"
     ):
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
-    group = client.get("registered-models/get", {"name": name}).get("registered_model")
-    if not isinstance(group, dict) or _tags(group).get("sos.archived") == "true":
-        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-NOT-REGISTERED")
+
+
+def delete_registered_versions(client, model: dict) -> None:
+    """판본의 MLflow 등록 버전을 지운다. 등록 결과를 기록하지 못했으면 게시 Job 태그로 찾아 지운다.
+
+    등록 전송이 시도된 판본만 호출한다. 지우기 전에 각 버전이 여전히 이 판본의 기록인지(아티팩트
+    URI·게시 Job·SHA) 확인한다. 그룹이 다시 만들어져 버전 번호가 재사용됐다면 다른 모델일 수 있으므로,
+    하나라도 일치하지 않으면 아무것도 지우지 않는다. 등록 상태(READY)는 요구하지 않으며, 이미 없는 버전은
+    삭제된 것으로 본다.
+
+    Raises:
+        MLflowDeliveryError: `SOS-MLFLOW-MODEL-MISMATCH` — 버전이 이 판본의 기록이 아니다.
+    """
+    name = registered_model_name(model)
+    if model.get("registry_version"):
+        try:
+            entry = client.get("model-versions/get", {
+                "name": name, "version": model["registry_version"],
+            }).get("model_version")
+        except MLflowDeliveryError as exc:
+            if str(exc).startswith("SOS-MLFLOW-HTTP-404"):
+                return
+            raise
+        entries = [entry]
+    else:
+        entries = [
+            version for version in _versions(client, name)
+            if _tags(version).get("sos.job_id") == model.get("job_id")
+        ]
+    if not all(_records_model(entry, model, name) for entry in entries):
+        raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
+    for entry in entries:
+        try:
+            client.delete("model-versions/delete", {"name": name, "version": entry["version"]})
+        except MLflowDeliveryError as exc:
+            if not str(exc).startswith("SOS-MLFLOW-HTTP-404"):
+                raise
 
 
 def _source(model: dict) -> dict | None:
@@ -137,9 +173,8 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
             existing.append(version)
     if len(existing) > 1:
         raise MLflowDeliveryError("SOS-MLFLOW-DUPLICATE-MODELS")
-    # MLflow의 registered-models/get은 미등록 이름에 404를 반환한다.
-    # 먼저 정확한 모델 이름으로 검색하고, 존재하는 그룹만 GET하여 보관을 확인한다.
-    # 첫 학습에서는 GET 404를 기다리지 않고 그룹부터 생성해야 한다.
+    # MLflow의 registered-models/get은 미등록 이름에 404를 반환하므로 정확한 이름으로 검색한다.
+    # 첫 등록에서는 GET 404를 기다리지 않고 그룹부터 생성한다.
     listing = client.get("registered-models/search", {
         "filter": f"name = '{name}'", "max_results": 100,
     })
@@ -152,24 +187,16 @@ def register_model_version(client, model: dict, run_id: str) -> tuple[str, str]:
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
     if len(models) > 1:
         raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-    if models:
-        group = client.get("registered-models/get", {"name": name}).get("registered_model")
-        if not isinstance(group, dict) or group.get("name") != name:
-            raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-        if _tags(group).get("sos.archived") == "true":
-            raise MLflowDeliveryError("SOS-MLFLOW-MODEL-ARCHIVED")
-    elif existing:
+    if not models and existing:
         # 이미 버전이 있는데 Registry 그룹은 없다는 불일치 상태에서는 재생성 금지.
         raise MLflowDeliveryError("SOS-MLFLOW-MODEL-MISMATCH")
-    else:
-        tags = [{"key": "sos.source", "value": "sos-platform"}]
-        # 기본 그룹은 학습 시 처음 생성되므로 SOS 그룹 생성 API와 같은 제목·보관 태그를 붙인다.
-        if (model.get("registry_key") or "default") == "default":
-            tags += [
-                {"key": "sos.title", "value": DEFAULT_GROUP_TITLE},
-                {"key": "sos.archived", "value": "false"},
-            ]
-        client.post("registered-models/create", {"name": name, "tags": tags})
+    if not models:
+        client.post("registered-models/create", {
+            "name": name,
+            "description": "SOS 모델 그룹의 등록 기록입니다. 그룹 이름·설명·보관과 모델 사용 여부는 "
+                           "SOS가 관리합니다.",
+            "tags": [{"key": "sos.source", "value": "sos-platform"}],
+        })
     if existing:
         item = existing[0]
         if (

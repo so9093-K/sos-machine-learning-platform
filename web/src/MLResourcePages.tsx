@@ -14,13 +14,13 @@ import type {
   ExplanationResult, ModelOffering, ModelOfferingPage,
 } from "./types";
 import {
-  algorithmLabel, explanationMethodLabel, formatRecordedAt, jobStatusLabel, policyModeLabel,
-  scoreDirectionLabel,
+  algorithmLabel, explanationMethodLabel, formatRecordedAt, jobStatusLabel, modelVersionLabel,
+  policyModeLabel, scoreDirectionLabel,
 } from "./display-format";
 import { ModelServingPanel } from "./ModelServingPanel";
 import { ModelCreationEvidence, modelCreatedLabel, modelImportSource } from "./ModelCreationEvidence";
 import { ModelEvaluationEvidence } from "./ModelEvaluationEvidence";
-import { canApplyModel, ModelOfferingPanel, useModelOffering } from "./ModelOffering";
+import { canApplyModel, ModelOfferingPanel, modelAvailableForNewWork, useModelOffering } from "./ModelOffering";
 import { EvaluationSummary } from "./EvaluationSummary";
 
 type OpenResource = (kind: MLResourceKind, id: string) => void;
@@ -369,7 +369,7 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
   const collapsed = resultFocused && !showSetup;
   return <div className="ml-resource-workspace">
     {resultFocused && current && <div className="model-lab-result-toolbar">
-      <span>{algorithmLabel(current.algorithm)} · v{current.registry_version ?? "?"} · Dataset 분석 결과</span>
+      <span>{algorithmLabel(current.algorithm)} · {modelVersionLabel(current)} · Dataset 분석 결과</span>
       <button type="button" className="secondary" aria-expanded={showSetup}
         onClick={() => setShowSetup(value => !value)}>
         {showSetup ? "모델 선택 닫기" : "모델 선택 변경"}</button>
@@ -383,17 +383,17 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
           onChange={event => onModelSelected(event.target.value)}>
           <option value="">모델 선택</option>
           {preferredModelId && !listed && <option value={preferredModelId}>{current
-            ? `${algorithmLabel(current.algorithm)} · v${current.registry_version ?? "?"} · ${state && !state.offered
+            ? `${algorithmLabel(current.algorithm)} · ${modelVersionLabel(current)} · ${state && !state.offered
               ? "제공되지 않은 판본" : "목록 밖 판본"}` : "선택한 모델"}</option>}
           {offered.map(item => <option key={item.model.id} value={item.model.id}>
-            {algorithmLabel(item.model.algorithm)} · v{item.model.registry_version ?? "?"} · 제공 {formatRecordedAt(item.offered_at)}
+            {algorithmLabel(item.model.algorithm)} · {modelVersionLabel(item.model)} · 제공 {formatRecordedAt(item.offered_at)}
           </option>)}
         </select>
       </label>
       {offeredCursor && <button type="button" className="secondary" onClick={() => void loadMoreOffered()}>
         모델 더 보기</button>}
       {current && <div className="model-choice-summary">
-        <p>{algorithmLabel(current.algorithm)} · v{current.registry_version ?? "?"} · {modelCreatedLabel(current)} {formatRecordedAt(current.created_at)}
+        <p>{algorithmLabel(current.algorithm)} · {modelVersionLabel(current)} · {modelCreatedLabel(current)} {formatRecordedAt(current.created_at)}
           · 입력 Feature {current.features.length}개
           {" "}<button type="button" className="ghost" onClick={() => onOpenResource("model", current.id)}>모델 상세 →</button></p>
         {description && <p className="model-offering-description">{description}</p>}
@@ -405,8 +405,8 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
       {offering.error && <p role="alert">모델 제공 상태 확인 실패 · {offering.error}
         <button type="button" className="secondary" onClick={offering.reload}>다시 조회</button></p>}
       {current && state && !usable && <div className="notice-blocked" role="status">
-        <p>{current.lifecycle_state !== "Active" || !current.registry_version
-          ? "이 판본은 현재 새 계산에 사용할 수 없습니다."
+        <p>{!modelAvailableForNewWork(current)
+          ? "이 판본은 보관됐거나 삭제 중이라 새 계산에 사용할 수 없습니다."
           : "제공이 중단된 모델입니다. 이미 만든 결과는 확인할 수 있지만 새 적용은 할 수 없습니다."}</p>
         <button type="button" className="secondary" onClick={() => onNavigate("ml")}>제공 모델 목록 →</button>
       </div>}

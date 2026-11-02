@@ -1,6 +1,6 @@
 # 0017 — 목적별 모델 그룹과 모델 자산 삭제 계약
 
-- 상태: **Accepted**
+- 상태: **Accepted** (결정 2·3과 결정 4의 등록 미완료 삭제 거부는 [0025](0025-sos-owned-model-use-decision.md)가 대체)
 - 관련: [ADR 0015](0015-mlflow-management-ownership.md), [ADR 0016](0016-dagster-orchestration.md)
 
 ## 배경

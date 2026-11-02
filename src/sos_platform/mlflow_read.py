@@ -6,7 +6,6 @@ from .mlflow_experiments import (
     experiment_prefix,
     find_experiment,
 )
-from .mlflow_registry import registered_model_name
 
 
 def _page_token(result: dict) -> str | None:
@@ -113,65 +112,5 @@ def read_runs(
                 item["key"]: item["value"] for item in data.get("metrics", [])
                 if isinstance(item, dict) and isinstance(item.get("key"), str)
             },
-        })
-    return {"items": visible, "next_page_token": _page_token(result)}
-
-
-def read_model_versions(client, store, actor_id: str, *, page_token: str | None = None, registry_key: str = "default", include_archived: bool = False) -> dict:
-    """Registry 판본과 SOS 아티팩트를 대조하며 페이지 정보를 보존한다."""
-    name = registered_model_name({
-        "owner_actor": actor_id, "algorithm": "isolation_forest", "registry_key": registry_key,
-    })
-    request = {"filter": f"name = '{name}'", "max_results": 100}
-    if page_token:
-        request["page_token"] = page_token
-    result = client.get("model-versions/search", request)
-    versions = result.get("model_versions") or []
-    if not isinstance(versions, list):
-        raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-    # 관리 화면은 보관된 그룹도 확인해야 하지만 모델 사용 경로는 제외한다.
-    if versions and not include_archived:
-        registered = client.get("registered-models/get", {"name": name}).get("registered_model")
-        if not isinstance(registered, dict):
-            raise MLflowDeliveryError("SOS-MLFLOW-RESPONSE-INVALID")
-        group_tags = {
-            tag.get("key"): tag.get("value")
-            for tag in registered.get("tags") or [] if isinstance(tag, dict)
-        }
-        if group_tags.get("sos.archived") == "true":
-            return {"items": [], "next_page_token": None}
-    visible = []
-    for version in versions:
-        if not isinstance(version, dict) or version.get("name") != name:
-            continue
-        tags = {
-            tag.get("key"): tag.get("value")
-            for tag in version.get("tags") or [] if isinstance(tag, dict)
-        }
-        if tags.get("sos.archived") == "true" and not include_archived:
-            continue
-        job_id = tags.get("sos.job_id")
-        job = store.get_job(job_id) if isinstance(job_id, str) else None
-        if not job or job.get("owner_actor") != actor_id:
-            continue
-        model_id = (job.get("result") or {}).get("model_revision_id")
-        model = store.get_model_revision(model_id) if model_id else None
-        if (
-            not model or model.get("lifecycle_state", "Active") != "Active"
-            or model.get("owner_actor") != actor_id
-            or model.get("registry_model") != name
-            or model.get("registry_version") != version.get("version")
-            or model.get("sha256") != tags.get("sos.sha256")
-            or model.get("location") != version.get("source")
-            or version.get("status") != "READY"
-        ):
-            continue
-        visible.append({
-            "name": name, "version": version["version"],
-            "dataset_id": model.get("dataset_id"), "created_at": model.get("created_at"),
-            "model_id": model_id, "run_id": version.get("run_id"),
-            "status": version.get("status"), "job_id": job_id,
-            "aliases": version.get("aliases") or [],
-            "archived": tags.get("sos.archived") == "true",
         })
     return {"items": visible, "next_page_token": _page_token(result)}

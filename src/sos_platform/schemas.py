@@ -9,6 +9,7 @@ from pydantic import (
     Field,
     StrictFloat,
     StrictInt,
+    StringConstraints,
     computed_field,
     field_validator,
     model_validator,
@@ -311,22 +312,40 @@ class MLflowRunPageOut(BaseModel):
     next_page_token: str | None = None
 
 
-class MLflowModelVersionOut(BaseModel):
-    dataset_id: str | None = None
-    created_at: str | None = None
-    archived: bool = False
-    name: str
-    version: str
-    model_id: str
-    run_id: str | None = None
-    status: str
-    job_id: str
-    aliases: list[str] = Field(default_factory=list)
+# 그룹 이름은 앞뒤 공백을 제거한 뒤 길이를 검사한다. 공백만 있는 이름은 받지 않는다.
+ModelGroupTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 
 
-class MLflowModelVersionPageOut(BaseModel):
-    items: list[MLflowModelVersionOut]
-    next_page_token: str | None = None
+class ModelGroupCreate(BaseModel):
+    registry_key: str = Field(pattern=r"^[a-z][a-z0-9-]{0,39}$")
+    title: ModelGroupTitle
+    description: str = Field(default="", max_length=1000)
+
+
+class ModelGroupUpdate(BaseModel):
+    title: ModelGroupTitle | None = None
+    description: str | None = Field(default=None, max_length=1000)
+    archived: bool | None = Field(default=None, description="참이면 보관, 거짓이면 복원")
+
+
+class ModelGroupOut(BaseModel):
+    """소유 Actor의 목적별 모델 그룹. 이름·설명·보관은 SOS가 정본이다."""
+
+    registry_key: str
+    title: str
+    description: str
+    archived_at: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class ModelGroupListOut(BaseModel):
+    items: list[ModelGroupOut]
+
+
+class ModelArchiveOut(BaseModel):
+    model_revision_id: str
+    archived_at: str | None
 
 
 class MLflowExportStatusOut(BaseModel):
@@ -535,8 +554,14 @@ class MLTrainRequest(BaseModel):
 class ModelRevisionBaseOut(BaseModel):
     """소비자와 공급자가 공유하는 모델 사용 계약."""
 
-    registry_version: str | None = None
+    registry_version: str | None = Field(
+        default=None, description="SOS 모델 그룹의 MLflow 등록 버전(외부 기록). 사용 가능 여부와 무관하다"
+    )
     lifecycle_state: Literal["Active", "Deleting", "Deleted"] = "Active"
+    archived_at: str | None = Field(default=None, description="판본 보관 시각. 보관된 판본은 새 사용에서 제외된다")
+    group_archived_at: str | None = Field(
+        default=None, description="모델 그룹 보관 시각. 보관된 그룹의 판본은 새 사용에서 제외된다"
+    )
     id: str
     algorithm: str
     source_kind: Literal["sos_training", "mlflow_registry"] = Field(

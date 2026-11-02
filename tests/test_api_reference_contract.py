@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from sos_platform import api_control
 from sos_platform.api import create_app
+from sos_platform.errors import PlatformError
 from sos_platform.security import Actor, IdentitySettings
 from sos_platform.store import Store
 
@@ -156,7 +157,7 @@ def test_model_authoring_is_separate_from_general_execution(tmp_path, monkeypatc
         ("/api/ml/models/imports", {"mlflow_model": "producer-model", "mlflow_version": "1"}),
         ("/api/features/services/jobs", definition),
         ("/api/features/services/missing/retirement/jobs", {}),
-        ("/api/ml/registry/groups", {"registry_key": "test", "title": "test"}),
+        ("/api/ml/model-groups", {"registry_key": "test", "title": "test"}),
     ]:
         assert client.post(path, json=body, headers=analyst).status_code == 403, path
     assert submitted == []
@@ -206,7 +207,6 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
         "id": jid, "kind": "ml_train", "owner_actor": "supplier"})
     monkeypatch.setattr(api_ml_models.MLflowSettings, "from_env", lambda: object())
     monkeypatch.setattr(api_ml_models, "MLflowClient", lambda settings: object())
-    monkeypatch.setattr(api_ml_results, "verify_registered_version", lambda *args: None)
     monkeypatch.setattr(api_ml_results, "discovery_columns", lambda store, dataset: {
         "columns": [{"name": "a", "dtype": "Float64"}]})
 
@@ -225,10 +225,17 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
                  "offered_at": offering["offered_at"]}] if offering and not offering["withdrawn_at"] else []
 
     def create(self, **values):
+        # Store 계약: 같은 키는 원래 Job을 돌려주고, 새 Job은 접수 시점의 제공 여부로 판정한다.
         assert values["require_model_offering"] is True
         assert values["spec"]["model_owner_actor"] == "supplier"
-        submitted.append(values)
-        return {**values, "id": "score-job", "status": "Queued", "result": None,
+        previous = next((job for job in submitted
+                         if job["idempotency_key"] == values["idempotency_key"]), None)
+        if previous is None:
+            if offering.get("withdrawn_at"):
+                raise PlatformError("SOS-ML-MODEL-NOT-OFFERED")
+            submitted.append(values)
+            previous = values
+        return {**previous, "id": "score-job", "status": "Queued", "result": None,
             "cancel_requested": False, "error": None, "attempts": [],
             "created_at": model["created_at"], "updated_at": model["created_at"]}
 
@@ -258,7 +265,11 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
     assert client.delete(path, headers=consumer).status_code == 403
     assert client.delete(path, headers=supplier).json()["offered"] is False
     assert client.get("/api/ml/offered-models", headers=consumer).json()["items"] == []
-    assert client.post("/api/ml/scoring/jobs", json=body, headers=consumer).status_code == 404
+    # 제공 중단 뒤에도 같은 키 재전송은 원래 Job을 받고, 새 키의 새 계산은 거부된다.
+    assert client.post("/api/ml/scoring/jobs", json=body, headers=consumer).json()["id"] == "score-job"
+    renewed = client.post("/api/ml/scoring/jobs", json=body,
+                          headers={**consumer, "Idempotency-Key": "offering-contract-02"})
+    assert renewed.status_code == 409 and renewed.json()["code"] == "SOS-ML-MODEL-NOT-OFFERED"
     assert len(submitted) == 1
     assert client.get("/api/ml/scoring/results/scored", headers=consumer).status_code == 200
     assert client.get("/api/ml/scoring/results/scored", headers=other).status_code == 404
@@ -341,7 +352,8 @@ def test_model_training_evidence_is_private_in_detail_and_offering_list(tmp_path
                 assert result["training_score_summary"] == original["training_score_summary"]
             else:
                 assert set(result) == {"id", "algorithm", "source_kind", "features", "created_at", "registry_version",
-                                       "lifecycle_state", "creation_evidence_visible", "output_type",
+                                       "lifecycle_state", "archived_at", "group_archived_at",
+                                       "creation_evidence_visible", "output_type",
                                        "training_score_summary", "runtime"}
                 assert not {"dataset_id", "dataset_version", "job_id", "attempt_id", "location", "sha256", "params",
                             "source"}.intersection(result)

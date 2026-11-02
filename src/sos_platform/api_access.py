@@ -95,7 +95,7 @@ class ResourceAccess:
         # 생산 방식(source_kind)은 공개하되 출처 상세(source·Dataset·Job)는 공개하지 않는다.
         response = {key: model[key] for key in (
             "id", "algorithm", "source_kind", "features", "created_at", "registry_version",
-            "lifecycle_state",
+            "lifecycle_state", "archived_at", "group_archived_at",
         ) if key in model}
         response["creation_evidence_visible"] = False
         runtime = model["runtime"]

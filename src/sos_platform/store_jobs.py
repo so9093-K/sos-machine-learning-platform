@@ -8,6 +8,7 @@ from uuid import uuid4
 from sqlalchemy import Connection, bindparam, text
 
 from .errors import ERRORS, InvalidRequestError, PlatformError, WorkerOwnershipLost
+from .model_use import group_title, locked_model, use_blocked
 from .store_administration import now
 
 
@@ -74,69 +75,10 @@ class JobStoreMixin:
             updated_at=now(),
         )
         with self.connection() as db:
-            if kind in ("ml_score", "ml_playground"):
-                model_id = spec.get("model_revision_id")
-                state = db.execute(text(
-                    "SELECT lifecycle_state FROM model_revisions WHERE id=:id FOR SHARE"
-                ), {"id": model_id}).scalar_one_or_none()
-                if state != "Active":
-                    raise PlatformError("SOS-ML-MODEL-INVALID")
-                # API에서 제공 상태를 읽은 뒤 중단이 확정될 수 있다. 중단·삭제와
-                # 같은 모델 행 잠금 아래에서 교차 Actor의 신규 사용을 재확인한다.
-                if require_model_offering and db.execute(text(
-                    "SELECT 1 FROM model_offerings WHERE model_revision_id=:id "
-                    "AND withdrawn_at IS NULL"
-                ), {"id": model_id}).scalar_one_or_none() is None:
-                    raise PlatformError("SOS-API-CONFLICT")
-            if kind == "ml_explain":
-                # 설명 대상의 모델 파일이 삭제되는 상황과 계산 접수를 직렬화한다.
-                if spec.get("playground_job_id"):
-                    model_state = db.execute(text(
-                        "SELECT m.lifecycle_state FROM model_revisions m "
-                        "JOIN jobs j ON j.spec::jsonb ->> 'model_revision_id'=m.id "
-                        "WHERE j.id=:job_id AND j.kind='ml_playground' "
-                        "AND j.status='Succeeded' FOR SHARE OF m"
-                    ), {"job_id": spec["playground_job_id"]}).scalar_one_or_none()
-                else:
-                    model_state = db.execute(text(
-                        "SELECT m.lifecycle_state FROM model_revisions m "
-                        "JOIN scoring_results s ON s.model_revision_id=m.id "
-                        "WHERE s.id=:scoring_id FOR SHARE OF m"
-                    ), {"scoring_id": spec.get("scoring_result_id")}).scalar_one_or_none()
-                if model_state != "Active":
-                    raise PlatformError("SOS-ML-MODEL-INVALID")
-            if kind == "ml_score_index":
-                # 같은 결과의 색인 요청을 결과 행 잠금으로 직렬화한다. 대기·실행 중인 Job을 색인 조각보다
-                # 먼저 확인하므로 게시 확정과 겹쳐도 색인 Job이 중복되지 않는다. 보존된 점수 결과만 읽으므로
-                # 모델 상태는 확인하지 않는다.
-                result_id = spec["scoring_result_id"]
-                db.execute(
-                    text("SELECT id FROM scoring_results WHERE id=:id FOR UPDATE"), {"id": result_id},
-                ).scalar_one()
-                active = db.execute(text(
-                    "SELECT id FROM jobs WHERE kind='ml_score_index' AND status IN ('Queued','Running') "
-                    "AND (spec::jsonb ->> 'scoring_result_id')=:id ORDER BY created_at DESC LIMIT 1"
-                ), {"id": result_id}).scalar_one_or_none()
-                if active is not None:
-                    return self.get_job(active)
-                if db.execute(text(
-                    "SELECT 1 FROM scoring_observation_parts WHERE scoring_result_id=:id LIMIT 1"
-                ), {"id": result_id}).first():
-                    raise ScoringIndexExists
-            is_understanding = (
-                kind == "profile"
-                and spec.get("mode") == "understanding"
-                and owner_actor is not None
-            )
-            if is_understanding:
-                # 같은 Actor의 여러 탭이 동시에 새 프로파일을 만들지 않게 직렬화한다.
-                # 다른 Actor에게 기존 Job과 요청 메타데이터를 노출하지 않는다.
-                db.execute(
-                    text("SELECT id FROM datasets WHERE id=:id FOR UPDATE"),
-                    {"id": dataset_id},
-                ).scalar_one()
             if idempotency_key is not None:
-                # PostgreSQL 유일성 충돌은 동시 트랜잭션을 직렬화한다.
+                # 같은 Actor·키·명세의 재요청은 그 뒤 모델·그룹이 보관·삭제·제공 중단됐더라도 원래 Job을
+                # 반환한다(ADR 0005). 아래 상태 검사는 새 Job을 만들 때만 한다. PostgreSQL 유일성 충돌은
+                # 동시 트랜잭션을 직렬화하며, 새 Job 접수가 실패하면 같은 트랜잭션의 키 예약도 되돌린다.
                 inserted = db.execute(
                     text(
                         "INSERT INTO job_submissions(actor_id,submission_key,fingerprint,"
@@ -167,6 +109,83 @@ class JobStoreMixin:
                     previous_id = previous["job_id"]
                     # get_job은 새 트랜잭션으로 기존 확정 Job을 조회한다.
                     return self.get_job(previous_id)
+            if kind in ("ml_score", "ml_playground"):
+                model_id = spec.get("model_revision_id")
+                # 삭제·보관과 같은 판본·그룹 행 잠금 아래에서 SOS 상태만으로 새 사용을 판정한다.
+                blocked = use_blocked(locked_model(db, model_id) or {})
+                if blocked:
+                    raise PlatformError(blocked)
+                # 다른 Actor의 새 계산 허용(현재 제공 중)은 API가 아니라 여기서 판정한다. API는 읽기 권한만
+                # 확인하므로 같은 키 재요청은 제공 중단 뒤에도 위에서 원래 Job을 받는다.
+                if require_model_offering and not self._offered(db, model_id):
+                    raise PlatformError("SOS-ML-MODEL-NOT-OFFERED")
+            if kind == "ml_explain":
+                # 설명 대상의 모델 파일이 삭제되는 상황과 계산 접수를 직렬화한다.
+                if spec.get("playground_job_id"):
+                    source_model = db.execute(text(
+                        "SELECT m.id,m.lifecycle_state FROM model_revisions m "
+                        "JOIN jobs j ON j.spec::jsonb ->> 'model_revision_id'=m.id "
+                        "WHERE j.id=:job_id AND j.kind='ml_playground' "
+                        "AND j.status='Succeeded' FOR SHARE OF m"
+                    ), {"job_id": spec["playground_job_id"]}).mappings().first()
+                    model_state = source_model["lifecycle_state"] if source_model else None
+                    # 단일 입력 결과의 설명은 그 모델의 새 계산이므로 다른 Actor에게는 현재 제공이 필요하다.
+                    if (model_state == "Active" and require_model_offering
+                            and not self._offered(db, source_model["id"])):
+                        raise PlatformError("SOS-ML-MODEL-NOT-OFFERED")
+                else:
+                    model_state = db.execute(text(
+                        "SELECT m.lifecycle_state FROM model_revisions m "
+                        "JOIN scoring_results s ON s.model_revision_id=m.id "
+                        "WHERE s.id=:scoring_id FOR SHARE OF m"
+                    ), {"scoring_id": spec.get("scoring_result_id")}).scalar_one_or_none()
+                if model_state != "Active":
+                    raise PlatformError("SOS-ML-MODEL-INVALID")
+            if kind in ("ml_train", "ml_import"):
+                # 새 판본이 들어갈 모델 그룹을 접수와 같은 트랜잭션에서 확정한다. 보관된 그룹에는
+                # 새 판본을 만들지 않는다. 그룹 삭제는 진행 중인 학습·연결이 있으면 거부한다.
+                registry_key = spec.get("registry_key") or "default"
+                db.execute(text(
+                    "INSERT INTO model_groups(owner_actor,registry_key,title,description,archived_at,"
+                    "created_at,updated_at) VALUES(:owner,:key,:title,'',NULL,:at,:at) "
+                    "ON CONFLICT DO NOTHING"
+                ), {"owner": owner_actor, "key": registry_key, "title": group_title(registry_key),
+                    "at": now()})
+                if db.execute(text(
+                    "SELECT archived_at FROM model_groups WHERE owner_actor=:owner "
+                    "AND registry_key=:key FOR SHARE"
+                ), {"owner": owner_actor, "key": registry_key}).scalar_one():
+                    raise PlatformError("SOS-ML-MODEL-ARCHIVED")
+            if kind == "ml_score_index":
+                # 같은 결과의 색인 요청을 결과 행 잠금으로 직렬화한다. 대기·실행 중인 Job을 색인 조각보다
+                # 먼저 확인하므로 게시 확정과 겹쳐도 색인 Job이 중복되지 않는다. 보존된 점수 결과만 읽으므로
+                # 모델 상태는 확인하지 않는다.
+                result_id = spec["scoring_result_id"]
+                db.execute(
+                    text("SELECT id FROM scoring_results WHERE id=:id FOR UPDATE"), {"id": result_id},
+                ).scalar_one()
+                active = db.execute(text(
+                    "SELECT id FROM jobs WHERE kind='ml_score_index' AND status IN ('Queued','Running') "
+                    "AND (spec::jsonb ->> 'scoring_result_id')=:id ORDER BY created_at DESC LIMIT 1"
+                ), {"id": result_id}).scalar_one_or_none()
+                if active is not None:
+                    return self.get_job(active)
+                if db.execute(text(
+                    "SELECT 1 FROM scoring_observation_parts WHERE scoring_result_id=:id LIMIT 1"
+                ), {"id": result_id}).first():
+                    raise ScoringIndexExists
+            is_understanding = (
+                kind == "profile"
+                and spec.get("mode") == "understanding"
+                and owner_actor is not None
+            )
+            if is_understanding:
+                # 같은 Actor의 여러 탭이 동시에 새 프로파일을 만들지 않게 직렬화한다.
+                # 다른 Actor에게 기존 Job과 요청 메타데이터를 노출하지 않는다.
+                db.execute(
+                    text("SELECT id FROM datasets WHERE id=:id FOR UPDATE"),
+                    {"id": dataset_id},
+                ).scalar_one()
             # Feature 조회·폐기의 접수는 같은 등록 Job 행 잠금으로 직렬화한다.
             # 폐기가 Queued인 순간부터 신규 조회를 차단하므로 Registry 삭제가
             # 이미 접수된 조회를 놓치거나 삭제 중 새 조회가 유입되는 경합을 없앤다.
@@ -257,6 +276,13 @@ class JobStoreMixin:
                     request_id=request_id,
                 )
         return self.get_job(item["id"])
+
+    @staticmethod
+    def _offered(db: Connection, model_id: str) -> bool:
+        """판본이 지금 다른 Actor에게 제공 중인지. 제공 중단·삭제와 같은 판본 행 잠금 아래에서 읽는다."""
+        return db.execute(text(
+            "SELECT 1 FROM model_offerings WHERE model_revision_id=:id AND withdrawn_at IS NULL"
+        ), {"id": model_id}).scalar_one_or_none() is not None
 
     @staticmethod
     def _decode_job(item: dict) -> dict:

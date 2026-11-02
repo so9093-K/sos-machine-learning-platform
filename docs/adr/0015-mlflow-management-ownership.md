@@ -1,6 +1,6 @@
 # 0015 — MLflow 모델·실험 관리 정본 전환
 
-- 상태: Accepted
+- 상태: Accepted (결정 3과 결정 1의 모델 그룹 정본은 [0025](0025-sos-owned-model-use-decision.md)가 대체)
 - 이전 결정: [0012](0012-ml-experiment-boundaries.md)의 선택적 Tracking 및 자체 모델 관리 책임 범위 대체
 
 ## 배경

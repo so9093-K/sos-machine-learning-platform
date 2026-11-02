@@ -23,9 +23,9 @@
 - [0012 — ML 실험·이상 점수·외부 추적의 책임 경계](0012-ml-experiment-boundaries.md) · Accepted (관리 정본·외부 Tracking 조항은 0015가 대체)
 - [0013 — 레거시 검증 자동화 초기화](0013-validation-reset.md) · Accepted (0009 대체·0011 검증 관리 조항 종료)
 - [0014 — Iceberg 과도기 쓰기 소유권 채택 종료](0014-remove-iceberg-adoption.md) · Accepted (0008의 관리자 채택 조항 대체)
-- [0015 — MLflow 모델·실험 관리 정본 전환](0015-mlflow-management-ownership.md) · Accepted (0012의 관리 책임 제안 대체)
+- [0015 — MLflow 모델·실험 관리 정본 전환](0015-mlflow-management-ownership.md) · Accepted (0012의 관리 책임 제안 대체 · 등록 전 사용 금지와 모델 그룹 정본은 0025가 대체)
 - [0016 — Dagster OSS Workflow 단일 정본 전환](0016-dagster-orchestration.md) · Accepted (자체 Pipeline 실행기 대체 · SOS 제출·단계 Job 조합은 0024가 대체)
-- [0017 — 모델 자산 그룹·보관·영구 삭제 계약](0017-model-lifecycle.md) · Accepted (ADR 0015의 단일 모델 그룹 기준 확장)
+- [0017 — 모델 자산 그룹·보관·영구 삭제 계약](0017-model-lifecycle.md) · Accepted (ADR 0015의 단일 모델 그룹 기준 확장 · 그룹·보관 정본과 등록 미완료 삭제 거부는 0025가 대체)
 
 - [0018 — Feast Feature 관리·조회 정본 전환](0018-feast-feature-ownership.md) · Accepted
 - [0019 — Ray Serve 기반 온라인 서빙](0019-ray-serve-online-serving.md) · Accepted (Dashboard 비공개 조항은 0020이 대체)
@@ -35,3 +35,4 @@
 
 - [0023 — 모델 상세의 명시적 최초 배포 진입](0023-explicit-model-deployment-entry.md) · Accepted (0019의 웹 조작 범위 대체)
 - [0024 — 모델 생산과 SOS 모델 연결의 책임 분리](0024-model-production-realignment.md) · Accepted (0016의 SOS 제출·단계 Job 조합, 0021의 등록 Pipeline 조항 대체)
+- [0025 — 모델 사용 판정과 모델 그룹의 SOS 정본화](0025-sos-owned-model-use-decision.md) · Accepted (0015의 등록 전 사용 금지·모델 그룹 정본, 0017의 그룹·보관 정본과 등록 미완료 삭제 거부 대체)

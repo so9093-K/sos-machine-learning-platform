@@ -27,7 +27,7 @@ Dataset 캐시는 재사용 가능한 로컬 복사본이며 원본 S3 객체·�
 
 API·초기화는 기본 의존성을 사용하고 ML 계산용 numpy·joblib·scikit-learn·SHAP·skops는 `ml` dependency group으로 설치한다. 모델 생산 Pipeline(Dagster)은 `dagster`와 `ml` 그룹을 함께 설치해 SOS와 같은 ML 판본으로 학습한다. 학습 제출·Fork의 매개변수 검증은 SDK를 로딩하지 않는다. 개발 검사는 실제 ML 계산을 포함하므로 `dev` 그룹에 `ml`을 포함한다. 호스트 Worker 실행에는 `uv sync --locked --group ml`을 사용하고, 등록 Feature 실행에는 `--group feast`를 함께 선택한다. `serving` 그룹은 `ml`에 Ray Serve를 더한 서빙 이미지용이다. 컨테이너 이미지는 Dockerfile의 `SOS_UV_GROUPS` 인자로 그룹을 고른다.
 
-MLflow는 Worker/API의 실험·모델 관리 시스템이다. 이름·버전·Alias의 정본은 MLflow이지만 SOS는 Worker가 게시한 모델 위치·SHA-256·Feature·Runtime·권한을 검증한 뒤 실행한다. 외부 Registry 등록만으로 임의 직렬화 파일을 신뢰하지 않는다. SOS가 학습한 판본은 신뢰된 SOS 실행 환경만 쓴 joblib으로, MLflow에서 연결한 판본은 허용 타입만 복원하는 skops와 판본 기록의 전처리로 복원한다. 인증정보는 서버 측에만 제공한다. 연결 상태의 의미는 [Workflows](workflows.md)를 따른다.
+MLflow는 Experiment·Run과 생산 Pipeline의 원본 Registry, SOS 판본의 등록 기록을 맡는다. SOS는 Worker가 게시한 모델 위치·SHA-256·Feature·Runtime·권한을 검증한 뒤 실행하고, 판본의 사용 여부는 MLflow 없이 SOS가 정한다. 외부 Registry 등록만으로 임의 직렬화 파일을 신뢰하지 않는다. SOS가 학습한 판본은 신뢰된 SOS 실행 환경만 쓴 joblib으로, MLflow에서 연결한 판본은 허용 타입만 복원하는 skops와 판본 기록의 전처리로 복원한다. 인증정보는 서버 측에만 제공한다. 연결 상태의 의미는 [Workflows](workflows.md)를 따른다.
 
 ## Feast 전문 Runtime
 

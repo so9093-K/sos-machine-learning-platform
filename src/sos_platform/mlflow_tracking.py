@@ -20,8 +20,7 @@ from .errors import WorkerOwnershipLost
 from .mlflow_config import MLflowSettings
 from .mlflow_errors import MLflowDeliveryError
 from .mlflow_experiments import DEFAULT_EXPERIMENT, ensure_experiment
-from .mlflow_registry import register_model_version, verify_registered_version
-
+from .mlflow_registry import confirm_registered_version, register_model_version
 
 logger = logging.getLogger(__name__)
 
@@ -370,8 +369,8 @@ def send_to_mlflow(
     return run_id
 
 
-def _destination_fingerprint(settings: MLflowSettings) -> str:
-    """인증정보를 제외한 Tracking 서버·Experiment 정책의 연결 지문."""
+def destination_fingerprint(settings: MLflowSettings) -> str:
+    """인증정보를 제외한 Tracking 서버·Experiment 정책의 연결 지문. 전송과 외부 삭제가 같은 대상을 확인한다."""
     identity = f"{settings.endpoint}\0owner-experiment-v1".encode()
     return hashlib.sha256(identity).hexdigest()
 
@@ -388,7 +387,7 @@ def run_tracking_once(store, client: MLflowClient) -> TrackingOutcome:
         return "idle"
     job_id = export["job_id"]
     try:
-        if not store.bind_tracking_destination(job_id, _destination_fingerprint(client.settings)):
+        if not store.bind_tracking_destination(job_id, destination_fingerprint(client.settings)):
             raise MLflowDeliveryError("SOS-MLFLOW-TARGET-CHANGED")
         job = store.get_job(job_id)
         if job is None:
@@ -405,13 +404,13 @@ def run_tracking_once(store, client: MLflowClient) -> TrackingOutcome:
             model = store.get_model_revision(model_id) if model_id else None
             if model is None:
                 raise MLflowDeliveryError("SOS-MLFLOW-MODEL-INVALID")
-            name, version = register_model_version(client, model, run_id)
-            # Registry가 실제 READY 상태인지 검증한 뒤에만 SOS 실행 경로를 연다.
-            # 생성 직후 비동기 PENDING이면 전송을 Retry로 남기며 학습 결과는 유지한다.
-            verify_registered_version(
-                client, {**model, "registry_model": name, "registry_version": version}
-            )
-            store.save_registry_version(model_id, name, version)
+            # 등록은 SOS 판본의 외부 기록이다. 삭제가 시작된 판본은 등록하지 않는다. 삭제는 전송 중인
+            # 판본을 거부하므로, 전송을 차지한 뒤 읽은 수명주기가 등록 여부를 정한다.
+            if model["lifecycle_state"] == "Active":
+                name, version = register_model_version(client, model, run_id)
+                # 생성 직후 비동기 PENDING이면 전송을 Retry로 남긴다. 판본의 사용 가능 여부와는 무관하다.
+                confirm_registered_version(client, model, name, version)
+                store.save_registry_version(model_id, name, version)
     except MLflowDeliveryError as exc:
         store.finish_tracking_export(job_id, error_code=str(exc))
         return "unavailable" if str(exc) == "SOS-MLFLOW-UNAVAILABLE" else "retry"
