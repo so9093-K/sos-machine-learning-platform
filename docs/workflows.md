@@ -2,7 +2,7 @@
 
 SOS는 데이터 이해·가공·학습·평가·추론·관측을 필요한 만큼 독립 실행하거나 조합한다. 모두에게 하나의 선형 파이프라인을 요구하지 않는다.
 
-모델 생산 Pipeline(Dagster)의 Run은 SOS Job을 만들지 않는다. 학습·평가·MLflow 등록이 끝난 뒤 생산 Pipeline이 고정 모델 버전의 연결을 요청하면, SOS는 연결 Job(`ml_import`) 하나로 패키지를 검증·게시한다. 생산 Run 성공, MLflow 등록, SOS 연결 성공, SOS Registry 등록은 각각 다른 상태다. 연결 Job은 다른 ML Job과 같은 소유권·멱등성·취소 계약을 따르며, 생산 Pipeline의 Run을 종료하면 대기 중인 연결에도 취소를 요청한다.
+모델 생산 Pipeline(Dagster)의 Run은 SOS Job을 만들지 않는다. 학습·평가·MLflow 등록이 끝난 뒤 생산 Pipeline이 고정 모델 버전의 연결을 요청하면, SOS는 연결 Job(`ml_import`) 하나로 패키지를 검증·게시한다. 생산 Run 성공, MLflow 등록, SOS 연결 성공, SOS 판본의 MLflow 등록 기록은 각각 다른 상태다. 연결 Job은 다른 ML Job과 같은 소유권·멱등성·취소 계약을 따르며, 생산 Pipeline의 Run을 종료하면 대기 중인 연결에도 취소를 요청한다.
 
 ## 실행 단위와 Job 상태
 
@@ -27,7 +27,7 @@ SOS는 데이터 이해·가공·학습·평가·추론·관측을 필요한 만
 
 학습의 완료와 모델 평가의 신뢰성은 다르다. Model Revision·Scoring Result·정책·Evaluation·Explanation은 각자의 판본을 가지며 같은 점수에 다른 정책을 적용하더라도 재학습을 강제하지 않는다. 의미의 정본은 [Contracts](contracts.md)다.
 
-성공·실패·취소한 ML Job은 각기 FINISHED·FAILED·KILLED MLflow Run 상태로 기록한다. 전송 의도는 Worker 종료·실행 전 취소·Worker 중단 뒤 복구 중 어느 경로로 끝나든 Job의 최종 상태와 같은 트랜잭션에 남긴다. Dataset 없는 Job(Playground 단일 입력 설명)은 Dataset 참조 없이 출처 Job을 기록하고, 원본 학습의 Experiment에 묶는다. 모델 Registry 판본은 성공한 학습·연결에서만 생성한다. MLflow Run과 Registry 등록은 ML Job과 별도로 `Pending → Sending → Succeeded / Retry` 상태를 가진다. 외부 등록 실패는 완료한 학습·연결 성공을 뒤집지 않지만 새 모델 Scoring·제공은 Registry 버전이 확인될 때까지 차단한다. 외부 시스템과 원자적 트랜잭션을 공유하지 않으므로 재시도에서 중복 Run/Model Version을 검사한다. MLflow에 연결하지 못하면 Worker는 잠시 전송을 멈추고 Job 실행을 계속하며, 이후 남은 전송을 다시 시도한다. 연결 구현은 [Runtimes](runtimes.md)를 따른다.
+성공·실패·취소한 ML Job은 각기 FINISHED·FAILED·KILLED MLflow Run 상태로 기록한다. 전송 의도는 Worker 종료·실행 전 취소·Worker 중단 뒤 복구 중 어느 경로로 끝나든 Job의 최종 상태와 같은 트랜잭션에 남긴다. Dataset 없는 Job(Playground 단일 입력 설명)은 Dataset 참조 없이 출처 Job을 기록하고, 원본 학습의 Experiment에 묶는다. 모델 Registry 판본은 성공한 학습·연결에서만 생성한다. MLflow Run과 Registry 등록은 ML Job과 별도로 `Pending → Sending → Succeeded / Retry` 상태를 가진다. 외부 등록 실패는 완료한 학습·연결 성공을 뒤집지 않으며, 등록은 SOS 판본의 기록이므로 Scoring·제공·서빙을 막지 않는다. 외부 시스템과 원자적 트랜잭션을 공유하지 않으므로 재시도에서 중복 Run/Model Version을 검사한다. MLflow에 연결하지 못하면 Worker는 잠시 전송을 멈추고 Job 실행을 계속하며, 이후 남은 전송을 다시 시도한다. 연결 구현은 [Runtimes](runtimes.md)를 따른다.
 
 ## 데이터·결과 게시와 복구
 

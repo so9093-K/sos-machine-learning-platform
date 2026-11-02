@@ -7,7 +7,7 @@ SOS는 **Research Platform · ML Execution Platform · ML Service Platform**의 
 ![SOS Control Plane과 교체 가능한 Training·Serving Runtime의 책임 분리](references/control-plane-runtime-architecture.png)
 
 - **공통 API:** 사람·웹·외부 시스템·AI 에이전트에 동일한 신원·권한·요청·결과 계약을 제공한다.
-- **Application / Control Plane:** SOS는 Dataset·Job/Attempt·정책·평가·모델의 불변 실행 참조 및 접근 권한을 관리한다. MLflow는 Experiment·Run·Registered Model/Version·Alias 관리 정본이다.
+- **Application / Control Plane:** SOS는 Dataset·Job/Attempt·정책·평가·모델의 불변 실행 참조 및 접근 권한을 관리한다. MLflow는 Experiment·Run과 생산 Pipeline이 등록한 원본 Registered Model/Version의 정본이다. 모델 그룹과 판본의 사용 허용은 SOS가 정한다([ADR 0025](adr/0025-sos-owned-model-use-decision.md)).
 - **Feature Store:** 등록 Feature의 Entity·Feature View·Feature Service와 Point-in-Time Historical Retrieval은 Feast가 관리한다. SOS는 원본 Dataset·Snapshot·조회 Job·불변 결과·Actor 권한을 소유한다. Data Preparation과 직접 모델 입력은 독립 기능이다. [ADR 0018](adr/0018-feast-feature-ownership.md)을 따른다.
 - **모델 생산:** 데이터 준비·학습·평가·MLflow 등록은 Dagster OSS의 생산 Pipeline이 직접 실행한다. 생산 Pipeline은 SOS DB·저장소에 접근하지 않고, 등록한 고정 모델 버전의 연결을 SOS API에 요청한다. SOS는 모델 패키지를 검증해 Model Revision으로 게시하고 이후 제공·적용·서빙·설명을 맡는다. SOS 안의 Dataset 학습은 독립 기능이다. [ADR 0024](adr/0024-model-production-realignment.md)를 따른다.
 - **Online Serving:** Endpoint의 의도(서빙·중단, 활성·전환 대상·직전 판본)는 SOS가, 복제본 실행·라우팅은 Ray Serve가 맡는다. 독립 `serving-controller`가 실제 상태를 의도에 맞추고 준비가 확인된 판본으로만 전환한다. 외부 요청은 SOS API의 인증·권한·입력 검증을 거친다. [ADR 0019](adr/0019-ray-serve-online-serving.md)를 따른다.
