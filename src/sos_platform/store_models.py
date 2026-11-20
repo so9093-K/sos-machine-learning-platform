@@ -1,10 +1,11 @@
 """모델과 독립 Scoring Result의 영속 조회 계약."""
 
 import json
+from collections.abc import Mapping
 
 from sqlalchemy import text
 
-from .errors import ERRORS
+from .errors import ERRORS, InvalidRequestError
 from .model_use import GROUP_ARCHIVED, GROUP_JOIN, USABLE_SQL, locked_model, use_blocked
 from .store_administration import now
 
@@ -22,6 +23,41 @@ def _model_item(row) -> dict:
     # SOS가 학습한 판본은 출처 기록이 없다. 출처는 학습 Job·Dataset이다.
     item["source"] = json.loads(item["source"]) if item.get("source") else None
     return item
+
+
+# 공개 평가 근거로 보이는 판정 집계. 관측값·Dataset이 아니라 집계 수치만 공개한다.
+PUBLISHED_DECISION_FIELDS = (
+    "score_count", "threshold", "alert_rate", "predicted_anomalies", "evaluation_kind",
+    "true_positives", "false_positives", "false_negatives", "precision", "recall", "f1",
+)
+
+
+def check_publishable_evaluation(
+    row: Mapping | None, revision_id: str, actor_id: str, privileged: bool,
+) -> None:
+    """공개할 수 있는 평가: 이 판본의 Scoring으로 만든 평가이고, 요청 계정이 열람할 수 있어야 한다."""
+    if row is None or row["model_revision_id"] != revision_id:
+        raise InvalidRequestError("이 모델 판본의 점수로 만든 평가만 공개할 수 있습니다.")
+    if not privileged and row["owner_actor"] != actor_id:
+        raise InvalidRequestError("이 계정이 만든 평가만 공개할 수 있습니다.")
+
+
+def published_evaluation(row: Mapping) -> dict:
+    """소비자에게 보이는 공개 평가 요약. 평가에 쓴 Dataset·Scoring 식별자는 포함하지 않는다."""
+    decision = json.loads(row["decision_metrics"])
+    return {
+        "evaluation_revision_id": row["evaluation_revision_id"],
+        "note": row["note"],
+        "published_at": row["published_at"],
+        "evaluated_at": row["created_at"],
+        "label_coverage": row["label_coverage"],
+        "policy": None if row["policy_mode"] is None else {
+            "mode": row["policy_mode"], "threshold": row["policy_threshold"],
+            "alert_fraction": row["policy_alert_fraction"],
+        },
+        "decision_metrics": {key: decision.get(key) for key in PUBLISHED_DECISION_FIELDS},
+        "ranking_metrics": json.loads(row["ranking_metrics"]) if row["ranking_metrics"] else None,
+    }
 
 
 class ModelStoreMixin:
@@ -99,6 +135,57 @@ class ModelStoreMixin:
                 resource_type="model", resource_id=revision_id,
             )
         return self.get_model_offering(revision_id)
+
+    def set_offering_evaluations(
+        self, revision_id: str, items: list[dict], *, actor_id: str, actor_type: str,
+        owner_actor: str | None, privileged: bool,
+    ) -> list[dict]:
+        """공개할 평가 목록을 통째로 바꾼다. 평가마다 같은 판본·열람 권한을 확인한다.
+
+        owner_actor가 주어지면 그 Actor가 소유한 판본만 바꾼다. 관리자는 None을 전달한다.
+        """
+        with self.connection() as db:
+            model = db.execute(
+                text("SELECT owner_actor FROM model_revisions WHERE id=:id FOR UPDATE"),
+                {"id": revision_id},
+            ).mappings().first()
+            if model is None or (owner_actor is not None and model["owner_actor"] != owner_actor):
+                raise LookupError(revision_id)
+            for item in items:
+                row = db.execute(text(
+                    "SELECT e.owner_actor, s.model_revision_id FROM evaluation_revisions e "
+                    "JOIN scoring_results s ON s.id=e.scoring_result_id WHERE e.id=:id"
+                ), {"id": item["evaluation_revision_id"]}).mappings().first()
+                check_publishable_evaluation(row, revision_id, actor_id, privileged)
+            db.execute(text("DELETE FROM model_offering_evaluations WHERE model_revision_id=:id"),
+                       {"id": revision_id})
+            at = now()
+            for position, item in enumerate(items):
+                db.execute(text(
+                    "INSERT INTO model_offering_evaluations(model_revision_id,evaluation_revision_id,"
+                    "note,position,published_by,published_at) VALUES(:id,:evaluation,:note,:position,"
+                    ":actor,:at)"
+                ), {"id": revision_id, "evaluation": item["evaluation_revision_id"],
+                    "note": item["note"], "position": position, "actor": actor_id, "at": at})
+            self._audit(
+                db, actor_id=actor_id, actor_type=actor_type, action="model.offer_evaluations",
+                resource_type="model", resource_id=revision_id, reason=f"evaluations={len(items)}",
+            )
+        return self.list_offering_evaluations(revision_id)
+
+    def list_offering_evaluations(self, revision_id: str) -> list[dict]:
+        """공급자가 공개한 평가 요약을 공개한 순서대로 반환한다."""
+        with self.connection() as db:
+            rows = db.execute(text(
+                "SELECT o.evaluation_revision_id, o.note, o.published_at, e.created_at, "
+                "e.label_coverage, e.decision_metrics, e.ranking_metrics, p.mode AS policy_mode, "
+                "p.threshold AS policy_threshold, p.alert_fraction AS policy_alert_fraction "
+                "FROM model_offering_evaluations o "
+                "JOIN evaluation_revisions e ON e.id=o.evaluation_revision_id "
+                "LEFT JOIN decision_policy_revisions p ON p.id=e.policy_revision_id "
+                "WHERE o.model_revision_id=:id ORDER BY o.position"
+            ), {"id": revision_id}).mappings().all()
+        return [published_evaluation(row) for row in rows]
 
     def withdraw_model_offering(
         self, revision_id: str, *, actor_id: str, actor_type: str, owner_actor: str | None,

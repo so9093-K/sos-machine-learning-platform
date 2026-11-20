@@ -799,6 +799,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ml/models/{revision_id}/offering/evaluations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 제공 모델의 공개 평가 근거 갱신
+         * @description 모델 소유 계정이 이 판본의 점수로 만든 자기 평가 중 사용자에게 공개할 평가와 기준 데이터 설명을 정합니다. 목록 전체를 바꾸며, 빈 목록은 공개를 모두 거둡니다. 평가 Dataset·관측값은 공개하지 않고 집계 요약만 보입니다.
+         */
+        put: operations["publish_offering_evaluations_api_ml_models__revision_id__offering_evaluations_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ml/offered-models": {
         parameters: {
             query?: never;
@@ -2415,6 +2435,11 @@ export interface components {
             offered_by?: string | null;
             /** Owned */
             owned: boolean;
+            /**
+             * Published Evaluations
+             * @description 공급자가 공개한 기준 데이터 평가 요약. 사용자 데이터의 성능이 아니다
+             */
+            published_evaluations?: components["schemas"]["PublishedEvaluationOut"][];
             /** Withdrawn At */
             withdrawn_at?: string | null;
         };
@@ -2715,6 +2740,61 @@ export interface components {
             topic: string;
             /** Url */
             url: string;
+        };
+        /** PublishedEvaluationItem */
+        PublishedEvaluationItem: {
+            /** Evaluation Revision Id */
+            evaluation_revision_id: string;
+            /**
+             * Note
+             * @description 기준 데이터·조건 설명(소비자에게 보임)
+             */
+            note: string;
+        };
+        /**
+         * PublishedEvaluationOut
+         * @description 공급자가 명시적으로 공개한 기준 데이터 평가의 요약. 평가 Dataset·관측값은 공개하지 않는다.
+         */
+        PublishedEvaluationOut: {
+            /** Decision Metrics */
+            decision_metrics: {
+                [key: string]: unknown;
+            };
+            /** Evaluated At */
+            evaluated_at: string;
+            /** Evaluation Revision Id */
+            evaluation_revision_id: string;
+            /** Label Coverage */
+            label_coverage: string;
+            /**
+             * Note
+             * @description 공급자가 쓴 기준 데이터·조건 설명
+             */
+            note: string;
+            policy?: components["schemas"]["PublishedPolicyOut"] | null;
+            /** Published At */
+            published_at: string;
+            /** Ranking Metrics */
+            ranking_metrics?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** PublishedEvaluationsRequest */
+        PublishedEvaluationsRequest: {
+            /** Evaluations */
+            evaluations: components["schemas"]["PublishedEvaluationItem"][];
+        };
+        /** PublishedPolicyOut */
+        PublishedPolicyOut: {
+            /** Alert Fraction */
+            alert_fraction?: number | null;
+            /**
+             * Mode
+             * @description fixed(고정 점수 임계값) 또는 quantile(점수 상위 비율)
+             */
+            mode: string;
+            /** Threshold */
+            threshold: number;
         };
         /**
          * ReadyFeaturesOut
@@ -4787,6 +4867,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOfferingStateOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    publish_offering_evaluations_api_ml_models__revision_id__offering_evaluations_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishedEvaluationsRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { formatError, request } from "./api";
 import { formatRecordedAt } from "./display-format";
+import { PublishedEvaluations, PublishedEvaluationsEditor } from "./PublishedEvaluations";
 import type { ModelOfferingState, ModelRevision } from "./types";
 
 /** 모델 판본의 제공 상태를 조회한다. 제공한 적이 없으면 offered=false로 응답한다. */
@@ -170,6 +171,14 @@ export function ModelOfferingPanel({ model, offering, error, loading, canManage,
     {/* 삭제는 제공 중단을 먼저 요구하고 삭제된 판본은 다시 제공할 수 없으므로 활성 판본만 관리한다. */}
     {canManage && model.lifecycle_state === "Active" && <OfferingEditor key={model.id} model={model} offering={offering}
       disabled={loading || Boolean(error)} statusError={Boolean(error)} onSaved={onSaved} onRetry={onRetry} />}
+    <section className="model-offering-evidence" aria-label="공개 평가 근거">
+      <h4>공개 평가 근거</h4>
+      <PublishedEvaluations items={offering.published_evaluations ?? []} />
+      {canManage && model.lifecycle_state === "Active" && <details className="input-fix-more">
+        <summary>공개할 평가 고르기</summary>
+        <PublishedEvaluationsEditor key={model.id} modelId={model.id} offering={offering} onSaved={onSaved} />
+      </details>}
+    </section>
     {offering.offered && !loading && !error && <div className="model-offering-destinations">
       <button type="button" className="secondary" onClick={onOpenCatalog}>제공 모델 목록 →</button>
     </div>}
