@@ -106,7 +106,13 @@ export function ModelInputPreparation({ model, columns, steps, transformed, onAd
     </div></div>
     {current.ready
       ? <p className="scoring-input-ready" role="status">현재 Dataset 입력 구조 일치 · 변환 없이 모델에 적용할 수 있습니다.</p>
-      : <ModelDatasetCompatibility model={model} columns={columns} />}
+      : after?.ready
+        // 미리보기로 해결이 확인되면 결과를 먼저 보이고, 원본의 불일치 내역은 펼쳐 확인한다.
+        ? <details className="input-fix-more">
+          <summary>원본 Dataset의 불일치 {current.missing.length + current.mismatches.length}개 보기</summary>
+          <ModelDatasetCompatibility model={model} columns={columns} />
+        </details>
+        : <ModelDatasetCompatibility model={model} columns={columns} />}
     {pending.length > 0 && <div className="model-input-actions">
       <button type="button" className="secondary" disabled={capacity === 0}
         onClick={() => onAddSteps(pending.slice(0, capacity))}>
