@@ -3,6 +3,7 @@ import { formatError, request } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { topicFeatureGroups } from "./FeatureGroups";
 import { PublicDataImport } from "./PublicDataImport";
+import { PublishedEvaluations } from "./PublishedEvaluations";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { ModelApiUsage, servesModel } from "./ModelApiUsage";
 import type { PlaygroundRun } from "./ModelLabPlayground";
@@ -150,6 +151,8 @@ export function TopicPlayground({ topicId, datasets, selectedDatasetId, preferre
     const timer = window.setTimeout(() => setServingCheck(value => value + 1), SERVING_RECHECK_MS);
     return () => window.clearTimeout(timer);
   }, [preparing, serving]);
+  const chosenOffering = useModelOffering(chosen?.model.id ?? null);
+  const evidence = chosenOffering.offering?.published_evaluations ?? [];
   const guide = topicGuides[topicId];
   if (!guide || (catalog.items && !topic)) return <section className="panel">
     <h2>알 수 없는 분석 주제</h2>
@@ -205,6 +208,10 @@ export function TopicPlayground({ topicId, datasets, selectedDatasetId, preferre
             {onlineReady ? "온라인 API 사용 가능" : "온라인 API 준비 중"}</span>}
           <button type="button" className="ghost" onClick={() => onOpenResource("model", chosen.model.id)}>모델 상세 →</button>
           <p className="muted model-offering-description">{chosen.description || "아직 작성된 제공 설명이 없습니다."}</p>
+          {evidence.length > 0 && <details className="published-evidence-summary" open>
+            <summary>공개 평가 근거 · {evidence.length}개 기준 데이터</summary>
+            <PublishedEvaluations items={evidence} />
+          </details>}
           {!chosen.offered && <p className="hint">사용자에게 제공되지 않은 판본입니다. {isAdministrator
             ? "관리자 권한으로 적용합니다." : "소유자 권한으로 적용합니다."}</p>}
         </div>

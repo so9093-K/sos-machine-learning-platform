@@ -1176,3 +1176,12 @@ main details > summary { cursor:pointer; font-size:13px; font-weight:600; color:
 .public-source-parts .chip { margin-left:8px; }
 .public-data-entry { flex-basis:100%; }
 .public-data-entry > summary { cursor:pointer; font-weight:600; }
+
+/* 공개 평가 근거: 검토량과 실제 포착을 나란히 보인다. */
+.published-evaluations td small { display:block; color:var(--sos-muted); font-size:11px; }
+.published-evaluations table { font-size:13px; }
+.model-offering-evidence { margin-top:16px; }
+.model-offering-evidence h4 { margin:0 0 6px; }
+.published-evidence-summary { flex-basis:100%; margin-top:6px; }
+.published-evidence-summary > summary { cursor:pointer; font-weight:600; font-size:13px; }
+.published-evaluations-editor input:not([type=checkbox]) { width:100%; }

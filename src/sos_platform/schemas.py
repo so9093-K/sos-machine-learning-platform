@@ -623,6 +623,48 @@ class ModelOfferingRequest(BaseModel):
         return self
 
 
+class PublishedPolicyOut(BaseModel):
+    mode: str = Field(description="fixed(고정 점수 임계값) 또는 quantile(점수 상위 비율)")
+    threshold: float
+    alert_fraction: float | None = None
+
+
+class PublishedEvaluationOut(BaseModel):
+    """공급자가 명시적으로 공개한 기준 데이터 평가의 요약. 평가 Dataset·관측값은 공개하지 않는다."""
+
+    evaluation_revision_id: str
+    note: str = Field(description="공급자가 쓴 기준 데이터·조건 설명")
+    published_at: str
+    evaluated_at: str
+    label_coverage: str
+    policy: PublishedPolicyOut | None = None
+    decision_metrics: dict[str, object]
+    ranking_metrics: dict[str, object] | None = None
+
+
+class PublishedEvaluationItem(BaseModel):
+    evaluation_revision_id: str = Field(min_length=1, max_length=36)
+    note: str = Field(min_length=1, max_length=300, description="기준 데이터·조건 설명(소비자에게 보임)")
+
+    @field_validator("note")
+    @classmethod
+    def note_has_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("note must describe the evaluation data")
+        return value.strip()
+
+
+class PublishedEvaluationsRequest(BaseModel):
+    evaluations: list[PublishedEvaluationItem] = Field(max_length=10)
+
+    @model_validator(mode="after")
+    def distinct(self):
+        ids = [item.evaluation_revision_id for item in self.evaluations]
+        if len(set(ids)) != len(ids):
+            raise ValueError("evaluations must be distinct")
+        return self
+
+
 class ModelOfferingStateOut(BaseModel):
     """현재 Actor가 본 모델 판본의 제공 상태. 학습 데이터 접근 권한은 포함하지 않는다."""
 
@@ -632,6 +674,9 @@ class ModelOfferingStateOut(BaseModel):
     offered_at: str | None = None
     withdrawn_at: str | None = None
     owned: bool
+    published_evaluations: list[PublishedEvaluationOut] = Field(
+        default_factory=list, description="공급자가 공개한 기준 데이터 평가 요약. 사용자 데이터의 성능이 아니다",
+    )
 
 
 class ModelOfferingOut(BaseModel):

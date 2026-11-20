@@ -9,7 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from .api_access import ResourceAccess
 from .model_use import use_blocked
 from .pagination import decode_cursor, page_from_rows
-from .schemas import ModelOfferingPageOut, ModelOfferingRequest, ModelOfferingStateOut
+from .schemas import (
+    ModelOfferingPageOut,
+    ModelOfferingRequest,
+    ModelOfferingStateOut,
+    PublishedEvaluationsRequest,
+)
 from .security import Actor, require
 from .store import Store
 from .store_models import ModelOfferingUnavailable
@@ -34,6 +39,8 @@ def model_offering_router(store: Store, access: ResourceAccess) -> APIRouter:
             "offered_at": offering.get("offered_at"),
             "withdrawn_at": offering.get("withdrawn_at"),
             "owned": owned,
+            # 공급자가 명시적으로 공개한 평가 요약만 보인다. 공개하지 않은 평가는 계속 비공개다.
+            "published_evaluations": store.list_offering_evaluations(model["id"]),
         }
 
     @router.get(
@@ -88,6 +95,32 @@ def model_offering_router(store: Store, access: ResourceAccess) -> APIRouter:
             raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.") from exc
         except ModelOfferingUnavailable as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return offering_state(access.owned_model(revision_id, actor), actor)
+
+    @router.put(
+        "/api/ml/models/{revision_id}/offering/evaluations",
+        tags=["Models"],
+        summary="제공 모델의 공개 평가 근거 갱신",
+        description="모델 소유 계정이 이 판본의 점수로 만든 자기 평가 중 사용자에게 공개할 평가와 기준 데이터 "
+        "설명을 정합니다. 목록 전체를 바꾸며, 빈 목록은 공개를 모두 거둡니다. 평가 Dataset·관측값은 공개하지 "
+        "않고 집계 요약만 보입니다.",
+        response_model=ModelOfferingStateOut,
+    )
+    def publish_offering_evaluations(
+        revision_id: str, body: PublishedEvaluationsRequest, actor: Actor = MANAGE_MODEL,
+    ):
+        access.owned_model(revision_id, actor)
+        try:
+            store.set_offering_evaluations(
+                revision_id,
+                [item.model_dump() for item in body.evaluations],
+                actor_id=actor.id,
+                actor_type=actor.kind,
+                owner_actor=None if actor.privileged else actor.id,
+                privileged=actor.privileged,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="모델 판본을 찾을 수 없습니다.") from exc
         return offering_state(access.owned_model(revision_id, actor), actor)
 
     @router.delete(

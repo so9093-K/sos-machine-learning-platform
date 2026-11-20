@@ -202,6 +202,8 @@ def test_offered_model_cross_actor_use_withdrawal_and_result_ownership(tmp_path,
     monkeypatch.setattr(Store, "record_audit", lambda *args, **kwargs: None)
     monkeypatch.setattr(Store, "get_model_revision", lambda self, mid: model if mid == "model" else None)
     monkeypatch.setattr(Store, "get_model_offering", lambda self, mid: dict(offering) or None)
+    # 공개 평가 근거는 별도 계약(test_published_evaluations)에서 확인한다.
+    monkeypatch.setattr(Store, "list_offering_evaluations", lambda self, mid: [])
     monkeypatch.setattr(Store, "get_dataset", lambda self, did: {
         "id": did, "owner_actor": "consumer" if did == "user-data" else "supplier", "version": "v1"})
     monkeypatch.setattr(Store, "get_job", lambda self, jid: {

@@ -26,6 +26,7 @@ export type ModelRevision = components["schemas"]["ModelRevisionOut"] | componen
 export type ModelOffering = components["schemas"]["ModelOfferingOut"];
 export type ModelOfferingPage = components["schemas"]["ModelOfferingPageOut"];
 export type ModelOfferingState = components["schemas"]["ModelOfferingStateOut"];
+export type PublishedEvaluation = components["schemas"]["PublishedEvaluationOut"];
 
 export type ScoringObservations = components["schemas"]["ScoringObservationsOut"];
 export type ScoringResult = components["schemas"]["ScoringResultOut"];
