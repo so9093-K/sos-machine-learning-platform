@@ -4,6 +4,7 @@ import { MAX_TRANSFORM_STEPS } from "./feature-utils";
 
 const opLabels: Record<string, string> = {
   select: "컬럼 선택", filter_not_null: "결측 행 제외", fill_null: "결측값 대체",
+  null_non_finite: "무한값을 결측으로",
   cast: "실수형(Float64) 변환", rename: "컬럼 이름 변경",
   lag: "이전 행 값 (Lag)", rolling_mean: "이동 평균 (Rolling Mean)",
 };

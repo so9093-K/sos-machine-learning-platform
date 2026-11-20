@@ -1,4 +1,4 @@
-"""활동 이상 탐지 모델을 SOS에 공급하고 선택적으로 온라인 서빙에 배포한다.
+"""이상 탐지 분석 주제의 모델을 SOS에 공급하고 선택적으로 온라인 서빙에 배포한다.
 
 모델은 두 경로로 공급한다. Dataset으로 SOS에서 학습하거나(--dataset-file·--dataset-id), 외부 Pipeline이
 생산해 MLflow에 등록한 고정 모델 버전을 연결한다(--mlflow-model·--mlflow-version).
@@ -23,7 +23,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-TOPIC_ID = "activity_anomaly"
+DEFAULT_TOPIC = "activity_anomaly"
 TERMINAL = {"Succeeded", "Failed", "Cancelled"}
 PARAMS = {
     "n_estimators": 100,
@@ -151,7 +151,8 @@ def supply(client: httpx.Client, args: argparse.Namespace, description: str) -> 
     if args.endpoint:
         serve(client, args, state, path, model_id)
     web = os.getenv("SOS_WEB_URL", "http://localhost:9601").rstrip("/")
-    print(f"활동 이상 탐지 · {web}/topics/activity-anomaly?{urlencode({'model': model_id})}")
+    topic_id = getattr(args, "topic", DEFAULT_TOPIC)
+    print(f"분석 주제 · {web}/topics/{topic_id.replace('_', '-')}?{urlencode({'model': model_id})}")
     print("Dataset을 선택·등록해 모델을 적용하거나, '값 직접 입력'으로 개별 관측값을 계산하세요.")
 
 
@@ -177,9 +178,9 @@ def train_from_dataset(client: httpx.Client, args: argparse.Namespace, state: di
 
     if not state.get("training_request"):
         topic = next((item for item in checked(client.get("/api/topics"))
-                      if item["id"] == TOPIC_ID), None)
+                      if item["id"] == args.topic), None)
         if topic is None:
-            fail("활동 이상 탐지 분석 주제를 찾을 수 없습니다.")
+            fail(f"분석 주제를 찾을 수 없습니다: {args.topic}")
         state["training_request"] = {
             "dataset_id": state["dataset_id"], "features": topic["required_features"],
             "params": PARAMS, "training_input": state["training_input"],
@@ -262,7 +263,9 @@ def serve(client: httpx.Client, args: argparse.Namespace, state: dict, path: Pat
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="활동 이상 탐지 모델 공급(SOS 학습 또는 MLflow 버전 연결)·재개")
+    parser = argparse.ArgumentParser(description="이상 탐지 주제 모델 공급(SOS 학습 또는 MLflow 버전 연결)·재개")
+    parser.add_argument("--topic", default=DEFAULT_TOPIC,
+                        help="SOS 학습 시 입력 Feature를 정하는 분석 주제 ID (기본: activity_anomaly)")
     parser.add_argument("--state-file", type=Path, required=True,
                         help="Dataset·학습 키·Job·Model ID를 보관할 공급 상태 JSON")
     source = parser.add_mutually_exclusive_group()

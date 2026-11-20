@@ -9,7 +9,7 @@
 - CSV(UTF-8·쉼표·첫 행 헤더)·Parquet·헤더 유무를 지정한 탭 구분 TSV/TXT를 등록하고 원본 SHA-256과 해석 설정을 보존한다. 형식이 불명확한 파일은 이유와 함께 거절한다.
 - Iceberg 테이블 적재와 고정 Snapshot 참조, Dataset별 Snapshot Tag 보존, Catalog Table UUID·토큰에 고정한 테이블 쓰기 소유권을 제공한다. 파티션 테이블도 행 수 제한 없이 배치로 적재해 한 Snapshot으로 커밋한다.
 - Data Explorer에서 Dataset 개요·Understanding Profile(역할·탐색 후보)·컬럼 투영·필터·정렬 조회·DuckDB 탐색을 제공하고, 기본 분석과 전체 집계는 명시적 Job으로 실행한다. 결과마다 분석 범위·실제 분석 행 수·근사 여부를 구별한다.
-- Data Preparation에서 Polars Feature 변환(컬럼 이름 변경·그룹별 Lag·Rolling 등), 불투명 UUIDv4 관측치 ID 발급, Iceberg 적재를 독립 Job으로 실행한다. Lag·Rolling 미리보기는 입력 행 수와 관계없이 전체 변환과 같은 결과 앞부분을 보이며, 한 요청의 계산 시간 한도를 넘으면 변환 Job으로 안내한다.
+- Data Preparation에서 Polars Feature 변환(컬럼 이름 변경·무한값 결측 변환·그룹별 Lag·Rolling 등), 불투명 UUIDv4 관측치 ID 발급, Iceberg 적재를 독립 Job으로 실행한다. Lag·Rolling 미리보기는 입력 행 수와 관계없이 전체 변환과 같은 결과 앞부분을 보이며, 한 요청의 계산 시간 한도를 넘으면 변환 Job으로 안내한다.
 
 ### 모델 활용
 
@@ -18,13 +18,14 @@
 - 결과에서 실제 점수 분포·점수순 관측값·입력 프로필을 제공한다. 새 학습 판본은 실제 적합 입력의 Feature 참고 분포를 전체 또는 비용이 제한된 표본으로 보존하고 분석 행 수를 표시하며, 기존 판본은 보존된 중앙값만 비교한다. 분포의 P50과 입력 복원의 학습 기준 중앙값을 구별한다. 학습 Dataset·Job·Attempt·저장 위치·해시·매개변수와 학습 규모·내부 선택·결측 정책·학습 점수 집계는 모델 소유자·관리자만 조회한다. 모델 점수 기여는 선택적으로 Permutation SHAP으로 확인한다.
 - 값 직접 입력은 소수 활동 특징의 시각적 비교·수정과 명시적 재계산을 중심으로 입력·점수를 Job에 보존한다. 전체 입력은 상세에서 편집하며 수정한 활동은 프로필에서 확인한다. 학습 P10·P90 수치와 구간 밖 차이를 표시하고, Dataset 관측값을 가져와 원래 점수와 비교하거나 복원할 수 있다. 제공 모델은 다음 페이지까지 탐색한다.
 - 판정 정책은 보정 결과와 별도로 판본 관리해 호환되는 다른 Scoring Result에 적용하고, 평가는 레이블 유무에 따라 지표를 구별한다.
-- 비지도 학습 → 이상 탐지 → 활동 이상 탐지로 이어지는 소개 화면과 주제 Playground에서 활용 방법을 보고, 같은 화면에서 자신의 Dataset·직접 입력에 모델을 적용해 결과 해석과 API 연동 방법까지 확인한다. Dataset Scoring 명령은 새 요청 키를 생성하고 재시도에는 같은 키를 사용하도록 안내한다.
-- 분석 주제는 입력 Feature와 출력 계약으로 정의되며(`GET /api/topics`), 알고리즘이나 모델 출처와 관계없이 계약이 맞는 모델을 적용·호출한다.
+- 비지도 학습 → 이상 탐지 → 분석 주제(활동 이상 탐지·네트워크 흐름 이상 탐지)로 이어지는 소개 화면과 주제 Playground(`/topics/<주제>`)에서 활용 방법과 자기 데이터로 입력을 만드는 방법을 보고, 같은 화면에서 자신의 Dataset·직접 입력에 모델을 적용해 결과 해석과 API 연동 방법까지 확인한다. Dataset Scoring 명령은 새 요청 키를 생성하고 재시도에는 같은 키를 사용하도록 안내한다.
+- 분석 주제는 입력 Feature와 출력 계약으로 정의되며(`GET /api/topics`), 알고리즘이나 모델 출처와 관계없이 계약이 맞는 모델을 적용·호출한다. 네트워크 흐름 이상 탐지 주제는 수정 CICFlowMeter가 흐름마다 출력하는 통계 76개를 헤더 이름 그대로 입력으로 쓴다.
 - 서빙 중인 모델은 `POST /api/serving/endpoints/{id}/predict`로 관측값을 바로 점수화한다. Playground는 온라인 API 사용 가능 여부를 보이고, 계산한 입력을 그대로 보내 같은 점수를 확인한다.
 
 ### 모델 공급과 운영
 
-- 모델 생산(학습·평가·MLflow 등록)은 Dagster의 생산 Pipeline이 SOS DB 접근 없이 직접 실행하고, SOS는 MLflow 고정 모델 버전을 다시 학습하지 않고 Model Revision으로 연결한다(`POST /api/ml/models/imports`, 진행 조회·취소는 공통 Job API). 연결은 모델 패키지(`sos_model.json`·`estimator.skops`)의 허용 타입 복원과 검증 점수 재현을 확인한 뒤 게시하며, Model Revision은 출처(`source_kind`·`source`)를 가진다. SOS Pipeline 제출 API·화면과 Workflow 제출 기록은 제거했다.
+- 모델 생산(학습·평가·MLflow 등록)은 Dagster의 생산 Pipeline(`anomaly_production`, Run 설정 `topic`이 입력 Feature를 정함)이 SOS DB 접근 없이 직접 실행하고, SOS는 MLflow 고정 모델 버전을 다시 학습하지 않고 Model Revision으로 연결한다(`POST /api/ml/models/imports`, 진행 조회·취소는 공통 Job API). 연결은 모델 패키지(`sos_model.json`·`estimator.skops`)의 허용 타입 복원과 검증 점수 재현을 확인한 뒤 게시하며, Model Revision은 출처(`source_kind`·`source`)를 가진다. SOS Pipeline 제출 API·화면과 Workflow 제출 기록은 제거했다.
+- 공개 CIC-IDS2017 정정판(CNS2022)을 네트워크 흐름 주제의 학습 입력(정상만 있는 월요일)과 레이블 평가 Dataset(화~금, 효과 없이 끝난 공격 시도 제외)으로 준비하는 `scripts/prepare_cic_ids2017.py`를 제공한다. 원본은 저장소·이미지에 포함하지 않고 고정한 SHA-256으로 확인하며, 출처·인용·제외 행 수를 manifest에 남긴다.
 - 학습·모델 관리·Feature 정의 변경은 `kind: service` 전용 `automation` 역할과 관리자만 할 수 있다. `scripts/supply_model.py`는 MLflow 고정 버전 연결 또는 실제 Dataset 학습으로 판본 게시·제공·선택적 온라인 서빙을 연결하고 상태 파일로 중단 후 재개한다. 모델 적용은 Dataset 선택·등록을 기본으로 하고 값 직접 입력을 선택적으로 제공한다.
 - 모델 제공·설명 수정·중단을 명시적으로 관리하며, 제공 중단은 새 적용만 막고 기존 결과를 유지한다. 제공 중인 판본은 중단 후 삭제할 수 있다.
 - Isolation Forest 학습은 전체·명시적 표본 입력, UTC 시간 분할, Train 중앙값 결측 정책을 지원하고 불변 Model Revision을 남긴다.

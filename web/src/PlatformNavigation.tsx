@@ -14,7 +14,12 @@ export type MLNavigationContext = {
   dataJobKind?: "data" | "exploration";
   /** 학습 유형·분석 과제 화면의 분류 ID. */
   taxonomyId?: string;
+  /** 분석 주제 화면의 주제 ID(카탈로그 ID, 예: activity_anomaly). 주소에는 하이픈으로 표기한다. */
+  topicId?: string;
 };
+/** 주제를 지정하지 않은 주제 화면 주소가 여는 주제. 기존 주소 /topics/activity-anomaly와 같다. */
+export const DEFAULT_TOPIC = "activity_anomaly";
+export const topicSlug = (topicId: string) => topicId.replace(/_/g, "-");
 type WorkspaceRoute = {
   tab: WorkspaceTab; resource: ResourceRoute; context: MLNavigationContext;
 };
@@ -64,7 +69,9 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
   if (context.datasetId && MODEL_INPUT_TABS.includes(tab)) params.set("dataset", context.datasetId);
   const base = TAXONOMY_TABS.includes(tab) && context.taxonomyId
-    ? `${paths[tab]}/${encodeURIComponent(context.taxonomyId)}` : paths[tab];
+    ? `${paths[tab]}/${encodeURIComponent(context.taxonomyId)}`
+    : tab === "topic" ? `${paths.topic}/${encodeURIComponent(topicSlug(context.topicId ?? DEFAULT_TOPIC))}`
+    : paths[tab];
   return base + (params.size ? "?" + params.toString() : "");
 }
 
@@ -72,7 +79,7 @@ const paths: Record<WorkspaceTab, string> = {
   overview: "/", understanding: "/data", preview: "/data/query",
   profile: "/data/profile", preparation: "/data/prepare",
   learning: "/learning-types", task: "/tasks",
-  topic: "/topics/activity-anomaly", ml: "/models",
+  topic: "/topics", ml: "/models",
   scoring: "/scoring", policies: "/policies",
   evaluations: "/evaluations", explanations: "/explanations",
   jobs: "/activity/jobs", "ml-jobs": "/activity/ml", serving: "/operations/serving", storage: "/operations/storage", audit: "/operations/audit",
@@ -92,6 +99,15 @@ export function resourcePath(kind: MLResourceKind, id: string, context: MLNaviga
 }
 
 export function routeAt(pathname: string, search: string): WorkspaceRoute {
+  if (pathname.startsWith(paths.topic + "/")) {
+    const slug = pathname.slice(paths.topic.length + 1);
+    if (slug && !slug.includes("/")) {
+      try {
+        return { tab: "topic", resource: null, context: { ...contextAt("topic", search),
+          topicId: decodeURIComponent(slug).replace(/-/g, "_") } };
+      } catch { /* 잘못 인코딩된 URL은 기본 화면으로 돌린다. */ }
+    }
+  }
   for (const tab of TAXONOMY_TABS) {
     if (pathname.startsWith(paths[tab] + "/")) {
       const id = pathname.slice(paths[tab].length + 1);
@@ -117,8 +133,20 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
     context: contextAt(tab ?? "overview", search) };
 }
 
-/** 독립 화면 간에 목적과 관련된 선택만 전달한다. */
+/** 화면 주소 전체(경로·쿼리)에서 탐색 상태를 읽는다. 주제 ID처럼 경로에 있는 문맥도 함께 읽는다. */
+export function routeFromPath(path: string): WorkspaceRoute {
+  const url = new URL(path, "http://sos.local");
+  return routeAt(url.pathname, url.search);
+}
+
+/** 독립 화면 간에 목적과 관련된 선택만 전달한다. 같은 주제 화면 안의 이동은 주제를 유지한다. */
 export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTab): MLNavigationContext {
+  const next = nextContext(previous, tab);
+  return tab === "topic" && previous.tab === "topic" && previous.context.topicId
+    ? { ...next, topicId: previous.context.topicId } : next;
+}
+
+function nextContext(previous: WorkspaceRoute, tab: WorkspaceTab): MLNavigationContext {
   // 결과 상세에서 모델 영역 탭을 직접 선택해도 이미 확인한 리소스를 전달한다.
   if (previous.resource?.kind === "scoring" && isDecisionTab(tab)) {
     return { scoringId: previous.resource.id };
@@ -169,9 +197,7 @@ export function useWorkspaceNavigation() {
     requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
   }, []);
   const navigateWithContext = useCallback((tab: WorkspaceTab, context: MLNavigationContext) => {
-    const path = contextPath(tab, context);
-    const url = new URL(path, window.location.origin);
-    const next = routeAt(url.pathname, url.search).context;
+    const next = routeFromPath(contextPath(tab, context)).context;
     update({ tab, resource: null, context: next }, contextPath(tab, next));
   }, [update]);
   const navigate = useCallback((target: WorkspaceTab | ((previous: WorkspaceTab) => WorkspaceTab)) => {
@@ -184,7 +210,8 @@ export function useWorkspaceNavigation() {
     const previous = current.current;
     if (previous.resource) return;
     const path = contextPath(previous.tab, context);
-    const parsed = contextAt(previous.tab, path.split("?")[1] ?? "");
+    // 같은 화면의 선택도 경로의 문맥(예: 주제 ID)을 잃지 않도록 주소 전체로 다시 읽는다.
+    const parsed = routeFromPath(path).context;
     // 사용자가 확인한 Dataset/Model/Scoring 선택은 뒤로 가기로 복원할 수 있어야 한다.
     // 입력 한 글자마다 호출하지 않으며, 같은 화면의 선택은 헤더 포커스를 움직이지 않는다.
     if (window.location.pathname + window.location.search !== path) {
@@ -255,11 +282,13 @@ export function ModelAreaNavigation({ active, context, resource, onNavigate }: {
 }
 
 /** 영역별 진입점은 내부 결과가 없어도 언제나 탐색 가능하다. */
-export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInspectStorage, canViewAudit, canViewDataset = true,
+export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, onOpenTopic, canInspectStorage, canViewAudit, canViewDataset = true,
   canPrepareData = true, canManageServing = false, context = {}, resource = null }: {
   active: WorkspaceTab;
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenTaxonomy: (tab: "learning" | "task", id: string) => void;
+  /** 분류 트리의 주제를 연다. 없으면 기본 주제 화면으로 이동한다. */
+  onOpenTopic?: (topicId: string) => void;
   canInspectStorage: boolean;
   canViewAudit: boolean;
   canViewDataset?: boolean;
@@ -348,12 +377,12 @@ export function PlatformNavigation({ active, onNavigate, onOpenTaxonomy, canInsp
                   </div>
                   {isExpanded(taskKey) && <div className="model-lab-tree-children">
                     {task.topics.map(topic => <a key={topic.id}
-                      className="workspace-link model-lab-topic-link" href={hrefFor("topic")}
-                      aria-current={active === "topic" ? "page" : undefined}
+                      className="workspace-link model-lab-topic-link" href={contextPath("topic", { topicId: topic.id })}
+                      aria-current={active === "topic" && (context.topicId ?? DEFAULT_TOPIC) === topic.id ? "page" : undefined}
                       onClick={event => {
                         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                         event.preventDefault();
-                        onNavigate("topic");
+                        if (onOpenTopic) onOpenTopic(topic.id); else onNavigate("topic");
                       }}>
                       <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                         <rect x="4" y="2.5" width="12" height="15" rx="1.5"/>

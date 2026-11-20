@@ -13,7 +13,7 @@ const pageLabels: Record<WorkspaceTab, { title: string; description: string }> =
   preparation: { title: "데이터 준비", description: "원본 선택 · 변환 편집 · 결과 Dataset" },
   learning: { title: "학습 유형", description: "개요 · 활용 상황 · 분석 과제" },
   task: { title: "분석 과제", description: "원리 · 활용 방법 · 결과 해석 · 주제" },
-  topic: { title: "활동 이상 탐지", description: "활용 방법 · 모델 적용 · 결과 해석 · 서비스 연동" },
+  topic: { title: "분석 주제", description: "활용 방법 · 모델 적용 · 결과 해석 · 서비스 연동" },
   ml: { title: "모델 활용", description: "모델 선택 · 입력 확인 · 적용 · 결과 이해" },
   scoring: { title: "모델 적용", description: "Dataset 분석 · 직접 입력 · 점수 결과" },
   policies: { title: "판정 정책", description: "점수 결과 선택 · 판정 기준 · 작업 이력" },
@@ -27,7 +27,7 @@ const pageLabels: Record<WorkspaceTab, { title: string; description: string }> =
 };
 
 /** 모든 페이지에 공통인 탐색·인증 문맥을 업무 화면에서 분리한다. */
-export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTaxonomy, onSignOut, canConfigure,
+export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTaxonomy, onOpenTopic, onSignOut, canConfigure,
   brandName, brandReady, brandLoadError, onBrandChange, onBrandRetry,
   canInspectStorage, canViewAudit, modelContext, modelResource, children }: {
   actor: Identity;
@@ -38,6 +38,7 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
   modelResource: ResourceRoute;
   onNavigate: (tab: WorkspaceTab) => void;
   onOpenTaxonomy: (tab: "learning" | "task", id: string) => void;
+  onOpenTopic?: (topicId: string) => void;
   onSignOut: () => void;
   canConfigure: boolean;
   brandName: string;
@@ -74,7 +75,7 @@ export function PlatformShell({ actor, section, pageTitle, onNavigate, onOpenTax
       </div>
       <div id="sos-sidebar-menu" className={"sidebar-menu" + (menuOpen ? " open" : "")}>
       <PlatformNavigation active={section} context={modelContext} resource={modelResource} onNavigate={onNavigate}
-        onOpenTaxonomy={onOpenTaxonomy}
+        onOpenTaxonomy={onOpenTaxonomy} onOpenTopic={onOpenTopic}
         canInspectStorage={canInspectStorage} canViewAudit={canViewAudit}
         canViewDataset={actor.capabilities.includes("dataset.read")}
         canPrepareData={actor.capabilities.includes("job.create")}
