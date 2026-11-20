@@ -113,6 +113,12 @@ def transform(lf: pl.LazyFrame, spec: Transform, *, preview: PreviewScope | None
             continue
         if step.column not in columns:
             raise InvalidRequestError(f"컬럼이 Dataset에 없습니다: {step.column}")
+        if step.op == "rename":
+            # 기존 컬럼을 덮어쓰지 않는다. 키 컬럼의 이름을 바꾸면 이후 Window 단계가 키를 찾지 못해 거부된다.
+            if step.alias in columns:
+                raise InvalidRequestError(f"바꿀 이름의 컬럼이 이미 있습니다: {step.alias}")
+            lf = lf.rename({step.column: step.alias})
+            continue
         col = pl.col(step.column)
         if step.op == "filter_not_null":
             lf = lf.filter(col.is_not_null())

@@ -2,6 +2,8 @@
 import type { components } from "./api.generated";
 
 type ApiStep = components["schemas"]["Step"];
+/** 한 변환 요청의 최대 단계 수. 서버 `Transform.steps`의 `max_length`와 같다. */
+export const MAX_TRANSFORM_STEPS = 30;
 // Pydantic가 기본값을 채우는 필드는 UI 요청 초안에서 생략할 수 있다.
 export type FeatureStep = Omit<ApiStep, "periods" | "window"> &
   Partial<Pick<ApiStep, "periods" | "window">>;
@@ -25,6 +27,12 @@ export function createStep(
     return { op, column, value: Number.isFinite(parsed) ? parsed : raw };
   }
   if (op === "cast") return { op, column, dtype: "Float64" };
+  if (op === "rename") {
+    // 모델 입력 이름은 정확히 대조하므로 입력한 이름을 다듬지 않는다.
+    if (!raw.trim()) throw new Error("새 컬럼 이름을 입력해 주세요.");
+    if (raw === column) throw new Error("현재 이름과 다른 새 이름을 입력해 주세요.");
+    return { op, column, alias: raw };
+  }
   if (op === "lag" || op === "rolling_mean") {
     const parameter = size ?? (op === "lag" ? 1 : 3);
     const minimum = op === "lag" ? 1 : 2;

@@ -32,6 +32,7 @@ import { useDataJobs } from "./useDataJobs";
 import { UploadProgressStatus, useDatasetUpload } from "./DatasetUpload";
 import { DatasetPreviewPanel, useDatasetQuery } from "./DatasetPreviewTab";
 import { ProfileStatistics, useProfileSelection } from "./ProfileStatistics";
+import { ModelInputBanner, ModelInputPreparation, schemaColumns, useModelRevision } from "./ModelInputPreparation";
 
 type Tab = WorkspaceTab;
 const DATA_TABS: Tab[] = ["understanding", "preview", "profile", "preparation"];
@@ -62,6 +63,9 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const { tab, resource, context, navigate: setTab, navigateWithContext,
     selectContext, openResource } = useWorkspaceNavigation();
   const isDataArea = DATA_TABS.includes(tab);
+  // 모델 적용에서 데이터 준비로 온 경우에만 데이터 화면과 작업 이력이 적용할 모델을 유지한다.
+  const preparingModelId = isDataArea || tab === "jobs" ? context.modelId : undefined;
+  const preparingModel = useModelRevision(preparingModelId);
   const catalog = useDatasetCatalog();
   const { datasets } = catalog;
   const [rememberedDataset, setSelected] = useState<string>(context.datasetId ?? "");
@@ -83,7 +87,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const topicCatalog = useTopicCatalog(actor.capabilities.includes("job.read"));
   // Playground 주제가 있는 모델은 그 Playground에서, 그 밖의 모델은 공통 모델 적용 화면에서 적용한다.
   // 주제 판단에는 카탈로그가 필요하다. 조회 전이면 기다리고, 실패하면 다른 화면으로 보내지 않는다.
-  async function applyModel(model: ModelRevision) {
+  async function applyModel(model: ModelRevision, datasetId = context.datasetId) {
     let topics = topicCatalog.items;
     if (!topics) {
       try {
@@ -96,11 +100,16 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
       }
     }
     if (playgroundTopicFor(model, topics) === "activity_anomaly") {
-      navigateWithContext("topic", { modelId: model.id, datasetId: context.datasetId });
-    } else startScoring(model.id);
+      navigateWithContext("topic", { modelId: model.id, datasetId });
+    } else startScoring(model.id, datasetId);
   }
-  function startScoring(modelId: string) {
-    navigateWithContext("scoring", { modelId, datasetId: context.datasetId });
+  function startScoring(modelId: string, datasetId = context.datasetId) {
+    navigateWithContext("scoring", { modelId, datasetId });
+  }
+  /** 모델 입력 불일치를 데이터 준비에서 맞추도록 적용할 모델과 Dataset을 함께 넘긴다. */
+  function prepareModelInput(datasetId: string, modelId: string) {
+    setSelected(datasetId);
+    navigateWithContext("preparation", { datasetId, modelId });
   }
   const [explorationDraft, setExplorationDraft] = useState<ExplorationDraft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -172,10 +181,11 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
 
   function chooseDataset(id: string, target: "understanding" | "preview" | "profile" | "preparation") {
     setSelected(id);
-    navigateWithContext(target, { datasetId: id });
+    navigateWithContext(target, { datasetId: id, modelId: preparingModelId });
   }
   function openDataJob(jobId: string, kind: "data" | "exploration" = "data") {
-    navigateWithContext("jobs", { datasetId: selected, dataJobId: jobId, dataJobKind: kind });
+    navigateWithContext("jobs", { datasetId: selected, dataJobId: jobId, dataJobKind: kind,
+      modelId: preparingModelId });
   }
   /** 서버 등록 성공을 목록 새로고침 실패 때문에 취소된 작업처럼 표시하지 않는다. */
   async function showRegisteredDataset(data: Dataset, success: string, stale: string) {
@@ -326,6 +336,12 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         onCancel={uploads.cancelDelimited}
         onConfirm={file => { void uploads.upload(file); }} />}
       {uploads.progress && <UploadProgressStatus progress={uploads.progress} />}
+      {preparingModelId && <ModelInputBanner model={preparingModel.model} loading={preparingModel.loading}
+        error={preparingModel.error} onRetry={preparingModel.retry}
+        columns={isDataArea && dataset && preview ? schemaColumns(preview.schema) : undefined}
+        datasetSelected={Boolean(selected)} waitingForJob={tab === "jobs"}
+        onReturn={() => { if (preparingModel.model) void applyModel(preparingModel.model, selected); }}
+        onDismiss={() => selectContext({ ...context, modelId: undefined })} />}
       {tab === "overview" && <PlatformOverview brandName={brandName}
         datasets={datasets.map(d => ({ id: d.id, name: d.name, kind: d.kind }))}
         canViewModels={actor.capabilities.includes("job.read")}
@@ -340,7 +356,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         onSelectDataset={datasetId => selectContext({ ...context, datasetId })}
         hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
         onDatasetRegistered={catalog.upsert} canRun={canRun} canCancel={canCancel} canUpload={canWrite}
-        canInfer={actor.capabilities.includes("model.infer")} onOpenResource={openResource} links={taxonomyLinks} />}
+        canInfer={actor.capabilities.includes("model.infer")} onOpenResource={openResource} links={taxonomyLinks}
+        onPrepareInput={canRun ? prepareModelInput : undefined} />}
       {isDataArea && <DataSourceBar datasets={datasets} loading={catalog.loading} readError={Boolean(catalog.readError)} selected={selected} canWrite={canWrite} busy={busy}
           uploadRef={uploadRef} uploadPolicy={uploads.policy}
           onFile={file => {
@@ -438,6 +455,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
               데이터 준비 미리보기 다시 시도
             </button>
           </section>}
+          {preview && preparingModel.model && <ModelInputPreparation model={preparingModel.model}
+            columns={schemaColumns(preview.schema)} steps={steps}
+            transformed={editor.featurePreview ? schemaColumns(editor.featurePreview.schema) : null}
+            onAddSteps={editor.appendSteps} />}
           {preview && <FeaturePanel editor={editor}
             columnNames={columnNames} busy={busy} canRun={canRun}
             onSubmit={() => void submit("transform")} />}
@@ -462,7 +483,8 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         hasMoreDatasets={Boolean(catalog.nextCursor)} onLoadMoreDatasets={loadMoreDatasets}
         canUpload={canWrite} onDatasetRegistered={catalog.upsert}
         onModelSelected={modelId => selectContext({ ...context, modelId })} onNavigate={setTab}
-        isAdministrator={actor.roles.includes("administrator")} canRun={canRun} canCancel={canCancel} onOpenResource={openResource} />}
+        isAdministrator={actor.roles.includes("administrator")} canRun={canRun} canCancel={canCancel} onOpenResource={openResource}
+        onPrepareInput={canRun ? prepareModelInput : undefined} />}
       {(["policies","evaluations","explanations"] as Tab[]).includes(tab) && !resource &&
         <DecisionWorkspace
           key={tab} view={tab === "policies" ? "policy" : tab === "evaluations" ? "evaluation" : "explanation"}

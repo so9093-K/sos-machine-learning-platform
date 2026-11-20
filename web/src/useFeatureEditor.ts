@@ -49,12 +49,18 @@ export function useFeatureEditor({
       setEditingStep(null); setPreviewResult(null); onError(null);
     } catch (e) { onError(e); }
   }
+  /** 화면이 계산한 단계 묶음을 순서대로 덧붙인다. 한도 확인은 호출자가 한다. */
+  function appendSteps(next: FeatureStep[]) {
+    if (!next.length) return;
+    setSteps(existing => [...existing, ...next]);
+    setEditingStep(null); setPreviewResult(null); onError(null);
+  }
   function editStep(index: number) {
     const step = steps[index];
     if (!step) return;
     setEditingStep(index);
     setOp(step.op); setColumn(step.column ?? "");
-    setValue(step.value == null ? "" : String(step.value));
+    setValue(step.op === "rename" ? step.alias ?? "" : step.value == null ? "" : String(step.value));
     setLagPeriods(step.periods ?? 1); setRollingWindow(step.window ?? 3);
     setChosenColumns(step.columns ?? []);
   }
@@ -94,7 +100,7 @@ export function useFeatureEditor({
     steps, editingStep, lagPeriods, setLagPeriods, rollingWindow, setRollingWindow,
     op, setOp, column, setColumn, value, setValue, orderBy, setOrderBy,
     groupBy, setGroupBy, chosenColumns, setChosenColumns, transform,
-    featurePreview, addStep, editStep, moveStep, deleteStep,
+    featurePreview, addStep, appendSteps, editStep, moveStep, deleteStep,
     cancelEdit: () => setEditingStep(null), previewFeatures,
   };
 }

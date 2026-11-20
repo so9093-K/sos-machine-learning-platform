@@ -9,7 +9,7 @@ import type { Dataset, ModelRevision } from "./types";
 /** 진입 위치와 관계없이 같은 모델 적용·관측값 실험·결과 복귀 경험을 사용한다. */
 export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, model, datasets, canRun, canCancel, onOpenResource,
   hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered, onResultViewChange,
-  onInputReadyChange, onPlaygroundRun }: {
+  onInputReadyChange, onPlaygroundRun, onPrepareInput }: {
   selectedDatasetId?: string;
   onSelectDataset?: (id: string) => void;
   model: ModelRevision; datasets: Dataset[]; canRun: boolean; canCancel: boolean;
@@ -19,6 +19,7 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
   onResultViewChange?: (visible: boolean) => void;
   onInputReadyChange?: (datasetId: string, ready: boolean) => void;
   onPlaygroundRun?: (run: PlaygroundRun) => void;
+  onPrepareInput?: (datasetId: string, modelId: string) => void;
 }) {
   const [usage, setUsage] = useState<"dataset" | "playground">("dataset");
   useEffect(() => { if (selectedDatasetId) setUsage("dataset"); }, [selectedDatasetId]);
@@ -79,7 +80,8 @@ export function ModelApplicationWorkspace({ selectedDatasetId, onSelectDataset, 
         onOpenResult={id => onOpenResource("scoring", id)} onOpenResource={onOpenResource}
         canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
         onResultViewChange={setResultVisible} onInputReadyChange={onInputReadyChange}
-        onTryObservation={tryObservation} />
+        onTryObservation={tryObservation}
+        onPrepareInput={onPrepareInput && (datasetId => onPrepareInput(datasetId, model.id))} />
     </div>
   </div>;
 }

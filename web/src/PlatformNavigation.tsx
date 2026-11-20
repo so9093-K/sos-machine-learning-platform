@@ -39,6 +39,8 @@ function contextAt(tab: WorkspaceTab, search: string): MLNavigationContext {
     ...(params.get("model") ? { modelId: params.get("model")! } : {}) };
   if (DATA_TABS.includes(tab)) {
     return { datasetId: params.get("dataset") ?? "",
+      // 모델 입력을 맞추려고 데이터 준비로 온 경우에만 적용할 모델이 남는다.
+      ...(params.get("model") ? { modelId: params.get("model")! } : {}),
       ...(tab === "jobs" && params.get("job") ? {
         dataJobId: params.get("job")!,
         dataJobKind: params.get("type") === "exploration" ? "exploration" as const : "data" as const,
@@ -56,7 +58,9 @@ export function contextPath(tab: WorkspaceTab, context: MLNavigationContext): st
     params.set("job", context.dataJobId);
     if (context.dataJobKind === "exploration") params.set("type", "exploration");
   }
-  if ((tab === "scoring" || tab === "topic") && context.modelId) params.set("model", context.modelId);
+  if ((tab === "scoring" || tab === "topic" || DATA_TABS.includes(tab)) && context.modelId) {
+    params.set("model", context.modelId);
+  }
   if (isDecisionTab(tab) && context.scoringId) params.set("scoring", context.scoringId);
   if (context.datasetId && MODEL_INPUT_TABS.includes(tab)) params.set("dataset", context.datasetId);
   const base = TAXONOMY_TABS.includes(tab) && context.taxonomyId
@@ -122,8 +126,14 @@ export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTa
   if (previous.resource?.kind === "model" && tab === "scoring") {
     return { modelId: previous.resource.id, ...(previous.context.datasetId ? { datasetId: previous.context.datasetId } : {}) };
   }
+  const { datasetId, modelId } = previous.context;
   if (DATA_TABS.includes(tab) && DATA_TABS.includes(previous.tab)) {
-    return previous.context.datasetId ? { datasetId: previous.context.datasetId } : {};
+    return { ...(datasetId ? { datasetId } : {}), ...(modelId ? { modelId } : {}) };
+  }
+  // 모델 입력을 맞추던 데이터 화면에서 적용 화면으로 돌아가면 같은 모델을 잇는다.
+  // 반대 방향은 명시적인 데이터 준비 이동에서만 모델 문맥을 만든다.
+  if (modelId && DATA_TABS.includes(previous.tab) && (tab === "topic" || tab === "scoring")) {
+    return { modelId, ...(datasetId ? { datasetId } : {}) };
   }
   if (previous.context.datasetId &&
       ((MODEL_INPUT_TABS.includes(tab) && (DATA_TABS.includes(previous.tab) || MODEL_INPUT_TABS.includes(previous.tab))) ||

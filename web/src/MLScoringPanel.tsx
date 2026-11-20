@@ -27,6 +27,8 @@ type Props = {
     features: Record<string, number | null>, rowIndex: number, score: number,
     scoringResultId: string, modelRevisionId: string,
   ) => string | null;
+  /** 선택한 Dataset을 이 모델의 입력 조건에 맞추도록 데이터 준비로 이동한다. */
+  onPrepareInput?: (datasetId: string) => void;
 };
 
 const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
@@ -35,6 +37,7 @@ const TERMINAL = new Set(["Succeeded", "Failed", "Cancelled"]);
 export function MLScoringPanel({
   selectedDatasetId, onSelectDataset, model, datasets, hasMoreDatasets = false, onLoadMoreDatasets, canRun, canCancel, onOpenResult, onOpenResource,
   canUpload = false, onDatasetRegistered, onResultViewChange, onInputReadyChange, onTryObservation,
+  onPrepareInput,
 }: Props) {
   const [localDatasetId, setLocalDatasetId] = useState("");
   const datasetId = selectedDatasetId ?? localDatasetId;
@@ -382,7 +385,8 @@ export function MLScoringPanel({
     {columnStatus === "loading" && <p role="status">Dataset의 입력 컬럼을 확인하는 중입니다.</p>}
     {columnStatus === "error" && <div role="alert"><p>입력 컬럼을 조회하지 못했습니다: {columnError}</p>
       <button type="button" className="secondary" onClick={() => setColumnsRetry(value => value + 1)}>입력 구조 재조회</button></div>}
-    {checkedColumns && <ModelDatasetCompatibility model={model} columns={columns} />}
+    {checkedColumns && <ModelDatasetCompatibility model={model} columns={columns}
+      onPrepare={onPrepareInput && datasetId ? () => onPrepareInput(datasetId) : undefined} />}
     {model.creation_evidence_visible && datasetId === model.dataset_id && <p className="hint">
       모델 학습에 사용한 Dataset과 같은 ID입니다. 판본이 같다면 해당 점수는 독립 Test 성능이 아닙니다.
     </p>}
