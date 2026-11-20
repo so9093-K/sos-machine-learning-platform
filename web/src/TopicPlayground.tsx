@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
-import { activityFeatureGroups } from "./ActivityFeatureGroups";
+import { topicFeatureGroups } from "./FeatureGroups";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { ModelApiUsage, servesModel } from "./ModelApiUsage";
 import type { PlaygroundRun } from "./ModelLabPlayground";
@@ -21,7 +21,6 @@ type Selection =
   | { state: "blocked"; reason: string }
   | { state: "none" };
 
-const TOPIC = "activity_anomaly";
 const SERVING_RECHECK_MS = 5000;
 
 /** 이 판본을 서빙하거나 이 판본으로 전환 중인 Endpoint. 이미 요청을 처리하는 쪽을 먼저 고른다.
@@ -34,14 +33,18 @@ function servingFor(items: ServingEndpoint[], modelId: string): ServingEndpoint 
   return candidates.find(item => servesModel(item, modelId)) ?? candidates[0] ?? null;
 }
 
-/** 활동 이상 탐지 Playground. 쓸모를 먼저 보이고, 같은 화면에서 실행·결과 확인·API 연결까지 잇는다.
+/** 분석 주제 Playground. 쓸모를 먼저 보이고, 같은 화면에서 실행·결과 확인·API 연결까지 잇는다.
+ *
+ *  주제의 입력·출력 계약은 카탈로그(/api/topics)가, 활용·입력 준비 안내는 topicGuides가 정한다.
  *
  *  모델 공급·학습 같은 운영 정보는 이 화면의 흐름에 두지 않는다.
  */
-export function ActivityPlayground({ datasets, selectedDatasetId, preferredModelId, onSelectModel, isAdministrator,
+export function TopicPlayground({ topicId, datasets, selectedDatasetId, preferredModelId, onSelectModel, isAdministrator,
   onSelectDataset, hasMoreDatasets,
   onLoadMoreDatasets, onDatasetRegistered, canRun, canCancel, canUpload, canInfer, onOpenResource, links,
   onPrepareInput }: {
+  /** 분석 주제 ID(카탈로그 ID). */
+  topicId: string;
   datasets: Dataset[];
   selectedDatasetId?: string;
   /** 모델 목록·상세에서 고른 모델. 주소에 남아 새로고침·뒤로 가기에서도 유지된다. */
@@ -59,8 +62,9 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
 }) {
   const catalog = useTopicCatalog();
   // 주제의 입력·출력 계약. 어떤 알고리즘·Pipeline으로 만든 모델이든 이 계약을 따르면 적용할 수 있다.
-  const topic = catalog.items?.find(item => item.id === TOPIC) ?? null;
-  const trail = topicTree(catalog.tree, TOPIC);
+  const topic = catalog.items?.find(item => item.id === topicId) ?? null;
+  const trail = topicTree(catalog.tree, topicId);
+  const title = topicGuides[topicId]?.title ?? topic?.name ?? "분석 주제";
   const [offered, setOffered] = useState<ModelOffering[] | null>(null);
   const [offeredError, setOfferedError] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -111,7 +115,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
     if (!lookupId || direct?.id !== lookupId) return { state: "loading" };
     if (direct.error || !direct.model) return { state: "blocked", reason: `선택한 모델을 열 수 없습니다. ${direct.error}` };
     if (topic && !isTopicCompatible(direct.model, topic)) return { state: "blocked",
-      reason: "선택한 모델은 활동 이상 탐지의 입력 조건(Feature)이나 출력 형식(이상 점수)과 맞지 않습니다. 모델 상세에서 입력 조건을 확인하세요." };
+      reason: `선택한 모델은 ${title}의 입력 조건(Feature)이나 출력 형식(이상 점수)과 맞지 않습니다. 모델 상세에서 입력 조건을 확인하세요.` };
     const state = directOffering.offering;
     if (directOffering.error && !state) return { state: "blocked",
       reason: `선택한 모델의 제공 상태를 확인하지 못했습니다. ${directOffering.error}` };
@@ -145,15 +149,20 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
     const timer = window.setTimeout(() => setServingCheck(value => value + 1), SERVING_RECHECK_MS);
     return () => window.clearTimeout(timer);
   }, [preparing, serving]);
-  const guide = topicGuides[TOPIC];
+  const guide = topicGuides[topicId];
+  if (!guide || (catalog.items && !topic)) return <section className="panel">
+    <h2>알 수 없는 분석 주제</h2>
+    <p className="muted">요청한 분석 주제를 찾을 수 없습니다. 왼쪽 메뉴의 분석 주제에서 다시 선택하세요.</p>
+  </section>;
+  const groups = topicFeatureGroups[topicId] ?? [];
 
   return <div className="playground-page">
-    {trail && <TaxonomyTrail learningType={trail.learningType} task={trail.task} topic={TOPIC} links={links} />}
+    {trail && <TaxonomyTrail learningType={trail.learningType} task={trail.task} topic={topicId} links={links} />}
 
     {/* 적용 화면이 자체 카드이므로 바깥은 카드로 감싸지 않는다. */}
     <section className="guide-section playground-try" aria-labelledby="playground-try-heading">
       <h2 id="playground-try-heading">모델 적용</h2>
-      <p className="muted">제공 모델을 활동 Dataset 또는 직접 입력한 값에 적용해 이상 점수를 계산하고, 점수가 높은 관측의 입력값을 학습 기준과 비교합니다.</p>
+      <p className="muted">제공 모델을 Dataset 또는 직접 입력한 값에 적용해 이상 점수를 계산하고, 점수가 높은 관측의 입력값을 학습 기준과 비교합니다.</p>
       {(catalog.error || offeredError) && <div role="alert" className="guide-state">
         <p>모델을 불러오지 못했습니다. {catalog.error || offeredError}</p>
         <button type="button" className="secondary" onClick={() => { catalog.reload(); setRetry(value => value + 1); }}>
@@ -171,7 +180,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
       {selection.state === "none" && offered !== null && topic && <div className="playground-notice">
         <p className="muted">
         {nextCursor ? "현재 조회한 목록에 호환 모델이 없습니다. 다음 제공 모델을 조회할 수 있습니다."
-          : "활동 이상 탐지용 제공 모델이 없습니다. 개발·배포 담당자의 모델 제공 후 Dataset을 적용할 수 있습니다."}</p>
+          : `${title}용 제공 모델이 없습니다. 개발·배포 담당자의 모델 제공 후 Dataset을 적용할 수 있습니다.`}</p>
         {!nextCursor && <button type="button" className="secondary" disabled={loadingModels}
           onClick={() => { setRequestCursor(null); setRetry(value => value + 1); }}>제공 모델 다시 조회</button>}
       </div>}
@@ -223,6 +232,13 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
       lastRun={lastRun?.modelRevisionId === chosen.model.id ? lastRun : undefined}
       datasetId={selectedDatasetId && readyDatasetId === selectedDatasetId ? selectedDatasetId : undefined} />}
 
+    {guide.input.steps && <details className="panel playground-details">
+      <summary>입력 데이터 만들기</summary>
+      <div className="guide-cards">{guide.input.steps.map(item => <article key={item.title} className="guide-card">
+        <h3>{item.title}</h3><p>{item.text}</p>
+      </article>)}</div>
+    </details>}
+
     <details className="panel playground-details">
       <summary>활용 방법</summary>
       <div className="guide-cards">{guide.uses.map(item => <article key={item.title} className="guide-card">
@@ -232,12 +248,11 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
 
     {topic && <details className="panel playground-details">
       <summary>입력 조건 · 모델 정보</summary>
-      <p>모델은 사용자·호스트 단위로 집계한 숫자형 활동 Feature {topic.required_features.length}개를 이름과 자료형 그대로 요구합니다.
-        컬럼 순서는 달라도 되며, 원시 로그에서 Feature를 자동으로 만들지 않습니다. 관측 시각 컬럼은 선택입니다.</p>
-      {[...activityFeatureGroups.map(group => ({ id: group.id, title: group.title,
-        names: topic.required_features.filter(name => (group.features as readonly string[]).includes(name)) })),
+      <p>입력 Feature {topic.required_features.length}개 · {guide.input.summary}</p>
+      {[...groups.map(group => ({ id: group.id, title: group.title,
+        names: topic.required_features.filter(name => group.features.includes(name)) })),
         { id: "other", title: "그 밖의 Feature", names: topic.required_features.filter(name =>
-          !activityFeatureGroups.some(group => (group.features as readonly string[]).includes(name))) }]
+          !groups.some(group => group.features.includes(name))) }]
         .filter(group => group.names.length > 0).map(group => <div key={group.id} className="playground-feature-group">
           <strong>{group.title} · {group.names.length}개</strong>
           <p>{group.names.map(activityFeatureLabel).join(" · ")}</p>

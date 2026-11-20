@@ -16,6 +16,13 @@ type Guide = {
   uses: GuideItem[];
   reading?: GuideItem[];
 };
+/** 주제 화면의 입력 안내. 입력 계약(Feature 이름·자료형)의 정본은 /api/topics다. */
+type TopicInput = {
+  /** 입력이 무엇이며 SOS가 대신 하지 않는 일. */
+  summary: string;
+  /** 자신의 데이터로 입력을 만드는 순서. */
+  steps?: GuideItem[];
+};
 
 export const learningTypeGuides: Record<string, Guide> = {
   unsupervised: {
@@ -46,7 +53,7 @@ export const taskGuides: Record<string, Guide> = {
   },
 };
 
-export const topicGuides: Record<string, Guide & { route: "topic" }> = {
+export const topicGuides: Record<string, Guide & { route: "topic"; input: TopicInput }> = {
   activity_anomaly: {
     route: "topic",
     title: "활동 이상 탐지",
@@ -56,6 +63,28 @@ export const topicGuides: Record<string, Guide & { route: "topic" }> = {
       { title: "평소와의 차이 확인", text: "파일·네트워크·프로세스 활동 중 어떤 값이 학습 기준과 달랐는지 관측별로 비교합니다." },
       { title: "운영 연동", text: "같은 입력을 API로 보내 정기 점검이나 알림 우선순위에 점수를 활용합니다." },
     ],
+    input: {
+      summary: "사용자·호스트 단위로 집계한 숫자형 활동 Feature를 이름과 자료형 그대로 요구합니다. 컬럼 순서는 달라도 되며, 원시 로그에서 Feature를 자동으로 만들지 않습니다. 관측 시각 컬럼은 선택입니다.",
+    },
+  },
+  network_flow_anomaly: {
+    route: "topic",
+    title: "네트워크 흐름 이상 탐지",
+    summary: "연결 단위 흐름 통계에서 평소 트래픽과 다른 흐름을 찾아 먼저 검토할 연결을 좁힙니다.",
+    uses: [
+      { title: "검토 대상 선별", text: "하루 수십만 개의 흐름 중 평소 트래픽과 가장 다른 흐름부터 확인합니다." },
+      { title: "평소와의 차이 확인", text: "패킷 길이·도착 간격·TCP 플래그 중 어떤 값이 학습 기준과 달랐는지 흐름별로 비교합니다." },
+      { title: "검토 기준 정하기", text: "레이블이 있는 기준 데이터로 검토량과 알려진 공격의 포착 정도를 먼저 보고, 자기 데이터의 판정 기준을 정합니다." },
+    ],
+    input: {
+      summary: "흐름 추출 도구가 연결마다 출력하는 숫자형 통계 Feature를 헤더 이름 그대로 요구합니다. 흐름 ID·IP·포트·Protocol·Timestamp는 입력이 아니며 남겨 두어도 점수 계산에 쓰지 않습니다. pcap에서 흐름을 자동으로 만들지 않습니다.",
+      steps: [
+        { title: "1. 흐름 통계 만들기", text: "pcap을 CIC-IDS2017 정정판(CNS2022)을 만든 수정 CICFlowMeter로 변환합니다(Flow Timeout 120초·Activity Timeout 5초). 같은 도구·설정이어야 Feature의 의미가 학습 데이터와 같습니다." },
+        { title: "2. 등록하고 확인하기", text: "CSV를 등록하면 입력 조건과 이름·자료형을 대조합니다. 이름·자료형만 다르면 데이터 준비에서 맞출 수 있습니다." },
+        { title: "3. 무한값 정리", text: "지속 시간이 0인 흐름은 Flow Bytes/s·Flow Packets/s가 무한대로 기록됩니다. 데이터 준비의 '무한값을 결측으로'를 적용하면 학습 기준값으로 대체해 계산합니다." },
+        { title: "4. 우리 망 기준 정하기", text: "다른 망의 트래픽으로 학습한 모델은 우리 망의 평범한 연결도 높은 점수로 볼 수 있습니다. 모델 설명에서 학습 데이터를 확인하고, 판정 기준은 우리 데이터의 점수 분포로 정합니다." },
+      ],
+    },
   },
 };
 

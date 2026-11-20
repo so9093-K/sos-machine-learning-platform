@@ -105,7 +105,11 @@ export function ModelInputPreparation({ model, columns, steps, transformed, onAd
       <p>변환 결과가 모델의 Feature 이름·자료형과 맞는지 미리보기로 확인한 뒤 전체 변환을 실행합니다.</p>
     </div></div>
     {current.ready
-      ? <p className="scoring-input-ready" role="status">현재 Dataset 입력 구조 일치 · 변환 없이 모델에 적용할 수 있습니다.</p>
+      ? <div role="status">
+        <p className="scoring-input-ready">현재 Dataset 입력 구조 일치</p>
+        <p className="hint">이름·자료형은 맞습니다. 무한대처럼 정의되지 않은 값 때문에 점수 계산이 실패했다면
+          아래 변환에서 '무한값을 결측으로'를 해당 컬럼에 더합니다. 결측은 모델의 학습 기준값으로 대체됩니다.</p>
+      </div>
       : after?.ready
         // 미리보기로 해결이 확인되면 결과를 먼저 보이고, 원본의 불일치 내역은 펼쳐 확인한다.
         ? <details className="input-fix-more">

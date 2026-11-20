@@ -281,6 +281,13 @@ export function MLScoringPanel({
         <p className="hint">취소가 요청됐습니다. 종료가 확인될 때까지 기다립니다.</p>}
       {selectedJob.status === "Failed" && <p role="alert">점수 계산 실패 · {selectedJob.error ?? "실행 오류"}
         {selectedJob.error_code && <small> ({selectedJob.error_code})</small>}</p>}
+      {/* 구조는 맞아도 값 때문에 실패할 수 있다. 무한값처럼 데이터 준비로 고칠 수 있는 원인을 안내한다. */}
+      {selectedJob.status === "Failed" && selectedJob.error_code === "SOS-ML-INPUT-INVALID" && <div className="notice-blocked">
+        <p>입력 값 확인 필요 · 무한대처럼 정의되지 않은 값이 있으면 데이터 준비의 '무한값을 결측으로'를 적용한 뒤 다시 분석합니다.
+          결측은 모델의 학습 기준값으로 대체됩니다.</p>
+        {onPrepareInput && <button type="button" className="secondary"
+          onClick={() => onPrepareInput(selectedJob.dataset_id ?? datasetId)}>데이터 준비에서 맞추기 →</button>}
+      </div>}
       {selectedJob.status === "Succeeded" &&
         !hasResultReference &&
         <p role="alert">점수 계산은 완료됐지만 결과 참조가 없습니다. 작업 이력에서 실행 근거를 확인해 주세요.</p>}

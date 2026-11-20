@@ -14,13 +14,13 @@ import { DiscoveryPanel } from "./DiscoveryPanel";
 import { UnderstandingPanel } from "./UnderstandingPanel";
 import type { AnalysisTopic, Dataset, Job, Identity, ExplorationRequest, ModelRevision } from "./types";
 import { WorkspaceTabs, type DatasetTab } from "./WorkspaceTabs";
-import { useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
+import { DEFAULT_TOPIC, nextNavigationContext, useWorkspaceNavigation, type WorkspaceTab } from "./PlatformNavigation";
 import { PlatformShell } from "./PlatformShell";
 import { PlatformOverview } from "./PlatformOverview";
 import { ActivityWorkspace } from "./ActivityWorkspace";
-import { ActivityPlayground } from "./ActivityPlayground";
+import { TopicPlayground } from "./TopicPlayground";
 import { AnalysisTaskPage, LearningTypePage, learningTypeGuides, playgroundTopicFor, taskGuides,
-  useTopicCatalog, type TaxonomyLinks } from "./ModelLabGuide";
+  topicGuides, useTopicCatalog, type TaxonomyLinks } from "./ModelLabGuide";
 import { DataSourceBar } from "./DataSourceBar";
 import { ModelCatalog } from "./ModelCatalog";
 import { MLResourceDetail, ScoringWorkspace, DecisionWorkspace } from "./MLResourcePages";
@@ -82,8 +82,13 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   const taxonomyLinks: TaxonomyLinks = {
     onOpenLearningType: id => navigateWithContext("learning", { taxonomyId: id }),
     onOpenTask: id => navigateWithContext("task", { taxonomyId: id }),
-    onOpenTopic: () => setTab("topic"),
+    onOpenTopic: topicId => openTopic(topicId),
   };
+  /** 분류 트리·과제 화면에서 고른 주제를 연다. 데이터 문맥은 주제 화면 이동 규칙대로 잇는다. */
+  function openTopic(topicId: string) {
+    navigateWithContext("topic", { ...nextNavigationContext({ tab, resource, context }, "topic"), topicId });
+  }
+  const topicId = context.topicId ?? DEFAULT_TOPIC;
   const topicCatalog = useTopicCatalog(actor.capabilities.includes("job.read"));
   // Playground 주제가 있는 모델은 그 Playground에서, 그 밖의 모델은 공통 모델 적용 화면에서 적용한다.
   // 주제 판단에는 카탈로그가 필요하다. 조회 전이면 기다리고, 실패하면 다른 화면으로 보내지 않는다.
@@ -99,9 +104,9 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         return;
       }
     }
-    if (playgroundTopicFor(model, topics) === "activity_anomaly") {
-      navigateWithContext("topic", { modelId: model.id, datasetId });
-    } else startScoring(model.id, datasetId);
+    const playground = playgroundTopicFor(model, topics);
+    if (playground) navigateWithContext("topic", { topicId: playground, modelId: model.id, datasetId });
+    else startScoring(model.id, datasetId);
   }
   function startScoring(modelId: string, datasetId = context.datasetId) {
     navigateWithContext("scoring", { modelId, datasetId });
@@ -285,10 +290,12 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
   return <PlatformShell actor={actor} section={tab} modelContext={context}
     pageTitle={tab === "learning" ? learningTypeGuides[context.taxonomyId ?? ""]?.title
       : tab === "task" ? taskGuides[context.taxonomyId ?? ""]?.title
+      : tab === "topic" ? topicGuides[topicId]?.title
       : resource ? { model: "모델 상세", scoring: "점수 결과", policy: "판정 정책",
         evaluation: "평가 결과", explanation: "설명 결과" }[resource.kind] : undefined}
     modelResource={resource} onNavigate={setTab}
     onOpenTaxonomy={(target, id) => navigateWithContext(target, { taxonomyId: id })}
+    onOpenTopic={openTopic}
     onSignOut={onSignOut} canConfigure={canConfigure}
     brandName={brandName} brandReady={brandReady} brandLoadError={brandLoadError}
     onBrandChange={onBrandChange} onBrandRetry={onBrandRetry}
@@ -350,7 +357,7 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
         onOpenDataset={id => chooseDataset(id, "understanding")} />}
       {tab === "learning" && <LearningTypePage id={context.taxonomyId ?? ""} links={taxonomyLinks} />}
       {tab === "task" && <AnalysisTaskPage id={context.taxonomyId ?? ""} links={taxonomyLinks} />}
-      {tab === "topic" && <ActivityPlayground datasets={datasets} selectedDatasetId={context.datasetId}
+      {tab === "topic" && <TopicPlayground key={topicId} topicId={topicId} datasets={datasets} selectedDatasetId={context.datasetId}
         preferredModelId={context.modelId} onSelectModel={modelId => selectContext({ ...context, modelId })}
         isAdministrator={actor.roles.includes("administrator")}
         onSelectDataset={datasetId => selectContext({ ...context, datasetId })}

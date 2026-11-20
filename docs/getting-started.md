@@ -84,12 +84,13 @@ make down      # 컨테이너 종료, 데이터 볼륨 보존
 
 ### Dagster에서 SOS 연결까지 실행
 
-Dagster의 `activity_anomaly_production` Job이 학습 데이터를 시간순 Train·Calibration·Test로 나누어 학습·평가하고, 모델 패키지(`sos_model.json`·`estimator.skops`)를 MLflow 모델 버전으로 등록한 뒤 SOS에 연결을 요청한다. 학습 파일은 `dagster/inputs`(또는 `SOS_PIPELINE_INPUT_DIR`)에 두고 Run 설정의 `data_path`에 `/data/inputs/<파일>`로 지정한다. 파일에는 UTC 오프셋이 있는 `ts`와 활동 Feature가 필요하다. SOS 연결에는 공급 계정 토큰의 해시를 `SOS_AUTH_TOKEN_HASHES`에 `kind: service`, `roles: [automation]`으로 등록하고, 원문은 `SOS_SUPPLY_TOKEN`으로 실행 환경에 주입한 뒤 Compose를 기동한다. 공급 토큰은 Dagster Code Location에만 전달되며 API·Web 컨테이너에는 전달되지 않는다.
+Dagster의 `anomaly_production` Job이 Run 설정 `topic`(기본 `activity_anomaly`)이 정한 입력 Feature로 학습 데이터를 시간순 Train·Calibration·Test로 나누어 학습·평가하고, 모델 패키지(`sos_model.json`·`estimator.skops`)를 MLflow 모델 버전으로 등록한 뒤 SOS에 연결을 요청한다. 학습 파일은 `dagster/inputs`(또는 `SOS_PIPELINE_INPUT_DIR`)에 두고 Run 설정의 `data_path`에 `/data/inputs/<파일>`로 지정한다. 파일에는 UTC 시각 `ts`(문자열이면 오프셋 포함)와 주제의 입력 Feature가 필요하다. `registered_model`을 생략하면 `<주제>-if`(예: `activity-anomaly-if`)로 등록한다. SOS 연결에는 공급 계정 토큰의 해시를 `SOS_AUTH_TOKEN_HASHES`에 `kind: service`, `roles: [automation]`으로 등록하고, 원문은 `SOS_SUPPLY_TOKEN`으로 실행 환경에 주입한 뒤 Compose를 기동한다. 공급 토큰은 Dagster Code Location에만 전달되며 API·Web 컨테이너에는 전달되지 않는다.
 
 ```yaml
 ops:
   train_and_evaluate:
     config:
+      topic: activity_anomaly
       data_path: /data/inputs/activity.parquet
       registered_model: activity-anomaly-if
       connect_to_sos: true
@@ -98,6 +99,20 @@ ops:
 입력 크기와 관계없이 같은 경로로 실행한다. 입력 파일은 Run 시작 때 Run 임시 디렉터리(`SOS_PIPELINE_STAGE_DIR`, Compose는 Dagster 볼륨)에 복사·해시해 고정하고 그 사본만 배치로 읽는다. 모델 패키지의 `data_sha256`은 Run이 실제로 읽은 이 사본의 해시다. 시간 경계·임계값은 외부 정렬로, Calibration·Test 평가는 배치 점수 파일로 계산한다. 외부 정렬의 메모리·디스크 예산은 Run 설정 `memory_mib`·`stage_mib`로 조정한다. 모델 적합은 학습 구간 행렬을 메모리에 올리는 알고리즘의 실행 조건이다.
 
 성공한 `connect_to_sos` 단계의 `sos_model_revision` Materialization에서 `model_revision_id`를 확인한다. SOS의 `/models/<model_revision_id>`를 열어 모델 상세에서 제공 설명·모델 제공·선택적 온라인 배포를 진행한다. 이 판본을 제공·배포하려고 `--mlflow-model`로 다시 연결하지 않는다. 연결 성공은 사용자 제공이나 온라인 배포 완료를 의미하지 않는다.
+
+### 네트워크 흐름 이상 탐지: 공개 데이터로 학습·기준 평가
+
+네트워크 흐름 주제(`network_flow_anomaly`)는 [CIC-IDS2017 정정판(CNS2022)](https://intrusion-detection.distrinet-research.be/CNS2022/Dataset_Download.html)을 학습과 기준 평가에 쓸 수 있다. 원본은 연구 목적으로 공개되며 논문 인용을 요구하고 재배포 조건이 명시되지 않았으므로, 저장소·이미지에 넣지 않고 원본에서 받은 zip을 변환한다.
+
+```bash
+# CICIDS2017_improved.zip(약 328MB)을 받은 뒤, 고정한 SHA-256을 확인하고 변환한다.
+uv run --locked python scripts/prepare_cic_ids2017.py \
+  --source <CICIDS2017_improved.zip> --output dagster/inputs/network-flow
+```
+
+출력은 정상 트래픽만 있는 월요일의 `train.parquet`(`ts`·입력 Feature), 화~금의 `evaluation-<요일>.parquet`(`ts`·`label`·`attack`·입력 Feature), 출처·인용·행 수·제외 수를 담은 `manifest.json`이다. 효과 없이 끝난 공격 시도(`Attempted`)는 정상·공격 어느 쪽으로도 단정할 수 없어 평가에서 제외한다. 지속 시간이 0인 흐름의 무한 비율은 결측으로 두며 학습 중앙값으로 대체된다.
+
+학습은 위 Dagster Job을 `topic: network_flow_anomaly`, `data_path: /data/inputs/network-flow/train.parquet`로 실행한다. 월요일 안에서 시간순으로 나눈 Test 구간의 판정 비율은 정상 트래픽에서 경보가 나는 비율이다. 공격 포착은 SOS에서 `evaluation-<요일>.parquet`을 등록하고, 주제 화면에서 정답 레이블 `label`·관측 시각 `ts`를 지정해 점수를 계산한 뒤 판정 정책과 평가를 실행해 요일(공격 유형)별로 확인한다. 제공 설명에는 학습 데이터가 연구용 망의 정상 트래픽이라는 점과, 다른 망에서는 판정 기준을 그 망의 점수 분포로 다시 정해야 한다는 한계를 적는다.
 
 다른 생산 Pipeline도 `ml_model_package.package_isolation_forest`로 같은 패키지를 만들어 MLflow 버전의 아티팩트 위치에 두면 연결할 수 있다. 생산 환경의 Python minor·numpy·scikit-learn 버전은 SOS와 같아야 한다.
 
@@ -119,7 +134,7 @@ SOS_SUPPLY_TOKEN=<automation 토큰> .venv/bin/python scripts/supply_model.py \
   [--endpoint activity-anomaly]
 ```
 
-스크립트는 MLflow 고정 버전을 다시 학습하지 않고 연결하거나, 학습 데이터를 등록해 활동 이상 탐지의 필수 Feature로 SOS Worker 학습을 실행한다. 이후 게시된 판본을 설명과 함께 제공한다. `--state-file`은 하나의 공급 실행을 식별하며, 같은 파일로 재실행하면 기존 등록·학습에서 이어 간다. 새로운 입력·학습에는 새 상태 파일을 쓴다. 파일 등록 응답이 유실되면 자동 재업로드하지 않으므로, `GET /api/datasets`에서 등록 상태를 확인하고 같은 `--state-file`과 확인한 `--dataset-id`로 재개한다.
+스크립트는 MLflow 고정 버전을 다시 학습하지 않고 연결하거나, 학습 데이터를 등록해 `--topic`(기본 `activity_anomaly`) 주제의 필수 Feature로 SOS Worker 학습을 실행한다. 이후 게시된 판본을 설명과 함께 제공한다. `--state-file`은 하나의 공급 실행을 식별하며, 같은 파일로 재실행하면 기존 등록·학습에서 이어 간다. 새로운 입력·학습에는 새 상태 파일을 쓴다. 파일 등록 응답이 유실되면 자동 재업로드하지 않으므로, `GET /api/datasets`에서 등록 상태를 확인하고 같은 `--state-file`과 확인한 `--dataset-id`로 재개한다.
 
 학습 원본은 접근 권한이 통제된 연구 환경에서 관리하며 공개 저장소나 기본 다운로드 데이터에 포함하지 않는다. 모델 공급 전에는 Feature별 결측의 의미와 사용할 입력, 정상 기준·학습 기간, 레이블 정의와 평가 조건을 연구에서 정한다. 필수 Feature가 모두 존재하거나 중앙값 대체가 가능하다는 사실은 연구적 유효성이나 탐지 성능을 입증하지 않는다.
 
@@ -148,8 +163,8 @@ Feast Feature Service의 등록·시점 조회·폐기는 `automation` 계정이
 
 - **온라인 서빙 (SOS 웹):** 모델 관리 권한 계정의 **작업·운영 → 온라인 서빙**에서 Endpoint별 활성·전환 대상·직전 판본과 실제 실행 상태·배포 실패 사유를 확인하고 되돌리기·전환 취소·중단·재개·삭제를 실행한다. 같은 PC에서 접속한 운영 계정에는 판본마다 Ray Dashboard의 해당 애플리케이션 화면으로 가는 **복제본·로그** 링크가 보인다.
 - **Ray Dashboard** (`http://localhost:9609`): 온라인 서빙 복제본 상태, 배포 실패 메시지 전체, 복제본 로그와 자원 사용량을 확인한다. 애플리케이션 이름은 `<Endpoint ID>--<모델 판본 ID>`다. 보는 용도로 쓰며, 배포·전환은 SOS로 요청한다. Ray에 직접 적용한 Serve Config는 컨트롤러가 다음 조정에서 SOS 의도로 되돌린다.
-- **Dagster** (`http://localhost:9607`): 모델 생산 Job `activity_anomaly_production`을 실행하고 Run·단계·이벤트를 확인한다. Run마다 새 MLflow Run·모델 버전을 만든다.
-- **MLflow** (`http://localhost:9606`): 생산 Pipeline의 Run은 Experiment `activity-anomaly-production`에 남는다. SOS 모델 그룹(`sos-if-*`) 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 수정하거나 삭제하지 않는다. 연결한 버전은 `sos.source_model`·`sos.source_version`으로 원본을 가리킨다. 외부 서버는 `SOS_MLFLOW_TRACKING_URI`·`SOS_MLFLOW_TOKEN`으로 연결한다.
+- **Dagster** (`http://localhost:9607`): 모델 생산 Job `anomaly_production`을 실행하고 Run·단계·이벤트를 확인한다. Run마다 새 MLflow Run·모델 버전을 만든다.
+- **MLflow** (`http://localhost:9606`): 생산 Pipeline의 Run은 주제별 Experiment `<주제>-production`(예: `activity-anomaly-production`)에 남는다. SOS 모델 그룹(`sos-if-*`) 버전의 `sos.job_id`·`sos.sha256` 태그는 SOS의 무결성 대조 값이므로 수정하거나 삭제하지 않는다. 연결한 버전은 `sos.source_model`·`sos.source_version`으로 원본을 가리킨다. 외부 서버는 `SOS_MLFLOW_TRACKING_URI`·`SOS_MLFLOW_TOKEN`으로 연결한다.
 - **Feast UI** (`http://localhost:9608`): `sos_features` SQL Registry를 읽기 전용 DB 계정으로 탐색한다. 등록된 Feature가 없으면 빈 Catalog가 정상이다.
 
 SOS에서 모델을 쓸 수 있는지는 SOS 연결·학습 Job의 성공과 판본 상태로 판단한다. Dagster Run 성공이나 MLflow Run `Finished`만으로 판단하지 않으며, SOS 판본의 MLflow 등록은 사용 조건이 아닌 기록이다. 복구는 [Diagnostics](diagnostics.md)를 따른다.

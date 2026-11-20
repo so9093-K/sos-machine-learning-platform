@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { createServer } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -31,7 +32,15 @@ try {
   assert.deepEqual(nextNavigationContext(first, "ml"), {});
 
   assert.equal(routeAt("/scoring", "?model=model-v1").context.modelId, "model-v1");
-  assert.deepEqual(routeAt("/topics/activity-anomaly", "").context, {});
+  // 주제 화면 주소는 주제 ID를 하이픈으로 표기한다. 기존 활동 이상 탐지 주소와 주제 미지정 이동은 같은 화면이다.
+  assert.deepEqual(routeAt("/topics/activity-anomaly", "").context, { topicId: "activity_anomaly" });
+  assert.equal(contextPath("topic", {}), "/topics/activity-anomaly");
+  const networkTopic = routeAt("/topics/network-flow-anomaly", "?model=m-1&dataset=d-1");
+  assert.equal(networkTopic.tab, "topic");
+  assert.deepEqual(networkTopic.context, { topicId: "network_flow_anomaly", modelId: "m-1", datasetId: "d-1" });
+  assert.equal(contextPath("topic", networkTopic.context), "/topics/network-flow-anomaly?model=m-1&dataset=d-1");
+  assert.equal(nextNavigationContext(networkTopic, "topic").topicId, "network_flow_anomaly");
+  assert.equal(nextNavigationContext(networkTopic, "scoring").topicId, undefined);
   assert.equal(contextPath("scoring", { modelId: "name + / ?" }),
     "/scoring?model=name+%2B+%2F+%3F");
   assert.equal(routeAt("/policies", "").context.scoringId, "");
@@ -118,6 +127,16 @@ try {
     { name: "d", dtype: "Int64" },
   ], [{ op: "cast", column: "a", dtype: "Float64" }]), [{ op: "cast", column: "b", dtype: "Float64" }]);
   const { createStep } = await vite.ssrLoadModule("/src/feature-utils.ts");
+  assert.deepEqual(createStep("null_non_finite", "Flow Bytes/s", ""), { op: "null_non_finite", column: "Flow Bytes/s" });
+  // 주제 화면의 Feature 묶음은 SOS 주제 정의의 입력 Feature를 빠짐·중복 없이 덮는다.
+  const { topicFeatureGroups } = await vite.ssrLoadModule("/src/FeatureGroups.ts");
+  const topicsSource = fs.readFileSync(new URL("../../src/sos_platform/analysis_topics.py", import.meta.url), "utf8");
+  for (const [topicId, constant] of [["activity_anomaly", "ACTIVITY_FEATURES"], ["network_flow_anomaly", "NETWORK_FLOW_FEATURES"]]) {
+    const declared = [...topicsSource.match(new RegExp(constant + " = \\(([^)]*)\\)"))[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
+    const grouped = topicFeatureGroups[topicId].flatMap(group => group.features);
+    assert.equal(new Set(grouped).size, grouped.length, topicId + " 묶음 중복");
+    assert.deepEqual([...grouped].sort(), [...declared].sort(), topicId + " 묶음과 주제 Feature 불일치");
+  }
   assert.deepEqual(createStep("rename", " a ", "a"), { op: "rename", column: " a ", alias: "a" });
   assert.throws(() => createStep("rename", "a", "a"));
   assert.throws(() => createStep("rename", "a", "  "));

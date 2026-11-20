@@ -42,7 +42,7 @@ export function createStep(
     return op === "lag" ? { op, column, periods: parameter }
       : { op, column, window: parameter };
   }
-  if (op === "filter_not_null") return { op, column };
+  if (op === "filter_not_null" || op === "null_non_finite") return { op, column };
   throw new Error("지원하지 않는 변환입니다.");
 }
 export function needsTimeOrder(steps: FeatureStep[]): boolean {

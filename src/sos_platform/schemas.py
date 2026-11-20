@@ -21,7 +21,9 @@ from .ml_outputs import revision_output_contract
 class Step(BaseModel):
     """검증 및 직렬화가 가능한 피처 변환 단계."""
 
-    op: Literal["select", "filter_not_null", "fill_null", "cast", "rename", "lag", "rolling_mean"]
+    op: Literal[
+        "select", "filter_not_null", "fill_null", "null_non_finite", "cast", "rename", "lag", "rolling_mean",
+    ]
     column: str | None = None
     columns: list[str] | None = None
     value: int | float | str | bool | None = None

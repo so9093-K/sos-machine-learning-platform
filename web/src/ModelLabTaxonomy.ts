@@ -12,7 +12,9 @@ export function isTopicCompatible(model: Pick<ModelRevision, "features" | "outpu
 
 const learningTypes: Record<string, string> = { unsupervised: "비지도 학습" };
 const taskTypes: Record<string, string> = { anomaly_detection: "이상 탐지" };
-const topics: Record<string, string> = { activity_anomaly: "활동 이상 탐지" };
+const topics: Record<string, string> = {
+  activity_anomaly: "활동 이상 탐지", network_flow_anomaly: "네트워크 흐름 이상 탐지",
+};
 
 export type ModelLabClassification = {
   learning_type: string; task_type: string; topic: string;

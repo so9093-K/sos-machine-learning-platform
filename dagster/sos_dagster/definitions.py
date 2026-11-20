@@ -1,8 +1,9 @@
-"""활동 이상 탐지 모델 생산 Pipeline. Dagster가 학습·평가·MLflow 등록을 직접 실행한다.
+"""이상 탐지 분석 주제의 모델 생산 Pipeline. Dagster가 학습·평가·MLflow 등록을 직접 실행한다.
 
 SOS DB·저장소·Job에 접근하지 않는다. 생산한 모델은 MLflow 모델 버전으로 등록하고, 연결 설정이
 있으면 SOS API에 그 고정 버전의 연결을 요청한다. 전처리·학습·학습 근거 계산과 모델 패키지는 SOS와
-같은 라이브러리 함수를 쓰므로, SOS에서 같은 의미로 표시되고 같은 점수를 낸다.
+같은 라이브러리 함수를 쓰므로, SOS에서 같은 의미로 표시되고 같은 점수를 낸다. 입력 Feature는
+SOS 분석 주제 카탈로그가 정본이며 Run 설정의 `topic`으로 고른다.
 """
 
 import hashlib
@@ -31,12 +32,13 @@ from dagster import (
     job,
     op,
 )
-from sos_platform.analysis_topics import ACTIVITY_FEATURES
+from sos_platform.analysis_topics import topic as analysis_topic
 from sos_platform.duckdb_spill import SpillBudget, order_statistics
 from sos_platform.ml_if_config import IsolationForestConfig
 from sos_platform.ml_input import NUMERIC
 from sos_platform.ml_isolation_forest import TrainedIsolationForest, train_isolation_forest
 from sos_platform.ml_model_package import ESTIMATOR_FILE, MANIFEST_FILE, package_isolation_forest
+from sos_platform.ml_outputs import ANOMALY_SCORE_V1
 from sos_platform.ml_staged_matrix import (
     fit_staged_medians,
     staged_model_input,
@@ -49,14 +51,15 @@ from sos_platform.mlflow_errors import MLflowDeliveryError
 from sos_platform.mlflow_tracking import MLflowClient
 from sos_platform.score_files import ScoreWriter, quantile_threshold_file, summarize_scores
 
-PRODUCER = "dagster:activity_anomaly_production"
 TIMESTAMP = "ts"
-EXPERIMENT = "activity-anomaly-production"
 
 
 class ProductionConfig(Config):
-    data_path: str = Field(description="CSV·Parquet 경로. ts(UTC 오프셋 포함)와 활동 Feature 44개가 필요하다.")
-    registered_model: str = Field(default="activity-anomaly-if", description="등록할 MLflow 모델 이름")
+    topic: str = Field(default="activity_anomaly", description="입력 Feature를 정하는 SOS 분석 주제 ID")
+    data_path: str = Field(description="CSV·Parquet 경로. ts(UTC 오프셋 포함)와 주제의 입력 Feature가 필요하다.")
+    registered_model: str | None = Field(
+        default=None, description="등록할 MLflow 모델 이름. 생략하면 <주제>-if(예: activity-anomaly-if)",
+    )
     train_fraction: float = Field(default=0.6, gt=0, lt=1, description="시간순 Train 구간 비율")
     calibration_fraction: float = Field(default=0.2, gt=0, lt=1, description="Train 다음 Calibration 구간 비율")
     alert_fraction: float = Field(default=0.005, gt=0, lt=1, description="Calibration 점수로 정하는 판정 비율")
@@ -72,6 +75,24 @@ class ProductionConfig(Config):
     )
     connect_to_sos: bool = Field(default=True, description="MLflow 등록 후 SOS에 고정 버전을 연결한다. 공급 CLI로 연결할 예정이면 false로 지정한다")
     registry_key: str = Field(default="default", description="연결한 판본을 관리할 SOS 모델 그룹")
+
+
+def _production_topic(topic_id: str) -> dict:
+    """생산할 주제와 기록 이름. 활동 이상 탐지는 기존 MLflow 이름·출처 표시를 그대로 쓴다."""
+    found = analysis_topic(topic_id)
+    if found is None:
+        raise Failure(f"알 수 없는 분석 주제입니다: {topic_id}")
+    # Isolation Forest는 이상 점수를 낸다. 다른 출력 계약의 주제에는 이 Pipeline을 쓰지 않는다.
+    if found["output_type"] != ANOMALY_SCORE_V1:
+        raise Failure(f"이상 점수 주제가 아닙니다: {topic_id}")
+    slug = topic_id.replace("_", "-")
+    return {
+        **found,
+        "producer": f"dagster:{topic_id}_production",
+        "experiment": f"{slug}-production",
+        "default_model": f"{slug}-if",
+        "slug": slug,
+    }
 
 
 def _pin_input(path: str, stage: Path) -> tuple[Path, str]:
@@ -104,15 +125,16 @@ def _nearest_rank(count: int, fraction: float) -> int:
     return math.floor((count - 1) * fraction + 0.5)
 
 
-def _score_partition(model: TrainedIsolationForest, scan: pl.LazyFrame, path: Path) -> int:
+def _score_partition(model: TrainedIsolationForest, scan: pl.LazyFrame, path: Path,
+                     features: list[str]) -> int:
     """구간을 배치로 읽어 이상 점수를 파일에 쓴다. 결측은 학습 중앙값으로 대체하고 무한값은 거부한다."""
     with ScoreWriter(path) as writer:
-        for frame in scan.select(ACTIVITY_FEATURES).collect_batches(
+        for frame in scan.select(features).collect_batches(
             chunk_size=8192, maintain_order=True,
         ):
             values = np.asarray(frame.to_numpy(), dtype=np.float64)
             if np.isinf(values).any():
-                raise Failure("활동 Feature에 무한값이 있습니다.")
+                raise Failure("입력 Feature에 무한값이 있습니다. 결측으로 바꾼 뒤 다시 실행하세요.")
             writer.write(model.score_anomalies(values))
     return writer.count
 
@@ -127,20 +149,21 @@ def train_and_evaluate(context: OpExecutionContext, config: ProductionConfig) ->
     """
     if config.train_fraction + config.calibration_fraction >= 1:
         raise Failure("train_fraction + calibration_fraction은 1보다 작아야 합니다.")
-    features = list(ACTIVITY_FEATURES)
+    production = _production_topic(config.topic)
+    features = list(production["required_features"])
     stage_root = os.getenv("SOS_PIPELINE_STAGE_DIR")
     if stage_root:
         Path(stage_root).mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix="activity-production-", dir=stage_root) as directory:
+    with TemporaryDirectory(prefix=f"{production['slug']}-production-", dir=stage_root) as directory:
         stage = Path(directory)
         pinned, data_sha256 = _pin_input(config.data_path, stage)
         source = _scan(pinned)
         schema = source.collect_schema()
-        missing = [name for name in (TIMESTAMP, *ACTIVITY_FEATURES) if name not in schema]
+        missing = [name for name in (TIMESTAMP, *features) if name not in schema]
         if missing:
             raise Failure("필수 컬럼 없음: " + ", ".join(missing[:12]))
-        if any(schema[name] not in NUMERIC for name in ACTIVITY_FEATURES):
-            raise Failure("활동 Feature는 숫자형이어야 합니다.")
+        if any(schema[name] not in NUMERIC for name in features):
+            raise Failure("주제의 입력 Feature는 숫자형이어야 합니다.")
         budget = SpillBudget(
             stage=stage, memory_mib=config.memory_mib, max_stage_bytes=config.stage_mib * 1024 * 1024,
             stage_error="SOS-ML-TRAIN-STAGE-LIMIT", capacity_error="SOS-ML-TRAIN-CAPACITY",
@@ -191,11 +214,11 @@ def train_and_evaluate(context: OpExecutionContext, config: ProductionConfig) ->
         model = TrainedIsolationForest(
             trained.estimator, config_params, len(features), preprocessing=preprocessing,
         )
-        _score_partition(model, calibration_scan, stage / "calibration-scores.parquet")
+        _score_partition(model, calibration_scan, stage / "calibration-scores.parquet", features)
         threshold = quantile_threshold_file(
             stage / "calibration-scores.parquet", config.alert_fraction, budget,
         )
-        _score_partition(model, test_scan, stage / "test-scores.parquet")
+        _score_partition(model, test_scan, stage / "test-scores.parquet", features)
         test_evaluation = summarize_scores(stage / "test-scores.parquet", threshold=threshold)
         del train, transformed
     rows = {key: split[f"{key}_rows"] for key in ("train", "calibration", "test")}
@@ -205,7 +228,7 @@ def train_and_evaluate(context: OpExecutionContext, config: ProductionConfig) ->
         training_score_summary=summary,
         feature_training_profile=profile,
         training={
-            "producer": PRODUCER,
+            "producer": production["producer"],
             "data_reference": config.data_path,
             "data_sha256": data_sha256,
             "rows": rows,
@@ -226,7 +249,8 @@ def train_and_evaluate(context: OpExecutionContext, config: ProductionConfig) ->
         rows["train"], rows["calibration"], rows["test"], test_evaluation["alert_rate"],
     )
     return {
-        "registered_model": config.registered_model,
+        "topic": config.topic,
+        "registered_model": config.registered_model or production["default_model"],
         "connect_to_sos": config.connect_to_sos,
         "registry_key": config.registry_key,
         "files": files,
@@ -253,14 +277,14 @@ def _mlflow() -> MLflowClient:
     return MLflowClient(settings)
 
 
-def _experiment(client: MLflowClient) -> str:
+def _experiment(client: MLflowClient, name: str) -> str:
     try:
-        found = client.get("experiments/get-by-name", {"experiment_name": EXPERIMENT})
+        found = client.get("experiments/get-by-name", {"experiment_name": name})
         return found["experiment"]["experiment_id"]
     except MLflowDeliveryError as exc:
         if not str(exc).startswith("SOS-MLFLOW-HTTP-404"):
             raise
-    return client.post("experiments/create", {"name": EXPERIMENT})["experiment_id"]
+    return client.post("experiments/create", {"name": name})["experiment_id"]
 
 
 def _ensure_registered_model(client: MLflowClient, name: str) -> None:
@@ -274,14 +298,16 @@ def _ensure_registered_model(client: MLflowClient, name: str) -> None:
 
 @op(description="학습·평가 기록과 모델 패키지를 MLflow Run에 남기고, 그 패키지를 MLflow 모델 버전으로 등록합니다.")
 def register_in_mlflow(context: OpExecutionContext, produced: dict) -> dict:
+    production = _production_topic(produced["topic"])
     client = _mlflow()
     started = int(time.time() * 1000)
     run = client.post("runs/create", {
-        "experiment_id": _experiment(client),
-        "run_name": f"activity-anomaly-{context.run_id[:8]}",
+        "experiment_id": _experiment(client, production["experiment"]),
+        "run_name": f"{production['slug']}-{context.run_id[:8]}",
         "start_time": started,
         "tags": [
-            {"key": "sos.producer", "value": PRODUCER},
+            {"key": "sos.producer", "value": production["producer"]},
+            {"key": "sos.topic", "value": produced["topic"]},
             {"key": "dagster.run_id", "value": context.run_id},
         ],
     })["run"]["info"]
@@ -305,7 +331,7 @@ def register_in_mlflow(context: OpExecutionContext, produced: dict) -> dict:
     _ensure_registered_model(client, name)
     version = client.post("model-versions/create", {
         "name": name, "source": artifact_uri + "/sos_model", "run_id": run_id,
-        "description": "활동 이상 탐지 Isolation Forest. sos_model/ 아래 SOS 모델 패키지(sos_model.json·estimator.skops).",
+        "description": f"{production['name']} Isolation Forest. sos_model/ 아래 SOS 모델 패키지(sos_model.json·estimator.skops).",
     })["model_version"]["version"]
     for _ in range(60):
         entry = client.get("model-versions/get", {"name": name, "version": version})["model_version"]
@@ -315,7 +341,7 @@ def register_in_mlflow(context: OpExecutionContext, produced: dict) -> dict:
     else:
         raise Failure("MLflow 모델 버전이 READY 상태가 되지 않았습니다.")
     context.log_event(AssetMaterialization(
-        asset_key="activity_anomaly_model",
+        asset_key=f"{produced['topic']}_model",
         metadata={
             "registered_model": name,
             "version": version,
@@ -382,12 +408,12 @@ def connect_to_sos(context: OpExecutionContext, registered: dict) -> None:
 @job(
     executor_def=in_process_executor,
     description=(
-        "활동 이상 탐지 모델 생산. 입력 파일로 학습·평가하고 MLflow 모델 버전으로 등록한 뒤 SOS에 연결한다. "
-        "Run마다 새 MLflow Run·모델 버전을 만든다."
+        "이상 탐지 주제의 모델 생산. 설정의 topic이 정한 입력 Feature로 학습·평가하고 MLflow 모델 버전으로 "
+        "등록한 뒤 SOS에 연결한다. Run마다 새 MLflow Run·모델 버전을 만든다."
     ),
 )
-def activity_anomaly_production():
+def anomaly_production():
     connect_to_sos(register_in_mlflow(train_and_evaluate()))
 
 
-defs = Definitions(jobs=[activity_anomaly_production])
+defs = Definitions(jobs=[anomaly_production])

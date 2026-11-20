@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FeatureProfile, profileFeatureNames } from "./FeatureProfile";
 import { formatError, request, submitJob } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
-import { groupActivityFeatures } from "./ActivityFeatureGroups";
+import { groupFeatures } from "./FeatureGroups";
 import { formatFeatureValue } from "./feature-format";
 import { FeatureResultDetails } from "./FeatureResultDetails";
 import { PlaygroundResult, formatPlaygroundScore as formatScore, type PlaygroundComparison } from "./PlaygroundResult";
@@ -281,7 +281,7 @@ export function ModelLabPlayground({ model, canRun, canCancel, observationInput,
     ? playgroundChangedFeatures(fields, importedSource.fields, model.features) : [];
   const showCurrentJob = playgroundJobVisibleAfterImport(importedSource, importedAfterJobId, job?.id ?? null);
   const newJobAfterImport = Boolean(importedSource && showCurrentJob);
-  const inputGroups = groupActivityFeatures(
+  const inputGroups = groupFeatures(
     Object.fromEntries(model.features.map(name => [name, null])));
   const searchedNames = model.features.filter(name => {
     const term = inputSearch.trim().toLocaleLowerCase();

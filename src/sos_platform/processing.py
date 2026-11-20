@@ -126,6 +126,18 @@ def transform(lf: pl.LazyFrame, spec: Transform, *, preview: PreviewScope | None
             lf = lf.with_columns(col.fill_null(step.value))
             if step.column == spec.order_by or step.column in spec.group_by:
                 validated_window_keys = False
+        elif step.op == "null_non_finite":
+            # 0으로 나눈 비율처럼 정의되지 않은 값(무한대·NaN)을 결측으로 둔다. ML 입력은 무한값을 거부하고
+            # 결측은 판본의 학습 중앙값으로 대체하므로, 값을 임의의 수로 바꾸지 않고 결측 정책에 맡긴다.
+            dtype = current_schema[step.column]
+            if not dtype.is_numeric():
+                raise InvalidRequestError("무한값 결측 변환은 수치형 컬럼에만 적용할 수 있습니다.")
+            if dtype.is_float():
+                lf = lf.with_columns(
+                    pl.when(col.is_finite()).then(col).otherwise(None).alias(step.column)
+                )
+            if step.column == spec.order_by or step.column in spec.group_by:
+                validated_window_keys = False
         elif step.op == "cast":
             lf = lf.with_columns(col.cast(ALLOWED_CASTS[step.dtype], strict=True))
             if step.column == spec.order_by or step.column in spec.group_by:
