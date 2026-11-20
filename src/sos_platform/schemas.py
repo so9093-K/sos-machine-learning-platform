@@ -882,7 +882,7 @@ JobKind = Literal[
     "profile", "transform", "iceberg_import", "exploration",
     "feature_register", "feature_retrieve", "feature_retire",
     "ml_train", "ml_import", "ml_score", "ml_playground",
-    "ml_policy", "ml_evaluate", "ml_explain",
+    "ml_policy", "ml_evaluate", "ml_explain", "public_import",
 ]
 
 
@@ -905,6 +905,38 @@ class JobOut(BaseModel):
     created_at: str
     updated_at: str
     attempts: list[AttemptOut]
+
+
+class PublicPartOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    role: Literal["train", "evaluation"] = Field(
+        description="train은 정상만 있는 학습·기준 Dataset, evaluation은 0/1 `label`과 원본 `attack`을 가진 평가 Dataset"
+    )
+
+
+class PublicSourceOut(BaseModel):
+    """검증한 공개 데이터 원본. 가져오기 전에 이용 조건·인용을 사용자에게 보인다."""
+
+    id: str
+    title: str
+    summary: str
+    topic: str = Field(description="이 원본으로 준비하는 Dataset이 따르는 분석 주제")
+    url: str
+    sha256: str = Field(description="검증한 원본 판본. 받은 원본이 다르면 가져오지 않는다")
+    size_bytes: int
+    terms: str
+    terms_version: str = Field(description="가져오기 요청이 확인해야 하는 이용 조건·준비 방법 판본")
+    citations: list[str]
+    parts: list[PublicPartOut]
+
+
+class PublicImportRequest(BaseModel):
+    part: str = Field(min_length=1, max_length=64, description="가져올 부분 ID")
+    accept_terms_version: str = Field(
+        min_length=1, max_length=32, description="사용자가 확인한 이용 조건 판본. 현재 판본과 같아야 한다",
+    )
 
 
 class MLModelImportRequest(BaseModel):

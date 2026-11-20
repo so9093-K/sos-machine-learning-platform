@@ -1,4 +1,5 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
+import { PublicDataImport } from "./PublicDataImport";
 import type { Dataset, UploadPolicy } from "./types";
 
 type SnapshotChoice = { snapshot_id: string | number; timestamp_ms: number };
@@ -25,6 +26,8 @@ type Props = {
   onLoadMore: () => void;
   /** URL로 지정했지만 목록에 아직 없는 Dataset의 표시 이름. */
   pendingLabel?: string;
+  /** 공개 데이터 가져오기로 만든 Dataset. */
+  onPublicImported: (dataset: Dataset) => void;
 };
 
 const mebibytes = (size: number) => (size / (1024 * 1024)).toFixed(2);
@@ -35,8 +38,10 @@ export function DataSourceBar(props: Props) {
     datasets, selected, canWrite, busy, loading = false, readError = false, uploadRef, uploadPolicy,
     onFile, onChoose, existingTableName, onChangeExistingName,
     snapshots, snapshotId, onSnapshotId, snapshotsLoading,
-    onLoadSnapshots, onConnectExisting, hasMore, onLoadMore, pendingLabel,
+    onLoadSnapshots, onConnectExisting, hasMore, onLoadMore, pendingLabel, onPublicImported,
   } = props;
+  // 펼쳤을 때만 공개 데이터 목록을 조회한다.
+  const [publicOpen, setPublicOpen] = useState(false);
   return <div className="data-source-bar">
     {loading && datasets.length === 0 && <p className="muted" role="status">Dataset 조회 중…</p>}
     {!loading && !readError && datasets.length === 0 && <p className="muted">등록된 Dataset이 없습니다.</p>}
@@ -89,6 +94,10 @@ export function DataSourceBar(props: Props) {
             {snapshotId ? "선택한 Snapshot 연결" : "최신 Snapshot 연결"}
           </button>
         </div>
+        <details className="public-data-entry" onToggle={event => setPublicOpen(event.currentTarget.open)}>
+          <summary>공개 데이터 가져오기</summary>
+          {publicOpen && <PublicDataImport onImported={onPublicImported} />}
+        </details>
       </div>
     </details>}
   </div>;

@@ -7,6 +7,7 @@
 ### 데이터
 
 - CSV(UTF-8·쉼표·첫 행 헤더)·Parquet·헤더 유무를 지정한 탭 구분 TSV/TXT를 등록하고 원본 SHA-256과 해석 설정을 보존한다. 형식이 불명확한 파일은 이유와 함께 거절한다.
+- 검증한 공개 데이터(고정 URL·SHA-256·이용 조건 판본)를 이용 조건 확인 후 `public_import` Job으로 가져와 출처가 기록된 일반 Dataset으로 만든다(`GET /api/public-datasets`). 첫 원본은 CIC-IDS2017 정정판이다.
 - Iceberg 테이블 적재와 고정 Snapshot 참조, Dataset별 Snapshot Tag 보존, Catalog Table UUID·토큰에 고정한 테이블 쓰기 소유권을 제공한다. 파티션 테이블도 행 수 제한 없이 배치로 적재해 한 Snapshot으로 커밋한다.
 - Data Explorer에서 Dataset 개요·Understanding Profile(역할·탐색 후보)·컬럼 투영·필터·정렬 조회·DuckDB 탐색을 제공하고, 기본 분석과 전체 집계는 명시적 Job으로 실행한다. 결과마다 분석 범위·실제 분석 행 수·근사 여부를 구별한다.
 - Data Preparation에서 Polars Feature 변환(컬럼 이름 변경·무한값 결측 변환·그룹별 Lag·Rolling 등), 불투명 UUIDv4 관측치 ID 발급, Iceberg 적재를 독립 Job으로 실행한다. Lag·Rolling 미리보기는 입력 행 수와 관계없이 전체 변환과 같은 결과 앞부분을 보이며, 한 요청의 계산 시간 한도를 넘으면 변환 Job으로 안내한다.

@@ -159,6 +159,19 @@ DEFINITIONS = (
         "validation",
     ),
     spec(
+        "SOS-PUBLIC-DATA-UNAVAILABLE",
+        "공개 데이터 원본 연결 실패",
+        "공개 데이터 원본 위치에 연결할 수 없거나 받는 중 연결이 끊겼습니다. Worker의 외부 네트워크 연결을 확인한 뒤 다시 가져오세요.",
+        "dependency",
+        "after_refresh",
+    ),
+    spec(
+        "SOS-PUBLIC-DATA-MISMATCH",
+        "공개 데이터 원본 불일치",
+        "받은 원본이 검증한 판본(크기·SHA-256)과 다르거나, 요청을 접수한 뒤 이용 조건·준비 방법이 바뀌었습니다. 다른 원본을 쓰지 않도록 가져오지 않았습니다. 목록을 다시 확인한 뒤 요청하세요.",
+        "validation",
+    ),
+    spec(
         "SOS-ML-IMPORT-SOURCE-UNAVAILABLE",
         "MLflow 모델 버전 확인 실패",
         "MLflow에 연결할 수 없거나 지정한 모델 버전이 없거나 READY 상태가 아닙니다. 모델 이름·버전과 MLflow 상태를 확인하세요.",

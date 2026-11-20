@@ -97,6 +97,12 @@ Worker의 `worker.staging.cleanup_failed`는 정리를 모두 시도한 뒤 실�
 5. 컨트롤러 구조화 로그(`make logs`의 `serving-controller`)로 흐름을 따라간다. `serving.config.applied`는 Config 적용, `serving.application.failed`(`endpoint_id`·`model_revision_id`·`status`)는 애플리케이션 실패(상태가 바뀔 때 한 번), `serving.revision.activated`는 전환 시점이다. `serving.reconcile.unavailable`(`failure_type`·`status`)로 Ray 연결 장애와 Config 거절을 구분한다.
 6. 서빙 의도와 판본은 SOS DB가 정본이다. Ray에 적용된 Config가 의도와 다르거나 애플리케이션이 사라지면 컨트롤러가 다음 조정에서 의도한 Config를 다시 적용하므로, 변경은 SOS로 요청한다.
 
+### 공개 데이터 가져오기
+
+1. `SOS-PUBLIC-DATA-UNAVAILABLE`이면 Worker 컨테이너에서 원본 위치로 HTTPS 연결이 되는지 확인한 뒤 같은 부분을 다시 가져온다. 이미 받은 원본은 캐시에서 다시 쓴다.
+2. `SOS-PUBLIC-DATA-MISMATCH`이면 받은 원본의 크기·SHA-256이 카탈로그와 다르거나 접수 뒤 이용 조건·준비 방법 판본이 바뀐 것이다. 다른 원본으로 대체하지 않으며, 원본 제공처의 변경을 확인하고 카탈로그를 코드 변경으로 갱신한다.
+3. 가져온 Dataset의 출처는 작업 이력의 가져오기 Job 결과(`public_source`)에서 확인한다.
+
 ### 모델 생산·연결
 
 1. `make status`에서 `dagster-postgres`, `dagster-code`, `dagster-webserver`, `dagster-daemon` 상태를 확인한다. Dagster 장애는 기존 SOS 판본·Scoring·서빙에 영향을 주지 않는다.

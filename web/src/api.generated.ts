@@ -987,6 +987,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public-datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 가져올 수 있는 공개 데이터
+         * @description 검증한 원본(고정 URL·SHA-256)과 이용 조건·인용, 원본에서 만드는 Dataset 부분을 반환합니다.
+         */
+        get: operations["list_public_datasets_api_public_datasets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public-datasets/{source_id}/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 공개 데이터 가져오기
+         * @description 이용 조건 판본을 확인한 사용자가 원본의 한 부분을 Dataset으로 가져옵니다. Worker가 원본을 받아 고정 SHA-256을 확인하고 주제 입력 형식으로 준비합니다. 202 Accepted는 가져오기 완료가 아닙니다. 성공하면 `result.dataset_id`가 요청자 소유의 새 Dataset이며, 출처는 `result.public_source`에 남습니다.
+         */
+        post: operations["create_public_import_api_public_datasets__source_id__imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ready": {
         parameters: {
             query?: never;
@@ -2548,6 +2588,19 @@ export interface components {
             /** Sampled */
             sampled: boolean;
         };
+        /** PublicImportRequest */
+        PublicImportRequest: {
+            /**
+             * Accept Terms Version
+             * @description 사용자가 확인한 이용 조건 판본. 현재 판본과 같아야 한다
+             */
+            accept_terms_version: string;
+            /**
+             * Part
+             * @description 가져올 부분 ID
+             */
+            part: string;
+        };
         /**
          * PublicModelRevisionOut
          * @description 제공 모델 소비자의 사용 정보. 내부 출처·저장 근거·학습 설정을 포함하지 않는다.
@@ -2610,6 +2663,58 @@ export interface components {
             training_score_summary: {
                 [key: string]: unknown;
             };
+        };
+        /** PublicPartOut */
+        PublicPartOut: {
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /**
+             * Role
+             * @description train은 정상만 있는 학습·기준 Dataset, evaluation은 0/1 `label`과 원본 `attack`을 가진 평가 Dataset
+             * @enum {string}
+             */
+            role: "train" | "evaluation";
+            /** Title */
+            title: string;
+        };
+        /**
+         * PublicSourceOut
+         * @description 검증한 공개 데이터 원본. 가져오기 전에 이용 조건·인용을 사용자에게 보인다.
+         */
+        PublicSourceOut: {
+            /** Citations */
+            citations: string[];
+            /** Id */
+            id: string;
+            /** Parts */
+            parts: components["schemas"]["PublicPartOut"][];
+            /**
+             * Sha256
+             * @description 검증한 원본 판본. 받은 원본이 다르면 가져오지 않는다
+             */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Summary */
+            summary: string;
+            /** Terms */
+            terms: string;
+            /**
+             * Terms Version
+             * @description 가져오기 요청이 확인해야 하는 이용 조건·준비 방법 판본
+             */
+            terms_version: string;
+            /** Title */
+            title: string;
+            /**
+             * Topic
+             * @description 이 원본으로 준비하는 Dataset이 따르는 분석 주제
+             */
+            topic: string;
+            /** Url */
+            url: string;
         };
         /**
          * ReadyFeaturesOut
@@ -3902,7 +4007,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string | null;
-                kind?: ("profile" | "transform" | "iceberg_import" | "exploration" | "feature_register" | "feature_retrieve" | "feature_retire" | "ml_train" | "ml_import" | "ml_score" | "ml_playground" | "ml_policy" | "ml_evaluate" | "ml_explain")[] | null;
+                kind?: ("profile" | "transform" | "iceberg_import" | "exploration" | "feature_register" | "feature_retrieve" | "feature_retire" | "ml_train" | "ml_import" | "ml_score" | "ml_playground" | "ml_policy" | "ml_evaluate" | "ml_explain" | "public_import")[] | null;
                 model_revision_id?: string | null;
             };
             header?: never;
@@ -5017,6 +5122,72 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MLForkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_public_datasets_api_public_datasets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSourceOut"][];
+                };
+            };
+            /** @description Structured API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_public_import_api_public_datasets__source_id__imports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicImportRequest"];
             };
         };
         responses: {

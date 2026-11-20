@@ -23,6 +23,8 @@ Worker는 자식 실행의 시간·메모리·스테이징 사용량을 감시�
 
 ## 데이터·외부 시스템 경계
 
+공개 데이터 가져오기는 Worker가 카탈로그에 고정한 원본 위치로만 나가는 연결을 쓴다([ADR 0026](adr/0026-public-data-import.md)). 받은 원본은 Worker 캐시(`<SOS 홈>/public-sources/<SHA-256>.zip`)의 다시 받을 수 있는 사본이고, 해시가 맞을 때만 다시 쓴다. 외부 연결이 막힌 환경에서는 이 기능만 쓸 수 없다.
+
 Dataset 캐시는 재사용 가능한 로컬 복사본이며 원본 S3 객체·모델·Iceberg Snapshot의 보존 정책과 다르다. 사용 중인 캐시를 임의 축출하지 않으며 데이터 손상 시 원본으로부터 무결성을 확인한다.
 
 API·초기화는 기본 의존성을 사용하고 ML 계산용 numpy·joblib·scikit-learn·SHAP·skops는 `ml` dependency group으로 설치한다. 모델 생산 Pipeline(Dagster)은 `dagster`와 `ml` 그룹을 함께 설치해 SOS와 같은 ML 판본으로 학습한다. 학습 제출·Fork의 매개변수 검증은 SDK를 로딩하지 않는다. 개발 검사는 실제 ML 계산을 포함하므로 `dev` 그룹에 `ml`을 포함한다. 호스트 Worker 실행에는 `uv sync --locked --group ml`을 사용하고, 등록 Feature 실행에는 `--group feast`를 함께 선택한다. `serving` 그룹은 `ml`에 Ray Serve를 더한 서빙 이미지용이다. 컨테이너 이미지는 Dockerfile의 `SOS_UV_GROUPS` 인자로 그룹을 고른다.

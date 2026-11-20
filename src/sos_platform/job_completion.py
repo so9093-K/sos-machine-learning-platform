@@ -51,7 +51,7 @@ def complete_job(
                 publisher = publish_evaluation
             elif kind == "ml_explain":
                 publisher = publish_explanation
-            elif kind in ("transform", "feature_retrieve", "iceberg_import"):
+            elif kind in ("transform", "feature_retrieve", "iceberg_import", "public_import"):
                 publisher = publish_dataset
             else:
                 publisher = None

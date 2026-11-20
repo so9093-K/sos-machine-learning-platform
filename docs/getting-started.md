@@ -110,6 +110,8 @@ uv run --locked python scripts/prepare_cic_ids2017.py \
   --source <CICIDS2017_improved.zip> --output dagster/inputs/network-flow
 ```
 
+SOS 화면에서는 같은 준비를 **데이터 → 데이터 추가·연결 → 공개 데이터 가져오기** 또는 네트워크 흐름 주제 화면의 **공개 기준 데이터 가져오기**로 실행한다(Worker가 원본을 받아 확인한다). 스크립트는 Dagster 입력처럼 SOS 밖에서 파일이 필요할 때 쓴다.
+
 출력은 정상 트래픽만 있는 월요일의 `train.parquet`(`ts`·입력 Feature), 화~금의 `evaluation-<요일>.parquet`(`ts`·`label`·`attack`·입력 Feature), 출처·인용·행 수·제외 수를 담은 `manifest.json`이다. 효과 없이 끝난 공격 시도(`Attempted`)는 정상·공격 어느 쪽으로도 단정할 수 없어 평가에서 제외한다. 지속 시간이 0인 흐름의 무한 비율은 결측으로 두며 학습 중앙값으로 대체된다.
 
 학습은 위 Dagster Job을 `topic: network_flow_anomaly`, `data_path: /data/inputs/network-flow/train.parquet`로 실행한다. 월요일 안에서 시간순으로 나눈 Test 구간의 판정 비율은 정상 트래픽에서 경보가 나는 비율이다. 공격 포착은 SOS에서 `evaluation-<요일>.parquet`을 등록하고, 주제 화면에서 정답 레이블 `label`·관측 시각 `ts`를 지정해 점수를 계산한 뒤 판정 정책과 평가를 실행해 요일(공격 유형)별로 확인한다. 제공 설명에는 학습 데이터가 연구용 망의 정상 트래픽이라는 점과, 다른 망에서는 판정 기준을 그 망의 점수 분포로 다시 정해야 한다는 한계를 적는다.

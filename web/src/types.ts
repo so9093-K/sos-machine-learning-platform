@@ -4,6 +4,7 @@ import type { components, operations } from "./api.generated";
 export type Identity = components["schemas"]["AuthMeOut"];
 export type AuditEvent = components["schemas"]["AuditEventOut"];
 export type Dataset = components["schemas"]["DatasetOut"];
+export type PublicSource = components["schemas"]["PublicSourceOut"];
 export type DatasetPage = components["schemas"]["DatasetPageOut"];
 export type Snapshot = components["schemas"]["SnapshotOut"];
 export type Preview = components["schemas"]["PreviewOut"];

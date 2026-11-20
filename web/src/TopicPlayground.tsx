@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { activityFeatureLabel } from "./ActivityFeatureLabels";
 import { topicFeatureGroups } from "./FeatureGroups";
+import { PublicDataImport } from "./PublicDataImport";
 import { ModelApplicationWorkspace } from "./ModelApplicationWorkspace";
 import { ModelApiUsage, servesModel } from "./ModelApiUsage";
 import type { PlaygroundRun } from "./ModelLabPlayground";
@@ -220,6 +221,15 @@ export function TopicPlayground({ topicId, datasets, selectedDatasetId, preferre
           onPlaygroundRun={setLastRun} onPrepareInput={onPrepareInput} />}
       </>}
     </section>
+
+    {canUpload && guide.publicData && <details className="panel playground-details">
+      <summary>공개 기준 데이터 가져오기</summary>
+      <p className="hint">{guide.publicData}</p>
+      <PublicDataImport topicId={topicId} onImported={dataset => {
+        onDatasetRegistered(dataset);
+        onSelectDataset(dataset.id);
+      }} />
+    </details>}
 
     {taskGuides.anomaly_detection.reading && <section className="guide-section" aria-labelledby="playground-reading">
       <h2 id="playground-reading">결과 해석</h2>

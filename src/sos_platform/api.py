@@ -23,9 +23,10 @@ from .api_ml_results import ml_results_router
 from .api_ml_training import training_router
 from .api_model_import import model_import_router
 from .api_model_offering import model_offering_router
+from .api_public_datasets import public_dataset_router
 from .api_serving import serving_router
-from .api_topics import topic_router
 from .api_storage import storage_router
+from .api_topics import topic_router
 from .errors import ERRORS
 from .ingestion import MULTIPART_OVERHEAD_BYTES, UploadPolicy
 from .model_deletion import model_deletion_router
@@ -243,6 +244,7 @@ def create_app(home: Path | None = None, *, identity: IdentitySettings | None = 
     app.include_router(job_router(store, access))
     app.include_router(model_groups_router(store))
     app.include_router(model_import_router(store, access))
+    app.include_router(public_dataset_router(store, access))
     app.include_router(model_offering_router(store, access))
     app.include_router(model_deletion_router(store))
     app.include_router(serving_router(store, access))
