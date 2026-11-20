@@ -13,7 +13,7 @@ const vite = await createServer({
 });
 
 try {
-  const { routeAt, contextPath, nextNavigationContext, resourcePath } =
+  const { routeAt, routeFromPath, contextPath, nextNavigationContext, resourcePath } =
     await vite.ssrLoadModule("/src/PlatformNavigation.tsx");
 
   assert.equal(routeAt("/training", "").tab, "overview");
@@ -41,6 +41,9 @@ try {
   assert.equal(contextPath("topic", networkTopic.context), "/topics/network-flow-anomaly?model=m-1&dataset=d-1");
   assert.equal(nextNavigationContext(networkTopic, "topic").topicId, "network_flow_anomaly");
   assert.equal(nextNavigationContext(networkTopic, "scoring").topicId, undefined);
+  // 주제 화면에서 Dataset·모델을 골라도(같은 화면의 문맥 선택) 경로의 주제를 잃지 않는다.
+  assert.deepEqual(routeFromPath(contextPath("topic", { ...networkTopic.context, datasetId: "d-2" })).context,
+    { topicId: "network_flow_anomaly", modelId: "m-1", datasetId: "d-2" });
   assert.equal(contextPath("scoring", { modelId: "name + / ?" }),
     "/scoring?model=name+%2B+%2F+%3F");
   assert.equal(routeAt("/policies", "").context.scoringId, "");

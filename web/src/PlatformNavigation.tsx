@@ -133,6 +133,12 @@ export function routeAt(pathname: string, search: string): WorkspaceRoute {
     context: contextAt(tab ?? "overview", search) };
 }
 
+/** 화면 주소 전체(경로·쿼리)에서 탐색 상태를 읽는다. 주제 ID처럼 경로에 있는 문맥도 함께 읽는다. */
+export function routeFromPath(path: string): WorkspaceRoute {
+  const url = new URL(path, "http://sos.local");
+  return routeAt(url.pathname, url.search);
+}
+
 /** 독립 화면 간에 목적과 관련된 선택만 전달한다. 같은 주제 화면 안의 이동은 주제를 유지한다. */
 export function nextNavigationContext(previous: WorkspaceRoute, tab: WorkspaceTab): MLNavigationContext {
   const next = nextContext(previous, tab);
@@ -191,9 +197,7 @@ export function useWorkspaceNavigation() {
     requestAnimationFrame(() => document.getElementById("sos-page-heading")?.focus());
   }, []);
   const navigateWithContext = useCallback((tab: WorkspaceTab, context: MLNavigationContext) => {
-    const path = contextPath(tab, context);
-    const url = new URL(path, window.location.origin);
-    const next = routeAt(url.pathname, url.search).context;
+    const next = routeFromPath(contextPath(tab, context)).context;
     update({ tab, resource: null, context: next }, contextPath(tab, next));
   }, [update]);
   const navigate = useCallback((target: WorkspaceTab | ((previous: WorkspaceTab) => WorkspaceTab)) => {
@@ -206,7 +210,8 @@ export function useWorkspaceNavigation() {
     const previous = current.current;
     if (previous.resource) return;
     const path = contextPath(previous.tab, context);
-    const parsed = contextAt(previous.tab, path.split("?")[1] ?? "");
+    // 같은 화면의 선택도 경로의 문맥(예: 주제 ID)을 잃지 않도록 주소 전체로 다시 읽는다.
+    const parsed = routeFromPath(path).context;
     // 사용자가 확인한 Dataset/Model/Scoring 선택은 뒤로 가기로 복원할 수 있어야 한다.
     // 입력 한 글자마다 호출하지 않으며, 같은 화면의 선택은 헤더 포커스를 움직이지 않는다.
     if (window.location.pathname + window.location.search !== path) {
