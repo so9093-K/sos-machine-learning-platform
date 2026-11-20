@@ -60,7 +60,7 @@ export function useFeatureEditor({
     if (!step) return;
     setEditingStep(index);
     setOp(step.op); setColumn(step.column ?? "");
-    setValue(step.value == null ? "" : String(step.value));
+    setValue(step.op === "rename" ? step.alias ?? "" : step.value == null ? "" : String(step.value));
     setLagPeriods(step.periods ?? 1); setRollingWindow(step.window ?? 3);
     setChosenColumns(step.columns ?? []);
   }

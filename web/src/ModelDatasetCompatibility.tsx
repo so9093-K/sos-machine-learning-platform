@@ -3,12 +3,18 @@ import type { DatasetColumns, ModelRevision } from "./types";
 
 type Columns = DatasetColumns["columns"];
 type TypeMismatch = { name: string; expected: string; actual: string };
+type RenameCandidate = { name: string; actual: string; expected: string; actualDtype: string };
 
 /** 데이터 준비의 자료형 변환이 만드는 대상 자료형. 다른 자료형은 원본에서 맞춰야 한다. */
 export const PREPARATION_CAST_DTYPE = "Float64";
 // 실수형 변환이 값의 의미를 바꾸지 않는 원본 자료형. 문자열은 숫자로 읽히지 않으면 변환 Job이 실패한다.
 const CASTABLE_SOURCE = /^(?:U?Int(?:8|16|32|64|128)|Float32|Decimal.*|String)$/;
 const LIST_PREVIEW = 6;
+
+/** 데이터 준비의 실수형 변환으로 `actual`을 모델이 요구하는 `expected`로 맞출 수 있는지. */
+export function preparationCastable(actual: string, expected: string): boolean {
+  return expected === PREPARATION_CAST_DTYPE && CASTABLE_SOURCE.test(actual);
+}
 
 /** 대소문자·앞뒤 공백·공백/하이픈 구분자만 무시한 이름. 컬럼의 의미가 같은지는 판단하지 않는다. */
 export function normalizedFeatureName(name: string): string {
@@ -31,13 +37,13 @@ export function checkModelDatasetInput(model: Pick<ModelRevision, "features" | "
     const expected = String(types[index]);
     return column && column.dtype !== expected ? [{ name, expected, actual: column.dtype }] : [];
   });
-  const renamed = missing.flatMap(name => {
+  const renamed: RenameCandidate[] = missing.flatMap(name => {
     const candidates = columns.filter(column => !model.features.includes(column.name) &&
       normalizedFeatureName(column.name) === normalizedFeatureName(name));
-    return candidates.length === 1 ? [{ name, actual: candidates[0].name }] : [];
+    return candidates.length === 1 ? [{ name, actual: candidates[0].name,
+      expected: String(types[model.features.indexOf(name)]), actualDtype: candidates[0].dtype }] : [];
   });
-  const castable = mismatches.filter(item =>
-    item.expected === PREPARATION_CAST_DTYPE && CASTABLE_SOURCE.test(item.actual));
+  const castable = mismatches.filter(item => preparationCastable(item.actual, item.expected));
   return { missing, mismatches, renamed, castable,
     ready: missing.length === 0 && mismatches.length === 0 };
 }
@@ -59,10 +65,13 @@ function NameList({ items }: { items: string[] }) {
   </>;
 }
 
+const typeChange = (item: TypeMismatch) =>
+  `${item.name}: ${formatDtype(item.actual)} → ${formatDtype(item.expected)}`;
+
 export function ModelDatasetCompatibility({ model, columns, compact = false, onPrepare }: {
   compact?: boolean;
   model: Pick<ModelRevision, "features" | "runtime">; columns: Columns;
-  /** 자료형 변환으로 맞출 수 있는 불일치가 있을 때 데이터 준비로 이동한다. */
+  /** 데이터 준비로 맞출 수 있는 불일치가 있을 때 데이터 준비로 이동한다. */
   onPrepare?: () => void;
 }) {
   const input = checkModelDatasetInput(model, columns);
@@ -81,32 +90,36 @@ export function ModelDatasetCompatibility({ model, columns, compact = false, onP
   const castableNames = new Set(input.castable.map(item => item.name));
   const sourceTypes = input.mismatches.filter(item => !castableNames.has(item.name));
   const matched = model.features.length - input.missing.length - input.mismatches.length;
-  const remaining = absent.length + input.renamed.length + sourceTypes.length;
+  const inPreparation = input.renamed.length + input.castable.length;
+  const inSource = absent.length + sourceTypes.length;
   return <div className="notice-blocked model-input-check" role="status">
     <strong>선택한 Dataset에 적용할 수 없음</strong>
     <p>필수 Feature {model.features.length}개 중 이름·자료형 일치 {matched}개</p>
-    {input.castable.length > 0 && <section className="input-fix" aria-label="자료형 변환으로 해결">
-      <strong>자료형 변환으로 해결 · {input.castable.length}개</strong>
-      <p className="hint">데이터 준비에서 실수형({PREPARATION_CAST_DTYPE})으로 변환하면 맞출 수 있습니다.
-        원본은 그대로 두고 변환 결과를 새 Dataset으로 만들며, 숫자로 읽을 수 없는 값이 있으면 변환이 실패합니다.</p>
-      <NameList items={input.castable.map(item => `${item.name}: ${formatDtype(item.actual)} → ${formatDtype(item.expected)}`)} />
-      {onPrepare && <button type="button" className="secondary" onClick={onPrepare}>데이터 준비에서 자료형 변환 →</button>}
-      {onPrepare && remaining > 0 && <p className="hint">자료형 변환 후에도 아래 {remaining}개는 원본에서 준비해야 합니다.</p>}
+    {inPreparation > 0 && <section className="input-fix" aria-label="데이터 준비에서 해결">
+      <strong>데이터 준비에서 해결 · {inPreparation}개</strong>
+      <p className="hint">원본은 그대로 두고 변환 결과를 새 Dataset으로 만듭니다.</p>
+      {input.renamed.length > 0 && <>
+        <p className="input-fix-kind">이름 변경 · 대소문자·공백·구분자만 다른 컬럼입니다. 같은 값인지 확인한 뒤 바꾸세요.</p>
+        <NameList items={input.renamed.map(item => `${visibleName(item.actual)} → ${item.name}`)} />
+      </>}
+      {input.castable.length > 0 && <>
+        <p className="input-fix-kind">실수형({PREPARATION_CAST_DTYPE}) 변환 · 숫자로 읽을 수 없는 값이 있으면 변환이 실패합니다.</p>
+        <NameList items={input.castable.map(typeChange)} />
+      </>}
+      {onPrepare && <button type="button" className="secondary" onClick={onPrepare}>데이터 준비에서 맞추기 →</button>}
+      {onPrepare && inSource > 0 && <p className="hint">데이터 준비 후에도 아래 {inSource}개는 원본에서 준비해야 합니다.</p>}
     </section>}
-    {input.renamed.length > 0 && <section className="input-fix" aria-label="이름만 다른 컬럼">
-      <strong>이름만 다름 · {input.renamed.length}개</strong>
-      <p className="hint">대소문자·공백·구분자만 다른 컬럼입니다. 같은 값인지 확인한 뒤 원본에서 컬럼 이름을 바꿔 다시 등록하세요.</p>
-      <NameList items={input.renamed.map(item => `${visibleName(item.actual)} → ${item.name}`)} />
-    </section>}
-    {absent.length > 0 && <section className="input-fix" aria-label="없는 Feature">
-      <strong>없는 Feature · {absent.length}개</strong>
-      <p className="hint">데이터 준비로는 새 Feature를 만들 수 없습니다. 원본 데이터를 만드는 단계에서 같은 이름의 컬럼으로 준비하세요.</p>
-      <NameList items={absent} />
-    </section>}
-    {sourceTypes.length > 0 && <section className="input-fix" aria-label="원본 자료형 변경 필요">
-      <strong>원본 자료형 변경 필요 · {sourceTypes.length}개</strong>
-      <p className="hint">데이터 준비에서 만들 수 없는 자료형입니다. 원본에서 요구 자료형으로 저장해 다시 등록하세요.</p>
-      <NameList items={sourceTypes.map(item => `${item.name}: ${formatDtype(item.actual)} → ${formatDtype(item.expected)}`)} />
+    {inSource > 0 && <section className="input-fix" aria-label="원본에서 준비">
+      <strong>원본에서 준비 · {inSource}개</strong>
+      <p className="hint">데이터 준비로는 새 Feature를 만들거나 실수형 외 자료형으로 바꿀 수 없습니다. 원본 데이터를 만드는 단계에서 준비해 다시 등록하세요.</p>
+      {absent.length > 0 && <>
+        <p className="input-fix-kind">없는 Feature</p>
+        <NameList items={absent} />
+      </>}
+      {sourceTypes.length > 0 && <>
+        <p className="input-fix-kind">자료형 변경</p>
+        <NameList items={sourceTypes.map(typeChange)} />
+      </>}
     </section>}
   </div>;
 }

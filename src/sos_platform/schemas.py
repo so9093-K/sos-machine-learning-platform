@@ -21,7 +21,7 @@ from .ml_outputs import revision_output_contract
 class Step(BaseModel):
     """검증 및 직렬화가 가능한 피처 변환 단계."""
 
-    op: Literal["select", "filter_not_null", "fill_null", "cast", "lag", "rolling_mean"]
+    op: Literal["select", "filter_not_null", "fill_null", "cast", "rename", "lag", "rolling_mean"]
     column: str | None = None
     columns: list[str] | None = None
     value: int | float | str | bool | None = None
@@ -41,6 +41,11 @@ class Step(BaseModel):
             raise ValueError("fill_null requires a value")
         if self.op == "cast" and self.dtype is None:
             raise ValueError("cast requires a dtype")
+        # rename은 alias를 새 컬럼 이름으로 쓴다. 값·자료형은 바꾸지 않는다.
+        if self.op == "rename" and (not self.alias or not self.alias.strip()):
+            raise ValueError("rename requires a new column name in alias")
+        if self.op == "rename" and self.alias == self.column:
+            raise ValueError("rename requires a different column name")
         return self
 
 

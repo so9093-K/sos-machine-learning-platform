@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { formatError, request } from "./api";
 import { algorithmLabel, modelVersionLabel } from "./display-format";
 import { MAX_TRANSFORM_STEPS, type FeatureStep } from "./feature-utils";
-import { checkModelDatasetInput, ModelDatasetCompatibility, PREPARATION_CAST_DTYPE } from "./ModelDatasetCompatibility";
+import { checkModelDatasetInput, ModelDatasetCompatibility, PREPARATION_CAST_DTYPE,
+  preparationCastable } from "./ModelDatasetCompatibility";
 import type { DatasetColumns, ModelRevision } from "./types";
 
 type Columns = DatasetColumns["columns"];
@@ -13,12 +14,22 @@ export function schemaColumns(schema: Record<string, string>): Columns {
   return Object.entries(schema).map(([name, dtype]) => ({ name, dtype }));
 }
 
-/** 자료형 변환으로 맞출 수 있지만 아직 변환 목록에 없는 컬럼의 실수형 변환 단계. */
-export function pendingCastSteps(model: InputModel, columns: Columns, steps: FeatureStep[]): FeatureStep[] {
-  return checkModelDatasetInput(model, columns).castable
-    .filter(item => !steps.some(step => step.op === "cast" && step.column === item.name &&
-      step.dtype === PREPARATION_CAST_DTYPE))
-    .map(item => ({ op: "cast", column: item.name, dtype: PREPARATION_CAST_DTYPE }));
+/** 데이터 준비로 맞출 수 있지만 아직 변환 목록에 없는 단계. 이름 변경을 먼저 두어,
+ *  이름과 자료형이 모두 다른 컬럼은 바꾼 이름으로 실수형 변환한다. */
+export function pendingInputSteps(model: InputModel, columns: Columns, steps: FeatureStep[]): FeatureStep[] {
+  const input = checkModelDatasetInput(model, columns);
+  const hasCast = (column: string) => steps.some(step => step.op === "cast" && step.column === column &&
+    step.dtype === PREPARATION_CAST_DTYPE);
+  const renames: FeatureStep[] = input.renamed
+    .filter(item => !steps.some(step => step.op === "rename" && step.column === item.actual))
+    .map(item => ({ op: "rename", column: item.actual, alias: item.name }));
+  const casts: FeatureStep[] = [
+    ...input.castable.map(item => item.name),
+    ...input.renamed.filter(item => item.actualDtype !== item.expected &&
+      preparationCastable(item.actualDtype, item.expected)).map(item => item.name),
+  ].filter(name => !hasCast(name))
+    .map(name => ({ op: "cast", column: name, dtype: PREPARATION_CAST_DTYPE }));
+  return [...renames, ...casts];
 }
 
 /** 데이터 화면이 맞추고 있는 모델. 조회 실패는 문맥 해제와 별개로 다시 시도할 수 있다. */
@@ -86,7 +97,7 @@ export function ModelInputPreparation({ model, columns, steps, transformed, onAd
   onAddSteps: (steps: FeatureStep[]) => void;
 }) {
   const current = checkModelDatasetInput(model, columns);
-  const pending = pendingCastSteps(model, columns, steps);
+  const pending = pendingInputSteps(model, columns, steps);
   const capacity = Math.max(0, MAX_TRANSFORM_STEPS - steps.length);
   const after = transformed ? checkModelDatasetInput(model, transformed) : null;
   return <section className="panel model-input-preparation" aria-label="모델 입력 조건 맞추기">
@@ -99,7 +110,7 @@ export function ModelInputPreparation({ model, columns, steps, transformed, onAd
     {pending.length > 0 && <div className="model-input-actions">
       <button type="button" className="secondary" disabled={capacity === 0}
         onClick={() => onAddSteps(pending.slice(0, capacity))}>
-        실수형 변환 단계 {Math.min(pending.length, capacity)}개 추가</button>
+        필요한 변환 단계 {Math.min(pending.length, capacity)}개 추가</button>
       <p className="hint">{pending.length > capacity
         ? `한 번의 변환은 최대 ${MAX_TRANSFORM_STEPS}단계입니다. 나머지 ${pending.length - capacity}개는 변환 결과 Dataset에서 이어서 변환합니다.`
         : "추가한 단계는 아래 변환 목록에서 확인·수정할 수 있습니다."}</p>

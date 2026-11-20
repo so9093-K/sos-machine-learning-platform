@@ -27,6 +27,12 @@ export function createStep(
     return { op, column, value: Number.isFinite(parsed) ? parsed : raw };
   }
   if (op === "cast") return { op, column, dtype: "Float64" };
+  if (op === "rename") {
+    // 모델 입력 이름은 정확히 대조하므로 입력한 이름을 다듬지 않는다.
+    if (!raw.trim()) throw new Error("새 컬럼 이름을 입력해 주세요.");
+    if (raw === column) throw new Error("현재 이름과 다른 새 이름을 입력해 주세요.");
+    return { op, column, alias: raw };
+  }
   if (op === "lag" || op === "rolling_mean") {
     const parameter = size ?? (op === "lag" ? 1 : 3);
     const minimum = op === "lag" ? 1 : 2;

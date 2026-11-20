@@ -2838,7 +2838,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "select" | "filter_not_null" | "fill_null" | "cast" | "lag" | "rolling_mean";
+            op: "select" | "filter_not_null" | "fill_null" | "cast" | "rename" | "lag" | "rolling_mean";
             /**
              * Periods
              * @default 1

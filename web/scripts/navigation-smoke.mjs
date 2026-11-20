@@ -98,17 +98,29 @@ try {
   assert.deepEqual(classified.mismatches.map(item => item.name), ["a", "b", "c", "d"]);
   // 이름 후보는 정규화 이름이 같은 컬럼이 하나뿐일 때만 제시하고, 다른 필수 Feature 컬럼은 후보가 아니다.
   const named = { features: ["io_bytes", "Net Rate", "x_y"], runtime: { feature_dtypes: ["Float64", "Float64", "Float64"] } };
-  assert.deepEqual(checkModelDatasetInput(named, [
-    { name: " IO-Bytes ", dtype: "Float64" }, { name: "net_rate", dtype: "Float64" },
+  const namedColumns = [
+    { name: " IO-Bytes ", dtype: "Int64" }, { name: "net_rate", dtype: "Float64" },
     { name: "NET-RATE", dtype: "Float64" }, { name: "X Y", dtype: "Float64" },
-  ]).renamed, [{ name: "io_bytes", actual: " IO-Bytes " }, { name: "x_y", actual: "X Y" }]);
+  ];
+  assert.deepEqual(checkModelDatasetInput(named, namedColumns).renamed.map(item => [item.actual, item.name]),
+    [[" IO-Bytes ", "io_bytes"], ["X Y", "x_y"]]);
   assert.deepEqual(checkModelDatasetInput({ features: ["a_b", "A B"], runtime: { feature_dtypes: ["Float64", "Float64"] } },
     [{ name: "A B", dtype: "Float64" }]).renamed, []);
-  const { pendingCastSteps } = await vite.ssrLoadModule("/src/ModelInputPreparation.tsx");
-  assert.deepEqual(pendingCastSteps(floats, [
+  // 데이터 준비 초안: 이름 변경을 먼저 두고, 이름·자료형이 모두 다르면 바꾼 이름으로 변환한다. 이미 있는 단계는 다시 넣지 않는다.
+  const { pendingInputSteps } = await vite.ssrLoadModule("/src/ModelInputPreparation.tsx");
+  assert.deepEqual(pendingInputSteps(named, namedColumns, []), [
+    { op: "rename", column: " IO-Bytes ", alias: "io_bytes" },
+    { op: "rename", column: "X Y", alias: "x_y" },
+    { op: "cast", column: "io_bytes", dtype: "Float64" },
+  ]);
+  assert.deepEqual(pendingInputSteps(floats, [
     { name: "a", dtype: "Int64" }, { name: "b", dtype: "String" }, { name: "c", dtype: "Float64" },
     { name: "d", dtype: "Int64" },
   ], [{ op: "cast", column: "a", dtype: "Float64" }]), [{ op: "cast", column: "b", dtype: "Float64" }]);
+  const { createStep } = await vite.ssrLoadModule("/src/feature-utils.ts");
+  assert.deepEqual(createStep("rename", " a ", "a"), { op: "rename", column: " a ", alias: "a" });
+  assert.throws(() => createStep("rename", "a", "a"));
+  assert.throws(() => createStep("rename", "a", "  "));
   // 모델 문맥은 명시적인 데이터 준비 이동에서만 만들고, 데이터 화면·작업 이력을 거쳐 적용 화면으로 돌아간다.
   const preparePath = contextPath("preparation", { datasetId: "source", modelId: "model / a" });
   assert.equal(preparePath, "/data/prepare?dataset=source&model=model+%2F+a");

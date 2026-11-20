@@ -4,7 +4,8 @@ import { MAX_TRANSFORM_STEPS } from "./feature-utils";
 
 const opLabels: Record<string, string> = {
   select: "컬럼 선택", filter_not_null: "결측 행 제외", fill_null: "결측값 대체",
-  cast: "실수형(Float64) 변환", lag: "이전 행 값 (Lag)", rolling_mean: "이동 평균 (Rolling Mean)",
+  cast: "실수형(Float64) 변환", rename: "컬럼 이름 변경",
+  lag: "이전 행 값 (Lag)", rolling_mean: "이동 평균 (Rolling Mean)",
 };
 const MAX_GROUP_COLUMNS = 4;
 
@@ -48,6 +49,8 @@ export function FeaturePanel({
             </select></label>}
             {op === "fill_null" && <label>대체 값 <input value={value}
               onChange={e => setValue(e.target.value)} placeholder="0" /></label>}
+            {op === "rename" && <label>새 이름 <input value={value}
+              onChange={e => setValue(e.target.value)} placeholder="예: io_bytes_per_sec" /></label>}
             {op === "lag" && <label>이전 행 수 <input type="number" min={1} max={1000}
               value={lagPeriods} onChange={e => setLagPeriods(Number(e.target.value))} /></label>}
             {op === "rolling_mean" && <label>윈도 행 수 <input type="number" min={2} max={1000}
@@ -92,6 +95,7 @@ export function FeaturePanel({
               <strong>{i + 1}. {opLabels[step.op] ?? step.op}</strong>
               <span>{step.op === "select" ? (step.columns ?? []).join(", ") : step.column}
                 {step.op === "fill_null" ? ` · ${String(step.value)}(으)로 대체` : ""}
+                {step.op === "rename" ? ` → ${step.alias ?? ""}` : ""}
                 {step.periods ? ` · ${step.periods}행 이전` : ""}
                 {step.window ? ` · ${step.window}행 평균` : ""}</span>
               <button className="ghost" aria-label={`${i + 1}번째 단계 위로 이동`}
