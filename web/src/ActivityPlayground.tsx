@@ -40,7 +40,8 @@ function servingFor(items: ServingEndpoint[], modelId: string): ServingEndpoint 
  */
 export function ActivityPlayground({ datasets, selectedDatasetId, preferredModelId, onSelectModel, isAdministrator,
   onSelectDataset, hasMoreDatasets,
-  onLoadMoreDatasets, onDatasetRegistered, canRun, canCancel, canUpload, canInfer, onOpenResource, links }: {
+  onLoadMoreDatasets, onDatasetRegistered, canRun, canCancel, canUpload, canInfer, onOpenResource, links,
+  onPrepareInput }: {
   datasets: Dataset[];
   selectedDatasetId?: string;
   /** 모델 목록·상세에서 고른 모델. 주소에 남아 새로고침·뒤로 가기에서도 유지된다. */
@@ -54,6 +55,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
   canRun: boolean; canCancel: boolean; canUpload: boolean; canInfer: boolean;
   onOpenResource: (kind: MLResourceKind, id: string) => void;
   links: TaxonomyLinks;
+  onPrepareInput?: (datasetId: string, modelId: string) => void;
 }) {
   const catalog = useTopicCatalog();
   // 주제의 입력·출력 계약. 어떤 알고리즘·Pipeline으로 만든 모델이든 이 계약을 따르면 적용할 수 있다.
@@ -206,7 +208,7 @@ export function ActivityPlayground({ datasets, selectedDatasetId, preferredModel
           canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
           canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
           onInputReadyChange={(datasetId, ready) => setReadyDatasetId(ready ? datasetId : "")}
-          onPlaygroundRun={setLastRun} />}
+          onPlaygroundRun={setLastRun} onPrepareInput={onPrepareInput} />}
       </>}
     </section>
 

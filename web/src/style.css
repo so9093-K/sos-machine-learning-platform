@@ -440,6 +440,23 @@ a.platform-list-link.ghost span { color:var(--sos-muted); font-size:12px; }
   line-height:1.7; }
 .notice-blocked ul { padding-left:20px; }
 
+/* 모델 입력 불일치: 원인별 목록과 다음 행동. */
+.model-input-check > p { margin:6px 0 0; }
+.input-fix { margin-top:14px; padding-top:12px; border-top:1px solid var(--sos-border); }
+.input-fix > p.hint { margin:4px 0 8px; }
+.input-fix button { margin-top:8px; }
+.input-fix-list { margin:0; padding-left:20px; display:grid; gap:2px; }
+.input-fix-list code { font-size:12px; overflow-wrap:anywhere; }
+.input-fix-more summary { margin-top:6px; cursor:pointer; font-size:12px; color:var(--sos-muted); }
+.model-input-banner { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:12px;
+  margin:0 0 16px; padding:14px 16px; border:1px solid var(--sos-border); border-radius:11px;
+  background:var(--sos-raised); font-size:13px; line-height:1.65; }
+.model-input-banner strong { display:block; font-size:15px; }
+.model-input-banner p { margin:6px 0 0; }
+.model-input-banner-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.model-input-actions { margin-top:14px; }
+.model-input-actions p { margin:6px 0 0; }
+
 /* 관측값 분석: 선택한 관측값의 실제 근거와 설명을 함께 보인다. */
 
 .observation-inspection { display: grid; grid-template-columns:minmax(0,1fr); gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--sos-border); border-radius: 12px; }

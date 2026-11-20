@@ -316,13 +316,14 @@ function JobRowSummary({ job, subject }: { job: JobRow; subject: string }) {
 /** 특정 학습 화면을 거치지 않고 Model Revision과 Dataset으로 Scoring한다. */
 export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets, preferredModelId, canRun, canCancel,
   onOpenResource, onModelSelected, onNavigate, isAdministrator = false,
-  hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered }: {
+  hasMoreDatasets = false, onLoadMoreDatasets, canUpload = false, onDatasetRegistered, onPrepareInput }: {
   selectedDatasetId?: string; onSelectDataset?: (id: string) => void;
   datasets: Dataset[]; preferredModelId: string; canRun: boolean; canCancel: boolean; isAdministrator?: boolean;
   onOpenResource: OpenResource; onModelSelected: (id: string) => void;
   onNavigate: (tab: "ml" | "scoring") => void;
   hasMoreDatasets?: boolean; onLoadMoreDatasets?: () => Promise<void>;
   canUpload?: boolean; onDatasetRegistered?: (dataset: Dataset) => void;
+  onPrepareInput?: (datasetId: string, modelId: string) => void;
 }) {
   const [offered, setOffered] = useState<ModelOffering[]>([]);
   const [offeredCursor, setOfferedCursor] = useState<string | null>(null);
@@ -422,7 +423,7 @@ export function ScoringWorkspace({ selectedDatasetId, onSelectDataset, datasets,
       hasMoreDatasets={hasMoreDatasets} onLoadMoreDatasets={onLoadMoreDatasets}
       canUpload={canUpload} onDatasetRegistered={onDatasetRegistered}
       canRun={canRun} canCancel={canCancel} onOpenResource={onOpenResource}
-      onResultViewChange={setResultFocused} />}
+      onResultViewChange={setResultFocused} onPrepareInput={onPrepareInput} />}
     {!collapsed && <section className="panel">
       <div className="panel-head"><div><h2>전체 점수 계산 이력</h2>
         <p>이 화면에서 실행하지 않은 기존 점수 계산도 찾을 수 있습니다. 현재 조회된 목록 기준입니다.</p></div>

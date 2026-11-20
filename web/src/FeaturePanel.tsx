@@ -1,5 +1,6 @@
 import type { useFeatureEditor } from "./useFeatureEditor";
 import { formatDtype } from "./display-format";
+import { MAX_TRANSFORM_STEPS } from "./feature-utils";
 
 const opLabels: Record<string, string> = {
   select: "컬럼 선택", filter_not_null: "결측 행 제외", fill_null: "결측값 대체",
@@ -53,7 +54,7 @@ export function FeaturePanel({
               value={rollingWindow} onChange={e => setRollingWindow(Number(e.target.value))} /></label>}
             <button className="secondary" onClick={addStep} disabled={
               (op === "select" ? chosenColumns.length === 0 : !column) ||
-              (steps.length >= 30 && editingStep === null)
+              (steps.length >= MAX_TRANSFORM_STEPS && editingStep === null)
             }>
               {editingStep === null ? "+ 단계 추가" : "단계 수정 반영"}</button>
             {editingStep !== null && <button className="ghost" onClick={cancelEdit}>

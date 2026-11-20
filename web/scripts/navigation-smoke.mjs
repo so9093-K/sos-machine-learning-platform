@@ -88,6 +88,43 @@ try {
   assert.equal(checkModelDatasetInput(contract, [
     { name: "count", dtype: "String" }, { name: "ratio", dtype: "Float64" },
   ]).ready, false);
+  // 불일치는 다음 행동별로 나눈다. 데이터 준비는 실수형(Float64) 변환만 만든다.
+  const floats = { features: ["a", "b", "c", "d"], runtime: { feature_dtypes: ["Float64", "Float64", "Float64", "Int64"] } };
+  const classified = checkModelDatasetInput(floats, [
+    { name: "a", dtype: "Int64" }, { name: "b", dtype: "String" },
+    { name: "c", dtype: "Boolean" }, { name: "d", dtype: "Float64" },
+  ]);
+  assert.deepEqual(classified.castable.map(item => item.name), ["a", "b"]);
+  assert.deepEqual(classified.mismatches.map(item => item.name), ["a", "b", "c", "d"]);
+  // 이름 후보는 정규화 이름이 같은 컬럼이 하나뿐일 때만 제시하고, 다른 필수 Feature 컬럼은 후보가 아니다.
+  const named = { features: ["io_bytes", "Net Rate", "x_y"], runtime: { feature_dtypes: ["Float64", "Float64", "Float64"] } };
+  assert.deepEqual(checkModelDatasetInput(named, [
+    { name: " IO-Bytes ", dtype: "Float64" }, { name: "net_rate", dtype: "Float64" },
+    { name: "NET-RATE", dtype: "Float64" }, { name: "X Y", dtype: "Float64" },
+  ]).renamed, [{ name: "io_bytes", actual: " IO-Bytes " }, { name: "x_y", actual: "X Y" }]);
+  assert.deepEqual(checkModelDatasetInput({ features: ["a_b", "A B"], runtime: { feature_dtypes: ["Float64", "Float64"] } },
+    [{ name: "A B", dtype: "Float64" }]).renamed, []);
+  const { pendingCastSteps } = await vite.ssrLoadModule("/src/ModelInputPreparation.tsx");
+  assert.deepEqual(pendingCastSteps(floats, [
+    { name: "a", dtype: "Int64" }, { name: "b", dtype: "String" }, { name: "c", dtype: "Float64" },
+    { name: "d", dtype: "Int64" },
+  ], [{ op: "cast", column: "a", dtype: "Float64" }]), [{ op: "cast", column: "b", dtype: "Float64" }]);
+  // 모델 문맥은 명시적인 데이터 준비 이동에서만 만들고, 데이터 화면·작업 이력을 거쳐 적용 화면으로 돌아간다.
+  const preparePath = contextPath("preparation", { datasetId: "source", modelId: "model / a" });
+  assert.equal(preparePath, "/data/prepare?dataset=source&model=model+%2F+a");
+  const preparing = routeAt("/data/prepare", preparePath.slice(preparePath.indexOf("?")));
+  assert.deepEqual(preparing.context, { datasetId: "source", modelId: "model / a" });
+  const preparingJobPath = contextPath("jobs", { datasetId: "source", dataJobId: "job-1", dataJobKind: "data",
+    modelId: "model / a" });
+  const preparingJob = routeAt("/activity/jobs", preparingJobPath.slice(preparingJobPath.indexOf("?")));
+  assert.equal(preparingJob.context.modelId, "model / a");
+  assert.deepEqual(nextNavigationContext(preparing, "preview"), { datasetId: "source", modelId: "model / a" });
+  const transformed = routeAt("/data/query", "?dataset=output&model=model-a");
+  assert.deepEqual(nextNavigationContext(transformed, "topic"), { modelId: "model-a", datasetId: "output" });
+  assert.deepEqual(nextNavigationContext(transformed, "scoring"), { modelId: "model-a", datasetId: "output" });
+  assert.deepEqual(nextNavigationContext(transformed, "ml"), { datasetId: "output" });
+  assert.deepEqual(nextNavigationContext(routeAt("/topics/activity-anomaly", "?model=model-a&dataset=d"),
+    "preparation"), { datasetId: "d" });
   const jobContext = { datasetId: "one", dataJobId: "job / one", dataJobKind: "exploration" };
   const jobPath = contextPath("jobs", jobContext);
   assert.deepEqual(routeAt("/activity/jobs", jobPath.slice(jobPath.indexOf("?"))).context, jobContext);

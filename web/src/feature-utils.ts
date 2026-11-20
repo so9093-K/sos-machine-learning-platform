@@ -2,6 +2,8 @@
 import type { components } from "./api.generated";
 
 type ApiStep = components["schemas"]["Step"];
+/** 한 변환 요청의 최대 단계 수. 서버 `Transform.steps`의 `max_length`와 같다. */
+export const MAX_TRANSFORM_STEPS = 30;
 // Pydantic가 기본값을 채우는 필드는 UI 요청 초안에서 생략할 수 있다.
 export type FeatureStep = Omit<ApiStep, "periods" | "window"> &
   Partial<Pick<ApiStep, "periods" | "window">>;
