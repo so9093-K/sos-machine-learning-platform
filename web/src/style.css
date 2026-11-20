@@ -1162,3 +1162,17 @@ main details > summary { cursor:pointer; font-size:13px; font-weight:600; color:
 .model-deployment-form { margin-top:14px; }
 .model-deployment-form form { display:grid; justify-items:start; gap:10px; }
 .model-deployment-form label { display:grid; gap:6px; max-width:100%; }
+
+/* 공개 데이터 가져오기: 출처·이용 조건을 먼저 보이고 부분별로 명시적으로 가져온다. */
+.public-data-import { display:grid; gap:14px; }
+.public-source { display:grid; gap:6px; padding:14px 16px; border:1px solid var(--sos-border); border-radius:11px;
+  background:var(--sos-raised); font-size:13px; line-height:1.6; }
+.public-source p { margin:0; }
+.public-source-consent { display:flex; align-items:center; gap:8px; font-weight:600; }
+.public-source-parts { list-style:none; margin:4px 0 0; padding:0; display:grid; gap:8px; }
+.public-source-parts li { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 12px; border:1px solid var(--sos-border); border-radius:9px; }
+.public-source-parts li > div { flex:1 1 280px; min-width:0; }
+.public-source-parts .chip { margin-left:8px; }
+.public-data-entry { flex-basis:100%; }
+.public-data-entry > summary { cursor:pointer; font-weight:600; }

@@ -380,7 +380,10 @@ export function Workspace({ actor, onSignOut, brandName, brandReady, brandLoadEr
           onLoadSnapshots={() => void loadSnapshots()}
           onConnectExisting={() => void connectExisting()}
           hasMore={Boolean(catalog.nextCursor)} onLoadMore={() => void loadMoreDatasets()}
-          pendingLabel={selected && !dataset ? (requested.error ? "선택한 Dataset · 조회 실패" : "선택한 Dataset · 조회 중") : undefined} />}
+          pendingLabel={selected && !dataset ? (requested.error ? "선택한 Dataset · 조회 실패" : "선택한 Dataset · 조회 중") : undefined}
+          onPublicImported={data => void showRegisteredDataset(data,
+            "공개 데이터를 가져왔습니다. 출처는 이 Dataset을 만든 작업에 기록됩니다.",
+            "공개 데이터는 정상 등록됐습니다. 목록 갱신 결과를 확인하지 못했지만 다시 가져올 필요는 없습니다.")} />}
       {isDataArea && selected && !dataset && <section className="panel" aria-label="선택한 Dataset 조회">
         {requested.error ? <ErrorNoticeView title="선택한 Dataset을 열지 못했습니다" notice={requested.error}>
           <p className="hint">다른 계정의 Dataset이거나 삭제된 Dataset은 열 수 없습니다.</p>

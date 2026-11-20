@@ -61,7 +61,8 @@ class ResultPublication:
             pending.replace(output)
             uploaded = self._upload(store, job, stem + ".parquet", output)
             self.payload = {
-                "name": f"features-{job['id'][:8]}.parquet",
+                # 공개 데이터 가져오기처럼 결과 이름을 정한 연산은 그 이름을, 그 밖에는 Job 이름을 쓴다.
+                "name": value.get("dataset_name") or f"features-{job['id'][:8]}.parquet",
                 "kind": "file",
                 "location": uploaded["location"],
                 "version": uploaded["sha256"],

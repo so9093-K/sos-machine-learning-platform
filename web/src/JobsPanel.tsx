@@ -12,6 +12,7 @@ export function dataJobLabel(job: Pick<JobSummary, "kind" | "spec">): string {
   if (job.kind === "profile") return job.spec.mode === "understanding"
     ? job.spec.scope === "full" ? "데이터 이해 · 전체 행" : "데이터 이해 · 표본" : "전체 데이터 프로파일";
   return ({ iceberg_import: "Iceberg 적재", exploration: "전체 집계", transform: "데이터 변환",
+    public_import: "공개 데이터 가져오기",
     feature_register: "Feature Service 등록", feature_retrieve: "Feature 시점 조회",
     feature_retire: "Feature Service 폐기", ml_playground: "단일 입력 점수 계산" } as Record<string, string>)[job.kind] ?? job.kind;
 }

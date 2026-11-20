@@ -38,11 +38,12 @@ class JobStoreMixin:
     ) -> dict:
         """중복 제출 판정과 Job 생성을 같은 트랜잭션으로 확정한다."""
         if dataset_id is None and not (
-            kind in ("ml_playground", "ml_import")
+            kind in ("ml_playground", "ml_import", "public_import")
             or (kind == "ml_explain" and spec.get("playground_job_id"))
         ):
             raise ValueError(
-                "Only Playground, model import or Playground Explanation Jobs may omit a Dataset"
+                "Only Playground, model import, public data import or Playground Explanation Jobs "
+                "may omit a Dataset"
             )
         if idempotency_key is not None and owner_actor is None:
             raise ValueError("Idempotent Job requires an actor")

@@ -36,3 +36,4 @@
 - [0023 — 모델 상세의 명시적 최초 배포 진입](0023-explicit-model-deployment-entry.md) · Accepted (0019의 웹 조작 범위 대체)
 - [0024 — 모델 생산과 SOS 모델 연결의 책임 분리](0024-model-production-realignment.md) · Accepted (0016의 SOS 제출·단계 Job 조합, 0021의 등록 Pipeline 조항 대체)
 - [0025 — 모델 사용 판정과 모델 그룹의 SOS 정본화](0025-sos-owned-model-use-decision.md) · Accepted (0015의 등록 전 사용 금지·모델 그룹 정본, 0017의 그룹·보관 정본과 등록 미완료 삭제 거부 대체)
+- [0026 — 검증한 공개 데이터 가져오기](0026-public-data-import.md) · Accepted

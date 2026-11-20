@@ -53,7 +53,9 @@ export const taskGuides: Record<string, Guide> = {
   },
 };
 
-export const topicGuides: Record<string, Guide & { route: "topic"; input: TopicInput }> = {
+export const topicGuides: Record<string, Guide & { route: "topic"; input: TopicInput;
+  /** 이 주제의 공개 기준 데이터를 가져올 때 무엇을 얻는지. 없으면 가져오기를 보이지 않는다. */
+  publicData?: string }> = {
   activity_anomaly: {
     route: "topic",
     title: "활동 이상 탐지",
@@ -71,6 +73,7 @@ export const topicGuides: Record<string, Guide & { route: "topic"; input: TopicI
     route: "topic",
     title: "네트워크 흐름 이상 탐지",
     summary: "연결 단위 흐름 통계에서 평소 트래픽과 다른 흐름을 찾아 먼저 검토할 연결을 좁힙니다.",
+    publicData: "정답 레이블이 있는 공개 흐름 데이터를 가져와 모델이 어떤 공격을 얼마나 잡는지 먼저 확인합니다. 평가 Dataset은 정답 레이블(label)로 순위 지표와 판정 정책별 정밀도·재현율을 계산할 수 있습니다. 연구용 망의 결과이며 우리 망의 성능이 아닙니다.",
     uses: [
       { title: "검토 대상 선별", text: "하루 수십만 개의 흐름 중 평소 트래픽과 가장 다른 흐름부터 확인합니다." },
       { title: "평소와의 차이 확인", text: "패킷 길이·도착 간격·TCP 플래그 중 어떤 값이 학습 기준과 달랐는지 흐름별로 비교합니다." },

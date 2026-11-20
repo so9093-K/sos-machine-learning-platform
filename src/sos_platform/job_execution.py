@@ -17,7 +17,7 @@ def execute_job(store: Store, job: dict, pending: Path, set_stage: Callable[[str
 
     dataset = store.get_dataset(job["dataset_id"]) if job["dataset_id"] else None
     if dataset is None and not (
-        job["kind"] in ("ml_playground", "ml_import")
+        job["kind"] in ("ml_playground", "ml_import", "public_import")
         or (job["kind"] == "ml_explain" and job["spec"].get("playground_job_id"))
     ):
         raise ValueError("Input dataset is missing")
@@ -26,6 +26,12 @@ def execute_job(store: Store, job: dict, pending: Path, set_stage: Callable[[str
 
         set_stage("processing")
         result = import_registered_model(job["spec"], pending.with_suffix(".skops"))
+    elif job["kind"] == "public_import":
+        from .public_datasets import import_part
+
+        set_stage("processing")
+        # 받은 원본은 다시 받을 수 있는 캐시다. 결과 Dataset은 일반 게시 경로로 확정한다.
+        result = import_part(store.home / "public-sources", job["spec"], pending)
     elif job["kind"] == "ml_playground":
         from .ml_playground import run_playground_scoring
 
