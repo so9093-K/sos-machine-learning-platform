@@ -13,6 +13,34 @@ from .errors import PlatformError
 SqlQuoter = Callable[[str], str]
 
 
+def _duckdb_header_names(path: Path, delim: str, quote: str) -> list[str]:
+    """DuckDB가 노출하는 헤더 이름. 타입 추론 없이 헤더만 읽는다.
+
+    DuckDB는 헤더 이름의 앞뒤 공백을 지우고, 지운 뒤 겹치는 이름에 접미사를 붙인다. 컬럼 조회·입력
+    검사는 DuckDB 이름을 보이므로, Polars 실행(변환·학습·Scoring)도 같은 이름을 쓰게 하는 정본이다.
+    """
+    escaped = str(path).replace("'", "''")
+    escape = f", escape='{quote}'" if quote else ""
+    with duckdb.connect() as conn:
+        rows = conn.execute(
+            f"DESCRIBE SELECT * FROM read_csv('{escaped}', delim='{delim}', quote='{quote}'{escape}, "
+            "header=true, skip=0, encoding='utf-8', all_varchar=true, sample_size=1)"
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
+def _same_header_names(frame: pl.LazyFrame, path: Path, delim: str, quote: str) -> pl.LazyFrame:
+    """Polars 컬럼 이름을 DuckDB 이름으로 맞춘다. 두 엔진의 컬럼 수가 다르면 추측하지 않고 거부한다."""
+    names = _duckdb_header_names(path, delim, quote)
+    current = pl.read_csv(path, separator=delim, quote_char=quote or None, has_header=True,
+                          n_rows=0, infer_schema=False).columns
+    if len(current) != len(names):
+        raise PlatformError("SOS-DATASET-UNREADABLE")
+    if current == names:
+        return frame
+    return frame.rename(dict(zip(current, names, strict=True)))
+
+
 class FileReader:
     """한 파일 포맷의 옵션·검증·두 실행 엔진 진입점을 소유한다."""
 
@@ -66,7 +94,7 @@ class CsvReader(FileReader):
 
     def scan_polars(self, path: Path, options: dict | None) -> pl.LazyFrame:
         self.validate(path, options)
-        return pl.scan_csv(
+        frame = pl.scan_csv(
             path,
             separator=",",
             quote_char='"',
@@ -76,6 +104,7 @@ class CsvReader(FileReader):
             # DuckDB와 같은 자료형을 얻도록 전체 행으로 추론한다.
             infer_schema_length=None,
         )
+        return _same_header_names(frame, path, ",", '"')
 
     def create_duckdb_view(
         self, conn, path: Path, options: dict | None, literal: SqlQuoter, quoted: SqlQuoter
@@ -163,7 +192,8 @@ class TabDelimitedReader(FileReader):
         if not self._header(options):
             names = frame.collect_schema().names()
             frame = frame.rename({name: f"unnamed_{index}" for index, name in enumerate(names, 1)})
-        return frame
+            return frame
+        return _same_header_names(frame, path, "\t", "")
 
     def create_duckdb_view(
         self, conn, path: Path, options: dict | None, literal: SqlQuoter, quoted: SqlQuoter

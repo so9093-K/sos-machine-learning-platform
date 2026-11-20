@@ -88,7 +88,13 @@ export function ModelDatasetCompatibility({ model, columns, compact = false, onP
   const renamedNames = new Set(input.renamed.map(item => item.name));
   const absent = input.missing.filter(name => !renamedNames.has(name));
   const castableNames = new Set(input.castable.map(item => item.name));
-  const sourceTypes = input.mismatches.filter(item => !castableNames.has(item.name));
+  // 이름을 바꿔도 자료형이 맞지 않는 후보는 실수형 변환으로 맞출 수 없으면 원본에서 바꿔야 한다.
+  const sourceTypes = [
+    ...input.mismatches.filter(item => !castableNames.has(item.name)),
+    ...input.renamed.filter(item => item.actualDtype !== item.expected &&
+      !preparationCastable(item.actualDtype, item.expected))
+      .map(item => ({ name: item.name, expected: item.expected, actual: item.actualDtype })),
+  ];
   const matched = model.features.length - input.missing.length - input.mismatches.length;
   const inPreparation = input.renamed.length + input.castable.length;
   const inSource = absent.length + sourceTypes.length;
@@ -100,7 +106,9 @@ export function ModelDatasetCompatibility({ model, columns, compact = false, onP
       <p className="hint">원본은 그대로 두고 변환 결과를 새 Dataset으로 만듭니다.</p>
       {input.renamed.length > 0 && <>
         <p className="input-fix-kind">이름 변경 · 대소문자·공백·구분자만 다른 컬럼입니다. 같은 값인지 확인한 뒤 바꾸세요.</p>
-        <NameList items={input.renamed.map(item => `${visibleName(item.actual)} → ${item.name}`)} />
+        <NameList items={input.renamed.map(item => `${visibleName(item.actual)} → ${item.name}` +
+          (item.actualDtype !== item.expected && preparationCastable(item.actualDtype, item.expected)
+            ? ` · ${formatDtype(item.actualDtype)} → ${formatDtype(item.expected)}` : ""))} />
       </>}
       {input.castable.length > 0 && <>
         <p className="input-fix-kind">실수형({PREPARATION_CAST_DTYPE}) 변환 · 숫자로 읽을 수 없는 값이 있으면 변환이 실패합니다.</p>
